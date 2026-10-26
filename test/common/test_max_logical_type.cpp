@@ -24,59 +24,62 @@ static LogicalType MakeStruct(const duckdb::vector<pair<string, LogicalType>> &c
 	return LogicalType::STRUCT(std::move(child_list));
 }
 
-static duckdb::vector<LogicalType> GetTestTypes() {
+//! The children of the nested test types
+static duckdb::vector<LogicalType> GetNestedChildTypes() {
+	return {LogicalType::INTEGER, LogicalType::UINTEGER,      LogicalType::BIGINT, LogicalType::DOUBLE,
+	        LogicalType::VARCHAR, LogicalType::DECIMAL(4, 1), LogicalType::DATE,   LogicalType::TIMESTAMP};
+}
+
+static duckdb::vector<LogicalType> GetTestTypes(const duckdb::vector<LogicalType> &children = GetNestedChildTypes()) {
 	duckdb::vector<LogicalType> types {LogicalType::SQLNULL,
-	                           LogicalType::BOOLEAN,
-	                           LogicalType::TINYINT,
-	                           LogicalType::SMALLINT,
-	                           LogicalType::INTEGER,
-	                           LogicalType::BIGINT,
-	                           LogicalType::HUGEINT,
-	                           LogicalType::UTINYINT,
-	                           LogicalType::USMALLINT,
-	                           LogicalType::UINTEGER,
-	                           LogicalType::UBIGINT,
-	                           LogicalType::UHUGEINT,
-	                           LogicalType::FLOAT,
-	                           LogicalType::DOUBLE,
-	                           LogicalType::DECIMAL(4, 1),
-	                           LogicalType::DECIMAL(9, 0),
-	                           LogicalType::DECIMAL(18, 3),
-	                           LogicalType::DECIMAL(38, 10),
-	                           LogicalType::BIGNUM,
-	                           LogicalType::DATE,
-	                           LogicalType::TIME,
-	                           LogicalType::TIME_NS,
-	                           LogicalType::TIME_TZ,
-	                           LogicalType::TIMESTAMP_S,
-	                           LogicalType::TIMESTAMP_MS,
-	                           LogicalType::TIMESTAMP,
-	                           LogicalType::TIMESTAMP_NS,
-	                           LogicalType::TIMESTAMP_TZ,
-	                           LogicalType::TIMESTAMP_TZ_NS,
-	                           LogicalType::INTERVAL,
-	                           LogicalType::VARCHAR,
-	                           LogicalType::VARCHAR_COLLATION("nocase"),
-	                           LogicalType::VARCHAR_COLLATION("noaccent"),
-	                           LogicalType::BLOB,
-	                           LogicalType::BIT,
-	                           LogicalType::UUID,
-	                           LogicalType::GEOMETRY(),
-	                           LogicalType::VARIANT(),
-	                           MakeEnum({"a", "b"}),
-	                           MakeEnum({"a", "b", "c"}),
-	                           LogicalType(LogicalTypeId::STRING_LITERAL),
-	                           LogicalType::INTEGER_LITERAL(Value::INTEGER(42)),
-	                           LogicalType::INTEGER_LITERAL(Value::BIGINT(NumericLimits<int64_t>::Maximum())),
-	                           LogicalType(LogicalType::INTEGER).WithAlias("my_int"),
-	                           LogicalType(LogicalType::INTEGER).WithAlias("my_other_int"),
-	                           LogicalType(LogicalType::VARCHAR).WithAlias("my_text"),
-	                           LogicalType::JSON()};
+	                                   LogicalType::BOOLEAN,
+	                                   LogicalType::TINYINT,
+	                                   LogicalType::SMALLINT,
+	                                   LogicalType::INTEGER,
+	                                   LogicalType::BIGINT,
+	                                   LogicalType::HUGEINT,
+	                                   LogicalType::UTINYINT,
+	                                   LogicalType::USMALLINT,
+	                                   LogicalType::UINTEGER,
+	                                   LogicalType::UBIGINT,
+	                                   LogicalType::UHUGEINT,
+	                                   LogicalType::FLOAT,
+	                                   LogicalType::DOUBLE,
+	                                   LogicalType::DECIMAL(4, 1),
+	                                   LogicalType::DECIMAL(9, 0),
+	                                   LogicalType::DECIMAL(18, 3),
+	                                   LogicalType::DECIMAL(38, 10),
+	                                   LogicalType::BIGNUM,
+	                                   LogicalType::DATE,
+	                                   LogicalType::TIME,
+	                                   LogicalType::TIME_NS,
+	                                   LogicalType::TIME_TZ,
+	                                   LogicalType::TIMESTAMP_S,
+	                                   LogicalType::TIMESTAMP_MS,
+	                                   LogicalType::TIMESTAMP,
+	                                   LogicalType::TIMESTAMP_NS,
+	                                   LogicalType::TIMESTAMP_TZ,
+	                                   LogicalType::TIMESTAMP_TZ_NS,
+	                                   LogicalType::INTERVAL,
+	                                   LogicalType::VARCHAR,
+	                                   LogicalType::VARCHAR_COLLATION("nocase"),
+	                                   LogicalType::VARCHAR_COLLATION("noaccent"),
+	                                   LogicalType::BLOB,
+	                                   LogicalType::BIT,
+	                                   LogicalType::UUID,
+	                                   LogicalType::GEOMETRY(),
+	                                   LogicalType::VARIANT(),
+	                                   MakeEnum({"a", "b"}),
+	                                   MakeEnum({"a", "b", "c"}),
+	                                   LogicalType(LogicalTypeId::STRING_LITERAL),
+	                                   LogicalType::INTEGER_LITERAL(Value::INTEGER(42)),
+	                                   LogicalType::INTEGER_LITERAL(Value::BIGINT(NumericLimits<int64_t>::Maximum())),
+	                                   LogicalType(LogicalType::INTEGER).WithAlias("my_int"),
+	                                   LogicalType(LogicalType::INTEGER).WithAlias("my_other_int"),
+	                                   LogicalType(LogicalType::VARCHAR).WithAlias("my_text"),
+	                                   LogicalType::JSON()};
 
 	// nested types over a few interesting children
-	duckdb::vector<LogicalType> children {LogicalType::INTEGER, LogicalType::UINTEGER, LogicalType::BIGINT,
-	                              LogicalType::DOUBLE,  LogicalType::VARCHAR,  LogicalType::DECIMAL(4, 1),
-	                              LogicalType::DATE,    LogicalType::TIMESTAMP};
 	for (auto &child : children) {
 		types.push_back(LogicalType::LIST(child));
 		types.push_back(LogicalType::ARRAY(child, 2));
@@ -113,8 +116,8 @@ static LogicalType SortMembers(const LogicalType &type) {
 		if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
 			return type;
 		}
-		auto members = type.id() == LogicalTypeId::STRUCT ? StructType::GetChildTypes(type)
-		                                                  : UnionType::CopyMemberTypes(type);
+		auto members =
+		    type.id() == LogicalTypeId::STRUCT ? StructType::GetChildTypes(type) : UnionType::CopyMemberTypes(type);
 		for (auto &member : members) {
 			member.second = SortMembers(member.second);
 		}
@@ -139,7 +142,8 @@ static bool IsImplicitlyCastable(ClientContext &context, const LogicalType &sour
 
 using max_type_function_t = std::function<bool(const LogicalType &, const LogicalType &, LogicalType &)>;
 
-static duckdb::vector<string> CheckMaxLogicalTypeProperties(ClientContext &context, const max_type_function_t &max_type) {
+static duckdb::vector<string> CheckMaxLogicalTypeProperties(ClientContext &context,
+                                                            const max_type_function_t &max_type) {
 	duckdb::vector<string> violations;
 	auto types = GetTestTypes();
 	for (auto &left : types) {
@@ -199,6 +203,51 @@ static duckdb::vector<string> CheckForceMaxLogicalTypeCommutative(ClientContext 
 	return violations;
 }
 
+//! Checks that combining a set of three types does not depend on their order (up to the member order of the result)
+static duckdb::vector<string> CheckMaxLogicalTypeOrderIndependent(ClientContext &context,
+                                                                  const duckdb::vector<LogicalType> &types) {
+	duckdb::vector<string> violations;
+	auto set_string = [&](const idx_t(&indexes)[3]) {
+		return types[indexes[0]].ToString() + " | " + types[indexes[1]].ToString() + " | " +
+		       types[indexes[2]].ToString();
+	};
+	for (idx_t a = 0; a < types.size(); a++) {
+		for (idx_t b = a; b < types.size(); b++) {
+			for (idx_t c = b; c < types.size(); c++) {
+				// iterate over all orders of the set by permuting the indexes
+				idx_t indexes[3] = {a, b, c};
+				LogicalType expected;
+				bool expected_ok = false;
+				bool first = true;
+				do {
+					duckdb::vector<LogicalType> set {types[indexes[0]], types[indexes[1]], types[indexes[2]]};
+					LogicalType result;
+					bool ok;
+					try {
+						ok = LogicalType::TryGetMaxLogicalType(context, set, result);
+					} catch (std::exception &ex) {
+						violations.push_back(StringUtil::Format("exception: %s: %s", set_string(indexes), ex.what()));
+						break;
+					}
+					if (first) {
+						expected = std::move(result);
+						expected_ok = ok;
+						first = false;
+						continue;
+					}
+					if (ok != expected_ok || (ok && SortMembers(result) != SortMembers(expected))) {
+						violations.push_back(StringUtil::Format("order dependent: %s -> %s / %s", set_string(indexes),
+						                                        ok ? result.ToString() : "<error>",
+						                                        expected_ok ? expected.ToString() : "<error>"));
+						break;
+					}
+				} while (std::next_permutation(indexes, indexes + 3));
+			}
+		}
+	}
+	return violations;
+}
+
 static void RequireNoViolations(const duckdb::vector<string> &violations) {
 	for (auto &violation : violations) {
 		UNSCOPED_INFO(violation);
@@ -238,4 +287,20 @@ TEST_CASE("Test properties of LogicalType::TryGetMaxLogicalType", "[max_logical_
 			    return LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(left, right, result);
 		    }));
 	}
+}
+
+TEST_CASE("Test that LogicalType::TryGetMaxLogicalType over a set of types is order independent",
+          "[max_logical_type]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// the number of sets grows cubically - only nest a few interesting types here
+	auto types = GetTestTypes({LogicalType::INTEGER, LogicalType::UINTEGER, LogicalType::DECIMAL(4, 1)});
+	RequireNoViolations(CheckMaxLogicalTypeOrderIndependent(*con.context, types));
+}
+
+TEST_CASE("Test that LogicalType::TryGetMaxLogicalType over a set of all test types is order independent",
+          "[.][max_logical_type_order]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	RequireNoViolations(CheckMaxLogicalTypeOrderIndependent(*con.context, GetTestTypes()));
 }

@@ -119,17 +119,16 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 				}
 			}
 		}
-		// now loop over the lists and select the max logical type
-		for (idx_t list_idx = 0; list_idx < values.size(); list_idx++) {
-			auto &list = values[list_idx];
-			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
-				if (!should_infer[val_idx]) {
-					continue;
-				}
-				auto &current_type = result.types[val_idx];
-				auto next_type = ExpressionBinder::GetExpressionReturnType(*list[val_idx]);
-				result.types[val_idx] = LogicalType::MaxLogicalType(context, current_type, next_type);
+		// now select the max logical type of each column over all of the lists
+		for (idx_t val_idx = 0; val_idx < result.types.size(); val_idx++) {
+			if (!should_infer[val_idx]) {
+				continue;
 			}
+			vector<LogicalType> column_types;
+			for (auto &list : values) {
+				column_types.push_back(ExpressionBinder::GetExpressionReturnType(*list[val_idx]));
+			}
+			result.types[val_idx] = LogicalType::MaxLogicalType(context, column_types);
 		}
 		for (auto &type : result.types) {
 			type = LogicalType::NormalizeType(type);

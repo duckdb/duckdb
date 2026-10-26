@@ -242,14 +242,18 @@ template <class LEAST_GREATER_OP>
 void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(input.GetArgument(0));
-	for (idx_t i = 1; i < input.GetArgumentCount(); i++) {
-		auto arg_type = ExpressionBinder::GetExpressionReturnType(input.GetArgument(i));
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			throw BinderException(input.GetArgument(i).GetQueryLocation(),
-			                      "Cannot combine types of %s and %s - an explicit cast is required",
-			                      child_type.ToString(), arg_type.ToString());
-		}
+	vector<LogicalType> arg_types;
+	for (idx_t i = 0; i < input.GetArgumentCount(); i++) {
+		arg_types.push_back(ExpressionBinder::GetExpressionReturnType(input.GetArgument(i)));
+	}
+	LogicalType child_type;
+	idx_t conflict_index;
+	if (!LogicalType::TryGetMaxLogicalType(context, arg_types, child_type, conflict_index)) {
+		auto &conflict_type = arg_types[conflict_index];
+		throw BinderException(input.GetArgument(conflict_index).GetQueryLocation(),
+		                      "Cannot combine types of %s and %s - an explicit cast is required%s",
+		                      child_type.ToString(), conflict_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, child_type, conflict_type));
 	}
 	switch (child_type.id()) {
 	case LogicalTypeId::UNKNOWN:

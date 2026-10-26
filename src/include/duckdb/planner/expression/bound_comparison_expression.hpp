@@ -39,5 +39,9 @@ struct BoundComparisonExpression {
 	                                  const LogicalType &right_type, ExpressionType comparison_type);
 	static bool TryBindComparison(ClientContext &context, const LogicalType &left_type, const LogicalType &right_type,
 	                              LogicalType &result_type, ExpressionType comparison_type);
+	//! Binds a comparison between all of the given types at once (e.g. for IN or BETWEEN), independent of their order
+	//! On failure, conflict_index is set to the index of a type that cannot be compared with the others
+	static bool TryBindComparison(ClientContext &context, const vector<LogicalType> &types, LogicalType &result_type,
+	                              ExpressionType comparison_type, optional_ptr<idx_t> conflict_index = nullptr);
 };
 } // namespace duckdb

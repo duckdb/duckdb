@@ -402,13 +402,14 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 		auto &bound_order = bound_orders[0];
 		D_ASSERT(bound_order);
-		auto order_type = bound_order->GetReturnType();
+		vector<LogicalType> types {bound_order->GetReturnType()};
 		if (window.StartExpr()) {
-			order_type = LogicalType::MaxLogicalType(context, order_type, start_type);
+			types.push_back(start_type);
 		}
 		if (window.EndExpr()) {
-			order_type = LogicalType::MaxLogicalType(context, order_type, end_type);
+			types.push_back(end_type);
 		}
+		auto order_type = LogicalType::MaxLogicalType(context, types);
 
 		// Cast all three to match
 		auto &original_order = *bound_order;

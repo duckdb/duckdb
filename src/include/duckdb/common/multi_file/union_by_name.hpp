@@ -21,10 +21,11 @@ struct MultiFileReaderInterface;
 
 class UnionByName {
 public:
-	static void CombineUnionTypes(ClientContext &context, const vector<string> &new_names,
-	                              const vector<LogicalType> &new_types, vector<LogicalType> &union_col_types,
-	                              vector<Identifier> &union_col_names, identifier_map_t<idx_t> &union_names_map);
-	//! Variant without a ClientContext - uses only the built-in type combination rules
+	//! Combines the columns of all schemas by name - the types of the columns do not depend on the order of the schemas
+	static void CombineUnionTypes(ClientContext &context, const vector<vector<string>> &names,
+	                              const vector<vector<LogicalType>> &types, vector<LogicalType> &union_col_types,
+	                              vector<Identifier> &union_col_names);
+	//! Adds the columns of a schema to the combined columns - uses only the built-in type combination rules
 	static void CombineUnionTypes(const vector<string> &new_names, const vector<LogicalType> &new_types,
 	                              vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
 	                              identifier_map_t<idx_t> &union_names_map);

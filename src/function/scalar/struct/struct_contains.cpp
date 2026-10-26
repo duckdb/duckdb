@@ -7,6 +7,7 @@
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -254,10 +255,24 @@ static void StructContainsResolveTypes(ResolveScalarFunctionTypesInput &input) {
 
 	// find the type that the value and all the children it can be compared with can be cast to
 	LogicalType target_type = arguments[1]->GetReturnType();
-	for (auto &child : struct_children) {
+	if (Settings::Get<OldTypeUnificationSetting>(context)) {
+		for (auto &child : struct_children) {
+			LogicalType max_type;
+			if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type)) {
+				target_type = max_type;
+			}
+		}
+	} else {
+		vector<LogicalType> comparable_types {target_type};
+		for (auto &child : struct_children) {
+			LogicalType max_type;
+			if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type)) {
+				comparable_types.push_back(child.second);
+			}
+		}
 		LogicalType max_type;
-		if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type)) {
-			target_type = max_type;
+		if (LogicalType::TryGetMaxLogicalType(context, comparable_types, max_type)) {
+			target_type = std::move(max_type);
 		}
 	}
 	bound_function.GetArguments()[1] = target_type;

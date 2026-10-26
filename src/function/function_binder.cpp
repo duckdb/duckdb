@@ -1151,12 +1151,26 @@ static void PropagateReturnCollation(BoundSimpleFunction &bound_function, const 
 	bound_function.SetReturnType(LogicalType::VARCHAR_COLLATION(std::move(collation)));
 }
 
+namespace {
+
+//! The types a template type is used with, collected over all arguments
+struct TemplateTypeCandidates {
+	//! The concrete types, and the expressions they come from
+	vector<LogicalType> types;
+	vector<reference<const Expression>> expressions;
+	//! Whether the template type is used with an unknown (parameter) or NULL type - these combine with anything
+	bool has_unknown = false;
+	bool has_null = false;
+};
+
+} // namespace
+
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-                              case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
+                              case_insensitive_map_t<TemplateTypeCandidates> &bindings, const Expression &current_expr,
                               const BoundSimpleFunction &function) {
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
-		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
+		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if they are not inferred to
 		// something else
 
 		// This might seem a bit strange, why not just not set the binding and error out later when we try to substitute
@@ -1166,10 +1180,11 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 		TypeVisitor::Contains(source, [&](const LogicalType &child) {
 			if (child.id() == LogicalTypeId::TEMPLATE) {
-				const auto index = TemplateType::GetName(child);
-				if (bindings.find(index) == bindings.end()) {
-					// not found, add the binding
-					bindings[index] = {target.id()};
+				auto &candidates = bindings[TemplateType::GetName(child)];
+				if (target.id() == LogicalTypeId::UNKNOWN) {
+					candidates.has_unknown = true;
+				} else {
+					candidates.has_null = true;
 				}
 			}
 			return false; // continue visiting
@@ -1177,49 +1192,12 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		return;
 	}
 
-	// If the source is a template type, we bind it, or try to unify its existing binding with the target type.
+	// If the source is a template type, we record the target type as a candidate - all candidates are unified later
 	if (source.id() == LogicalTypeId::TEMPLATE) {
-		const auto &index = TemplateType::GetName(source);
-		auto it = bindings.find(index);
-		if (it == bindings.end()) {
-			// not found, add the binding
-			bindings[index] = {target};
-			return;
-		}
-		if (it->second.back() == target) {
-			// already bound to the same type
-			return;
-		}
-
-		// Try to unify (promote) the type candidates
-		LogicalType result;
-		if (LogicalType::TryGetMaxLogicalType(context, it->second.back(), target, result)) {
-			// Type unification was successful
-			if (it->second.back() != result) {
-				// update the binding
-				it->second.push_back(target);
-				it->second.push_back(std::move(result)); // Push the new promoted type
-			}
-			return;
-		}
-
-		// If we reach here, it means the types are incompatible
-		string msg =
-		    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
-		                       TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
-		const auto &steps = it->second;
-
-		for (idx_t i = 0; i < steps.size(); i += 2) {
-			if (i == 0) {
-				// Normalize the first step to ensure it is a valid type
-				msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[i].ToString());
-			} else {
-				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
-				                          steps[i - 2].ToString(), steps[i - 1]);
-			}
-		}
-		msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", target.ToString());
-		throw BinderException(current_expr.GetQueryLocation(), msg);
+		auto &candidates = bindings[TemplateType::GetName(source)];
+		candidates.types.push_back(target);
+		candidates.expressions.push_back(current_expr);
+		return;
 	}
 
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
@@ -1280,7 +1258,37 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	}
 }
 
-static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
+//! Unifies the types a template type is used with into the type it is bound to - independent of the argument order
+static LogicalType ResolveTemplateCandidates(ClientContext &context, const string &name,
+                                             const TemplateTypeCandidates &candidates,
+                                             const BoundSimpleFunction &function) {
+	if (candidates.types.empty()) {
+		// only used with unknown or NULL types
+		return candidates.has_unknown ? LogicalType::UNKNOWN : LogicalType::SQLNULL;
+	}
+	LogicalType result;
+	idx_t conflict_index;
+	if (LogicalType::TryGetMaxLogicalType(context, candidates.types, result, conflict_index)) {
+		return result;
+	}
+	auto &conflict = candidates.types[conflict_index];
+	string msg = StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to "
+	                                "be each of the following types, which have no common type:\n",
+	                                name, function.ToString(), name);
+	vector<LogicalType> listed_types;
+	for (auto &type : candidates.types) {
+		if (std::find(listed_types.begin(), listed_types.end(), type) != listed_types.end()) {
+			continue;
+		}
+		listed_types.push_back(type);
+		msg += StringUtil::Format(" - '%s'\n", type.ToString());
+	}
+	msg += StringUtil::Format("'%s' is incompatible with '%s'", conflict.ToString(), result.ToString());
+	msg += LogicalType::GetTypeUnificationHint(context, result, conflict);
+	throw BinderException(candidates.expressions[conflict_index].get().GetQueryLocation(), msg);
+}
+
+static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<LogicalType> &bindings,
                                    const Identifier &function_name) {
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
@@ -1289,7 +1297,7 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 			auto it = bindings.find(index);
 			if (it != bindings.end()) {
 				// found a binding, return the concrete type
-				return LogicalType::NormalizeType(it->second.back());
+				return LogicalType::NormalizeType(it->second);
 			}
 
 			// If we reach here, the template type was not bound to any concrete type.
@@ -1303,7 +1311,7 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 
 void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
-	case_insensitive_map_t<vector<LogicalType>> bindings;
+	case_insensitive_map_t<TemplateTypeCandidates> candidates;
 	vector<reference<LogicalType>> to_substitute;
 
 	// First, we need to infer the template types from the children.
@@ -1313,10 +1321,14 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 		// If the parameter is not templated, we can skip it.
 		if (param.IsTemplated()) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, param, actual, bindings, *children[i], bound_function);
+			InferTemplateType(context, param, actual, candidates, *children[i], bound_function);
 
 			to_substitute.emplace_back(param);
 		}
+	}
+	case_insensitive_map_t<LogicalType> bindings;
+	for (auto &entry : candidates) {
+		bindings[entry.first] = ResolveTemplateCandidates(context, entry.first, entry.second, bound_function);
 	}
 
 	// If the return type is templated, we need to substitute it as well

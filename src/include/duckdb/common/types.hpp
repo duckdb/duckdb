@@ -478,6 +478,19 @@ struct LogicalType {
 	//! Variant of ForceMaxLogicalType for call-sites that have no ClientContext available; uses only the built-in
 	//! CastRules (no extension-registered casts).
 	DUCKDB_API static LogicalType DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
+	//! Returns the maximum logical type of a set of types, computed over all types at once - the result does not
+	//! depend on the order of the types, except for the layout (e.g. the member order) of combined STRUCT, TUPLE and
+	//! UNION types, which follows the order of the input types.
+	//! On failure, conflict_index is set to the index of a type that cannot be combined with the others
+	DUCKDB_API static bool TryGetMaxLogicalType(ClientContext &context, const vector<LogicalType> &types,
+	                                            LogicalType &result, optional_ptr<idx_t> conflict_index = nullptr);
+	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const vector<LogicalType> &types);
+	DUCKDB_API static LogicalType ForceMaxLogicalType(ClientContext &context, const vector<LogicalType> &types);
+	DUCKDB_API static bool DefaultTryGetMaxLogicalTypeUnchecked(const vector<LogicalType> &types, LogicalType &result);
+	//! Returns a hint to append to an error when the two types cannot be combined, but could be combined with the
+	//! legacy rules (see the old_type_unification setting) - or an empty string otherwise
+	DUCKDB_API static string GetTypeUnificationHint(ClientContext &context, const LogicalType &left,
+	                                                const LogicalType &right);
 	//! Normalize a type - removing literals
 	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 	//! Nested type children with Parquet style names

@@ -12,6 +12,7 @@
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -62,8 +63,10 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const LogicalType &left_type,
                                                   const LogicalType &right_type, LogicalType &result_type,
                                                   ExpressionType comparison_type) {
-	LogicalType res;
-	bool is_equality;
+	return TryBindComparison(context, vector<LogicalType> {left_type, right_type}, result_type, comparison_type);
+}
+
+static bool IsEqualityComparison(ExpressionType comparison_type) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -71,27 +74,47 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 	case ExpressionType::COMPARE_NOT_IN:
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		is_equality = true;
-		break;
+		return true;
 	default:
-		is_equality = false;
-		break;
+		return false;
 	}
-	if (is_equality) {
-		res = LogicalType::ForceMaxLogicalType(context, left_type, right_type);
+}
+
+bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const vector<LogicalType> &types,
+                                                  LogicalType &result_type, ExpressionType comparison_type,
+                                                  optional_ptr<idx_t> conflict_index) {
+	D_ASSERT(!types.empty());
+	auto legacy = Settings::Get<OldTypeUnificationSetting>(context);
+	if (legacy && types.size() > 2) {
+		// legacy: bind the comparison of the types from left to right
+		result_type = types[0];
+		for (idx_t i = 1; i < types.size(); i++) {
+			if (!TryBindComparison(context, vector<LogicalType> {result_type, types[i]}, result_type,
+			                       comparison_type)) {
+				if (conflict_index) {
+					*conflict_index = i;
+				}
+				return false;
+			}
+		}
+		return true;
+	}
+	LogicalType res;
+	if (IsEqualityComparison(comparison_type)) {
+		res = LogicalType::ForceMaxLogicalType(context, types);
 	} else {
-		if (!LogicalType::TryGetMaxLogicalType(context, left_type, right_type, res)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, types, res, conflict_index)) {
+			result_type = res;
 			return false;
 		}
 	}
 	switch (res.id()) {
 	case LogicalTypeId::DECIMAL: {
 		// result is a decimal: we need the maximum width and the maximum scale over width
-		vector<LogicalType> argument_types = {left_type, right_type};
 		uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
-		for (idx_t i = 0; i < argument_types.size(); i++) {
+		for (auto &type : types) {
 			uint8_t width, scale;
-			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
+			auto can_convert = type.GetDecimalProperties(width, scale);
 			if (!can_convert) {
 				result_type = res;
 				return true;
@@ -108,21 +131,32 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		res = LogicalType::DECIMAL(max_width, max_scale);
 		break;
 	}
-	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR: {
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(left_type)) {
-			res = LogicalType::NormalizeType(left_type);
-		} else if (right_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(right_type)) {
-			res = LogicalType::NormalizeType(right_type);
-		} else {
-			// else: check if collations are compatible
-			auto left_collation = StringType::GetCollation(left_type);
-			auto right_collation = StringType::GetCollation(right_type);
-			if (!left_collation.empty() && !right_collation.empty() && left_collation != right_collation) {
-				throw BinderException("Cannot combine types with different collation!");
+		vector<LogicalType> switch_types;
+		for (auto &type : types) {
+			if (type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(type)) {
+				switch_types.push_back(LogicalType::NormalizeType(type));
 			}
 		}
+		if (!switch_types.empty()) {
+			res = legacy ? switch_types[0] : LogicalType::ForceMaxLogicalType(context, switch_types);
+			break;
+		}
+		// else: check if collations are compatible
+		string collation;
+		for (auto &type : types) {
+			auto type_collation = StringType::GetCollation(type);
+			if (type_collation.empty()) {
+				continue;
+			}
+			if (!collation.empty() && collation != type_collation) {
+				throw BinderException("Cannot combine types with different collation!");
+			}
+			collation = type_collation;
+		}
 		break;
+	}
 	default:
 		break;
 	}
@@ -134,8 +168,9 @@ LogicalType BoundComparisonExpression::BindComparison(ClientContext &context, co
                                                       const LogicalType &right_type, ExpressionType comparison_type) {
 	LogicalType result_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, left_type, right_type, result_type, comparison_type)) {
-		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required",
-		                      left_type.ToString(), right_type.ToString());
+		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required%s",
+		                      left_type.ToString(), right_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, left_type, right_type));
 	}
 	return result_type;
 }

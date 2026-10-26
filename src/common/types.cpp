@@ -10,6 +10,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/type_map.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -1071,7 +1072,6 @@ public:
 	}
 };
 
-#ifdef D_ASSERT_IS_ENABLED
 static bool IsImplicitlyCastable(LogicalTypeResolver &logical_type_resolver, const LogicalType &source,
                                  const LogicalType &target) {
 	if (source == target) {
@@ -1082,7 +1082,6 @@ static bool IsImplicitlyCastable(LogicalTypeResolver &logical_type_resolver, con
 	                : CastRules::ImplicitCast(source, target);
 	return cost >= 0;
 }
-#endif
 
 class TryGetLogicalTypeResolver : public LogicalTypeResolver {
 public:
@@ -1109,6 +1108,9 @@ static bool PreferLeftType(const LogicalType &left, const LogicalType &right) {
 	auto right_score = GetLogicalTypeScore(right);
 	if (left_score != right_score) {
 		return left_score > right_score;
+	}
+	if (left.id() != right.id()) {
+		return left.id() > right.id();
 	}
 	return left.ToString() >= right.ToString();
 }
@@ -1217,25 +1219,24 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 	return TryCombineViaImplicitCast(logical_type_resolver, left, right, result);
 }
 
+static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver,
+                                         const duckdb::vector<LogicalType> &types, LogicalType &result,
+                                         optional_ptr<idx_t> conflict_index);
+
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (Settings::Get<OldImplicitCastingSetting>(context)) {
-		result = LogicalType::ForceMaxLogicalType(context, left, right);
-		return true;
-	}
-	return TryGetMaxLogicalTypeUnchecked(context, left, right, result);
+	return TryGetMaxLogicalType(context, duckdb::vector<LogicalType> {left, right}, result);
 }
 
 bool LogicalType::TryGetMaxLogicalTypeUnchecked(ClientContext &context, const LogicalType &left,
                                                 const LogicalType &right, LogicalType &result) {
 	TryGetLogicalTypeResolver logical_type_resolver(&context);
-	return logical_type_resolver.Operation(left, right, result);
+	return TryGetMaxLogicalTypeInternal(logical_type_resolver, {left, right}, result, nullptr);
 }
 
 bool LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
                                                        LogicalType &result) {
-	TryGetLogicalTypeResolver logical_type_resolver(nullptr);
-	return logical_type_resolver.Operation(left, right, result);
+	return DefaultTryGetMaxLogicalTypeUnchecked(duckdb::vector<LogicalType> {left, right}, result);
 }
 
 static idx_t GetLogicalTypeScore(const LogicalType &type) {
@@ -1360,22 +1361,245 @@ static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> conte
 	}
 }
 
+static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> context,
+                                               const duckdb::vector<LogicalType> &types);
+
 LogicalType LogicalType::ForceMaxLogicalType(ClientContext &context, const LogicalType &left,
                                              const LogicalType &right) {
-	return ForceMaxLogicalTypeInternal(&context, left, right);
+	return ForceMaxLogicalTypeInternal(&context, {left, right});
 }
 
 LogicalType LogicalType::DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	return ForceMaxLogicalTypeInternal(nullptr, left, right);
+	return ForceMaxLogicalTypeInternal(nullptr, {left, right});
+}
+
+//! Compares two types for the order in which a set of types is combined: wider types first (also for the children of
+//! nested types), so that they absorb the narrower ones. Returns 0 if the order does not matter.
+static int32_t CompareMaxLogicalTypeOrder(const LogicalType &left, const LogicalType &right) {
+	auto left_score = GetLogicalTypeScore(left);
+	auto right_score = GetLogicalTypeScore(right);
+	if (left_score != right_score) {
+		return left_score > right_score ? -1 : 1;
+	}
+	// NULL combines with anything - combine it last so it does not normalize literals early
+	auto left_null = left.id() == LogicalTypeId::SQLNULL;
+	auto right_null = right.id() == LogicalTypeId::SQLNULL;
+	if (left_null != right_null) {
+		return left_null ? 1 : -1;
+	}
+	if (left.id() != right.id()) {
+		return left.id() < right.id() ? -1 : 1;
+	}
+	if (!left.HasParameters() || !right.HasParameters()) {
+		return 0;
+	}
+	switch (left.id()) {
+	case LogicalTypeId::LIST:
+		return CompareMaxLogicalTypeOrder(ListType::GetChildType(left), ListType::GetChildType(right));
+	case LogicalTypeId::ARRAY:
+		return CompareMaxLogicalTypeOrder(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+	case LogicalTypeId::MAP: {
+		auto result = CompareMaxLogicalTypeOrder(MapType::KeyType(left), MapType::KeyType(right));
+		return result != 0 ? result : CompareMaxLogicalTypeOrder(MapType::ValueType(left), MapType::ValueType(right));
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
+	case LogicalTypeId::UNION: {
+		auto &left_children = StructType::GetChildTypes(left);
+		auto &right_children = StructType::GetChildTypes(right);
+		for (idx_t i = 0; i < MinValue(left_children.size(), right_children.size()); i++) {
+			auto result = CompareMaxLogicalTypeOrder(left_children[i].second, right_children[i].second);
+			if (result != 0) {
+				return result;
+			}
+		}
+		return 0;
+	}
+	default:
+		return 0;
+	}
+}
+
+//! The order in which a set of types is combined - this makes the result independent of the order of the input types
+//! Types that compare equal keep their input order, e.g. to keep the member order of STRUCTs
+static duckdb::vector<idx_t> GetMaxLogicalTypeOrder(const duckdb::vector<LogicalType> &types, bool legacy) {
+	duckdb::vector<idx_t> order;
+	for (idx_t i = 0; i < types.size(); i++) {
+		order.push_back(i);
+	}
+	if (legacy) {
+		// legacy: combine the types from left to right
+		return order;
+	}
+	std::stable_sort(order.begin(), order.end(), [&](idx_t left_idx, idx_t right_idx) {
+		return CompareMaxLogicalTypeOrder(types[left_idx], types[right_idx]) < 0;
+	});
+	return order;
+}
+
+static bool ContainsAlias(const LogicalType &type) {
+	return TypeVisitor::Contains(type, [](const LogicalType &child) { return child.HasAlias(); });
+}
+
+//! FIXME: fallback for implicit casts of aliased types that are not transitive: INTEGER -> JSON and JSON -> VARCHAR
+//! are implicit, but INTEGER -> VARCHAR is not. Combining the types one by one can then fail even though one of the
+//! inputs is a common type. Remove this (and the verification in TryGetMaxLogicalTypeInternal) once these casts are
+//! consistent. VARIANT does not need this, as combining anything with VARIANT always results in VARIANT.
+//! Picks one of the input types that all inputs can be implicitly cast to (if any).
+static bool TryGetMaxLogicalTypeFromInputs(LogicalTypeResolver &logical_type_resolver, const type_set_t &types,
+                                           LogicalType &result) {
+	optional_ptr<const LogicalType> best;
+	for (auto &candidate : types) {
+		if (candidate.id() == LogicalTypeId::SQLNULL || candidate.id() == LogicalTypeId::STRING_LITERAL ||
+		    candidate.id() == LogicalTypeId::INTEGER_LITERAL) {
+			continue;
+		}
+		if (best && (*best == candidate || PreferLeftType(*best, candidate))) {
+			continue;
+		}
+		bool all_castable = true;
+		for (auto &type : types) {
+			if (!IsImplicitlyCastable(logical_type_resolver, type, candidate)) {
+				all_castable = false;
+				break;
+			}
+		}
+		if (all_castable) {
+			best = candidate;
+		}
+	}
+	if (!best) {
+		return false;
+	}
+	result = *best;
+	return true;
+}
+
+static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver,
+                                         const duckdb::vector<LogicalType> &types, LogicalType &result,
+                                         optional_ptr<idx_t> conflict_index) {
+	if (types.empty()) {
+		throw InternalException("TryGetMaxLogicalType called without any types");
+	}
+	auto legacy = logical_type_resolver.legacy_type_unification;
+	auto order = GetMaxLogicalTypeOrder(types, legacy);
+	result = types[order[0]];
+	// the distinct types combined so far
+	duckdb::vector<reference<const LogicalType>> combined_types {types[order[0]]};
+	type_set_t seen_types {types[order[0]]};
+	for (idx_t i = 1; i < order.size(); i++) {
+		auto &type = types[order[i]];
+		if (!legacy && !seen_types.insert(type).second) {
+			continue;
+		}
+		LogicalType combined;
+		bool success = logical_type_resolver.Operation(result, type, combined);
+		if (success && !legacy && combined != result &&
+		    (ContainsAlias(result) || ContainsAlias(type) || ContainsAlias(combined))) {
+			// FIXME: implicit casts of aliased types are not transitive (see TryGetMaxLogicalTypeFromInputs)
+			// verify that the earlier types can be cast to the new candidate
+			for (auto &entry : combined_types) {
+				if (!IsImplicitlyCastable(logical_type_resolver, entry, combined)) {
+					// they cannot - keep the current type instead, if the new type can be cast to it
+					success = IsImplicitlyCastable(logical_type_resolver, type, result);
+					combined = result;
+					break;
+				}
+			}
+		}
+		if (!success) {
+			// FIXME: see TryGetMaxLogicalTypeFromInputs
+			if (!legacy && TryGetMaxLogicalTypeFromInputs(logical_type_resolver,
+			                                              type_set_t(types.begin(), types.end()), result)) {
+				break;
+			}
+			if (conflict_index) {
+				*conflict_index = order[i];
+			}
+			return false;
+		}
+		combined_types.push_back(type);
+		result = std::move(combined);
+	}
+	if (types.size() > 1 &&
+	    (result.id() == LogicalTypeId::STRING_LITERAL || result.id() == LogicalTypeId::INTEGER_LITERAL)) {
+		// identical literal types are skipped above - combining literals always results in a regular type
+		result = LogicalType::NormalizeType(result);
+	}
+#ifdef D_ASSERT_IS_ENABLED
+	// all inputs must be implicitly castable to the combined type
+	if (!logical_type_resolver.legacy_type_unification) {
+		for (auto &type : types) {
+			D_ASSERT(IsImplicitlyCastable(logical_type_resolver, type, result));
+		}
+	}
+#endif
+	return true;
+}
+
+bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const duckdb::vector<LogicalType> &types,
+                                       LogicalType &result, optional_ptr<idx_t> conflict_index) {
+	if (Settings::Get<OldImplicitCastingSetting>(context)) {
+		result = LogicalType::ForceMaxLogicalType(context, types);
+		return true;
+	}
+	TryGetLogicalTypeResolver logical_type_resolver(&context);
+	return TryGetMaxLogicalTypeInternal(logical_type_resolver, types, result, conflict_index);
+}
+
+bool LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(const duckdb::vector<LogicalType> &types, LogicalType &result) {
+	TryGetLogicalTypeResolver logical_type_resolver(nullptr);
+	return TryGetMaxLogicalTypeInternal(logical_type_resolver, types, result, nullptr);
+}
+
+LogicalType LogicalType::MaxLogicalType(ClientContext &context, const duckdb::vector<LogicalType> &types) {
+	LogicalType result;
+	idx_t conflict_index;
+	if (!TryGetMaxLogicalType(context, types, result, conflict_index)) {
+		auto &conflict = types[conflict_index];
+		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required%s",
+		                              result.ToString(), conflict.ToString(),
+		                              GetTypeUnificationHint(context, result, conflict));
+	}
+	return result;
+}
+
+static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> context,
+                                               const duckdb::vector<LogicalType> &types) {
+	if (types.empty()) {
+		throw InternalException("ForceMaxLogicalType called without any types");
+	}
+	ForceLogicalTypeResolver logical_type_resolver(context);
+	auto order = GetMaxLogicalTypeOrder(types, logical_type_resolver.legacy_type_unification);
+	auto result = types[order[0]];
+	for (idx_t i = 1; i < order.size(); i++) {
+		result = ForceMaxLogicalTypeInternal(context, result, types[order[i]]);
+	}
+	return result;
+}
+
+LogicalType LogicalType::ForceMaxLogicalType(ClientContext &context, const duckdb::vector<LogicalType> &types) {
+	return ForceMaxLogicalTypeInternal(&context, types);
+}
+
+string LogicalType::GetTypeUnificationHint(ClientContext &context, const LogicalType &left, const LogicalType &right) {
+	TryGetLogicalTypeResolver legacy_resolver(&context);
+	if (legacy_resolver.legacy_type_unification) {
+		return string();
+	}
+	legacy_resolver.legacy_type_unification = true;
+	LogicalType result;
+	if (!legacy_resolver.Operation(left, right, result)) {
+		return string();
+	}
+	return StringUtil::Format(
+	    "\n\nCombining %s and %s was allowed in earlier versions of DuckDB. Add an explicit cast, "
+	    "or use \"SET old_type_unification=true\" to revert to the old behavior.",
+	    left.ToString(), right.ToString());
 }
 
 LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right) {
-	LogicalType result;
-	if (!TryGetMaxLogicalType(context, left, right, result)) {
-		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(),
-		                              right.ToString());
-	}
-	return result;
+	return MaxLogicalType(context, duckdb::vector<LogicalType> {left, right});
 }
 
 void LogicalType::Verify() const {
