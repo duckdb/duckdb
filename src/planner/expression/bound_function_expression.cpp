@@ -69,6 +69,9 @@ bool BoundFunctionExpression::IsFoldable() const {
 	if (lambda_expr && lambda_expr->IsVolatile()) {
 		return false;
 	}
+	if (function.IsNeverFolded()) {
+		return false;
+	}
 	return function.GetStability() == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 

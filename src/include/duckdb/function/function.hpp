@@ -563,6 +563,13 @@ public:
 		requires_ordered_execution = value;
 	}
 
+	auto IsNeverFolded() const -> bool {
+		return never_folded;
+	}
+	auto SetNeverFolded(bool value) -> void {
+		never_folded = value;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -590,6 +597,8 @@ public:
 	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
+	//! Whether this function must never be evaluated at plan time, even for constant arguments
+	bool never_folded = false;
 };
 
 class BoundSimpleFunction {

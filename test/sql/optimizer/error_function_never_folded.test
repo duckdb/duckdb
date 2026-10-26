@@ -1,0 +1,62 @@
+# name: test/sql/optimizer/error_function_never_folded.test
+# description: error() is deterministic but must not be evaluated at plan time
+# group: [optimizer]
+
+# error() in a branch that is never evaluated must not fail the query
+query I
+SELECT CASE WHEN true THEN 7 ELSE CASE WHEN error('never') THEN 8 ELSE 9 END END
+----
+7
+
+query I
+SELECT CASE WHEN false THEN regexp_matches('abc', error('never')::VARCHAR) ELSE true END
+----
+true
+
+query I
+SELECT CASE WHEN false THEN 'abc' LIKE error('never')::VARCHAR ELSE true END
+----
+true
+
+query I
+SELECT CASE WHEN false THEN contains('abc', error('never')::VARCHAR) ELSE true END
+----
+true
+
+query I
+SELECT CASE WHEN false THEN 'a' || error('never')::VARCHAR ELSE 'b' END
+----
+b
+
+# The order of the filters keeps the throwing filter behind the filter that removes all rows
+query I
+SELECT count(*) FROM range(5) t(i) WHERE i < 0 AND (error('never')::INTEGER) = 1
+----
+0
+
+# A throwing operand does not take part in constant simplification of the other operand
+query I
+SELECT (error('never')::INTEGER = 1) OR true
+----
+true
+
+query I
+SELECT true OR (error('never')::INTEGER = 1)
+----
+true
+
+# Reachable errors are still raised
+statement error
+SELECT error('reached');
+----
+Invalid Input Error: reached
+
+statement error
+SELECT regexp_matches('abc', error('reached')::VARCHAR);
+----
+Invalid Input Error: reached
+
+statement error
+SELECT count(*) FROM range(5) t(i) WHERE i >= 0 AND (error('reached')::INTEGER) = 1;
+----
+Invalid Input Error: reached

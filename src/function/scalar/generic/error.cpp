@@ -21,8 +21,8 @@ static void ErrorFunction(DataChunk &args, ExpressionState &state, Vector &resul
 ScalarFunction ErrorFun::GetFunction() {
 	auto fun = ScalarFunction("error", {}, LogicalType::SQLNULL, ErrorFunction);
 	fun.GetSignature().AddParameter("message", LogicalType::VARCHAR);
-	// Set the function with side effects to avoid the optimization.
-	fun.SetVolatile();
+	// Deterministic, but never evaluate it at plan time.
+	fun.SetNeverFolded(true);
 	fun.SetFallible();
 	return fun;
 }
