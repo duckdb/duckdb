@@ -14,12 +14,14 @@ CompressedStringScanState::~CompressedStringScanState() {
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx,
                                                         StringScanType string_scan_type) {
-	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.GetBlockSize()));
-
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
 	uint32_t string_len = GetStringLength(dict_idx);
+	if (dict_offset > dictionary_size || string_len > dictionary_size - dict_offset) {
+		throw DataCorruptionException("Failed to scan dictionary string - dictionary offset was out of range. Database "
+		                              "file appears to be corrupted.");
+	}
 
 	// normal string: read string from this block
 	auto dict_pos = dict_ptr + dict_offset;
@@ -107,7 +109,9 @@ void CompressedStringScanState::Initialize() {
 		break;
 	}
 
-	if (static_cast<idx_t>(dict_count) > segment.GetBlockSize()) {
+	// FSST_ONLY has one string per row after the reserved index 0, which its sequential scans rely on
+	if (static_cast<idx_t>(dict_count) > segment.GetBlockSize() ||
+	    (mode == DictFSSTMode::FSST_ONLY && static_cast<idx_t>(dict_count) <= segment.count.load())) {
 		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
