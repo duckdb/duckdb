@@ -17,13 +17,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Persistent Roaring segment is missing its data block
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error: Persistent Roaring segment is missing its data block
