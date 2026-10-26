@@ -280,7 +280,7 @@ void TupleDataCollection::SortKeyComputeHeapSizes(TupleDataChunkState &chunk_sta
 	const auto &source_validity = source_vector_data.validity;
 	const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
 
-	const auto inlined_size = SortKeyUtils::GetInlineLength(sort_key_type);
+	const auto inlined_size = SortKeyUtils::GetInlineCapacity(sort_key_type);
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 		const auto &string_size = source_data[source_idx].GetSize();
