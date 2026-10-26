@@ -148,39 +148,6 @@ SELECT * FROM db.main.v_using_key;
 ----
 22
 
-# outside of a view nothing changes: the reference binds to the attached database, or is ambiguous within its catalog
-query I
-SELECT s.g();
-----
-11
-
-statement ok
-CREATE TABLE db.s.defaults(z INTEGER DEFAULT s.g());
-
-statement ok
-INSERT INTO db.s.defaults DEFAULT VALUES;
-
-query I
-SELECT * FROM db.s.defaults;
-----
-11
-
-statement ok
-USE db;
-
-statement error
-SELECT * FROM db.t;
-----
-Ambiguous reference to catalog or schema "db"
-
-statement error
-SELECT s.g();
-----
-Ambiguous reference to catalog or schema "s"
-
-statement ok
-USE memory;
-
 # the schema preference also applies after re-attaching under a different alias
 statement ok
 ATTACH '{TEST_DIR}/view_catalog_schema_ambiguity.db' AS db1;
@@ -212,3 +179,33 @@ query I
 SELECT * FROM db2.db1.v;
 ----
 5
+
+# outside of a view nothing changes: the reference binds to the attached database, or is ambiguous within its catalog
+query I
+SELECT s.g();
+----
+11
+
+statement ok
+CREATE TABLE db.s.defaults(z INTEGER DEFAULT s.g());
+
+statement ok
+INSERT INTO db.s.defaults DEFAULT VALUES;
+
+query I
+SELECT * FROM db.s.defaults;
+----
+11
+
+statement ok
+USE db;
+
+statement error
+SELECT * FROM db.t;
+----
+Ambiguous reference to catalog or schema "db"
+
+statement error
+SELECT s.g();
+----
+Ambiguous reference to catalog or schema "s"
