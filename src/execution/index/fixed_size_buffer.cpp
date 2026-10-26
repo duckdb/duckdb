@@ -160,6 +160,15 @@ void FixedSizeBuffer::LoadFromDisk() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto pinned_buffer_handle = buffer_manager.Pin(block_handle);
 
+	// block_pointer.offset and allocation_size come straight from the index's on-disk metadata - verify the read
+	// stays within the (fixed-size) source and destination blocks before copying out of either of them.
+	auto block_size = block_manager.GetBlockSize();
+	if (allocation_size > block_size || block_pointer.offset > block_size - allocation_size) {
+		throw DataCorruptionException("Corrupted index buffer: offset %llu with allocation size %llu exceeds the "
+		                              "block size %llu",
+		                              block_pointer.offset, allocation_size, block_size);
+	}
+
 	// Copy the (partial) data into a new (not yet disk-backed) buffer handle.
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);

@@ -1255,7 +1255,7 @@ SchemaOrData <- CopySchema / CopyData
 CopySchema <- 'SCHEMA'
 CopyData <- 'DATA'
 
-CreateIndexStmt <- UniqueIndex? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
+CreateIndexStmt <- UniqueIndex? 'INDEX' IndexConcurrently? IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
 
 WithList <- 'WITH' RelOptionOrOids
 RelOptionOrOids <- RelOptionList / Oids
@@ -1266,6 +1266,7 @@ WithOids <- 'WITH'
 WithoutOids <- 'WITHOUT'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 UniqueIndex <- 'UNIQUE'
+IndexConcurrently <- 'CONCURRENTLY'
 IndexType <- 'USING' Identifier
 RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedColLabel / StringLiteral
@@ -1587,19 +1588,23 @@ ExplainableStatements <-
     DropStatement /
     ExecuteStatement /
     InsertStatement /
+    InstallStatement /
     LoadStatement /
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
     ExplainSelectStatement /
     TransactionStatement /
+    TruncateStatement /
+    UpdateExtensionsStatement /
     UpdateStatement /
     VacuumStatement /
     SetStatement /
     ResetStatement
 
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
+ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral ExportOptions?
 ExportSource <- CatalogName 'TO'
+ExportOptions <- GenericCopyOptionList / SpecializedOptionList
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
 ColumnReference <- NestedSchemaTableColumnName / CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
@@ -1843,10 +1848,11 @@ InSelectStatement <- Parens(SelectStatementInternal)
 BetweenClause <- 'BETWEEN' Asymmetric? OtherOperatorExpression 'AND' OtherOperatorExpression
 Asymmetric <- 'ASYMMETRIC'
 # LEVEL 8
-OtherOperatorExpression <- InfixOtherOperatorExpression / CustomPrefixExpression
+OtherOperatorExpression <- InfixOtherOperatorExpression
 InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
-CustomPrefixExpression <- OperatorLiteral OtherOperatorExpression
-OtherOperatorTail <- OtherOperator BitwiseExpression
+OtherOperatorTail <- AnyAllSubqueryTail / OtherOperatorExpressionTail
+AnyAllSubqueryTail <- AnyAllParsedOperator SubqueryReference
+OtherOperatorExpressionTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator
@@ -1883,11 +1889,13 @@ CollateExpression <- AtTimeZoneExpression CollateExpressionTail*
 CollateExpressionTail <- CollateOperator AtTimeZoneExpression
 CollateOperator <- 'COLLATE'
 # LEVEL 14
-AtTimeZoneExpression <- PrefixExpression AtTimeZoneExpressionTail*
-AtTimeZoneExpressionTail <- AtTimeZoneOperator PrefixExpression
+AtTimeZoneExpression <- UnaryExpression AtTimeZoneExpressionTail*
+AtTimeZoneExpressionTail <- AtTimeZoneOperator UnaryExpression
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
+UnaryExpression <- PrefixExpression / CustomPrefixExpression
 PrefixExpression <- PrefixOperator* BaseExpression
+CustomPrefixExpression <- OperatorLiteral TildeExpression
 PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
@@ -2331,11 +2339,14 @@ ValuesExpressions <- Parens(List(Expression))
 SetStatement <- 'SET' SetAssignmentOrTimeZone
 SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
-ResetStatement <- 'RESET' SetVariableOrSetting
-SetSchema <- 'SCHEMA' StringLiteral
+ResetStatement <- 'RESET' ResetTarget
+ResetTarget <- ResetTimeZone / ResetVariableOrSetting
+ResetTimeZone <- SettingScope? 'TIME' 'ZONE'
+ResetVariableOrSetting <- SetVariableOrSetting
+SetSchema <- SettingScope? 'SCHEMA' StringLiteral
 StandardAssignment <- SetVariableOrSetting SetAssignment
 SetVariableOrSetting <- SetVariable / SetSetting
-SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+SetTimeZone <- SettingScope? 'TIME' 'ZONE' ZoneValue
 
 ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / ZoneLocal / ZoneDefault / ZoneStringLiteral / ZoneIdentifier / NumberLiteral
 ZoneLocal <- 'LOCAL'

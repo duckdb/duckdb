@@ -37,12 +37,22 @@ void BignumIntermediate::Print() const {
 }
 
 BignumIntermediate::BignumIntermediate(const bignum_t &value) {
+	if (value.data.GetSize() < Bignum::BIGNUM_HEADER_SIZE + 1) {
+		throw DataCorruptionException("Invalid BIGNUM blob: size %llu is smaller than the minimum of %llu bytes",
+		                              static_cast<uint64_t>(value.data.GetSize()),
+		                              static_cast<uint64_t>(Bignum::BIGNUM_HEADER_SIZE + 1));
+	}
 	is_negative = (value.data.GetData()[0] & 0x80) == 0;
 	data = reinterpret_cast<data_ptr_t>(value.data.GetDataWriteable() + Bignum::BIGNUM_HEADER_SIZE);
 	size = static_cast<uint32_t>(value.data.GetSize()) - Bignum::BIGNUM_HEADER_SIZE;
 }
 
 BignumIntermediate::BignumIntermediate(uint8_t *value, idx_t ptr_size) {
+	if (ptr_size < Bignum::BIGNUM_HEADER_SIZE + 1) {
+		throw DataCorruptionException("Invalid BIGNUM blob: size %llu is smaller than the minimum of %llu bytes",
+		                              static_cast<uint64_t>(ptr_size),
+		                              static_cast<uint64_t>(Bignum::BIGNUM_HEADER_SIZE + 1));
+	}
 	is_negative = (value[0] & 0x80) == 0;
 	data = value + Bignum::BIGNUM_HEADER_SIZE;
 	size = static_cast<uint32_t>(ptr_size) - Bignum::BIGNUM_HEADER_SIZE;

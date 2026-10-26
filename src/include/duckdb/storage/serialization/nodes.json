@@ -311,7 +311,10 @@
     ],
     "constructor": [
       "seed"
-    ]
+    ],
+    "methods": {
+      "Verify": []
+    }
   },
   {
     "class": "BaseReservoirSampling",
@@ -1256,6 +1259,9 @@
         "type": "string"
       }
     ],
+    "methods": {
+      "Verify": []
+    },
     "pointer_type": "none"
   },
   {

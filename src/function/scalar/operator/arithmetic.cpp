@@ -1184,7 +1184,12 @@ struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
-			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
+			if constexpr (std::is_same<OP, ModuloOperator>::value) {
+				// the remainder of MIN / -1 is 0 - only the division itself overflows
+				return RESULT_TYPE(0);
+			} else {
+				throw OutOfRangeException("Overflow in division of %d / %d", left, right);
+			}
 		} else if (right == 0) {
 			if (!NULL_ON_ZERO) {
 				ThrowDivisionByZero(fun.get());
@@ -1226,7 +1231,12 @@ struct BinaryNumericDivideHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
-			throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
+			if constexpr (std::is_same<OP, ModuloOperator>::value) {
+				// the remainder of MIN / -1 is 0 - only the division itself overflows
+				return RESULT_TYPE(0);
+			} else {
+				throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
+			}
 		} else if (right == 0) {
 			if (!NULL_ON_ZERO) {
 				ThrowDivisionByZero(fun.get());
@@ -1449,17 +1459,252 @@ hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 	return left % right;
 }
 
+namespace {
+
+// a % b keeps the sign of a with |a % b| <= |a| and |a % b| < |b|; when |a| < |b| for every pair the result is a
+template <class T>
+bool SignedModuloBounds(const LogicalType &type, const BaseStatistics &lstats, const BaseStatistics &rstats,
+                        Value &new_min, Value &new_max, bool &zero_divisor) {
+	auto lmin = NumericStats::GetMin<T>(lstats);
+	auto lmax = NumericStats::GetMax<T>(lstats);
+	auto rmin = NumericStats::GetMin<T>(rstats);
+	auto rmax = NumericStats::GetMax<T>(rstats);
+	const T zero(0);
+	zero_divisor = rmin <= zero && rmax >= zero;
+	if (rmin == zero && rmax == zero) {
+		return false;
+	}
+	T result_min = lmin < zero ? lmin : zero;
+	T result_max = lmax > zero ? lmax : zero;
+	// |rmin| is not representable for the minimum value, and the bound it implies is the full type range anyway
+	if (rmin != NumericLimits<T>::Minimum()) {
+		T abs_rmin = rmin < zero ? T(-rmin) : rmin;
+		T abs_rmax = rmax < zero ? T(-rmax) : rmax;
+		T max_abs = MaxValue(abs_rmin, abs_rmax);
+		T min_abs = zero_divisor ? zero : MinValue(abs_rmin, abs_rmax);
+		if (!zero_divisor && T(-min_abs) < lmin && lmax < min_abs) {
+			result_min = lmin;
+			result_max = lmax;
+		} else {
+			T bound = T(max_abs - T(1));
+			result_min = MaxValue(result_min, T(-bound));
+			result_max = MinValue(result_max, bound);
+		}
+	}
+	new_min = NumericStatsValue(type, result_min);
+	new_max = NumericStatsValue(type, result_max);
+	return true;
+}
+
+template <class T>
+bool UnsignedModuloBounds(const LogicalType &type, const BaseStatistics &lstats, const BaseStatistics &rstats,
+                          Value &new_min, Value &new_max, bool &zero_divisor) {
+	auto lmin = NumericStats::GetMin<T>(lstats);
+	auto lmax = NumericStats::GetMax<T>(lstats);
+	auto rmin = NumericStats::GetMin<T>(rstats);
+	auto rmax = NumericStats::GetMax<T>(rstats);
+	const T zero(0);
+	zero_divisor = rmin == zero;
+	if (rmax == zero) {
+		return false;
+	}
+	T result_min = zero;
+	T result_max = lmax;
+	if (lmax < rmin) {
+		result_min = lmin;
+	} else {
+		result_max = MinValue(result_max, T(rmax - T(1)));
+	}
+	new_min = NumericStatsValue(type, result_min);
+	new_max = NumericStatsValue(type, result_max);
+	return true;
+}
+
+template <class T>
+bool FloatingModuloBounds(const LogicalType &type, const BaseStatistics &lstats, const BaseStatistics &rstats,
+                          Value &new_min, Value &new_max, bool &zero_divisor) {
+	auto lmin = NumericStats::GetMin<T>(lstats);
+	auto lmax = NumericStats::GetMax<T>(lstats);
+	auto rmin = NumericStats::GetMin<T>(rstats);
+	auto rmax = NumericStats::GetMax<T>(rstats);
+	if (!Value::IsFinite(lmin) || !Value::IsFinite(lmax) || !Value::IsFinite(rmin) || !Value::IsFinite(rmax)) {
+		return false;
+	}
+	zero_divisor = rmin <= 0 && rmax >= 0;
+	if (rmin == 0 && rmax == 0) {
+		return false;
+	}
+	T result_min = lmin < 0 ? lmin : 0;
+	T result_max = lmax > 0 ? lmax : 0;
+	T abs_rmin = std::fabs(rmin);
+	T abs_rmax = std::fabs(rmax);
+	T max_abs = MaxValue(abs_rmin, abs_rmax);
+	T min_abs = zero_divisor ? 0 : MinValue(abs_rmin, abs_rmax);
+	if (!zero_divisor && -min_abs < lmin && lmax < min_abs) {
+		result_min = lmin;
+		result_max = lmax;
+	} else {
+		result_min = MaxValue(result_min, -max_abs);
+		result_max = MinValue(result_max, max_abs);
+	}
+	new_min = NumericStatsValue(type, result_min);
+	new_max = NumericStatsValue(type, result_max);
+	return true;
+}
+
+template <class T>
+void SetFullRange(const LogicalType &type, BaseStatistics &stats) {
+	NumericStats::SetMin(stats, NumericStatsValue(type, NumericLimits<T>::Minimum()));
+	NumericStats::SetMax(stats, NumericStatsValue(type, NumericLimits<T>::Maximum()));
+}
+
+bool ModuloFullRange(const LogicalType &type, BaseStatistics &stats) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+		SetFullRange<int8_t>(type, stats);
+		break;
+	case PhysicalType::INT16:
+		SetFullRange<int16_t>(type, stats);
+		break;
+	case PhysicalType::INT32:
+		SetFullRange<int32_t>(type, stats);
+		break;
+	case PhysicalType::INT64:
+		SetFullRange<int64_t>(type, stats);
+		break;
+	case PhysicalType::INT128:
+		SetFullRange<hugeint_t>(type, stats);
+		break;
+	case PhysicalType::UINT8:
+		SetFullRange<uint8_t>(type, stats);
+		break;
+	case PhysicalType::UINT16:
+		SetFullRange<uint16_t>(type, stats);
+		break;
+	case PhysicalType::UINT32:
+		SetFullRange<uint32_t>(type, stats);
+		break;
+	case PhysicalType::UINT64:
+		SetFullRange<uint64_t>(type, stats);
+		break;
+	case PhysicalType::UINT128:
+		SetFullRange<uhugeint_t>(type, stats);
+		break;
+	case PhysicalType::FLOAT:
+		SetFullRange<float>(type, stats);
+		break;
+	case PhysicalType::DOUBLE:
+		SetFullRange<double>(type, stats);
+		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<BaseStatistics> PropagateModuloStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 2);
+	auto &lstats = child_stats[0];
+	auto &rstats = child_stats[1];
+	if (!NumericStats::HasMinMax(rstats)) {
+		return nullptr;
+	}
+	auto &return_type = expr.GetReturnType();
+	// the divisor alone bounds the result: a dividend without statistics spans its whole type
+	BaseStatistics full_range = NumericStats::CreateUnknown(return_type);
+	if (!NumericStats::HasMinMax(lstats)) {
+		if (return_type.id() == LogicalTypeId::DECIMAL || !ModuloFullRange(return_type, full_range)) {
+			return nullptr;
+		}
+	}
+	auto &dividend_stats = NumericStats::HasMinMax(lstats) ? lstats : full_range;
+	Value new_min, new_max;
+	bool zero_divisor = false;
+	bool has_bounds;
+	switch (return_type.InternalType()) {
+	case PhysicalType::INT8:
+		has_bounds = SignedModuloBounds<int8_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::INT16:
+		has_bounds = SignedModuloBounds<int16_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::INT32:
+		has_bounds = SignedModuloBounds<int32_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::INT64:
+		has_bounds = SignedModuloBounds<int64_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::INT128:
+		has_bounds = SignedModuloBounds<hugeint_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::UINT8:
+		has_bounds = UnsignedModuloBounds<uint8_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::UINT16:
+		has_bounds =
+		    UnsignedModuloBounds<uint16_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::UINT32:
+		has_bounds =
+		    UnsignedModuloBounds<uint32_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::UINT64:
+		has_bounds =
+		    UnsignedModuloBounds<uint64_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::UINT128:
+		has_bounds =
+		    UnsignedModuloBounds<uhugeint_t>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::FLOAT:
+		has_bounds = FloatingModuloBounds<float>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	case PhysicalType::DOUBLE:
+		has_bounds = FloatingModuloBounds<double>(return_type, dividend_stats, rstats, new_min, new_max, zero_divisor);
+		break;
+	default:
+		return nullptr;
+	}
+	if (!has_bounds) {
+		return nullptr;
+	}
+	if (zero_divisor) {
+		// x % 0 is NaN under IEEE semantics and raises by default: neither must be hidden by derived bounds
+		if (return_type.IsFloating() && Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+			return nullptr;
+		}
+		if (Settings::Get<ErrorOnDivisionByZeroSetting>(context)) {
+			return nullptr;
+		}
+	}
+	auto result = NumericStats::CreateEmpty(return_type);
+	NumericStats::SetMin(result, new_min);
+	NumericStats::SetMax(result, new_max);
+	result.CombineValidity(lstats, rstats);
+	if (zero_divisor) {
+		// x % 0 is NULL
+		result.SetHasNull();
+	}
+	return result.ToUnique();
+}
+
+} // namespace
+
 ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	ScalarFunctionSet modulo("%");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE) {
-			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>));
+			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>,
+			                                  PropagateModuloStats));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
-			ScalarFunction function({type, type}, type, nullptr, BindDecimalArithmetic<true>);
+			ScalarFunction function({type, type}, type, nullptr, BindDecimalArithmetic<true>, PropagateModuloStats);
 			function.SetResolveTypesCallback(DecimalModuloResolveTypes<ModuloOperator>);
 			modulo.AddFunction(std::move(function));
 		} else {
-			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>));
+			modulo.AddFunction(
+			    ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>, PropagateModuloStats));
 		}
 	}
 	modulo.SetFallible();
@@ -1477,9 +1722,18 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
+//! Interpolates between two integers without going through a double for the values themselves
+static int64_t InterpolateInt64(const int64_t lo, const double d, const int64_t hi) {
+	int64_t delta;
+	if (!TrySubtractOperator::Operation(hi, lo, delta)) {
+		return std::llround(static_cast<double>(lo) * (1.0 - d) + static_cast<double>(hi) * d);
+	}
+	return lo + std::llround(static_cast<double>(delta) * d);
+}
+
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 //! TIMETZ values are interpolated by their time normalized to UTC - the result is the normalized time at offset +00
@@ -1502,7 +1756,7 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 template <>

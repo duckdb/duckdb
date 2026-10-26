@@ -71,7 +71,7 @@ static unique_ptr<FunctionData> JsonSerializeBind(BindScalarFunctionInput &input
 			}
 			skip_if_default = BooleanValue::Get(input.GetConstant(i));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument '%s'", alias));
+			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument %s", alias));
 		}
 	}
 	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, skip_if_default, format);
@@ -282,6 +282,10 @@ struct ExecuteSqlTableFunction {
 		shared_ptr<Relation> plan;
 		unique_ptr<QueryResult> result;
 		unique_ptr<Connection> con;
+
+		bool SupportStatementCache() const override {
+			return false;
+		}
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,

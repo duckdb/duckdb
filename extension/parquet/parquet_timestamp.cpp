@@ -8,6 +8,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 namespace duckdb {
 
@@ -26,7 +28,12 @@ static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 	int64_t days_since_epoch = ImpalaTimestampToDays(impala_timestamp);
 	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
 	auto microseconds = nanoseconds / NANOSECONDS_PER_MICRO;
-	return days_since_epoch * MICROSECONDS_PER_DAY + microseconds;
+	int64_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(days_since_epoch, MICROSECONDS_PER_DAY, result) ||
+	    !TryAddOperator::Operation<int64_t, int64_t, int64_t>(result, microseconds, result)) {
+		throw InvalidInputException("Int96 timestamp is out of range");
+	}
+	return result;
 }
 
 static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
@@ -132,6 +139,14 @@ static T ParquetWrapTime(const T &raw, const T day) {
 	}
 	const auto modulus = raw % day;
 	return modulus + (modulus < 0) * day;
+}
+
+int64_t ParquetTimeTZToUTCMicros(const dtime_tz_t &timetz) {
+	// Keep the end of the UTC day, which NormalizeTimeTZ wraps to its start
+	if (timetz.time().value - timetz.offset() * Interval::MICROS_PER_SEC == Interval::MICROS_PER_DAY) {
+		return Interval::MICROS_PER_DAY;
+	}
+	return Time::NormalizeTimeTZ(timetz).value;
 }
 
 bool ParquetTimeIsValid(const int64_t &raw, const int64_t day) {

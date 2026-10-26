@@ -6,6 +6,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -19,6 +20,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
@@ -168,6 +170,14 @@ FileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
+FileSystem &FileSystem::Get(QueryContext context, AttachedDatabase &db) {
+	auto client_context = context.GetClientContext();
+	if (client_context) {
+		return FileSystem::GetFileSystem(*client_context);
+	}
+	return FileSystem::Get(db);
+}
+
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
 	return db.config;
 }
@@ -282,7 +292,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 			}
 			ExtensionOption extension_option;
 			if (!config.TryGetExtensionOption(name, extension_option)) {
-				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+				throw InternalException("Extension %s did not provide the %s config setting", extension_name, name);
 			}
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
@@ -523,6 +533,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	os_util = make_uniq<OSUtil>(*this, config.options.configuration_env);
 	// carry over a capability set handed to us, so a database created by code with its own copy of
 	// DuckDB can be given the extensions the binary that created it links
 	config.linked_extensions = new_config.linked_extensions;
@@ -705,6 +716,11 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+OSUtil &DatabaseInstance::GetOSUtil() {
+	D_ASSERT(os_util);
+	return *os_util;
 }
 
 MetricsManager &DatabaseInstance::GetMetricsManager() {

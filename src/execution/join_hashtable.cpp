@@ -2350,6 +2350,8 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 
 	// gather the values from the RHS
 	GatherRHS(addresses, sel_vector, found_entries, result, left_column_count);
+	// the result may have no columns, so set the count explicitly
+	result.SetChildCardinality(found_entries);
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {

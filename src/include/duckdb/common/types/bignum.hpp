@@ -80,6 +80,11 @@ public:
 	DUCKDB_API static bool BignumToDouble(const bignum_t &blob, double &result, bool &strict);
 	template <class T>
 	static bool BignumToInt(const bignum_t &blob, T &result, bool &strict) {
+		if (blob.data.GetSize() < BIGNUM_HEADER_SIZE + 1) {
+			throw DataCorruptionException("Invalid BIGNUM blob: size %llu is smaller than the minimum of %llu bytes",
+			                              static_cast<uint64_t>(blob.data.GetSize()),
+			                              static_cast<uint64_t>(BIGNUM_HEADER_SIZE + 1));
+		}
 		auto data_byte_size = blob.data.GetSize() - BIGNUM_HEADER_SIZE;
 		auto data = blob.data.GetData();
 		bool is_negative = (data[0] & 0x80) == 0;
@@ -90,20 +95,32 @@ public:
 			if (is_negative) {
 				byte = static_cast<uint8_t>(~byte);
 			}
+			if (abs_value > (NumericLimits<uhugeint_t>::Maximum() >> 8)) {
+				// the absolute value does not fit in 128 bits
+				return false;
+			}
 			abs_value = (abs_value << 8) | byte;
 		}
 
-		if (is_negative) {
-			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max()) + 1) {
-				throw OutOfRangeException("Negative bignum too small for type");
-			}
-			result = static_cast<T>(-static_cast<hugeint_t>(abs_value));
-		} else {
-			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max())) {
-				throw OutOfRangeException("Positive bignum too large for type");
+		const auto max_value = static_cast<uhugeint_t>(NumericLimits<T>::Maximum());
+		if (!is_negative || abs_value == 0) {
+			if (abs_value > max_value) {
+				return false;
 			}
 			result = static_cast<T>(abs_value);
+			return true;
 		}
+		if (!NumericLimits<T>::IsSigned()) {
+			return false;
+		}
+		if (abs_value > max_value + 1) {
+			return false;
+		}
+		if (abs_value == max_value + 1) {
+			result = NumericLimits<T>::Minimum();
+			return true;
+		}
+		result = static_cast<T>(-static_cast<hugeint_t>(abs_value));
 		return true;
 	}
 };
