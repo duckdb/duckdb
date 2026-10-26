@@ -36,6 +36,12 @@ struct BooleanSelectionTable {
 };
 
 constexpr BooleanSelectionTable BOOLEAN_SELECTION_TABLE;
+
+uint8_t BooleanSelectionMask(const uint8_t *matches) {
+	// Pack eight 0/1 bytes into their corresponding bits.
+	const auto word = BSwapIfBE(Load<uint64_t>(matches));
+	return static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
+}
 } // namespace
 
 idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset) {
@@ -47,9 +53,7 @@ idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t c
 	idx_t result_count = 0;
 	idx_t i = 0;
 	for (; i + 8 <= count; i += 8) {
-		// Pack eight 0/1 bytes into their corresponding bits.
-		const auto word = BSwapIfBE(Load<uint64_t>(matches + i));
-		const auto mask = static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
+		const auto mask = BooleanSelectionMask(matches + i);
 		const auto base = UnsafeNumericCast<sel_t>(offset + i);
 		for (idx_t j = 0; j < 8; j++) {
 			result[result_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
@@ -61,6 +65,35 @@ idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t c
 		result_count += matches[i];
 	}
 	return result_count;
+}
+
+idx_t SelectionVector::PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
+                                                    sel_t *false_result, idx_t offset) {
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(matches[i] <= 1);
+	}
+#endif
+	idx_t true_count = 0;
+	idx_t i = 0;
+	for (; i + 8 <= count; i += 8) {
+		const auto mask = BooleanSelectionMask(matches + i);
+		const auto base = UnsafeNumericCast<sel_t>(offset + i);
+		const auto false_count = i - true_count;
+		for (idx_t j = 0; j < 8; j++) {
+			true_result[true_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
+		}
+		for (idx_t j = 0; j < 8; j++) {
+			false_result[false_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask ^ 255][j];
+		}
+		true_count += BOOLEAN_SELECTION_TABLE.counts[mask];
+	}
+	for (; i < count; i++) {
+		true_result[true_count] = UnsafeNumericCast<sel_t>(offset + i);
+		false_result[i - true_count] = UnsafeNumericCast<sel_t>(offset + i);
+		true_count += matches[i];
+	}
+	return true_count;
 }
 
 // LCOV_EXCL_START

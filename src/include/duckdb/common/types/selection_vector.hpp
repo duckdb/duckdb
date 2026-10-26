@@ -185,9 +185,24 @@ public:
 		return SelectFromBooleanInternal(matches, count, destination.data(), offset);
 	}
 
+	//! Partition 0/1 bytes into stable true/false row indices; return the true count.
+	//! Both destinations need count entries, including scratch, and all three buffers must be disjoint.
+	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> true_destination,
+	                               array_ptr<sel_t> false_destination, idx_t offset = 0) {
+		if (DUCKDB_UNLIKELY(count > true_destination.size())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, true_destination.size());
+		}
+		if (DUCKDB_UNLIKELY(count > false_destination.size())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, false_destination.size());
+		}
+		return PartitionFromBooleanInternal(matches, count, true_destination.data(), false_destination.data(), offset);
+	}
+
 private:
 	//! Bounds are checked by the public wrapper, keeping the compaction kernel independent of error handling.
 	DUCKDB_API static idx_t SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset);
+	DUCKDB_API static idx_t PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
+	                                                     sel_t *false_result, idx_t offset);
 
 private:
 	sel_t *sel_vector;

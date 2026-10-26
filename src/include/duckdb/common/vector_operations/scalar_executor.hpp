@@ -457,7 +457,8 @@ private:
 		StaticSelectionSink(SelectionVector *true_selection_p, SelectionVector *false_selection_p)
 		    : true_selection(true_selection_p ? true_selection_p->data() : nullptr),
 		      false_selection(false_selection_p ? false_selection_p->data() : nullptr),
-		      true_capacity(true_selection_p ? true_selection_p->Capacity() : 0) {
+		      true_capacity(true_selection_p ? true_selection_p->Capacity() : 0),
+		      false_capacity(false_selection_p ? false_selection_p->Capacity() : 0) {
 			D_ASSERT(!HAS_TRUE_SELECTION || true_selection);
 			D_ASSERT(!HAS_FALSE_SELECTION || false_selection);
 		}
@@ -474,14 +475,23 @@ private:
 		}
 
 		inline bool CanAppendBatch() const {
-			return HAS_TRUE_SELECTION && !HAS_FALSE_SELECTION;
+			return HAS_TRUE_SELECTION;
 		}
 
 		inline void AppendBatch(const uint8_t *matches, idx_t count, idx_t offset) {
 			D_ASSERT(CanAppendBatch());
 			D_ASSERT(true_count <= true_capacity);
 			array_ptr<sel_t> destination(true_selection + true_count, true_capacity - true_count);
-			true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+			if constexpr (HAS_FALSE_SELECTION) {
+				D_ASSERT(false_count <= false_capacity);
+				array_ptr<sel_t> false_destination(false_selection + false_count, false_capacity - false_count);
+				auto selected =
+				    SelectionVector::SelectFromBoolean(matches, count, destination, false_destination, offset);
+				true_count += selected;
+				false_count += count - selected;
+			} else {
+				true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+			}
 		}
 
 		inline void AppendInvalidRange(const SelectionVector &sel, idx_t start, idx_t end) {
@@ -519,6 +529,7 @@ private:
 		sel_t *true_selection;
 		sel_t *false_selection;
 		idx_t true_capacity;
+		idx_t false_capacity;
 		idx_t true_count = 0;
 		idx_t false_count = 0;
 	};
@@ -540,14 +551,24 @@ private:
 		}
 
 		inline bool CanAppendBatch() const {
-			return true_selection && !false_selection;
+			return true_selection;
 		}
 
 		inline void AppendBatch(const uint8_t *matches, idx_t count, idx_t offset) {
 			D_ASSERT(CanAppendBatch());
 			D_ASSERT(true_count <= true_selection->Capacity());
 			array_ptr<sel_t> destination(true_selection->data() + true_count, true_selection->Capacity() - true_count);
-			true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+			if (false_selection) {
+				D_ASSERT(false_count <= false_selection->Capacity());
+				array_ptr<sel_t> false_destination(false_selection->data() + false_count,
+				                                   false_selection->Capacity() - false_count);
+				auto selected =
+				    SelectionVector::SelectFromBoolean(matches, count, destination, false_destination, offset);
+				true_count += selected;
+				false_count += count - selected;
+			} else {
+				true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+			}
 		}
 
 		inline void AppendInvalidRange(const SelectionVector &sel, idx_t start, idx_t end) {

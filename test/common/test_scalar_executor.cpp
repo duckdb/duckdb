@@ -133,13 +133,16 @@ static bool Contains(const SelectionVector &sel, idx_t count, idx_t value) {
 TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scalar_executor]") {
 	constexpr sel_t SENTINEL = NumericLimits<sel_t>::Maximum();
 	for (idx_t count : {0, 1, 7, 8, 9, 63, 64, 65, 127, 129}) {
-		for (idx_t pattern = 0; pattern < 256; pattern++) {
+		for (idx_t pattern = 0; pattern < 258; pattern++) {
 			duckdb::vector<uint8_t> matches(count);
 			duckdb::vector<sel_t> expected;
+			duckdb::vector<sel_t> expected_false;
 			for (idx_t i = 0; i < count; i++) {
-				matches[i] = ((pattern + 17 * (i / 8)) >> (i % 8)) & 1;
+				matches[i] = pattern >= 256 ? pattern - 256 : ((pattern + 17 * (i / 8)) >> (i % 8)) & 1;
 				if (matches[i]) {
 					expected.push_back(UnsafeNumericCast<sel_t>(97 + i));
+				} else {
+					expected_false.push_back(UnsafeNumericCast<sel_t>(97 + i));
 				}
 			}
 			duckdb::vector<sel_t> output(count + 2, SENTINEL);
@@ -151,6 +154,22 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 			}
 			REQUIRE(output.front() == SENTINEL);
 			REQUIRE(output.back() == SENTINEL);
+
+			std::fill(output.begin(), output.end(), SENTINEL);
+			duckdb::vector<sel_t> false_output(count + 2, SENTINEL);
+			result_count = SelectionVector::SelectFromBoolean(matches.data(), count, destination,
+			                                                  array_ptr<sel_t>(false_output.data() + 1, count), 97);
+			REQUIRE(result_count == expected.size());
+			for (idx_t i = 0; i < expected.size(); i++) {
+				REQUIRE(output[i + 1] == expected[i]);
+			}
+			for (idx_t i = 0; i < expected_false.size(); i++) {
+				REQUIRE(false_output[i + 1] == expected_false[i]);
+			}
+			REQUIRE(output.front() == SENTINEL);
+			REQUIRE(output.back() == SENTINEL);
+			REQUIRE(false_output.front() == SENTINEL);
+			REQUIRE(false_output.back() == SENTINEL);
 		}
 	}
 
@@ -161,6 +180,17 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, 8, array_ptr<sel_t>(output, 7)), InternalException);
 	for (auto entry : output) {
 		REQUIRE(entry == SENTINEL);
+	}
+	sel_t false_output[8];
+	std::fill(false_output, false_output + 8, SENTINEL);
+	for (bool short_true : {false, true}) {
+		REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, 8, array_ptr<sel_t>(output, short_true ? 7 : 8),
+		                                                     array_ptr<sel_t>(false_output, short_true ? 8 : 7)),
+		                  InternalException);
+		for (idx_t i = 0; i < 8; i++) {
+			REQUIRE(output[i] == SENTINEL);
+			REQUIRE(false_output[i] == SENTINEL);
+		}
 	}
 }
 
