@@ -116,6 +116,10 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 
 		const auto stats_left = PropagateExpression(condition.LeftReference());
 		const auto stats_right = PropagateExpression(condition.RightReference());
+		// Ordinary joins reject both FALSE and NULL candidate pairs; MARK joins distinguish them.
+		condition.SetComparisonType(SimplifyDistinctComparison(
+		    condition.GetComparisonType(), stats_left.get(), stats_right.get(),
+		    join.join_type == JoinType::MARK ? ComparisonContext::MARK_JOIN : ComparisonContext::JOIN));
 		if (stats_left && stats_right) {
 			if ((condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 			     condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&

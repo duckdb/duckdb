@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -146,12 +147,46 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	                                NumericStats::Max(rstats), comparison, has_null);
 }
 
+ExpressionType StatisticsPropagator::SimplifyDistinctComparison(ExpressionType comparison,
+                                                                optional_ptr<const BaseStatistics> left,
+                                                                optional_ptr<const BaseStatistics> right,
+                                                                ComparisonContext context) {
+	if (comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+	    comparison != ExpressionType::COMPARE_DISTINCT_FROM) {
+		return comparison;
+	}
+	const bool row_equality = context == ComparisonContext::MARK_JOIN;
+	const bool left_not_null = left && ComparisonInputIsNotNull(*left, row_equality);
+	const bool right_not_null = right && ComparisonInputIsNotNull(*right, row_equality);
+	switch (comparison) {
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		if ((left_not_null && right_not_null) ||
+		    (context == ComparisonContext::JOIN && (left_not_null || right_not_null))) {
+			return ExpressionType::COMPARE_EQUAL;
+		}
+		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		if (left_not_null && right_not_null) {
+			return ExpressionType::COMPARE_NOTEQUAL;
+		}
+		break;
+	default:
+		break;
+	}
+	return comparison;
+}
+
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFunctionExpression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
 	auto &left = BoundComparisonExpression::LeftMutable(expr);
 	auto &right = BoundComparisonExpression::RightMutable(expr);
 	auto left_stats = PropagateExpression(left);
 	auto right_stats = PropagateExpression(right);
+	auto comparison = SimplifyDistinctComparison(expr.GetExpressionType(), left_stats.get(), right_stats.get(),
+	                                             ComparisonContext::SCALAR);
+	if (comparison != expr.GetExpressionType()) {
+		BoundComparisonExpression::SetType(expr, comparison);
+	}
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}

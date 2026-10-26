@@ -21,6 +21,11 @@ class BoundColumnRefExpression;
 class Expression;
 class LogicalCTE;
 class LogicalOperator;
+class BaseStatistics;
+
+//! Prove that an input cannot introduce UNKNOWN in an ordinary comparison.
+//! Row equality compares TUPLE children independently instead of using nested ordering semantics.
+bool ComparisonInputIsNotNull(const BaseStatistics &stats, bool row_equality = false);
 
 //! Returns whether an expression becomes NULL when the provided column reference becomes NULL.
 bool ExpressionBecomesNull(const Expression &expr,

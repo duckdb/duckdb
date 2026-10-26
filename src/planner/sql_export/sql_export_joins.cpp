@@ -8,6 +8,7 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
@@ -32,15 +33,34 @@ static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) 
 	return string();
 }
 
-static bool CanReconstructMarkGroups(const LogicalComparisonJoin &join) {
+static bool TryReconstructMarkGroups(const LogicalComparisonJoin &join, vector<ExpressionType> &comparison_types) {
+	if (join.mark_types.empty()) {
+		return false;
+	}
+	LogicalComparisonJoin reconstructed(JoinType::MARK);
+	for (idx_t i = 0; i < join.conditions.size(); i++) {
+		const auto &condition = join.conditions[i];
+		auto copy = condition.Copy();
+		if (i < join.mark_types.size() && copy.IsComparison() &&
+		    copy.GetComparisonType() == ExpressionType::COMPARE_EQUAL && condition.GetLeftStats() &&
+		    condition.GetRightStats() && ComparisonInputIsNotNull(*condition.GetLeftStats(), true) &&
+		    ComparisonInputIsNotNull(*condition.GetRightStats(), true)) {
+			// SQL binding recovers MARK groups from NULL-safe equalities.
+			copy.SetComparisonType(ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		}
+		reconstructed.conditions.push_back(std::move(copy));
+	}
 	vector<LogicalType> group_types;
-	if (!join.TryGetMarkJoinGroupTypes(group_types) || group_types.size() != join.mark_types.size()) {
+	if (!reconstructed.TryGetMarkJoinGroupTypes(group_types) || group_types.size() != join.mark_types.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		if (!group_types[i].EqualsIncludingCollation(join.mark_types[i])) {
 			return false;
 		}
+	}
+	for (auto &condition : reconstructed.conditions) {
+		comparison_types.push_back(condition.GetComparisonType());
 	}
 	return true;
 }
@@ -90,7 +110,8 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "join_delim_state", "The join requires a duplicate-eliminated input scope")});
 		}
-		if (comparison.join_type == JoinType::MARK && !CanReconstructMarkGroups(comparison)) {
+		vector<ExpressionType> mark_comparison_types;
+		if (comparison.join_type == JoinType::MARK && !TryReconstructMarkGroups(comparison, mark_comparison_types)) {
 			auto reason = MarkConditionUnsupportedReason(comparison);
 			if (!reason.empty()) {
 				return Result::Failure(
@@ -102,6 +123,7 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 			}
 		}
 		idx_t ordinal = 0;
+		idx_t condition_index = 0;
 		for (auto &condition : comparison.conditions) {
 			auto lhs = context.ExportExpression(op, expressions, ordinal++, expression_context, path);
 			if (lhs.HasError()) {
@@ -113,10 +135,13 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 				if (rhs.HasError()) {
 					return Result::Failure(rhs);
 				}
-				conjunct = make_uniq<ComparisonExpression>(condition.GetComparisonType(), std::move(conjunct),
-				                                           std::move(rhs.GetValue()));
+				const auto comparison_type = mark_comparison_types.empty() ? condition.GetComparisonType()
+				                                                           : mark_comparison_types[condition_index];
+				conjunct =
+				    make_uniq<ComparisonExpression>(comparison_type, std::move(conjunct), std::move(rhs.GetValue()));
 			}
 			predicate = SQLExportHelpers::Conjoin(std::move(predicate), std::move(conjunct));
+			condition_index++;
 		}
 		if (!predicate) {
 			predicate = ConstantExpression::FromValue(Value::BOOLEAN(true));
