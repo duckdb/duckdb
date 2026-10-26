@@ -18,7 +18,7 @@ public:
 	~CompressedStringScanState() override;
 
 public:
-	void Initialize(bool initialize_dictionary = true);
+	void Initialize();
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count,
 	                      StringScanType string_scan_type = StringScanType::STANDARD);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
@@ -75,7 +75,6 @@ public:
 	data_ptr_t string_lengths_ptr;
 
 	buffer_ptr<DictionaryEntry> dictionary;
-	bool build_dictionary = false;
 	void *decoder = nullptr;
 	bool all_values_inlined = false;
 

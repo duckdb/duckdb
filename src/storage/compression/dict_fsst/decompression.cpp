@@ -47,7 +47,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 	}
 }
 
-void CompressedStringScanState::Initialize(bool initialize_dictionary) {
+void CompressedStringScanState::Initialize() {
 	baseptr = handle.GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
@@ -111,8 +111,6 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
-	// scans build the dictionary on first use
-	build_dictionary = initialize_dictionary && mode != DictFSSTMode::FSST_ONLY;
 }
 
 void CompressedStringScanState::LoadStringLengths() {
@@ -167,7 +165,7 @@ uint32_t CompressedStringScanState::SumStringLengths(idx_t start, idx_t end) {
 }
 
 bool CompressedStringScanState::EnsureDictionary() {
-	if (dictionary || !build_dictionary) {
+	if (dictionary || mode == DictFSSTMode::FSST_ONLY) {
 		return dictionary != nullptr;
 	}
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), dict_count);
