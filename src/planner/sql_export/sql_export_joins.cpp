@@ -33,38 +33,6 @@ static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) 
 	return string();
 }
 
-static bool TryReconstructMarkGroups(const LogicalComparisonJoin &join, vector<ExpressionType> &comparison_types) {
-	if (join.mark_types.empty()) {
-		return false;
-	}
-	LogicalComparisonJoin reconstructed(JoinType::MARK);
-	for (idx_t i = 0; i < join.conditions.size(); i++) {
-		const auto &condition = join.conditions[i];
-		auto copy = condition.Copy();
-		if (i < join.mark_types.size() && copy.IsComparison() &&
-		    copy.GetComparisonType() == ExpressionType::COMPARE_EQUAL && condition.GetLeftStats() &&
-		    condition.GetRightStats() && ComparisonInputIsNotNull(*condition.GetLeftStats(), true) &&
-		    ComparisonInputIsNotNull(*condition.GetRightStats(), true)) {
-			// SQL binding recovers MARK groups from NULL-safe equalities.
-			copy.SetComparisonType(ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		}
-		reconstructed.conditions.push_back(std::move(copy));
-	}
-	vector<LogicalType> group_types;
-	if (!reconstructed.TryGetMarkJoinGroupTypes(group_types) || group_types.size() != join.mark_types.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < group_types.size(); i++) {
-		if (!group_types[i].EqualsIncludingCollation(join.mark_types[i])) {
-			return false;
-		}
-	}
-	for (auto &condition : reconstructed.conditions) {
-		comparison_types.push_back(condition.GetComparisonType());
-	}
-	return true;
-}
-
 static bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
 	if (join.join_type != JoinType::MARK || join.mark_types.empty()) {
 		return false;
@@ -85,6 +53,55 @@ static bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
 	}
 	// Retained types also disable uncorrelated row-equality NULL handling.
 	return (comparison_count > 1 || tuple_comparison) && all_equal;
+}
+
+static ExpressionType NullSafeComparisonType(const JoinCondition &condition) {
+	const auto type = condition.GetComparisonType();
+	if ((type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOTEQUAL) ||
+	    !condition.GetLeftStats() || !condition.GetRightStats() ||
+	    !ComparisonInputIsNotNull(*condition.GetLeftStats(), true) ||
+	    !ComparisonInputIsNotNull(*condition.GetRightStats(), true)) {
+		return type;
+	}
+	return type == ExpressionType::COMPARE_EQUAL ? ExpressionType::COMPARE_NOT_DISTINCT_FROM
+	                                             : ExpressionType::COMPARE_DISTINCT_FROM;
+}
+
+static bool TryReconstructMarkConditions(const LogicalComparisonJoin &join, vector<ExpressionType> &comparison_types) {
+	LogicalComparisonJoin reconstructed(JoinType::MARK);
+	reconstructed.mark_types = join.mark_types;
+	for (idx_t i = 0; i < join.conditions.size(); i++) {
+		const auto &condition = join.conditions[i];
+		auto copy = condition.Copy();
+		if (i < join.mark_types.size() && copy.IsComparison() &&
+		    copy.GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
+			// SQL binding recovers MARK groups from NULL-safe equalities.
+			copy.SetComparisonType(NullSafeComparisonType(condition));
+		}
+		reconstructed.conditions.push_back(std::move(copy));
+	}
+	vector<LogicalType> group_types;
+	bool grouped = reconstructed.TryGetMarkJoinGroupTypes(group_types) && group_types.size() == join.mark_types.size();
+	if (grouped) {
+		for (idx_t i = 0; i < group_types.size(); i++) {
+			grouped &= group_types[i].EqualsIncludingCollation(join.mark_types[i]);
+		}
+	}
+	if (!grouped) {
+		for (idx_t i = 0; i < join.conditions.size(); i++) {
+			if (!join.conditions[i].IsComparison()) {
+				return false;
+			}
+			reconstructed.conditions[i].SetComparisonType(NullSafeComparisonType(join.conditions[i]));
+		}
+		if (!reconstructed.HasNullSafeMarkJoinConditions() || RequiresMarkGroupMetadata(reconstructed)) {
+			return false;
+		}
+	}
+	for (auto &condition : reconstructed.conditions) {
+		comparison_types.push_back(condition.GetComparisonType());
+	}
+	return true;
 }
 
 static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
@@ -111,7 +128,8 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 			    path, "join_delim_state", "The join requires a duplicate-eliminated input scope")});
 		}
 		vector<ExpressionType> mark_comparison_types;
-		if (comparison.join_type == JoinType::MARK && !TryReconstructMarkGroups(comparison, mark_comparison_types)) {
+		if (comparison.join_type == JoinType::MARK &&
+		    !TryReconstructMarkConditions(comparison, mark_comparison_types)) {
 			auto reason = MarkConditionUnsupportedReason(comparison);
 			if (!reason.empty()) {
 				return Result::Failure(
