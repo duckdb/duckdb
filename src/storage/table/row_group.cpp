@@ -1366,9 +1366,9 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		// mark the rows before updating them: an update conflicts with any write of a row the transaction does not see
 		auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
 		auto vector_start = row_group_start + vector_idx * STANDARD_VECTOR_SIZE;
-		uint16_t updated_rows[STANDARD_VECTOR_SIZE];
+		WrittenRows written;
 		WriteRows(transaction, table_entry, vector_idx, vector_start, ids + offset, count,
-		          UnsafeNumericCast<row_t>(vector_start), true, updated_rows);
+		          UnsafeNumericCast<row_t>(vector_start), true, written);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -2179,27 +2179,21 @@ void RowGroup::Verify() {
 #endif
 }
 
-idx_t RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
-                          const row_t ids[], idx_t count, row_t offset, bool is_update, uint16_t rows[]) {
+void RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
+                         const row_t ids[], idx_t count, row_t offset, bool is_update, WrittenRows &written) {
 	auto &version_info = GetOrCreateVersionInfo();
-	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
-	bool is_consecutive;
-	idx_t previous_id_count;
-	auto written = version_info.WriteRows(vector_idx, transaction, ids, count, offset, is_update, rows, previous_ids,
-	                                      is_consecutive, previous_id_count);
-	if (transaction.transaction && written > 0) {
-		auto written_rows = is_consecutive ? nullptr : rows;
+	version_info.WriteRows(vector_idx, transaction, ids, count, offset, is_update, written);
+	if (transaction.transaction && written.count > 0) {
 		try {
 			transaction.transaction->PushWrite(is_update ? UndoFlags::UPDATE_ROWS : UndoFlags::DELETE_TUPLE,
-			                                   table_entry, version_info, vector_idx, written_rows, written, base_row,
-			                                   previous_ids, previous_id_count);
+			                                   table_entry, version_info, vector_idx, base_row, written);
 		} catch (...) {
 			// without an undo entry, nothing would restore the ids - restore them as the entry would have
-			version_info.RollbackWrite(vector_idx, written_rows, written, previous_ids, previous_id_count);
+			version_info.RollbackWrite(vector_idx, written.GetStoredRows(), written.count, written.previous_ids,
+			                           written.previous_id_count);
 			throw;
 		}
 	}
-	return written;
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
@@ -2220,10 +2214,10 @@ void VersionDeleteState::Flush() {
 		return;
 	}
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
-	// WriteRows skips the tuples that are deleted already, and returns how many tuples it actually deleted
-	uint16_t deleted_rows[STANDARD_VECTOR_SIZE];
-	auto actual_delete_count = info.WriteRows(transaction, table_entry, current_chunk, base_row + chunk_row, rows,
-	                                          count, 0, false, deleted_rows);
+	// WriteRows skips the tuples that are deleted already, and outputs the tuples it actually deleted
+	WrittenRows deleted;
+	info.WriteRows(transaction, table_entry, current_chunk, base_row + chunk_row, rows, count, 0, false, deleted);
+	auto actual_delete_count = deleted.count;
 	delete_count += actual_delete_count;
 	if (deleted_ids) {
 		if (!deleted_ids->has_skipped_rows && actual_delete_count != count) {
@@ -2233,7 +2227,7 @@ void VersionDeleteState::Flush() {
 		}
 		if (deleted_ids->has_skipped_rows) {
 			for (idx_t i = 0; i < actual_delete_count; i++) {
-				deleted_ids->row_ids.push_back(UnsafeNumericCast<row_t>(base_row + chunk_row + deleted_rows[i]));
+				deleted_ids->row_ids.push_back(UnsafeNumericCast<row_t>(base_row + chunk_row + deleted.rows[i]));
 			}
 		}
 		input_offset += count;

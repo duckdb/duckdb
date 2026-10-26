@@ -19,6 +19,7 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 struct DeleteInfo;
+struct WrittenRows;
 class Serializer;
 class Deserializer;
 class FixedSizeAllocator;
@@ -51,9 +52,6 @@ enum class VersionCompressionResult : uint8_t {
 //! ARRAY    - per-row delete ids materialized in deleted_data; constant_delete_id is NOT_DELETED_ID
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
-//! An update marker is the updater's transaction or commit id with this bit set, stored in the row's delete id
-static constexpr transaction_t UPDATE_MARKER_BIT = transaction_t(1) << 63;
-
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -76,10 +74,10 @@ public:
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
-	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the written rows and old ids,
-	//! whether the rows are consecutive and how many old ids the undo entry stores (see DeleteInfo)
-	idx_t WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset, bool is_update,
-	                uint16_t rows[], transaction_t previous_ids[], bool &is_consecutive, idx_t &previous_id_count);
+	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the rows it wrote and the ids
+	//! they held before
+	void WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset, bool is_update,
+	               WrittenRows &written);
 	//! Replaces the delete id and update marker of old_id on the rows by those of new_id (on commit and revert)
 	void CommitWrite(transaction_t old_id, transaction_t new_id, const uint16_t rows[], idx_t count);
 	//! Rolls back a write: the rows get back the ids they held before (NOT_DELETED_ID if none are stored)
@@ -126,8 +124,7 @@ private:
 	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
 	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
 	//! Writes id into the rows of a vector whose other rows share one id, keeping them in deleted_mask
-	idx_t WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, uint16_t rows[],
-	                transaction_t previous_ids[], bool &is_consecutive, idx_t &previous_id_count);
+	void WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, WrittenRows &written);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
 	template <class F>
 	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);

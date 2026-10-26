@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class DuckTableEntry;
@@ -65,6 +66,22 @@ struct DeleteInfo {
 private:
 	//! The per-vector row identifiers (actual row id is base_row + rows[x])
 	uint16_t rows[1];
+};
+
+//! The rows that a delete or an update wrote in one vector, and the ids they held before (stored in its DeleteInfo)
+struct WrittenRows {
+	idx_t count = 0;
+	//! Whether the rows are 0, 1, ..., count - 1
+	bool is_consecutive = true;
+	//! How many previous_ids are set: 0 (the rows held NOT_DELETED_ID), 1 (they held the same id) or count
+	idx_t previous_id_count = 0;
+	uint16_t rows[STANDARD_VECTOR_SIZE];
+	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
+
+	//! The rows as an undo entry stores them: nullptr if they are consecutive
+	const uint16_t *GetStoredRows() const {
+		return is_consecutive ? nullptr : rows;
+	}
 };
 
 } // namespace duckdb

@@ -286,8 +286,8 @@ public:
 
 	//! Writes a delete or an update into the version info of the rows (ids[i] - offset) and pushes its undo entry;
 	//! outputs the rows that it wrote (within the vector)
-	idx_t WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
-	                const row_t ids[], idx_t count, row_t offset, bool is_update, uint16_t rows[]);
+	void WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
+	               const row_t ids[], idx_t count, row_t offset, bool is_update, WrittenRows &written);
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization
