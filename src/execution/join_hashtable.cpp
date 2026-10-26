@@ -210,14 +210,11 @@ idx_t GetOptionalIndex(optional_ptr<const SelectionVector> sel, const idx_t idx)
 	return HAS_SEL ? sel->get_index(idx) : idx;
 }
 
-static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry, Vector &pointers_result_v,
-                                idx_t row_ht_offset, idx_t &keys_to_compare_count, const idx_t &row_index) {
-	const auto row_ptr_insert_to = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
-	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
-
-	state.keys_to_compare_sel.set_index(keys_to_compare_count, row_index);
+static void AddPointerToCompare(SelectionVector &compare_sel, const ht_entry_t &entry, data_ptr_t *row_ptr_insert_to,
+                                idx_t *ht_offsets_and_salts, idx_t row_ht_offset, idx_t &keys_to_compare_count,
+                                const idx_t &row_index) {
+	compare_sel.set_index(keys_to_compare_count, row_index);
 	row_ptr_insert_to[row_index] = entry.GetPointer();
-
 	// If the key does not match, we have to continue linear probing, we need to store the ht_offset and the salt
 	// for this element based on the row_index. We can't get the offset from the hash as we already might have
 	// some linear probing steps when arriving here.
@@ -232,6 +229,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
 	const auto bitmask = ht.bitmask;
 
+	const auto row_ptr_insert_to = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
+	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -256,8 +255,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				if (salt_match) {
 					// we know that the entry is occupied and the salt matches -> compare the keys
 					auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
-					                    row_index);
+					AddPointerToCompare(state.keys_to_compare_sel, entry, row_ptr_insert_to, ht_offsets_and_salts,
+					                    row_ht_offset, keys_to_compare_count, row_index);
 					break;
 				}
 
@@ -270,7 +269,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 			if (occupied) {
 				// the entry is occupied -> compare the keys
 				auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-				AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count, row_index);
+				AddPointerToCompare(state.keys_to_compare_sel, entry, row_ptr_insert_to, ht_offsets_and_salts,
+				                    row_ht_offset, keys_to_compare_count, row_index);
 			}
 		}
 	}
@@ -302,19 +302,21 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    JoinHashTable &ht, unsafe_optional_ptr<ht_entry_t> entries,
                                    Vector &pointers_result_v, SelectionVector &match_sel, bool has_row_sel) {
 	// Densify original hashes, mapping resident buckets once. Retries below already contain offsets and salt.
+	const auto input_count = count;
 	const auto bucket_shift = ht.GetBucketShift();
+	const auto bitmask = ht.bitmask;
 	if (has_row_sel || bucket_shift) {
 		auto hashes_unified = hashes_v.Values<hash_t>();
-		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
+		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, input_count);
 
-		for (idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < input_count; i++) {
 			const auto row_index = has_row_sel ? row_sel->get_index(i) : i;
 			const auto hash = hashes_unified[row_index].GetValue();
-			hashes_dense.WriteValue(
-			    bucket_shift ? (hash & ht_entry_t::SALT_MASK) | ((hash >> bucket_shift) & ht.bitmask) : hash);
+			hashes_dense.WriteValue(bucket_shift ? (hash & ht_entry_t::SALT_MASK) | ((hash >> bucket_shift) & bitmask)
+			                                     : hash);
 		}
 	} else {
-		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
+		VectorOperations::Copy(hashes_v, state.hashes_dense_v, input_count, 0, 0);
 	}
 
 	// the number of keys that match for all iterations of the following loop
@@ -354,7 +356,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
 			const auto row_index = state.keys_no_match_sel.get_index(i);
 			auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
-			IncrementAndWrap(ht_offset_and_salt, ht.bitmask | ht_entry_t::SALT_MASK);
+			IncrementAndWrap(ht_offset_and_salt, bitmask | ht_entry_t::SALT_MASK);
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
