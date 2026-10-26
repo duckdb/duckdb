@@ -110,7 +110,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		return;
 	}
 	default:
-		throw InternalException("Type not implemented for AppenderType");
+		InternalException::Throw("Type not implemented for AppenderType");
 	}
 }
 
@@ -188,7 +188,7 @@ void BaseAppender::AppendValueInternal(T input) {
 			AppendWideDecimalValueInternal<T>(col, input);
 			break;
 		default:
-			throw InternalException("Internal type not recognized for Decimal");
+			InternalException::Throw("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:

@@ -355,6 +355,10 @@ FatalException::FatalException(ExceptionType type, const string &msg) : Exceptio
 	// FIXME: Make any log context available to add error logging.
 }
 
+void InternalException::Throw(const char *message) {
+	throw InternalException(message);
+}
+
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 	// FIXME: Make any log context available to add error logging.
 #ifdef DUCKDB_CRASH_ON_ASSERT
