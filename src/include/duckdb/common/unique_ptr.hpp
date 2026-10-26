@@ -16,6 +16,11 @@ public:
 	using original = duckdb_base_std::unique_ptr<DATA_TYPE, DELETER>;
 	using original::original; // NOLINT
 	using pointer = typename original::pointer;
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 170000
+	// libc++ relocates elements of this type with memcpy when the typedef names the class itself
+	using __trivially_relocatable = // NOLINT: libc++ extension point
+	    typename std::conditional<std::__libcpp_is_trivially_relocatable<original>::value, unique_ptr, void>::type;
+#endif
 
 private:
 	static inline void AssertNotNull(const bool null) {
@@ -60,6 +65,11 @@ class unique_ptr<DATA_TYPE[], DELETER, true> : public duckdb_base_std::unique_pt
 public:
 	using original = duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER>;
 	using original::original;
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 170000
+	// libc++ relocates elements of this type with memcpy when the typedef names the class itself
+	using __trivially_relocatable = // NOLINT: libc++ extension point
+	    typename std::conditional<std::__libcpp_is_trivially_relocatable<original>::value, unique_ptr, void>::type;
+#endif
 
 private:
 	static inline void AssertNotNull(const bool null) {
@@ -87,6 +97,11 @@ class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public duckdb_base_std::unique_pt
 public:
 	using original = duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER>;
 	using original::original;
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 170000
+	// libc++ relocates elements of this type with memcpy when the typedef names the class itself
+	using __trivially_relocatable = // NOLINT: libc++ extension point
+	    typename std::conditional<std::__libcpp_is_trivially_relocatable<original>::value, unique_ptr, void>::type;
+#endif
 
 private:
 	static inline void AssertNotNull(const bool null) {
