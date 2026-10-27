@@ -6,7 +6,6 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -159,34 +158,29 @@ static void PushdownProjectionColumns(LogicalProjection &proj, const vector<Join
 	}
 }
 
-//! Whether any expression evaluated inside a secure view (including filters pushed into its scans) can throw
-static bool SecureViewCanThrow(LogicalOperator &op) {
-	bool can_throw = false;
-	LogicalOperatorVisitor::EnumerateExpressions(
-	    op, [&](unique_ptr<Expression> *expr) { can_throw = can_throw || (*expr)->CanThrow(); });
-	if (can_throw) {
-		return true;
+//! Whether the runtime filter of a column that entered a secure view may be wrapped in a barrier when it is built: its
+//! cast chain contains a cast that can throw. Such a filter must never pass an operator in the view that removes rows
+static bool MayRequireBarrier(const JoinFilterPushdownColumn &column) {
+	if (!column.crossed_secure_view) {
+		return false;
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		for (auto &entry : op.Cast<LogicalGet>().table_filters) {
-			auto &filter = entry.Filter();
-			if (filter.filter_type == TableFilterType::EXPRESSION_FILTER &&
-			    filter.Cast<ExpressionFilter>().expr->CanThrow()) {
-				return true;
-			}
-		}
-	}
-	for (auto &child : op.children) {
-		if (SecureViewCanThrow(*child)) {
+	for (auto &step : column.runtime_filter_casts) {
+		if (step.mode == RuntimeFilterCastMode::DEFAULT_CAST) {
 			return true;
 		}
 	}
 	return false;
 }
 
+//! Keep only the columns whose filters may pass an operator that removes rows
+static void RemoveBarrierColumns(vector<JoinFilterPushdownColumn> &columns) {
+	columns.erase(std::remove_if(columns.begin(), columns.end(), MayRequireBarrier), columns.end());
+}
+
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
-                                                           vector<PushdownFilterTarget> &targets) {
+                                                           vector<PushdownFilterTarget> &targets,
+                                                           bool cross_secure_views) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
@@ -199,11 +193,16 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// does not affect probe side - recurse into left child
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		// these remove rows: a filter that may be barred stays above them
+		RemoveBarrierColumns(columns);
+		if (columns.empty()) {
+			return;
+		}
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		auto &unnest = probe_child.Cast<LogicalUnnest>();
@@ -214,13 +213,20 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = probe_child.Cast<LogicalSetOperation>();
+		if (probe_child.type != LogicalOperatorType::LOGICAL_UNION) {
+			// removes rows: a filter that may be barred stays above it
+			RemoveBarrierColumns(columns);
+			if (columns.empty()) {
+				return;
+			}
+		}
 		for (auto &child : probe_child.children) {
 			// rewrite the filters for each of the children of the union
 			vector<JoinFilterPushdownColumn> child_columns;
@@ -241,7 +247,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				continue;
 			}
 			// then recurse into the child
-			GetPushdownFilterTargets(*child, std::move(child_columns), targets);
+			GetPushdownFilterTargets(*child, std::move(child_columns), targets, cross_secure_views);
 
 			// for EXCEPT we can only recurse into the first (left) child
 			if (probe_child.type == LogicalOperatorType::LOGICAL_EXCEPT) {
@@ -303,22 +309,20 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		if (projected_columns.empty()) {
 			return;
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets, cross_secure_views);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
-		if (SecureViewCanThrow(*probe_child.children[0])) {
-			// a pushed filter would decide which hidden rows reach the error
+		if (!cross_secure_views) {
 			break;
 		}
-		// storage-domain filters only - this also keeps TopN filters and the row-group pruner (which would count
-		// hidden rows) from crossing the view
+		// the filter enters the view as a pushed WHERE filter does (see PushdownSecureView): if evaluating it is
+		// observable it is wrapped in a barrier when it is built (PhysicalHashJoin), and it never passes an operator in
+		// the view that removes rows
 		for (auto &filter : columns) {
-			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
-			filter.runtime_filter_casts.clear();
 			filter.crossed_secure_view = true;
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -335,7 +339,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	}
 	default:
@@ -409,7 +413,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	}
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	vector<PushdownFilterTarget> pushdown_filter_targets;
-	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
+	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets, true);
 	for (auto &target : pushdown_filter_targets) {
 		auto &get = target.get;
 		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set

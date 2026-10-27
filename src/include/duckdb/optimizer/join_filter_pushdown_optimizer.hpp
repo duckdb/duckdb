@@ -24,8 +24,10 @@ public:
 
 public:
 	void VisitOperator(LogicalOperator &op) override;
+	//! Finds the scans the filters can be pushed into. Only the join filters cross a secure view
+	//! (cross_secure_views): what the other callers learn about the targets must not depend on the view's contents
 	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-	                                     vector<PushdownFilterTarget> &targets);
+	                                     vector<PushdownFilterTarget> &targets, bool cross_secure_views = false);
 
 	static bool IsFiltering(const unique_ptr<LogicalOperator> &op);
 
