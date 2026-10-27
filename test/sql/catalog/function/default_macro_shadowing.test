@@ -255,7 +255,8 @@ SELECT system.pg_catalog.format_type(NULL::BIGINT, -1);
 ----
 NULL
 
-# ILIKE inside a default table macro body stays pinned
+# ILIKE inside a default table macro body stays pinned, in both the WHERE filter and the
+# CASE that produces the parsed message
 
 statement ok
 CALL enable_logging('QueryLog', storage = 'memory');
@@ -267,7 +268,7 @@ statement ok
 CREATE MACRO "~~*"(a, b) AS false;
 
 query I
-SELECT count(*) > 0 FROM duckdb_logs_parsed('QueryLog');
+SELECT count(message) > 0 FROM duckdb_logs_parsed('QueryLog');
 ----
 true
 
