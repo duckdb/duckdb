@@ -521,8 +521,8 @@ bool StringUtil::CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l
 	return true;
 }
 
-bool StringUtil::CIEquals(const string &l1, const string &l2) {
-	return CIEquals(l1.c_str(), l1.size(), l2.c_str(), l2.size());
+bool StringUtil::CIEquals(std::string_view l1, std::string_view l2) {
+	return CIEquals(l1.data(), l1.size(), l2.data(), l2.size());
 }
 
 bool StringUtil::CIStartsWith(const string &str, const string &prefix) {

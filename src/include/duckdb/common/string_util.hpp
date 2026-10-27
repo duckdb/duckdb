@@ -18,6 +18,7 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 
 #include <cstring>
+#include <string_view>
 
 namespace duckdb {
 
@@ -240,9 +241,9 @@ public:
 	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
-	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
+	DUCKDB_API static bool CIEquals(std::string_view l1, std::string_view l2);
 
-	//! Case insensitive equals (null-terminated strings)
+	//! Case insensitive equals (explicit lengths, no null terminator required)
 	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
 
 	//! Case insensitive starts-with
