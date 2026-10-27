@@ -123,6 +123,13 @@ static void ComputeGroupLocation(const Vector &group, Value &min, uintptr_t *add
 	}
 }
 
+static inline void CheckGroupInRange(uint64_t group, idx_t total_groups) {
+	if (group >= total_groups) {
+		throw DataCorruptionException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu.", group,
+		                              total_groups);
+	}
+}
+
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	const auto row_count = groups.size();
 	// first we need to find the location in the HT of each of the groups
@@ -146,12 +153,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// Non-clustered path: convert group ids to state pointers and update aggregates.
 	for (idx_t i = 0; i < row_count; i++) {
 		const auto group = address_data[i];
-		if (group >= total_groups) {
-			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
-			                            "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
-			                            "disable_optimizer to disable optimizations that rely on correct statistics",
-			                            group, total_groups);
-		}
+		CheckGroupInRange(group, total_groups);
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}
@@ -193,6 +195,7 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 		return false;
 	}
 	clustered.InitializeStates([&](uint64_t gid) {
+		CheckGroupInRange(gid, total_groups);
 		auto group_id = static_cast<idx_t>(gid);
 		group_is_set[group_id] = true;
 		return data + group_id * tuple_size;
