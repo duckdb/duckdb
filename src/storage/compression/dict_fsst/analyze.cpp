@@ -54,6 +54,16 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : Analyz
 
 	string_size_limit = GetStringSizeLimit(block_size, false);
 	fsst_string_size_limit = GetStringSizeLimit(block_size, true);
+	exact_hashes.resize(EXACT_TABLE_SIZE, 0);
+}
+
+//! Slot of "hash" in the exact table: either holds the hash or is the empty slot where it would go
+static idx_t ExactSlot(const vector<hash_t> &table, hash_t hash) {
+	auto slot = hash & (DictFSSTAnalyzeState::EXACT_TABLE_SIZE - 1);
+	while (table[slot] != 0 && table[slot] != hash) {
+		slot = (slot + 1) & (DictFSSTAnalyzeState::EXACT_TABLE_SIZE - 1);
+	}
+	return slot;
 }
 
 bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
@@ -68,11 +78,16 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		non_null_count++;
 		auto hash = Hash(str);
 		distinct_strings.InsertElement(hash);
-		if (exact_distinct.size() < EXACT_DISTINCT_LIMIT) {
-			if (exact_distinct.insert(hash).second) {
-				exact_distinct_length += str_len;
-			}
-		} else if (exact_distinct.find(hash) == exact_distinct.end()) {
+		// 0 marks an empty table slot
+		auto key = hash == 0 ? hash_t(1) : hash;
+		auto slot = ExactSlot(exact_hashes, key);
+		if (exact_hashes[slot] == key) {
+			// a repeat of a string that was already counted
+		} else if (exact_count < EXACT_DISTINCT_LIMIT) {
+			exact_hashes[slot] = key;
+			exact_count++;
+			exact_distinct_length += str_len;
+		} else {
 			scaled_string_length += str_len;
 			scaled_count++;
 		}
@@ -103,13 +118,12 @@ idx_t DictFSSTAnalyzeState::FinalAnalyze() {
 	idx_t distinct_count = 0;
 	double distinct_string_length = 0;
 	if (non_null_count > 0) {
-		distinct_count =
-		    MinValue<idx_t>(MaxValue<idx_t>(distinct_strings.Count(), exact_distinct.size()), non_null_count);
+		distinct_count = MinValue<idx_t>(MaxValue<idx_t>(distinct_strings.Count(), exact_count), non_null_count);
 		// strings in the exact set count at their real length; the distinct strings beyond it get the average length
 		// of the unknown strings that arrived after the set filled up
 		distinct_string_length = double(exact_distinct_length);
-		if (scaled_count > 0 && distinct_count > exact_distinct.size()) {
-			auto extra_distinct = MinValue<idx_t>(distinct_count - exact_distinct.size(), scaled_count);
+		if (scaled_count > 0 && distinct_count > exact_count) {
+			auto extra_distinct = MinValue<idx_t>(distinct_count - exact_count, scaled_count);
 			distinct_string_length += double(scaled_string_length) * double(extra_distinct) / double(scaled_count);
 		}
 	}

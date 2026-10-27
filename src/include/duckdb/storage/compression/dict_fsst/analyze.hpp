@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/hyperloglog.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
@@ -34,9 +34,12 @@ public:
 	//! Approximate number of distinct strings: sizes the dictionary and the width of the dictionary indices
 	HyperLogLogP<10> distinct_strings;
 	//! Exact bytes of the first EXACT_DISTINCT_LIMIT distinct strings, so that a few long repeated values next to many
-	//! short ones do not get scaled as if every string had the average length
+	//! short ones do not get scaled as if every string had the average length. The hashes live in an open-addressing
+	//! table that is at most half full; 0 marks an empty slot.
 	static constexpr idx_t EXACT_DISTINCT_LIMIT = 2048;
-	unordered_set<hash_t> exact_distinct;
+	static constexpr idx_t EXACT_TABLE_SIZE = 2 * EXACT_DISTINCT_LIMIT;
+	vector<hash_t> exact_hashes;
+	idx_t exact_count = 0;
 	idx_t exact_distinct_length = 0;
 	//! Strings that arrived after the exact set filled up and are not in it: their distinct bytes are scaled
 	idx_t scaled_string_length = 0;
