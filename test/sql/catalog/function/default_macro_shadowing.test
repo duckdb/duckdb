@@ -94,12 +94,13 @@ SELECT system.main.split_part('a,b', ',', 2);
 ----
 b
 
-# operator syntax in user queries also keeps its backing function under a shadowing macro
+# operator syntax in user queries keeps its existing backing-name resolution: a shadowing
+# macro captures the lookup and operator syntax rejects it (unchanged behavior)
 
-query I
+statement error
 SELECT ([1, 2, 3])[2:];
 ----
-[2, 3]
+<REGEX>:.*array_slice.*
 
 # a default macro calling another default macro
 

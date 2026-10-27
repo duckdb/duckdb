@@ -15,68 +15,69 @@ static const DefaultTableMacro internal_table_macros[] = {
 WITH bins AS (
    SELECT
       CASE
-      WHEN (NOT (can_cast_implicitly(MIN(col_name), NULL::BIGINT) OR
-            can_cast_implicitly(MIN(col_name), NULL::DOUBLE) OR
-            can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
+      WHEN (NOT (system.main.can_cast_implicitly(system.main.min(col_name), NULL::BIGINT) OR
+            system.main.can_cast_implicitly(system.main.min(col_name), NULL::DOUBLE) OR
+            system.main.can_cast_implicitly(system.main.min(col_name), NULL::TIMESTAMP)) AND technique='auto')
             OR technique='sample'
       THEN
-         approx_top_k(col_name, bin_count)
+         system.main.approx_top_k(col_name, bin_count)
       WHEN technique='equi-height'
       THEN
-         quantile(col_name, [x / bin_count::DOUBLE for x in generate_series(1, bin_count)])
+         system.main.quantile(col_name, [x / bin_count::DOUBLE for x in system.main.generate_series(1, bin_count)])
       WHEN technique='equi-width'
       THEN
-         equi_width_bins(MIN(col_name), MAX(col_name), bin_count, false)
+         system.main.equi_width_bins(system.main.min(col_name), system.main.max(col_name), bin_count, false)
       WHEN technique='equi-width-nice' OR technique='auto'
       THEN
-         equi_width_bins(MIN(col_name), MAX(col_name), bin_count, true)
+         system.main.equi_width_bins(system.main.min(col_name), system.main.max(col_name), bin_count, true)
       ELSE
-         error(concat('Unrecognized technique ', technique))
+         system.main.error(system.main.concat('Unrecognized technique ', technique))
       END AS bins
-   FROM query_table(source::VARCHAR)
+   FROM system.main.query_table(source::VARCHAR)
    )
-SELECT UNNEST(map_keys(histogram)) AS bin, UNNEST(map_values(histogram)) AS count
+SELECT system.main.unnest(system.main.map_keys(histogram)) AS bin,
+       system.main.unnest(system.main.map_values(histogram)) AS count
 FROM (
    SELECT CASE
-      WHEN (NOT (can_cast_implicitly(MIN(col_name), NULL::BIGINT) OR
-            can_cast_implicitly(MIN(col_name), NULL::DOUBLE) OR
-            can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
+      WHEN (NOT (system.main.can_cast_implicitly(system.main.min(col_name), NULL::BIGINT) OR
+            system.main.can_cast_implicitly(system.main.min(col_name), NULL::DOUBLE) OR
+            system.main.can_cast_implicitly(system.main.min(col_name), NULL::TIMESTAMP)) AND technique='auto')
             OR technique='sample'
       THEN
-            histogram_exact(col_name, bins)
+            system.main.histogram_exact(col_name, bins)
       ELSE
-            histogram(col_name, bins)
+            system.main.histogram(col_name, bins)
       END AS histogram
-   FROM query_table(source::VARCHAR), bins
+   FROM system.main.query_table(source::VARCHAR), bins
 );
 )"},
 	{DEFAULT_SCHEMA, "histogram", {"source", "col_name", nullptr}, {{"bin_count", "10"}, {"technique", "'auto'"}, {nullptr, nullptr}},  R"(
 SELECT
    CASE
-   WHEN is_histogram_other_bin(bin)
+   WHEN system.main.is_histogram_other_bin(bin)
    THEN '(other values)'
-   WHEN (NOT (can_cast_implicitly(bin, NULL::BIGINT) OR
-              can_cast_implicitly(bin, NULL::DOUBLE) OR
-              can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
+   WHEN (NOT (system.main.can_cast_implicitly(bin, NULL::BIGINT) OR
+              system.main.can_cast_implicitly(bin, NULL::DOUBLE) OR
+              system.main.can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
               OR technique='sample'
    THEN bin::VARCHAR
-   WHEN row_number() over () = 1
-   THEN concat('x <= ', bin::VARCHAR)
-   ELSE concat(lag(bin::VARCHAR) over (), ' < x <= ', bin::VARCHAR)
+   WHEN system.main.row_number() over () = 1
+   THEN system.main.concat('x <= ', bin::VARCHAR)
+   ELSE system.main.concat(system.main.lag(bin::VARCHAR) over (), ' < x <= ', bin::VARCHAR)
    END AS bin,
    count,
-   bar(count, 0, max(count) over ()) AS bar
-FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
+   system.main.bar(count, 0, system.main.max(count) over ()) AS bar
+FROM system.main.histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
 	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
 SELECT * EXCLUDE (message),
-       UNNEST(CASE WHEN type ILIKE log_type THEN parse_duckdb_log_message(log_type, message) END)
-FROM duckdb_logs(denormalized_table=1)
+       system.main.unnest(CASE WHEN type ILIKE log_type THEN system.main.parse_duckdb_log_message(log_type, message) END)
+FROM system.main.duckdb_logs(denormalized_table=1)
 WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
 SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
-  FROM duckdb_settings(deprecated := false)
+  FROM system.main.duckdb_settings(deprecated := false)
   WHERE name IN (
       'enable_profiling',
       'profiling_coverage',
