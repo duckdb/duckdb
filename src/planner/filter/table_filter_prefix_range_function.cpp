@@ -352,7 +352,7 @@ public:
 
 private:
 	// Staging only pays off once bitmap loads are expensive enough.
-	static constexpr idx_t PREFETCH_MIN_BYTES = 1024 * 1024;
+	static constexpr idx_t PREFETCH_MIN_BYTES = 1024ULL * 1024ULL;
 	static constexpr idx_t PREFETCH_MIN_COUNT = 128;
 	static constexpr idx_t WORD_SHIFT = 6;
 	static constexpr idx_t WORD_MASK = 63;

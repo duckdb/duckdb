@@ -186,7 +186,7 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024 * 1024;
+	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024ULL * 1024ULL;
 	idx_t found_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
@@ -204,7 +204,7 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &s
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024 * 1024;
+	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024ULL * 1024ULL;
 	idx_t found_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
