@@ -631,10 +631,18 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (chunk_idx >= collection.ChunkCount()) {
 		return nullptr;
 	}
-	auto chunk = duckdb::make_uniq<duckdb::DataChunk>();
-	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
-	collection.FetchChunk(chunk_idx, *chunk);
-	return reinterpret_cast<duckdb_data_chunk>(chunk.release());
+	try {
+		auto chunk = duckdb::make_uniq<duckdb::DataChunk>();
+		chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
+		collection.FetchChunk(chunk_idx, *chunk);
+		for (auto &vector : chunk->data) {
+			duckdb::PrepareCAPIVector(vector);
+		}
+		return reinterpret_cast<duckdb_data_chunk>(chunk.release());
+	} catch (std::exception &e) {
+		result_data.result->SetError(duckdb::ErrorData(e));
+		return nullptr;
+	}
 }
 
 bool duckdb_result_is_streaming(duckdb_result result) {
