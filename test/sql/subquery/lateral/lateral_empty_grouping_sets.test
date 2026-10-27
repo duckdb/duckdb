@@ -296,6 +296,30 @@ FROM (VALUES (7)) AS o(k);
 ----
 <REGEX>:.*More than one row returned by a subquery.*
 
+# the cardinality error must also fire when the outer key is present in the inner input
+statement error
+SELECT o.k, (
+    SELECT sum(v)
+    FROM (VALUES (1, 42)) AS i(k, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS s
+FROM (VALUES (1)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
+# duplicate non-empty sets in a scalar subquery must raise the cardinality error for present keys
+statement error
+SELECT o.k, (
+    SELECT sum(i.v)
+    FROM (VALUES (1, 10, 42)) AS i(k, g, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((i.g), (i.g))
+) AS s
+FROM (VALUES (1)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
 # scalar GROUPING() with a single empty set: the recovered row is observable, not NULL
 query II
 SELECT o.k, (
@@ -514,6 +538,29 @@ ORDER BY ALL;
 1	1	1
 7	0	1
 7	0	1
+
+# the scalar cardinality error must also survive the plain delim join rewrites
+statement error
+SELECT o.k, (
+    SELECT sum(v)
+    FROM (VALUES (1, 42)) AS i(k, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS s
+FROM (VALUES (1)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
+statement error
+SELECT o.k, (
+    SELECT sum(i.v)
+    FROM (VALUES (1, 10, 42)) AS i(k, g, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((i.g), (i.g))
+) AS s
+FROM (VALUES (1)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
 
 query II
 SELECT o.k, (
