@@ -109,6 +109,16 @@ struct ParquetWriteBindData : public TableFunctionData {
 	//! The maximum uncompressed size of a data page
 	idx_t data_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
 
+	//! Cut data pages at content-defined boundaries rather than only when they hit the limit above
+	bool content_defined_chunking = false;
+	//! The smallest and largest page such a boundary may produce, in uncompressed value bytes. Pages come out
+	//! (min + max) / 2 long on average, which is Arrow's semantics as well. See parquet_cdc_chunker.hpp.
+	idx_t cdc_min_chunk_size = PARQUET_CDC_DEFAULT_MIN_CHUNK_SIZE;
+	idx_t cdc_max_chunk_size = PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
+	//! How many bits are taken off the boundary mask on top of what min and max imply. 0 is Arrow's default and
+	//! the recommendation for anything not reading many files at once.
+	int64_t cdc_norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+
 	bool enable_bloom_filters = true;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
@@ -152,6 +162,11 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["data_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	// Either a BOOLEAN, which takes the default sizes, or a STRUCT of sizes that picks them: the fields are
+	// optional, so {min_chunk_size: '64KB'} means the default maximum. It is a copy option rather than a setting
+	// because a COPY that is prepared, stored or logged has to carry the decision with it - a session setting
+	// would silently change what an already-written script produces.
+	copy_options["content_defined_chunking"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
 	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -172,6 +187,58 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+}
+
+//! Parse a size given for the content_defined_chunking option: a plain number of bytes, or a size string like
+//! '256KiB'. Sizes count uncompressed value bytes, before any encoding. A zero minimum means "no minimum", which
+//! Arrow allows; a zero maximum would mean nothing sensible, so it is refused. Sizes go through DuckDB's memory
+//! parser, where 'MB' is 10^6 and 'MiB' is 2^20 while Arrow takes plain byte counts - a page meant to line up with
+//! another writer's should therefore be given a bare byte count, since that difference moves every boundary after
+//! the page that fills to the ceiling.
+static idx_t ParseParquetCdcChunkSize(const Value &value, const string &field_name, bool allow_zero) {
+	if (value.IsNull()) {
+		throw BinderException("content_defined_chunking: '%s' cannot be NULL", field_name);
+	}
+	uint64_t size;
+	if (value.type().id() == LogicalTypeId::VARCHAR) {
+		string text = StringValue::Get(value);
+		StringUtil::Trim(text);
+		if (!text.empty() && text.find_first_not_of("0123456789") == string::npos) {
+			// a bare number is a plain byte count, which is what the other parquet writers take. DuckDB's
+			// memory parser wants a unit and rejects those, so they are handled here rather than by it
+			try {
+				size = std::stoull(text);
+			} catch (...) {
+				throw BinderException("content_defined_chunking: '%s' is out of range for '%s'", text, field_name);
+			}
+		} else {
+			try {
+				size = DBConfig::ParseMemoryLimit(text).GetIndex();
+			} catch (...) {
+				throw BinderException("content_defined_chunking: '%s' is not a size for '%s' - use a number of "
+				                      "bytes or a size like '256KiB', where KB is 10^3 and KiB is 2^10",
+				                      text, field_name);
+			}
+		}
+	} else {
+		try {
+			size = value.DefaultCastAs(LogicalType::UBIGINT).GetValue<uint64_t>();
+		} catch (...) {
+			throw BinderException("content_defined_chunking: '%s' is not a size for '%s' - use a number of bytes "
+			                      "or a size like '256KiB'",
+			                      value.ToString(), field_name);
+		}
+	}
+	if (size == 0 && !allow_zero) {
+		throw BinderException("content_defined_chunking: '%s' must be at least 1 byte", field_name);
+	}
+	if (size > PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE) {
+		// no page can be bigger than the writer's absolute page limit, so a larger minimum could only ever be
+		// ignored
+		throw BinderException("content_defined_chunking: '%s' cannot exceed %llu bytes", field_name,
+		                      PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE);
+	}
+	return size;
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
@@ -319,6 +386,54 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				                      PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE);
 			}
 			bind_data->data_page_size_limit = val;
+		} else if (option_name == "content_defined_chunking") {
+			const auto &value = option_values[0];
+			if (value.type().id() == LogicalTypeId::STRUCT) {
+				// sizes are given in bytes or as a size string, and a field left out takes its default. Whether the
+				// three of them make a usable boundary mask is decided by the chunker's own arithmetic, so that the
+				// message - and the acceptance - is the same one Arrow gives for the same numbers.
+				auto &children = StructValue::GetChildren(value);
+				optional_idx min_chunk_size, max_chunk_size;
+				int64_t norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+				for (idx_t i = 0; i < children.size(); i++) {
+					const auto &name = StructType::GetChildName(value.type(), i).GetIdentifierName();
+					if (name == "min_chunk_size") {
+						min_chunk_size = ParseParquetCdcChunkSize(children[i], name, true);
+					} else if (name == "max_chunk_size") {
+						max_chunk_size = ParseParquetCdcChunkSize(children[i], name, false);
+					} else if (name == "norm_level") {
+						if (children[i].IsNull()) {
+							throw BinderException("content_defined_chunking: 'norm_level' cannot be NULL");
+						}
+						norm_level = children[i].DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+					} else {
+						throw BinderException("content_defined_chunking: unknown field '%s', the fields are "
+						                      "'min_chunk_size', 'max_chunk_size' and 'norm_level'",
+						                      name);
+					}
+				}
+				bind_data->cdc_min_chunk_size =
+				    min_chunk_size.IsValid() ? min_chunk_size.GetIndex() : PARQUET_CDC_DEFAULT_MIN_CHUNK_SIZE;
+				// a minimum without a maximum keeps the default maximum even when that leaves no room for it,
+				// because raising the ceiling the user did not ask about is a worse answer than telling them
+				bind_data->cdc_max_chunk_size =
+				    max_chunk_size.IsValid() ? max_chunk_size.GetIndex() : PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
+				bind_data->cdc_norm_level = norm_level;
+				ParquetContentDefinedChunker::CalculateMask(bind_data->cdc_min_chunk_size,
+				                                            bind_data->cdc_max_chunk_size, bind_data->cdc_norm_level);
+				bind_data->content_defined_chunking = true;
+			} else {
+				if (value.IsNull()) {
+					throw BinderException("content_defined_chunking cannot be NULL");
+				}
+				bind_data->content_defined_chunking = BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
+				if (!bind_data->content_defined_chunking) {
+					// switching it off is the same as not asking for it, sizes included
+					bind_data->cdc_min_chunk_size = PARQUET_CDC_DEFAULT_MIN_CHUNK_SIZE;
+					bind_data->cdc_max_chunk_size = PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
+					bind_data->cdc_norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+				}
+			}
 		} else if (option_name == "write_bloom_filter") {
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
@@ -410,6 +525,10 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
 	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
 	options.data_page_size_limit = parquet_bind.data_page_size_limit;
+	options.content_defined_chunking = parquet_bind.content_defined_chunking;
+	options.cdc_min_chunk_size = parquet_bind.cdc_min_chunk_size;
+	options.cdc_max_chunk_size = parquet_bind.cdc_max_chunk_size;
+	options.cdc_norm_level = parquet_bind.cdc_norm_level;
 	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
 	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
 	options.compression_level = parquet_bind.compression_level;
@@ -813,6 +932,13 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                  default_value.not_null_columns);
 	serializer.WritePropertyWithDefault(121, "data_page_size_limit", bind_data.data_page_size_limit,
 	                                    default_value.data_page_size_limit);
+	serializer.WritePropertyWithDefault(122, "content_defined_chunking", bind_data.content_defined_chunking,
+	                                    default_value.content_defined_chunking);
+	serializer.WritePropertyWithDefault(123, "cdc_min_chunk_size", bind_data.cdc_min_chunk_size,
+	                                    default_value.cdc_min_chunk_size);
+	serializer.WritePropertyWithDefault(124, "cdc_max_chunk_size", bind_data.cdc_max_chunk_size,
+	                                    default_value.cdc_max_chunk_size);
+	serializer.WritePropertyWithDefault(125, "cdc_norm_level", bind_data.cdc_norm_level, default_value.cdc_norm_level);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -855,6 +981,14 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
 	data->data_page_size_limit =
 	    deserializer.ReadPropertyWithExplicitDefault(121, "data_page_size_limit", default_value.data_page_size_limit);
+	data->content_defined_chunking = deserializer.ReadPropertyWithExplicitDefault(
+	    122, "content_defined_chunking", default_value.content_defined_chunking);
+	data->cdc_min_chunk_size =
+	    deserializer.ReadPropertyWithExplicitDefault(123, "cdc_min_chunk_size", default_value.cdc_min_chunk_size);
+	data->cdc_max_chunk_size =
+	    deserializer.ReadPropertyWithExplicitDefault(124, "cdc_max_chunk_size", default_value.cdc_max_chunk_size);
+	data->cdc_norm_level =
+	    deserializer.ReadPropertyWithExplicitDefault(125, "cdc_norm_level", default_value.cdc_norm_level);
 
 	return std::move(data);
 }

@@ -1,0 +1,266 @@
+# name: test/sql/copy/parquet/writer/parquet_write_content_defined_pages.test
+# description: Test the content_defined_chunking COPY option
+# group: [writer]
+
+require parquet
+
+# three shapes of the same data: pages cut by size only, pages cut by content at the defaults, and pages
+# cut by content with a small minimum. The data has enough distinct values that the string column is not
+# dictionary-encoded, so its pages are a readable size.
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/by_size.parquet' (format parquet, compression uncompressed);
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/by_content.parquet' (format parquet, compression uncompressed, content_defined_chunking true);
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/content_small.parquet' (format parquet, compression uncompressed, content_defined_chunking {min_chunk_size: '64KB', max_chunk_size: '128KB'});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/content_big.parquet' (format parquet, compression uncompressed, content_defined_chunking {min_chunk_size: '1MB', max_chunk_size: '2MB'});
+
+# false has to mean "do not touch the writer's normal page cutting", not "cut at some default size"
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/turned_off.parquet' (format parquet, compression uncompressed, content_defined_chunking false);
+
+query I
+select hash(content) = (select hash(content) from read_blob('{TEST_DIR}/by_size.parquet'))
+from read_blob('{TEST_DIR}/turned_off.parquet');
+----
+true
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/by_content_b.parquet' (format parquet, compression uncompressed, content_defined_chunking true);
+
+# writing the same thing twice gives the same bytes, which is the whole premise
+query I
+select hash(a.content) = hash(b.content)
+from read_blob('{TEST_DIR}/by_content.parquet') a, read_blob('{TEST_DIR}/by_content_b.parquet') b;
+----
+true
+
+# round trip: the option moves page boundaries and nothing else
+query II
+select count(*), sum(i) from '{TEST_DIR}/by_content.parquet';
+----
+50000	1249975000
+
+query I
+select count(*) from (select * from '{TEST_DIR}/by_size.parquet' except all select * from '{TEST_DIR}/by_content.parquet');
+----
+0
+
+query I
+select count(*) from (select * from '{TEST_DIR}/by_content.parquet' except all select * from '{TEST_DIR}/content_small.parquet');
+----
+0
+
+query I
+select count(*) from (select * from '{TEST_DIR}/by_content.parquet' except all select * from '{TEST_DIR}/content_big.parquet');
+----
+0
+
+# one data page per column chunk without the option, and many more with it
+query I
+select pages
+from (select sum(s.count) pages from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/by_size.parquet') where path_in_schema = 's'));
+----
+1
+
+query I
+select pages > 10
+from (select sum(s.count) pages from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/by_content.parquet') where path_in_schema = 's'));
+----
+true
+
+# the minimum and the maximum are both honoured, on uncompressed value bytes: the mean page size of a
+# column sits between them, and follows them when they move
+query I
+select mean between 65536 and 131072
+from (select (select sum(total_uncompressed_size) from parquet_metadata('{TEST_DIR}/content_small.parquet') where path_in_schema = 's') /
+           (select sum(s.count) from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/content_small.parquet') where path_in_schema = 's')) mean);
+----
+true
+
+query I
+select mean > 131072
+from (select (select sum(total_uncompressed_size) from parquet_metadata('{TEST_DIR}/content_big.parquet') where path_in_schema = 's') /
+           (select sum(s.count) from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/content_big.parquet') where path_in_schema = 's')) mean);
+----
+true
+
+# fewer pages for a bigger minimum, more for a smaller one
+query I
+select small_pages > content_pages
+from (select sum(s.count) small_pages from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/content_small.parquet') where path_in_schema = 's')),
+     (select sum(s.count) content_pages from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/by_content.parquet') where path_in_schema = 's'));
+----
+true
+
+# encoding_stats counts the pages of a column chunk, which makes it enough to pin a column's page count
+statement ok
+create macro cdc_pages(path, file) as
+	(select sum(s.count) from (select unnest(encoding_stats) s from parquet_metadata(file) where path_in_schema = path) where s.page_type = 'DATA_PAGE');
+
+# The page counts below are pinned so that a change to the gear tables, to the size gate, or to which side
+# of a boundary a value lands on fails here instead of quietly moving every boundary after it. They are
+# not arbitrary numbers: parquet-cpp cuts the same pages from the same data, which is what
+# scripts/cdc_conformance.py of the hf extension checks (it compares per-page value counts, not just how
+# many there are). Everything here is written into one row group, because the chunker starts over per row
+# group and the counts would otherwise move with the row group size.
+statement ok
+copy (select range i from range(200_000)) to '{TEST_DIR}/pin_i.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/pin_s.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/pin_s_norm2.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072, norm_level: 2});
+
+statement ok
+copy (select range i, case when range % 977 = 0 then null else repeat(md5(range::varchar), 4) end s from range(50_000)) to '{TEST_DIR}/pin_s_null.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/pin_s_no_floor.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 0, max_chunk_size: 65536});
+
+# a bare number is a byte count, which is the form to use when comparing against another writer: '64KB'
+# would mean 64000 here and 65536 anywhere else, and a size that moves by 2% moves every boundary after
+# the first page
+query II
+select cdc_pages('i', '{TEST_DIR}/pin_i.parquet'), cdc_pages('s', '{TEST_DIR}/pin_s.parquet');
+----
+22	61
+
+# a looser mask cuts more, smaller pages: norm_level takes bits off the mask, so boundaries come up sooner
+query I
+select cdc_pages('s', '{TEST_DIR}/pin_s_norm2.parquet');
+----
+84
+
+# a null is hashed too (it is a definition level, and Arrow hashes those), so nulls move boundaries. They
+# do not move the count of pages much - a page that stops early starts again early - so this is a check
+# that the column is still being cut at all, at the same average, with levels in the feed.
+query I
+select cdc_pages('s', '{TEST_DIR}/pin_s_null.parquet');
+----
+61
+
+# no minimum at all: every position where the mask hits cuts, which is 156 pages instead of 61
+query I
+select cdc_pages('s', '{TEST_DIR}/pin_s_no_floor.parquet');
+----
+156
+
+# a column under a list keeps size-based page cuts: its values are interleaved with the parent's levels,
+# and a page there can only be cut at a record boundary
+statement ok
+copy (select range i, [repeat(md5(range::varchar), 4)] l from range(50_000)) to '{TEST_DIR}/nested_list.parquet' (format parquet, compression uncompressed, content_defined_chunking true);
+
+query I
+select sum(s.count) pages
+from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/nested_list.parquet') where path_in_schema = 'l, list, element')
+where s.page_type = 'DATA_PAGE';
+----
+1
+
+# nulls, empty and single-row files round trip
+statement ok
+copy (select range i, case when range % 7 = 0 then null else repeat(md5(range::varchar), 4) end s from range(50_000)) to '{TEST_DIR}/with_nulls.parquet' (format parquet, content_defined_chunking {min_chunk_size: '32KB'});
+
+query II
+select count(*), count(*) - count(s) from '{TEST_DIR}/with_nulls.parquet';
+----
+50000	7143
+
+query I
+select count(*) from (
+	select * from '{TEST_DIR}/with_nulls.parquet'
+	except all
+	select range i, case when range % 7 = 0 then null else repeat(md5(range::varchar), 4) end s from range(50_000));
+----
+0
+
+statement ok
+copy (select 1 i where false) to '{TEST_DIR}/empty_cdc.parquet' (format parquet, content_defined_chunking true);
+
+query I
+select count(*) from '{TEST_DIR}/empty_cdc.parquet';
+----
+0
+
+statement ok
+copy (select repeat('x', 4_000_000) s) to '{TEST_DIR}/oversized_value.parquet' (format parquet, content_defined_chunking {min_chunk_size: '1KB', max_chunk_size: '64KB'});
+
+query I
+select length(s) = 4000000 from '{TEST_DIR}/oversized_value.parquet';
+----
+true
+
+# a value bigger than the page size still lands on a page of its own, and pages stay under the 100MB
+# ceiling
+query I
+select sum(s.count) = 1
+from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/oversized_value.parquet'))
+where s.page_type = 'DATA_PAGE';
+----
+true
+
+# the option survives being serialized, i.e. a prepared COPY writes what was prepared
+statement ok
+prepare cdc_copy as copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/prepared.parquet' (format parquet, compression uncompressed, content_defined_chunking {min_chunk_size: '64KB', max_chunk_size: '128KB'});
+
+statement ok
+execute cdc_copy;
+
+query I
+select hash(content) = (select hash(content) from read_blob('{TEST_DIR}/content_small.parquet'))
+from read_blob('{TEST_DIR}/prepared.parquet');
+----
+true
+
+# the option is write-only: reading a file does not take it
+statement error
+select count(*) from read_parquet('{TEST_DIR}/by_content.parquet', content_defined_chunking := true);
+----
+Invalid named parameter
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/bad_field.parquet' (format parquet, content_defined_chunking {bogus: 1});
+----
+unknown field
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/min_over_max.parquet' (format parquet, content_defined_chunking {min_chunk_size: '5MB', max_chunk_size: '1MB'});
+----
+must be greater than
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/max_too_small.parquet' (format parquet, content_defined_chunking {max_chunk_size: 0});
+----
+at least 1 byte
+
+# a minimum equal to the maximum leaves no room for a mask: the target chunk size would need 0 bits
+statement error
+copy (select 42 i) to '{TEST_DIR}/equal_sizes.parquet' (format parquet, content_defined_chunking {min_chunk_size: 100, max_chunk_size: 100});
+----
+must be between 1 and 63
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/far_norm.parquet' (format parquet, content_defined_chunking {min_chunk_size: '1MB', max_chunk_size: '2MB', norm_level: 40});
+----
+must be between 1 and 63
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/not_a_size.parquet' (format parquet, content_defined_chunking {min_chunk_size: 'nonsense'});
+----
+is not a size
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/oversized_chunk.parquet' (format parquet, content_defined_chunking {max_chunk_size: '1GB'});
+----
+cannot exceed
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/null_chunk.parquet' (format parquet, content_defined_chunking {min_chunk_size: null});
+----
+cannot be NULL
