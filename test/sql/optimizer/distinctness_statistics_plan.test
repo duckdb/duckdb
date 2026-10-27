@@ -74,7 +74,7 @@ EXPLAIN SELECT * FROM probe JOIN nullable_build ON a IS DISTINCT FROM b;
 ----
 physical_plan	<REGEX>:.*IS DISTINCT FROM.*
 
-# MARK joins must continue returning FALSE rather than NULL for one-sided NULL keys.
+# MARK conditions are preserved even when both operands are non-NULL.
 
 query II
 EXPLAIN SELECT a, __mark_join_marker FROM nullable_probe JOIN BY (TYPE MARK) build ON a IS NOT DISTINCT FROM b;
@@ -84,7 +84,12 @@ physical_plan	<REGEX>:.*IS NOT DISTINCT FROM.*
 query II
 EXPLAIN SELECT a, __mark_join_marker FROM probe JOIN BY (TYPE MARK) build ON a IS NOT DISTINCT FROM b;
 ----
-physical_plan	<!REGEX>:.*IS NOT DISTINCT FROM.*
+physical_plan	<REGEX>:.*IS NOT DISTINCT FROM.*
+
+query II
+EXPLAIN SELECT a, __mark_join_marker FROM probe JOIN BY (TYPE MARK) build ON a IS DISTINCT FROM b;
+----
+physical_plan	<REGEX>:.*IS DISTINCT FROM.*
 
 endloop
 
@@ -123,20 +128,33 @@ physical_plan	<REGEX>:.*IS NOT DISTINCT FROM.*
 statement ok
 RESET disabled_optimizers;
 
-# Member-level proofs retain safe UNION and MARK TUPLE rewrites.
+# UNION and TUPLE comparisons are preserved even when every child is non-NULL.
 statement ok
 CREATE TABLE union_keys AS SELECT union_value(i:=a) a, union_value(i:=b) b FROM scalar_keys;
-
-query II
-EXPLAIN SELECT a IS NOT DISTINCT FROM b FROM union_keys;
-----
-physical_plan	<REGEX>:.*a = b.*
 
 statement ok
 CREATE TABLE tuple_keys AS SELECT row(a,a) a, row(b,b) b FROM scalar_keys;
 
-query II
-EXPLAIN SELECT __mark_join_marker FROM tuple_keys p JOIN BY (TYPE MARK) tuple_keys q ON p.a IS DISTINCT FROM q.b;
-----
-physical_plan	<!REGEX>:.*IS DISTINCT FROM.*
+foreach table union_keys tuple_keys
 
+query II
+EXPLAIN SELECT a IS NOT DISTINCT FROM b FROM {table};
+----
+physical_plan	<REGEX>:.*IS NOT DISTINCT FROM.*
+
+query II
+EXPLAIN SELECT a IS DISTINCT FROM b FROM {table};
+----
+physical_plan	<REGEX>:.*IS DISTINCT FROM.*
+
+query II
+EXPLAIN SELECT * FROM {table} p JOIN {table} q ON p.a IS NOT DISTINCT FROM q.b;
+----
+physical_plan	<REGEX>:.*IS NOT DISTINCT FROM.*
+
+query II
+EXPLAIN SELECT * FROM {table} p JOIN {table} q ON p.a IS DISTINCT FROM q.b;
+----
+physical_plan	<REGEX>:.*IS DISTINCT FROM.*
+
+endloop

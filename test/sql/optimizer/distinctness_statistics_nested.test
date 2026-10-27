@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/distinctness_statistics_nested.test
-# description: Distinctness simplification accounts for UNION members and MARK row-comparison NULLs
+# description: Preserve distinctness semantics for UNION, TUPLE and MARK comparisons
 # group: [optimizer]
 
 statement ok
@@ -60,7 +60,7 @@ SELECT __mark_join_marker FROM nested_tuple_probe JOIN BY (TYPE MARK) nested_tup
 ----
 true
 
-# Retained MARK grouping metadata must survive the rewritten non-NULL group key.
+# MARK grouping comparisons remain NULL-safe during statistics propagation.
 statement ok
 CREATE TABLE group_probe(g INTEGER, v INTEGER);
 

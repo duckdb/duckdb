@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -155,9 +154,13 @@ ExpressionType StatisticsPropagator::SimplifyDistinctComparison(ExpressionType c
 	    comparison != ExpressionType::COMPARE_DISTINCT_FROM) {
 		return comparison;
 	}
-	const bool row_equality = context == ComparisonContext::MARK_JOIN;
-	const bool left_not_null = left && ComparisonInputIsNotNull(*left, row_equality);
-	const bool right_not_null = right && ComparisonInputIsNotNull(*right, row_equality);
+	for (auto stats : {left, right}) {
+		if (stats && (stats->GetType().id() == LogicalTypeId::UNION || stats->GetType().id() == LogicalTypeId::TUPLE)) {
+			return comparison;
+		}
+	}
+	const bool left_not_null = left && !left->CanHaveNull();
+	const bool right_not_null = right && !right->CanHaveNull();
 	switch (comparison) {
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if ((left_not_null && right_not_null) ||

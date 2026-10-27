@@ -145,7 +145,7 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> &expr_ptr);
 
 	unique_ptr<BaseStatistics> PropagateComparison(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
-	enum class ComparisonContext : uint8_t { SCALAR, JOIN, MARK_JOIN };
+	enum class ComparisonContext : uint8_t { SCALAR, JOIN };
 	//! Simplify distinctness when NULL cannot affect the comparison's result in this context
 	static ExpressionType SimplifyDistinctComparison(ExpressionType comparison, optional_ptr<const BaseStatistics> left,
 	                                                 optional_ptr<const BaseStatistics> right,

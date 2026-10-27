@@ -9,41 +9,10 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_stats.hpp"
-#include "duckdb/storage/statistics/struct_stats.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
-
-bool ComparisonInputIsNotNull(const BaseStatistics &stats, bool row_equality) {
-	if (stats.CanHaveNull()) {
-		return false;
-	}
-	const auto &type = stats.GetType();
-	if (type.id() == LogicalTypeId::UNION) {
-		// Only the active member participates; inactive members are always NULL.
-		idx_t first_member = 0;
-		idx_t last_member = UnionType::GetMemberCount(type) - 1;
-		const auto &tag = StructStats::GetChildStats(stats, 0);
-		if (NumericStats::HasMinMax(tag)) {
-			first_member = NumericStats::Min(tag).GetValue<uint8_t>();
-			last_member = NumericStats::Max(tag).GetValue<uint8_t>();
-		}
-		for (idx_t member = first_member; member <= last_member; member++) {
-			if (!ComparisonInputIsNotNull(StructStats::GetChildStats(stats, member + 1))) {
-				return false;
-			}
-		}
-	} else if (row_equality && type.id() == LogicalTypeId::TUPLE) {
-		for (idx_t child = 0; child < StructType::GetChildCount(type); child++) {
-			if (!ComparisonInputIsNotNull(StructStats::GetChildStats(stats, child), true)) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
 
 bool ExpressionBecomesNull(const Expression &expr,
                            const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null) {
