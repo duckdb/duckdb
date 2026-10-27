@@ -9,6 +9,8 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/value_map.hpp"

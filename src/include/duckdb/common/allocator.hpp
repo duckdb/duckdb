@@ -56,6 +56,8 @@ typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_da
 class AllocatedData {
 public:
 	DUCKDB_API AllocatedData();
+	//! An empty allocation that retains its resource for later growth.
+	DUCKDB_API explicit AllocatedData(Allocator &allocator);
 	DUCKDB_API AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
 	DUCKDB_API ~AllocatedData();
 	// disable copy constructors

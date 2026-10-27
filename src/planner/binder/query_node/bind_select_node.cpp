@@ -577,6 +577,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// set up a mapping of expression -> group index so we can map expressions in the select list / having to groups
 		auto grp_copy = grp->Copy();
 		bind_state.group_map[*grp_copy] = ProjectionIndex(i);
+		if (grp_copy->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+			bind_state.has_compound_groups = true;
+		}
 		bind_state.unbound_groups.push_back(std::move(grp_copy));
 	}
 
