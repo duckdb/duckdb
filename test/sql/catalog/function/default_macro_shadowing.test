@@ -242,6 +242,35 @@ SELECT format_pg_type('ENUM', 'Mood');
 ----
 mood
 
+# format_type: the outer concatenation and the typemod arithmetic stay pinned under the
+# "||", "//" and "%" shadows created above
+
+query I
+SELECT format_type((SELECT min(type_oid) FROM duckdb_types() WHERE logical_type = 'INTEGER'), 10002);
+----
+int4(10,2)
+
+query I
+SELECT system.pg_catalog.format_type(NULL::BIGINT, -1);
+----
+NULL
+
+# ILIKE inside a default table macro body stays pinned
+
+statement ok
+CALL enable_logging('QueryLog', storage = 'memory');
+
+statement ok
+SELECT 42;
+
+statement ok
+CREATE MACRO "~~*"(a, b) AS false;
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs_parsed('QueryLog');
+----
+true
+
 # ago needs the ICU TIMESTAMPTZ arithmetic, its pinned value function and minus run with icu
 
 require icu

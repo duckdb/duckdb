@@ -91,10 +91,10 @@ static const DefaultMacro internal_macros[] = {
      "'timestamptz' when 'TIME WITH TIME ZONE' then 'timetz' when 'SMALLINT' then 'int2' when 'INTEGER' then 'int4' "
      "when 'BIGINT' then 'int8' when 'BOOLEAN' then 'bool' else system.main.lower(logical_type) end"},
     {"pg_catalog", "format_type",
-     "(type_oid, typemod) AS (select system.pg_catalog.format_pg_type(logical_type, type_name) from "
-     "system.main.duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then "
+     "(type_oid, typemod) AS system.main.\"||\"((select system.pg_catalog.format_pg_type(logical_type, type_name) "
+     "from system.main.duckdb_types() t where t.type_oid=type_oid), case when typemod>0 then "
      "system.main.concat('(', system.main.\"//\"(typemod, 1000), ',', system.main.\"%\"(typemod, 1000), ')') "
-     "else '' end"},
+     "else '' end)"},
     {"pg_catalog", "map_to_pg_oid",
      "(type_name) AS case type_name when 'bool' then 16 when 'int16' then 21 when 'int' then 23 when 'bigint' then 20 "
      "when 'date' then 1082 when 'time' then 1083 when 'datetime' then 1114 when 'dec' then 1700 when 'float' then 700 "
