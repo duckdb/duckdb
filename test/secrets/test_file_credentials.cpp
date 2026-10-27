@@ -182,10 +182,7 @@ public:
 protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info {file.path};
-		if (file.extended_info) {
-			info.file_secret = file.extended_info->file_secret;
-		}
+		FileOpenerInfo info(file);
 		string key_id;
 		string region;
 		ReadSecret(opener, info, key_id, region);
@@ -200,7 +197,7 @@ protected:
 	}
 	unique_ptr<MultiFileList> GlobFilesExtended(const string &pattern, const FileGlobInput &input,
 	                                            optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info {pattern, input.file_secret};
+		FileOpenerInfo info(OpenFileInfo(pattern).WithFileSecret(input.file_secret));
 		string key_id;
 		string region;
 		ReadSecret(opener, info, key_id, region);
@@ -224,7 +221,9 @@ protected:
 			}
 			OpenFileInfo listed(path);
 			listed.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-			listed.extended_info->file_secret = file_secret;
+			if (!file_secret.empty()) {
+				listed.extended_info->options[ExtendedOpenFileInfo::FILE_SECRET_OPTION] = Value(file_secret);
+			}
 			if (listing_metadata) {
 				listed.extended_info->options["last_modified"] = Value::TIMESTAMP(Timestamp::FromEpochSeconds(1000));
 				listed.extended_info->options["etag"] = Value("v1");
@@ -291,12 +290,11 @@ struct CredentialsFixture {
 	string FileSecret(const string &key_id, const char *type = TEST_TYPE) {
 		return FileSecret(Context(), key_id, type);
 	}
-	static shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name,
-	                                                      const string &path) {
+	static shared_ptr<SecretEntry> GetFileSecret(ClientContext &context, const string &name, const string &path) {
 		return SecretManager::Get(context).GetFileSecret(context, name, path);
 	}
-	static string KeyOf(const shared_ptr<const KeyValueSecret> &secret) {
-		return secret->TryGetValue("key_id").ToString();
+	static string KeyOf(const shared_ptr<SecretEntry> &entry) {
+		return entry->secret->Cast<KeyValueSecret>().TryGetValue("key_id").ToString();
 	}
 	static OpenFileInfo File(const string &path, const string &name) {
 		return OpenFileInfo(path).WithFileSecret(name);
@@ -429,7 +427,7 @@ TEST_CASE("A file secret of another type fails the read, and a reader of several
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", name)); },
 	                  "is a secret of type \"file_credentials_test_other\", which this read does not take");
 	ClientContextFileOpener opener(f.Context());
-	FileOpenerInfo info {"mem://bucket/table/a.bin", name};
+	FileOpenerInfo info(CredentialsFixture::File("mem://bucket/table/a.bin", name));
 	const char *with_other[] = {TEST_TYPE, "FILE_CREDENTIALS_TEST_OTHER"};
 	KeyValueSecretReader reader(opener, &info, with_other, 2);
 	REQUIRE(reader.GetSecretKey("key_id").ToString() == "other-key");
@@ -448,7 +446,7 @@ TEST_CASE("A glob with a file secret lists with it, and each file it lists carri
 	REQUIRE(files.size() == 2);
 	REQUIRE(f.fs->Accesses("glob")[0].key_id == "table-key");
 	for (auto &file : files) {
-		REQUIRE(file.extended_info->file_secret == name);
+		REQUIRE(file.GetFileSecret() == name);
 		REQUIRE(f.OpenKey(file) == "table-key");
 	}
 	// WithFileSecret copies the extended information, and keeps the file secret a file has
@@ -458,9 +456,11 @@ TEST_CASE("A glob with a file secret lists with it, and each file it lists carri
 	given.extended_info->options["file_size"] = Value::UBIGINT(3);
 	auto with = given.WithFileSecret(name);
 	REQUIRE(with.extended_info->options.count("file_size") == 1);
-	REQUIRE(given.extended_info->file_secret.empty());
-	REQUIRE(with.WithFileSecret(own).extended_info->file_secret == name);
+	REQUIRE(given.GetFileSecret().empty());
+	REQUIRE(with.WithFileSecret(own).GetFileSecret() == name);
 	REQUIRE_FALSE(OpenFileInfo("mem://bucket/table/a.bin").WithFileSecret("").extended_info);
+	// the name is an option of the file, so it also travels in a file struct
+	REQUIRE(OpenFileInfo::FromValue(with.ToValue(), Identifier("test")).GetFileSecret() == name);
 	f.con.Rollback();
 }
 
@@ -595,7 +595,7 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	other.Rollback();
 	// an opener without a client
 	DatabaseFileOpener database_opener(*f.db.instance);
-	FileOpenerInfo info {path, name};
+	FileOpenerInfo info(CredentialsFixture::File(path, name));
 	RequireThrowsWith([&]() { KeyValueSecretReader reader(database_opener, &info, TEST_TYPE); }, "without a client");
 	f.con.Query(outcome);
 	if (context.transaction.HasActiveTransaction()) {
@@ -613,30 +613,47 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	RequireThrowsWith([&]() { f.FileSecret("table-key"); }, "an active transaction");
 }
 
-TEST_CASE("No SQL statement can match, list, read with or drop a file secret", "[file_credentials]") {
+TEST_CASE("Only a statement given the name of a file secret reads with it, and none can match, list or drop it",
+          "[file_credentials]") {
 	CredentialsFixture f;
 	f.fs->files["mem://bucket/table/t1.csv"] = "i\n1\n";
 	auto &context = f.Context();
+	auto read_with = [&](const string &secret) {
+		f.fs->ClearAccesses();
+		return f.con.Query("SELECT i FROM read_csv([{'filename': 'mem://bucket/table/t1.csv', 'secret': '" + secret +
+		                   "'}])");
+	};
 	f.con.BeginTransaction();
 	auto name = f.FileSecret("table-key");
-	REQUIRE(CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/t1.csv"));
+	// 128 random bits, as hex digits
+	REQUIRE(name.size() == 32);
+	REQUIRE(name.find_first_not_of("0123456789abcdef") == string::npos);
+	REQUIRE(f.FileSecret("table-key") != name);
 	auto result = f.con.Query("SELECT name FROM which_secret('mem://bucket/table/t1.csv', 'file_credentials_test')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
 	result = f.con.Query("SELECT string_agg(name, ',') FROM duckdb_secrets()");
 	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
 	REQUIRE_FALSE(
 	    SecretManager::Get(context).GetSecretByName(CatalogTransaction::GetSystemCatalogTransaction(context), name));
-	// a file struct can hold an option of that name, which is not the file secret of the file
-	f.fs->ClearAccesses();
-	result = f.con.Query("SELECT i FROM read_csv([{'filename': 'mem://bucket/table/t1.csv', 'file_secret': '" + name +
-	                     "'}])");
+	// a file struct that names the file secret reads the file with it
+	result = read_with(name);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(f.fs->Accesses("open").size() > 0);
-	REQUIRE(f.fs->CountKey("open", "path-key") == f.fs->Accesses("open").size());
+	REQUIRE(f.fs->CountKey("open", "table-key") == f.fs->Accesses("open").size());
 	// last: the failure aborts the transaction
 	RequireThrowsWith([&]() { f.con.Query("DROP SECRET \"" + name + "\" FROM transaction")->ThrowError(); },
 	                  "non-existent transaction secret");
 	f.con.Rollback();
+	// one that names no file secret of its transaction fails, rather than reading with the secret matched to the path,
+	// and the error does not repeat the name
+	for (auto &other : {name, string(32, '0')}) {
+		INFO(other);
+		result = read_with(other);
+		REQUIRE(result->HasError());
+		REQUIRE(StringUtil::Contains(result->GetError(), "is not available"));
+		REQUIRE_FALSE(StringUtil::Contains(result->GetError(), other));
+		REQUIRE(f.fs->CountKey("open", "path-key") == 0);
+	}
 }
 
 TEST_CASE("Opens of one path with two file secrets each use their own, also between opens by path",
@@ -787,8 +804,11 @@ TEST_CASE("A failed vend throws and the next use vends again; a refresh replaces
 	REQUIRE_THROWS_AS(key(), IOException);
 	fail = false;
 	REQUIRE(key() == "table-key#2");
+	auto before = CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin");
 	REQUIRE(refresh());
 	REQUIRE(key() == "table-key#3");
+	// a reader of the secret a refresh replaced keeps it
+	REQUIRE(CredentialsFixture::KeyOf(before) == "table-key#2");
 	fail = true;
 	REQUIRE_THROWS_AS(refresh(), IOException);
 	REQUIRE(key() == "table-key#3");

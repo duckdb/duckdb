@@ -29,7 +29,7 @@ struct FileGlobInput {
 	FileGlobOptions behavior;
 	bool allow_empty;
 	string extension;
-	//! The name of the file secret to list with; every file the glob lists carries it
+	//! The name of the file secret to list with; every file the glob lists carries it in its "secret" option
 	string file_secret;
 };
 

@@ -17,16 +17,17 @@ namespace duckdb {
 
 struct ExtendedOpenFileInfo {
 	unordered_map<string, Value> options;
-	//! The name of the file secret to open the file with (SecretManager::RegisterFileSecret). A typed field rather
-	//! than an option, so that nothing that writes the options (file options a query wrote, a listing response) can
-	//! set it
-	string file_secret;
+
+	//! The option that names the file secret to open the file with (SecretManager::RegisterFileSecret)
+	static constexpr const char *FILE_SECRET_OPTION = "secret";
 
 public:
 	//! Read an option as a T - returns false when the option is not set, throws when it is set to a value
 	//! that cannot be read as a T. Only the types specialized below are supported
 	template <class T>
 	bool TryGetOption(const string &name, T &result) const;
+	//! The name of the file secret to open the file with - false when the file names none
+	DUCKDB_API bool TryGetFileSecret(string &name) const;
 };
 
 //! A boolean option - anything that casts to BOOLEAN is accepted
@@ -63,8 +64,10 @@ public:
 	DUCKDB_API Value ToValue() const;
 	//! Whether the file is opened with a file secret. Reads of such a file use no cache that reads of its path share
 	bool HasFileSecret() const {
-		return extended_info && !extended_info->file_secret.empty();
+		return extended_info && extended_info->options.count(ExtendedOpenFileInfo::FILE_SECRET_OPTION) > 0;
 	}
+	//! The name of the file secret the file is opened with - "" when it has none
+	DUCKDB_API string GetFileSecret() const;
 	//! This file with the file secret `name` when it has none. The extended information is copied, because copies of
 	//! an OpenFileInfo share it
 	DUCKDB_API OpenFileInfo WithFileSecret(const string &name) const;

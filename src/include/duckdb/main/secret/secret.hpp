@@ -342,8 +342,8 @@ protected:
 	optional_ptr<const KeyValueSecret> secret;
 	//! Optionally an owning pointer to the secret entry
 	shared_ptr<SecretEntry> secret_entry;
-	//! The file secret FileOpenerInfo::file_secret names, when the open names one; no setting fills a key it lacks
-	shared_ptr<const KeyValueSecret> file_secret;
+	//! Whether `secret` is the file secret the open names; no setting then fills a key it lacks
+	bool is_file_secret = false;
 
 	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance
 	//! (global only)

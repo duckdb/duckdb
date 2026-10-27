@@ -100,9 +100,6 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	file_input.multi_file_scan = options.multi_file_scan;
 	file_input.schema_only = schema_only;
 	file_input.file_bind_data = file_bind_data;
-	if (file.HasFileSecret()) {
-		file_input.file_secret = file.extended_info->file_secret;
-	}
 	if (!options.expected_names.empty()) {
 		// the schema of the scan is known upfront - bind this file against that schema
 		file_input.expected_names = options.expected_names;

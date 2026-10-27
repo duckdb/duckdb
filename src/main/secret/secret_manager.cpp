@@ -568,20 +568,19 @@ string SecretManager::RegisterFileSecret(ClientContext &context, string scope, f
 	return storage.RegisterFileSecret(std::move(scope), std::move(vend));
 }
 
-shared_ptr<const KeyValueSecret> SecretManager::GetFileSecret(ClientContext &context, const string &name,
-                                                              const string &path) {
-	shared_ptr<const KeyValueSecret> secret;
+shared_ptr<SecretEntry> SecretManager::GetFileSecret(ClientContext &context, const string &name, const string &path) {
+	shared_ptr<SecretEntry> entry;
 	if (context.transaction.HasActiveTransaction()) {
 		auto storage = GetTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
 		if (storage) {
-			secret = storage->GetFileSecret(context, name, path);
+			entry = storage->GetFileSecret(context, name, path);
 		}
 	}
-	if (!secret) {
+	if (!entry) {
 		throw InvalidConfigurationException(
 		    "The file secret for '%s' is not available: it serves only the transaction that registered it", path);
 	}
-	return secret;
+	return entry;
 }
 
 bool SecretManager::RefreshFileSecret(ClientContext &context, const string &name) {

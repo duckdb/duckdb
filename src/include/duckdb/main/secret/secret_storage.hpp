@@ -119,7 +119,7 @@ public:
 	string RegisterFileSecret(string scope, file_secret_vend_t vend);
 	//! The file secret `name` for reading `path`, vended on first use; nullptr when there is none. Throws when `path`
 	//! is outside its scope
-	shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name, const string &path);
+	shared_ptr<SecretEntry> GetFileSecret(ClientContext &context, const string &name, const string &path);
 	//! Vends the file secret `name` again; false when there is none
 	bool RefreshFileSecret(ClientContext &context, const string &name);
 
@@ -129,7 +129,8 @@ private:
 		file_secret_vend_t vend;
 		//! Held while vending, so that concurrent first uses share one vend
 		mutex lock;
-		shared_ptr<const KeyValueSecret> secret;
+		//! The vended secret. A refresh replaces it; a reader of the previous one keeps that alive
+		shared_ptr<SecretEntry> entry;
 	};
 	optional_ptr<FileSecret> FindFileSecret(const string &name);
 

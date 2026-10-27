@@ -142,15 +142,15 @@ public:
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
 	//! Registers a file secret in the current transaction of `context` and returns its name: the secret `vend` returns
-	//! on first use, and again on a refresh, for reading the files under `scope` that name it
-	//! (ExtendedOpenFileInfo::file_secret). No lookup by path, listing of secrets or lookup by name sees it, so no SQL
-	//! statement can use it. It serves only that transaction, which keeps it until it ends: register one per table and
-	//! transaction, and name it on every scan of the table
+	//! on first use, and again on a refresh, for reading the files under `scope` whose "secret" option names it
+	//! (ExtendedOpenFileInfo::FILE_SECRET_OPTION). The name is 128 random bits, and no lookup by path, listing of
+	//! secrets or lookup by name sees the secret, so only a statement that is given the name can use it. It serves only
+	//! that transaction, which keeps it until it ends: register one per table and transaction, and name it on every
+	//! scan of the table
 	DUCKDB_API string RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend);
 	//! The file secret `name` for reading `path`; throws when the current transaction of `context` has no such secret,
 	//! or when `path` is outside its scope
-	DUCKDB_API shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name,
-	                                                          const string &path);
+	DUCKDB_API shared_ptr<SecretEntry> GetFileSecret(ClientContext &context, const string &name, const string &path);
 	//! Vends the file secret `name` again, after the store rejected it as expired; false when there is no such secret
 	DUCKDB_API bool RefreshFileSecret(ClientContext &context, const string &name);
 

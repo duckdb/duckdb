@@ -212,21 +212,23 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 	if (info) {
 		path = info->file_path;
 	}
-	if (info && !info->file_secret.empty()) {
+	string file_secret;
+	if (info && info->extended_info && info->extended_info->TryGetFileSecret(file_secret)) {
 		// the open names its secret: look up none by path
 		if (!context) {
 			throw InvalidConfigurationException("The file secret for '%s' is not available without a client", path);
 		}
-		file_secret = SecretManager::Get(*context).GetFileSecret(*context, info->file_secret, path);
+		secret_entry = SecretManager::Get(*context).GetFileSecret(*context, file_secret, path);
+		auto &type = secret_entry->secret->GetType();
 		for (idx_t i = 0; i < secret_types_len; i++) {
-			if (StringUtil::CIEquals(file_secret->GetType().GetIdentifierName(), secret_types[i])) {
-				secret = *file_secret;
+			if (StringUtil::CIEquals(type.GetIdentifierName(), secret_types[i])) {
+				secret = secret_entry->secret->Cast<KeyValueSecret>();
+				is_file_secret = true;
 				return;
 			}
 		}
 		throw InvalidConfigurationException(
-		    "The file secret for '%s' is a secret of type %s, which this read does not take", path,
-		    file_secret->GetType());
+		    "The file secret for '%s' is a secret of type %s, which this read does not take", path, type);
 	}
 
 	Initialize(secret_types, secret_types_len);
@@ -247,7 +249,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const Identif
 	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
-	if (file_secret) {
+	if (is_file_secret) {
 		// a setting is something the query's caller can change
 		return SettingLookupResult();
 	}

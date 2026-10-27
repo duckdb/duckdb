@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -21,10 +22,19 @@ class HTTPUtil;
 class Value;
 class Logger;
 
+//! The file an open, listing or request is for
 struct FileOpenerInfo {
+	FileOpenerInfo() = default;
+	FileOpenerInfo(string file_path_p) // NOLINT: allow implicit conversion from a path
+	    : file_path(std::move(file_path_p)) {
+	}
+	FileOpenerInfo(const OpenFileInfo &file) // NOLINT: allow implicit conversion from a file
+	    : file_path(file.path), extended_info(file.extended_info) {
+	}
+
 	string file_path;
-	//! When set, the secret for this open is this file secret, and none is looked up for `file_path`
-	string file_secret;
+	//! The extended information of the file (OpenFileInfo::extended_info), e.g. the file secret to open it with
+	shared_ptr<ExtendedOpenFileInfo> extended_info;
 };
 
 //! Abstract type that provide client-specific context to FileSystem.

@@ -21,6 +21,8 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
+#include <random>
+
 namespace duckdb {
 
 TransactionSecretStorage::TransactionSecretStorage(const string &name_p)
@@ -107,11 +109,31 @@ bool HasParentSegment(const string &path) {
 	return StringUtil::Contains("/" + StringUtil::Replace(path, "\\", "/") + "/", "/../");
 }
 
-//! Handed out in order, so a name kept past its transaction names no later file secret in this process. Short
-//! enough to be stored without an allocation
-string NextFileSecretName() {
-	static atomic<idx_t> next_name {0};
-	return to_string(++next_name);
+//! 128 bits of std::random_device as 32 hex digits, so a statement can name a file secret only when handed the name
+string NewFileSecretName() {
+	static constexpr const char *HEX_DIGITS = "0123456789abcdef";
+	std::random_device random_device;
+	string name;
+	for (idx_t word = 0; word < 4; word++) {
+		auto bits = static_cast<uint32_t>(random_device());
+		for (idx_t digit = 0; digit < 8; digit++) {
+			name += HEX_DIGITS[(bits >> (4 * digit)) & 0xF];
+		}
+	}
+	return name;
+}
+
+//! The vended secret as an entry of the transaction's storage
+shared_ptr<SecretEntry> VendFileSecret(ClientContext &context, const file_secret_vend_t &vend, const string &scope) {
+	auto secret = vend(context);
+	if (!secret) {
+		throw InternalException("The file secret of '%s' vended no secret", scope);
+	}
+	auto entry = make_shared_ptr<SecretEntry>(nullptr);
+	entry->persist_type = SecretPersistType::TRANSACTION;
+	entry->storage_mode = SecretManager::TRANSACTION_STORAGE_NAME;
+	entry->secret = secret->Clone();
+	return entry;
 }
 
 } // namespace
@@ -120,7 +142,7 @@ string TransactionSecretStorage::RegisterFileSecret(string scope, file_secret_ve
 	auto file_secret = make_uniq<FileSecret>();
 	file_secret->scope = std::move(scope);
 	file_secret->vend = std::move(vend);
-	auto name = NextFileSecretName();
+	auto name = NewFileSecretName();
 	lock_guard<mutex> guard(lock);
 	file_secrets.emplace(name, std::move(file_secret));
 	return name;
@@ -135,8 +157,8 @@ optional_ptr<TransactionSecretStorage::FileSecret> TransactionSecretStorage::Fin
 	return entry->second.get();
 }
 
-shared_ptr<const KeyValueSecret> TransactionSecretStorage::GetFileSecret(ClientContext &context, const string &name,
-                                                                         const string &path) {
+shared_ptr<SecretEntry> TransactionSecretStorage::GetFileSecret(ClientContext &context, const string &name,
+                                                                const string &path) {
 	auto file_secret = FindFileSecret(name);
 	if (!file_secret) {
 		return nullptr;
@@ -146,13 +168,10 @@ shared_ptr<const KeyValueSecret> TransactionSecretStorage::GetFileSecret(ClientC
 		                                    path);
 	}
 	lock_guard<mutex> guard(file_secret->lock);
-	if (!file_secret->secret) {
-		file_secret->secret = file_secret->vend(context);
+	if (!file_secret->entry) {
+		file_secret->entry = VendFileSecret(context, file_secret->vend, file_secret->scope);
 	}
-	if (!file_secret->secret) {
-		throw InternalException("The file secret of '%s' vended no secret", file_secret->scope);
-	}
-	return file_secret->secret;
+	return file_secret->entry;
 }
 
 bool TransactionSecretStorage::RefreshFileSecret(ClientContext &context, const string &name) {
@@ -162,7 +181,7 @@ bool TransactionSecretStorage::RefreshFileSecret(ClientContext &context, const s
 	}
 	lock_guard<mutex> guard(file_secret->lock);
 	// a vend that throws keeps the current secret
-	file_secret->secret = file_secret->vend(context);
+	file_secret->entry = VendFileSecret(context, file_secret->vend, file_secret->scope);
 	return true;
 }
 
