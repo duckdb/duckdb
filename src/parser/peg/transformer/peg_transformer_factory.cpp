@@ -234,7 +234,7 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 	return true;
 }
 
-QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
+QualifiedName PEGTransformerFactory::StringToQualifiedName(const vector<string> &input) {
 	if (input.empty()) {
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
