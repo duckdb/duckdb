@@ -50,7 +50,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const CompiledGrammar &grammar) {
+                                                                           const CompiledGrammar &grammar,
+                                                                           optional_idx &failure_index) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -67,22 +68,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	process_allocator.FreeAll();
 	if (!match_result.IsSuccess()) {
-		// syntax error — surface as a parser exception in the same shape as Transform()
-		auto token_stream = token_iterator.ToString();
-		idx_t error_token_idx = state.GetMaxTokenIndex();
-		if (error_token_idx >= token_iterator.Size()) {
-			error_token_idx = token_iterator.Size() - 1;
-		}
-		// Walk back past the EOI sentinel so the error message names a real token.
-		if (error_token_idx > 0 &&
-		    (token_iterator.GetToken(error_token_idx).type == TokenType::END_OF_INPUT ||
-		     token_iterator.GetToken(error_token_idx).type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
-			error_token_idx--;
-		}
-		auto &error_token = token_iterator.GetToken(error_token_idx);
-		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
-		throw ParserException::SyntaxError(token_stream, error_message,
-		                                   QueryLocation(error_token.offset, error_token.length));
+		failure_index = state.GetMaxTokenIndex();
+		return nullptr;
 	}
 	D_ASSERT(match_result.HasParseResult());
 
@@ -238,15 +225,14 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 	if (input.empty()) {
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
-	if (input.size() == 1) {
-		return QualifiedName(Identifier(input[0]));
-	} else if (input.size() == 2) {
-		return QualifiedName({Identifier(input[0])}, Identifier(input[1]));
-	} else if (input.size() == 3) {
-		return QualifiedName(Identifier(input[0]), Identifier(input[1]), Identifier(input[2]));
-	} else {
-		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
+	// Store the qualification as the full path - it may be deeper than [catalog, schema, name] for nested
+	// schemas. The leading component is resolved to a catalog at bind time (Binder::BindTableName).
+	vector<Identifier> path;
+	path.reserve(input.size());
+	for (auto &part : input) {
+		path.emplace_back(std::move(part));
 	}
+	return QualifiedName::FromPath(std::move(path));
 }
 
 QualifiedColumnName PEGTransformerFactory::StringToQualifiedColumnName(const vector<string> &input) {

@@ -3119,6 +3119,12 @@ static const TransformFrameOps VALUES_EXPRESSIONS_OPS = {"ValuesExpressions",
 static const TransformFrameOps SET_STATEMENT_OPS = {"SetStatement",
                                                     &PEGTransformerFactory::InitializeSetStatementTrampoline,
                                                     &PEGTransformerFactory::FinalizeSetStatementTrampoline};
+static const TransformFrameOps SET_KEYWORD_STATEMENT_OPS = {
+    "SetKeywordStatement", &PEGTransformerFactory::InitializeSetKeywordStatementTrampoline,
+    &PEGTransformerFactory::FinalizeSetKeywordStatementTrampoline};
+static const TransformFrameOps VARIABLE_ASSIGNMENT_OPS = {
+    "VariableAssignment", &PEGTransformerFactory::InitializeVariableAssignmentTrampoline,
+    &PEGTransformerFactory::FinalizeVariableAssignmentTrampoline};
 static const TransformFrameOps SET_ASSIGNMENT_OR_TIME_ZONE_OPS = {
     "SetAssignmentOrTimeZone", &PEGTransformerFactory::InitializeSetAssignmentOrTimeZoneTrampoline,
     &PEGTransformerFactory::FinalizeSetAssignmentOrTimeZoneTrampoline};
@@ -4378,6 +4384,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ValuesClause", &VALUES_CLAUSE_OPS},
 	    {"ValuesExpressions", &VALUES_EXPRESSIONS_OPS},
 	    {"SetStatement", &SET_STATEMENT_OPS},
+	    {"SetKeywordStatement", &SET_KEYWORD_STATEMENT_OPS},
+	    {"VariableAssignment", &VARIABLE_ASSIGNMENT_OPS},
 	    {"SetAssignmentOrTimeZone", &SET_ASSIGNMENT_OR_TIME_ZONE_OPS},
 	    {"ResetStatement", &RESET_STATEMENT_OPS},
 	    {"ResetTarget", &RESET_TARGET_OPS},
@@ -26337,14 +26345,52 @@ PEGTransformerFactory::FinalizeValuesExpressionsTrampoline(PEGTransformer &trans
 void PEGTransformerFactory::InitializeSetStatementTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSetStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<SQLStatement>>(0);
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSetKeywordStatementTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
 	process.PushChild({transformer.GetRule(PEGRuleId::SetAssignmentOrTimeZone), list_pr.GetChild(1)}, 0);
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeSetStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeSetKeywordStatementTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
 	auto set_assignment_or_time_zone = process.TakeResult<unique_ptr<SetStatement>>(0);
-	auto result = TransformSetStatement(transformer, std::move(set_assignment_or_time_zone));
+	auto result = TransformSetKeywordStatement(transformer, std::move(set_assignment_or_time_zone));
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeVariableAssignmentTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(3)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeVariableAssignmentTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformVariableAssignment(transformer, identifier, std::move(expression));
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 

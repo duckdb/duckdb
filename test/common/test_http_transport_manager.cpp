@@ -1068,7 +1068,7 @@ static string ReadExtensionBinary(const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto size = NumericCast<idx_t>(handle->GetFileSize());
 	string result(size, '\0');
-	handle->Read(data_ptr_cast(result.data()), size);
+	handle->Read(data_ptr_cast(result.data()), size, 0);
 	return result;
 }
 
