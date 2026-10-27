@@ -138,7 +138,9 @@ public:
 } // namespace
 
 TEST_CASE("Post-unregistration callbacks can drain connection work", "[api][connection_callbacks]") {
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection anchor(db);
 	REQUIRE_NO_FAIL(anchor.Query("ATTACH ':memory:' AS attached"));
 	REQUIRE_NO_FAIL(anchor.Query("CREATE TABLE attached.t AS SELECT 42::BIGINT AS i"));
@@ -166,7 +168,9 @@ TEST_CASE("Post-unregistration callbacks can drain connection work", "[api][conn
 
 TEST_CASE("Both close phases use the same callback snapshot", "[api][connection_callbacks]") {
 	vector<string> events;
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection anchor(db);
 	auto first = make_shared_ptr<OrderedCallback>(events, "a");
 	auto second = make_shared_ptr<OrderedCallback>(events, "b");
@@ -184,7 +188,9 @@ TEST_CASE("Both close phases use the same callback snapshot", "[api][connection_
 }
 
 TEST_CASE("An opening callback exception does not register the connection", "[api][connection_callbacks]") {
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection anchor(db);
 	auto callback = make_shared_ptr<ThrowingConnectionCallback>();
 	ExtensionCallback::Register(DBConfig::GetConfig(*db.instance), callback);
