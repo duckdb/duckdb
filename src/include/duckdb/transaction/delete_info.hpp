@@ -26,7 +26,7 @@ struct DeleteInfo {
 	//! Whether or not row ids are consecutive (0, 1, 2, ..., count).
 	//! If this is true no rows are stored and `rows` should not be accessed.
 	bool is_consecutive;
-	//! How many of the ids that the rows held before are stored after the rows: 0 (none), 1 (shared) or count
+	//! How many of the ids that the rows held before are stored after the rows: 1 (shared) or count
 	idx_t previous_id_count;
 
 	uint16_t *GetRows() {
@@ -47,19 +47,10 @@ struct DeleteInfo {
 	transaction_t *GetPreviousIds() {
 		return reinterpret_cast<transaction_t *>(GetPreviousIdsAddress());
 	}
-	//! How many of the previous ids an entry stores: none (all NOT_DELETED_ID), one (all equal), or all
-	static idx_t GetPreviousIdCount(const transaction_t previous_ids[], idx_t count) {
-		for (idx_t i = 1; i < count; i++) {
-			if (previous_ids[i] != previous_ids[0]) {
-				return count;
-			}
-		}
-		return previous_ids[0] == NOT_DELETED_ID ? 0 : 1;
-	}
 	//! The size of the entry (an upper bound, as the rows start before the end of the struct)
 	static idx_t GetAllocationSize(idx_t count, bool is_consecutive, idx_t previous_id_count) {
 		return sizeof(DeleteInfo) + (is_consecutive ? 0 : count * sizeof(uint16_t)) +
-		       (previous_id_count ? (previous_id_count + 1) * sizeof(transaction_t) : 0);
+		       (previous_id_count + 1) * sizeof(transaction_t);
 	}
 
 private:
@@ -78,8 +69,8 @@ struct WrittenRows {
 	idx_t count = 0;
 	//! Whether the rows are 0, 1, ..., count - 1
 	bool is_consecutive = true;
-	//! How many previous_ids are set: 0 (the rows held NOT_DELETED_ID), 1 (they held the same id) or count
-	idx_t previous_id_count = 0;
+	//! How many previous_ids are set: 1 (the rows held the same id) or count
+	idx_t previous_id_count = 1;
 	uint16_t rows[STANDARD_VECTOR_SIZE];
 	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
 

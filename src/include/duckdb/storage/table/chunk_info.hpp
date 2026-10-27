@@ -78,7 +78,7 @@ public:
 	               WrittenRows &written);
 	//! Replaces the delete id and update marker of old_id on the rows by those of new_id (on commit and revert)
 	void CommitWrite(transaction_t old_id, transaction_t new_id, const uint16_t rows[], idx_t count);
-	//! Rolls back a write: the rows get back the ids they held before (NOT_DELETED_ID if none are stored)
+	//! Rolls back a write: the rows get back the ids they held before
 	void RollbackWrite(const uint16_t rows[], idx_t count, const transaction_t previous_ids[], idx_t previous_id_count);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
@@ -119,6 +119,8 @@ private:
 	void CompressDeleteToMask(transaction_t mask_id);
 	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
 	void DecompressDeleteMask();
+	//! The delete id or update marker of a row of a vector without per-row ids
+	transaction_t GetDeleteId(idx_t row) const;
 	//! Whether writing new_id into the rows (ids[i] - offset) conflicts with a delete or update of another transaction
 	bool HasConflictingWrite(TransactionData transaction, transaction_t new_id, const row_t ids[], idx_t count,
 	                         row_t offset) const;
@@ -127,8 +129,8 @@ private:
 	//! Allocates per-row delete ids, set to row_id(row)
 	template <class F>
 	IndexPointer NewDeletedData(F &&row_id);
-	//! Writes id into the rows of a vector whose other rows share one id, keeping them in deleted_mask
-	void WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, WrittenRows &written);
+	//! Gives the rows (0, 1, ..., count - 1 if rows is nullptr) the id, if the vector needs no per-row ids for it
+	bool AssignId(const uint16_t rows[], idx_t count, transaction_t id);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
 	template <class F>
 	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);
