@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+SET TimeZone='UTC';
+
+statement ok
 SET threads = 1;
 
 statement ok
