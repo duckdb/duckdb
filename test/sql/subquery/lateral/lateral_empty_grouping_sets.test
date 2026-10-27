@@ -324,6 +324,42 @@ ORDER BY ALL;
 1	1
 7	0
 
+# LIST correlation keys disable duplicate elimination and take the row-number delim path
+query II
+SELECT o.k, a.c
+FROM (VALUES ([7]), ([8]), ([1])) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES ([1])) AS i(k)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a
+ORDER BY ALL;
+----
+[1]	1
+[1]	1
+[7]	0
+[7]	0
+[8]	0
+[8]	0
+
+query III
+SELECT o.k, a.c, a.gm
+FROM (VALUES ([1]), ([7])) AS o(k),
+LATERAL (
+    SELECT count(*) AS c, GROUPING(g) AS gm
+    FROM (VALUES ([1], 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), (), ())
+) AS a
+ORDER BY ALL;
+----
+[1]	1	0
+[1]	1	1
+[1]	1	1
+[7]	0	1
+[7]	0	1
+
 # the plain delim join path must preserve the same multiplicity and masks
 statement ok
 SET delim_join_as_cte = false
