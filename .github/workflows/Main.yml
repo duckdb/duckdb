@@ -161,7 +161,6 @@ jobs:
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extension/**
             tests:
               - test/**/*.test
             tests_slow:
