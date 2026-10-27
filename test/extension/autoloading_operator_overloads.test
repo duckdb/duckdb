@@ -1,0 +1,64 @@
+# name: test/extension/autoloading_operator_overloads.test
+# description: An extension autoloaded while binding an argument adds overloads to the function being bound
+# group: [extension]
+
+# This test assumes icu is not statically linked, it is only available for autoloading
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require icu
+
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_operator_overloads'
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoload_known_extensions=true
+
+# epoch(TIMESTAMPTZ) is icu's: binding it autoloads icu, which also adds overloads to the enclosing -, replacing
+# its catalog entry while its arguments are bound; that is reported instead of binding against the destroyed entry
+statement error
+SELECT epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ) - epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)
+----
+autoloading in this position is not supported yet
+
+# icu is loaded now, so the same query binds
+query I
+SELECT epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ) - epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)
+----
+0.0
+
+restart
+
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_operator_overloads'
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoload_known_extensions=true
+
+# an enclosing function the extension does not touch keeps working
+query I
+SELECT abs(epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ))
+----
+1704067200.0
+
+restart
+
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_operator_overloads'
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoload_known_extensions=true
+
+query I
+SELECT sum(epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)) FROM range(2)
+----
+3408134400.0
