@@ -248,9 +248,6 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 			}
 		}
 	}
-	for (auto &macro : macro_info.macros) {
-		DefaultMacroQualifier::Qualify(*macro, Identifier(default_macro.schema));
-	}
 	bind_info->macros = std::move(macro_info.macros);
 	bind_info->SetQualifiedName(
 	    QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
@@ -277,7 +274,13 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
+			auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
+			// the built-in bodies only reference system functions, so they can be qualified here.
+			// Extension macros built through CreateInternalMacroInfo keep their spelling
+			for (auto &macro : info->macros) {
+				DefaultMacroQualifier::Qualify(*macro, schema);
+			}
+			return std::move(info);
 		}
 	}
 	return nullptr;

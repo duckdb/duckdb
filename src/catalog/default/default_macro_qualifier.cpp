@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/column_qualifier.hpp"
 
@@ -102,6 +103,14 @@ static void QualifyExpression(unique_ptr<ParsedExpression> &expr, DefaultMacroQu
 		}
 		if (function.IsLambdaFunction()) {
 			QualifyLambdaArguments(function, state);
+			if (function.FilterMutable()) {
+				QualifyExpression(function.FilterMutable(), state);
+			}
+			if (function.OrderByMutable()) {
+				for (auto &order : function.OrderByMutable()->orders) {
+					QualifyExpression(order.expression, state);
+				}
+			}
 			return;
 		}
 		break;
@@ -127,8 +136,12 @@ static void QualifyExpression(unique_ptr<ParsedExpression> &expr, DefaultMacroQu
 	case ExpressionClass::WINDOW: {
 		auto &window = expr->Cast<WindowExpression>();
 		auto &name = window.GetQualifiedName();
-		if (name.Catalog().empty() && name.Schema().empty() && !name.Name().empty()) {
-			window.SetQualifiedName(state.Resolve(name.Name()));
+		if (name.Catalog().empty() && !name.Name().empty()) {
+			if (name.Schema().empty()) {
+				window.SetQualifiedName(state.Resolve(name.Name()));
+			} else {
+				window.SetQualifiedName(QualifiedName(Identifier::SystemCatalog(), name.Schema(), name.Name()));
+			}
 		}
 		break;
 	}
