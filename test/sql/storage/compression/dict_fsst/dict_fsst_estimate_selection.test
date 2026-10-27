@@ -1,0 +1,72 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_estimate_selection.test
+# description: The cardinality-aware DICT_FSST estimate picks the same methods as the writer would want, also with 16 KiB blocks
+# group: [dict_fsst]
+
+statement ok
+SET threads = 1;
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_estimate_selection.db' AS db (BLOCK_SIZE 16384);
+
+statement ok
+USE db;
+
+# one long repeated string next to many short distinct ones: the long value must not be scaled as if it were distinct
+statement ok
+CREATE TABLE skewed AS
+SELECT row_id, CASE WHEN row_id < 14336 THEN repeat('x', 12000)
+       ELSE chr((33 + (row_id - 14336) // 8836)::INTEGER)
+         || chr((33 + ((row_id - 14336) // 94) % 94)::INTEGER)
+         || chr((33 + (row_id - 14336) % 94)::INTEGER)
+       END AS s
+FROM range(32768) AS input(row_id)
+ORDER BY row_id;
+
+# long strings that are all distinct: nothing to deduplicate and FSST is disabled at this block size, so ZSTD wins
+statement ok
+CREATE TABLE long_unique AS SELECT repeat('y', 9000) || lpad(row_id::VARCHAR, 600, '0') AS s FROM range(4096) AS input(row_id);
+
+# long strings with few distinct values: the dictionary wins
+statement ok
+CREATE TABLE long_repeated AS SELECT repeat('z', 9000) || lpad((row_id % 16)::VARCHAR, 600, '0') AS s FROM range(4096) AS input(row_id);
+
+# short strings, distinct and repeated
+statement ok
+CREATE TABLE short_unique AS SELECT lpad(row_id::VARCHAR, 12, '0') AS s FROM range(100000) AS input(row_id);
+
+statement ok
+CREATE TABLE short_repeated AS SELECT 'value-' || (row_id % 100)::VARCHAR AS s FROM range(100000) AS input(row_id);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT table_name, string_agg(DISTINCT compression, ',' ORDER BY compression)
+FROM (
+    SELECT 'skewed' AS table_name, compression FROM pragma_storage_info('skewed') WHERE segment_type = 'VARCHAR'
+    UNION ALL
+    SELECT 'long_unique', compression FROM pragma_storage_info('long_unique') WHERE segment_type = 'VARCHAR'
+    UNION ALL
+    SELECT 'long_repeated', compression FROM pragma_storage_info('long_repeated') WHERE segment_type = 'VARCHAR'
+    UNION ALL
+    SELECT 'short_unique', compression FROM pragma_storage_info('short_unique') WHERE segment_type = 'VARCHAR'
+    UNION ALL
+    SELECT 'short_repeated', compression FROM pragma_storage_info('short_repeated') WHERE segment_type = 'VARCHAR'
+)
+GROUP BY table_name ORDER BY table_name;
+----
+long_repeated	DICT_FSST
+long_unique	ZSTD
+short_repeated	DICT_FSST
+short_unique	DICT_FSST
+skewed	DICT_FSST
+
+# the data reads back unchanged
+query IIIII
+SELECT (SELECT count(*) FILTER (WHERE s <> CASE WHEN row_id < 14336 THEN repeat('x', 12000) ELSE chr((33 + (row_id - 14336) // 8836)::INTEGER) || chr((33 + ((row_id - 14336) // 94) % 94)::INTEGER) || chr((33 + (row_id - 14336) % 94)::INTEGER) END) FROM skewed),
+       (SELECT count(DISTINCT s) FROM long_unique),
+       (SELECT count(DISTINCT s) FROM long_repeated),
+       (SELECT count(DISTINCT s) FROM short_unique),
+       (SELECT count(DISTINCT s) FROM short_repeated);
+----
+0	4096	16	100000	100

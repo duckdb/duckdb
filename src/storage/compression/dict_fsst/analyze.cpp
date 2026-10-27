@@ -66,7 +66,16 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		auto str_len = str.GetSize();
 		total_string_length += str_len;
 		non_null_count++;
-		distinct_strings.InsertElement(Hash(str));
+		auto hash = Hash(str);
+		distinct_strings.InsertElement(hash);
+		if (exact_distinct.size() < EXACT_DISTINCT_LIMIT) {
+			if (exact_distinct.insert(hash).second) {
+				exact_distinct_length += str_len;
+			}
+		} else if (exact_distinct.find(hash) == exact_distinct.end()) {
+			scaled_string_length += str_len;
+			scaled_count++;
+		}
 		if (str_len > max_string_length) {
 			max_string_length = str_len;
 		}
@@ -90,16 +99,23 @@ idx_t DictFSSTAnalyzeState::FinalAnalyze() {
 	const auto length_width = BitpackingPrimitives::MinimumBitWidth<idx_t>(max_string_length);
 
 	// Dictionary: every distinct string once (FSST-encoded unless disabled), a bitpacked length per dictionary entry
-	// and a bitpacked dictionary index per row (index 0 is reserved for NULL)
+	// (plus the NULL entry) and a bitpacked dictionary index per row (indices 0..distinct_count, 0 is NULL)
 	idx_t distinct_count = 0;
 	double distinct_string_length = 0;
 	if (non_null_count > 0) {
-		distinct_count = MinValue<idx_t>(MaxValue<idx_t>(distinct_strings.Count(), 1), non_null_count);
-		distinct_string_length = double(total_string_length) * double(distinct_count) / double(non_null_count);
+		distinct_count =
+		    MinValue<idx_t>(MaxValue<idx_t>(distinct_strings.Count(), exact_distinct.size()), non_null_count);
+		// strings in the exact set count at their real length; the distinct strings beyond it get the average length
+		// of the unknown strings that arrived after the set filled up
+		distinct_string_length = double(exact_distinct_length);
+		if (scaled_count > 0 && distinct_count > exact_distinct.size()) {
+			auto extra_distinct = MinValue<idx_t>(distinct_count - exact_distinct.size(), scaled_count);
+			distinct_string_length += double(scaled_string_length) * double(extra_distinct) / double(scaled_count);
+		}
 	}
-	const auto index_width = BitpackingPrimitives::MinimumBitWidth<idx_t>(distinct_count + 1);
+	const auto index_width = BitpackingPrimitives::MinimumBitWidth<idx_t>(distinct_count);
 	double size = distinct_string_length * fsst_factor +
-	              double(BitpackingPrimitives::GetRequiredSize(distinct_count, length_width)) +
+	              double(BitpackingPrimitives::GetRequiredSize(distinct_count + 1, length_width)) +
 	              double(BitpackingPrimitives::GetRequiredSize(total_count, index_width));
 
 	// FSST only: when there are no duplicates and no NULLs the strings are stored in row order without indices
