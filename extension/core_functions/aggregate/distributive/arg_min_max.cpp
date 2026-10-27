@@ -51,12 +51,12 @@ struct ArgMinMaxValueAssign<string_t> {
 };
 
 template <typename T>
-inline void ArgMinMaxReadValue(Vector &result, T &arg, T &target) {
+inline void ArgMinMaxReadValue(Vector &result, const T &arg, T &target) {
 	target = arg;
 }
 
 template <>
-inline void ArgMinMaxReadValue(Vector &result, string_t &arg, string_t &target) {
+inline void ArgMinMaxReadValue(Vector &result, const string_t &arg, string_t &target) {
 	target = StringVector::AddStringOrBlob(result, arg);
 }
 
@@ -193,7 +193,7 @@ struct ArgMinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set || !state.arg_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
@@ -244,6 +244,7 @@ struct GenericArgMinMaxState {
 	}
 };
 
+//! Decodes a sort key on finalize, so it is wired with StateVoidFinalize and never through the inherited read-only path
 template <typename COMPARATOR, OrderType ORDER_TYPE, class UPDATE_TYPE = SpecializedGenericArgMinMaxState>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 	static constexpr OrderType ORDER = ORDER_TYPE;

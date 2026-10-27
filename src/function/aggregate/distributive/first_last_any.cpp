@@ -207,7 +207,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
@@ -283,7 +283,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
@@ -395,9 +395,9 @@ AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
 	    AggregateFunction({type}, type, AggregateFunction::StateSize<FirstState<T>>,
 	                      AggregateFunction::StateInitialize<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
 	                      AggregateFunction::UnaryScatterUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
-	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
-	                      AggregateFunction::StateFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>, nullptr,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
+	AggregateFunction::UseReadOnlyFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>(result);
 	AggregateFunction::WireStructStateType<FirstState<T>>(result);
 	return result;
 }

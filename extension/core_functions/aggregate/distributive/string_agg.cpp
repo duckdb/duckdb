@@ -37,7 +37,7 @@ struct StringAggBindData : public FunctionData {
 
 struct StringAggFunction {
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
@@ -176,9 +176,9 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
-	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
-	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
+	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>, nullptr,
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
+	AggregateFunction::UseReadOnlyFinalize<StringAggState, string_t, StringAggFunction>(string_agg_param);
 
 	string_agg_param.GetSignature().GetParameter(0).SetName("str");
 	string_agg_param.SetSerializeCallback(StringAggSerialize);

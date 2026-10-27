@@ -231,7 +231,6 @@ public:
 	aggregate_combine_t GetStateCombineCallback() const { return combine; }
 	bool HasStateCombineCallback() const { return combine != nullptr; }
 
-	void SetStateFinalizeCallback(aggregate_finalize_t callback) { finalize = callback; }
 	aggregate_finalize_t GetStateFinalizeCallback() const { return finalize; }
 	bool HasStateFinalizeCallback() const { return finalize != nullptr; }
 
@@ -293,7 +292,8 @@ public:
 	aggregate_update_t update = nullptr;
 	//! The hashed aggregate combine states function (may be null, if window is set)
 	aggregate_combine_t combine = nullptr;
-	//! The hashed aggregate finalization function (may be null, if window is set)
+	//! The hashed aggregate finalization function (may be null, if window is set). Replaced through
+	//! BaseAggregateFunction::SetStateFinalizeCallback so that finalize_read_only is reset with it.
 	aggregate_finalize_t finalize = nullptr;
 	//! Initializes the local state used by the finalize (may be null)
 	aggregate_init_local_state_finalize_t init_local_state_finalize = nullptr;
@@ -366,8 +366,11 @@ public:
 	auto SetProperties(const AggregateFunctionProperties &value) -> void { properties = value; }
 
 	auto GetCallbacks() const -> const AggregateFunctionCallbacks & { return callbacks; }
-	auto GetCallbacks() -> AggregateFunctionCallbacks & { return callbacks; }
-	auto SetCallbacks(const AggregateFunctionCallbacks &value) -> void { callbacks = value; }
+	//! Callbacks change through the setters below: replacing the finalizer must reset finalize_read_only
+	auto SetCallbacks(const AggregateFunctionCallbacks &value) -> void {
+		callbacks = value;
+		finalize_read_only = false;
+	}
 
 public: // Properties
 
@@ -403,6 +406,10 @@ public: // Properties
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }
 	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+
+	//! Whether the finalizer is declared read-only, derived from the finalize callback
+	auto FinalizeIsReadOnly() const -> bool { return finalize_read_only; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -443,7 +450,11 @@ public: // Callbacks
 
 	auto HasStateFinalizeCallback() const -> bool { return callbacks.finalize != nullptr; }
 	auto GetStateFinalizeCallback() const -> aggregate_finalize_t { return callbacks.finalize; }
-	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { callbacks.finalize = callback; }
+	//! Replacing the finalizer drops the read-only declaration; re-declare it through UseReadOnlyFinalize
+	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void {
+		callbacks.finalize = callback;
+		finalize_read_only = false;
+	}
 
 	auto HasInitLocalStateFinalizeCallback() const -> bool { return callbacks.init_local_state_finalize != nullptr; }
 	auto GetInitLocalStateFinalizeCallback() const -> aggregate_init_local_state_finalize_t { return callbacks.init_local_state_finalize; }
@@ -521,6 +532,16 @@ protected:
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;
 	shared_ptr<AggregateFunctionInfo> function_info;
+
+private:
+	friend class AggregateFunction;
+
+	//! Owned by the implementation so replacing generic properties cannot restore a stale declaration.
+	//! Factories set this from FinalizeReadOnly(const STATE &). Replacing the finalizer clears it.
+	//! Concurrent finalizes still require frozen state and caller-local scratch. Const access alone does not
+	//! prevent mutation through state-owned pointers, so each declaration needs a deep-mutation audit.
+	//! Finalizers must preserve later reads and updates even when they require the finalize lock.
+	bool finalize_read_only = false;
 };
 
 class AggregateFunction : public BaseAggregateFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
@@ -676,13 +697,38 @@ public:
 		}
 	}
 
+	//! Selects the finalize callback of an operation: the read-only path when it implements FinalizeReadOnly
+	template <class STATE, class RESULT_TYPE, class OP>
+	static aggregate_finalize_t StateFinalizeCallback() {
+		static_assert(!(OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value &&
+		                OperationHasFinalize<STATE, RESULT_TYPE, OP>::value),
+		              "an aggregate operation implements either Finalize or FinalizeReadOnly, not both");
+		if constexpr (OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value) {
+			return AggregateFunction::StateFinalizeReadOnly<STATE, RESULT_TYPE, OP>;
+		} else {
+			return AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>;
+		}
+	}
+
+	//! Wires OP::FinalizeReadOnly as the finalize of a function assembled from explicit callbacks and declares it
+	//! read-only in one step, so the declaration cannot exist without the const finalizer
+	template <class STATE, class RESULT_TYPE, class OP>
+	static void UseReadOnlyFinalize(AggregateFunction &function) {
+		static_assert(
+		    OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value,
+		    "UseReadOnlyFinalize requires OP::FinalizeReadOnly(const STATE &, RESULT &, AggregateFinalizeData &)");
+		function.callbacks.finalize = AggregateFunction::StateFinalizeReadOnly<STATE, RESULT_TYPE, OP>;
+		function.finalize_read_only = true;
+	}
+
 	template <class STATE, class RESULT_TYPE, class OP>
 	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
-		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+		    AggregateFunction::StateCombine<STATE, OP>, StateFinalizeCallback<STATE, RESULT_TYPE, OP>(),
 		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryClusterUpdate<STATE, OP>);
+		result.finalize_read_only = OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value;
 		WireStructStateType<STATE>(result);
 		return result;
 	}
@@ -696,12 +742,13 @@ public:
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
-		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                         StateFinalizeCallback<STATE, RESULT_TYPE, OP>(), null_handling,
 		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
 		// automatically wire up the destructor if the operation defines a Destroy method
 		if constexpr (OperationHasDestroy<STATE, OP>::value) {
 			result.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		}
+		result.finalize_read_only = OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value;
 		WireStructStateType<STATE>(result);
 		return result;
 	}
@@ -725,7 +772,8 @@ public:
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
-		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, nullptr);
+		                         StateFinalizeCallback<STATE, RESULT_TYPE, OP>(), nullptr);
+		result.finalize_read_only = OperationHasFinalizeReadOnly<STATE, RESULT_TYPE, OP>::value;
 		WireStructStateType<STATE>(result);
 		return result;
 	}
@@ -768,6 +816,27 @@ public:
 	                           initialize_void_t<decltype(OP::template Destroy<STATE>(
 	                               std::declval<STATE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {
 	};
+
+	//! Detects whether "OP" provides a "FinalizeReadOnly<RESULT, STATE>(const STATE &, RESULT &, AggregateFinalizeData
+	//! &)" method that leaves the state and its owned storage untouched
+	template <class STATE, class RESULT_TYPE, class OP, class = void>
+	struct OperationHasFinalizeReadOnly : std::false_type {};
+	template <class STATE, class RESULT_TYPE, class OP>
+	struct OperationHasFinalizeReadOnly<
+	    STATE, RESULT_TYPE, OP,
+	    initialize_void_t<decltype(OP::template FinalizeReadOnly<RESULT_TYPE, STATE>(
+	        std::declval<const STATE &>(), std::declval<RESULT_TYPE &>(), std::declval<AggregateFinalizeData &>()))>>
+	    : std::true_type {};
+
+	//! Detects the mutable "Finalize<RESULT, STATE>(STATE &, RESULT &, AggregateFinalizeData &)" counterpart
+	template <class STATE, class RESULT_TYPE, class OP, class = void>
+	struct OperationHasFinalize : std::false_type {};
+	template <class STATE, class RESULT_TYPE, class OP>
+	struct OperationHasFinalize<
+	    STATE, RESULT_TYPE, OP,
+	    initialize_void_t<decltype(OP::template Finalize<RESULT_TYPE, STATE>(
+	        std::declval<STATE &>(), std::declval<RESULT_TYPE &>(), std::declval<AggregateFinalizeData &>()))>>
+	    : std::true_type {};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(AggregateStateInput &, data_ptr_t *states, idx_t count) {
@@ -856,6 +925,12 @@ public:
 	static void StateFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
 	                          idx_t count, idx_t offset) {
 		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, finalize_input_data, result, count, offset);
+	}
+
+	template <class STATE, class RESULT_TYPE, class OP>
+	static void StateFinalizeReadOnly(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                                  idx_t count, idx_t offset) {
+		AggregateExecutor::FinalizeReadOnly<STATE, RESULT_TYPE, OP>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
