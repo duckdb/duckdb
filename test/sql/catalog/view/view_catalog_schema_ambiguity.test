@@ -148,6 +148,125 @@ SELECT * FROM db.main.v_using_key;
 ----
 22
 
+# a multi-part path that names a nested schema of the view's catalog refers to that schema
+statement ok
+CREATE SCHEMA db.s1;
+
+statement ok
+CREATE SCHEMA db.s1.s2;
+
+statement ok
+CREATE TABLE db.s1.s2.t AS SELECT 7 AS n;
+
+statement ok
+CREATE MACRO db.s1.s2.m() AS 70;
+
+statement ok
+CREATE VIEW db.main.v_nested AS SELECT n, db.s1.s2.m() AS m FROM db.s1.s2.t;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_nested';
+----
+CREATE VIEW v_nested AS SELECT n, s1.s2.m() AS m FROM s1.s2.t;
+
+query II
+SELECT * FROM db.main.v_nested;
+----
+7	70
+
+statement ok
+ATTACH ':memory:' AS s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t AS SELECT 8 AS n;
+
+statement ok
+CREATE MACRO s1.s2.m() AS 80;
+
+# the view keeps reading its own catalog
+query II
+SELECT * FROM db.main.v_nested;
+----
+7	70
+
+# a view in the nested schema itself
+statement ok
+CREATE VIEW db.s1.s2.v_in_nested AS SELECT n FROM db.s1.s2.t;
+
+query I
+SELECT * FROM db.s1.s2.v_in_nested;
+----
+7
+
+# outside of a view the path is the attached catalog
+query II
+SELECT n, s1.s2.m() FROM s1.s2.t;
+----
+8	80
+
+# a path that is not a nested schema of the view's catalog still refers to the attached catalog: s has a schema "db"
+# but no "db.main" below it
+statement ok
+CREATE TABLE db.main.plain AS SELECT 9 AS p;
+
+statement ok
+CREATE VIEW s.main.v_cross AS SELECT p FROM db.main.plain;
+
+query I
+SELECT * FROM s.main.v_cross;
+----
+9
+
+# a window call into a nested schema of the view's catalog
+statement ok
+CREATE MACRO db.s1.s2.w(x) AS sum(x);
+
+statement ok
+CREATE MACRO s1.s2.w(x) AS sum(x) * 10;
+
+statement ok
+CREATE VIEW db.main.v_window AS SELECT db.s1.s2.w(n) OVER () AS total FROM db.s1.s2.t;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_window';
+----
+CREATE VIEW v_window AS SELECT s1.s2.w(n) OVER () AS total FROM s1.s2.t;
+
+query I
+SELECT * FROM db.main.v_window;
+----
+7
+
+# a lone qualifier that names a schema of the view's catalog is that schema, even when the catalog also has a nested
+# schema of the same name below a schema named like the catalog (db.db.s next to db.s)
+statement ok
+CREATE SCHEMA db.db.s;
+
+statement ok
+CREATE MACRO db.db.s.g() AS 33;
+
+query I
+SELECT * FROM db.main.v_precedence;
+----
+22
+
+# the nested schema is reached through its path
+statement ok
+CREATE VIEW db.main.v_nested_explicit AS SELECT db.db.s.g() AS z;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_nested_explicit';
+----
+CREATE VIEW v_nested_explicit AS SELECT db.s.g() AS z;
+
+query I
+SELECT * FROM db.main.v_nested_explicit;
+----
+33
+
 # the schema preference also applies after re-attaching under a different alias
 statement ok
 ATTACH '{TEST_DIR}/view_catalog_schema_ambiguity.db' AS db1;

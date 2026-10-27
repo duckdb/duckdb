@@ -83,6 +83,28 @@ static Identifier ViewCatalogForSchema(CatalogEntryRetriever &retriever, const I
 	return view_catalog;
 }
 
+//! The same for a multi-part qualification: "db.s1.s2.t" is stored as "s1.s2.t", so inside the view body a path that
+//! names a nested schema of the view's catalog is that schema - even if an attached database is called "s1". Returns
+//! true when this applies, with `catalog` set to the view's catalog (`path` is then its schema path).
+static bool ResolveViewCatalogPath(CatalogEntryRetriever &retriever, const vector<Identifier> &path,
+                                   Identifier &catalog) {
+	auto &view_catalog = retriever.GetViewCatalog();
+	if (view_catalog.empty()) {
+		return false;
+	}
+	for (auto &component : path) {
+		if (component.empty()) {
+			// a placeholder left by promoting a lone qualifier to a catalog: the catalog is explicit already
+			return false;
+		}
+	}
+	if (!Catalog::GetSchema(retriever.GetContext(), view_catalog, path, OnEntryNotFound::RETURN_NULL)) {
+		return false;
+	}
+	catalog = view_catalog;
+	return true;
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -153,6 +175,11 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName
 	Identifier catalog;
 	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
+	if (!catalog.empty() && !schema.empty()) {
+		// the qualifier is a schema of the view's catalog: leave the name as written, ResolveCatalog applies the same
+		// rule (prefixing the catalog here would make "x.name" look like a nested schema path "catalog.x" of it)
+		return;
+	}
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
 
@@ -259,11 +286,14 @@ QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const Qua
 	} else if (path.size() > 1) {
 		// multiple qualifiers ("cat.schema.name" or a nested "s1.s2.name"): the leading component is the catalog when
 		// it names an attached database. It is positionally unambiguous, so we do not run the catalog/schema ambiguity
-		// check (which is only relevant for a lone qualifier).
-		auto &db_manager = DatabaseManager::Get(context);
-		if (db_manager.GetDatabase(context, path[0])) {
-			catalog = std::move(path[0]);
-			path.erase(path.begin());
+		// check (which is only relevant for a lone qualifier). Inside a view body the view's own catalog takes
+		// precedence, since CREATE VIEW stripped that catalog from the stored definition.
+		if (!ResolveViewCatalogPath(retriever, path, catalog)) {
+			auto &db_manager = DatabaseManager::Get(context);
+			if (db_manager.GetDatabase(context, path[0])) {
+				catalog = std::move(path[0]);
+				path.erase(path.begin());
+			}
 		}
 	}
 	if (default_catalog && IsInvalidCatalog(catalog)) {
