@@ -103,24 +103,6 @@ bool RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 }
 
 optional<RelationStats> RelationManager::AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats) {
-	if (op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW && op.children.size() == 1) {
-		// pass-through relation: only the view's own estimate (and allowed statistics) cross the boundary
-		auto child_stats = AlignStatsWithRelationRoot(*op.children[0], stats);
-		if (!child_stats) {
-			return {};
-		}
-		auto &secure_view = op.Cast<LogicalSecureView>();
-		RelationStats result = std::move(*child_stats);
-		result.cardinality = op.EstimateCardinality(context);
-		result.filter_strength = 1;
-		if (!secure_view.propagate_statistics) {
-			for (auto &column : result.columns) {
-				column.distinct_count =
-				    DistinctCount(MaxValue<idx_t>(result.cardinality, 1), DistinctCountSource::CARDINALITY);
-			}
-		}
-		return result;
-	}
 	auto projected = RelationStatisticsHelper::ProjectOutputStats(stats, op);
 	if (projected && (op.children.size() != 1 || CanReuseAlignedStats(op))) {
 		return projected;
@@ -180,6 +162,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_SAMPLE:
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
 		return true;
 	default:
 		return false;
@@ -530,6 +513,37 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		return AddRelation(input_op, parent, *operator_stats);
+	}
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
+		// the view is one relation: its contents are optimized on their own, and only what the view reports crosses
+		// the boundary - its own estimate, and the distinct counts of its columns only if it may propagate statistics
+		RelationStats child_stats;
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		auto &secure_view = op->Cast<LogicalSecureView>();
+		RelationStats stats;
+		stats.cardinality = secure_view.EstimateCardinality(context);
+		stats.table_name = Identifier(secure_view.view_name);
+		stats.stats_initialized = true;
+		RelationColumnStatsLookup child_columns(child_stats);
+		for (auto &binding : secure_view.GetColumnBindings()) {
+			DistinctCount distinct_count(MaxValue<idx_t>(stats.cardinality, 1), DistinctCountSource::CARDINALITY);
+			Identifier name;
+			auto child_column = child_columns.Find(binding);
+			if (child_column) {
+				name = child_column->name;
+				if (secure_view.propagate_statistics) {
+					distinct_count = child_column->distinct_count;
+				}
+			}
+			stats.columns.emplace_back(binding, distinct_count, std::move(name));
+		}
+		if (!datasource_filters.empty()) {
+			stats.cardinality =
+			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+		}
+		ModifyStatsIfLimit(limit_op.get(), stats);
+		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		// optimize children of unnest

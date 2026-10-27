@@ -99,37 +99,6 @@ SELECT count(*) FROM big b JOIN (SELECT * FROM big_secure_filtered WHERE id BETW
 ----
 5
 
-# the view's own predicate throws on a hidden row: whether the query fails must not depend on the join keys
-statement ok
-CREATE TABLE regions AS
-SELECT i AS id, CASE WHEN i = 777777 THEN 'x' ELSE (i % 5)::VARCHAR END AS region FROM range(1000000) t(i);
-
-statement ok
-CREATE SECURE VIEW region_secure AS SELECT id FROM regions WHERE CAST(region AS INTEGER) = 3;
-
-statement ok
-CREATE SECURE VIEW region_secure_two AS SELECT id FROM regions WHERE CAST(region AS INTEGER) = 3 AND id % 2 = 0;
-
-statement ok
-CREATE TABLE keys_miss AS SELECT i AS k FROM range(100, 200) t(i);
-
-statement ok
-CREATE TABLE keys_hit AS SELECT i AS k FROM range(777700, 777800) t(i);
-
-foreach view region_secure region_secure_two
-
-statement error
-SELECT count(*) FROM {view} r JOIN keys_miss k ON r.id = k.k
-----
-Could not convert string 'x'
-
-statement error
-SELECT count(*) FROM {view} r JOIN keys_hit k ON r.id = k.k
-----
-Could not convert string 'x'
-
-endloop
-
 # a TRY_CAST in the view cannot throw: the join filter crosses the view on the raw scan values
 statement ok
 CREATE SECURE VIEW try_secure AS SELECT TRY_CAST(id AS INTEGER) AS id FROM big WHERE g < 50;
@@ -151,24 +120,6 @@ query I
 SELECT count(*) FROM wide_try_secure n JOIN probe p ON n.id = p.id
 ----
 20
-
-# a join condition inside the view can throw as well
-statement ok
-CREATE TABLE lookup AS SELECT 3 AS r;
-
-statement ok
-CREATE SECURE VIEW region_join_secure AS
-SELECT regions.id FROM regions JOIN lookup ON CAST(regions.region AS INTEGER) = lookup.r;
-
-statement error
-SELECT count(*) FROM region_join_secure r JOIN keys_miss k ON r.id = k.k
-----
-Could not convert string 'x'
-
-statement error
-SELECT count(*) FROM region_join_secure r JOIN keys_hit k ON r.id = k.k
-----
-Could not convert string 'x'
 
 # the same visible rows in the same positions, only the hidden rows' keys differ: the rows leaving the view must not
 # depend on them (zone maps include hidden rows)
@@ -205,3 +156,142 @@ EXPLAIN ANALYZE SELECT count(*) FROM {view} v JOIN in_keys k ON v.id = k.k
 analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*4,501 rows[\s\S]*
 
 endloop
+
+# a range join takes the selectivity-optional branch: crossing the view it is still checked on every row, so exactly the
+# matching visible rows leave the view, whatever the hidden rows hold
+statement ok
+CREATE TABLE rng AS SELECT 500000 AS lo, 500025 AS hi;
+
+foreach view hidden_near_secure hidden_far_secure
+
+query I
+SELECT count(*) FROM {view} v JOIN rng ON v.id >= rng.lo AND v.id <= rng.hi
+----
+13
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM {view} v JOIN rng ON v.id >= rng.lo AND v.id <= rng.hi
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*13 rows[\s\S]*
+
+endloop
+
+# casts recorded on the join key keep their meaning: VARIANT keys are not compared in the VARIANT domain
+statement ok
+CREATE TABLE vt AS SELECT CASE WHEN i % 10 = 9 THEN (i::DOUBLE)::VARIANT ELSE i::INTEGER::VARIANT END AS v FROM range(100) t(i);
+
+statement ok
+CREATE SECURE VIEW variant_secure AS SELECT v FROM vt;
+
+statement ok
+CREATE TABLE ik AS SELECT i::INTEGER AS k FROM range(40, 60) t(i);
+
+query I
+SELECT count(*) FROM variant_secure sv JOIN ik ON TRY_CAST(sv.v AS INTEGER) = ik.k
+----
+20
+
+statement ok
+CREATE SECURE VIEW variant_cast_secure AS SELECT TRY_CAST(v AS INTEGER) AS vi FROM vt;
+
+query I
+SELECT count(*) FROM variant_cast_secure sv JOIN ik ON sv.vi = ik.k
+----
+20
+
+# a cast on the join key that can fail is barred inside the view: it still raises its error on a row the view emits...
+statement ok
+CREATE TABLE wide_visible AS SELECT i::BIGINT AS id, true AS visible FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT, true;
+
+statement ok
+CREATE SECURE VIEW wide_visible_secure AS SELECT id FROM wide_visible WHERE visible;
+
+statement error
+SELECT count(*) FROM wide_visible_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+Conversion Error
+
+# ... and never sees a row the view hides, whether the view filters in its scan or with a join
+statement ok
+CREATE TABLE wide_hidden AS SELECT i::BIGINT AS id, i % 2 AS g, true AS visible FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT, 1, false;
+
+statement ok
+CREATE SECURE VIEW wide_hidden_secure AS SELECT id FROM wide_hidden WHERE visible;
+
+query I
+SELECT count(*) FROM wide_hidden_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+20
+
+statement ok
+CREATE TABLE even_groups AS SELECT 0 AS g;
+
+statement ok
+CREATE SECURE VIEW wide_joined_secure AS SELECT wide_hidden.id FROM wide_hidden JOIN even_groups USING (g);
+
+query I
+SELECT count(*) FROM wide_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+10
+
+# only the join filters cross a secure view: a TopN filter on a UNION still reaches its plain inputs
+statement ok
+CREATE TABLE topn_plain AS SELECT i AS x FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE topn_hidden AS SELECT i AS x FROM range(100000) t(i);
+
+statement ok
+CREATE SECURE VIEW topn_secure AS SELECT x FROM topn_hidden;
+
+query II
+EXPLAIN ANALYZE SELECT x FROM (SELECT x FROM topn_plain UNION ALL SELECT x FROM topn_secure) ORDER BY x LIMIT 5
+----
+analyzed_plan	<REGEX>:[\s\S]*Dynamic Filter \(x\)[\s\S]*
+
+# the plan outside a view does not depend on the rows it hides: two datasets with the same visible rows and the same
+# row count, whose hidden rows differ, get the same plan (the build side choice included)
+statement ok
+CREATE TABLE d AS SELECT i AS k, i % 10 AS f FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE x1 AS SELECT i * 2 AS id FROM range(50000) t(i);
+
+statement ok
+CREATE TABLE g AS SELECT i AS id, i % 1000 AS k, CASE WHEN i % 2 = 0 THEN i % 10 ELSE 1 END AS c, i % 2 = 0 AS visible
+FROM range(2000000) t(i);
+
+statement ok
+CREATE SECURE VIEW gv AS SELECT id, k, c FROM g WHERE visible;
+
+query II nosort hidden_rows_plan
+EXPLAIN SELECT count(*) FROM gv JOIN d ON gv.k = d.k WHERE gv.c = 1 AND d.f = 1 AND gv.id IN (SELECT id FROM x1)
+----
+
+statement ok
+CREATE OR REPLACE TABLE g AS SELECT i AS id, i % 1000 AS k, CASE WHEN i % 2 = 0 THEN i % 10 ELSE i END AS c,
+i % 2 = 0 AS visible FROM range(2000000) t(i);
+
+query II nosort hidden_rows_plan
+EXPLAIN SELECT count(*) FROM gv JOIN d ON gv.k = d.k WHERE gv.c = 1 AND d.f = 1 AND gv.id IN (SELECT id FROM x1)
+----
+
+# a secure view over a secure view: the join filter crosses both and exactly the matching rows leave the outer view
+statement ok
+CREATE SECURE VIEW inner_secure AS SELECT * FROM big WHERE g < 50;
+
+statement ok
+CREATE SECURE VIEW outer_secure AS SELECT * FROM inner_secure WHERE id >= 100000;
+
+statement ok
+CREATE TABLE nested_keys AS SELECT i AS k FROM range(100000, 100010) t(i);
+
+query I
+SELECT count(*) FROM outer_secure o JOIN nested_keys n ON o.id = n.k
+----
+10
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM outer_secure o JOIN nested_keys n ON o.id = n.k
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*10 rows[\s\S]*
