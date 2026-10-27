@@ -42,7 +42,7 @@ public:
 					Connection user(*db);
 					user_opened = true;
 					auto internal = Connection::CreateInternal(*db);
-					auto result = internal.Query("SELECT sum(i) FROM attached.t");
+					auto result = internal.Query("SELECT i FROM attached.t");
 					if (result->HasError()) {
 						helper_failed = true;
 					} else {
