@@ -42,7 +42,7 @@ statement ok
 CALL truncate_duckdb_logs();
 
 statement ok
-COPY (SELECT k,s,${key} AS part FROM key_input) TO '{TEST_DIR}/${key}'
+COPY (SELECT k,s,{key} AS part FROM key_input) TO '{TEST_DIR}/{key}'
 (FORMAT PARQUET, PARTITION_BY part, PARTITION_PATH 'one',
  ROW_GROUP_SIZE 4194304, ROW_GROUP_SIZE_BYTES 1048576);
 
@@ -60,8 +60,8 @@ statement ok
 COMMIT;
 
 query II
-SELECT (SELECT count(*) FROM (SELECT k,s FROM key_input EXCEPT ALL SELECT k,s FROM read_parquet('{TEST_DIR}/${key}/**/*.parquet',hive_partitioning=false))),
-       (SELECT count(*) FROM (SELECT k,s FROM read_parquet('{TEST_DIR}/${key}/**/*.parquet',hive_partitioning=false) EXCEPT ALL SELECT k,s FROM key_input));
+SELECT (SELECT count(*) FROM (SELECT k,s FROM key_input EXCEPT ALL SELECT k,s FROM read_parquet('{TEST_DIR}/{key}/**/*.parquet',hive_partitioning=false))),
+       (SELECT count(*) FROM (SELECT k,s FROM read_parquet('{TEST_DIR}/{key}/**/*.parquet',hive_partitioning=false) EXCEPT ALL SELECT k,s FROM key_input));
 ----
 0	0
 
