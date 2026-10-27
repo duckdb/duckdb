@@ -254,6 +254,124 @@ ORDER BY ALL;
 7	0
 7	0
 
+# NULL-propagating aggregates only: missing keys still get one row per empty set
+query II
+SELECT o.k, a.s
+FROM (VALUES (7)) AS o(k) LEFT JOIN LATERAL (
+    SELECT sum(v) AS s
+    FROM (VALUES (1, 42)) AS i(k, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a ON true
+ORDER BY ALL;
+----
+7	NULL
+7	NULL
+
+query II
+SELECT o.k, a.s
+FROM (VALUES (1), (7)) AS o(k),
+LATERAL (
+    SELECT sum(v) AS s
+    FROM (VALUES (1, 42)) AS i(k, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a
+ORDER BY ALL;
+----
+1	42
+1	42
+7	NULL
+7	NULL
+
+# scalar subquery with a NULL-propagating aggregate: repeated empty sets break the cardinality rule
+statement error
+SELECT o.k, (
+    SELECT sum(v)
+    FROM (VALUES (1, 42)) AS i(k, v)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS s
+FROM (VALUES (7)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
+# scalar GROUPING() with a single empty set: the recovered row is observable, not NULL
+query II
+SELECT o.k, (
+    SELECT GROUPING(g)
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), ())
+) AS gm
+FROM (VALUES (7)) AS o(k)
+ORDER BY ALL;
+----
+7	1
+
+# a present key emits both grouping set rows and must raise the cardinality error
+statement error
+SELECT o.k, (
+    SELECT GROUPING(g)
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), ())
+) AS gm
+FROM (VALUES (1)) AS o(k);
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
+# WHERE-clause consumption of the recovered GROUPING() value
+query I
+SELECT o.k
+FROM (VALUES (7), (8)) AS o(k)
+WHERE (
+    SELECT GROUPING(g)
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), ())
+) = 1
+ORDER BY ALL;
+----
+7
+8
+
+# GROUPING() in HAVING keeps only the empty-set rows, including recovered ones
+query II
+SELECT o.k, a.c
+FROM (VALUES (1), (7)) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), (), ())
+    HAVING GROUPING(g) = 1
+) AS a
+ORDER BY ALL;
+----
+1	1
+1	1
+7	0
+7	0
+
+# ROLLUP nested inside GROUPING SETS adds another empty set
+query II
+SELECT o.k, a.c
+FROM (VALUES (1), (7)) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS (ROLLUP (g), ())
+) AS a
+ORDER BY ALL;
+----
+1	1
+1	1
+1	1
+7	0
+7	0
+
 # EXISTS over repeated empty grouping sets is true for every outer row
 query II
 SELECT o.k, EXISTS (
@@ -396,3 +514,15 @@ ORDER BY ALL;
 1	1	1
 7	0	1
 7	0	1
+
+query II
+SELECT o.k, (
+    SELECT GROUPING(g)
+    FROM (VALUES (1, 10)) AS i(k, g)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((g), ())
+) AS gm
+FROM (VALUES (7)) AS o(k)
+ORDER BY ALL;
+----
+7	1

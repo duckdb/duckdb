@@ -918,7 +918,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		return result;
 	}
 
-	auto join_type = !any_join && propagate_null_values ? JoinType::INNER : JoinType::LEFT;
+	// dropping missing keys is only equivalent when the single recovered row would be all-NULL:
+	// repeated empty sets need one row per set and GROUPING() outputs are non-NULL constants
+	auto drop_missing_keys =
+	    !any_join && propagate_null_values && empty_set_count <= 1 && aggr.grouping_functions.empty();
+	auto join_type = drop_missing_keys ? JoinType::INNER : JoinType::LEFT;
 
 	unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
 	auto left_index = binder.GenerateTableIndex();
@@ -950,7 +954,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 	// GROUPING() masks, and emit one recovered row per empty grouping set
 	auto grouping_count = aggr.grouping_functions.size();
 	bool needs_empty_results = !empty_aggregates.empty() || grouping_count > 0;
-	bool needs_multiplier = empty_set_count > 1 && join_type == JoinType::LEFT;
+	bool needs_multiplier = empty_set_count > 1;
 	ColumnBinding marker_binding;
 	if (needs_empty_results || needs_multiplier) {
 		// recovered rows are detected by a NULL marker: count(*) is non-NULL for every aggregate row
