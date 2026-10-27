@@ -41,7 +41,7 @@ struct ConstantVector {
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
 		VerifyConstantVector(vector);
-		return vector.GetBufferRef() ? vector.BufferMutable().GetData() : nullptr;
+		return vector.GetBufferRef() ? vector.BufferMutable().GetDataMutable() : nullptr;
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
