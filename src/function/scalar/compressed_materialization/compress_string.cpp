@@ -15,8 +15,14 @@ string StringCompressFunctionName(const LogicalType &result_type) {
 
 template <idx_t LENGTH>
 inline void TemplatedReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src) {
-	for (idx_t i = 0; i < LENGTH; i++) {
-		dest[i] = src[LENGTH - 1 - i];
+	idx_t offset = 0;
+	if (LENGTH > sizeof(uint64_t)) {
+		for (; offset + sizeof(uint32_t) <= LENGTH; offset += sizeof(uint32_t)) {
+			Store<uint32_t>(BSwap(Load<uint32_t>(src + LENGTH - offset - sizeof(uint32_t))), dest + offset);
+		}
+	}
+	for (; offset < LENGTH; offset++) {
+		dest[offset] = src[LENGTH - offset - 1];
 	}
 }
 
