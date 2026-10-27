@@ -1844,14 +1844,13 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		return;
 	}
 	if (!info.context) {
-		throw Exception(ExceptionType::SETTINGS,
-		                "Cannot set 'warnings_as_errors=true' in the startup config; no logger is available yet. To "
-		                "solve, run: 'SET enable_logging=true;' and 'SET warnings_as_errors=true;' after startup");
+		throw InvalidInputException(
+		    "Cannot set 'warnings_as_errors=true' in the startup config; no logger is available yet. To "
+		    "solve, run: 'SET enable_logging=true;' and 'SET warnings_as_errors=true;' after startup");
 	}
 	auto &log_manager = LogManager::Get(*info.context);
 	if (!log_manager.GetConfig().enabled) {
-		throw Exception(
-		    ExceptionType::SETTINGS,
+		throw InvalidInputException(
 		    "Cannot set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
 	}
 }
