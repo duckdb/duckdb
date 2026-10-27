@@ -408,7 +408,7 @@ static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalO
 
 	bool changed = false;
 	auto &delim_join = input.get().Cast<LogicalComparisonJoin>();
-	if (!projections.empty() && delim_join.join_type != JoinType::INNER && delim_join.join_type != JoinType::LEFT) {
+	if (!projections.empty() && PropagatesBuildSide(delim_join.join_type)) {
 		return false;
 	}
 	for (auto &projection : projections) {
