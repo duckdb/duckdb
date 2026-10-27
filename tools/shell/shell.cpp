@@ -3959,6 +3959,8 @@ int RunShell(int argc, const char **argv) {
 		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
+	data.DetectDarkLightMode();
+
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
 	** file is processed so that the command-line arguments will override
@@ -4003,8 +4005,6 @@ int RunShell(int argc, const char **argv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-			// only query the terminal colors once we know we are starting an interactive session
-			data.DetectDarkLightMode();
 			ShellHighlight highlight(data);
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),

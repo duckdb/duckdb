@@ -81,11 +81,13 @@ def test_deprecated_highlight_constant(shell):
     ['-json', '-c', 'SELECT 42'],
     ['-dark-mode', '-manual', 'list_contains'],
 ])
-def test_exiting_commands_skip_color_probe(shell, arguments):
+def test_unanswered_color_probe_does_not_stall(shell, arguments):
     import pty
+    import time
 
     # nothing answers the background color query on this pseudo-terminal
     master, slave = pty.openpty()
+    start = time.monotonic()
     try:
         process = subprocess.Popen(
             [shell, '-no-init', *arguments],
@@ -108,5 +110,56 @@ def test_exiting_commands_skip_color_probe(shell, arguments):
     os.close(master)
     assert process.wait(timeout=30) == 0, output.decode('utf8', 'replace')
     assert b'Timeout trying to read terminal background color' not in output
+    assert time.monotonic() - start < 4
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+@pytest.mark.parametrize("events", [
+    # the terminal answers the color query after the probe gave up
+    [(1.0, b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c')],
+    # ALT+] starts like an OSC reply, but the keys typed after it must be kept
+    [(0.0, b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'), (0.5, b'\x1b]')],
+])
+def test_terminal_reply_is_not_typed(shell, tmp_path, events):
+    import pty
+    import re
+    import select
+    import time
+
+    query = (events[-1][0] + 0.5, b"SELECT 'typed_ok' AS r;\r")
+    events = events + [query, (query[0] + 1.5, b'.exit\r')]
+    env = ShellTest(shell).get_environment()
+    env['DUCKDB_HISTORY'] = str(tmp_path / 'history')
+    master, slave = pty.openpty()
+    try:
+        process = subprocess.Popen([shell, '-no-init'], stdin=slave, stdout=slave, stderr=slave, env=env)
+    finally:
+        os.close(slave)
+    output = bytearray()
+    probe_time = None
+    deadline = time.monotonic() + 30
+    try:
+        while process.poll() is None and time.monotonic() < deadline:
+            if select.select([master], [], [], 0.05)[0]:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                output.extend(chunk)
+                # answer cursor position queries like a terminal emulator
+                for _ in range(chunk.count(b'\x1b[6n')):
+                    os.write(master, b'\x1b[1;1R')
+            if probe_time is None and b'\x1b]11;?' in output:
+                probe_time = time.monotonic()
+            while probe_time is not None and events and time.monotonic() - probe_time >= events[0][0]:
+                os.write(master, events.pop(0)[1])
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        os.close(master)
+    text = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07', '', output.decode('utf8', 'replace'))
+    assert process.returncode == 0, text
+    assert '│ typed_ok │' in text, text
+    assert 'Error' not in text, text
 
 # fmt: on
