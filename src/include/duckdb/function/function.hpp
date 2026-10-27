@@ -53,7 +53,7 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
 //! Why a VOLATILE function must be evaluated at execution time
 //! NON_DETERMINISTIC       -> equal inputs may give different results (e.g. RANDOM(), NEXTVAL())
-//! NO_PLAN_TIME_EVALUATION -> equal inputs always give the same outcome, but it must never be evaluated early (e.g. ERROR())
+//! NO_PLAN_TIME_EVALUATION -> equal inputs give the same outcome, but it must never be evaluated early (e.g. ERROR())
 enum class VolatilityReason : uint8_t { NON_DETERMINISTIC = 0, NO_PLAN_TIME_EVALUATION = 1 };
 
 //! How to handle collations
