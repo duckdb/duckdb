@@ -1167,7 +1167,7 @@ void ClientContext::InterruptCheck() const {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
-	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
+	if (HasQueryDeadline() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
 		BlockingInterruptCheck();
 	}
 }
@@ -1181,12 +1181,19 @@ void ClientContext::BlockingInterruptCheck() const {
 	}
 }
 
+bool ClientContext::HasQueryDeadline() const {
+	return query_deadline.IsValid() || (base_context && base_context->HasQueryDeadline());
+}
+
 bool ClientContext::QueryDeadlinePassed() const {
-	if (!query_deadline.IsValid()) {
-		return false;
+	if (query_deadline.IsValid()) {
+		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		if (now >= query_deadline.GetIndex()) {
+			return true;
+		}
 	}
-	auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
-	return now >= query_deadline.GetIndex();
+	// an internal connection is also out of time when the query it runs on behalf of is
+	return base_context && base_context->QueryDeadlinePassed();
 }
 
 void ClientContext::CancelTransaction() {
