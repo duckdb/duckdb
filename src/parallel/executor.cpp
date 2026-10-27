@@ -584,6 +584,29 @@ vector<LogicalType> Executor::GetTypes() {
 void Executor::PushError(ErrorData exception) {
 	// push the exception onto the stack
 	error_manager.PushError(std::move(exception));
+	InterruptPipelines();
+}
+
+void Executor::PushTaskError(const std::exception &ex) {
+	error_manager.PushTaskError([&]() { return ErrorData(ex); });
+	TryInterruptPipelines();
+}
+
+void Executor::PushTaskError(const char *message) {
+	error_manager.PushTaskError([&]() { return ErrorData(message); });
+	TryInterruptPipelines();
+}
+
+void Executor::TryInterruptPipelines() {
+	try {
+		InterruptPipelines();
+	} catch (...) { // NOLINT
+		// rescheduling blocked tasks can fail when memory runs out, and the error is recorded, so the main thread
+		// sees it and cancels the remaining tasks
+	}
+}
+
+void Executor::InterruptPipelines() {
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupt_state = ClientInterruptState::INTERRUPTED;
 	for (auto &pipeline : pipelines) {
@@ -605,12 +628,11 @@ void Executor::ThrowException() {
 }
 
 void Executor::Flush(ThreadContext &thread_context) {
-	auto global_profiler = profiler;
-	if (global_profiler) {
-		global_profiler->Flush(thread_context.profiler);
+	if (profiler) {
+		profiler->Flush(thread_context.profiler);
 
 		auto blocked_time = blocked_thread_time.load();
-		global_profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
+		profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
 	}
 }
 

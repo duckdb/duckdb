@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -41,6 +42,9 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/catalog/schema_scan_filters.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/main/settings.hpp"
 #include <algorithm>
@@ -485,42 +489,143 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	return GetSchema(retriever, schema_lookup, if_not_found);
 }
 
-static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction transaction, SchemaCatalogEntry &parent,
-                                                             const Identifier &name, OnEntryNotFound if_not_found) {
-	// go through the schema's own lookup so that nested schemas work for any catalog, not only DuckCatalog
-	EntryLookupInfo nested_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(name));
-	auto entry = parent.LookupEntry(transaction, nested_lookup);
-	if (!entry) {
-		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException("Schema with name %s does not exist!", name);
-		}
-		return nullptr;
+static bool TryParseSchemaPath(const string &schema_arg, vector<Identifier> &result) {
+	try {
+		result = QualifiedName::ParseComponents(schema_arg);
+	} catch (ParserException &) {
+		return false;
 	}
-	return entry->Cast<SchemaCatalogEntry>();
+	if (schema_arg.empty() || schema_arg.back() == '.') {
+		result.emplace_back();
+	}
+	return true;
+}
+
+static string EmptyComponentError(const string &schema_arg) {
+	return StringUtil::Format(
+	    "Failed to parse schema path \"%s\" - schema paths cannot contain empty components. Schema names that "
+	    "contain a '.' or a '\"' must be double-quoted (e.g. '\"my.schema\"')",
+	    schema_arg);
+}
+
+struct SchemaPathCandidateList {
+	vector<vector<Identifier>> candidates;
+	string parse_error;
+};
+
+static SchemaPathCandidateList SchemaPathCandidates(Catalog &catalog, const string &schema_arg) {
+	SchemaPathCandidateList result;
+	vector<Identifier> literal_path;
+	literal_path.emplace_back(schema_arg);
+	vector<Identifier> nested_path;
+	if (!catalog.SupportsNestedSchemas() || !TryParseSchemaPath(schema_arg, nested_path)) {
+		result.candidates.push_back(std::move(literal_path));
+		return result;
+	}
+	if (std::any_of(nested_path.begin(), nested_path.end(), [](const Identifier &part) { return part.empty(); })) {
+		result.parse_error = EmptyComponentError(schema_arg);
+		result.candidates.push_back(std::move(literal_path));
+		return result;
+	}
+	bool is_literal = nested_path.size() == 1 && nested_path[0].GetIdentifierName() == schema_arg;
+	result.candidates.push_back(std::move(nested_path));
+	if (!is_literal) {
+		result.candidates.push_back(std::move(literal_path));
+	}
+	return result;
+}
+
+QualifiedName Catalog::ResolveEntryName(ClientContext &context, const string &schema_arg, const string &entry_name,
+                                        CatalogType entry_type, optional_ptr<BoundAtClause> at_clause) {
+	Identifier name(entry_name);
+	if (schema_arg.empty()) {
+		return QualifiedName(GetName(), Identifier(), std::move(name));
+	}
+	auto candidates = SchemaPathCandidates(*this, schema_arg);
+	if (candidates.candidates.size() > 1 || !candidates.parse_error.empty()) {
+		for (auto &candidate : candidates.candidates) {
+			auto qualified_name = QualifiedName::FromCatalogSchema(GetName(), candidate, name);
+			EntryLookupInfo lookup(entry_type, qualified_name, at_clause, QueryErrorContext());
+			CatalogEntryRetriever retriever(context);
+			if (LookupEntry(retriever, lookup, OnEntryNotFound::RETURN_NULL).entry) {
+				return qualified_name;
+			}
+		}
+		if (!candidates.parse_error.empty()) {
+			throw InvalidInputException("%s", candidates.parse_error);
+		}
+	}
+	return QualifiedName::FromCatalogSchema(GetName(), candidates.candidates[0], name);
+}
+
+SchemaCatalogEntry &Catalog::ResolveSchema(ClientContext &context, const string &schema_arg) {
+	auto candidates = SchemaPathCandidates(*this, schema_arg);
+	if (candidates.candidates.size() > 1 || !candidates.parse_error.empty()) {
+		for (auto &candidate : candidates.candidates) {
+			auto entry = Catalog::GetSchema(context, GetName(), candidate, OnEntryNotFound::RETURN_NULL);
+			if (entry) {
+				return *entry;
+			}
+		}
+		if (!candidates.parse_error.empty()) {
+			throw InvalidInputException("%s", candidates.parse_error);
+		}
+	}
+	return *Catalog::GetSchema(context, GetName(), candidates.candidates[0], OnEntryNotFound::THROW_EXCEPTION);
+}
+
+optional_ptr<SchemaCatalogEntry>
+Catalog::LookupSchemaPath(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
+                          OnEntryNotFound if_not_found,
+                          const std::function<optional_ptr<CatalogEntry>(const EntryLookupInfo &)> &lookup_root) {
+	auto &path = schema_lookup.GetQualifiedName().Path();
+	optional_ptr<SchemaCatalogEntry> schema;
+	// Bound schema lookups lead with the catalog; bare lookups contain just the schema name.
+	for (idx_t i = path.size() > 1 ? 1 : 0; i < path.size(); i++) {
+		if (path[i].empty()) {
+			continue;
+		}
+		EntryLookupInfo lookup(schema_lookup, QualifiedName(path[i]));
+		auto entry = schema ? schema->LookupEntry(transaction, lookup) : lookup_root(lookup);
+		if (!entry) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw CatalogException::MissingEntry(lookup, string());
+			}
+			return nullptr;
+		}
+		schema = entry->Cast<SchemaCatalogEntry>();
+	}
+	return schema;
 }
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,
                                                     const vector<Identifier> &schema_path,
                                                     OnEntryNotFound if_not_found) {
 	D_ASSERT(!schema_path.empty());
-	// resolve the outermost schema (this also resolves the catalog), then navigate the nested-schema chain
 	auto schema = GetSchema(context, catalog_name, schema_path[0], if_not_found);
-	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
-		schema =
-		    NavigateNestedSchema(schema->catalog.GetCatalogTransaction(context), *schema, schema_path[i], if_not_found);
+	if (!schema || schema_path.size() == 1) {
+		return schema;
 	}
-	return schema;
+	auto &catalog = schema->catalog;
+	auto path = schema_path;
+	path.insert(path.begin(), catalog.GetName());
+	EntryLookupInfo lookup(CatalogType::SCHEMA_ENTRY, QualifiedName::FromPath(std::move(path)));
+	return catalog.LookupSchemaPath(
+	    catalog.GetCatalogTransaction(context), lookup, if_not_found,
+	    [&](const EntryLookupInfo &) -> optional_ptr<CatalogEntry> { return schema.get(); });
 }
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogTransaction transaction,
                                                     const vector<Identifier> &schema_path,
                                                     OnEntryNotFound if_not_found) {
 	D_ASSERT(!schema_path.empty());
-	auto schema = GetSchema(transaction, schema_path[0], if_not_found);
-	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
-		schema = NavigateNestedSchema(transaction, *schema, schema_path[i], if_not_found);
-	}
-	return schema;
+	auto path = schema_path;
+	path.insert(path.begin(), GetName());
+	EntryLookupInfo lookup(CatalogType::SCHEMA_ENTRY, QualifiedName::FromPath(std::move(path)));
+	return LookupSchemaPath(transaction, lookup, if_not_found,
+	                        [&](const EntryLookupInfo &root) -> optional_ptr<CatalogEntry> {
+		                        return LookupSchema(transaction, root, if_not_found).get();
+	                        });
 }
 
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,
@@ -795,6 +900,9 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	for (const auto &database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
+		}
+		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
 		}
 		auto &catalog = database->GetCatalog();
 		auto current_schemas = catalog.GetSchemas(context);
@@ -1389,6 +1497,29 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
 	vector<reference<SchemaCatalogEntry>> schemas;
 	ScanSchemas(context, [&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+	return schemas;
+}
+
+bool SchemaScanFilters::Satisfies(ClientContext &context, optional_ptr<const TableFilter> filter, const Value &value) {
+	if (!filter) {
+		return true;
+	}
+	return ExpressionFilter::GetExpressionFilter(*filter, "SchemaScanFilters").EvaluateWithConstant(context, value);
+}
+
+bool SchemaScanFilters::Accepts(ClientContext &context, const SchemaCatalogEntry &schema) const {
+	return Satisfies(context, schema_name, Value(schema.name.GetIdentifierName())) &&
+	       Satisfies(context, schema_oid, Value::BIGINT(NumericCast<int64_t>(schema.oid)));
+}
+
+vector<reference<SchemaCatalogEntry>> Catalog::GetSchemasForScan(ClientContext &context,
+                                                                 const SchemaScanFilters &filters) {
+	vector<reference<SchemaCatalogEntry>> schemas;
+	ScanSchemas(context, [&](SchemaCatalogEntry &entry) {
+		if (filters.Accepts(context, entry)) {
+			schemas.push_back(entry);
+		}
+	});
 	return schemas;
 }
 

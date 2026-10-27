@@ -96,7 +96,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 			auto db = manager.GetDatabase(context, entry.first);
 			if (db && !db->GetCatalog().SupportsMultipleDMLCTEs()) {
 				throw BinderException("Multiple DML statements in a single WITH clause are not supported for "
-				                      "database \"%s\"",
+				                      "database %s",
 				                      entry.first);
 			}
 		}
@@ -142,6 +142,9 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	names = query.names;
 	for (idx_t i = 0; i < aliases.size() && i < names.size(); i++) {
+		if (aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		names[i] = aliases[i];
 	}
 

@@ -28,6 +28,14 @@ struct SortedAggregateStateOrder {
 	OrderByNullType null_order;
 };
 
+//! A scalar function with its argument and return types resolved, before the bind callback is invoked
+struct ResolvedScalarFunctionTypes {
+	BoundScalarFunction bound_function;
+	vector<Identifier> argument_names;
+	//! The collation pushed into the arguments, to be propagated to the return type after binding
+	string pushed_collation;
+};
+
 //! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
 //! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
 //! considered, can select overloads too.
@@ -145,6 +153,12 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
+	//! Throws the binding error instead of returning nullptr
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
+	                                                     vector<unique_ptr<Expression>> children,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
+
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunctionCatalogEntry &function,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
@@ -254,6 +268,9 @@ public:
 	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
 	                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types);
 
+	DUCKDB_API unique_ptr<Expression> BindScalarWindowFunction(BoundWindowExpression &wexpr,
+	                                                           const vector<LogicalType> &input_types);
+
 	//! Turn a function into a BoundScalarFunction bound to the given arguments. The function is kept as the
 	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition().
 	pair<BoundScalarFunction, unique_ptr<FunctionData>>
@@ -326,6 +343,11 @@ public:
 	}
 
 private:
+	//! Resolves the argument / return types of the function and casts the children to them - everything that happens
+	//! before the bind callback is invoked
+	ResolvedScalarFunctionTypes
+	ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &children,
+	                           vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
 

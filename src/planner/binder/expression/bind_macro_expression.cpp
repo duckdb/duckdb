@@ -7,6 +7,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -59,7 +60,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
 			return;
 		}
 
@@ -204,6 +205,8 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
+	// expanding nested macros can take a long time, allow the query to be interrupted
+	context.InterruptCheck();
 
 	// unfold the macro expression
 	UnfoldMacroExpression(function, macro_func, expr, depth);

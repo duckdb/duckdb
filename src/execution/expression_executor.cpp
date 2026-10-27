@@ -263,7 +263,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
-			D_ASSERT(FlatVector::ValidityMutable(result).CheckAllValid(count));
+			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
 		}
 	}
 #endif
@@ -325,6 +325,8 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_FUNCTION:
 		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel,
 		              false_sel); // NOLINT: c-style cast
+	case ExpressionClass::BOUND_OPERATOR:
+		return Select(expr.Cast<BoundOperatorExpression>(), *state, sel, count, true_sel, false_sel);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

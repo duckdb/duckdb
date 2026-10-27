@@ -13,38 +13,36 @@
 namespace duckdb {
 
 static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
+	if (join.HasNullSafeMarkJoinConditions()) {
+		return string();
+	}
 	bool comparisons_only = !join.conditions.empty();
 	bool all_equal = true;
-	bool all_null_safe = true;
 	for (auto &condition : join.conditions) {
 		if (!condition.IsComparison()) {
 			comparisons_only = false;
 			continue;
 		}
 		all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
-		all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	}
-	const bool has_supported_conjunction = join.conditions.size() == 1 || all_equal || all_null_safe;
+	const bool has_supported_conjunction = join.conditions.size() == 1 || all_equal;
 	if (!comparisons_only || !has_supported_conjunction) {
 		return "The MARK condition requires conjunction execution semantics";
 	}
-	for (auto &condition : join.conditions) {
-		switch (condition.GetComparisonType()) {
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			return "MARK DISTINCT FROM comparisons cannot preserve NULL semantics";
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			if (condition.GetLHS().GetReturnType().IsNested() || condition.GetRHS().GetReturnType().IsNested()) {
-				return "MARK ordering comparisons on nested types cannot preserve NULL semantics";
-			}
-			break;
-		default:
-			break;
+	return string();
+}
+
+static bool CanReconstructMarkGroups(const LogicalComparisonJoin &join) {
+	vector<LogicalType> group_types;
+	if (!join.TryGetMarkJoinGroupTypes(group_types) || group_types.size() != join.mark_types.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < group_types.size(); i++) {
+		if (!group_types[i].EqualsIncludingCollation(join.mark_types[i])) {
+			return false;
 		}
 	}
-	return string();
+	return true;
 }
 
 static bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
@@ -92,16 +90,16 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "join_delim_state", "The join requires a duplicate-eliminated input scope")});
 		}
-		if (comparison.join_type == JoinType::MARK) {
+		if (comparison.join_type == JoinType::MARK && !CanReconstructMarkGroups(comparison)) {
 			auto reason = MarkConditionUnsupportedReason(comparison);
 			if (!reason.empty()) {
 				return Result::Failure(
 				    {LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(path, "mark_condition_semantics", reason)});
 			}
-		}
-		if (RequiresMarkGroupMetadata(comparison)) {
-			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
-			    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
+			if (RequiresMarkGroupMetadata(comparison)) {
+				return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+				    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
+			}
 		}
 		idx_t ordinal = 0;
 		for (auto &condition : comparison.conditions) {
@@ -201,7 +199,13 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 			expression = make_uniq<ColumnRefExpression>(Identifier("__mark_join_marker"));
 		} else {
 			auto resolved = expression_context.resolve_binding(field.source_binding);
-			D_ASSERT(resolved && resolved->type == field.type);
+			if (!resolved || resolved->type != field.type) {
+				auto issue = SQLExportHelpers::MakeIssue(
+				    LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, LogicalPlanVerificationPhase::PLAN_EXPORT,
+				    path, LogicalPlanVerificationConstructIdentity::LogicalOperator(op.type),
+				    "Join output field has no matching SQL column binding");
+				return LogicalPlanSQLExportResult::Failure({std::move(issue)});
+			}
 			expression = make_uniq<ColumnRefExpression>(resolved->names);
 		}
 		expression->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(select->select_list.size()));

@@ -70,21 +70,25 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType, Identifier, identifier_map_t<idx_t>> named_arg_types;
+	// the speculative binds below may register correlated columns referenced by the arguments: restore the binder's
+	// correlated columns afterwards, binding the expanded macro body re-registers those that are actually used
+	auto saved_correlated_columns = binder.correlated_columns;
 	for (auto &arg : function_expr.GetArgumentsMutable()) {
 		auto arg_copy = arg.GetExpression().Copy();
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
-			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
+			// bind at the same scope depth as the macro call: "depth" counts subquery scopes, not expression nesting
+			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth);
 			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
-		if (!arg.GetExpression().GetAlias().empty()) {
+		if (arg.HasName()) {
 			// Default argument
-			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
-				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated '%s'", name,
-				                                          arg.GetExpression().GetAlias()));
+			if (named_arguments.find(arg.GetName()) != named_arguments.end()) {
+				return MacroBindResult(
+				    StringUtil::Format("Macro %s() has named argument repeated %s", name, arg.GetName()));
 			}
-			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));
-			named_arguments[arg.GetExpression().GetAlias()] = std::move(arg.GetExpressionMutable());
+			named_arg_types.insert(arg.GetName(), std::move(arg_type));
+			named_arguments[arg.GetName()] = std::move(arg.GetExpressionMutable());
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));
@@ -94,6 +98,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			positional_arg_types.push_back(std::move(arg_type));
 		}
 	}
+	binder.correlated_columns = std::move(saved_correlated_columns);
 
 	// Check for each macro function if it matches the number of positional arguments
 	auto lowest_cost = NumericLimits<idx_t>::Maximum();

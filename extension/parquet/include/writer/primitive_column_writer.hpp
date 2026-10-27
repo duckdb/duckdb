@@ -41,6 +41,9 @@ struct PageInformation {
 };
 
 struct PageWriteInformation {
+	explicit PageWriteInformation(const duckdb_parquet::PageHeader::allocator_type &alloc) : page_header(alloc) {
+	}
+
 	duckdb_parquet::PageHeader page_header;
 	unique_ptr<MemoryStream> temp_writer;
 	unique_ptr<ColumnWriterPageState> page_state;
@@ -94,7 +97,7 @@ public:
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void PrepareWrite(ColumnWriterState &state) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
-	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
+	idx_t FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) override;
 
 protected:
 	static void WriteLevels(Allocator &allocator, WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,

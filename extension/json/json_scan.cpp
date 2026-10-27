@@ -149,7 +149,8 @@ void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
 		    .Add("timestamp_format", LogicalType::VARCHAR)
 		    .Add("records", LogicalType::ANY)
 		    .Add("array", LogicalType::BOOLEAN)
-		    .Add("maximum_sample_files", LogicalType::BIGINT);
+		    .Add("maximum_sample_files", LogicalType::BIGINT)
+		    .Add("case_insensitive_keys", LogicalType::BOOLEAN);
 	});
 }
 
@@ -246,8 +247,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg > 0) {
 			options.sample_size = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
 			                      "files entirely, up to \"maximum_sample_files\" files.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
@@ -275,8 +278,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg >= 0) {
 			options.map_inference_threshold = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
 			                      "or -1 to disable map inference for consistent objects.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
@@ -311,8 +316,16 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 	if (key == "records") {
 		// records is tri-state: 'auto', 'true' or 'false'. Accept a boolean for the latter two, since
 		// records = false reads more naturally than records = 'false'.
-		auto arg = value.type().id() == LogicalTypeId::BOOLEAN ? string(BooleanValue::Get(value) ? "true" : "false")
-		                                                       : StringValue::Get(value);
+		string arg;
+		if (value.type().id() == LogicalTypeId::BOOLEAN) {
+			arg = BooleanValue::Get(value) ? "true" : "false";
+		} else if (value.type().id() == LogicalTypeId::VARCHAR) {
+			arg = StringValue::Get(value);
+		} else {
+			throw BinderException("read_json \"records\" parameter must be a string ('auto', 'true' or 'false') or "
+			                      "a boolean, not %s",
+			                      value.type().ToString());
+		}
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
 		} else if (arg == "true") {
@@ -331,13 +344,19 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg > 0) {
 			options.maximum_sample_files = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
 			                      "the limit on the number of files used to sample \"sample_size\" rows.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
 	if (key == "convert_strings_to_integers") {
 		options.convert_strings_to_integers = BooleanValue::Get(value);
+		return true;
+	}
+	if (key == "case_insensitive_keys") {
+		options.case_insensitive_keys = BooleanValue::Get(value);
 		return true;
 	}
 	return false;
@@ -362,13 +381,17 @@ void JSONScan::BindSchema(ClientContext &context, JSONScanData &json_data, Multi
 	if (!options.auto_detect) {
 		// Need to specify columns if RECORDS and not auto-detecting
 		if (return_types.empty()) {
+			// LCOV_EXCL_START
 			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
 			                      "\"columns\" parameter.");
+			// LCOV_EXCL_STOP
 		}
 		// If we are reading VALUES, we can only have one column
 		if (options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
+			// LCOV_EXCL_START
 			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
 			                      "parameter when \"records\" is set to 'false'.");
+			// LCOV_EXCL_STOP
 		}
 	}
 
@@ -401,6 +424,7 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	transform_options.error_duplicate_key = !options.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
+	transform_options.key_match = options.case_insensitive_keys ? JSONKeyMatch::CASE_INSENSITIVE : JSONKeyMatch::EXACT;
 	transform_options.date_format_map = json_data.date_format_map.get();
 	transform_options.delay_error = true;
 

@@ -1,6 +1,13 @@
 # Adds extensions to what the DuckDB targets link by default, for extension configs; STATICALLY_LINK_EXTENSIONS
 # replaces the whole default. An extension that is only loaded with duckdb_extension_load is built, not linked, and can be
 # installed from the build's extension repository.
+set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED FALSE)
+if(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    if(NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "" AND NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "0")
+        set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED TRUE)
+    endif()
+endif()
+
 function(duckdb_extension_statically_link)
     set_property(GLOBAL APPEND PROPERTY DUCKDB_EXTENSIONS_STATICALLY_LINKED_BY_CONFIG ${ARGN})
 endfunction()
@@ -149,7 +156,29 @@ endfunction()
 
 # Links what duckdb_resolve_static_link picked at configure time, capabilities first, into a DuckDB target.
 function(link_extension_libraries LIBRARY LINKAGE)
+    # From an extension's own CMakeLists, while the extensions are added: what to link isn't resolved yet, and neither
+    # the DuckDB targets nor the extensions after this one exist. Done by duckdb_link_deferred_extension_libraries.
+    if(DUCKDB_ADDING_EXTENSIONS)
+        set_property(GLOBAL APPEND PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS "${LIBRARY}" "${LINKAGE}")
+        return()
+    endif()
     duckdb_link_extensions(${LIBRARY} ${LINKAGE} ${DUCKDB_STATICALLY_LINKED_CAPABILITIES} ${DUCKDB_STATICALLY_LINKED_EXTENSIONS})
+endfunction()
+
+# Called by the top-level CMakeLists once every target exists
+function(duckdb_link_deferred_extension_libraries)
+    get_property(DEFERRED GLOBAL PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS)
+    list(LENGTH DEFERRED COUNT)
+    if(COUNT EQUAL 0)
+        return()
+    endif()
+    math(EXPR LAST "${COUNT} - 1")
+    foreach(I RANGE 0 ${LAST} 2)
+        math(EXPR J "${I} + 1")
+        list(GET DEFERRED ${I} LIBRARY)
+        list(GET DEFERRED ${J} LINKAGE)
+        link_extension_libraries(${LIBRARY} "${LINKAGE}")
+    endforeach()
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -255,6 +284,9 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
     set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
     set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+    if(NOT EXTENSION_STATIC_BUILD)
+        set_property(TARGET ${TARGET_NAME} PROPERTY DUCKDB_DYNAMIC_LOADABLE_EXTENSION TRUE)
+    endif()
     if(${IGNORE_WARNINGS} GREATER -1)
         disable_target_warnings(${TARGET_NAME})
     endif()
@@ -462,7 +494,8 @@ function(build_static_extension NAME PARAMETERS)
         set(PREBUILT_TARGET ${NAME}_prebuilt_extension)
         add_library(${PREBUILT_TARGET} STATIC IMPORTED GLOBAL)
         set_property(TARGET ${PREBUILT_TARGET} PROPERTY IMPORTED_LOCATION "${PREBUILT_PATH}")
-        target_link_libraries(${PREBUILT_TARGET} INTERFACE duckdb_static)
+        target_link_libraries(${PREBUILT_TARGET} INTERFACE
+            "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
         add_library(${NAME}_extension STATIC "${DUMMY_SOURCE}")
         target_link_libraries(${NAME}_extension "$<BUILD_INTERFACE:${PREBUILT_TARGET}>")
         set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND CPP)
@@ -470,7 +503,9 @@ function(build_static_extension NAME PARAMETERS)
         return()
     endif()
     add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
+    # Dynamic loadables resolve DuckDB symbols from the host, including when linked through this archive.
+    target_link_libraries(${NAME}_extension
+        "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
     duckdb_add_extension_describe(${NAME} CPP)
     duckdb_make_native_lto_archive(${NAME}_extension)
 endfunction()
@@ -542,7 +577,8 @@ endfunction()
 
 function(build_static_extension_capi_internal NAME KIND API_VERSION FILES)
     add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
+    target_link_libraries(${NAME}_extension
+        "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
     duckdb_add_extension_describe(${NAME} ${KIND} "${API_VERSION}")
     duckdb_make_native_lto_archive(${NAME}_extension)
@@ -634,7 +670,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         # Use the pre-cloned source from extension/external/<name> (populated by
         # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
         set("${NAME}_extension_fc_SOURCE_DIR" "${DUCKDB_MODULE_BASE_DIR}/extension/external/${NAME}")
@@ -671,7 +707,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
 
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         message(STATUS "Load extension '${NAME}' from extension/external/${NAME} @ ${EXTERNAL_EXTENSION_VERSION}")
     else()
         message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
@@ -859,7 +895,17 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
     endif()
 endforeach()
 
-set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
+if(NOT DEFINED EXTENSION_CONFIG_BASE_DIR)
+    if(DEFINED ENV{EXTENSION_CONFIG_BASE_DIR} AND NOT "$ENV{EXTENSION_CONFIG_BASE_DIR}" STREQUAL "")
+        set(EXTENSION_CONFIG_BASE_DIR "$ENV{EXTENSION_CONFIG_BASE_DIR}")
+    else()
+        set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions")
+    endif()
+endif()
+get_filename_component(EXTENSION_CONFIG_BASE_DIR "${EXTENSION_CONFIG_BASE_DIR}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+if(NOT IS_DIRECTORY "${EXTENSION_CONFIG_BASE_DIR}")
+    message(FATAL_ERROR "Extension config directory does not exist: ${EXTENSION_CONFIG_BASE_DIR}")
+endif()
 
 if(DEFINED CORE_EXTENSIONS)
     message(DEPRECATION "CORE_EXTENSIONS is deprecated. Use BUILD_EXTENSIONS instead.")
@@ -869,6 +915,13 @@ if(DEFINED CORE_EXTENSIONS)
         list(APPEND BUILD_EXTENSIONS ${CORE_EXTENSIONS})
     endif()
 endif()
+
+# Explicit project configurations take precedence over named defaults.
+foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
+    if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
+        include("${DUCKDB_EXTENSION_CONFIG}")
+    endif()
+endforeach()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
@@ -906,13 +959,6 @@ endif()
 
 
 
-# Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
-foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
-    if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
-        include(${DUCKDB_EXTENSION_CONFIG})
-    endif()
-endforeach()
-
 # Local extension config
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
     include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
@@ -944,6 +990,7 @@ function(set_extension_version_sources EXT_NAME)
 endfunction()
 
 # Add subdirectories for registered extensions
+set(DUCKDB_ADDING_EXTENSIONS TRUE)
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
@@ -966,12 +1013,17 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     endif()
 
     if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
+        # Provide the extension name to the extension's CMakeLists. C-API extensions built from the
+        # extension-template-c template require EXTENSION_NAME to be defined; supplying it here lets
+        # such an extension be built in-tree without a wrapper CMakeLists or hardcoding its own name.
+        set(EXTENSION_NAME ${EXT_NAME})
         if(NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PREBUILT_PATH}" STREQUAL "")
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME} EXCLUDE_FROM_ALL)
         else()
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
         endif()
         duckdb_add_missing_extension_describe(${EXT_NAME})
+        unset(EXTENSION_NAME)
     else()
         message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
     endif()
@@ -980,6 +1032,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
     endif()
 endforeach()
+unset(DUCKDB_ADDING_EXTENSIONS)
 
 # Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees
 duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)

@@ -264,6 +264,17 @@ struct GetPartitionStatsInput {
 	optional_ptr<const FunctionData> bind_data;
 };
 
+struct TableFunctionGetBindInfoInput {
+public:
+	TableFunctionGetBindInfoInput(ClientContext &context, optional_ptr<FunctionData> bind_data_p)
+	    : context(context), bind_data(bind_data_p) {
+	}
+
+public:
+	ClientContext &context;
+	optional_ptr<FunctionData> bind_data;
+};
+
 struct TableFunctionGetMetricsInput {
 public:
 	TableFunctionGetMetricsInput(ClientContext &context, optional_ptr<const FunctionData> bind_data_p,
@@ -286,11 +297,19 @@ enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 struct BindInfo {
 public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
-	explicit BindInfo(TableCatalogEntry &table) : type(ScanType::TABLE), table(&table) {};
 
 	unordered_map<string, Value> options;
 	ScanType type;
-	optional_ptr<TableCatalogEntry> table;
+
+	//! An identifier attached to a result column of the bound call, or to a field nested inside one (addressed as in
+	//! MultiFileColumnDefinition::ResolveChildPath) - e.g. a field id, by which a multi-file function wrapping the
+	//! function maps the columns of its files onto one another
+	struct ColumnIdentifier {
+		idx_t column_index;
+		vector<idx_t> child_path;
+		Value identifier;
+	};
+	vector<ColumnIdentifier> column_identifiers;
 
 	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {
@@ -347,7 +366,9 @@ typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionCon
 typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context,
                                                                      TableFunctionGetPartitionInput &input);
 
-typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
+typedef BindInfo (*table_function_get_bind_info_t)(TableFunctionGetBindInfoInput &input);
+//! The table a bound call scans, if it scans one - see LogicalGet::GetTable
+typedef optional_ptr<TableCatalogEntry> (*table_function_get_table_entry_t)(optional_ptr<const FunctionData> bind_data);
 
 typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(const BoundTableFunction &);
 
@@ -497,6 +518,8 @@ public:
 	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
+	//! (Optional) the table a bound call scans, e.g. for a scan of a catalog table
+	table_function_get_table_entry_t get_table_entry;
 	//! (Optional) pushes down projection expressions like len() in "SELECT len(str)" or
 	//! casts like "col as UINTEGER" in "SELECT col::UINTEGER" to scanner.
 	//! Returns true if pushdown was successful

@@ -16,17 +16,42 @@
 
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
+BaseQueryResult::BaseQueryResult(StatementType statement_type, StatementProperties properties_p,
                                  vector<LogicalType> types_p, vector<Identifier> names_p)
-    : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
+    : statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
       names(std::move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
-    : type(type), success(false), error(std::move(error)) {
+BaseQueryResult::BaseQueryResult(ErrorData error) : success(false), error(std::move(error)) {
 	// Assert that the error object is initialized
 	D_ASSERT(this->error.HasError());
+}
+
+BaseQueryResult::BaseQueryResult(StatementType statement_type)
+    : statement_type(statement_type), metadata_available(false), success(true) {
+}
+
+void BaseQueryResult::SetMetadata(StatementProperties properties_p, vector<LogicalType> types_p,
+                                  vector<Identifier> names_p) {
+	D_ASSERT(!metadata_available);
+	D_ASSERT(types_p.size() == names_p.size());
+	properties = std::move(properties_p);
+	types = std::move(types_p);
+	names = std::move(names_p);
+	metadata_available = true;
+}
+
+void BaseQueryResult::RequireMetadata() const {
+	// A result that failed reports the empty metadata of every failed result
+	if (!MetadataAvailable()) {
+		throw InvalidInputException("The metadata of this result is not available yet: the statement expands into "
+		                            "several, and the one that produces the result has not been bound");
+	}
+}
+
+bool BaseQueryResult::MetadataAvailable() const {
+	return metadata_available || !success;
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -35,6 +60,12 @@ BaseQueryResult::~BaseQueryResult() {
 void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	D_ASSERT(HasError());
 	error.Throw(prepended_message);
+}
+
+void BaseQueryResult::ThrowIfError(const string &prepended_message) const {
+	if (HasError()) {
+		error.Throw(prepended_message);
+	}
 }
 
 void BaseQueryResult::SetError(ErrorData error) {
@@ -65,11 +96,8 @@ const ErrorData &BaseQueryResult::GetErrorObject() const {
 }
 
 idx_t BaseQueryResult::ColumnCount() const {
+	RequireMetadata();
 	return types.size();
-}
-
-QueryResultType BaseQueryResult::GetResultType() const {
-	return type;
 }
 
 StatementType BaseQueryResult::GetStatementType() const {
@@ -77,39 +105,27 @@ StatementType BaseQueryResult::GetStatementType() const {
 }
 
 const StatementProperties &BaseQueryResult::GetStatementProperties() const {
+	RequireMetadata();
 	return properties;
 }
 
 const vector<LogicalType> &BaseQueryResult::GetTypes() const {
+	RequireMetadata();
 	return types;
 }
 
 const vector<Identifier> &BaseQueryResult::GetNames() const {
+	RequireMetadata();
 	return names;
 }
 
 //===--------------------------------------------------------------------===//
 // Construction
 //===--------------------------------------------------------------------===//
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), format(ChunkFormat::InMemory()) {
-	InitializeChunkFormatState();
-}
-
-QueryResult::QueryResult(QueryResultType type, ErrorData error)
-    : BaseQueryResult(type, std::move(error)),
-      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
-      format(ChunkFormat::InMemory()) {
-	InitializeChunkFormatState();
-}
-
 QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                          vector<LogicalType> types_p, ClientProperties client_properties_p,
                          shared_ptr<BufferedData> buffer_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement.statement_type, statement.properties,
-                      std::move(types_p), statement.names),
+    : BaseQueryResult(statement.statement_type, statement.properties, std::move(types_p), statement.names),
       client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)) {
 	if (buffer) {
 		format = buffer->SharedFormat();
@@ -120,10 +136,38 @@ QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementD
 	}
 }
 
+QueryResult::QueryResult(shared_ptr<ClientContext> context_p, StatementType statement_type,
+                         shared_ptr<ResultFormat> format_p, ClientProperties client_properties_p)
+    : BaseQueryResult(statement_type), client_properties(std::move(client_properties_p)), context(std::move(context_p)),
+      format(std::move(format_p)) {
+	if (!format) {
+		format = ChunkFormat::InMemory();
+	}
+	// The state of a result without columns, which a failure leaves in place; the statement producing the result
+	// replaces it
+	ResultFormatContext format_context {vector<LogicalType>(), vector<Identifier>(), client_properties,
+	                                    ResultOrdering::UNORDERED};
+	format_state = format->InitGlobal(format_context);
+}
+
+void QueryResult::AdoptResultStatement(StatementProperties properties, PreparedStatementData &statement,
+                                       shared_ptr<BufferedData> buffer_p) {
+	D_ASSERT(!buffer && buffer_p);
+	SetMetadata(std::move(properties), statement.types, statement.names);
+	buffer = std::move(buffer_p);
+	format = buffer->SharedFormat();
+	format_state = buffer->SharedFormatState();
+}
+
+void QueryResult::AdoptRowlessResult(QueryResult &produced) {
+	SetMetadata(produced.GetStatementProperties(), produced.GetTypes(), produced.GetNames());
+	format_state = produced.format_state;
+	AdoptCollected(produced);
+}
+
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
                          unique_ptr<ColumnDataCollection> collection_p, ClientProperties client_properties_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
-                      collection_p->Types(), std::move(names_p)),
+    : BaseQueryResult(statement_type, std::move(properties), collection_p->Types(), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(ChunkFormat::InMemory()),
       collection(make_uniq<ChunkRetainedCollection>(std::move(collection_p))) {
 	InitializeChunkFormatState();
@@ -133,14 +177,17 @@ QueryResult::QueryResult(StatementType statement_type, StatementProperties prope
                          vector<Identifier> names_p, unique_ptr<RetainedResultCollection> collection_p,
                          shared_ptr<ResultFormat> format_p, shared_ptr<ResultFormatGlobalState> format_state_p,
                          ClientProperties client_properties_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), std::move(types_p),
-                      std::move(names_p)),
+    : BaseQueryResult(statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(std::move(format_p)),
       format_state(std::move(format_state_p)), collection(std::move(collection_p)) {
 	D_ASSERT(format && format_state && collection);
 }
 
-QueryResult::QueryResult(ErrorData error) : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)) {
+QueryResult::QueryResult(ErrorData error)
+    : BaseQueryResult(std::move(error)),
+      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
+      format(ChunkFormat::InMemory()) {
+	InitializeChunkFormatState();
 }
 
 QueryResult::~QueryResult() {
@@ -220,9 +267,8 @@ bool QueryResult::IsOpen() {
 
 QueryResultState QueryResult::Cancelled() {
 	if (!HasError()) {
-		SetError(ErrorData(ExceptionType::INTERRUPT,
-		                   "The execution of the query was cancelled before it could finish, likely caused by "
-		                   "executing a different query"));
+		SetError(
+		    ErrorData(ExceptionType::INTERRUPT, "The execution of the query was cancelled before it could finish"));
 	}
 	return QueryResultState::EXECUTION_ERROR;
 }
@@ -243,9 +289,21 @@ QueryResultState QueryResult::Poll() {
 }
 
 QueryResultState QueryResult::ExecuteTask() {
+	if (IsCollected()) {
+		// An earlier call ended the query: keep reporting the terminal state
+		return QueryResultState::FINISHED;
+	}
+	// Ending the query drops the handle's reference to the context, which the lock below outlives
+	auto keep_alive = context;
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
-	return context->ExecuteTaskInternal(*lock, *this);
+	auto state = context->ExecuteTaskInternal(*lock, *this);
+	// Only a statement that sank no row finishes undecided, since producers park until the decision. A statement
+	// that expands into several without returning rows never has a buffer
+	if (state == QueryResultState::FINISHED && (!buffer || buffer->Lifetime() != ResultLifetime::DRAINING)) {
+		return EndFinishedInternal(*lock);
+	}
+	return state;
 }
 
 void QueryResult::WaitForTask() {
@@ -266,9 +324,8 @@ void QueryResult::Close() {
 	if (context) {
 		auto lock = context->LockContext();
 		if (context->IsActiveResult(*lock, *this)) {
-			// Abandoned before the result was consumed: release the active-query state now (matching
-			// InitialCleanup) instead of leaking it until the next query or context teardown
-			context->CleanupInternal(*lock, this, false);
+			// No call ended the query, so it was abandoned and nothing it ran may be committed
+			context->AbortInternal(*lock);
 		}
 	}
 	context.reset();
@@ -300,6 +357,7 @@ const ResultFormatGlobalState &QueryResult::CheckedFormatState(const char *expec
 	if (!StringUtil::Equals(Format().Name(), expected)) {
 		ThrowFormatMismatch(expected);
 	}
+	RequireMetadata();
 	D_ASSERT(format_state);
 	return *format_state;
 }
@@ -331,8 +389,16 @@ void QueryResult::Materialize() {
 		context.reset();
 		return;
 	}
-	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
+	SettleRetainedInternal(*lock);
+}
+
+void QueryResult::SettleRetainedInternal(ClientContextLock &lock) {
+	if (buffer) {
+		buffer->Decide(ResultLifetime::RETAINED);
+		return;
+	}
+	// The statement that produces the result has not started: its buffer takes the decision when it is created
+	context->DecideResultLifetimeInternal(lock, ResultLifetime::RETAINED);
 }
 
 void QueryResult::Complete() {
@@ -354,23 +420,58 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		context.reset();
 		return;
 	}
-	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
-	QueryResultState state;
-	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
-		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
-			context->WaitForTask(lock, *this);
+	SettleRetainedInternal(lock);
+	try {
+		QueryResultState state;
+		while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
+			// NO_TASKS_AVAILABLE: the remaining tasks run on other threads. Wait (bounded, woken when a task
+			// completes) as RunToResultStatementInternal does, instead of spinning on the executor lock
+			if (state == QueryResultState::BLOCKED || state == QueryResultState::READY ||
+			    state == QueryResultState::NO_TASKS_AVAILABLE) {
+				context->WaitForTask(lock, *this);
+			}
 		}
+		if (state == QueryResultState::FINISHED) {
+			EndFinishedInternal(lock);
+		}
+	} catch (std::exception &ex) {
+		AbandonAfterThrowInternal(lock, ErrorData(ex));
+		throw;
+	} catch (...) { // LCOV_EXCL_START
+		AbandonAfterThrowInternal(lock, ErrorData("Unhandled exception while completing the query"));
+		throw;
+	} // LCOV_EXCL_STOP
+	context.reset();
+}
+
+void QueryResult::AbandonAfterThrowInternal(ClientContextLock &lock, ErrorData error) {
+	// the caller holds the context lock - clean up with it here, as closing this result would lock it again
+	try {
+		if (context->IsActiveResult(lock, *this)) {
+			if (!HasError()) {
+				// Ended as failed, so nothing the query ran is committed
+				SetError(std::move(error));
+			}
+			context->CleanupInternal(lock, this, true);
+		}
+	} catch (...) { // NOLINT
 	}
-	if (state == QueryResultState::FINISHED) {
-		auto produced = context->GetExecutor().GetResult();
-		// Cleanup can fail on an autocommit commit; it records the error on this result
-		context->CleanupInternal(lock, this, false);
-		if (!HasError()) {
+	context.reset();
+}
+
+QueryResultState QueryResult::EndFinishedInternal(ClientContextLock &lock) {
+	auto produced = context->TakeFinishedResultInternal(lock);
+	// Cleanup can fail on an autocommit commit; it records the error on this result
+	context->CleanupInternal(lock, this, false);
+	if (!HasError()) {
+		if (MetadataAvailable()) {
 			AdoptCollected(*produced);
+		} else {
+			AdoptRowlessResult(*produced);
 		}
 	}
 	context.reset();
+	return HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 }
 
 void QueryResult::ThrowNoCollection() const {
@@ -397,8 +498,15 @@ void QueryResult::EndQuery(ClientContextLock &lock, bool invalidate_transaction)
 }
 
 void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
+	if (!context || !context->IsActiveResult(lock, *this)) {
+		// The query already ended, so the failure is only recorded, unless an earlier one is
+		if (!HasError()) {
+			SetError(std::move(error));
+		}
+		return;
+	}
 	bool invalidate_query = true;
-	if (!context->ErrorInvalidatesTransaction(error.Type())) {
+	if (!context->ErrorInvalidatesQueryTransaction(error.Type())) {
 		// standard exceptions do not invalidate the current transaction
 		invalidate_query = false;
 	} else if (Exception::InvalidatesDatabase(error.Type())) {
@@ -411,7 +519,7 @@ void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
 	context->CleanupInternal(lock, this, invalidate_query);
 }
 
-unique_ptr<DataChunk> QueryResult::FetchInternal() {
+unique_ptr<DataChunk> QueryResult::FetchRaw() {
 	Complete();
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
@@ -425,14 +533,12 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 	return collection->Cast<ChunkRetainedCollection>().FetchRaw();
 }
 
-unique_ptr<DataChunk> QueryResult::FetchRaw() {
-	return FetchInternal();
-}
-
 //===--------------------------------------------------------------------===//
 // Rendering
 //===--------------------------------------------------------------------===//
 string QueryResult::ToString() {
+	// The metadata of a statement that expands into several is known once it runs
+	Complete();
 	if (HasError()) {
 		return GetError() + "\n";
 	}
@@ -457,6 +563,7 @@ string QueryResult::ToString() {
 }
 
 string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig &config) {
+	Complete();
 	if (HasError()) {
 		return GetError() + "\n";
 	}
@@ -469,6 +576,8 @@ string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig
 }
 
 bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_START
+	Complete();
+	other.Complete();
 	// first compare the success state of the results
 	if (HasError() != other.HasError()) {
 		return false;

@@ -80,6 +80,8 @@ public:
 	//! Returns nullopt if the catalog exists but has no default schema
 	DUCKDB_API optional<Identifier> GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
 	DUCKDB_API Identifier GetDefaultCatalog(const Identifier &schema) const;
+	//! Resolve a schema's catalog, falling back to the search-path default and then the default database.
+	DUCKDB_API Identifier ResolveCatalog(const Identifier &schema) const;
 
 	DUCKDB_API vector<Identifier> GetSchemasForCatalog(const Identifier &catalog) const;
 	DUCKDB_API vector<Identifier> GetCatalogsForSchema(const Identifier &schema) const;

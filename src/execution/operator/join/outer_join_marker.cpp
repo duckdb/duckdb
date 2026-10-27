@@ -112,10 +112,7 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 			for (idx_t i = 0; i < left_column_count; i++) {
 				ConstantVector::SetNull(result.data[i], count_t(result_count));
 			}
-			for (idx_t col_idx = left_column_count; col_idx < result.ColumnCount(); col_idx++) {
-				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
-				                           result_count);
-			}
+			result.Slice(lstate.scan_chunk, lstate.match_sel, result_count, left_column_count);
 		}
 		gstate.rows_scanned.fetch_add(lstate.scan_chunk.size(), std::memory_order_relaxed);
 		if (result_count > 0) {

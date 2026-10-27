@@ -6,6 +6,8 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -31,18 +33,24 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 
 	auto &log_manager = context.db->GetLogManager();
 
-	// Apply the config generated from the input
-	log_manager.SetConfig(*context.db, bind_data.config);
+	// Apply the config generated from the input - restoring the previous config if that fails part-way
+	auto previous_config = log_manager.GetConfig();
+	try {
+		log_manager.SetConfig(*context.db, bind_data.config);
 
-	if (bind_data.log_types_to_set.empty()) {
-		log_manager.SetEnableLogging(true);
-		log_manager.SetLogMode(LogMode::LEVEL_ONLY);
-	} else {
-		log_manager.SetEnableStructuredLoggers(bind_data.log_types_to_set);
-	}
+		if (bind_data.log_types_to_set.empty()) {
+			log_manager.SetEnableLogging(true);
+			log_manager.SetLogMode(LogMode::LEVEL_ONLY);
+		} else {
+			log_manager.SetEnableStructuredLoggers(bind_data.log_types_to_set);
+		}
 
-	if (!bind_data.storage_config.empty()) {
-		log_manager.UpdateLogStorageConfig(*context.db, bind_data.storage_config);
+		if (!bind_data.storage_config.empty()) {
+			log_manager.UpdateLogStorageConfig(*context.db, bind_data.storage_config);
+		}
+	} catch (...) {
+		log_manager.SetConfig(*context.db, previous_config);
+		throw;
 	}
 }
 
@@ -61,6 +69,13 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	if (input.inputs.size() > 1) {
 		throw InvalidInputException("EnableLogging: expected 0 or 1 parameter");
 	}
+
+	auto &config = DBConfig::GetConfig(context);
+	config.CheckLock(EnableLogging::Name);
+	config.CheckLock(EnabledLogTypes::Name);
+	config.CheckLock(LoggingLevel::Name);
+	config.CheckLock(LoggingMode::Name);
+	config.CheckLock(LoggingStorage::Name);
 
 	auto result = make_uniq<EnableLoggingBindData>();
 
@@ -140,6 +155,10 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 
 	for (const auto &log_type : result->log_types_to_set) {
 		TryAutoloadLogTypeExtension(context, log_type);
+		// verify the log types before changing any of the logging settings
+		if (!context.db->GetLogManager().LookupLogType(log_type)) {
+			throw InvalidInputException("Unknown log type: '%s'", log_type);
+		}
 	}
 
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -160,6 +179,7 @@ static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataC
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
+	DBConfig::GetConfig(context).CheckLock(EnableLogging::Name);
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 

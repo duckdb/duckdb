@@ -208,17 +208,6 @@
         "default_value": "true"
     },
     {
-        "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": [
-            "get",
-            "set",
-            "reset"
-        ]
-    },
-    {
         "name": "cache_local_files",
         "description": "Whether the external file cache also caches local files. Remote files are always cached.",
         "type": "BOOLEAN",
@@ -294,6 +283,14 @@
         ]
     },
     {
+        "name": "debug_abort_on_wal_failure",
+        "description": "Whether or not to abort if a serialization exception is thrown during WAL playback.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "internal_setting": "abort_on_wal_failure",
+        "is_debug": true
+    },
+    {
         "name": "debug_asof_iejoin",
         "description": "Force the use of an IEJoin to implement ASOF joins.",
         "type": "BOOLEAN",
@@ -360,6 +357,14 @@
         "description": "Set a time for the eviction queue to sleep before acquiring the shared ownership of some block memory.",
         "type": "UBIGINT",
         "scope": "global",
+        "default_value": "0",
+        "is_debug": true
+    },
+    {
+        "name": "debug_file_descriptor_limit",
+        "description": "Override the file descriptor limit that bounds how many files a scan opens ahead. 0 uses the limit of the process.",
+        "type": "UBIGINT",
+        "default_scope": "local",
         "default_value": "0",
         "is_debug": true
     },
@@ -450,6 +455,14 @@
             "force_variant_shredding"
         ],
         "struct": "ForceVariantShredding"
+    },
+    {
+        "name": "debug_force_wal_fsync_failure",
+        "description": "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
     },
     {
         "name": "debug_local_file_system_delay_ms",
@@ -568,6 +581,14 @@
         "type": "ENUM<DebugVectorVerification>",
         "default_scope": "global",
         "default_value": "NONE",
+        "is_debug": true
+    },
+    {
+        "name": "debug_wal_fsync_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
         "is_debug": true
     },
     {
@@ -715,6 +736,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_block_allocator",
+        "description": "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling preserves existing allocations and the virtual memory reservation.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_external_access",
@@ -898,7 +926,7 @@
         "name": "external_file_cache_local_max_block_size",
         "description": "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "16384",
         "custom_implementation": [
             "set"
@@ -911,7 +939,7 @@
         "name": "external_file_cache_remote_max_block_size",
         "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "2097152",
         "custom_implementation": [
             "set"
@@ -924,7 +952,7 @@
         "name": "external_file_cache_remote_min_block_size",
         "description": "Reads of remote files are rounded out to aligned blocks of this size, so tiny reads do not each cost a request.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "4096",
         "custom_implementation": [
             "set"
@@ -932,6 +960,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "external_file_cache_request_sizing",
+        "description": "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are always exact.",
+        "type": "ENUM<ExternalFileCacheRequestSizing>",
+        "scope": "global",
+        "default_value": "AUTO"
     },
     {
         "name": "external_file_cache_spill",
@@ -1170,6 +1205,13 @@
         "custom_implementation": true
     },
     {
+        "name": "match_recognize_max_states",
+        "description": "The maximum number of pattern states MATCH_RECOGNIZE explores for a single match, before it refuses the pattern (0 = no limit). A match is never refused below what matching the pattern without backtracking would take.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "1000000"
+    },
+    {
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit).",
         "type": "BIGINT",
@@ -1195,7 +1237,7 @@
     },
     {
         "name": "max_streaming_buffer_size",
-        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold one more unit, in construction or finished and waiting.",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold, beyond the queue, the units it is still building or handing over from its current chunk.",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true,
@@ -1401,6 +1443,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "redact_http_logs",
+        "description": "Redact HTTP header values in logs unless their names are explicitly allowed.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true"
     },
     {
         "name": "regex_match_operator_semantics",

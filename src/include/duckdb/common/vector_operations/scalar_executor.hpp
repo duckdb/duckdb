@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -126,6 +127,8 @@ private:
 		return result;
 	}
 
+	//! Makes a reused result ready for the one-row generic path: like the constant path, a stale NULL does not survive
+	DUCKDB_API static void PrepareConstantResult(Vector &result);
 	DUCKDB_API static bool PrepareGenericResultValidity(const UnifiedVectorFormat *formats, idx_t format_count,
 	                                                    Vector &result, idx_t count, bool preserve_result_validity,
 	                                                    bool adds_nulls);
@@ -187,6 +190,7 @@ private:
 		}
 	}
 
+#if !DUCKDB_SMALLER_BINARY(scalar_executor_constant)
 	template <class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteConstant(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                            bool input_is_null, ADAPTER &adapter, std::index_sequence<Is...>) {
@@ -203,6 +207,7 @@ private:
 		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 		result_data[0] = adapter.Operation(result_validity, 0, *ConstantVector::GetData<ARGS>(inputs[Is].get())...);
 	}
+#endif
 
 	template <idx_t INPUT_INDEX, uint64_t SELECTION_MASK>
 	static inline idx_t GenericInputIndex(const std::array<const sel_t *, 2> &selections, idx_t row) {
@@ -260,7 +265,7 @@ private:
 			                                result_validity, adapter);
 			return;
 		default:
-			throw InternalException("Invalid nullable generic scalar executor selection profile");
+			InternalException::Throw("Invalid nullable generic scalar executor selection profile");
 		}
 	}
 
@@ -322,7 +327,7 @@ private:
 			                              adapter);
 			return;
 		default:
-			throw InternalException("Invalid non-null generic scalar executor selection profile");
+			InternalException::Throw("Invalid non-null generic scalar executor selection profile");
 		}
 	}
 
@@ -378,8 +383,20 @@ private:
 		static_assert(N > 0, "ScalarExecutor requires at least one input");
 		auto profile = GetInputProfile(inputs, indices);
 		if (profile.all_constant) {
+#if !DUCKDB_SMALLER_BINARY(scalar_executor_constant)
 			ExecuteConstant<RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count, profile.any_constant_null, adapter,
 			                                               indices);
+#else
+			// the generic path computes the one row, which then becomes the constant
+			PrepareConstantResult(result);
+			ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS,
+			               POLICY::SPECIALIZE_NON_NULL_GENERIC_SELECTIONS, POLICY::PRESERVE_RESULT_VALIDITY,
+			               RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, 1, adapter, indices);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
+#endif
 			return;
 		}
 		if constexpr (POLICY::SPECIALIZE_FLAT && N <= 3) {
@@ -440,7 +457,7 @@ private:
 					}
 					break;
 				default:
-					throw InternalException("Invalid flat/constant scalar executor profile");
+					InternalException::Throw("Invalid flat/constant scalar executor profile");
 				}
 			}
 		}
@@ -843,7 +860,7 @@ public:
 	static idx_t Select(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
 		if (!true_sel && !false_sel) {
-			throw InternalException("Either true or false sel must be set");
+			InternalException::Throw("Either true or false sel must be set");
 		}
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();

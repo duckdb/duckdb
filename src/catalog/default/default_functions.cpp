@@ -1,6 +1,5 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -228,16 +227,11 @@ static const DefaultMacro internal_macros[] = {
     {nullptr, nullptr, nullptr}};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
-	return CreateInternalMacroInfo(default_macro, ParserOptions());
-}
-
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
-                                                                              const ParserOptions &options) {
+	auto parser = Parser::GetBuiltinParser();
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
 	auto sql = StringUtil::Format("CREATE MACRO __dummy__%s", default_macro.macro_definition);
-	Parser parser(options);
 	parser.ParseQuery(sql);
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
@@ -265,13 +259,12 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 	return macro.schema == schema && macro.name == name;
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-                                                         const ParserOptions &options) {
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index], options);
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
 		}
 	}
 	return nullptr;
@@ -283,9 +276,7 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const Identifier &entry_name) {
-	ParserOptions options;
-	options.compiled_grammar = CompiledGrammar::Get(context);
-	auto info = GetDefaultFunction(schema.name, entry_name, options);
+	auto info = GetDefaultFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}
