@@ -112,7 +112,7 @@ private:
 	IndexPointer GetDeletedPointer() const;
 	IndexPointer GetInitializedInsertedPointer();
 	IndexPointer GetInitializedDeletedPointer();
-	//! Frees the per-row delete ids and the mask (if any) - all rows get constant_delete_id
+	//! Frees the per-row delete ids (if any)
 	void FreeDeleteData();
 	//! ARRAY -> MASKED: record alive rows as invalid bits, free the per-row delete array. mask_id is the
 	//! shared committed id of the deleted rows (0 when they are already visible to all transactions)
@@ -121,14 +121,8 @@ private:
 	void DecompressDeleteMask();
 	//! The delete id or update marker of a row of a vector without per-row ids
 	transaction_t GetDeleteId(idx_t row) const;
-	//! Whether writing new_id into the rows (ids[i] - offset) conflicts with a delete or update of another transaction
-	bool HasConflictingWrite(TransactionData transaction, transaction_t new_id, const row_t ids[], idx_t count,
-	                         row_t offset) const;
 	//! Whether the rows (0, 1, ..., count - 1 if rows is nullptr) are all rows outside of the mask
 	bool RowsAreAllOutsideMask(const uint16_t rows[], idx_t count) const;
-	//! Allocates per-row delete ids, set to row_id(row)
-	template <class F>
-	IndexPointer NewDeletedData(F &&row_id);
 	//! Gives the rows (0, 1, ..., count - 1 if rows is nullptr) the id, if the vector needs no per-row ids for it
 	bool AssignId(const uint16_t rows[], idx_t count, transaction_t id);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one

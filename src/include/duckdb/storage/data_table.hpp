@@ -173,7 +173,7 @@ public:
 	//! 0 (first column of table)
 	//! -> 1 (second subcolumn of struct)
 	//! -> 0 (first subcolumn of INT)
-	//! This method should only be used from the WAL replay. It does not verify update constraints or detect conflicts.
+	//! This method should only be used from the WAL replay. It does not verify update constraints.
 	void UpdateColumn(DuckTableEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 

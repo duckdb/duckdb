@@ -41,9 +41,6 @@ struct DeleteInfo {
 		}
 		return rows;
 	}
-	const transaction_t *GetPreviousIds() const {
-		return reinterpret_cast<const transaction_t *>(GetPreviousIdsAddress());
-	}
 	transaction_t *GetPreviousIds() {
 		return reinterpret_cast<transaction_t *>(GetPreviousIdsAddress());
 	}
