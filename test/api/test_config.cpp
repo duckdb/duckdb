@@ -332,6 +332,10 @@ TEST_CASE("Test warnings_as_errors in the startup config", "[api]") {
 	REQUIRE_NOTHROW(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(false)));
 	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(true)),
 	                    Catch::Contains("startup config"));
+	// string values, as the C API passes them
+	REQUIRE_NOTHROW(config.SetOptionByName("warnings_as_errors", Value("false")));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value("true")), Catch::Contains("startup config"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value()), Catch::Contains("cannot be NULL"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	auto result = con.Query("SELECT current_setting('warnings_as_errors')");
