@@ -821,8 +821,8 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 
 		auto first_aggregate = GetBuiltinAggregateFunction(binder.context, FirstFun::Name, {col.type});
 		FunctionBinder function_binder(binder.context);
-		auto first_fun = function_binder.BindAggregateFunction(std::move(first_aggregate), std::move(aggr_children),
-		                                                       nullptr, AggregateType::NON_DISTINCT);
+		auto first_fun = function_binder.BindAggregateFunction(first_aggregate, std::move(aggr_children), nullptr,
+		                                                       AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }

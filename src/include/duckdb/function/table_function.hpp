@@ -586,6 +586,10 @@ public:
 //! A table function as it is registered in the catalog: its behaviour, plus the signature declaring what it accepts
 class TableFunction : public BaseTableFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	static constexpr const FunctionKind KIND = FunctionKind::TABLE;
+	FunctionKind GetKind() const override {
+		return KIND;
+	}
 	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
