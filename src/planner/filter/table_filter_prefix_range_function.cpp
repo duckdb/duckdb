@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/ht_entry.hpp"
@@ -34,9 +34,9 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 
@@ -92,8 +92,7 @@ public:
 		const auto word_idx = bit_idx >> WORD_SHIFT;
 		const auto mask = 1ULL << (bit_idx & WORD_MASK);
 		if (PARALLEL) {
-			// Shared build lanes are published only after every finalize task
-			// completes.
+			// Shared build lanes are published only after every finalize task completes.
 			auto &slot = *reinterpret_cast<atomic<uint64_t> *>(&state_bitmap[word_idx]);
 			slot.fetch_or(mask, std::memory_order_relaxed);
 		} else {
@@ -105,8 +104,7 @@ public:
 	void InsertKeys(Vector &keys, uint64_t *state_bitmap) const {
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U y = CONVERTER::Convert(entry.GetValue()) - min;
-			// All keys are in-range by construction, so the range check can be
-			// omitted here.
+			// All keys are in-range by construction, so the range check can be omitted here.
 			const U idx = y >> shift;
 			SetBit<PARALLEL>(state_bitmap, UnsafeNumericCast<idx_t>(idx));
 		}
@@ -309,8 +307,8 @@ public:
 		const idx_t lb_bit_off = UnsafeNumericCast<idx_t>(lb_bit_idx & UnsafeNumericCast<U>(WORD_MASK));
 		const idx_t ub_bit_off = UnsafeNumericCast<idx_t>(ub_bit_idx & UnsafeNumericCast<U>(WORD_MASK));
 
-		// TODO: Count the amount of 1's in the range, compare to a threshold, and
-		// make a decision if we want to use the per-row filter for this row group.
+		// TODO: Count the amount of 1's in the range, compare to a threshold, and make a decision if we want to use the
+		// per-row filter for this row group.
 		if (lb_word_idx == ub_word_idx) {
 			const auto range_mask = ((~0ULL << lb_bit_off) & (~0ULL >> (WORD_MASK - ub_bit_off)));
 			if (bitmap[lb_word_idx] & range_mask) {
@@ -394,8 +392,7 @@ uint32_t StringMaxComparable(const Value &value) {
 		return max_string.GetPrefixIntegerComparable();
 	}
 
-	// Pad string prefix with 0xFF to keep correctness if max is truncated at \0
-	// char, e.g., ab\0c -> ab
+	// Pad string prefix with 0xFF to keep correctness if max is truncated at \0 char, e.g., ab\0c -> ab
 	array<char, string_t::PREFIX_BYTES> padded_prefix;
 	padded_prefix.fill(char(0xFF));
 	for (idx_t i = 0; i < max_string.GetSize(); i++) {
@@ -804,9 +801,8 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		// String stats may contain raw parquet bytes that are not valid UTF-8.
-		// Reconstruct them as BLOBs so the prefix-range comparable logic can
-		// inspect the raw bytes without value-construction validation.
+		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
+		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
 		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(stats)),
 		                                Value::BLOB_RAW(StringStats::Max(stats)));
 	}
