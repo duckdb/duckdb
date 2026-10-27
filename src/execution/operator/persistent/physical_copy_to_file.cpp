@@ -2788,9 +2788,8 @@ unique_ptr<SortStrategyInput> IntegerPartitionInput::CreateOverflowInput(ClientC
 	vector<unique_ptr<Expression>> partition_bys;
 	partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[key_col], key_col));
 	vector<unique_ptr<BaseStatistics>> no_stats;
-	OperatorPartitionInfo unpartitioned_info;
-	auto strategy = SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, no_stats,
-	                                      unpartitioned_info, count);
+	auto strategy =
+	    SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, no_stats, count);
 	return make_uniq<SortStrategyInput>(partitioned_copy, std::move(strategy));
 }
 
