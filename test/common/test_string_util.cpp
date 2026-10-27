@@ -583,6 +583,20 @@ TEST_CASE("Test CIHash is independent of char signedness", "[string_util]") {
 	REQUIRE(StringUtil::CIHash("hello") == StringUtil::CIHash("HeLLo"));
 }
 
+TEST_CASE("Test Damerau-Levenshtein distance", "[string_util]") {
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("", "") == 0);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("", "abc") == 3);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("from", "FROM") == 0);
+	// a swap of adjacent characters is a single edit, unlike plain Levenshtein
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("form", "from") == 1);
+	REQUIRE(StringUtil::LevenshteinDistance("form", "from") == 2);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("gruop", "group") == 1);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("whre", "where") == 1);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("tabel", "table") == 1);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("alias", "all") == 3);
+	REQUIRE(StringUtil::DamerauLevenshteinDistance("int8_tbl", "int") == 5);
+}
+
 TEST_CASE("Test CILessThan handles embedded NUL bytes", "[string_util]") {
 	const string secret("secret");
 	const string secret_nul("secret\0other", 12);

@@ -3,7 +3,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
-#include "json_structure.hpp"
+#include "json_schema_inference.hpp"
 
 namespace duckdb {
 

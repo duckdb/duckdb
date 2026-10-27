@@ -47,3 +47,4 @@ benchmark/micro/update/upsert_select_cast_key.benchmark
 benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/aggregate/min_double.benchmark
 benchmark/micro/aggregate/max_double.benchmark
+benchmark/micro/pushdown/view_filter_below_delim_join.benchmark
