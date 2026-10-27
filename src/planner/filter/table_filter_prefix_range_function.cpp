@@ -152,7 +152,7 @@ public:
 		if (dense) {
 			return LookupDense<T, CONVERTER>(key_entries, SelectionVector(), result_sel, count);
 		}
-		if (word_count * sizeof(uint64_t) >= PREFETCH_MIN_BYTES) {
+		if (count >= PREFETCH_MIN_COUNT && ShouldPrefetch<T, CONVERTER>(key_entries, SelectionVector(), count)) {
 			return LookupPrefetched<T, CONVERTER>(key_entries, SelectionVector(), result_sel, count);
 		}
 		idx_t found_count = 0;
@@ -180,7 +180,7 @@ public:
 		if (dense) {
 			return LookupDense<T, CONVERTER>(key_entries, sel, result_sel, count);
 		}
-		if (word_count * sizeof(uint64_t) >= PREFETCH_MIN_BYTES) {
+		if (count >= PREFETCH_MIN_COUNT && ShouldPrefetch<T, CONVERTER>(key_entries, sel, count)) {
 			return LookupPrefetched<T, CONVERTER>(key_entries, sel, result_sel, count);
 		}
 		idx_t found_count = 0;
@@ -200,6 +200,33 @@ public:
 			found_count += bit & in_range;
 		}
 		return found_count;
+	}
+
+	template <typename T, typename CONVERTER>
+	bool ShouldPrefetch(const VectorIterator<T> &keys, const SelectionVector &sel, idx_t count) const {
+		if (word_count * sizeof(uint64_t) < PREFETCH_MIN_BYTES) {
+			return false;
+		}
+		const auto step = MaxValue<idx_t>(count / 16, 1);
+		idx_t min_word = word_count;
+		idx_t max_word = 0;
+		for (idx_t i = 0; i < count; i += step) {
+			const auto entry = keys[sel.get_index(i)];
+			if (!entry.IsValid()) {
+				continue;
+			}
+			const U y = CONVERTER::Convert(entry.GetValue()) - min;
+			if (y > span) {
+				continue;
+			}
+			const auto word_idx = UnsafeNumericCast<idx_t>((y >> shift) >> WORD_SHIFT);
+			min_word = MinValue(min_word, word_idx);
+			max_word = MaxValue(max_word, word_idx);
+			if (max_word - min_word >= PREFETCH_MIN_BYTES / sizeof(uint64_t)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	template <bool HAS_NULL, typename T, typename CONVERTER>
@@ -324,6 +351,7 @@ public:
 private:
 	// Staging only pays off once bitmap loads are expensive enough.
 	static constexpr idx_t PREFETCH_MIN_BYTES = 1024 * 1024;
+	static constexpr idx_t PREFETCH_MIN_COUNT = 128;
 	static constexpr idx_t WORD_SHIFT = 6;
 	static constexpr idx_t WORD_MASK = 63;
 
