@@ -2,6 +2,7 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/entry_scan_filters.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
@@ -82,6 +83,17 @@ string SchemaCatalogEntry::GetSchemaName() const {
 void SchemaCatalogEntry::Scan(CatalogTransaction transaction, CatalogType type,
                               const std::function<void(CatalogEntry &)> &callback) {
 	Scan(transaction.GetContext(), type, callback);
+}
+
+vector<reference<CatalogEntry>> SchemaCatalogEntry::GetEntriesForScan(ClientContext &context, CatalogType type,
+                                                                      const EntryScanFilters &filters) {
+	vector<reference<CatalogEntry>> entries;
+	Scan(context, type, [&](CatalogEntry &entry) {
+		if (filters.Accepts(context, entry)) {
+			entries.push_back(entry);
+		}
+	});
+	return entries;
 }
 
 template <class SCAN>
