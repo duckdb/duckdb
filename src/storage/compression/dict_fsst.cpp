@@ -213,25 +213,31 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
 		SelectionVector new_sel(sel_count);
 		idx_t approved_tuple_count = 0;
-		for (idx_t idx = 0; idx < sel_count; idx++) {
-			auto row_idx = sel.get_index(idx);
-			D_ASSERT(row_idx < vector_count);
-			auto dict_offset = dict_sel.get_index(row_idx);
-			// Evaluate NULL only when slot zero is referenced by an actual row.
-			if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
-				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
-				SelectionVector null_sel;
-				idx_t null_filter_count = 1;
-				ColumnSegment::FilterSelection(null_sel, null_data, filter_state, 1, null_filter_count);
-				scan_state.filter_result[0] = null_filter_count == 1;
-				scan_state.null_filter_result_initialized = true;
+		if (!sel.IsSet() && (scan_state.null_filter_result_initialized || !segment.GetStats().CanHaveNull())) {
+			approved_tuple_count =
+			    SelectionVector::SelectFromBoolean(scan_state.filter_result.get(), &dict_sel, sel_count,
+			                                       array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
+		} else {
+			for (idx_t idx = 0; idx < sel_count; idx++) {
+				auto row_idx = sel.get_index(idx);
+				D_ASSERT(row_idx < vector_count);
+				auto dict_offset = dict_sel.get_index(row_idx);
+				// Evaluate NULL only when slot zero is referenced by an actual row.
+				if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
+					Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
+					SelectionVector null_sel;
+					idx_t null_filter_count = 1;
+					ColumnSegment::FilterSelection(null_sel, null_data, filter_state, 1, null_filter_count);
+					scan_state.filter_result[0] = null_filter_count == 1;
+					scan_state.null_filter_result_initialized = true;
+				}
+				// Check filter result for the value at the offset and assign selection vector.
+				if (!scan_state.filter_result[dict_offset]) {
+					// does not pass the filter
+					continue;
+				}
+				new_sel.set_index(approved_tuple_count++, row_idx);
 			}
-			// Check filter result for the value at the offset and assign selection vector.
-			if (!scan_state.filter_result[dict_offset]) {
-				// does not pass the filter
-				continue;
-			}
-			new_sel.set_index(approved_tuple_count++, row_idx);
 		}
 		if (approved_tuple_count < vector_count) {
 			sel.Initialize(new_sel);
