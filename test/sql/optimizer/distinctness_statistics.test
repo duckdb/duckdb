@@ -207,3 +207,24 @@ EXECUTE rewritten_distinct;
 3	true	false
 4	false	true
 5	false	true
+
+# NULL extension invalidates input non-NULL proofs for comparisons above the join.
+statement ok
+CREATE TABLE preserved(id INTEGER);
+
+statement ok
+INSERT INTO preserved VALUES (1), (2);
+
+statement ok
+CREATE TABLE optional(id INTEGER, a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO optional VALUES (1, 10, 10);
+
+query III
+SELECT p.id, o.a IS NOT DISTINCT FROM o.b, o.a IS DISTINCT FROM o.b
+FROM preserved p LEFT JOIN optional o USING (id)
+ORDER BY p.id;
+----
+1	true	false
+2	true	false
