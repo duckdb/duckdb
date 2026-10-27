@@ -155,8 +155,8 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 					valid_columns = false;
 					break;
 				}
-				auto &source_distinct = source_stats->columns[source_col].distinct_count;
-				auto &target_distinct = target_stats->columns[target_col].distinct_count;
+				auto &source_distinct = source_stats->columns[source_col].total_domain;
+				auto &target_distinct = target_stats->columns[target_col].total_domain;
 				if (target_distinct.source == DistinctCountSource::CARDINALITY || target_distinct.distinct_count == 0) {
 					continue;
 				}
@@ -211,8 +211,9 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 		auto stats = *target_stats;
 		stats.cardinality = LossyNumericCast<idx_t>(std::ceil(static_cast<double>(stats.cardinality) * best_fraction));
 		for (auto &column : stats.columns) {
-			column.distinct_count.distinct_count = MinValue(column.distinct_count.distinct_count, stats.cardinality);
+			column.total_domain.distinct_count = MinValue(column.total_domain.distinct_count, stats.cardinality);
 		}
+		stats.CapCurrentDomainsToCardinality();
 		restricted_stats.emplace(target, std::move(stats));
 		join->children.push_back(std::move(cte.children[0]));
 		join->children.push_back(std::move(source_plan));

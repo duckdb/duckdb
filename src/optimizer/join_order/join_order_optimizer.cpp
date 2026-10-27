@@ -35,7 +35,7 @@ static optional<RelationStats> CombineReorderableStats(const vector<ColumnBindin
 		if (!source) {
 			return {};
 		}
-		result.columns.emplace_back(binding, source->distinct_count, source->name);
+		result.columns.emplace_back(binding, source->total_domain, source->current_domain, source->name);
 	}
 	result.Verify(bindings);
 	return result;

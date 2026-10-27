@@ -76,6 +76,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractProjectionStats(Logical
 		auto &expression = *projection.expressions[expression_idx];
 		auto expression_binding = GetChildColumnBinding(expression);
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);
+		SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence;
 		if (expression_binding.expression_is_constant) {
 			distinct_count = DistinctCount(MinValue<idx_t>(result.cardinality, 1), DistinctCountSource::EXACT);
 		} else if (expression_binding.FoundColumnRef()) {
@@ -83,9 +84,18 @@ optional<RelationStats> RelationStatisticsHelper::ExtractProjectionStats(Logical
 			if (!child_column) {
 				return {};
 			}
-			distinct_count = child_column->distinct_count;
+			distinct_count = child_column->total_domain;
 		}
-		result.columns.emplace_back(bindings[expression_idx], distinct_count, Identifier(expression.GetName()));
+		auto current_domain = distinct_count;
+		if (expression_binding.FoundColumnRef()) {
+			auto child_column = child_columns.Find(expression_binding.child_binding);
+			current_domain = child_column->current_domain;
+			if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
+			}
+		}
+		result.columns.emplace_back(bindings[expression_idx], distinct_count, current_domain,
+		                            Identifier(expression.GetName()), semi_anti_join_domain_evidence);
 	}
 	result.Verify(bindings);
 	return result;
@@ -122,7 +132,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 			if (!column) {
 				return {};
 			}
-			auto count = column->distinct_count;
+			auto count = column->total_domain;
 			count.distinct_count = MaxValue<idx_t>(count.distinct_count, 1);
 			set_counts.push_back(count);
 		}
@@ -140,14 +150,21 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 	for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
 		auto &group = *aggregate.groups[group_idx];
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);
+		SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence;
 		if (group.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			auto child_column = child_columns.Find(group.Cast<BoundColumnRefExpression>().Binding());
 			if (!child_column) {
 				return {};
 			}
-			distinct_count = child_column->distinct_count;
+			distinct_count = child_column->total_domain;
+			semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
 		}
-		result.columns.emplace_back(bindings[result.columns.size()], distinct_count, Identifier(group.GetName()));
+		auto current_domain = distinct_count;
+		if (group.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			current_domain = child_columns.Find(group.Cast<BoundColumnRefExpression>().Binding())->current_domain;
+		}
+		result.columns.emplace_back(bindings[result.columns.size()], distinct_count, current_domain,
+		                            Identifier(group.GetName()), semi_anti_join_domain_evidence);
 	}
 	for (auto &expression : aggregate.expressions) {
 		result.columns.emplace_back(bindings[result.columns.size()],
@@ -160,6 +177,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 		                            DistinctCount(grouping_count, DistinctCountSource::CARDINALITY),
 		                            Identifier("grouping"));
 	}
+	result.CapCurrentDomainsToCardinality();
 	result.Verify(bindings);
 	return result;
 }
@@ -174,7 +192,8 @@ optional<RelationStats> RelationStatisticsHelper::ExtractWindowStats(LogicalWind
 	for (auto &binding : window.GetColumnBindings()) {
 		auto child_column = child_columns.Find(binding);
 		if (child_column) {
-			result.columns.emplace_back(binding, child_column->distinct_count, child_column->name);
+			result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
+			                            child_column->name, child_column->semi_anti_join_domain_evidence);
 		} else if (binding.table_index == window.window_index) {
 			result.columns.emplace_back(binding, DistinctCount(result.cardinality, DistinctCountSource::CARDINALITY),
 			                            Identifier("window"));
@@ -191,11 +210,11 @@ static optional<DistinctCount> GetDistinctTargetCount(Expression &target, const 
 	switch (target.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		auto column = child_columns.Find(target.Cast<BoundColumnRefExpression>().Binding());
-		return column ? optional<DistinctCount>(column->distinct_count) : optional<DistinctCount>();
+		return column ? optional<DistinctCount>(column->total_domain) : optional<DistinctCount>();
 	}
 	case ExpressionClass::BOUND_REF: {
 		auto index = target.Cast<BoundReferenceExpression>().Index();
-		return index < child_stats.columns.size() ? optional<DistinctCount>(child_stats.columns[index].distinct_count)
+		return index < child_stats.columns.size() ? optional<DistinctCount>(child_stats.columns[index].total_domain)
 		                                          : optional<DistinctCount>();
 	}
 	case ExpressionClass::BOUND_CONSTANT:
@@ -214,7 +233,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractDistinctStats(LogicalDi
 	vector<DistinctCount> distinct_counts;
 	if (distinct.distinct_targets.empty()) {
 		for (auto &column : child_stats.columns) {
-			distinct_counts.push_back(column.distinct_count);
+			distinct_counts.push_back(column.total_domain);
 		}
 	} else {
 		RelationColumnStatsLookup child_columns(child_stats);
@@ -228,8 +247,9 @@ optional<RelationStats> RelationStatisticsHelper::ExtractDistinctStats(LogicalDi
 	}
 	result->cardinality = EstimateDistinctCardinality(distinct_counts, child_stats.cardinality);
 	for (auto &column : result->columns) {
-		column.distinct_count.distinct_count = MinValue(column.distinct_count.distinct_count, result->cardinality);
+		column.total_domain.distinct_count = MinValue(column.total_domain.distinct_count, result->cardinality);
 	}
+	result->CapCurrentDomainsToCardinality();
 	return result;
 }
 
@@ -252,7 +272,7 @@ optional<RelationStats> RelationStatisticsHelper::ProjectOutputStats(const Relat
 	}
 	RelationStats result;
 	result.cardinality = stats.cardinality;
-	result.filter_strength = stats.filter_strength;
+	result.row_retention = stats.row_retention;
 	result.stats_initialized = true;
 	result.table_name = stats.table_name;
 	RelationColumnStatsLookup lookup(stats);

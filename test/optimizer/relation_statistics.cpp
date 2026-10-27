@@ -86,10 +86,10 @@ TEST_CASE("Relation statistics follow projection output bindings", "[optimizer][
 	REQUIRE(stats);
 	auto output_bindings = projection.GetColumnBindings();
 	REQUIRE(stats->MatchesBindings(output_bindings));
-	REQUIRE(stats->columns[0].distinct_count.distinct_count == 13);
-	REQUIRE(stats->columns[1].distinct_count.distinct_count == 1);
-	REQUIRE(stats->columns[1].distinct_count.source == DistinctCountSource::EXACT);
-	REQUIRE(stats->columns[2].distinct_count.distinct_count == 7);
+	REQUIRE(stats->columns[0].total_domain.distinct_count == 13);
+	REQUIRE(stats->columns[1].total_domain.distinct_count == 1);
+	REQUIRE(stats->columns[1].total_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(stats->columns[2].total_domain.distinct_count == 7);
 }
 
 TEST_CASE("Aggregate group and result statistics use distinct bindings", "[optimizer][relation_statistics]") {
@@ -111,7 +111,7 @@ TEST_CASE("Aggregate group and result statistics use distinct bindings", "[optim
 	REQUIRE(stats->MatchesBindings(output_bindings));
 	REQUIRE(stats->columns.size() == 2);
 	REQUIRE(stats->columns[0].binding == ColumnBinding(TableIndex(20), ProjectionIndex(0)));
-	REQUIRE(stats->columns[0].distinct_count.distinct_count == 17);
+	REQUIRE(stats->columns[0].total_domain.distinct_count == 17);
 	REQUIRE(stats->columns[1].binding == ColumnBinding(TableIndex(21), ProjectionIndex(0)));
 
 	DuckDB db;
@@ -186,8 +186,8 @@ TEST_CASE("Relation statistics follow SQL scan, filter and projection bindings",
 	REQUIRE(scan_stats);
 	REQUIRE(scan_stats->cardinality == 100);
 	REQUIRE(scan_stats->columns.size() == 2);
-	REQUIRE(scan_stats->columns[0].distinct_count.distinct_count > 0);
-	REQUIRE(scan_stats->columns[0].distinct_count.distinct_count <= 100);
+	REQUIRE(scan_stats->columns[0].total_domain.distinct_count > 0);
+	REQUIRE(scan_stats->columns[0].total_domain.distinct_count <= 100);
 	connection.Rollback();
 }
 
@@ -211,7 +211,7 @@ TEST_CASE("Operator statistics remain aligned across unary and join operators", 
 	REQUIRE(filter_stats);
 	REQUIRE(filter_stats->cardinality == 20);
 	REQUIRE(filter_stats->MatchesBindings(filter.GetColumnBindings()));
-	REQUIRE(filter_stats->columns[0].distinct_count.distinct_count == 11);
+	REQUIRE(filter_stats->columns[0].total_domain.distinct_count == 11);
 
 	auto window_child = CreateProjectedDummy(TableIndex(30), TableIndex(10));
 	LogicalWindow window(TableIndex(40));
@@ -382,8 +382,8 @@ TEST_CASE("Linear recursive CTE statistics preserve their output layout", "[opti
 	REQUIRE(stats.cardinality == 1001);
 	REQUIRE(stats.MatchesBindings(plan->GetColumnBindings()));
 	REQUIRE(stats.columns.size() == 1);
-	REQUIRE(stats.columns[0].distinct_count.distinct_count == stats.cardinality);
-	REQUIRE(stats.columns[0].distinct_count.source == DistinctCountSource::CARDINALITY);
+	REQUIRE(stats.columns[0].total_domain.distinct_count == stats.cardinality);
+	REQUIRE(stats.columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
 	connection.Rollback();
 }
 
@@ -412,8 +412,8 @@ TEST_CASE("Recursive CTE join terms use fixpoint cardinality fallbacks", "[optim
 	REQUIRE(stats.cardinality == 1001);
 	REQUIRE(stats.MatchesBindings(plan->GetColumnBindings()));
 	REQUIRE(stats.columns.size() == 1);
-	REQUIRE(stats.columns[0].distinct_count.distinct_count == stats.cardinality);
-	REQUIRE(stats.columns[0].distinct_count.source == DistinctCountSource::CARDINALITY);
+	REQUIRE(stats.columns[0].total_domain.distinct_count == stats.cardinality);
+	REQUIRE(stats.columns[0].total_domain.source == DistinctCountSource::CARDINALITY);
 	connection.Rollback();
 }
 

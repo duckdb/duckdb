@@ -20,8 +20,9 @@ ProjectChildStats(LogicalOperator &op, const vector<reference<const RelationStat
 		if (!source) {
 			return {};
 		}
-		result.columns.emplace_back(binding, source->distinct_count, source->name);
+		result.columns.emplace_back(binding, source->total_domain, source->current_domain, source->name);
 	}
+	result.CapCurrentDomainsToCardinality();
 	result.Verify(op.GetColumnBindings());
 	return result;
 }
@@ -54,8 +55,10 @@ static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientC
 		if (!child_column) {
 			return {};
 		}
-		result.columns.emplace_back(binding, child_column->distinct_count, child_column->name);
+		result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
+		                            child_column->name, child_column->semi_anti_join_domain_evidence);
 	}
+	result.CapCurrentDomainsToCardinality();
 	result.Verify(get.GetColumnBindings());
 	return result;
 }
@@ -70,7 +73,8 @@ static optional<RelationStats> ExtractUnnestStats(LogicalOperator &op, const Rel
 	for (auto &binding : op.GetColumnBindings()) {
 		auto child_column = child_columns.Find(binding);
 		if (child_column) {
-			result.columns.emplace_back(binding, child_column->distinct_count, child_column->name);
+			result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
+			                            child_column->name);
 		} else if (binding.table_index == unnest.unnest_index) {
 			result.columns.emplace_back(binding, DistinctCount(result.cardinality, DistinctCountSource::CARDINALITY),
 			                            Identifier("unnest"));
@@ -101,7 +105,7 @@ static optional<RelationStats> ExtractComparisonJoinStats(LogicalComparisonJoin 
 	for (auto &binding : join.GetColumnBindings()) {
 		auto column = left_columns.Find(binding);
 		if (column) {
-			mark_result.columns.emplace_back(binding, column->distinct_count, column->name);
+			mark_result.columns.emplace_back(binding, column->total_domain, column->current_domain, column->name);
 		} else if (binding.table_index == join.mark_index) {
 			mark_result.columns.emplace_back(
 			    binding, DistinctCount(MinValue<idx_t>(cardinality, 3), DistinctCountSource::CARDINALITY),

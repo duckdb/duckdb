@@ -382,8 +382,9 @@ static optional<RelationStats> CombineNonReorderableStats(LogicalOperator &op, c
 		if (!source) {
 			return {};
 		}
-		result.columns.emplace_back(bindings[column_idx], source->distinct_count, source->name);
+		result.columns.emplace_back(bindings[column_idx], source->total_domain, source->current_domain, source->name);
 	}
+	result.CapCurrentDomainsToCardinality();
 	result.Verify(bindings);
 	return result;
 }
@@ -663,7 +664,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			// Statistics from one recursive term do not describe the complete fixpoint. Keep the output layout, but
 			// represent each fixpoint domain using the standard cardinality-based fallback.
 			for (auto &column : output_stats->columns) {
-				column.distinct_count = DistinctCount(cte_cardinality, DistinctCountSource::CARDINALITY);
+				column.total_domain = DistinctCount(cte_cardinality, DistinctCountSource::CARDINALITY);
+				column.current_domain = column.total_domain;
 			}
 		}
 		if (!output_stats || !AddRelation(input_op, parent, *output_stats)) {
@@ -1187,7 +1189,9 @@ void RelationManager::PrintRelationStats() {
 		auto &relation = relations.at(i);
 		auto &stats = relation->stats;
 		for (auto &column : stats.columns) {
-			to_print = column.name + " has estimated distinct count " + to_string(column.distinct_count.distinct_count);
+			to_print = column.name + " has estimated current/total domains " +
+			           to_string(column.current_domain.distinct_count) + "/" +
+			           to_string(column.total_domain.distinct_count);
 			Printer::Print(to_print);
 		}
 		to_print = stats.table_name + " has estimated cardinality " + to_string(stats.cardinality);
