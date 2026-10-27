@@ -1,0 +1,52 @@
+# name: test/sql/cte/recursive_cte_decimal_sum_state.test
+# description: Decimal sums retain their state and overflow checks across frozen recursive reads
+# group: [cte]
+
+statement ok
+SET max_execution_time=10000;
+
+statement ok
+CREATE MACRO key_count() AS greatest(current_setting('standard_vector_size')::BIGINT, 16) * 16;
+
+foreach threads 1 4
+
+statement ok
+SET threads={threads};
+
+# Each read finalizes the frozen sum and the next commit updates that same state.
+# Values double from 1 to 2 to 4 without altering the accumulated state during a read.
+query III
+WITH RECURSIVE t(k, v, iter) USING KEY (k, sum(v), max(iter)) AS (
+	SELECT i, 1::DECIMAL(38, 2), 0 FROM range(key_count()) r(i)
+	UNION ALL
+	SELECT n.k, r.v, n.iter + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.iter < 2
+)
+SELECT count(*) = key_count(), count(*) FILTER (WHERE v <> 4), count(*) FILTER (WHERE iter <> 2)
+FROM t;
+----
+true	0	0
+
+# The state fits in HUGEINT but its finalized value does not fit in DECIMAL(38).
+statement error
+WITH RECURSIVE t(k, v, iter) USING KEY (k, sum(v), max(iter)) AS (
+	SELECT 0, '50000000000000000000000000000000000000'::DECIMAL(38, 0), 0
+	UNION ALL
+	SELECT n.k, r.v, 1 FROM t n JOIN recurring.t r USING (k) WHERE n.iter = 0
+)
+SELECT * FROM t;
+----
+Overflow in SUM of DECIMAL
+
+statement error
+WITH RECURSIVE t(k, v, iter) USING KEY (k, sum(v), max(iter)) AS (
+	SELECT 0, '-50000000000000000000000000000000000000'::DECIMAL(38, 0), 0
+	UNION ALL
+	SELECT n.k, r.v, 1 FROM t n JOIN recurring.t r USING (k) WHERE n.iter = 0
+)
+SELECT * FROM t;
+----
+Overflow in SUM of DECIMAL
+
+endloop
