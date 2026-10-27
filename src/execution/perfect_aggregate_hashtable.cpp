@@ -124,11 +124,12 @@ static void ComputeGroupLocation(const Vector &group, Value &min, uintptr_t *add
 }
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+	const auto row_count = groups.size();
 	// first we need to find the location in the HT of each of the groups
-	FlatVector::SetSize(addresses, groups.size());
+	FlatVector::SetSize(addresses, row_count);
 	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	// zero-initialize the address data
-	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
+	memset(address_data, 0, row_count * sizeof(uintptr_t));
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
 
 	// Compute raw group ids first; convert them to state pointers below if needed.
@@ -143,7 +144,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 
 	// Non-clustered path: convert group ids to state pointers and update aggregates.
-	for (idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		const auto group = address_data[i];
 		if (group >= total_groups) {
 			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "

@@ -742,6 +742,32 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, id
 	return array.Score(len1, len2);
 }
 
+idx_t StringUtil::DamerauLevenshteinDistance(const string &s1_p, const string &s2_p) {
+	auto s1 = StringUtil::Lower(s1_p);
+	auto s2 = StringUtil::Lower(s2_p);
+	idx_t len1 = s1.size();
+	idx_t len2 = s2.size();
+	LevenshteinArray array(len1 + 1, len2 + 1);
+	for (idx_t i = 0; i <= len1; i++) {
+		array.Score(i, 0) = i;
+	}
+	for (idx_t j = 0; j <= len2; j++) {
+		array.Score(0, j) = j;
+	}
+	for (idx_t i = 1; i <= len1; i++) {
+		for (idx_t j = 1; j <= len2; j++) {
+			idx_t cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+			idx_t score = MinValue(array.Score(i - 1, j) + 1, array.Score(i, j - 1) + 1);
+			score = MinValue(score, array.Score(i - 1, j - 1) + cost);
+			if (i > 1 && j > 1 && s1[i - 1] == s2[j - 2] && s1[i - 2] == s2[j - 1]) {
+				score = MinValue(score, array.Score(i - 2, j - 2) + 1);
+			}
+			array.Score(i, j) = score;
+		}
+	}
+	return array.Score(len1, len2);
+}
+
 idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
