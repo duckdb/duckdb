@@ -302,6 +302,9 @@ protected:
 	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
 	CatalogEntry &BindFunction(FunctionExpression &function);
+	//! Throws when the function's catalog entry was replaced, by an extension autoloaded while its arguments were bound
+	static void ThrowIfReplacedWhileBindingArguments(const FunctionExpression &function,
+	                                                 const weak_ptr<const bool> &liveness);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
