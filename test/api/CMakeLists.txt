@@ -18,6 +18,7 @@ set(TEST_API_OBJECTS
     test_aggregate_state_bind_data.cpp
     test_config.cpp
     test_connect_prepare.cpp
+    test_remote_pushdown_macro_arguments.cpp
     test_os_util.cpp
     test_compression_select.cpp
     test_connection_secrets.cpp
@@ -79,6 +80,7 @@ set(TEST_API_OBJECTS
     test_worker_exception.cpp
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
+    test_rollback_delete_checkpoint_flag.cpp
     test_group_commit_bound.cpp
     test_data_table_scan_without_row_groups.cpp)
 
