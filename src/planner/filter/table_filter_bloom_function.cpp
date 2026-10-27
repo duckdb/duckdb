@@ -15,6 +15,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -189,6 +190,7 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
 		found_count += LookupOne(hashes[i]);
+		PrefetchHashTableEntry(i, count, [&](idx_t next_idx) { return &bf[hashes[next_idx] & bitmask]; });
 	}
 	return found_count;
 }
@@ -203,6 +205,8 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &s
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
 		found_count += LookupOne(hashes[sel.get_index_unsafe(i)]);
+		PrefetchHashTableEntry(i, count,
+		                       [&](idx_t next_idx) { return &bf[hashes[sel.get_index_unsafe(next_idx)] & bitmask]; });
 	}
 	return found_count;
 }
