@@ -172,6 +172,10 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (compiled_rule.suppress_suggestions || no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
+	auto label_entry = rule_labels.find(rule_name);
+	if (label_entry != rule_labels.end()) {
+		matcher.SetLabel(label_entry->second);
+	}
 	return matcher;
 }
 
@@ -201,6 +205,11 @@ void MatcherFactory::AddPackratMemoizedRule(const char *name) {
 
 void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
+}
+
+void MatcherFactory::LabelRule(const char *name, const char *label) {
+	// rules missing from the grammar (e.g. the small grammars built by tests) simply stay unlabelled
+	rule_labels.emplace(name, label);
 }
 
 MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p,
@@ -233,6 +242,34 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	for (auto &entry : terminal_rule_overrides) {
 		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
 	}
+
+	//===--------------------------------------------------------------------===//
+	// START GENERATED RULE LABELS
+	//===--------------------------------------------------------------------===//
+	LabelRule("Expression", "an expression");
+	LabelRule("LambdaArrowExpression", "an expression");
+	LabelRule("LogicalOrExpression", "an expression");
+	LabelRule("LogicalAndExpression", "an expression");
+	LabelRule("LogicalNotExpression", "an expression");
+	LabelRule("IsExpression", "an expression");
+	LabelRule("IsDistinctFromExpression", "an expression");
+	LabelRule("ComparisonExpression", "an expression");
+	LabelRule("BetweenInLikeExpression", "an expression");
+	LabelRule("OtherOperatorExpression", "an expression");
+	LabelRule("InContainsExpression", "an expression");
+	LabelRule("BitwiseExpression", "an expression");
+	LabelRule("AdditiveExpression", "an expression");
+	LabelRule("MultiplicativeExpression", "an expression");
+	LabelRule("ExponentiationExpression", "an expression");
+	LabelRule("CollateExpression", "an expression");
+	LabelRule("AtTimeZoneExpression", "an expression");
+	LabelRule("PrefixExpression", "an expression");
+	LabelRule("BaseExpression", "an expression");
+	LabelRule("SingleExpression", "an expression");
+	LabelRule("Type", "a type");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED RULE LABELS
+	//===--------------------------------------------------------------------===//
 
 	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
 	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and

@@ -505,4 +505,99 @@ TEST_CASE("Failed adaptive growth preserves rows and falls back to the existing 
 	REQUIRE(fixture.ScanGroupCount() == 65536);
 }
 
+TEST_CASE("Aggregate append pins are released before spilling", "[radix_ht_sink]") {
+	const auto group_count = MinValue<idx_t>(16, STANDARD_VECTOR_SIZE);
+	for (const bool acquire : {false, true}) {
+		CAPTURE(acquire);
+		RadixSinkFixture fixture("128MB");
+		fixture.Global().temporary_memory_state->SetMinimumReservation(64 * 1024 * 1024);
+		fixture.Global().temporary_memory_state->SetRemainingSizeAndUpdateReservation(*fixture.con.context,
+		                                                                              64 * 1024 * 1024);
+		fixture.Global().config.SetRadixBits(3);
+		fixture.Keys(0, group_count, 192000 / group_count);
+		fixture.Sink();
+		auto &ht = *fixture.Local().ht;
+		REQUIRE(ht.GetRadixBits() >= 3);
+		REQUIRE(ht.Count() == group_count);
+		REQUIRE(ht.GetPartitionedData().Count() == 0);
+		fixture.Global().any_abandoned = true;
+		// Leave completed blocks available for eviction alongside the current append blocks.
+		for (idx_t i = 0; i < 7; i++) {
+			ht.Abandon();
+			ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+		}
+		const auto materialized = ht.GetMaterializedCount();
+		REQUIRE(materialized == 8 * group_count);
+		auto &manager = BufferManager::GetBufferManager(*fixture.con.context);
+		{
+			auto competing_allocation =
+			    manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - manager.GetUsedMemory() - 65536);
+			if (acquire) {
+				auto data = ht.AcquirePartitionedData();
+				REQUIRE(data->Count() == materialized);
+				REQUIRE(ht.GetMaterializedCount() == 0);
+				continue;
+			}
+			REQUIRE_NOTHROW(ht.Abandon());
+			REQUIRE(ht.GetMaterializedCount() == materialized);
+		}
+		// A pressure episode may be followed by another resident append to a partial block.
+		for (idx_t i = 0; i < 3; i++) {
+			ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+			ht.Abandon();
+		}
+		REQUIRE(ht.GetMaterializedCount() == materialized + 3 * group_count);
+		fixture.Combine(0);
+		REQUIRE(fixture.ScanGroupCount() == group_count);
+	}
+}
+
+TEST_CASE("Abandoned aggregate blocks can be evicted before the next sink call", "[radix_ht_sink]") {
+	for (const bool direct : {false, true}) {
+		if (direct && STANDARD_VECTOR_SIZE < 64) {
+			continue;
+		}
+		CAPTURE(direct);
+		const auto group_count = MinValue<idx_t>(direct ? 64 : 16, STANDARD_VECTOR_SIZE);
+		RadixSinkFixture fixture("128MB");
+		fixture.Global().temporary_memory_state->SetMinimumReservation(64 * 1024 * 1024);
+		fixture.Global().temporary_memory_state->SetRemainingSizeAndUpdateReservation(*fixture.con.context,
+		                                                                              64 * 1024 * 1024);
+		fixture.Global().config.SetRadixBits(3);
+		fixture.Keys(0, group_count, 192000 / group_count);
+		fixture.Sink();
+		auto &ht = *fixture.Local().ht;
+		REQUIRE(ht.GetRadixBits() == 3);
+		REQUIRE(ht.Count() == group_count);
+		REQUIRE(ht.GetPartitionedData().Count() == (direct ? group_count : 0));
+		ht.EnableHLL(false);
+		// Exercise the sink's occupancy-triggered abandon without growing a large key domain.
+		fixture.Local().local_sink_capacity = STANDARD_VECTOR_SIZE;
+		for (idx_t i = 0; i < 32; i++) {
+			fixture.Sink();
+			REQUIRE(ht.Count() == 0);
+		}
+		fixture.Local().local_sink_capacity = ht.Capacity();
+		fixture.Sink();
+		REQUIRE_FALSE(fixture.Global().external);
+		REQUIRE(ht.Count() == group_count);
+		REQUIRE(ht.GetMaterializedCount() == 33 * group_count);
+		auto &manager = BufferManager::GetBufferManager(*fixture.con.context);
+		const auto used = manager.GetUsedMemory();
+		const idx_t extra = 2 * 1024 * 1024;
+		REQUIRE(used > extra);
+		REQUIRE(used < manager.GetMaxMemory());
+		{
+			// Reclaim completed blocks while the current groups are still referenced by the hash table.
+			auto allocation = manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - used + extra);
+			allocation.get()[0] = 1;
+			REQUIRE(ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter) == 0);
+			REQUIRE(ht.Count() == group_count);
+			REQUIRE(ht.GetMaterializedCount() == 33 * group_count);
+		}
+		fixture.Combine(0);
+		REQUIRE(fixture.ScanGroupCount() == group_count);
+	}
+}
+
 } // namespace duckdb
