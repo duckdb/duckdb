@@ -4,6 +4,11 @@
 
 require json
 
+# The function streams its inner result without a progress callback, which the progress verifier flags
+# for sources of two or more chunks. Pre-existing, first exposed by the two-chunk shapes below.
+statement ok
+SET debug_verify_progress_ignore='UNSUPPORTED_SOURCE:JSON_EXECUTE_SERIALIZED_SQL';
+
 # A recursive CTE re-initializes the scan of the inlined condition subquery on every iteration. The
 # executed result must not be consumed across iterations.
 query I
