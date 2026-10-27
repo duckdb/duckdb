@@ -211,7 +211,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		if (join.join_type != JoinType::INNER || join.condition->IsVolatile()) {
 			break;
 		}
-		GetPushdownFilterTargets(*join.children[0], std::move(columns), targets);
+		// removes rows: a filter that may be barred stays above it
+		RemoveBarrierColumns(columns);
+		if (columns.empty()) {
+			return;
+		}
+		GetPushdownFilterTargets(*join.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {

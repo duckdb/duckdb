@@ -523,6 +523,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &secure_view = op->Cast<LogicalSecureView>();
 		RelationStats stats;
 		stats.cardinality = secure_view.EstimateCardinality(context);
+		secure_view.SetEstimatedCardinality(stats.cardinality);
 		stats.table_name = Identifier(secure_view.view_name);
 		stats.stats_initialized = true;
 		RelationColumnStatsLookup child_columns(child_stats);

@@ -234,6 +234,16 @@ SELECT count(*) FROM wide_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 10
 
+# the same through a view whose join is not a comparison join (an ANY_JOIN), which removes rows as well
+statement ok
+CREATE SECURE VIEW wide_any_joined_secure AS
+SELECT wide_hidden.id FROM wide_hidden JOIN even_groups ON (wide_hidden.g = even_groups.g OR wide_hidden.id < 0);
+
+query I
+SELECT count(*) FROM wide_any_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+10
+
 # only the join filters cross a secure view: a TopN filter on a UNION still reaches its plain inputs
 statement ok
 CREATE TABLE topn_plain AS SELECT i AS x FROM range(100000) t(i);
