@@ -167,10 +167,6 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		break;
 	}
 
-	if (static_cast<idx_t>(layout.dict_count) > segment.GetBlockSize()) {
-		throw DataCorruptionException(
-		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
-	}
 	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 	string_lengths.resize(AlignValue<idx_t, group_size>(layout.dict_count));
 
