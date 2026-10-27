@@ -133,7 +133,7 @@ statement ok
 CREATE TABLE union_keys AS SELECT union_value(i:=a) a, union_value(i:=b) b FROM scalar_keys;
 
 statement ok
-CREATE TABLE tuple_keys AS SELECT row(a,a) a, row(b,b) b FROM scalar_keys;
+CREATE TEMP TABLE tuple_keys AS SELECT row(a,a) a, row(b,b) b FROM scalar_keys;
 
 foreach table union_keys tuple_keys
 

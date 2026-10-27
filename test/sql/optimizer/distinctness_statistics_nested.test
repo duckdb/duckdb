@@ -28,10 +28,10 @@ false	true
 true	false
 
 statement ok
-CREATE TABLE tuple_probe AS SELECT row(1,2) a;
+CREATE TEMP TABLE tuple_probe AS SELECT row(1,2) a;
 
 statement ok
-CREATE TABLE tuple_build AS SELECT row(1,NULL::INTEGER) b;
+CREATE TEMP TABLE tuple_build AS SELECT row(1,NULL::INTEGER) b;
 
 # Scalar tuple comparisons use nested ordering; MARK comparisons use row equality.
 query II
@@ -50,10 +50,10 @@ SELECT __mark_join_marker FROM tuple_probe JOIN BY (TYPE MARK) tuple_build ON b 
 false
 
 statement ok
-CREATE TABLE nested_tuple_probe AS SELECT row(row(1,2), union_value(i:=1)) a;
+CREATE TEMP TABLE nested_tuple_probe AS SELECT row(row(1,2), union_value(i:=1)) a;
 
 statement ok
-CREATE TABLE nested_tuple_build AS SELECT row(row(1,NULL::INTEGER), union_value(i:=NULL::INTEGER)) b;
+CREATE TEMP TABLE nested_tuple_build AS SELECT row(row(1,NULL::INTEGER), union_value(i:=NULL::INTEGER)) b;
 
 query I
 SELECT __mark_join_marker FROM nested_tuple_probe JOIN BY (TYPE MARK) nested_tuple_build ON a IS DISTINCT FROM b;
