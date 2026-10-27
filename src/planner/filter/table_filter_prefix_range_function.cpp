@@ -204,6 +204,7 @@ public:
 
 	template <typename T, typename CONVERTER>
 	bool ShouldPrefetch(const VectorIterator<T> &keys, const SelectionVector &sel, idx_t count) const {
+#if defined(__GNUC__) || defined(__clang__)
 		if (word_count * sizeof(uint64_t) < PREFETCH_MIN_BYTES) {
 			return false;
 		}
@@ -226,6 +227,7 @@ public:
 				return true;
 			}
 		}
+#endif
 		return false;
 	}
 
