@@ -888,7 +888,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
 		propagate_null_values &= !aggr_expr.IsVolatile() && aggr_expr.PropagatesNullValues();
 	}
-	auto result = PushDownChild(plan, propagate_null_values, std::move(state));
+	// the aggregate observes child row presence through groups, grouping sets and GROUPING()
+	auto result = PushDownChild(plan, false, std::move(state));
 
 	TableIndex delim_table_index;
 	idx_t delim_column_offset;
@@ -921,7 +922,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 	// dropping missing keys is only equivalent when the single recovered row would be all-NULL:
 	// repeated empty sets need one row per set and GROUPING() outputs are non-NULL constants
 	auto drop_missing_keys =
-	    !any_join && propagate_null_values && empty_set_count <= 1 && aggr.grouping_functions.empty();
+	    !any_join && propagate_null_values && empty_set_count == 1 && aggr.grouping_functions.empty();
 	auto join_type = drop_missing_keys ? JoinType::INNER : JoinType::LEFT;
 
 	unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
@@ -1356,7 +1357,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownWindow(uniq
                                                                             bool propagate_null_values,
                                                                             vector<ColumnBinding> state) {
 	auto &window = plan->Cast<LogicalWindow>();
-	auto result = PushDownChild(plan, propagate_null_values, std::move(state));
+	// window functions such as row_number() observe child row presence
+	auto result = PushDownChild(plan, false, std::move(state));
 
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -1379,7 +1381,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 	}
 #endif
 	for (auto &child : plan->children) {
-		auto child_state = PushDownCorrelatedNode(child, true, std::move(result.bindings));
+		// a dropped all-NULL branch row changes the cardinality observable alongside the other branches
+		auto child_state = PushDownCorrelatedNode(child, false, std::move(result.bindings));
 		result.bindings = child_state.bindings;
 		result.replacement_graph.Merge(child_state.replacement_graph);
 	}
@@ -1407,8 +1410,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 }
 
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownDistinct(unique_ptr<LogicalOperator> &plan,
+                                                                              bool propagate_null_values,
                                                                               vector<ColumnBinding> state) {
-	auto result = PushDownChild(plan, true, std::move(state), false);
+	auto result = PushDownChild(plan, propagate_null_values, std::move(state), false);
 	auto &distinct = plan->Cast<LogicalDistinct>();
 	AppendCorrelatedColumns(distinct.distinct_targets, result.bindings, false);
 	return result;
@@ -1503,7 +1507,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 	}
 
 	auto old_left_bindings = plan->children[0]->GetColumnBindings();
-	auto result = PushDownCorrelatedNode(plan->children[0], propagate_null_values, std::move(state));
+	// the CTE definition is scanned in contexts this chain does not see
+	auto result = PushDownCorrelatedNode(plan->children[0], false, std::move(state));
 	ColumnBindingRewrite::ApplyToChild(plan, 0, std::move(old_left_bindings), result.replacement_graph);
 
 	auto &cte = plan->Cast<LogicalCTE>();
@@ -1639,16 +1644,17 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 		return PushDownAggregate(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		return PushDownCrossProduct(plan, propagate_null_values, std::move(state));
+		// a dropped all-NULL row multiplies with the other side's rows, which are not all-NULL
+		return PushDownCrossProduct(plan, false, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		D_ASSERT(plan->children.size() == 2);
-		return DecorrelateSubtree(plan, propagate_null_values, std::move(state));
+		return DecorrelateSubtree(plan, false, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		return PushDownJoin(plan, propagate_null_values, std::move(state));
+		return PushDownJoin(plan, false, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		return PushDownLimit(plan, propagate_null_values, std::move(state));
@@ -1662,20 +1668,22 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 		return PushDownSetOperation(plan, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		return PushDownDistinct(plan, std::move(state));
+		return PushDownDistinct(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		return PushDownExpressionGet(plan, propagate_null_values, std::move(state));
+		// emits its expression rows once per child row
+		return PushDownExpressionGet(plan, false, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE: {
-		return PushDownDML(plan, propagate_null_values, std::move(state));
+		// the modified row count is a side effect
+		return PushDownDML(plan, false, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		throw BinderException("PIVOT is not supported in correlated subqueries yet");
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		return PushDownChild(plan, true, std::move(state));
+		return PushDownChild(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		return PushDownGet(plan, std::move(state));
