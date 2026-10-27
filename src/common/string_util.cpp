@@ -529,14 +529,14 @@ bool StringUtil::CIStartsWith(std::string_view str, std::string_view prefix) {
 	if (prefix.size() > str.size()) {
 		return false;
 	}
-	return CIEquals(str.data(), prefix.size(), prefix.data(), prefix.size());
+	return CIEquals(str.substr(0, prefix.size()), prefix);
 }
 
 bool StringUtil::CIEndsWith(std::string_view str, std::string_view suffix) {
 	if (suffix.size() > str.size()) {
 		return false;
 	}
-	return CIEquals(str.data() + str.size() - suffix.size(), suffix.size(), suffix.data(), suffix.size());
+	return CIEquals(str.substr(str.size() - suffix.size()), suffix);
 }
 
 bool StringUtil::CILessThan(std::string_view s1, std::string_view s2) {
