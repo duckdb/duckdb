@@ -49,15 +49,11 @@ static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
 		arg_refs.emplace_back(*arg);
 	}
 	bool in_args = true;
-
-	if (!w_expr.ArgOrders().empty()) {
-		for (auto &order : w_expr.ArgOrders()) {
-			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
-		}
-	} else if (!w_expr.OrderBy().empty()) {
-		for (auto &order : w_expr.OrderBy()) {
-			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
-		}
+	for (auto &order : w_expr.ArgOrders()) {
+		in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+	}
+	for (auto &order : w_expr.OrderBy()) {
+		in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
 	}
 
 	return in_args;
@@ -93,21 +89,18 @@ static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const Bo
 		return std::move(result);
 	}
 
-	if (!w_expr.ArgOrders().empty()) {
-		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
-		auto &orders = result->GetOrderBysMutable()->orders;
-		for (auto &order : w_expr.ArgOrders()) {
-			auto order_copy = order.Copy();
-			orders.emplace_back(std::move(order_copy));
-		}
-	} else if (!w_expr.OrderBy().empty()) {
-		//	If the frame was ordered, copy the frame ordering to the aggregate function
-		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
-		auto &orders = result->GetOrderBysMutable()->orders;
-		for (auto &order : w_expr.OrderBy()) {
-			auto order_copy = order.Copy();
-			orders.emplace_back(std::move(order_copy));
-		}
+	if (w_expr.ArgOrders().empty() && w_expr.OrderBy().empty()) {
+		return std::move(result);
+	}
+
+	//	The frame ordering breaks ties in the argument ordering
+	result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+	auto &orders = result->GetOrderBysMutable()->orders;
+	for (auto &order : w_expr.ArgOrders()) {
+		orders.emplace_back(order.Copy());
+	}
+	for (auto &order : w_expr.OrderBy()) {
+		orders.emplace_back(order.Copy());
 	}
 
 	return std::move(result);

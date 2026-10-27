@@ -393,3 +393,39 @@ EXECUTE partitioned(4);
 1	1
 2	1
 3	2
+
+#
+# Window ORDER BY breaks ties in argument ORDER BY
+#
+
+statement ok
+CREATE TABLE arg_ties(id INT, key_s VARCHAR, payload_s VARCHAR, ord INT);
+
+statement ok
+INSERT INTO arg_ties VALUES (1, 'b', 'b1_ord1', 1), (1, 'b', 'b2_ord2', 2);
+
+query II
+SELECT id,
+	STRING_AGG(payload_s, ',' ORDER BY key_s ASC) OVER (
+		PARTITION BY id
+		ORDER BY ord DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	) AS res
+FROM arg_ties
+ORDER BY id, ord;
+----
+1	b2_ord2,b1_ord1
+1	b2_ord2,b1_ord1
+
+query II
+SELECT id,
+	LIST(DISTINCT payload_s ORDER BY payload_s DESC) OVER (
+		PARTITION BY id
+		ORDER BY ord
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	) AS res
+FROM arg_ties
+ORDER BY id, ord;
+----
+1	[b2_ord2, b1_ord1]
+1	[b2_ord2, b1_ord1]
