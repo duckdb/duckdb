@@ -289,7 +289,7 @@ physical_plan	<!REGEX>:.*Filters:.*
 # ------------------------------------------------------------------------------------------------
 
 # s1 holds t1, t1b and v1; the name filter leaves one. The denominator is what the schema returned: the default
-# GetEntriesForScan already applies the filters, so it equals the numerator unless a catalog override returns more.
+# Scan already applies the filters, so it equals the numerator unless a catalog override returns more.
 query II
 EXPLAIN ANALYZE SELECT table_name FROM duckdb_tables() WHERE database_name = 'db1' AND schema_name = 's1' AND table_name = 't1';
 ----

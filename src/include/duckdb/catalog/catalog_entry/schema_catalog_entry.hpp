@@ -37,7 +37,14 @@ struct CreateCopyFunctionInfo;
 struct CreateTypeInfo;
 
 struct DropInfo;
-struct EntryScanFilters;
+class EntryScanFilters;
+
+//! Parameters of a schema scan: the entry type, the per-entry callback and any filters pushed down on the entries.
+struct SchemaScanInfo {
+	CatalogType type;
+	const std::function<void(CatalogEntry &)> &callback;
+	optional_ptr<const EntryScanFilters> filter;
+};
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public InCatalogEntry {
@@ -72,13 +79,9 @@ public:
 	                             const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
 	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) = 0;
-	//! The entries of `type` a system catalog scan (duckdb_tables, duckdb_views, duckdb_columns) visits in this
-	//! schema, given the filters pushed down on the entry identity columns. Scans every entry and keeps those the
-	//! filters accept. A schema may override this to avoid the scan; it must return every entry of `type` the filters
-	//! accept and may return more, including entries of another type: the caller re-checks the filters and the
-	//! function filters by type.
-	DUCKDB_API virtual vector<reference<CatalogEntry>> GetEntriesForScan(ClientContext &context, CatalogType type,
-	                                                                     const EntryScanFilters &filters);
+	//! Scan the entries of `info.type`, filtered by `info.filter`. An override may return a superset of the matches, so
+	//! callers that need exact results re-check them.
+	DUCKDB_API virtual void Scan(ClientContext &context, SchemaScanInfo &info);
 	//! Visit this schema and its descendants in depth-first, parent-before-child order.
 	DUCKDB_API void ScanSchemaTree(CatalogTransaction transaction,
 	                               const std::function<void(SchemaCatalogEntry &)> &callback);

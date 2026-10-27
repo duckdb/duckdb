@@ -85,15 +85,12 @@ void SchemaCatalogEntry::Scan(CatalogTransaction transaction, CatalogType type,
 	Scan(transaction.GetContext(), type, callback);
 }
 
-vector<reference<CatalogEntry>> SchemaCatalogEntry::GetEntriesForScan(ClientContext &context, CatalogType type,
-                                                                      const EntryScanFilters &filters) {
-	vector<reference<CatalogEntry>> entries;
-	Scan(context, type, [&](CatalogEntry &entry) {
-		if (filters.Accepts(context, entry)) {
-			entries.push_back(entry);
+void SchemaCatalogEntry::Scan(ClientContext &context, SchemaScanInfo &info) {
+	Scan(context, info.type, [&](CatalogEntry &entry) {
+		if (!info.filter || info.filter->Accepts(context, entry)) {
+			info.callback(entry);
 		}
 	});
-	return entries;
 }
 
 template <class SCAN>

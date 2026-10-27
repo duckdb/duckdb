@@ -112,7 +112,7 @@ struct ScanFilters {
 	EntryScanFilters entry;
 
 	bool HasSchemaLevelFilters() const {
-		return database_name || database_oid || schema.schema_name || schema.schema_oid;
+		return database_name || database_oid || schema.GetSchemaName() || schema.GetSchemaOid();
 	}
 };
 
@@ -131,13 +131,13 @@ ScanFilters CollectFilters(TableFunctionInitInput &input, const SystemCatalogSca
 		} else if (Matches(data.database_oid_idx, column_index)) {
 			result.database_oid = &entry.Filter();
 		} else if (Matches(data.schema_name_idx, column_index)) {
-			result.schema.schema_name = &entry.Filter();
+			result.schema.SetSchemaName(&entry.Filter());
 		} else if (Matches(data.schema_oid_idx, column_index)) {
-			result.schema.schema_oid = &entry.Filter();
+			result.schema.SetSchemaOid(&entry.Filter());
 		} else if (Matches(data.entry_name_idx, column_index)) {
-			result.entry.name = &entry.Filter();
+			result.entry.SetName(&entry.Filter());
 		} else if (Matches(data.entry_oid_idx, column_index)) {
-			result.entry.oid = &entry.Filter();
+			result.entry.SetOid(&entry.Filter());
 		}
 	}
 	return result;
@@ -213,15 +213,17 @@ vector<reference<CatalogEntry>> SystemCatalogScanner::GetSchemaEntries(ClientCon
                                                                        const EntryScanFilters &filters,
                                                                        SystemCatalogScannerStats &stats) {
 	vector<reference<CatalogEntry>> result;
-	for (auto &entry : schema.GetEntriesForScan(context, type, filters)) {
+	std::function<void(CatalogEntry &)> collect = [&](CatalogEntry &entry) {
 		stats.entries_total++;
 		// the schema may return entries the filters reject
-		if (!filters.Accepts(context, entry.get())) {
-			continue;
+		if (!filters.Accepts(context, entry)) {
+			return;
 		}
 		stats.entries_scanned++;
 		result.push_back(entry);
-	}
+	};
+	SchemaScanInfo info {type, collect, &filters};
+	schema.Scan(context, info);
 	return result;
 }
 
