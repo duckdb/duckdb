@@ -1338,7 +1338,8 @@ static optional_idx FindGeoJSONColumn(const child_list_t<LogicalType> &child_typ
 	                      option_name, name, StringUtil::Join(available, ", "));
 }
 
-static unique_ptr<FunctionData> JSONCopyToGeoJSONBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> JSONCopyToGeoJSONBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() != 6) {
@@ -1503,6 +1504,7 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetResolveTypesCallback(JSONCreateResolveTypes<JSONArrayBind<ResolveScalarFunctionTypesInput>>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -1511,6 +1513,7 @@ ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	                   JSONFunctionLocalState::Init);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetResolveTypesCallback(JSONCreateResolveTypes<ToJSONBind<ResolveScalarFunctionTypesInput>>);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -1533,14 +1536,15 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	ScalarFunction fun(JSON_COPY_TO_GEOJSON_INTERNAL_NAME,
 	                   {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                    LogicalType::VARCHAR, LogicalType::BOOLEAN},
-	                   LogicalType::JSON(), JSONCopyToGeoJSONFunction, JSONCopyToGeoJSONBind, nullptr,
-	                   JSONFunctionLocalState::Init);
+	                   LogicalType::JSON(), JSONCopyToGeoJSONFunction, JSONCopyToGeoJSONBind<BindScalarFunctionInput>,
+	                   nullptr, JSONFunctionLocalState::Init);
 	fun.GetSignature().GetParameter(0).SetName("value");
 	fun.GetSignature().GetParameter(1).SetName("date_format");
 	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
 	fun.GetSignature().GetParameter(3).SetName("geometry_column");
 	fun.GetSignature().GetParameter(4).SetName("id_column");
 	fun.GetSignature().GetParameter(5).SetName("write_bbox");
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<JSONCopyToGeoJSONBind<ResolveScalarFunctionTypesInput>>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	return fun;
@@ -1551,6 +1555,7 @@ ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	                   ArrayToJSONBind<BindScalarFunctionInput>, nullptr, JSONFunctionLocalState::Init);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetResolveTypesCallback(JSONCreateResolveTypes<ArrayToJSONBind<ResolveScalarFunctionTypesInput>>);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -1559,6 +1564,7 @@ ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 	                   nullptr, JSONFunctionLocalState::Init);
 	fun.GetSignature().AddArgs("args", LogicalType::ANY);
 	fun.SetResolveTypesCallback(JSONCreateResolveTypes<RowToJSONBind<ResolveScalarFunctionTypesInput>>);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
