@@ -24,6 +24,10 @@ bool BoundAggregateExpression::IsVolatile() const {
 	return function.GetStability() == FunctionStability::VOLATILE || Expression::IsVolatile();
 }
 
+bool BoundAggregateExpression::IsDeterministic() const {
+	return function.GetStability() != FunctionStability::VOLATILE && Expression::IsDeterministic();
+}
+
 string BoundAggregateExpression::ToString() const {
 	auto distinct = IsDistinct();
 	auto &function_name = function.GetName();

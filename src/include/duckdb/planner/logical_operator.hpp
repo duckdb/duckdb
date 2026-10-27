@@ -73,6 +73,8 @@ public:
 	bool HasSideEffects() const;
 	//! Returns true if this operator or any of its descendants contains a volatile expression
 	bool HasVolatileExpressions() const;
+	//! Returns true if this operator or any of its descendants contains a non-deterministic expression
+	bool HasNonDeterministicExpressions() const;
 
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;

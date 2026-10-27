@@ -51,6 +51,7 @@ public:
 	bool RequiresOrderedExecution() const;
 
 	bool IsVolatile() const override;
+	bool IsDeterministic() const override;
 	bool IsConsistent() const override;
 	bool IsFoldable() const override;
 	bool CanThrow() const override;

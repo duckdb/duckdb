@@ -110,7 +110,7 @@ bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
 	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases &&
 	       requires_expression_names == rhs.requires_expression_names &&
-	       requires_ordered_execution == rhs.requires_ordered_execution;
+	       requires_ordered_execution == rhs.requires_ordered_execution && volatility_reason == rhs.volatility_reason;
 }
 
 bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {

@@ -168,6 +168,7 @@ public:
 		return false;
 	}
 	bool IsVolatile() const override;
+	bool IsDeterministic() const override;
 
 	string ToString() const override;
 

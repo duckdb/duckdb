@@ -34,4 +34,11 @@ bool BoundSubqueryExpression::IsVolatile() const {
 	return subquery.plan && subquery.plan->HasVolatileExpressions();
 }
 
+bool BoundSubqueryExpression::IsDeterministic() const {
+	if (!Expression::IsDeterministic()) {
+		return false;
+	}
+	return !subquery.plan || !subquery.plan->HasNonDeterministicExpressions();
+}
+
 } // namespace duckdb

@@ -55,6 +55,16 @@ bool Expression::IsVolatile() const {
 	return is_volatile;
 }
 
+bool Expression::IsDeterministic() const {
+	bool is_deterministic = true;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (!child.IsDeterministic()) {
+			is_deterministic = false;
+		}
+	});
+	return is_deterministic;
+}
+
 bool Expression::IsConsistent() const {
 	bool is_consistent = true;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {

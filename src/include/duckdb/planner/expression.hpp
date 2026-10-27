@@ -52,6 +52,7 @@ public:
 	bool HasParameter() const override;
 
 	virtual bool IsVolatile() const;
+	virtual bool IsDeterministic() const;
 	virtual bool IsConsistent() const;
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;

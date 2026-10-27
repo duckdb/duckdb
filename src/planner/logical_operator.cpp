@@ -112,22 +112,31 @@ bool LogicalOperator::HasSideEffects() const {
 	return false;
 }
 
-bool LogicalOperator::HasVolatileExpressions() const {
-	bool is_volatile = false;
-	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](const unique_ptr<Expression> *expression) {
-		if ((*expression)->IsVolatile()) {
-			is_volatile = true;
+template <class PREDICATE>
+static bool HasExpressionMatching(const LogicalOperator &op, const PREDICATE &predicate) {
+	bool found = false;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
+		if (predicate(**expression)) {
+			found = true;
 		}
 	});
-	if (is_volatile) {
+	if (found) {
 		return true;
 	}
-	for (auto &child : children) {
-		if (child && child->HasVolatileExpressions()) {
+	for (auto &child : op.children) {
+		if (child && HasExpressionMatching(*child, predicate)) {
 			return true;
 		}
 	}
 	return false;
+}
+
+bool LogicalOperator::HasVolatileExpressions() const {
+	return HasExpressionMatching(*this, [](const Expression &expr) { return expr.IsVolatile(); });
+}
+
+bool LogicalOperator::HasNonDeterministicExpressions() const {
+	return HasExpressionMatching(*this, [](const Expression &expr) { return !expr.IsDeterministic(); });
 }
 
 void LogicalOperator::ResolveOperatorTypes() {

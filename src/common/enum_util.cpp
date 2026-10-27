@@ -7308,6 +7308,24 @@ ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value) {
 	return static_cast<ViewSecurityType>(StringUtil::StringToEnum(GetViewSecurityTypeValues(), 2, "ViewSecurityType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetVolatilityReasonValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VolatilityReason::NON_DETERMINISTIC), "NON_DETERMINISTIC" },
+		{ static_cast<uint32_t>(VolatilityReason::NO_PLAN_TIME_EVALUATION), "NO_PLAN_TIME_EVALUATION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VolatilityReason>(VolatilityReason value) {
+	return StringUtil::EnumToString(GetVolatilityReasonValues(), 2, "VolatilityReason", static_cast<uint32_t>(value));
+}
+
+template<>
+VolatilityReason EnumUtil::FromString<VolatilityReason>(const char *value) {
+	return static_cast<VolatilityReason>(StringUtil::StringToEnum(GetVolatilityReasonValues(), 2, "VolatilityReason", value));
+}
+
 const StringUtil::EnumStringLiteral *GetWALTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(WALType::INVALID), "INVALID" },

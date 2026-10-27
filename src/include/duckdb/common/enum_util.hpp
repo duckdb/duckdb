@@ -660,6 +660,8 @@ enum class VertexType : uint8_t;
 
 enum class ViewSecurityType : uint8_t;
 
+enum class VolatilityReason : uint8_t;
+
 enum class WALType : uint8_t;
 
 enum class WindowAggregationMode : uint32_t;
@@ -1612,6 +1614,9 @@ const char* EnumUtil::ToChars<VertexType>(VertexType value);
 
 template<>
 const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
+
+template<>
+const char* EnumUtil::ToChars<VolatilityReason>(VolatilityReason value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -2570,6 +2575,9 @@ VertexType EnumUtil::FromString<VertexType>(const char *value);
 
 template<>
 ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
+
+template<>
+VolatilityReason EnumUtil::FromString<VolatilityReason>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

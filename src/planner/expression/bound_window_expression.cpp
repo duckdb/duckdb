@@ -25,6 +25,11 @@ bool BoundWindowExpression::IsVolatile() const {
 	return stability == FunctionStability::VOLATILE || Expression::IsVolatile();
 }
 
+bool BoundWindowExpression::IsDeterministic() const {
+	auto stability = aggregate ? aggregate->GetStability() : window->GetStability();
+	return stability != FunctionStability::VOLATILE && Expression::IsDeterministic();
+}
+
 string BoundWindowExpression::ToString() const {
 	string function_name =
 	    aggregate.get() ? aggregate->GetName().GetIdentifierName() : window->GetName().GetIdentifierName();

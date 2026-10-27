@@ -51,6 +51,10 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
+//! Why a VOLATILE function must be evaluated at execution time
+//! NON_DETERMINISTIC       -> equal inputs may give different results (e.g. RANDOM(), NEXTVAL())
+//! NO_PLAN_TIME_EVALUATION -> equal inputs always give the same outcome, but it must never be evaluated early (e.g. ERROR())
+enum class VolatilityReason : uint8_t { NON_DETERMINISTIC = 0, NO_PLAN_TIME_EVALUATION = 1 };
 
 //! How to handle collations
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
@@ -563,12 +567,22 @@ public:
 		requires_ordered_execution = value;
 	}
 
+	auto GetVolatilityReason() const -> VolatilityReason {
+		return volatility_reason;
+	}
+	//! Whether equal inputs always give the same outcome, so evaluations may be shared across rows
+	auto IsDeterministic() const -> bool {
+		return stability != FunctionStability::VOLATILE ||
+		       volatility_reason == VolatilityReason::NO_PLAN_TIME_EVALUATION;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
 	}
-	auto SetVolatile() -> void {
+	auto SetVolatile(VolatilityReason reason = VolatilityReason::NON_DETERMINISTIC) -> void {
 		stability = FunctionStability::VOLATILE;
+		volatility_reason = reason;
 	}
 
 	bool operator==(const FunctionProperties &rhs) const;
@@ -590,6 +604,8 @@ public:
 	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
+	//! Why the function is VOLATILE. only meaningful when stability is VOLATILE
+	VolatilityReason volatility_reason = VolatilityReason::NON_DETERMINISTIC;
 };
 
 class BoundSimpleFunction {

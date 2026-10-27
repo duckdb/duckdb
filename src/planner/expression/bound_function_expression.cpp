@@ -57,6 +57,12 @@ bool BoundFunctionExpression::IsVolatile() const {
 	       Expression::IsVolatile();
 }
 
+bool BoundFunctionExpression::IsDeterministic() const {
+	auto lambda_expr = GetLambdaExpression(*this);
+	return function.IsDeterministic() && (!lambda_expr || lambda_expr->IsDeterministic()) &&
+	       Expression::IsDeterministic();
+}
+
 bool BoundFunctionExpression::IsConsistent() const {
 	auto lambda_expr = GetLambdaExpression(*this);
 	return function.GetStability() == FunctionStability::CONSISTENT && (!lambda_expr || lambda_expr->IsConsistent()) &&
