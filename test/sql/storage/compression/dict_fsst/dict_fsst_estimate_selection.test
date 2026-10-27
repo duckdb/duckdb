@@ -37,6 +37,10 @@ CREATE TABLE short_unique AS SELECT lpad(row_id::VARCHAR, 12, '0') AS s FROM ran
 statement ok
 CREATE TABLE short_repeated AS SELECT 'value-' || (row_id % 100)::VARCHAR AS s FROM range(100000) AS input(row_id);
 
+# a single two-byte string: the bitpacked index and length groups of a dictionary cost more than the string itself
+statement ok
+CREATE TABLE one_row AS SELECT 'aa' AS s;
+
 statement ok
 CHECKPOINT;
 
@@ -52,11 +56,14 @@ FROM (
     SELECT 'short_unique', compression FROM pragma_storage_info('short_unique') WHERE segment_type = 'VARCHAR'
     UNION ALL
     SELECT 'short_repeated', compression FROM pragma_storage_info('short_repeated') WHERE segment_type = 'VARCHAR'
+    UNION ALL
+    SELECT 'one_row', compression FROM pragma_storage_info('one_row') WHERE segment_type = 'VARCHAR'
 )
 GROUP BY table_name ORDER BY table_name;
 ----
 long_repeated	DICT_FSST
 long_unique	ZSTD
+one_row	Uncompressed
 short_repeated	DICT_FSST
 short_unique	DICT_FSST
 skewed	DICT_FSST
