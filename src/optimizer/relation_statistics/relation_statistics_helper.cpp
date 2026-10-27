@@ -1,5 +1,9 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
+#include "duckdb/common/types/value_map.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -7,6 +11,138 @@
 #include <math.h>
 
 namespace duckdb {
+
+optional<DistinctCount> RelationStatisticsHelper::SelectTotalDomain(const vector<DistinctCount> &domains) {
+	optional<DistinctCount> reliable;
+	optional<DistinctCount> min_max;
+	optional<DistinctCount> fallback;
+	for (auto &domain : domains) {
+		switch (domain.source) {
+		case DistinctCountSource::HLL:
+		case DistinctCountSource::EXACT:
+			if (!reliable || domain.distinct_count > reliable->distinct_count) {
+				reliable = domain;
+			}
+			break;
+		case DistinctCountSource::MIN_MAX:
+			if (!min_max || domain.distinct_count > min_max->distinct_count) {
+				min_max = domain;
+			}
+			break;
+		case DistinctCountSource::CARDINALITY:
+			if (!fallback || domain.distinct_count < fallback->distinct_count) {
+				fallback = domain;
+			}
+			break;
+		}
+	}
+	if (reliable) {
+		return reliable;
+	}
+	if (min_max) {
+		return min_max;
+	}
+	return fallback;
+}
+
+idx_t RelationStatisticsHelper::CardinalityFromDouble(double cardinality) {
+	if (!(cardinality > 0)) {
+		return 0;
+	}
+	// doubles at or above 2^64 - 2^11 round to 2^64; casting those is undefined
+	if (cardinality >= static_cast<double>(NumericLimits<idx_t>::Maximum())) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return LossyNumericCast<idx_t>(cardinality);
+}
+
+static bool MatchesTargetColumn(const Expression &expression, optional<ColumnBinding> target_binding) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return !target_binding || expression.Cast<BoundColumnRefExpression>().Binding() == *target_binding;
+	}
+	return !target_binding && expression.GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+optional_idx RelationStatisticsHelper::EstimateDirectFilterDomain(const Expression &expression,
+                                                                  optional<ColumnBinding> target_binding,
+                                                                  idx_t maximum_domain) {
+	if (BoundComparisonExpression::IsComparison(expression)) {
+		auto &comparison = expression.Cast<BoundFunctionExpression>();
+		if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			return {};
+		}
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		optional_ptr<const Expression> constant;
+		if (MatchesTargetColumn(left, target_binding)) {
+			constant = right;
+		} else if (MatchesTargetColumn(right, target_binding)) {
+			constant = left;
+		}
+		if (constant && constant->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		    !constant->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			return optional_idx(MinValue<idx_t>(maximum_domain, 1));
+		}
+		return {};
+	}
+
+	if (expression.GetExpressionType() == ExpressionType::COMPARE_IN &&
+	    expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		auto &children = expression.Cast<BoundOperatorExpression>().GetChildren();
+		if (children.empty() || !MatchesTargetColumn(*children[0], target_binding)) {
+			return {};
+		}
+		value_set_t constants;
+		for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
+			if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+				return {};
+			}
+			auto &value = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+			if (!value.IsNull()) {
+				constants.insert(value);
+			}
+		}
+		return optional_idx(MinValue<idx_t>(maximum_domain, constants.size()));
+	}
+
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return {};
+	}
+	auto &conjunction = expression.Cast<BoundConjunctionExpression>();
+	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		optional_idx result;
+		for (auto &child : conjunction.GetChildren()) {
+			auto child_bound = EstimateDirectFilterDomain(*child, target_binding, maximum_domain);
+			if (!child_bound.IsValid()) {
+				continue;
+			}
+			result = result.IsValid() ? MinValue(result.GetIndex(), child_bound.GetIndex()) : child_bound;
+		}
+		return result;
+	}
+	if (expression.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
+		return {};
+	}
+	// Every OR branch must supply a bound; saturation may not skip validating the remaining branches.
+	idx_t result = 0;
+	bool saturated = false;
+	for (auto &child : conjunction.GetChildren()) {
+		auto child_bound = EstimateDirectFilterDomain(*child, target_binding, maximum_domain);
+		if (!child_bound.IsValid()) {
+			return {};
+		}
+		if (saturated) {
+			continue;
+		}
+		if (child_bound.GetIndex() >= maximum_domain - result) {
+			saturated = true;
+			result = maximum_domain;
+		} else {
+			result += child_bound.GetIndex();
+		}
+	}
+	return optional_idx(result);
+}
 
 struct ExpressionBinding {
 	bool FoundExpression() const {
@@ -28,6 +164,9 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.GetChildren().empty()) {
+			if (expr.IsVolatile()) {
+				return result;
+			}
 			result.expression = expr;
 			result.expression_is_constant = true;
 			return result;
@@ -51,12 +190,15 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	default:
 		break;
 	}
+	if (expr.IsVolatile()) {
+		return result;
+	}
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
 		if (result.FoundColumnRef()) {
 			return;
 		}
 		auto child_result = GetChildColumnBinding(*child);
-		if (child_result.FoundExpression()) {
+		if (child_result.FoundColumnRef()) {
 			result = child_result;
 		}
 	});
@@ -67,6 +209,8 @@ optional<RelationStats> RelationStatisticsHelper::ExtractProjectionStats(Logical
                                                                          const RelationStats &child_stats) {
 	RelationStats result;
 	result.cardinality = child_stats.cardinality;
+	// Projections preserve rows, so the retention provenance continues.
+	result.row_retention = child_stats.row_retention;
 	result.table_name = Identifier(projection.GetName());
 	result.stats_initialized = true;
 	auto bindings = projection.GetColumnBindings();
@@ -106,6 +250,9 @@ idx_t RelationStatisticsHelper::EstimateDistinctCardinality(const vector<Distinc
 	if (distinct_counts.empty()) {
 		return input_cardinality / 2;
 	}
+	if (distinct_counts.size() == 1) {
+		return MinValue(distinct_counts[0].distinct_count, input_cardinality);
+	}
 	double product = 1;
 	for (auto &distinct_count : distinct_counts) {
 		product *= static_cast<double>(MaxValue<idx_t>(distinct_count.distinct_count, 1));
@@ -113,8 +260,40 @@ idx_t RelationStatisticsHelper::EstimateDistinctCardinality(const vector<Distinc
 	product *= pow(0.95, static_cast<double>(distinct_counts.size() - 1));
 	const auto multiplier = 1.0 - exp(-static_cast<double>(input_cardinality) / product);
 	const auto estimate = multiplier == 0 ? static_cast<double>(input_cardinality) : product * multiplier;
-	auto result = LossyNumericCast<idx_t>(MinValue(estimate, static_cast<double>(input_cardinality)));
+	auto result = MinValue(CardinalityFromDouble(estimate), input_cardinality);
 	return input_cardinality > 0 ? MaxValue<idx_t>(result, 1) : 0;
+}
+
+DistinctCount RelationStatisticsHelper::EstimateCurrentDomain(const DistinctCount &current_domain,
+                                                              idx_t input_cardinality, idx_t output_cardinality) {
+	auto count = MinValue(current_domain.distinct_count, input_cardinality);
+	if (count == 0 || output_cardinality == 0 || input_cardinality == 0) {
+		return DistinctCount(0, DistinctCountSource::CARDINALITY);
+	}
+	if (output_cardinality >= input_cardinality) {
+		return DistinctCount(count, current_domain.source);
+	}
+
+	const auto row_survival = static_cast<double>(output_cardinality) / static_cast<double>(input_cardinality);
+	const auto multiplicity = static_cast<double>(input_cardinality) / static_cast<double>(count);
+	const auto retained_fraction = -expm1(multiplicity * log1p(-row_survival));
+	auto result = CardinalityFromDouble(round(static_cast<double>(count) * retained_fraction));
+	result = MinValue(result, output_cardinality);
+	result = MinValue(result, count);
+	return DistinctCount(MaxValue<idx_t>(result, 1), DistinctCountSource::CARDINALITY);
+}
+
+void RelationStatisticsHelper::ApplyCardinality(RelationStats &stats, idx_t output_cardinality) {
+	const auto input_cardinality = stats.cardinality;
+	for (auto &column : stats.columns) {
+		column.current_domain = EstimateCurrentDomain(column.current_domain, input_cardinality, output_cardinality);
+		column.current_domain.distinct_count =
+		    MinValue(column.current_domain.distinct_count, column.total_domain.distinct_count);
+	}
+	if (input_cardinality > 0 && output_cardinality < input_cardinality) {
+		stats.row_retention *= double(output_cardinality) / double(input_cardinality);
+	}
+	stats.cardinality = output_cardinality;
 }
 
 optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate &aggregate,
@@ -132,7 +311,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 			if (!column) {
 				return {};
 			}
-			auto count = column->total_domain;
+			auto count = column->current_domain;
 			count.distinct_count = MaxValue<idx_t>(count.distinct_count, 1);
 			set_counts.push_back(count);
 		}
@@ -144,6 +323,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 	RelationStats result;
 	result.cardinality =
 	    aggregate.groups.empty() ? 1 : EstimateDistinctCardinality(cardinality_counts, child_stats.cardinality);
+	// Aggregation outputs groups rather than retained source rows: retention provenance restarts here.
 	result.table_name = Identifier(aggregate.GetName());
 	result.stats_initialized = true;
 	auto bindings = aggregate.GetColumnBindings();
@@ -157,11 +337,18 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 				return {};
 			}
 			distinct_count = child_column->total_domain;
-			semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
+			// Multiple grouping sets duplicate keys and NULL-extend them, invalidating child evidence.
+			if (aggregate.grouping_sets.size() <= 1) {
+				semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
+			}
 		}
 		auto current_domain = distinct_count;
 		if (group.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			current_domain = child_columns.Find(group.Cast<BoundColumnRefExpression>().Binding())->current_domain;
+		}
+		if (aggregate.groups.size() == 1 && aggregate.grouping_sets.size() == 1 &&
+		    aggregate.grouping_sets[0].size() == 1 && aggregate.grouping_sets[0].count(ProjectionIndex(0)) > 0) {
+			semi_anti_join_domain_evidence.MarkUnique();
 		}
 		result.columns.emplace_back(bindings[result.columns.size()], distinct_count, current_domain,
 		                            Identifier(group.GetName()), semi_anti_join_domain_evidence);
@@ -186,6 +373,8 @@ optional<RelationStats> RelationStatisticsHelper::ExtractWindowStats(LogicalWind
                                                                      const RelationStats &child_stats) {
 	RelationStats result;
 	result.cardinality = child_stats.cardinality;
+	// Windows preserve rows, so the retention provenance continues.
+	result.row_retention = child_stats.row_retention;
 	result.table_name = Identifier(window.GetName());
 	result.stats_initialized = true;
 	RelationColumnStatsLookup child_columns(child_stats);
@@ -210,15 +399,29 @@ static optional<DistinctCount> GetDistinctTargetCount(Expression &target, const 
 	switch (target.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		auto column = child_columns.Find(target.Cast<BoundColumnRefExpression>().Binding());
-		return column ? optional<DistinctCount>(column->total_domain) : optional<DistinctCount>();
+		return column ? optional<DistinctCount>(column->current_domain) : optional<DistinctCount>();
 	}
 	case ExpressionClass::BOUND_REF: {
 		auto index = target.Cast<BoundReferenceExpression>().Index();
-		return index < child_stats.columns.size() ? optional<DistinctCount>(child_stats.columns[index].total_domain)
+		return index < child_stats.columns.size() ? optional<DistinctCount>(child_stats.columns[index].current_domain)
 		                                          : optional<DistinctCount>();
 	}
 	case ExpressionClass::BOUND_CONSTANT:
 		return DistinctCount(MinValue<idx_t>(child_stats.cardinality, 1), DistinctCountSource::EXACT);
+	default:
+		return {};
+	}
+}
+
+static optional<ColumnBinding> GetDistinctTargetBinding(Expression &target, const RelationStats &child_stats) {
+	switch (target.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+		return target.Cast<BoundColumnRefExpression>().Binding();
+	case ExpressionClass::BOUND_REF: {
+		auto index = target.Cast<BoundReferenceExpression>().Index();
+		return index < child_stats.columns.size() ? optional<ColumnBinding>(child_stats.columns[index].binding)
+		                                          : optional<ColumnBinding>();
+	}
 	default:
 		return {};
 	}
@@ -233,7 +436,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractDistinctStats(LogicalDi
 	vector<DistinctCount> distinct_counts;
 	if (distinct.distinct_targets.empty()) {
 		for (auto &column : child_stats.columns) {
-			distinct_counts.push_back(column.total_domain);
+			distinct_counts.push_back(column.current_domain);
 		}
 	} else {
 		RelationColumnStatsLookup child_columns(child_stats);
@@ -246,10 +449,79 @@ optional<RelationStats> RelationStatisticsHelper::ExtractDistinctStats(LogicalDi
 		}
 	}
 	result->cardinality = EstimateDistinctCardinality(distinct_counts, child_stats.cardinality);
-	for (auto &column : result->columns) {
-		column.total_domain.distinct_count = MinValue(column.total_domain.distinct_count, result->cardinality);
-	}
 	result->CapCurrentDomainsToCardinality();
+	if (result->columns.size() == 1 && distinct.distinct_targets.empty()) {
+		result->columns[0].semi_anti_join_domain_evidence.MarkUnique();
+	} else if (distinct.distinct_targets.size() == 1) {
+		auto target_binding = GetDistinctTargetBinding(*distinct.distinct_targets[0], child_stats);
+		if (target_binding) {
+			for (auto &column : result->columns) {
+				if (column.binding == *target_binding) {
+					column.semi_anti_join_domain_evidence.MarkUnique();
+					break;
+				}
+			}
+		}
+	}
+	return result;
+}
+
+optional<RelationStats> RelationStatisticsHelper::ExtractFilterStats(LogicalFilter &filter,
+                                                                     const RelationStats &child_stats) {
+	auto result = ProjectOutputStats(child_stats, filter);
+	if (!result) {
+		return {};
+	}
+	auto cardinality = child_stats.cardinality;
+	if (cardinality > 0) {
+		cardinality = MaxValue<idx_t>(LossyNumericCast<idx_t>(double(cardinality) * DEFAULT_SELECTIVITY), 1);
+	}
+	ApplyCardinality(*result, cardinality);
+	for (auto &column : result->columns) {
+		for (auto &expression : filter.expressions) {
+			auto direct_bound =
+			    EstimateDirectFilterDomain(*expression, column.binding, column.total_domain.distinct_count);
+			if (!direct_bound.IsValid()) {
+				continue;
+			}
+			column.current_domain =
+			    DistinctCount(MinValue(column.current_domain.distinct_count, direct_bound.GetIndex()),
+			                  DistinctCountSource::CARDINALITY);
+			column.semi_anti_join_domain_evidence.TightenFilterDomainBound(direct_bound.GetIndex());
+		}
+	}
+	return result;
+}
+
+optional<RelationStats> RelationStatisticsHelper::ExtractLimitStats(LogicalLimit &limit,
+                                                                    const RelationStats &child_stats) {
+	auto result = ProjectOutputStats(child_stats, limit);
+	if (!result) {
+		return {};
+	}
+	auto available_cardinality = child_stats.cardinality;
+	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto offset = limit.offset_val.GetConstantValue();
+		available_cardinality = offset >= available_cardinality ? 0 : available_cardinality - offset;
+	}
+	auto cardinality = available_cardinality;
+	switch (limit.limit_val.Type()) {
+	case LimitNodeType::CONSTANT_VALUE:
+		cardinality = MinValue(cardinality, limit.limit_val.GetConstantValue());
+		break;
+	case LimitNodeType::CONSTANT_PERCENTAGE: {
+		auto percentage = limit.limit_val.GetConstantPercentage();
+		auto percentage_cardinality = child_stats.cardinality;
+		if (percentage < 100) {
+			percentage_cardinality = LossyNumericCast<idx_t>(double(child_stats.cardinality) * percentage / 100.0);
+		}
+		cardinality = MinValue(cardinality, percentage_cardinality);
+		break;
+	}
+	default:
+		break;
+	}
+	ApplyCardinality(*result, cardinality);
 	return result;
 }
 

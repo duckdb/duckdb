@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -131,6 +132,105 @@ static optional<RelationStats> ExtractCrossProductStats(LogicalOperator &op,
 	return ProjectChildStats(op, child_stats, cardinality);
 }
 
+static idx_t AddDistinctCounts(idx_t left, idx_t right) {
+	idx_t result;
+	if (!TryAddOperator::Operation(left, right, result)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return result;
+}
+
+static optional<RelationStats> ExtractSetOperationStats(LogicalSetOperation &setop,
+                                                        const vector<reference<const RelationStats>> &child_stats) {
+	if (child_stats.empty()) {
+		return {};
+	}
+
+	RelationStats result;
+	result.stats_initialized = true;
+	result.table_name = Identifier(setop.GetName());
+	idx_t summed_cardinality = 0;
+	for (auto &child : child_stats) {
+		summed_cardinality = AddDistinctCounts(summed_cardinality, child.get().cardinality);
+	}
+	switch (setop.type) {
+	case LogicalOperatorType::LOGICAL_UNION: {
+		// The binder lowers UNION DISTINCT to UNION ALL plus DISTINCT, so the DISTINCT branch is defensive.
+		idx_t max_cardinality = 0;
+		for (auto &child : child_stats) {
+			max_cardinality = MaxValue(max_cardinality, child.get().cardinality);
+		}
+		result.cardinality = setop.setop_all ? summed_cardinality : max_cardinality;
+		break;
+	}
+	// The min and first-child bounds below hold for both the ALL and DISTINCT variants.
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		result.cardinality = child_stats[0].get().cardinality;
+		for (idx_t child_idx = 1; child_idx < child_stats.size(); child_idx++) {
+			result.cardinality = MinValue(result.cardinality, child_stats[child_idx].get().cardinality);
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+		result.cardinality = child_stats[0].get().cardinality;
+		break;
+	default:
+		return {};
+	}
+
+	auto bindings = setop.GetColumnBindings();
+	for (idx_t column_idx = 0; column_idx < bindings.size(); column_idx++) {
+		if (column_idx >= child_stats[0].get().columns.size()) {
+			return {};
+		}
+		auto &first_column = child_stats[0].get().columns[column_idx];
+		auto total_domain = first_column.total_domain;
+		auto current_domain = first_column.current_domain;
+		for (idx_t child_idx = 1; child_idx < child_stats.size(); child_idx++) {
+			if (column_idx >= child_stats[child_idx].get().columns.size()) {
+				return {};
+			}
+			auto &child_column = child_stats[child_idx].get().columns[column_idx];
+			switch (setop.type) {
+			case LogicalOperatorType::LOGICAL_UNION:
+				total_domain.distinct_count =
+				    AddDistinctCounts(total_domain.distinct_count, child_column.total_domain.distinct_count);
+				current_domain.distinct_count =
+				    AddDistinctCounts(current_domain.distinct_count, child_column.current_domain.distinct_count);
+				total_domain.source = DistinctCountSource::CARDINALITY;
+				current_domain.source = DistinctCountSource::CARDINALITY;
+				break;
+			case LogicalOperatorType::LOGICAL_INTERSECT:
+				total_domain.distinct_count =
+				    MinValue(total_domain.distinct_count, child_column.total_domain.distinct_count);
+				current_domain.distinct_count =
+				    MinValue(current_domain.distinct_count, child_column.current_domain.distinct_count);
+				total_domain.source = DistinctCountSource::CARDINALITY;
+				current_domain.source = DistinctCountSource::CARDINALITY;
+				break;
+			case LogicalOperatorType::LOGICAL_EXCEPT:
+				break;
+			default:
+				return {};
+			}
+		}
+		total_domain.distinct_count = MaxValue(total_domain.distinct_count, current_domain.distinct_count);
+		result.columns.emplace_back(bindings[column_idx], total_domain, current_domain, first_column.name);
+	}
+	if (setop.type == LogicalOperatorType::LOGICAL_UNION && !setop.setop_all) {
+		// Distinct output rows cannot exceed the distinct estimate over the combined current domains.
+		vector<DistinctCount> current_domains;
+		for (auto &column : result.columns) {
+			current_domains.push_back(column.current_domain);
+		}
+		result.cardinality =
+		    MinValue(result.cardinality,
+		             RelationStatisticsHelper::EstimateDistinctCardinality(current_domains, summed_cardinality));
+	}
+	result.CapCurrentDomainsToCardinality();
+	result.Verify(bindings);
+	return result;
+}
+
 RelationStats RelationStatisticsHelper::ExtractExplainStats(LogicalOperator &op) {
 	RelationStats result;
 	result.cardinality = 3;
@@ -183,11 +283,7 @@ RelationStatisticsHelper::ExtractOperatorStats(LogicalOperator &op, ClientContex
 		if (child_stats.size() != 1) {
 			return {};
 		}
-		auto cardinality = child_stats[0].get().cardinality;
-		if (cardinality > 0) {
-			cardinality = MaxValue<idx_t>(LossyNumericCast<idx_t>(double(cardinality) * DEFAULT_SELECTIVITY), 1);
-		}
-		return ProjectChildStats(op, child_stats, cardinality);
+		return ExtractFilterStats(op.Cast<LogicalFilter>(), child_stats[0].get());
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		return ExtractUnnestStats(op, child_stats[0].get());
@@ -195,17 +291,16 @@ RelationStatisticsHelper::ExtractOperatorStats(LogicalOperator &op, ClientContex
 		if (child_stats.size() != 1) {
 			return {};
 		}
-		auto cardinality = child_stats[0].get().cardinality;
-		auto &limit = op.Cast<LogicalLimit>();
-		if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			cardinality = MinValue(cardinality, limit.limit_val.GetConstantValue());
-		}
-		return ProjectChildStats(op, child_stats, cardinality);
+		return ExtractLimitStats(op.Cast<LogicalLimit>(), child_stats[0].get());
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return ExtractComparisonJoinStats(op.Cast<LogicalComparisonJoin>(), child_stats);
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return ExtractCrossProductStats(op, child_stats);
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+		return ExtractSetOperationStats(op.Cast<LogicalSetOperation>(), child_stats);
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 		return ExtractEmptyResultStats(op.Cast<LogicalEmptyResult>());
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
