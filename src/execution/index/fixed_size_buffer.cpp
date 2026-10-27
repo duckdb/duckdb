@@ -37,9 +37,9 @@ void PartialBlockForIndex::Clear() {
 constexpr idx_t FixedSizeBuffer::BASE[];
 constexpr uint8_t FixedSizeBuffer::SHIFT[];
 
-FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag, bool unpin_when_unused)
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag)
     : block_manager(block_manager), readers(0), segment_count(0), allocation_size(0), dirty(false), vacuum(false),
-      loaded(false), unpin_when_unused(unpin_when_unused), block_pointer(), block_handle(nullptr) {
+      loaded(false), block_pointer(), block_handle(nullptr) {
 	auto &buffer_manager = block_manager.buffer_manager;
 	buffer_handle = buffer_manager.Allocate(memory_tag, &block_manager, false);
 	block_handle = buffer_handle.GetBlockHandle();
@@ -146,18 +146,12 @@ void FixedSizeBuffer::LoadFromDisk() {
 }
 
 uint32_t FixedSizeBuffer::AllocateSegment(const idx_t bitmask_count, const idx_t available_segments) {
-	if (heap_bitmask) {
-		return AllocateSegment(heap_bitmask.get(), bitmask_count, available_segments);
-	}
+	D_ASSERT(segment_count < available_segments);
+
 	// Get a handle to the buffer's validity mask (offset 0).
 	SegmentHandle handle(*this, 0);
 	handle.MarkModified();
-	return AllocateSegment(handle.GetPtr<validity_t>(), bitmask_count, available_segments);
-}
-
-uint32_t FixedSizeBuffer::AllocateSegment(validity_t *bitmask_ptr, const idx_t bitmask_count,
-                                          const idx_t available_segments) {
-	D_ASSERT(segment_count < available_segments);
+	const auto bitmask_ptr = handle.GetPtr<validity_t>();
 
 	ValidityMask mask(bitmask_ptr, available_segments);
 	const auto data = mask.GetData();
@@ -208,18 +202,12 @@ uint32_t FixedSizeBuffer::AllocateSegment(validity_t *bitmask_ptr, const idx_t b
 }
 
 void FixedSizeBuffer::FreeSegment(const idx_t offset, const idx_t available_segments) {
-	if (heap_bitmask) {
-		FreeSegment(heap_bitmask.get(), offset, available_segments);
-		return;
-	}
-	SegmentHandle handle(*this, 0);
-	handle.MarkModified();
-	FreeSegment(handle.GetPtr<validity_t>(), offset, available_segments);
-}
-
-void FixedSizeBuffer::FreeSegment(validity_t *bitmask_ptr, const idx_t offset, const idx_t available_segments) {
 	D_ASSERT(segment_count > 0);
 	D_ASSERT(offset < available_segments);
+
+	SegmentHandle handle(*this, 0);
+	handle.MarkModified();
+	const auto bitmask_ptr = handle.GetPtr<validity_t>();
 
 	ValidityMask mask(bitmask_ptr, available_segments);
 	D_ASSERT(!mask.RowIsValid(offset));
@@ -260,10 +248,6 @@ idx_t FixedSizeBuffer::GetNewAllocationSize(const idx_t available_segments, cons
 SegmentHandle::SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
 	lock_guard<mutex> l(buffer_ptr->lock);
 
-	if (!buffer_ptr->InMemory() && buffer_ptr->unpin_when_unused) {
-		// the last handle unpinned the buffer: pin it again, reading it back if it was evicted
-		buffer_ptr->buffer_handle = buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
-	}
 	if (!buffer_ptr->InMemory() && !buffer_ptr->loaded) {
 		buffer_ptr->LoadFromDisk();
 	}

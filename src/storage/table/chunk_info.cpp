@@ -394,16 +394,10 @@ template <class F>
 IndexPointer ChunkVectorInfo::NewDeletedData(F &&row_id) {
 	auto data = allocator.New();
 	data.SetMetadata(1);
-	try {
-		auto segment = allocator.GetHandle(data);
-		auto deleted = segment.GetPtr<transaction_t>();
-		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			deleted[i] = row_id(i);
-		}
-	} catch (...) {
-		// pinning the new segment can fail now that the buffers are unpinned
-		allocator.Free(data);
-		throw;
+	auto segment = allocator.GetHandle(data);
+	auto deleted = segment.GetPtr<transaction_t>();
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		deleted[i] = row_id(i);
 	}
 	return data;
 }
@@ -534,8 +528,6 @@ void ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[], 
 	}
 	if (written.count > 0) {
 		written.previous_id_count = DeleteInfo::GetPreviousIdCount(written.previous_ids, written.count);
-		// keep the ids in memory until the undo entry is pushed, so that they can be restored if that fails
-		written.pin = std::move(segment);
 	}
 }
 

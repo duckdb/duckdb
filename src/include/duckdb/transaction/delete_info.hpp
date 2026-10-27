@@ -11,7 +11,6 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/execution/index/fixed_size_buffer.hpp"
 
 namespace duckdb {
 class DuckTableEntry;
@@ -83,8 +82,6 @@ struct WrittenRows {
 	idx_t previous_id_count = 0;
 	uint16_t rows[STANDARD_VECTOR_SIZE];
 	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
-	//! Keeps the vector's per-row ids in memory, if the write changed them
-	SegmentHandle pin;
 
 	//! The rows as an undo entry stores them: nullptr if they are consecutive
 	const uint16_t *GetStoredRows() const {

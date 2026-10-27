@@ -45,7 +45,7 @@ public:
 
 public:
 	//! Constructor for a new in-memory buffer
-	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag, bool unpin_when_unused = false);
+	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag);
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
 	                shared_ptr<BlockHandle> block_handle);
 	//! Constructor for deserializing buffer metadata from disk
@@ -97,10 +97,8 @@ private:
 	void LoadFromDisk();
 	//! Reserves a free slot in the buffer and returns the corresponding offset, marks the buffer as modified.
 	uint32_t AllocateSegment(const idx_t bitmask_count, const idx_t available_segments);
-	uint32_t AllocateSegment(validity_t *bitmask_ptr, const idx_t bitmask_count, const idx_t available_segments);
 	//! Frees the slot at the given offset in the current buffer.
 	void FreeSegment(const idx_t offset, const idx_t available_segments);
-	void FreeSegment(validity_t *bitmask_ptr, const idx_t offset, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 	idx_t GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
@@ -123,10 +121,6 @@ private:
 	bool vacuum;
 	//! True: has been loaded from disk.
 	bool loaded;
-	//! True: the buffer is unpinned (evictable) while no segment handle reads it; only for in-memory buffers
-	bool unpin_when_unused = false;
-	//! The bitmask of free segments of such a buffer, on the heap instead of at offset 0 of the buffer
-	unsafe_unique_array<validity_t> heap_bitmask;
 
 	//! Partial block id and offset
 	BlockPointer block_pointer;
@@ -140,13 +134,19 @@ private:
 
 class SegmentHandle {
 public:
-	//! A handle that holds no segment
-	SegmentHandle() : buffer_ptr(nullptr), ptr(nullptr) {
-	}
+	SegmentHandle() = delete;
 	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset);
 
 	~SegmentHandle() {
-		Release();
+		if (!buffer_ptr) {
+			return;
+		}
+		buffer_ptr->readers--;
+		buffer_ptr = nullptr;
+		ptr = nullptr;
+
+		// FIXME: Enable unpinning buffers with zero readers while preventing oscillation.
+		// FIXME: loaded must be set to true.
 	}
 
 	SegmentHandle(const SegmentHandle &) = delete;
@@ -159,7 +159,9 @@ public:
 	SegmentHandle &operator=(SegmentHandle &&other) noexcept {
 		if (this != &other) {
 			// Decrement reader count for existing handle if it exists
-			Release();
+			if (buffer_ptr) {
+				buffer_ptr->readers--;
+			}
 			buffer_ptr = other.buffer_ptr;
 			ptr = other.ptr;
 			other.buffer_ptr = nullptr;
@@ -195,24 +197,6 @@ public:
 	}
 
 private:
-	void Release() {
-		if (!buffer_ptr) {
-			return;
-		}
-		if (buffer_ptr->unpin_when_unused) {
-			lock_guard<mutex> l(buffer_ptr->lock);
-			if (--buffer_ptr->readers == 0) {
-				buffer_ptr->buffer_handle.Destroy();
-			}
-		} else {
-			// FIXME: Enable unpinning ART buffers, which still hand out raw pointers, while preventing oscillation.
-			// FIXME: loaded must be set to true.
-			buffer_ptr->readers--;
-		}
-		buffer_ptr = nullptr;
-		ptr = nullptr;
-	}
-
 	optional_ptr<FixedSizeBuffer> buffer_ptr;
 	data_ptr_t ptr;
 };

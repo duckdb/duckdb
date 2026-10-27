@@ -32,7 +32,7 @@ public:
 public:
 	//! Construct a new fixed-size allocator
 	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager,
-	                   MemoryTag memory_tag = MemoryTag::ART_INDEX, bool unpin_unused_buffers = false);
+	                   MemoryTag memory_tag = MemoryTag::ART_INDEX);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
@@ -168,8 +168,6 @@ private:
 
 	//! Memory tag of memory that is allocated through the allocator
 	MemoryTag memory_tag;
-	//! Whether buffers are unpinned while no segment handle reads them (see FixedSizeBuffer::unpin_when_unused)
-	bool unpin_unused_buffers;
 	//! Allocation size of one segment in a buffer
 	//! We only need this value to calculate bitmask_count, bitmask_offset, and
 	//! available_segments_per_buffer
