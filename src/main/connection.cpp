@@ -43,7 +43,6 @@ Connection Connection::CreateInternal(ClientContext &caller) {
 	auto &context = *con.context;
 	context.base_context = caller.base_context ? caller.base_context : caller.shared_from_this();
 	context.internal_depth = caller.internal_depth + 1;
-	context.base_deadline = caller.query_deadline;
 	return con;
 }
 

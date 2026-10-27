@@ -67,10 +67,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	} else {
 		query_deadline.SetInvalid();
 	}
-	if (base_deadline.IsValid() &&
-	    (!query_deadline.IsValid() || base_deadline.GetIndex() < query_deadline.GetIndex())) {
-		query_deadline = base_deadline;
-	}
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);

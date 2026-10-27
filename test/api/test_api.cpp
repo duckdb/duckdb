@@ -1087,6 +1087,16 @@ TEST_CASE("Test internal connections follow the interrupts of their base client"
 		child.context->ClearInterrupt();
 	}
 
+	SECTION("The base client's query deadline applies to internal connections while it is set") {
+		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		// a deadline in the past, as a base query that ran out of time would leave it
+		con.context->query_deadline = 1;
+		REQUIRE_THROWS(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_THROWS(child.context->BlockingInterruptCheck());
+		con.context->query_deadline.SetInvalid();
+		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+	}
+
 	SECTION("A query running on behalf of the base stops when the base is interrupted") {
 		REQUIRE_NO_FAIL(
 		    con.Query("CREATE MACRO slow_deleter(h) AS TABLE SELECT sum(i) AS s FROM range(100000000000) t(i)"));
