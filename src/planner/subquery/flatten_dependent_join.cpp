@@ -85,7 +85,10 @@ FlattenDependentJoins::GetCurrentBindings(const vector<ColumnBinding> &state) co
 }
 
 void FlattenDependentJoins::RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state) {
-	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	if (!correlated_aliases.empty()) {
+		// only references to correlated columns are rewritten, without any there is nothing to visit
+		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	}
 	InvalidateAccessCache();
 }
 
