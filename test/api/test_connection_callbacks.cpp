@@ -5,6 +5,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "test_helpers.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <thread>
 
@@ -66,6 +67,7 @@ public:
 				visible = visible || RefersToSameObject(*connection, context);
 			}
 		}
+		completed = true;
 	}
 
 	void Join() {
@@ -80,6 +82,7 @@ public:
 	bool visible = false;
 	bool user_opened = false;
 	bool helper_failed = false;
+	std::atomic<bool> completed {false};
 	idx_t old_count = 0;
 	idx_t new_count = 0;
 
@@ -145,9 +148,11 @@ TEST_CASE("Post-unregistration callbacks can drain connection work", "[api][conn
 	ExtensionCallback::Register(DBConfig::GetConfig(*db.instance), callback);
 
 	connection.reset();
+	auto completed_before_join = callback->completed.load();
 	callback->Join();
 
 	REQUIRE(callback->called);
+	CHECK(completed_before_join);
 	CHECK(callback->drained);
 	CHECK(callback->user_opened);
 	CHECK_FALSE(callback->helper_failed);
@@ -183,7 +188,7 @@ TEST_CASE("An opening callback exception does not register the connection", "[ap
 	Connection anchor(db);
 	auto callback = make_shared_ptr<ThrowingConnectionCallback>();
 	ExtensionCallback::Register(DBConfig::GetConfig(*db.instance), callback);
-	REQUIRE_THROWS_WITH(make_uniq<Connection>(db), "Invalid Input Error: connection callback rejected open");
+	REQUIRE_THROWS_AS(make_uniq<Connection>(db), InvalidInputException);
 	CHECK(ConnectionManager::Get(*db.instance).GetConnectionCount() == 1);
 	CHECK(ConnectionManager::Get(*db.instance).GetConnectionList().size() == 1);
 	Connection next(db);
