@@ -63,11 +63,13 @@ enum class OptimizerType : uint32_t {
 	REDUNDANT_ORDER_KEYS = 46,
 	DISJUNCTIVE_JOIN_REWRITER = 47,
 	REDUNDANT_ORDER = 48,
-	WINDOW_JOIN_PUSHDOWN = 49
+	WINDOW_JOIN_PUSHDOWN = 49,
+	MARK_JOIN_SIMPLIFIER = 50
 };
 
 string OptimizerTypeToString(OptimizerType type);
 OptimizerType OptimizerTypeFromString(const string &str);
+idx_t GetOptimizerCount();
 vector<string> ListAllOptimizers();
 
 } // namespace duckdb

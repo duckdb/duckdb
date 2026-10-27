@@ -28,7 +28,7 @@ EXPLAIN WITH c AS MATERIALIZED (FROM keys) DELETE FROM target WHERE k IN (SELECT
 logical_opt	<REGEX>:.*SEMI.*
 
 statement ok
-SET disabled_optimizers='filter_pushdown';
+SET disabled_optimizers='mark_join_simplifier';
 
 query II
 EXPLAIN DELETE FROM target WHERE k IN (SELECT k FROM keys);

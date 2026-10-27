@@ -62,6 +62,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"redundant_order_keys", OptimizerType::REDUNDANT_ORDER_KEYS},
     {"disjunctive_join_rewriter", OptimizerType::DISJUNCTIVE_JOIN_REWRITER},
     {"redundant_order", OptimizerType::REDUNDANT_ORDER},
+    {"mark_join_simplifier", OptimizerType::MARK_JOIN_SIMPLIFIER},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
@@ -71,6 +72,10 @@ string OptimizerTypeToString(OptimizerType type) {
 		}
 	}
 	throw InternalException("Invalid optimizer type");
+}
+
+idx_t GetOptimizerCount() {
+	return sizeof(internal_optimizer_types) / sizeof(DefaultOptimizerType) - 1;
 }
 
 vector<string> ListAllOptimizers() {

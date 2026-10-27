@@ -305,6 +305,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
+	// Restore filtered markers before projection pullup exposes the converted joins.
+	RunOptimizer(OptimizerType::MARK_JOIN_SIMPLIFIER, [&]() {
+		MarkJoinSimplifier mark_simplifier(*this);
+		mark_simplifier.Optimize(plan);
+	});
+
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
 		ProjectionPullup projection_pullup(*this, plan);
@@ -321,12 +327,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
 		OuterJoinSimplification outer_join_simplification;
 		outer_join_simplification.VisitOperator(*plan);
-	});
-
-	// Consume marker filters after normalization and decorrelation, before join ordering.
-	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
-		MarkJoinSimplifier mark_simplifier(context);
-		mark_simplifier.Optimize(plan);
 	});
 
 	// then we perform the join ordering optimization

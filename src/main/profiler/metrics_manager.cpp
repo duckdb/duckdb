@@ -92,8 +92,7 @@ MetricsManager &MetricsManager::Get(DatabaseInstance &db) {
 idx_t MetricsManager::GetMetricCount() const {
 	lock_guard<mutex> guard(registered_metrics_lock);
 	idx_t count = sizeof(internal_metrics) / sizeof(MetricDescriptor) - 1;
-	count += static_cast<idx_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN) -
-	         static_cast<idx_t>(OptimizerType::EXPRESSION_REWRITER) + 1;
+	count += GetOptimizerCount();
 	count += registered_metrics.size();
 	return count;
 }
@@ -109,10 +108,9 @@ vector<MetricInfo> MetricsManager::GetAllMetrics() const {
 		info.unit = internal_metrics[i].unit;
 		result.push_back(std::move(info));
 	}
-	// Optimizer metrics are generated at runtime from the OptimizerType enum.
-	for (auto opt = static_cast<uint32_t>(OptimizerType::EXPRESSION_REWRITER);
-	     opt <= static_cast<uint32_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN); opt++) {
-		auto opt_type = static_cast<OptimizerType>(opt);
+	// Optimizer metrics are generated at runtime from the registered optimizers.
+	for (auto &optimizer : ListAllOptimizers()) {
+		auto opt_type = OptimizerTypeFromString(optimizer);
 		string opt_name = StringUtil::Lower(EnumUtil::ToString(opt_type));
 		MetricInfo info;
 		info.name = "optimizer." + opt_name;
