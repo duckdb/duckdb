@@ -27,6 +27,12 @@
 			"paths": [
 				"test/sql/types/variant/json_cast_depth.test"
 			]
+		},
+		{
+			"reason": "Forced shredding visits the VARIANT, and VariantVisitor rejects nesting beyond 128 levels; the fixture is 500 deep to exercise the reduced thread stack, which the cast itself handles",
+			"paths": [
+				"test/sql/types/variant/json_cast_depth_thread.test"
+			]
 		}
 	]
 }
