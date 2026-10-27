@@ -1,0 +1,159 @@
+# name: test/sql/join/pushdown/pushdown_join_filter_blocking_probe.test
+# description: Join filters reach probe-side scans that feed a blocking operator
+# group: [pushdown]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+COPY (SELECT i % 100 AS k, (i // 7) % 2000 AS c, i % 10 AS s, i % 997 AS amt FROM range(200000) t(i))
+TO '{TEST_DIR}/join_filter_blocking_probe' (FORMAT parquet, PARTITION_BY (k), OVERWRITE)
+
+statement ok
+CREATE VIEW fact AS FROM read_parquet('{TEST_DIR}/join_filter_blocking_probe/**/*.parquet', hive_partitioning=true)
+
+statement ok
+CREATE TABLE dim AS SELECT i AS k, i // 10 AS yr FROM range(100) t(i)
+
+# the aggregate on the probe side is blocking, its scan must still receive the join filter on the partition column
+query II
+EXPLAIN ANALYZE SELECT a.k, a.total FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a JOIN dim USING (k)
+WHERE yr = 3
+----
+analyzed_plan	<REGEX>:(?s).*Total Files Read: 10[^0-9].*
+
+query II
+SELECT a.k, a.total FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a JOIN dim USING (k)
+WHERE yr = 3 ORDER BY ALL
+----
+30	994692
+31	994698
+32	994704
+33	994710
+34	994716
+35	994722
+36	994728
+37	994734
+38	994740
+39	994746
+
+# same for union and intersect below the aggregate: every scan of the fact table receives the join filter
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(total) FROM (
+	SELECT k, sum(amt) AS total FROM (SELECT k, amt FROM fact UNION ALL SELECT k, amt FROM fact) GROUP BY k
+) a JOIN dim USING (k) WHERE yr = 3
+----
+analyzed_plan	<!REGEX>:(?s).*Total Files Read: 100[^0-9].*
+
+query II
+SELECT count(*), sum(total) FROM (
+	SELECT k, sum(amt) AS total FROM (SELECT k, amt FROM fact UNION ALL SELECT k, amt FROM fact) GROUP BY k
+) a JOIN dim USING (k) WHERE yr = 3
+----
+10	19894380
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM (SELECT k FROM fact INTERSECT SELECT k FROM fact) a JOIN dim USING (k) WHERE yr = 3
+----
+analyzed_plan	<!REGEX>:(?s).*Total Files Read: 100[^0-9].*
+
+query I
+SELECT count(*) FROM (SELECT k FROM fact INTERSECT SELECT k FROM fact) a JOIN dim USING (k) WHERE yr = 3
+----
+10
+
+# inequality joins: the min/max filter of a nested loop join (small build) and a piecewise merge join prunes files
+statement ok
+CREATE TABLE bound_one AS SELECT 35 AS hi
+
+statement ok
+CREATE TABLE bound_many AS SELECT 26 + i AS hi FROM range(10) t(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(total) FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a
+JOIN bound_one ON a.k < bound_one.hi
+----
+analyzed_plan	<REGEX>:(?s).*Nested Loop Join.*Total Files Read: 35[^0-9].*
+
+query II
+SELECT count(*), sum(total) FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a JOIN bound_one ON a.k < bound_one.hi
+----
+35	34811490
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(total) FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a
+JOIN bound_many ON a.k < bound_many.hi
+----
+analyzed_plan	<REGEX>:(?s).*Piecewise Merge Join.*Total Files Read: 36[^0-9].*
+
+query II
+SELECT count(*), sum(total) FROM (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a JOIN bound_many ON a.k < bound_many.hi
+----
+305	303353400
+
+# stacked joins on one probe pipeline: the dimension filter still reaches the scan below the aggregate
+statement ok
+CREATE TABLE probe AS SELECT i % 100 AS k, i AS id FROM range(1000) t(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(a.total), sum(p.id) FROM probe p
+JOIN (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a ON p.k = a.k JOIN dim ON p.k = dim.k WHERE dim.yr = 3
+----
+analyzed_plan	<REGEX>:(?s).*Total Files Read: 10[^0-9].*
+
+query III
+SELECT count(*), sum(a.total), sum(p.id) FROM probe p
+JOIN (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a ON p.k = a.k JOIN dim ON p.k = dim.k WHERE dim.yr = 3
+----
+100	99471900	48450
+
+# a recursive CTE gets no dependencies (its pipelines are rescheduled every iteration), the result is unchanged
+query II
+WITH RECURSIVE r(i, t) AS (
+	SELECT 0, 0::HUGEINT
+	UNION ALL
+	SELECT r.i + 1, a.total FROM r JOIN (SELECT k, sum(amt) AS total FROM fact GROUP BY k) a ON a.k = r.i + 30 WHERE r.i < 3
+)
+SELECT count(*), sum(t) FROM r
+----
+4	2984094
+
+# partial aggregate pushdown moves the fact scan below a pre-aggregation on the join key
+# the dimension has many rows per key, so that both sides of the join are pre-aggregated
+statement ok
+CREATE TABLE dim_dup AS SELECT i % 100 AS k, (i % 100) // 10 AS yr FROM range(10000) t(i)
+
+query II
+EXPLAIN SELECT c, s, sum(amt) FROM fact JOIN dim_dup USING (k) WHERE yr = 3 GROUP BY c, s
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+query II
+EXPLAIN ANALYZE SELECT c, s, sum(amt) FROM fact JOIN dim_dup USING (k) WHERE yr = 3 GROUP BY c, s
+----
+analyzed_plan	<REGEX>:(?s).*Total Files Read: 10[^0-9].*
+
+query IIII
+SELECT count(*), sum(c), sum(s), sum(total) FROM (
+	SELECT c, s, sum(amt) AS total FROM fact JOIN dim_dup USING (k) WHERE yr = 3 GROUP BY c, s
+)
+----
+1400	1396300	6300	994719000
+
+# the result is the same without the rewrite
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query II
+EXPLAIN SELECT c, s, sum(amt) FROM fact JOIN dim_dup USING (k) WHERE yr = 3 GROUP BY c, s
+----
+physical_plan	<!REGEX>:(?s).*combine_aggr.*
+
+query IIII
+SELECT count(*), sum(c), sum(s), sum(total) FROM (
+	SELECT c, s, sum(amt) AS total FROM fact JOIN dim_dup USING (k) WHERE yr = 3 GROUP BY c, s
+)
+----
+1400	1396300	6300	994719000
