@@ -1606,6 +1606,17 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		return PushDownCTERef(plan);
 	}
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
+		auto &ext = plan->Cast<LogicalExtensionOperator>();
+		switch (ext.GetDecorrelationMode()) {
+		case DecorrelationMode::SINGLE_CHILD_PASSTHROUGH:
+			D_ASSERT(plan->children.size() == 1);
+			return PushDownChild(plan, propagate_null_values, std::move(state));
+		case DecorrelationMode::NOT_SUPPORTED:
+			throw BinderException("Extension operator \"%s\" in correlated subqueries is not (yet) supported",
+			                      ext.GetExtensionName());
+		}
+	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");
 	}
