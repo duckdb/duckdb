@@ -13,6 +13,7 @@
 namespace duckdb {
 
 class LogicalFilter;
+class NotNullExpressionAnalyzer;
 class Optimizer;
 
 //! Convert filtered MARK joins while preserving their output schema.
@@ -22,8 +23,8 @@ public:
 	void Optimize(unique_ptr<LogicalOperator> &plan);
 
 private:
-	void Rewrite(unique_ptr<LogicalOperator> &op, LogicalOperator &root);
-	bool TrySimplify(LogicalFilter &filter, LogicalOperator &root);
+	void Rewrite(unique_ptr<LogicalOperator> &op, LogicalOperator &root, NotNullExpressionAnalyzer &nullability);
+	bool TrySimplify(LogicalFilter &filter, LogicalOperator &root, NotNullExpressionAnalyzer &nullability);
 
 private:
 	Optimizer &optimizer;

@@ -1,11 +1,14 @@
 #include "duckdb/optimizer/mark_join_simplifier.hpp"
 
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -16,10 +19,25 @@ namespace duckdb {
 MarkJoinSimplifier::MarkJoinSimplifier(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
-static bool HasOnlyNullSafeComparisons(const LogicalComparisonJoin &join) {
+static bool ComparisonInputIsNotNull(NotNullExpressionAnalyzer &analyzer, LogicalOperator &op, const Expression &expr) {
+	// These comparisons can produce NULL from nested members.
+	if (expr.GetReturnType().id() == LogicalTypeId::TUPLE || expr.GetReturnType().id() == LogicalTypeId::UNION) {
+		return false;
+	}
+	return analyzer.IsNotNull(op, expr);
+}
+
+static bool JoinConditionsCannotBeNull(NotNullExpressionAnalyzer &analyzer, LogicalComparisonJoin &join) {
 	for (auto &condition : join.conditions) {
-		if (!condition.IsComparison() || (condition.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM &&
-		                                  condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+		if (!condition.IsComparison()) {
+			return false;
+		}
+		if (condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			continue;
+		}
+		if (!ComparisonInputIsNotNull(analyzer, *join.children[0], condition.GetLHS()) ||
+		    !ComparisonInputIsNotNull(analyzer, *join.children[1], condition.GetRHS())) {
 			return false;
 		}
 	}
@@ -34,8 +52,83 @@ static bool IsMarker(const Expression &expr, ColumnBinding marker) {
 	return column.Depth() == 0 && column.Binding() == marker;
 }
 
-static void SimplifyNullSafeSemiJoinConditions(ClientContext &context, LogicalComparisonJoin &join) {
-	NotNullExpressionAnalyzer analyzer(context);
+static bool IsMarkerPredicate(const Expression &expr, ColumnBinding marker) {
+	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
+		return false;
+	}
+	if (IsMarker(expr, marker)) {
+		return true;
+	}
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::VALUE_CONSTANT:
+		return true;
+	case ExpressionType::OPERATOR_NOT:
+	case ExpressionType::OPERATOR_IS_NULL:
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+		break;
+	default:
+		if (!BoundComparisonExpression::IsComparison(expr)) {
+			return false;
+		}
+	}
+	bool supported = true;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { supported &= IsMarkerPredicate(child, marker); });
+	return supported;
+}
+
+struct MarkerPredicate {
+	bool accepts_true = false;
+	bool accepts_false = false;
+	bool accepts_null = false;
+
+	bool AcceptsOnlyTrue() const {
+		return accepts_true && !accepts_false && !accepts_null;
+	}
+
+	bool AcceptsOneNonNullValue() const {
+		return accepts_true != accepts_false;
+	}
+};
+
+static MarkerPredicate AnalyzeMarkerPredicate(ClientContext &context, const Expression &expr, ColumnBinding marker) {
+	MarkerPredicate result;
+	if (IsMarker(expr, marker)) {
+		result.accepts_true = true;
+		return result;
+	}
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_NOT &&
+	    IsMarker(*expr.Cast<BoundOperatorExpression>().GetChildren()[0], marker)) {
+		result.accepts_false = true;
+		return result;
+	}
+	if (!IsMarkerPredicate(expr, marker)) {
+		return result;
+	}
+	auto evaluate = [&](const Value &marker_value, bool &accepted) {
+		auto copy = expr.Copy();
+		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+		    copy, [&](BoundColumnRefExpression &, unique_ptr<Expression> &ref) {
+			    ref = make_uniq<BoundConstantExpression>(marker_value);
+		    });
+		Value evaluated;
+		if (!ExpressionExecutor::TryEvaluateScalar(context, *copy, evaluated)) {
+			return false;
+		}
+		accepted = !evaluated.IsNull() && evaluated.GetValue<bool>();
+		return true;
+	};
+	if (!evaluate(Value::BOOLEAN(true), result.accepts_true) ||
+	    !evaluate(Value::BOOLEAN(false), result.accepts_false) ||
+	    !evaluate(Value(LogicalType::BOOLEAN), result.accepts_null)) {
+		return {};
+	}
+	return result;
+}
+
+static void SimplifyNullSafeSemiJoinConditions(NotNullExpressionAnalyzer &analyzer, LogicalComparisonJoin &join) {
 	for (auto &condition : join.conditions) {
 		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			continue;
@@ -51,7 +144,8 @@ static void SimplifyNullSafeSemiJoinConditions(ClientContext &context, LogicalCo
 	}
 }
 
-bool MarkJoinSimplifier::TrySimplify(LogicalFilter &filter, LogicalOperator &root) {
+bool MarkJoinSimplifier::TrySimplify(LogicalFilter &filter, LogicalOperator &root,
+                                     NotNullExpressionAnalyzer &nullability) {
 	if (filter.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;
 	}
@@ -62,14 +156,12 @@ bool MarkJoinSimplifier::TrySimplify(LogicalFilter &filter, LogicalOperator &roo
 	}
 	const ColumnBinding marker(join.mark_index, ProjectionIndex(0));
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {
-		auto &expr = *filter.expressions[i];
+		auto predicate = AnalyzeMarkerPredicate(optimizer.context, *filter.expressions[i], marker);
 		auto target_type = JoinType::INVALID;
-		if (IsMarker(expr, marker)) {
+		if (predicate.AcceptsOnlyTrue()) {
 			target_type = JoinType::SEMI;
-		} else if (expr.GetExpressionType() == ExpressionType::OPERATOR_NOT &&
-		           IsMarker(*expr.Cast<BoundOperatorExpression>().GetChildren()[0], marker) &&
-		           HasOnlyNullSafeComparisons(join)) {
-			target_type = JoinType::ANTI;
+		} else if (predicate.AcceptsOneNonNullValue() && JoinConditionsCannotBeNull(nullability, join)) {
+			target_type = predicate.accepts_true ? JoinType::SEMI : JoinType::ANTI;
 		}
 		if (target_type == JoinType::INVALID) {
 			continue;
@@ -100,7 +192,7 @@ bool MarkJoinSimplifier::TrySimplify(LogicalFilter &filter, LogicalOperator &roo
 		join.mark_types.clear();
 		filter.expressions.erase_at(i);
 		if (target_type == JoinType::SEMI) {
-			SimplifyNullSafeSemiJoinConditions(optimizer.context, join);
+			SimplifyNullSafeSemiJoinConditions(nullability, join);
 		}
 		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(expressions));
 		projection->children.push_back(std::move(filter.children[0]));
@@ -115,21 +207,23 @@ bool MarkJoinSimplifier::TrySimplify(LogicalFilter &filter, LogicalOperator &roo
 	return false;
 }
 
-void MarkJoinSimplifier::Rewrite(unique_ptr<LogicalOperator> &op, LogicalOperator &root) {
+void MarkJoinSimplifier::Rewrite(unique_ptr<LogicalOperator> &op, LogicalOperator &root,
+                                 NotNullExpressionAnalyzer &nullability) {
 	for (auto &child : op->children) {
-		Rewrite(child, root);
+		Rewrite(child, root, nullability);
 	}
 	if (op->type != LogicalOperatorType::LOGICAL_FILTER) {
 		return;
 	}
 	auto &filter = op->Cast<LogicalFilter>();
-	if (TrySimplify(filter, root) && filter.expressions.empty() && !filter.HasProjectionMap()) {
+	if (TrySimplify(filter, root, nullability) && filter.expressions.empty() && !filter.HasProjectionMap()) {
 		op = std::move(filter.children[0]);
 	}
 }
 
 void MarkJoinSimplifier::Optimize(unique_ptr<LogicalOperator> &plan) {
-	Rewrite(plan, *plan);
+	NotNullExpressionAnalyzer nullability(optimizer.context, *plan);
+	Rewrite(plan, *plan, nullability);
 }
 
 } // namespace duckdb

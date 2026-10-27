@@ -46,6 +46,9 @@ EXPLAIN SELECT a, __mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_bu
 ----
 logical_opt	<REGEX>:.*ANTI.*
 
+statement ok
+INSERT INTO mark_build VALUES (NULL);
+
 query II
 EXPLAIN SELECT a, __mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b WHERE NOT __mark_join_marker;
 ----

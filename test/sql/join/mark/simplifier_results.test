@@ -128,10 +128,10 @@ SELECT count(*) FROM union_probe JOIN BY (TYPE MARK) union_build ON a IS NOT DIS
 
 # MARK tuple inequality can return NULL when ordinary tuple inequality returns TRUE.
 statement ok
-CREATE TABLE tuple_probe AS SELECT row(1,2) AS a;
+CREATE TEMP TABLE tuple_probe AS SELECT row(1,2) AS a;
 
 statement ok
-CREATE TABLE tuple_build AS SELECT row(1,NULL::INTEGER) AS b;
+CREATE TEMP TABLE tuple_build AS SELECT row(1,NULL::INTEGER) AS b;
 
 query I
 SELECT count(*) FROM tuple_probe JOIN BY (TYPE MARK) tuple_build ON a<>b WHERE __mark_join_marker;

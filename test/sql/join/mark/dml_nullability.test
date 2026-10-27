@@ -1,0 +1,104 @@
+# name: test/sql/join/mark/dml_nullability.test
+# description: MARK nullability proofs account for same-statement writes
+# group: [mark]
+
+statement ok
+CREATE TABLE b AS SELECT 2 AS b;
+
+query I
+WITH ins AS (INSERT INTO b VALUES (NULL) RETURNING b)
+SELECT 1 WHERE 1 NOT IN (SELECT b FROM b);
+----
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT 2 AS b;
+
+query I
+WITH upd AS (UPDATE b SET b=NULL RETURNING b)
+SELECT 1 WHERE 1 NOT IN (SELECT b FROM b);
+----
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT 2 AS b;
+
+query I
+WITH ins AS (INSERT INTO b VALUES (NULL) RETURNING b)
+SELECT m FROM (SELECT 1 IN (SELECT b FROM b) AS m) marked WHERE m IS NOT TRUE;
+----
+NULL
+
+statement ok
+CREATE TABLE p AS SELECT 1 AS a;
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT 2 AS b;
+
+query I
+WITH ins AS (INSERT INTO p VALUES (NULL) RETURNING a)
+SELECT a FROM p WHERE a NOT IN (SELECT b FROM b);
+----
+1
+
+# The executed filter still proves the build key non-NULL.
+query I
+WITH ins AS (INSERT INTO b VALUES (NULL) RETURNING b)
+SELECT 1 WHERE 1 NOT IN (SELECT b FROM b WHERE b IS NOT NULL);
+----
+1
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT 2 AS b;
+
+query I
+WITH ins AS (INSERT INTO b VALUES (NULL) RETURNING b),
+c AS MATERIALIZED (SELECT b FROM b)
+SELECT 1 WHERE 1 NOT IN (SELECT b FROM c);
+----
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT 2 AS b;
+
+# Null-safe comparisons remain two-valued after a write.
+query I
+WITH ins AS (INSERT INTO b VALUES (NULL) RETURNING b)
+SELECT a FROM p JOIN BY(TYPE MARK) b ON a IS NOT DISTINCT FROM b WHERE NOT __mark_join_marker;
+----
+1
+
+foreach cte_mode true false
+
+statement ok
+SET delim_join_as_cte={cte_mode};
+
+statement ok
+CREATE OR REPLACE TABLE correlated_probe AS SELECT 1 AS id, 5 AS v;
+
+statement ok
+CREATE OR REPLACE TABLE correlated_build AS SELECT * FROM (VALUES (1,6), (2,7)) t(id,v);
+
+# Delimiter elimination also relies on non-nullability when rewriting inequality.
+query III
+WITH ins AS (INSERT INTO correlated_probe VALUES (2,NULL) RETURNING id)
+SELECT id, v, EXISTS (
+    SELECT 1 FROM correlated_build b WHERE b.id=p.id AND p.v<>b.v
+) FROM correlated_probe p ORDER BY id;
+----
+1	5	true
+2	NULL	false
+
+statement ok
+CREATE OR REPLACE TABLE correlated_probe AS SELECT * FROM (VALUES (1,5), (2,8)) t(id,v);
+
+query III
+WITH upd AS (UPDATE correlated_probe SET v=NULL WHERE id=1 RETURNING id)
+SELECT id, v, EXISTS (
+    SELECT 1 FROM correlated_build b WHERE b.id=p.id AND p.v<>b.v
+) FROM correlated_probe p ORDER BY id;
+----
+1	NULL	false
+2	8	true
+
+endloop
+
+statement ok
+RESET delim_join_as_cte;
