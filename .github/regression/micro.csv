@@ -48,6 +48,7 @@ benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/aggregate/min_double.benchmark
 benchmark/micro/aggregate/max_double.benchmark
 benchmark/micro/pushdown/view_filter_below_delim_join.benchmark
+benchmark/micro/string/lpad.benchmark
 benchmark/micro/insert/bulk_insert_commit_batch.benchmark
 benchmark/micro/insert/bulk_insert_commit_parallel.benchmark
 benchmark/micro/insert/bulk_insert_commit_in_memory.benchmark
