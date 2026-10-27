@@ -128,3 +128,84 @@ TEST_CASE("Prefix range filter prune handles all-NULL and missing statistics", "
 	auto no_build = make_expr(uninitialized.get(), true);
 	REQUIRE(prune(*no_build, &all_null) == FilterPropagateResult::NO_PRUNING_POSSIBLE);
 }
+
+TEST_CASE("Prefix range staged lookup preserves validity and local positions", "[filter][prefix_range]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &context = *con.context;
+	constexpr int64_t MIN_KEY = -5;
+	constexpr int64_t MAX_KEY = MIN_KEY + (1 << 24) - 1;
+	constexpr int64_t MID_KEY = MIN_KEY + (1 << 23);
+
+	for (const auto &type : {LogicalType::BIGINT, LogicalType::INTEGER}) {
+		Vector build_keys(type, 3);
+		build_keys.SetValue(0, Value::BIGINT(MIN_KEY));
+		build_keys.SetValue(1, Value::BIGINT(MID_KEY));
+		build_keys.SetValue(2, Value::BIGINT(MAX_KEY));
+		FlatVector::SetSize(build_keys, count_t(3));
+		auto filter = PrefixRangeFilter::CreatePrefixRangeFilter(type);
+		filter->Initialize(context, 3, Value::BIGINT(MIN_KEY).DefaultCastAs(type),
+		                   Value::BIGINT(MAX_KEY).DefaultCastAs(type), 1ULL << 24);
+		REQUIRE(filter->GetBuildStateSize() >= 2 * 1024 * 1024);
+		auto build_state = filter->InitializeBuildState(context);
+		filter->InsertKeys(build_keys, *build_state);
+		filter->MergeBuildState(*build_state);
+
+		for (idx_t count : {idx_t(0), idx_t(1), idx_t(127), idx_t(128), idx_t(129), idx_t(STANDARD_VECTOR_SIZE),
+		                    idx_t(STANDARD_VECTOR_SIZE + 17)}) {
+			for (bool has_nulls : {false, true}) {
+				for (bool dictionary : {false, true}) {
+					for (bool mapped : {false, true}) {
+						CAPTURE(type, count, has_nulls, dictionary, mapped);
+						const auto vector_rows = count + 19;
+						Vector source(type, vector_rows);
+						const int64_t candidates[] = {MIN_KEY,     MAX_KEY,     MIN_KEY + 1, MAX_KEY - 1,
+						                              MIN_KEY - 1, MAX_KEY + 1, MID_KEY};
+						for (idx_t i = 0; i < vector_rows; i++) {
+							source.SetValue(i,
+							                has_nulls && i % 8 == 7 ? Value(type) : Value::BIGINT(candidates[i % 7]));
+						}
+						if (count >= 128) {
+							// Ensure the sampled rows span both ends of the sparse bitmap.
+							const auto step = count / 16;
+							source.SetValue(dictionary != mapped ? vector_rows - 1 : 0, Value::BIGINT(MIN_KEY));
+							source.SetValue(dictionary != mapped ? vector_rows - 1 - step : step,
+							                Value::BIGINT(MAX_KEY));
+						}
+						FlatVector::SetSize(source, count_t(vector_rows));
+						SelectionVector dictionary_sel(vector_rows), input_sel(count), result_sel(count);
+						for (idx_t i = 0; i < vector_rows; i++) {
+							dictionary_sel.set_index(i, vector_rows - i - 1);
+						}
+						Vector keys(type);
+						if (dictionary) {
+							keys.Slice(source, dictionary_sel, vector_rows);
+						} else {
+							keys.Reference(source);
+						}
+
+						vector<idx_t> expected;
+						for (idx_t i = 0; i < count; i++) {
+							input_sel.set_index(i, vector_rows - i - 1);
+							const auto row = mapped ? input_sel.get_index(i) : i;
+							const auto value = keys.GetValue(row);
+							if (value.IsNull()) {
+								continue;
+							}
+							const auto key = value.DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+							if (key == MIN_KEY || key == MID_KEY || key == MAX_KEY) {
+								expected.push_back(i);
+							}
+						}
+						const auto found_count = mapped ? filter->LookupKeys(keys, input_sel, result_sel, count)
+						                                : filter->LookupKeys(keys, result_sel, count);
+						REQUIRE(found_count == expected.size());
+						for (idx_t i = 0; i < found_count; i++) {
+							REQUIRE(result_sel.get_index(i) == expected[i]);
+						}
+					}
+				}
+			}
+		}
+	}
+}
