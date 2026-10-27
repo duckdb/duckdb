@@ -65,11 +65,13 @@ public:
 	bool TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const;
 	bool HasCompleteStats() const;
 	bool AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
+	//! Register a relation whose statistics already describe op's own output (e.g. a child optimizer result).
+	//! Only binding alignment is applied; no statistics are re-derived through pass-through operators.
+	bool AddRelationWithFinalStats(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+	                               const RelationStats &stats);
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	bool AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
-	                             optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
-	                             optional_ptr<LogicalOperator> limit_op,
-	                             vector<reference<LogicalOperator>> &datasource_filters);
+	                             optional_ptr<LogicalOperator> parent, RelationStats &child_stats);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
 
 	const vector<RelationStats> GetRelationStats();
@@ -85,6 +87,8 @@ private:
 	void GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings);
 	void RegisterRelationBindings(LogicalOperator &op, RelationIndex relation_id, const RelationStats &stats);
 	optional<RelationStats> AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats);
+	bool RegisterRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+	                      optional<RelationStats> aligned_stats);
 
 private:
 	ClientContext &context;
