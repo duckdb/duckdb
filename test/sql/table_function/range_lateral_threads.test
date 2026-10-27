@@ -60,6 +60,9 @@ true
 require icu
 
 statement ok
+SET TimeZone='UTC';
+
+statement ok
 SELECT count(*) AS probe_timestamptz_unnest FROM range(10000) t(i), LATERAL unnest([TIMESTAMPTZ '2020-01-01 00:00:00+00' + i * INTERVAL 1 DAY]) r(x);
 
 statement ok
