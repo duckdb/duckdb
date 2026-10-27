@@ -17,12 +17,16 @@ SELECT regexp_extract(message, 'rows=(\d+)', 1)::BIGINT AS rows,
        regexp_extract(message, 'reason=([A-Z_]+)', 1) AS reason
 FROM duckdb_logs WHERE type='PhysicalOperator' AND message LIKE '%FlushBatch%';
 
+# Flush the small fixed-width input through planned batches instead of delayed partition buffers.
+statement ok
+SET partitioned_write_flush_threshold=16384;
+
 # The direct integer partition input stores three columns but writes only two.
-# Counting the bucket and tuple headers closed every batch below the 4 MiB target.
+# Counting the bucket and tuple headers closed every batch below the 128 KiB target.
 statement ok
 CREATE TABLE fixed_input AS
-SELECT i AS k, count(*) AS payload, hash(i,6364136223846793005)%4 AS bucket
-FROM range(3000000) t(i) GROUP BY i;
+SELECT i AS k, 1::BIGINT AS payload, hash(i,6364136223846793005)%4 AS bucket
+FROM range(131072) t(i);
 
 # Keep the COPY and its in-memory log together under forced database restarts.
 statement ok
@@ -36,13 +40,13 @@ CALL truncate_duckdb_logs();
 
 statement ok
 COPY fixed_input TO '{TEST_DIR}/fixed'
-(FORMAT PARQUET, PARTITION_BY bucket, ROW_GROUP_SIZE 4194304, ROW_GROUP_SIZE_BYTES 4194304);
+(FORMAT PARQUET, PARTITION_BY bucket, ROW_GROUP_SIZE 4194304, ROW_GROUP_SIZE_BYTES 131072);
 
 query IIII
 SELECT count(*) FILTER (WHERE reason='BATCH_SIZE_BYTES') >= 8,
-       min(bytes) FILTER (WHERE reason='BATCH_SIZE_BYTES') >= 4194304,
+       min(bytes) FILTER (WHERE reason='BATCH_SIZE_BYTES') >= 131072,
        count(*) FILTER (WHERE reason='FORCED_FLUSH') <= 4,
-       sum(rows)=3000000
+       sum(rows)=131072
 FROM batches();
 ----
 true	true	true	true
@@ -55,7 +59,10 @@ SELECT count(*), count(DISTINCT k), min(k), max(k),
        bool_and(payload=1), bool_and(bucket=hash(k,6364136223846793005)%4)
 FROM read_parquet('{TEST_DIR}/fixed/**/*.parquet', hive_partitioning=true);
 ----
-3000000	3000000	0	2999999	true	true
+131072	131072	0	131071	true	true
+
+statement ok
+RESET partitioned_write_flush_threshold;
 
 # A long unwritten partition key must not contribute to the byte limit either.
 # String partition keys use the sorted backend. The byte budget spans multiple input chunks,
