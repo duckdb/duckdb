@@ -1240,8 +1240,12 @@ public:
 	virtual PartitionedCopyChunkPosition Position() const = 0;
 	//! The number of rows in the current chunk
 	virtual idx_t Count() const = 0;
+	//! An estimate of the bytes the written columns of the current chunk take
+	virtual idx_t ByteEstimate() const = 0;
 	//! The row offsets within the current chunk at which a new partition key starts (none in a single-key group)
 	virtual void PartitionBoundaries(vector<idx_t> &boundaries) const = 0;
+	//! The byte size of every written row of the current chunk (may pin and read the chunk)
+	virtual void RowSizes(vector<idx_t> &sizes) = 0;
 };
 
 //! The rows of one hash group: a hash bin of the sorted input, or one partition of the direct input. A group may
@@ -1262,7 +1266,7 @@ public:
 	virtual void FinishPreparation(idx_t step) = 0;
 
 	//! Chunk access, valid after the preparation steps: a cursor over the chunks, and scans from a chunk on
-	virtual unique_ptr<PartitionedCopyGroupCursor> InitializeCursor() const = 0;
+	virtual unique_ptr<PartitionedCopyGroupCursor> InitializeCursor(const CopyBatchSlicer &slicer) const = 0;
 	virtual unique_ptr<PartitionedCopyGroupScanState>
 	InitializeScan(const PartitionedCopyChunkPosition &position) const = 0;
 	virtual void InitializeScanChunk(DataChunk &chunk) const = 0;
@@ -2208,13 +2212,21 @@ public:
 		idx_t Count() const override {
 			return cursor.Count();
 		}
+		idx_t ByteEstimate() const override {
+			return cursor.AllocationSize(group.input.partitioned_copy.write_columns);
+		}
 		void PartitionBoundaries(vector<idx_t> &boundaries) const override {
 			group.PartitionBoundaries(cursor.Position().row_offset, Count(), boundaries);
 		}
+		void RowSizes(vector<idx_t> &sizes) override;
 
 	private:
 		const SortedBinGroup &group;
 		ColumnDataChunkCursor cursor;
+		//! The sizing state, created on first use
+		unique_ptr<CopyBatchSlicer> slicer;
+		DataChunk scan_chunk;
+		DataChunk size_chunk;
 	};
 
 public:
@@ -2234,7 +2246,7 @@ public:
 	                        idx_t end_block) override;
 	void FinishPreparation(idx_t step) override;
 
-	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor() const override {
+	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor(const CopyBatchSlicer &) const override {
 		return make_uniq<Cursor>(*this);
 	}
 	unique_ptr<PartitionedCopyGroupScanState>
@@ -2492,6 +2504,24 @@ void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
 	                   });
 }
 
+void SortedBinGroup::Cursor::RowSizes(vector<idx_t> &sizes) {
+	auto &partitioned_copy = group.input.partitioned_copy;
+	if (!slicer) {
+		slicer = make_uniq<CopyBatchSlicer>(partitioned_copy.write_types, partitioned_copy.op.batch_size_bytes);
+		group.InitializeScanChunk(scan_chunk);
+		size_chunk.Initialize(partitioned_copy.context, partitioned_copy.write_types);
+	}
+	auto scan_state = group.InitializeScan(Position());
+	if (!group.Scan(*scan_state, scan_chunk) || scan_chunk.size() != Count()) {
+		throw InternalException("Partitioned copy could not scan a chunk to size its rows");
+	}
+	size_chunk.ReferenceColumns(scan_chunk, partitioned_copy.write_columns);
+	sizes.clear();
+	for (const auto &size : slicer->ComputeRowSizes(size_chunk).Values<idx_t>()) {
+		sizes.push_back(size.GetValue());
+	}
+}
+
 void SortedBinGroup::PartitionBoundaries(idx_t row_begin, idx_t chunk_rows, vector<idx_t> &boundaries) const {
 	const auto row_end = row_begin + chunk_rows;
 	const auto begin_entry = row_begin / ValidityMask::BITS_PER_VALUE;
@@ -2596,7 +2626,10 @@ public:
 	//! Walks the tuple chunks without gathering their values
 	class Cursor : public PartitionedCopyGroupCursor {
 	public:
-		explicit Cursor(TupleDataCollection &data_p) : cursor(data_p) {
+		Cursor(const DirectPartitionGroup &group, const CopyBatchSlicer &slicer)
+		    : data(*group.data), cursor(data), fixed_row_bytes(slicer.GetFixedRowBytes()),
+		      omitted_heap_bytes(slicer.FixedRowSize().IsValid() ? 0 : group.OmittedHeapBytes()),
+		      has_heap(!data.GetLayout().AllConstant()) {
 		}
 
 	public:
@@ -2615,20 +2648,32 @@ public:
 		idx_t Count() const override {
 			return cursor.Count();
 		}
+		idx_t ByteEstimate() const override {
+			const auto heap_bytes = cursor.HeapSize();
+			// Clamp before multiplying so an estimated key size cannot overflow or underflow the heap total.
+			const auto omitted_bytes = MinValue(omitted_heap_bytes, heap_bytes / Count()) * Count();
+			return fixed_row_bytes * Count() + heap_bytes - omitted_bytes;
+		}
 		void PartitionBoundaries(vector<idx_t> &boundaries) const override {
 			// a single key: no boundaries
 		}
+		void RowSizes(vector<idx_t> &sizes) override;
 
 	private:
+		TupleDataCollection &data;
 		TupleDataChunkCursor cursor;
+		const idx_t fixed_row_bytes;
+		const idx_t omitted_heap_bytes;
+		const bool has_heap;
 		idx_t row_offset = 0;
 		bool started = false;
 	};
 
 public:
-	DirectPartitionGroup(ClientContext &context, unique_ptr<TupleDataCollection> data_p,
+	DirectPartitionGroup(const PartitionedCopy &partitioned_copy, unique_ptr<TupleDataCollection> data_p,
 	                     vector<column_t> column_ids_p = {})
-	    : context(context), data(std::move(data_p)), count(data->Count()), column_ids(std::move(column_ids_p)) {
+	    : partitioned_copy(partitioned_copy), data(std::move(data_p)), count(data->Count()),
+	      column_ids(std::move(column_ids_p)) {
 		if (column_ids.empty()) {
 			const auto column_count = data->GetLayout().ColumnCount();
 			for (column_t col_idx = 0; col_idx < column_count; col_idx++) {
@@ -2654,18 +2699,21 @@ public:
 		throw InternalException("DirectPartitionGroup has no preparation steps");
 	}
 
-	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor() const override {
-		return make_uniq<Cursor>(*data);
+	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor(const CopyBatchSlicer &slicer) const override {
+		return make_uniq<Cursor>(*this, slicer);
 	}
 	unique_ptr<PartitionedCopyGroupScanState>
 	InitializeScan(const PartitionedCopyChunkPosition &position) const override;
 	void InitializeScanChunk(DataChunk &chunk) const override {
-		chunk.Initialize(Allocator::Get(context), scan_types);
+		chunk.Initialize(Allocator::Get(partitioned_copy.context), scan_types);
 	}
 	bool Scan(PartitionedCopyGroupScanState &state, DataChunk &chunk) const override;
 
 private:
-	ClientContext &context;
+	idx_t OmittedHeapBytes() const;
+
+private:
+	const PartitionedCopy &partitioned_copy;
 	unique_ptr<TupleDataCollection> data;
 	const idx_t count;
 	//! The columns read from the tuples, and their types
@@ -2695,8 +2743,8 @@ public:
 	                        idx_t end_block) override;
 	void FinishPreparation(idx_t step) override;
 
-	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor() const override {
-		return sorted->InitializeCursor();
+	unique_ptr<PartitionedCopyGroupCursor> InitializeCursor(const CopyBatchSlicer &slicer) const override {
+		return sorted->InitializeCursor(slicer);
 	}
 	unique_ptr<PartitionedCopyGroupScanState>
 	InitializeScan(const PartitionedCopyChunkPosition &position) const override {
@@ -2813,10 +2861,58 @@ vector<unique_ptr<PartitionedCopyGroup>> IntegerPartitionInput::Finalize(ClientC
 		if (partition_idx == overflow_idx) {
 			groups.push_back(make_uniq<OverflowSortGroup>(*this, context, std::move(partition)));
 		} else {
-			groups.push_back(make_uniq<DirectPartitionGroup>(context, std::move(partition)));
+			groups.push_back(make_uniq<DirectPartitionGroup>(partitioned_copy, std::move(partition)));
 		}
 	}
 	return groups;
+}
+
+idx_t DirectPartitionGroup::OmittedHeapBytes() const {
+	const auto &op = partitioned_copy.op;
+	if (!op.batch_size_bytes.IsValid() || op.write_partition_columns) {
+		return 0;
+	}
+	vector<column_t> omitted_columns;
+	const auto &variable_columns = data->GetLayout().GetVariableColumns();
+	for (const auto &partition_column : op.partition_columns) {
+		const auto column_id = column_ids[partition_column];
+		if (std::find(variable_columns.begin(), variable_columns.end(), column_id) != variable_columns.end()) {
+			omitted_columns.push_back(column_id);
+		}
+	}
+	if (omitted_columns.empty()) {
+		return 0;
+	}
+
+	// Every row has the same partition key. Gather its variable columns once.
+	TupleDataChunkIterator iterator(*data, TupleDataPinProperties::UNPIN_AFTER_DONE, {0, 0}, true);
+	DataChunk key_chunk;
+	data->InitializeChunk(key_chunk, omitted_columns);
+	auto &chunk_state = iterator.GetChunkState();
+	const auto &selection = *FlatVector::IncrementalSelectionVector();
+	for (idx_t i = 0; i < omitted_columns.size(); i++) {
+		data->Gather(chunk_state.row_locations, selection, 1, omitted_columns[i], key_chunk.data[i], selection,
+		             nullptr);
+	}
+	key_chunk.SetChildCardinality(1);
+	CopyBatchSlicer slicer(key_chunk.GetTypes(), op.batch_size_bytes);
+	return slicer.ComputeRowSizes(key_chunk).Values<idx_t>()[0].GetValue() - slicer.GetFixedRowBytes();
+}
+
+void DirectPartitionGroup::Cursor::RowSizes(vector<idx_t> &sizes) {
+	const auto chunk_rows = cursor.Count();
+	sizes.assign(chunk_rows, fixed_row_bytes);
+	if (!has_heap) {
+		return;
+	}
+	TupleDataChunkIterator iterator(data, TupleDataPinProperties::UNPIN_AFTER_DONE, cursor.Position(), true);
+	if (iterator.GetCurrentChunkCount() != chunk_rows) {
+		throw InternalException("Partitioned copy could not read a chunk to size its rows");
+	}
+	const auto heap_sizes = iterator.GetHeapSizes();
+	for (idx_t row = 0; row < chunk_rows; row++) {
+		sizes[row] += heap_sizes[row] - MinValue(heap_sizes[row], omitted_heap_bytes);
+	}
 }
 
 unique_ptr<PartitionedCopyGroupScanState>
@@ -2924,7 +3020,7 @@ vector<unique_ptr<PartitionedCopyGroup>> SortStrategyInput::Finalize(ClientConte
 		// a bin proven to hold a single key is read straight from its tuple data, like a direct partition
 		auto single_key = strategy->TryTakeSinglePartition(bin, *gstate.source);
 		if (single_key) {
-			groups[bin] = make_uniq<DirectPartitionGroup>(context, std::move(single_key), strategy->scan_ids);
+			groups[bin] = make_uniq<DirectPartitionGroup>(partitioned_copy, std::move(single_key), strategy->scan_ids);
 		} else {
 			groups[bin] = make_uniq<SortedBinGroup>(*this, gstate, vector<idx_t> {bin}, chunk_rows[bin].count);
 		}
@@ -3117,10 +3213,9 @@ void PartitionedCopyHashGroup::AddPlannedBatch(idx_t batch_state_idx, Partitione
 	planned_batches.push_back(batch);
 }
 
-//! Plans the batches of the group: one partition per batch, split by the row and byte limits of the COPY. Rows are
-//! sized from the written columns, excluding unwritten columns and tuple storage overhead. Fixed-width rows need no
-//! scan. Variable-width rows use the same sizing as the other COPY paths. Both limits go through the batch analyzer:
-//! like the Parquet writer and the delayed partition path, a batch
+//! Plans the batches of the group: one partition per batch, split by the row and byte limits of the COPY. Cached
+//! written-column estimates are refined near byte boundaries. Fixed-width rows need no scan. Both limits go through
+//! the batch analyzer: like the Parquet writer and the delayed partition path, a batch
 //! is closed once it reaches a limit, so it may exceed the row limit by less than one input vector.
 void PartitionedCopyHashGroup::Plan() {
 	const auto &op = partitioned_copy.op;
@@ -3153,13 +3248,7 @@ void PartitionedCopyHashGroup::Plan() {
 	vector<idx_t> row_sizes;
 	CopyBatchSlicer slicer(partitioned_copy.write_types, batch_size_bytes);
 	const auto fixed_row_size = slicer.FixedRowSize();
-	DataChunk scan_chunk;
-	DataChunk size_chunk;
-	if (batch_size_bytes.IsValid() && !fixed_row_size.IsValid()) {
-		group->InitializeScanChunk(scan_chunk);
-		size_chunk.Initialize(partitioned_copy.context, partitioned_copy.write_types);
-	}
-	auto cursor = group->InitializeCursor();
+	auto cursor = group->InitializeCursor(slicer);
 	while (cursor->Next()) {
 		const auto position = cursor->Position();
 		const auto chunk_rows = cursor->Count();
@@ -3170,25 +3259,13 @@ void PartitionedCopyHashGroup::Plan() {
 			begin = {position, 0};
 			begin_at_next_chunk = false;
 		}
-		const auto chunk_bytes = fixed_row_size.IsValid() ? chunk_rows * fixed_row_size.GetIndex() : 0;
+		const auto chunk_bytes = fixed_row_size.IsValid()     ? chunk_rows * fixed_row_size.GetIndex()
+		                         : batch_size_bytes.IsValid() ? cursor->ByteEstimate()
+		                                                      : 0;
 		boundaries.clear();
 		cursor->PartitionBoundaries(boundaries);
 		boundaries.push_back(chunk_rows);
 		bool sized = false;
-		if (batch_size_bytes.IsValid() && !fixed_row_size.IsValid()) {
-			// Every chunk contributes written bytes. Correcting only the chunk that crosses the limit
-			// would leave earlier storage estimates in batch_bytes and still close batches too soon.
-			auto scan_state = group->InitializeScan(position);
-			if (!group->Scan(*scan_state, scan_chunk) || scan_chunk.size() != chunk_rows) {
-				throw InternalException("Partitioned copy could not scan a chunk to size its rows");
-			}
-			size_chunk.ReferenceColumns(scan_chunk, partitioned_copy.write_columns);
-			row_sizes.clear();
-			for (const auto &size : slicer.ComputeRowSizes(size_chunk).Values<idx_t>()) {
-				row_sizes.push_back(size.GetValue());
-			}
-			sized = true;
-		}
 
 		idx_t row = 0;
 		for (const auto &boundary : boundaries) {
@@ -3201,12 +3278,20 @@ void PartitionedCopyHashGroup::Plan() {
 				idx_t run_rows = boundary - row;
 				if (!sized && batch_size_bytes.IsValid() && run_rows > 1 &&
 				    batch_bytes + chunk_bytes * run_rows / chunk_rows >= batch_size_bytes.GetIndex()) {
-					// The fixed-width run would cross the byte limit. No values need to be gathered.
-					row_sizes.assign(chunk_rows, fixed_row_size.GetIndex());
+					// The run would cross the byte limit. Refine the remaining rows of this chunk.
+					if (fixed_row_size.IsValid()) {
+						row_sizes.assign(chunk_rows, fixed_row_size.GetIndex());
+					} else {
+						cursor->RowSizes(row_sizes);
+						if (row_sizes.size() != chunk_rows) {
+							throw InternalException("Partitioned copy sized %llu rows of a chunk of %llu rows",
+							                        row_sizes.size(), chunk_rows);
+						}
+					}
 					sized = true;
 				}
 				if (sized) {
-					// take rows by their exact size until a limit is reached
+					// take rows by their refined size until a limit is reached
 					while (run_rows) {
 						batch_bytes += row_sizes[row++];
 						++batch_rows;

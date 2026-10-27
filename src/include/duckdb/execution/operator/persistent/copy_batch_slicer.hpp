@@ -23,6 +23,10 @@ public:
 	~CopyBatchSlicer();
 
 public:
+	//! The fixed-width contribution, excluding tuple headers and variable payloads.
+	idx_t GetFixedRowBytes() const {
+		return fixed_row_bytes;
+	}
 	//! Fixed bytes per written row, when sizing needs no values from the input.
 	optional_idx FixedRowSize() const {
 		return batch_size_bytes.IsValid() && layout.AllConstant() ? optional_idx(fixed_row_bytes) : optional_idx();
