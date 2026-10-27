@@ -71,7 +71,7 @@ EXECUTE v7(42)
 
 # complex prepare with mixed types
 statement ok
-PREPARE v8 AS SELECT * FROM (values ('body')) t(field) WHERE CASE WHEN $1 IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split($1, ','))) AS fsq) END
+PREPARE v8 AS SELECT * FROM (values ('body')) t(field) WHERE CASE WHEN $1 IS NULL THEN true ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split($1, ','))) AS fsq) END
 
 statement ok
 EXECUTE v8('body')

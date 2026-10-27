@@ -242,27 +242,30 @@ void UnpivotResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	// collect names and deconflict, construct return type
-	LogicalType child_type =
-	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
-	for (idx_t i = 1; i < arguments.size(); i++) {
-		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			string list_arguments = "Full list: ";
-			idx_t error_index = list_arguments.size();
-			for (idx_t k = 0; k < arguments.size(); k++) {
-				if (k > 0) {
-					list_arguments += ", ";
-				}
-				if (k == i) {
-					error_index = list_arguments.size();
-				}
-				list_arguments += arguments[k]->ToString() + " " + arguments[k]->GetReturnType().ToString();
+	LogicalType child_type = LogicalType::SQLNULL;
+	vector<LogicalType> arg_types;
+	for (auto &argument : arguments) {
+		arg_types.push_back(ExpressionBinder::GetExpressionReturnType(*argument));
+	}
+	idx_t conflict_index;
+	if (!arg_types.empty() && !LogicalType::TryGetMaxLogicalType(context, arg_types, child_type, conflict_index)) {
+		auto &conflict_type = arg_types[conflict_index];
+		string list_arguments = "Full list: ";
+		idx_t error_index = list_arguments.size();
+		for (idx_t k = 0; k < arguments.size(); k++) {
+			if (k > 0) {
+				list_arguments += ", ";
 			}
-			auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-			                                child_type.ToString(), arg_type.ToString());
-			throw BinderException(arguments[i]->GetQueryLocation(),
-			                      QueryErrorContext::Format(list_arguments, error, error_index, false));
+			if (k == conflict_index) {
+				error_index = list_arguments.size();
+			}
+			list_arguments += arguments[k]->ToString() + " " + arguments[k]->GetReturnType().ToString();
 		}
+		auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required%s",
+		                                child_type.ToString(), conflict_type.ToString(),
+		                                LogicalType::GetTypeUnificationHint(context, child_type, conflict_type));
+		throw BinderException(arguments[conflict_index]->GetQueryLocation(),
+		                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 

@@ -48,7 +48,7 @@ SELECT 1 NOT IN (1, 2)::INT, 1 IN (1)::INT::VARCHAR::INT;
 0	1
 
 query II
-SELECT 1 IN (1)::INT IN (1), 1 IN (1) BETWEEN 0 AND 1;
+SELECT 1 IN (1)::INT IN (1), 1 IN (1) BETWEEN false AND true;
 ----
 true	true
 

@@ -54,10 +54,11 @@ void ArrayValueResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	}
 
 	// construct return type
-	LogicalType child_type = arguments[0]->GetReturnType();
-	for (idx_t i = 1; i < arguments.size(); i++) {
-		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->GetReturnType());
+	vector<LogicalType> arg_types;
+	for (auto &argument : arguments) {
+		arg_types.push_back(argument->GetReturnType());
 	}
+	auto child_type = LogicalType::MaxLogicalType(context, arg_types);
 
 	if (arguments.size() > ArrayType::MAX_ARRAY_SIZE) {
 		throw OutOfRangeException("Array size exceeds maximum allowed size");

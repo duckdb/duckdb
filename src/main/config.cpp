@@ -222,6 +222,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
     DUCKDB_SETTING_CALLBACK(OldImplicitCastingSetting),
+    DUCKDB_SETTING(OldTypeUnificationSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),

@@ -16,11 +16,11 @@ statement ok
 INSERT INTO t1(c0) VALUES (0);
 
 query II
-SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0) < 0);
+SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0)::INTEGER < 0);
 ----
 0	0
 
 query II
-SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0) < 0);
+SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0)::INTEGER < 0);
 ----
 

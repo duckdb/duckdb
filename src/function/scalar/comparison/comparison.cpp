@@ -82,8 +82,9 @@ static unique_ptr<FunctionData> ComparisonBind(BindScalarFunctionInput &input) {
 	auto right_type = ExpressionBinder::GetExpressionReturnType(*arguments[1]);
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, left_type, right_type, input_type, TYPE)) {
-		throw BinderException("Cannot compare values of type %s and type %s - an explicit cast is required",
-		                      left_type.ToString(), right_type.ToString());
+		throw BinderException("Cannot compare values of type %s and type %s - an explicit cast is required%s",
+		                      left_type.ToString(), right_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, left_type, right_type));
 	}
 	for (auto &argument : arguments) {
 		argument = BoundCastExpression::AddCastToType(context, std::move(argument), input_type,

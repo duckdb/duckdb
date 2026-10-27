@@ -42,9 +42,10 @@ static void ArrayGenericBinaryResolveTypes(ResolveScalarFunctionTypesInput &inpu
 	// Resolve common type
 	LogicalType common_type;
 	if (!LogicalType::TryGetMaxLogicalType(context, lhs_element_type, rhs_element_type, common_type)) {
-		throw BinderException("%s: Cannot infer common element type (left = '%s', right = '%s')",
+		throw BinderException("%s: Cannot infer common element type (left = '%s', right = '%s')%s",
 		                      SQLIdentifier(bound_function.GetName()), lhs_element_type.ToString(),
-		                      rhs_element_type.ToString());
+		                      rhs_element_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, lhs_element_type, rhs_element_type));
 	}
 
 	// Ensure it is float or double

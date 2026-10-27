@@ -15,14 +15,14 @@ false
 
 # a < NOT b = c is a < (NOT (b = c))
 query I
-SELECT 1 < NOT 2 = 2
+SELECT true < NOT false = false
 ----
 false
 
 query I
-SELECT (1 < NOT 2) = 2
+SELECT (true < NOT false) = false
 ----
-false
+true
 
 query I
 SELECT true = NOT false
@@ -56,12 +56,12 @@ false
 
 # NOT does not swallow AND / OR
 query I
-SELECT 1 < NOT 2 = 2 AND true
+SELECT true < NOT false = false AND true
 ----
 false
 
 query I
-SELECT 1 < NOT 2 = 2 OR false
+SELECT true < NOT false = false OR false
 ----
 false
 
@@ -79,7 +79,7 @@ statement ok
 CREATE TABLE t AS SELECT * FROM (VALUES (1, NULL), (2, 2)) v(a, b);
 
 query II
-SELECT a, a < NOT b IS NULL FROM t ORDER BY a
+SELECT a, a::BOOLEAN < NOT b IS NULL FROM t ORDER BY a
 ----
 1	false
 2	false

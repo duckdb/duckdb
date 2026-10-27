@@ -151,14 +151,11 @@ SELECT list_value(a, b, c) FROM nested_array_table;
 [[[13, 14], [15, 16]], NULL, [[17, 18], [19, 20]]]
 [[[21, NULL], [23, 24]], [[25, 26], [27, 28]], NULL]
 
-# ----------------------------------------------------------------------------------------
-# errors
-# ----------------------------------------------------------------------------------------
-
-statement error
-SELECT list_value([1, 2]::INTEGER[2], [3, 4, 5]::INTEGER[3], [6]::INTEGER[1]);
+# arrays of different sizes are combined as lists
+query II
+SELECT list_value([1, 2]::INTEGER[2], [3, 4, 5]::INTEGER[3], [6]::INTEGER[1]) r, typeof(r);
 ----
-Conversion Error: Cannot cast array of size 2 to array of size 3
+[[1, 2], [3, 4, 5], [6]]	INTEGER[][]
 
 statement ok
 CREATE TABLE mixed_array_table (a INTEGER[2], b VARCHAR[2], c DOUBLE[2]);

@@ -144,8 +144,10 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			LogicalType compare_type;
 			if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
 				throw BinderException(
-				    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
-				    child_type.ToString(), subquery_type);
+				    expr,
+				    "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required%s",
+				    child_type.ToString(), subquery_type,
+				    LogicalType::GetTypeUnificationHint(context, child_type, subquery_type));
 			}
 			child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
 			result->GetChildrenMutable().push_back(std::move(child));
@@ -164,8 +166,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 				if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
 					throw BinderException(
 					    expr,
-					    "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
-					    child_type.ToString(), subquery_type);
+					    "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required%s",
+					    child_type.ToString(), subquery_type,
+					    LogicalType::GetTypeUnificationHint(context, child_type, subquery_type));
 				}
 				child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
 				result->ChildTypesMutable().push_back(subquery_type);

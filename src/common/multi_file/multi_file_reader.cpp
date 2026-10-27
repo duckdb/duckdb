@@ -1250,6 +1250,34 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(file_row_number));
 }
 
+void UnionByName::CombineUnionTypes(ClientContext &context, const vector<vector<string>> &names,
+                                    const vector<vector<LogicalType>> &types, vector<LogicalType> &union_col_types,
+                                    vector<Identifier> &union_col_names) {
+	D_ASSERT(names.size() == types.size());
+	identifier_map_t<idx_t> union_names_map;
+	vector<vector<LogicalType>> column_types;
+	for (idx_t schema_idx = 0; schema_idx < names.size(); schema_idx++) {
+		auto &col_names = names[schema_idx];
+		auto &sql_types = types[schema_idx];
+		D_ASSERT(col_names.size() == sql_types.size());
+		for (idx_t col = 0; col < col_names.size(); ++col) {
+			Identifier col_name(col_names[col]);
+			auto union_find = union_names_map.find(col_name);
+			if (union_find == union_names_map.end()) {
+				union_names_map[col_name] = union_col_names.size();
+				union_col_names.emplace_back(col_name);
+				column_types.emplace_back();
+				column_types.back().push_back(sql_types[col]);
+			} else {
+				column_types[union_find->second].push_back(sql_types[col]);
+			}
+		}
+	}
+	for (auto &col_types : column_types) {
+		union_col_types.push_back(LogicalType::ForceMaxLogicalType(context, col_types));
+	}
+}
+
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
                                     vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
                                     identifier_map_t<idx_t> &union_names_map) {

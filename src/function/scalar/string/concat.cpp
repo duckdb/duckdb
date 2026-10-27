@@ -215,7 +215,8 @@ void SetArgumentType(BoundScalarFunction &bound_function, const LogicalType &typ
 void ResolveListConcatTypes(ResolveScalarFunctionTypesInput &input, bool is_operator) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	LogicalType child_type = LogicalType::SQLNULL;
+	vector<LogicalType> child_types;
+	vector<idx_t> child_arguments;
 	bool all_null = true;
 	for (idx_t i = 0; i < input.GetArgumentCount(); i++) {
 		auto &arg = input.GetArgument(i);
@@ -251,15 +252,22 @@ void ResolveListConcatTypes(ResolveScalarFunctionTypesInput &input, bool is_oper
 			throw BinderException(arg, "Cannot concatenate types %s - an explicit cast is required", type_list);
 		}
 		}
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-			throw BinderException(arg, "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-			                      child_type.ToString(), next_type.ToString());
-		}
+		child_types.push_back(std::move(next_type));
+		child_arguments.push_back(i);
 	}
 	if (all_null) {
 		// all arguments are NULL
 		SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 		return;
+	}
+	LogicalType child_type;
+	idx_t conflict_index;
+	if (!LogicalType::TryGetMaxLogicalType(context, child_types, child_type, conflict_index)) {
+		auto &conflict_type = child_types[conflict_index];
+		throw BinderException(input.GetArgument(child_arguments[conflict_index]),
+		                      "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required%s",
+		                      child_type.ToString(), conflict_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, child_type, conflict_type));
 	}
 	SetArgumentType(bound_function, LogicalType::LIST(child_type), is_operator);
 }

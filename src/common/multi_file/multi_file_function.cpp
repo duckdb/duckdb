@@ -49,10 +49,13 @@ optional_idx MultiFileReaderInterface::MaxThreads(ClientContext &context, const 
 void MultiFileReaderInterface::CombineSchemas(ClientContext &context,
                                               const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
-	identifier_map_t<idx_t> union_names_map;
+	vector<vector<string>> schema_names;
+	vector<vector<LogicalType>> schema_types;
 	for (auto &data : union_data) {
-		UnionByName::CombineUnionTypes(data->names, data->types, return_types, names, union_names_map);
+		schema_names.push_back(data->names);
+		schema_types.push_back(data->types);
 	}
+	UnionByName::CombineUnionTypes(context, schema_names, schema_types, return_types, names);
 }
 
 void MultiFileReaderInterface::FinalizeBindData(MultiFileBindData &multi_file_data) {

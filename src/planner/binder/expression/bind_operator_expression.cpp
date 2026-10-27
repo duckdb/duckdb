@@ -27,27 +27,33 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 		throw InternalException("IN requires at least a single child node");
 	}
 	// get the maximum type from the children
-	LogicalType max_type = ExpressionBinder::GetExpressionReturnType(*children[0]);
+	vector<LogicalType> child_types;
+	for (auto &child : children) {
+		child_types.push_back(ExpressionBinder::GetExpressionReturnType(*child));
+	}
 	bool is_in_operator = (op.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	                       op.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
-	for (idx_t i = 1; i < children.size(); i++) {
-		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
-		if (is_in_operator) {
-			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
-			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type,
-			                                                  op.GetExpressionType())) {
-				throw BinderException(op,
-				                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
-				                      max_type.ToString(), child_return.ToString(),
-				                      op.GetExpressionType() == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
-			}
-		} else {
-			// If it's COALESCE operator, don't do extra adjustment.
-			if (!LogicalType::TryGetMaxLogicalType(context, max_type, child_return, max_type)) {
-				throw BinderException(
-				    op, "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required",
-				    max_type.ToString(), child_return.ToString());
-			}
+	LogicalType max_type;
+	idx_t conflict_index;
+	if (is_in_operator) {
+		// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
+		if (!BoundComparisonExpression::TryBindComparison(context, child_types, max_type, op.GetExpressionType(),
+		                                                  conflict_index)) {
+			auto &conflict_type = child_types[conflict_index];
+			throw BinderException(op,
+			                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required%s",
+			                      max_type.ToString(), conflict_type.ToString(),
+			                      op.GetExpressionType() == ExpressionType::COMPARE_IN ? "IN" : "NOT IN",
+			                      LogicalType::GetTypeUnificationHint(context, max_type, conflict_type));
+		}
+	} else {
+		// If it's COALESCE operator, don't do extra adjustment.
+		if (!LogicalType::TryGetMaxLogicalType(context, child_types, max_type, conflict_index)) {
+			auto &conflict_type = child_types[conflict_index];
+			throw BinderException(
+			    op, "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required%s",
+			    max_type.ToString(), conflict_type.ToString(),
+			    LogicalType::GetTypeUnificationHint(context, max_type, conflict_type));
 		}
 	}
 

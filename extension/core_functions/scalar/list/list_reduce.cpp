@@ -207,8 +207,9 @@ LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalTy
 	if (LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, max_logical_type)) {
 		return max_logical_type;
 	}
-	throw BinderException("No common super type between initial value type %s and lambda return type %s",
-	                      initial_type.ToString(), lambda_return_type.ToString());
+	throw BinderException("No common super type between initial value type %s and lambda return type %s%s",
+	                      initial_type.ToString(), lambda_return_type.ToString(),
+	                      LogicalType::GetTypeUnificationHint(context, initial_type, lambda_return_type));
 }
 
 unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
@@ -241,8 +242,9 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->GetReturnType());
 		auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
-			throw BinderException("No common super type between list element type %s and lambda return type %s",
-			                      list_child_type.ToString(), lambda_return_type.ToString());
+			throw BinderException("No common super type between list element type %s and lambda return type %s%s",
+			                      list_child_type.ToString(), lambda_return_type.ToString(),
+			                      LogicalType::GetTypeUnificationHint(context, list_child_type, lambda_return_type));
 		}
 	}
 

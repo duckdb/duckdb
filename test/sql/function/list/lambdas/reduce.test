@@ -251,7 +251,7 @@ NULL
 NULL
 
 query I
-SELECT list_reduce(n, lambda x, y, x_i: list_reduce(l, lambda a, b, a_i: x + y + x_i < a + b + a_i)) FROM nested;
+SELECT list_reduce(n, lambda x, y, x_i: list_reduce(l, lambda a, b, a_i: (x + y + x_i < a + b + a_i)::INTEGER)) FROM nested;
 ----
 1
 NULL

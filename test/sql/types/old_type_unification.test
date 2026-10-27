@@ -1,0 +1,81 @@
+# name: test/sql/types/old_type_unification.test
+# description: Test the old_type_unification setting and the hint for types that could be combined with it
+# group: [types]
+
+statement ok
+CREATE TABLE t(b BOOLEAN, i INTEGER, d DATE);
+
+statement ok
+INSERT INTO t VALUES (true, 1, DATE '2000-01-01');
+
+statement error
+SELECT b > i FROM t;
+----
+Combining BOOLEAN and INTEGER was allowed in earlier versions of DuckDB. Add an explicit cast, or use "SET old_type_unification=true" to revert to the old behavior.
+
+statement error
+SELECT CASE WHEN b THEN b ELSE i END FROM t;
+----
+SET old_type_unification=true
+
+statement error
+SELECT i BETWEEN b AND 2 FROM t;
+----
+SET old_type_unification=true
+
+statement error
+SELECT COALESCE(b, i) FROM t;
+----
+SET old_type_unification=true
+
+statement error
+SELECT [b, i] FROM t;
+----
+SET old_type_unification=true
+
+statement error
+SELECT greatest(b, i) FROM t;
+----
+SET old_type_unification=true
+
+# types that cannot be combined with the legacy rules either do not get the hint
+statement error
+SELECT d > i FROM t;
+----
+<!REGEX>:(?s).*old_type_unification.*
+
+statement error
+SELECT [d, i] FROM t;
+----
+<!REGEX>:(?s).*old_type_unification.*
+
+statement ok
+SET old_type_unification = true;
+
+query I
+SELECT b > i FROM t;
+----
+false
+
+query I
+SELECT CASE WHEN b THEN b ELSE i END FROM t;
+----
+1
+
+query I
+SELECT [b, i] FROM t;
+----
+[1, 1]
+
+statement error
+SELECT d > i FROM t;
+----
+<!REGEX>:(?s).*old_type_unification.*
+
+statement ok
+RESET old_type_unification;
+
+statement error
+SELECT [b, i] FROM t;
+----
+SET old_type_unification=true

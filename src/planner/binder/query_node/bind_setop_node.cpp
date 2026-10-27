@@ -151,7 +151,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	// construct the return type of each of the columns
 	for (idx_t i = 0; i < new_size; ++i) {
 		auto &col_name = result.names[i];
-		LogicalType result_type(LogicalTypeId::INVALID);
+		vector<LogicalType> column_types;
 		for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
 			auto &child_types = result.bound_children[child_idx].types;
 			auto &child_name_map = node_name_maps[child_idx];
@@ -162,12 +162,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			} else {
 				auto col_idx_in_child = entry->second;
 				auto &child_col_type = child_types[col_idx_in_child];
-				// the child exists in this node - compute the type
-				if (result_type.id() == LogicalTypeId::INVALID) {
-					result_type = child_col_type;
-				} else {
-					result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_col_type);
-				}
+				column_types.push_back(child_col_type);
 				if (i != col_idx_in_child) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
 					need_reorder = true;
@@ -175,6 +170,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			}
 		}
 		// compute the final type for each column
+		auto result_type = LogicalType::ForceMaxLogicalType(context, column_types);
 		if (!CanContainNulls()) {
 			if (ExpressionBinder::ContainsNullType(result_type)) {
 				result_type = ExpressionBinder::ExchangeNullType(result_type);
@@ -356,11 +352,11 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 
 		// figure out the types of the setop result by picking the max of both
 		for (idx_t i = 0; i < result_columns; i++) {
-			auto result_type = result.bound_children[0].types[i];
-			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
-				auto &child_types = result.bound_children[child_idx].types;
-				result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_types[i]);
+			vector<LogicalType> column_types;
+			for (auto &child : result.bound_children) {
+				column_types.push_back(child.types[i]);
 			}
+			auto result_type = LogicalType::ForceMaxLogicalType(context, column_types);
 			if (!CanContainNulls()) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);

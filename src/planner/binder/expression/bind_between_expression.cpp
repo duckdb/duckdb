@@ -25,18 +25,16 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 
 	// cast the input types to the same type
 	// now obtain the result type of the input types
+	vector<LogicalType> types {input_sql_type, lower_sql_type, upper_sql_type};
 	LogicalType input_type;
-	if (!BoundComparisonExpression::TryBindComparison(context, input_sql_type, lower_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
+	idx_t conflict_index;
+	if (!BoundComparisonExpression::TryBindComparison(context, types, input_type, expr.GetExpressionType(),
+	                                                  conflict_index)) {
+		auto &conflict_type = types[conflict_index];
 		throw BinderException(expr,
-		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
-		                      input_sql_type.ToString(), lower_sql_type.ToString());
-	}
-	if (!BoundComparisonExpression::TryBindComparison(context, input_type, upper_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
-		throw BinderException(expr,
-		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
-		                      input_type.ToString(), upper_sql_type.ToString());
+		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required%s",
+		                      input_type.ToString(), conflict_type.ToString(),
+		                      LogicalType::GetTypeUnificationHint(context, input_type, conflict_type));
 	}
 	// add casts (if necessary)
 	input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);

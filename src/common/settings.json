@@ -1285,6 +1285,13 @@
         ]
     },
     {
+        "name": "old_type_unification",
+        "description": "Use the legacy rules for finding the common type of two types (e.g. in UNION, CASE or list constructors), which are not commutative and may produce types the inputs cannot be implicitly cast to.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "operator_memory_limit",
         "description": "The maximum memory available for query intermediates (sorts, hash tables) per connection (e.g. 256MB).",
         "type": "VARCHAR",

@@ -14,6 +14,23 @@ static bool CombineNoAliasTypes(LogicalTypeResolver &logical_type_resolver, cons
 	if (left.IsAggregateState() != right.IsAggregateState()) {
 		return false;
 	}
+	if (!logical_type_resolver.legacy_type_unification) {
+		if (left == right) {
+			result = left;
+			return true;
+		}
+		if (left.GetAlias() == right.GetAlias() && !left.IsAggregateState()) {
+			// same alias - combine the underlying types
+			LogicalType unaliased;
+			if (!logical_type_resolver.Operation(left.WithAlias(string()), right.WithAlias(string()), unaliased)) {
+				return false;
+			}
+			result = unaliased.WithAlias(left.GetAlias());
+			return true;
+		}
+		// different aliases only combine through (registered) implicit casts
+		return logical_type_resolver.TryCombineViaImplicitCast(left, right, result);
+	}
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -125,8 +142,16 @@ static bool CombineEqualEnum(LogicalTypeResolver &logical_type_resolver, const L
 }
 static bool CombineEqualVarchar(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                 const LogicalType &right, LogicalType &result) {
+	auto left_collation = StringType::GetCollation(left);
+	auto right_collation = StringType::GetCollation(right);
+	if (!logical_type_resolver.legacy_type_unification && !left_collation.empty() && !right_collation.empty() &&
+	    left_collation != right_collation) {
+		// conflicting collations - the result has no collation
+		result = LogicalType::VARCHAR;
+		return true;
+	}
 	// varchar: use type that has collation (if any)
-	if (StringType::GetCollation(right).empty()) {
+	if (right_collation.empty()) {
 		result = left;
 	} else {
 		result = right;
@@ -169,6 +194,11 @@ static bool CombineEqualArray(LogicalTypeResolver &logical_type_resolver, const 
 	if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
 		return false;
 	}
+	if (!logical_type_resolver.legacy_type_unification && ArrayType::GetSize(left) != ArrayType::GetSize(right)) {
+		// arrays of different sizes can only be combined as a list
+		result = LogicalType::LIST(new_child);
+		return true;
+	}
 	auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
 	result = LogicalType::ARRAY(new_child, new_size);
 	return true;
@@ -206,6 +236,9 @@ static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const 
 			found = true;
 			LogicalType new_member_type;
 			if (!logical_type_resolver.Operation(member.second, member_type, new_member_type)) {
+				if (!logical_type_resolver.legacy_type_unification) {
+					return false;
+				}
 				// the members cannot be combined - keep the base type
 				result = base;
 				return true;
@@ -215,6 +248,9 @@ static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const 
 		}
 		if (!found) {
 			if (members.size() >= UnionType::MAX_UNION_MEMBERS) {
+				if (!logical_type_resolver.legacy_type_unification) {
+					return false;
+				}
 				result = base;
 				return true;
 			}
@@ -351,6 +387,23 @@ static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left,
 	return true;
 }
 
+static bool CombineListArray(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                             const LogicalType &right, LogicalType &result) {
+	if (logical_type_resolver.legacy_type_unification) {
+		return logical_type_resolver.TryCombineViaImplicitCast(left, right, result);
+	}
+	// a LIST can hold the values of an ARRAY of any size, but not the other way around
+	auto &left_child = left.id() == LogicalTypeId::LIST ? ListType::GetChildType(left) : ArrayType::GetChildType(left);
+	auto &right_child =
+	    right.id() == LogicalTypeId::LIST ? ListType::GetChildType(right) : ArrayType::GetChildType(right);
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(left_child, right_child, new_child)) {
+		return false;
+	}
+	result = LogicalType::LIST(new_child);
+	return true;
+}
+
 // BIGNUM has no implicit cast to or from FLOAT and DECIMAL; like their arithmetic, these pairs meet in DOUBLE
 static bool CombineBignumFloatOrDecimal(LogicalTypeResolver &, const LogicalType &, const LogicalType &,
                                         LogicalType &result) {
@@ -392,6 +445,11 @@ static bool UnequalMatchesBignumFloatOrDecimal(const LogicalType &left, const Lo
 	return is_pair(left, right) || is_pair(right, left);
 }
 
+static bool UnequalMatchesListArray(const LogicalType &left, const LogicalType &right) {
+	return (left.id() == LogicalTypeId::LIST && right.id() == LogicalTypeId::ARRAY) ||
+	       (left.id() == LogicalTypeId::ARRAY && right.id() == LogicalTypeId::LIST);
+}
+
 static bool UnequalMatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == right.id()) {
 		// rule only applies to unequal types
@@ -410,6 +468,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {UnequalMatchesStruct, CombineStructTypes},
 	    {UnequalMatchesStringLiteral, CombineStringLiteral},
 	    {UnequalMatchesBignumFloatOrDecimal, CombineBignumFloatOrDecimal},
+	    {UnequalMatchesListArray, CombineListArray},
 	    {EqualMatchesStringLiteral, CombineEqualStringLiteral},
 	    {EqualMatchesIntegerLiteral, CombineEqualIntegerLiteral},
 	    {EqualMatchesEnum, CombineEqualEnum},

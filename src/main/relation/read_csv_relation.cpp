@@ -55,13 +55,16 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		vector<LogicalType> types;
 		vector<Identifier> names;
 		// sniff every file and unify the columns of the files by name
-		identifier_map_t<idx_t> union_names_map;
+		vector<vector<string>> file_names;
+		vector<vector<LogicalType>> file_types;
 		for (auto &file : files) {
 			auto file_csv_options = csv_options;
 			file_csv_options.file_path = file.path;
 			CSVFileScan file_scan(*context, file, file_csv_options, file_options);
-			UnionByName::CombineUnionTypes(file_scan.GetNames(), file_scan.GetTypes(), types, names, union_names_map);
+			file_names.push_back(file_scan.GetNames());
+			file_types.push_back(file_scan.GetTypes());
 		}
+		UnionByName::CombineUnionTypes(*context, file_names, file_types, types, names);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {

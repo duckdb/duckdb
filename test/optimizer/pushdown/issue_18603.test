@@ -6,7 +6,7 @@ statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-CREATE TABLE t0(c0 INT, c1 BOOLEAN);
+CREATE TABLE t0(c0 INT, c1 INT);
 
 statement ok
 CREATE TABLE t1(c0 INT);

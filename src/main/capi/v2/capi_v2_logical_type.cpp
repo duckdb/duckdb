@@ -215,19 +215,13 @@ Value TypeParamValue(const LogicalType &type, idx_t index, duckdb_v2_identifier_
 auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType {
 	D_ASSERT(!types.empty());
 	auto context = factory.TryGetClientContext();
-	auto result = types[0];
-	for (idx_t i = 1; i < types.size(); i++) {
-		auto &type = types[i];
-		if (context) {
-			result = LogicalType::MaxLogicalType(*context, result, type);
-			continue;
-		}
-		LogicalType max_type;
-		if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(result, type, max_type)) {
-			throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required",
-			                              result.ToString(), type.ToString());
-		}
-		result = std::move(max_type);
+	if (context) {
+		return LogicalType::MaxLogicalType(*context, types);
+	}
+	LogicalType result;
+	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(types, result)) {
+		throw NotImplementedException("Cannot combine types %s - an explicit cast is required",
+		                              StringUtil::ToString(types, ", "));
 	}
 	return result;
 }

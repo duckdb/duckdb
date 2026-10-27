@@ -1,0 +1,94 @@
+# name: test/sql/types/type_unification_order.test
+# description: The common type of a set of values does not depend on their order
+# group: [types]
+
+# a NULL does not turn an integer literal into an INTEGER early
+query III
+SELECT typeof([NULL, 1, 1::TINYINT]), typeof([1, 1::TINYINT, NULL]), typeof([1::TINYINT, NULL, 1]);
+----
+TINYINT[]	TINYINT[]	TINYINT[]
+
+# signed and unsigned integers do not widen the DECIMAL more than needed
+query II
+SELECT typeof([1::TINYINT, 1::UTINYINT, 1.5::DECIMAL(4,1)]), typeof([1.5::DECIMAL(4,1), 1::TINYINT, 1::UTINYINT]);
+----
+DECIMAL(4,1)[]	DECIMAL(4,1)[]
+
+query II
+SELECT typeof(CASE WHEN random() < 2 THEN 1::TINYINT WHEN random() < 2 THEN 1::UTINYINT ELSE 1.5::DECIMAL(4,1) END),
+       typeof(CASE WHEN random() < 2 THEN 1.5::DECIMAL(4,1) WHEN random() < 2 THEN 1::UTINYINT ELSE 1::TINYINT END);
+----
+DECIMAL(4,1)	DECIMAL(4,1)
+
+query II
+SELECT typeof(COALESCE(1::TINYINT, 1::UTINYINT, 1.5::DECIMAL(4,1))), typeof(COALESCE(1.5::DECIMAL(4,1), 1::UTINYINT, 1::TINYINT));
+----
+DECIMAL(4,1)	DECIMAL(4,1)
+
+query II
+SELECT typeof(greatest(1::TINYINT, 1::UTINYINT, 1.5::DECIMAL(4,1))), typeof(greatest(1.5::DECIMAL(4,1), 1::UTINYINT, 1::TINYINT));
+----
+DECIMAL(4,1)	DECIMAL(4,1)
+
+query II
+SELECT typeof(list_concat([1::TINYINT], [1::UTINYINT], [1.5::DECIMAL(4,1)])), typeof(list_concat([1.5::DECIMAL(4,1)], [1::UTINYINT], [1::TINYINT]));
+----
+DECIMAL(4,1)[]	DECIMAL(4,1)[]
+
+query I
+SELECT DISTINCT typeof(x) FROM (VALUES (1::TINYINT), (1::UTINYINT), (1.5::DECIMAL(4,1))) t(x);
+----
+DECIMAL(4,1)
+
+query I
+SELECT DISTINCT typeof(x) FROM (VALUES (1.5::DECIMAL(4,1)), (1::UTINYINT), (1::TINYINT)) t(x);
+----
+DECIMAL(4,1)
+
+query I
+SELECT DISTINCT typeof(x) FROM (SELECT 1::TINYINT x UNION ALL SELECT 1::UTINYINT UNION ALL SELECT 1.5::DECIMAL(4,1));
+----
+DECIMAL(4,1)
+
+query I
+SELECT DISTINCT typeof(x) FROM (SELECT 1.5::DECIMAL(4,1) x UNION ALL SELECT 1::UTINYINT UNION ALL SELECT 1::TINYINT);
+----
+DECIMAL(4,1)
+
+# struct_contains gives the same answer for any order of the struct children
+query II
+SELECT struct_contains(ROW(1.0::FLOAT, 2::TINYINT), TRUE), struct_contains(ROW(2::TINYINT, 1.0::FLOAT), TRUE);
+----
+false	false
+
+query II
+SELECT struct_contains(ROW(1.0::FLOAT, 2::TINYINT), 1), struct_contains(ROW(2::TINYINT, 1.0::FLOAT), 1);
+----
+true	true
+
+query II
+SELECT TRUE IN (1.0::FLOAT, 2::TINYINT), TRUE IN (2::TINYINT, 1.0::FLOAT);
+----
+true	true
+
+# union_by_name combines the column types of all files at once
+require parquet
+
+statement ok
+COPY (SELECT 1::TINYINT a) TO '{TEST_DIR}/unification_order_1.parquet';
+
+statement ok
+COPY (SELECT 1::UTINYINT a) TO '{TEST_DIR}/unification_order_2.parquet';
+
+statement ok
+COPY (SELECT 1.5::DECIMAL(4,1) a) TO '{TEST_DIR}/unification_order_3.parquet';
+
+query I
+SELECT DISTINCT typeof(a) FROM read_parquet(['{TEST_DIR}/unification_order_1.parquet', '{TEST_DIR}/unification_order_2.parquet', '{TEST_DIR}/unification_order_3.parquet'], union_by_name=true);
+----
+DECIMAL(4,1)
+
+query I
+SELECT DISTINCT typeof(a) FROM read_parquet(['{TEST_DIR}/unification_order_3.parquet', '{TEST_DIR}/unification_order_2.parquet', '{TEST_DIR}/unification_order_1.parquet'], union_by_name=true);
+----
+DECIMAL(4,1)

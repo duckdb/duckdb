@@ -41,6 +41,9 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::ARRAY:
 		return 160;
+	case LogicalTypeId::VARIANT:
+		// any value can be stored in a VARIANT - prefer it over the more lossy VARCHAR
+		return 140;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
 	case LogicalTypeId::TEMPLATE:
@@ -432,6 +435,9 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
 	}
 
+	if (to.id() == LogicalTypeId::VARIANT && from.id() != LogicalTypeId::VARIANT && !from.IsAggregateState()) {
+		return TargetTypeCost(to);
+	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
 
@@ -528,19 +534,21 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		auto &source_children = StructType::GetChildTypes(from);
 		auto &target_children = StructType::GetChildTypes(to);
 
+		auto target_is_unnamed = StructType::IsUnnamed(to);
+		auto source_is_unnamed = StructType::IsUnnamed(from);
+		auto named_struct_cast = !source_is_unnamed && !target_is_unnamed;
+
 		if (source_children.size() != target_children.size()) {
-			// different number of children: not possible
-			return -1;
+			// a named struct can be cast to a named struct with additional members, which are set to NULL
+			if (!named_struct_cast || source_children.empty() || source_children.size() > target_children.size()) {
+				return -1;
+			}
 		}
 
 		if (source_children.empty()) {
 			// both are empty - empty STRUCT and empty TUPLE are trivially inter-castable
 			return 0;
 		}
-
-		auto target_is_unnamed = StructType::IsUnnamed(to);
-		auto source_is_unnamed = StructType::IsUnnamed(from);
-		auto named_struct_cast = !source_is_unnamed && !target_is_unnamed;
 
 		int64_t cost = -1;
 		if (named_struct_cast) {
