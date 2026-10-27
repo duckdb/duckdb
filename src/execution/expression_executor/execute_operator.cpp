@@ -1,4 +1,5 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -22,6 +23,29 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOpera
 	return result;
 }
 
+static idx_t SelectFlatNulls(const ValidityMask &validity, idx_t count, SelectionVector &result) {
+	if (validity.CannotHaveNull()) {
+		return 0;
+	}
+	idx_t result_count = 0;
+	for (idx_t offset = 0; offset < count; offset += ValidityMask::BITS_PER_VALUE) {
+		const auto valid_bits = MinValue<idx_t>(ValidityMask::BITS_PER_VALUE, count - offset);
+		const auto mask = ValidityMask::EntryWithValidBits(valid_bits);
+		auto nulls = ~validity.GetValidityEntryUnsafe(offset / ValidityMask::BITS_PER_VALUE) & mask;
+		if (nulls == mask) {
+			for (idx_t i = 0; i < valid_bits; i++) {
+				result.set_index(result_count++, offset + i);
+			}
+			continue;
+		}
+		while (nulls) {
+			result.set_index(result_count++, offset + CountZeros<validity_t>::Trailing(nulls));
+			nulls &= nulls - 1;
+		}
+	}
+	return result_count;
+}
+
 template <bool HAS_VALID_SEL, bool HAS_NULL_SEL>
 static idx_t SelectNullLoop(const VectorValidityIterator &entries, const SelectionVector &sel, idx_t count,
                             optional_ptr<SelectionVector> valid_sel, optional_ptr<SelectionVector> null_sel) {
@@ -43,6 +67,9 @@ static idx_t SelectNullLoop(const VectorValidityIterator &entries, const Selecti
 
 static idx_t SelectNulls(const Vector &input, const SelectionVector &sel, idx_t count,
                          optional_ptr<SelectionVector> valid_sel, optional_ptr<SelectionVector> null_sel) {
+	if (!valid_sel && null_sel && !sel.IsSet() && input.GetVectorType() == VectorType::FLAT_VECTOR) {
+		return count - SelectFlatNulls(FlatVector::Validity(input), count, *null_sel);
+	}
 	auto entries = input.Validity();
 	if (entries.CannotHaveNull() || input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		const auto valid = entries.CannotHaveNull() || entries.IsValid(0);
