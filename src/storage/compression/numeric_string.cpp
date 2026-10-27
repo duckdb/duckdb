@@ -166,7 +166,9 @@ static idx_t FormatCanonical(int64_t mantissa, uint8_t scale, char *out) {
 	throw DataCorruptionException("Corrupted NumericString segment: %s", message);
 }
 
-//! Formats a fixed-width value into out, returns the length (always == width)
+//! Formats a fixed-width value into out, returns the length (== width for every value that was stored). The integer
+//! methods store arbitrary values in NULL slots, so a mantissa that does not fit the width is rendered canonically
+//! instead of being treated as corruption; the row's validity decides whether anyone sees it.
 static idx_t FormatFixedWidth(int64_t mantissa, uint8_t width, uint8_t scale, char *out) {
 	char digits[24];
 	auto end = digits + sizeof(digits);
@@ -174,7 +176,7 @@ static idx_t FormatFixedWidth(int64_t mantissa, uint8_t width, uint8_t scale, ch
 	auto digit_count = UnsafeNumericCast<idx_t>(end - ptr);
 	idx_t total_digits = scale > 0 ? idx_t(width) - 1 : idx_t(width);
 	if (mantissa < 0 || digit_count > total_digits || total_digits < scale || (scale > 0 && total_digits == scale)) {
-		ThrowCorrupt("fixed-width value does not fit its width");
+		return FormatCanonical(mantissa, scale, out);
 	}
 	auto o = out;
 	idx_t int_digits = total_digits - scale;
@@ -267,6 +269,10 @@ static unique_ptr<CompressedSegmentState> InitSegment(ColumnSegment &segment, bl
 	auto &state = segment_state->Cast<NumericStringSegmentState>();
 	if (!IsInnerCompressionType(state.inner_type)) {
 		ThrowCorrupt("unsupported inner compression method");
+	}
+	if (state.layout.mode == NumericStringMode::FIXED_WIDTH &&
+	    (state.layout.width == 0 || (state.layout.scale > 0 && state.layout.width <= state.layout.scale + 1))) {
+		ThrowCorrupt("fixed-width layout has no room for its digits");
 	}
 	auto &config = DBConfig::GetConfig(segment.GetDatabase());
 	auto &inner = config.GetCompressionFunction(state.inner_type, MANTISSA_PHYSICAL_TYPE).get();
@@ -599,13 +605,23 @@ static void FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 struct NumericStringScanState : public SegmentScanState {
 	explicit NumericStringScanState(unique_ptr<SegmentScanState> inner_state)
-	    : inner_state(std::move(inner_state)), mantissas(LogicalType::BIGINT) {
+	    : inner_state(std::move(inner_state)), mantissas(LogicalType::BIGINT), capacity(STANDARD_VECTOR_SIZE) {
 	}
 
 	//! The scan state of the integer method
 	unique_ptr<SegmentScanState> inner_state;
 	//! Scratch space the integer method scans into
 	Vector mantissas;
+	idx_t capacity;
+
+	//! List children scan more than STANDARD_VECTOR_SIZE rows at once: grow the scratch space to fit
+	Vector &Mantissas(idx_t count) {
+		if (count > capacity) {
+			mantissas.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+			capacity = count;
+		}
+		return mantissas;
+	}
 };
 
 //! The integer method expects its own scan state in the column scan state: swap it in for the duration of the call
@@ -645,11 +661,12 @@ static void ScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
                         idx_t result_offset) {
 	auto &compressed = GetCompressedState(segment);
 	auto &scan_state = state.scan_state->Cast<NumericStringScanState>();
+	auto &mantissas = scan_state.Mantissas(scan_count);
 	{
 		InnerScanScope scope(state, scan_state);
-		compressed.inner.scan_partial(segment, state, scan_count, scan_state.mantissas, 0);
+		compressed.inner.scan_partial(segment, state, scan_count, mantissas, 0);
 	}
-	FormatMantissas(compressed.layout, scan_state.mantissas, scan_count, result, result_offset);
+	FormatMantissas(compressed.layout, mantissas, scan_count, result, result_offset);
 }
 
 static void Scan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {

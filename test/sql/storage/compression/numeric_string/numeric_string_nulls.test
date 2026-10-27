@@ -1,0 +1,57 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_nulls.test
+# description: NULL rows of NUMERIC_STRING segments hold whatever the integer method stored and must not break the scan
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_nulls.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+# high-cardinality fixed-width and canonical columns with NULLs spread through every vector
+statement ok
+CREATE TABLE t AS
+SELECT i,
+       CASE WHEN i % 7 = 3 THEN NULL ELSE lpad(((i * 7919) % 100000)::VARCHAR, 5, '0') END AS zip,
+       CASE WHEN i % 11 = 5 THEN NULL ELSE ((i * 2654435761) % 1000000000)::VARCHAR END AS id,
+       CASE WHEN i % 13 = 0 THEN NULL ELSE lpad(((i * 31) % 10000)::VARCHAR, 4, '0') || '.' || lpad((i % 100)::VARCHAR, 2, '0') END AS amount
+FROM range(200000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT column_name, string_agg(DISTINCT compression, ',')
+FROM pragma_storage_info('t')
+WHERE segment_type = 'VARCHAR'
+GROUP BY column_name ORDER BY column_name;
+----
+amount	NUMERIC_STRING
+id	NUMERIC_STRING
+zip	NUMERIC_STRING
+
+query IIII
+SELECT count(*), count(zip), count(id), count(amount) FROM t;
+----
+200000	171429	181818	184615
+
+query I
+SELECT count(*) FROM t
+WHERE zip IS DISTINCT FROM (CASE WHEN i % 7 = 3 THEN NULL ELSE lpad(((i * 7919) % 100000)::VARCHAR, 5, '0') END)
+   OR id IS DISTINCT FROM (CASE WHEN i % 11 = 5 THEN NULL ELSE ((i * 2654435761) % 1000000000)::VARCHAR END)
+   OR amount IS DISTINCT FROM (CASE WHEN i % 13 = 0 THEN NULL ELSE lpad(((i * 31) % 10000)::VARCHAR, 4, '0') || '.' || lpad((i % 100)::VARCHAR, 2, '0') END);
+----
+0
+
+# NULL rows stay NULL through fetch_row and filters
+query III
+SELECT i, zip, id FROM t WHERE i IN (3, 5, 10, 16) ORDER BY i;
+----
+3	NULL	963307283
+5	39595	NULL
+10	NULL	544357610
+16	26704	NULL
+
+query I
+SELECT count(*) FROM t WHERE zip IS NULL AND id IS NULL;
+----
+2597

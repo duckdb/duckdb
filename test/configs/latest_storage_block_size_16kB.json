@@ -25,6 +25,12 @@
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
       ]
+    },
+    {
+      "reason": "The choice between NUMERIC_STRING and DICT_FSST depends on the per-segment overhead and thus on the block size.",
+      "paths": [
+        "test/sql/storage/compression/numeric_string/numeric_string_selection.test"
+      ]
     }
   ]
 }

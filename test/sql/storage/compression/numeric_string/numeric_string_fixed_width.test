@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_fixed_width.test
-# description: Zero-padded numeric strings use the fixed-width mode of NumericString compression
+# description: Zero-padded numeric strings use the fixed-width mode of NUMERIC_STRING compression
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_fixed_width.db readwrite v2.1.0
@@ -23,7 +23,7 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('zips') WHERE segment_type = 'VARCHAR' AND column_name <> 'all_zeros';
 ----
-NumericString
+NUMERIC_STRING
 
 query IIII
 SELECT zip, padded_decimal, padded_nulls, all_zeros FROM zips WHERE i IN (0, 1, 5, 4999) ORDER BY i;
@@ -56,7 +56,7 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT count(*) FROM pragma_storage_info('mixed') WHERE segment_type = 'VARCHAR' AND compression = 'NumericString';
+SELECT count(*) FROM pragma_storage_info('mixed') WHERE segment_type = 'VARCHAR' AND compression = 'NUMERIC_STRING';
 ----
 0
 

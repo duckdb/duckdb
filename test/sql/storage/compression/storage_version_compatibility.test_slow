@@ -350,7 +350,7 @@ endloop
 endloop
 
 ###############################
-# NumericString compression
+# NUMERIC_STRING compression
 # Available from version v2.1.0, for varchar
 ###############################
 
@@ -370,7 +370,7 @@ CREATE OR REPLACE TABLE t(
 	x VARCHAR USING COMPRESSION NUMERIC_STRING
 );
 ----
-Binder Error: Can't compress using user-provided compression type 'NumericString', that type is not available yet
+Binder Error: Can't compress using user-provided compression type 'NUMERIC_STRING', that type is not available yet
 
 endloop
 
@@ -387,5 +387,5 @@ CREATE OR REPLACE TABLE t(
 	x INTEGER USING COMPRESSION NUMERIC_STRING
 );
 ----
-Binder Error: Can't compress column "x" with type 'INTEGER' (physical: INT32) using compression type 'NumericString'
+Binder Error: Can't compress column "x" with type 'INTEGER' (physical: INT32) using compression type 'NUMERIC_STRING'
 

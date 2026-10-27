@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_updates.test
-# description: Updates, deletes and appends on top of NumericString segments
+# description: Updates, deletes and appends on top of NUMERIC_STRING segments
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_updates.db readwrite v2.1.0
@@ -25,7 +25,7 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 # updates are stored on the side and merged on read
 statement ok
@@ -55,7 +55,7 @@ SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v
 0
 
 query I
-SELECT count(*) > 0 FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR' AND compression <> 'NumericString';
+SELECT count(*) > 0 FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR' AND compression <> 'NUMERIC_STRING';
 ----
 true
 
@@ -71,7 +71,7 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 # deletes
 statement ok
@@ -116,7 +116,7 @@ SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 restart
 

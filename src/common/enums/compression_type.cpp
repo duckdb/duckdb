@@ -116,7 +116,7 @@ string CompressionTypeToString(CompressionType type) {
 	case CompressionType::COMPRESSION_DICT_FSST:
 		return "DICT_FSST";
 	case CompressionType::COMPRESSION_NUMERIC_STRING:
-		return "NumericString";
+		return "NUMERIC_STRING";
 	case CompressionType::COMPRESSION_EMPTY:
 		return "Empty Validity";
 	default:

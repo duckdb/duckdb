@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_large.test_slow
-# description: NumericString across many segments, with NULLs, decimals and partial scans
+# description: NUMERIC_STRING across many segments, with NULLs, decimals and partial scans
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_large.db readwrite v2.1.0
@@ -31,7 +31,7 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 # more than one segment per column
 query I

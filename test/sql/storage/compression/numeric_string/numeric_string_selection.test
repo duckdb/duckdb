@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_selection.test
-# description: NumericString is picked automatically for high-cardinality numeric strings and only then
+# description: NUMERIC_STRING is picked automatically for high-cardinality numeric strings and only then
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_selection.db readwrite v2.1.0
@@ -24,14 +24,14 @@ FROM pragma_storage_info('t')
 WHERE segment_type = 'VARCHAR' AND column_name IN ('sequential_ids', 'random_ids', 'amounts')
 GROUP BY column_name ORDER BY column_name;
 ----
-amounts	NumericString
-random_ids	NumericString
-sequential_ids	NumericString
+amounts	NUMERIC_STRING
+random_ids	NUMERIC_STRING
+sequential_ids	NUMERIC_STRING
 
 # low-cardinality and non-numeric columns never pick the codec
 query I
 SELECT count(*) FROM pragma_storage_info('t')
-WHERE segment_type = 'VARCHAR' AND column_name IN ('low_cardinality', 'not_numeric', 'mostly_numeric') AND compression = 'NumericString';
+WHERE segment_type = 'VARCHAR' AND column_name IN ('low_cardinality', 'not_numeric', 'mostly_numeric') AND compression = 'NUMERIC_STRING';
 ----
 0
 
@@ -53,7 +53,7 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT count(*) FROM pragma_storage_info('t2') WHERE segment_type = 'VARCHAR' AND compression = 'NumericString';
+SELECT count(*) FROM pragma_storage_info('t2') WHERE segment_type = 'VARCHAR' AND compression = 'NUMERIC_STRING';
 ----
 0
 
@@ -73,9 +73,9 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('t3') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 statement error
 CREATE TABLE t4 (v INTEGER USING COMPRESSION numeric_string);
 ----
-Binder Error: Can't compress column "v" with type 'INTEGER' (physical: INT32) using compression type 'NumericString'
+Binder Error: Can't compress column "v" with type 'INTEGER' (physical: INT32) using compression type 'NUMERIC_STRING'

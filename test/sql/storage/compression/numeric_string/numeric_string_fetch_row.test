@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_fetch_row.test
-# description: Index lookups fetch single rows out of NumericString segments
+# description: Index lookups fetch single rows out of NUMERIC_STRING segments
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_fetch_row.db readwrite v2.1.0
@@ -23,7 +23,7 @@ restart
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('test') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 # point lookups through the primary key index use fetch_row
 query II

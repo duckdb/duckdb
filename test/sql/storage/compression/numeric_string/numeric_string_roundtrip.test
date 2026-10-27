@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_roundtrip.test
-# description: Round trip integer and decimal strings through NumericString compression
+# description: Round trip integer and decimal strings through NUMERIC_STRING compression
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_roundtrip.db readwrite v2.1.0
@@ -38,18 +38,18 @@ CHECKPOINT;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name <> 'mixed_scale';
 ----
-NumericString
+NUMERIC_STRING
 
 # a column whose values do not share one scale is left to the string methods even when forced
 query I
-SELECT count(*) FROM pragma_storage_info('compressed') WHERE column_name = 'mixed_scale' AND compression = 'NumericString';
+SELECT count(*) FROM pragma_storage_info('compressed') WHERE column_name = 'mixed_scale' AND compression = 'NUMERIC_STRING';
 ----
 0
 
 # every segment names the integer method that stores its mantissas
 query I
 SELECT DISTINCT segment_info LIKE 'inner_compression: BitPacking, mode: %' OR segment_info LIKE 'inner_compression: RLE, mode: %'
-FROM pragma_storage_info('compressed', include_segment_info=true) WHERE compression = 'NumericString';
+FROM pragma_storage_info('compressed', include_segment_info=true) WHERE compression = 'NUMERIC_STRING';
 ----
 true
 

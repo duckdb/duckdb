@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_storage_version.test
-# description: NumericString requires storage version v2.1.0
+# description: NUMERIC_STRING requires storage version v2.1.0
 # group: [numeric_string]
 
 # the default storage version (v2.0.0) can neither force nor select the codec
@@ -8,7 +8,7 @@ load {TEST_DIR}/numeric_string_v200.db readwrite v2.0.0
 statement error
 CREATE TABLE t (v VARCHAR USING COMPRESSION numeric_string);
 ----
-Binder Error: Can't compress using user-provided compression type 'NumericString', that type is not available yet
+Binder Error: Can't compress using user-provided compression type 'NUMERIC_STRING', that type is not available yet
 
 # forcing is accepted (the setting does not know the database) but the codec is never used
 statement ok
@@ -21,7 +21,7 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT count(*) FROM pragma_storage_info('t') WHERE compression = 'NumericString';
+SELECT count(*) FROM pragma_storage_info('t') WHERE compression = 'NUMERIC_STRING';
 ----
 0
 
@@ -38,7 +38,7 @@ CHECKPOINT new;
 query I
 SELECT DISTINCT compression FROM pragma_storage_info('new.t') WHERE segment_type = 'VARCHAR';
 ----
-NumericString
+NUMERIC_STRING
 
 query I
 SELECT count(*) FROM new.t WHERE v::BIGINT <> rowid;
