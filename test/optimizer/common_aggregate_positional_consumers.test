@@ -8,16 +8,24 @@ SET explain_output = 'optimized_only';
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
-# duplicate aggregates in a regular projected aggregate are still merged
+# duplicate aggregates in a regular projected aggregate are still merged:
+# statistics propagation turns count(v) over a NULL-free column into a second count_star()
+statement ok
+CREATE TABLE tbl(g INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1, 10), (1, 20), (2, 30);
+
 query II
-EXPLAIN SELECT count(*), count() FROM range(3);
+EXPLAIN SELECT g, count(*), count(v) FROM tbl GROUP BY g;
 ----
 logical_opt	<!REGEX>:.*AGGREGATE.*count_star.*count_star.*
 
-query II
-SELECT count(*), count() FROM range(3);
+query III
+SELECT g, count(*), count(v) FROM tbl GROUP BY g ORDER BY g;
 ----
-3	3
+1	2	2
+2	1	1
 
 # the grouping sets rewrite materializes an aggregate directly as a CTE definition whose columns are read
 # positionally - the duplicate count(*) aggregates built by decorrelation must stay unmerged there
