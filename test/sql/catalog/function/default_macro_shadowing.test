@@ -169,3 +169,84 @@ query I
 SELECT pg_typeof(42);
 ----
 integer
+
+# arithmetic and concatenation operator spellings inside default bodies are pinned
+
+statement ok
+CREATE MACRO "//"(a, b) AS 0;
+
+statement ok
+CREATE MACRO "%"(a, b) AS 0;
+
+statement ok
+CREATE MACRO "||"(a, b) AS 'captured';
+
+statement ok
+CREATE MACRO "*"(a, b) AS 1000;
+
+statement ok
+CREATE MACRO "-"(a, b) AS 0;
+
+statement ok
+CREATE MACRO "/"(a, b) AS 42;
+
+query I
+SELECT fdiv(5, 2)::INT;
+----
+2
+
+query I
+SELECT fmod(5, 2)::INT;
+----
+1
+
+query I
+SELECT array_pop_back([10, 20, 30]);
+----
+[10, 20]
+
+query R
+SELECT wavg(x, w) FROM (VALUES (1, 1), (3, 1)) t(x, w);
+----
+2
+
+statement error
+SELECT assert_true(false, 'msg');
+----
+<REGEX>:.*Assertion: msg.*
+
+# bare value-function names inside default bodies are pinned to the system catalog
+
+statement ok
+CREATE MACRO get_current_timestamp() AS TIMESTAMPTZ '2000-01-01 00:00:00+00';
+
+query I
+SELECT pg_conf_load_time() > TIMESTAMPTZ '2020-01-01 00:00:00+00';
+----
+true
+
+# struct literals inside default bodies spell their constructor
+
+statement ok
+CREATE MACRO struct_pack(key, value) AS 999;
+
+query I
+SELECT map_contains_entry(map(['k'], [1]), 'k', 1);
+----
+true
+
+# the ENUM arm of format_pg_type keeps its qualified lower (lower is shadowed above)
+
+query I
+SELECT format_pg_type('ENUM', 'Mood');
+----
+mood
+
+# ago needs the ICU TIMESTAMPTZ arithmetic, its pinned value function and minus run with icu
+
+require icu
+
+query I
+SELECT ago(INTERVAL 1 DAY) > TIMESTAMPTZ '2020-01-01 00:00:00+00';
+----
+true

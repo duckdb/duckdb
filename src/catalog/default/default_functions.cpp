@@ -23,8 +23,8 @@ static const DefaultMacro internal_macros[] = {
     {"pg_catalog", "pg_my_temp_schema", "() AS 0"},     // OID of session's temporary schema, or 0 if none
     {"pg_catalog", "pg_is_other_temp_schema", "(schema_id) AS false"}, // is schema another session's temporary schema?
 
-    {"pg_catalog", "pg_conf_load_time", "() AS current_timestamp"},        // configuration load time
-    {"pg_catalog", "pg_postmaster_start_time", "() AS current_timestamp"}, // server start time
+    {"pg_catalog", "pg_conf_load_time", "() AS system.main.get_current_timestamp()"},        // configuration load time
+    {"pg_catalog", "pg_postmaster_start_time", "() AS system.main.get_current_timestamp()"}, // server start time
 
     {"pg_catalog", "pg_typeof",
      "(expression) AS system.main.lower(system.main.typeof(expression))"}, // get the data type of any value
@@ -79,20 +79,22 @@ static const DefaultMacro internal_macros[] = {
     {"pg_catalog", "pg_get_viewdef", "(oid) AS (select sql from system.main.duckdb_views() v where v.view_oid=oid)"},
     {"pg_catalog", "pg_get_constraintdef",
      "(constraint_oid) AS (select constraint_text from system.main.duckdb_constraints() d_constraint where "
-     "d_constraint.table_oid=constraint_oid//1000000 and d_constraint.constraint_index=constraint_oid%1000000), "
+     "d_constraint.table_oid=system.main.\"//\"(constraint_oid, 1000000) and "
+     "d_constraint.constraint_index=system.main.\"%\"(constraint_oid, 1000000)), "
      "(constraint_oid, pretty_bool) AS system.pg_catalog.pg_get_constraintdef(constraint_oid)"},
     {"pg_catalog", "pg_get_expr", "(pg_node_tree, relation_oid) AS pg_node_tree"},
     {"pg_catalog", "format_pg_type",
      "(logical_type, type_name) AS case system.main.upper(logical_type) when 'FLOAT' then 'float4' when 'DOUBLE' then "
      "'float8' "
-     "when 'DECIMAL' then 'numeric' when 'ENUM' then lower(type_name) when 'VARCHAR' then 'varchar' when 'BLOB' then "
+     "when 'DECIMAL' then 'numeric' when 'ENUM' then system.main.lower(type_name) when 'VARCHAR' then 'varchar' when 'BLOB' then "
      "'bytea' when 'TIMESTAMP' then 'timestamp' when 'TIME' then 'time' when 'TIMESTAMP WITH TIME ZONE' then "
      "'timestamptz' when 'TIME WITH TIME ZONE' then 'timetz' when 'SMALLINT' then 'int2' when 'INTEGER' then 'int4' "
      "when 'BIGINT' then 'int8' when 'BOOLEAN' then 'bool' else system.main.lower(logical_type) end"},
     {"pg_catalog", "format_type",
      "(type_oid, typemod) AS (select system.pg_catalog.format_pg_type(logical_type, type_name) from "
      "system.main.duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then "
-     "system.main.concat('(', typemod//1000, ',', typemod%1000, ')') else '' end"},
+     "system.main.concat('(', system.main.\"//\"(typemod, 1000), ',', system.main.\"%\"(typemod, 1000), ')') "
+     "else '' end"},
     {"pg_catalog", "map_to_pg_oid",
      "(type_name) AS case type_name when 'bool' then 16 when 'int16' then 21 when 'int' then 23 when 'bigint' then 20 "
      "when 'date' then 1082 when 'time' then 1083 when 'datetime' then 1114 when 'dec' then 1700 when 'float' then 700 "
@@ -125,20 +127,20 @@ static const DefaultMacro internal_macros[] = {
     {"pg_catalog", "pg_type_is_visible", "(type_oid) AS true"},
 
     {"pg_catalog", "pg_size_pretty", "(bytes) AS system.main.format_bytes(bytes)"},
-    {"pg_catalog", "pg_sleep", "(seconds) AS system.main.sleep_ms(CAST(seconds * 1000 AS BIGINT))"},
+    {"pg_catalog", "pg_sleep", "(seconds) AS system.main.sleep_ms(CAST(system.main.\"*\"(seconds, 1000) AS BIGINT))"},
 
     {DEFAULT_SCHEMA, "nullif", "(a, b) AS CASE WHEN a=b THEN NULL ELSE a END"},
     {DEFAULT_SCHEMA, "if", "(a, b, c) AS CASE WHEN a THEN b ELSE c END"},
     {DEFAULT_SCHEMA, "assert_true",
      "(condition) AS CASE WHEN condition THEN NULL ELSE system.main.error('Assertion failed') END, "
      "(condition, message) AS CASE WHEN condition THEN NULL ELSE "
-     "system.main.error(COALESCE('Assertion: ' || message, 'Assertion failed')) END"},
+     "system.main.error(COALESCE(system.main.\"||\"('Assertion: ', message), 'Assertion failed')) END"},
     {DEFAULT_SCHEMA, "list_append", "(l, e) AS system.main.list_concat(l, system.main.list_value(e))"},
     {DEFAULT_SCHEMA, "array_append", "(arr, el) AS system.main.list_append(arr, el)"},
     {DEFAULT_SCHEMA, "list_prepend", "(e, l) AS system.main.list_concat(system.main.list_value(e), l)"},
     {DEFAULT_SCHEMA, "array_prepend", "(el, arr) AS system.main.list_prepend(el, arr)"},
     {DEFAULT_SCHEMA, "array_pop_back",
-     "(arr) AS system.main.array_slice(arr, system.main.list_value(), system.main.len(arr)-1)"},
+     "(arr) AS system.main.array_slice(arr, system.main.list_value(), system.main.\"-\"(system.main.len(arr), 1))"},
     {DEFAULT_SCHEMA, "array_pop_front", "(arr) AS system.main.array_slice(arr, 2, system.main.list_value())"},
     {DEFAULT_SCHEMA, "array_push_back", "(arr, e) AS system.main.list_concat(arr, system.main.list_value(e))"},
     {DEFAULT_SCHEMA, "array_push_front", "(arr, e) AS system.main.list_concat(system.main.list_value(e), arr)"},
@@ -152,8 +154,8 @@ static const DefaultMacro internal_macros[] = {
 
     {DEFAULT_SCHEMA, "generate_subscripts",
      "(arr, dim := 1) AS system.main.unnest(system.main.generate_series(1, system.main.array_length(arr, dim)))"},
-    {DEFAULT_SCHEMA, "fdiv", "(x, y) AS system.main.floor(x/y)"},
-    {DEFAULT_SCHEMA, "fmod", "(x, y) AS (x-y*system.main.floor(x/y))"},
+    {DEFAULT_SCHEMA, "fdiv", "(x, y) AS system.main.floor(system.main.\"/\"(x, y))"},
+    {DEFAULT_SCHEMA, "fmod", "(x, y) AS system.main.\"-\"(x, system.main.\"*\"(y, system.main.floor(system.main.\"/\"(x, y))))"},
     {DEFAULT_SCHEMA, "split_part",
      "(string, delimiter, \"position\") AS system.main.if(string IS NOT NULL AND delimiter IS NOT NULL AND position "
      "IS NOT NULL, coalesce(system.main.array_extract(system.main.string_split(string, delimiter), position),''), "
@@ -162,8 +164,8 @@ static const DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "geometric_mean", "(x) AS system.main.geomean(x)"},
 
     {DEFAULT_SCHEMA, "weighted_avg",
-     "(value, weight) AS system.main.sum(value * weight) / "
-     "system.main.sum(CASE WHEN value IS NOT NULL THEN weight ELSE 0 END)"},
+     "(value, weight) AS system.main.\"/\"(system.main.sum(system.main.\"*\"(value, weight)), "
+     "system.main.sum(CASE WHEN value IS NOT NULL THEN weight ELSE 0 END))"},
     {DEFAULT_SCHEMA, "wavg", "(value, weight) AS system.main.weighted_avg(value, weight)"},
     {DEFAULT_SCHEMA, "variant_group_array", "(x) AS system.main.list(x)::VARIANT"},
 
@@ -210,7 +212,7 @@ static const DefaultMacro internal_macros[] = {
 
     // map functions
     {DEFAULT_SCHEMA, "map_contains_entry",
-     "(map, key, value) AS system.main.contains(system.main.map_entries(map), {'key': key, 'value': value})"},
+     "(map, key, value) AS system.main.contains(system.main.map_entries(map), system.main.struct_pack(key := key, value := value))"},
     {DEFAULT_SCHEMA, "map_contains_value", "(map, value) AS system.main.contains(system.main.map_values(map), value)"},
 
     // date functions
@@ -220,7 +222,7 @@ static const DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "days_in_month", "(date) AS system.main.day(system.main.last_day(date))"},
 
     // timestamptz functions
-    {DEFAULT_SCHEMA, "ago", "(i) AS current_timestamp - i::interval"},
+    {DEFAULT_SCHEMA, "ago", "(i) AS system.main.\"-\"(system.main.get_current_timestamp(), i::interval)"},
 
     // regexp functions
     {DEFAULT_SCHEMA, "regexp_split_to_table",

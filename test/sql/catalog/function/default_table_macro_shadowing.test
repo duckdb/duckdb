@@ -39,3 +39,18 @@ query I
 SELECT count(*) FROM system.main.histogram('hist_t', v);
 ----
 10
+
+# the equi-height comprehension spells its list_apply helper and division
+
+statement ok
+CREATE MACRO list_apply(xs, f) AS [0.5];
+
+statement ok
+CREATE MACRO "/"(a, b) AS 0.5;
+
+query II
+SELECT bin, count FROM histogram_values(hist_t, v, technique := 'equi-height') ORDER BY bin LIMIT 3;
+----
+9	10
+19	10
+29	10

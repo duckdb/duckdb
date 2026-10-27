@@ -23,7 +23,7 @@ WITH bins AS (
          system.main.approx_top_k(col_name, bin_count)
       WHEN technique='equi-height'
       THEN
-         system.main.quantile(col_name, [x / bin_count::DOUBLE for x in system.main.generate_series(1, bin_count)])
+         system.main.quantile(col_name, system.main.list_apply(system.main.generate_series(1, bin_count), lambda x: system.main."/"(x, bin_count::DOUBLE)))
       WHEN technique='equi-width'
       THEN
          system.main.equi_width_bins(system.main.min(col_name), system.main.max(col_name), bin_count, false)
@@ -71,9 +71,9 @@ FROM system.main.histogram_values(source, col_name, bin_count := bin_count, tech
 )"},
 	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
 SELECT * EXCLUDE (message),
-       system.main.unnest(CASE WHEN type ILIKE log_type THEN system.main.parse_duckdb_log_message(log_type, message) END)
+       system.main.unnest(CASE WHEN system.main."~~*"(type, log_type) THEN system.main.parse_duckdb_log_message(log_type, message) END)
 FROM system.main.duckdb_logs(denormalized_table=1)
-WHERE type ILIKE log_type
+WHERE system.main."~~*"(type, log_type)
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
 SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
