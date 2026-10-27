@@ -296,6 +296,74 @@ void RelationStatisticsHelper::ApplyCardinality(RelationStats &stats, idx_t outp
 	stats.cardinality = output_cardinality;
 }
 
+static double RoundSemiAntiCardinality(double preserved_cardinality, double selectivity) {
+	if (preserved_cardinality <= 0) {
+		return 0;
+	}
+	auto estimate = round(preserved_cardinality * MaxValue(0.0, MinValue(selectivity, 1.0)));
+	if (estimate <= 0) {
+		estimate = 1;
+	}
+	return MinValue(estimate, preserved_cardinality);
+}
+
+SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinFallback(double preserved_cardinality,
+                                                                                       idx_t rhs_cardinality,
+                                                                                       JoinType join_type) {
+	auto is_anti = join_type == JoinType::ANTI || join_type == JoinType::RIGHT_ANTI;
+	if (rhs_cardinality == 0) {
+		return {is_anti ? MaxValue(0.0, preserved_cardinality) : 0, false};
+	}
+	return {RoundSemiAntiCardinality(preserved_cardinality, DEFAULT_SELECTIVITY), false};
+}
+
+static constexpr double MAX_BASE_CARDINALITY_TO_DOMAIN_RATIO = 8;
+
+SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(
+    double preserved_cardinality, idx_t rhs_cardinality, double rhs_row_retention, JoinType join_type,
+    const vector<SemiAntiJoinDomain> &domains, bool has_residual) {
+	auto fallback = EstimateSemiAntiJoinFallback(preserved_cardinality, rhs_cardinality, join_type);
+	if (preserved_cardinality <= 0 || rhs_cardinality == 0 || has_residual || domains.empty()) {
+		return fallback;
+	}
+
+	double match_fraction = 1;
+	double strongest_fraction = 1;
+	idx_t strongest_total_domain = 0;
+	idx_t maximum_total_domain = 0;
+	column_binding_set_t preserved_bindings;
+	column_binding_set_t rhs_bindings;
+	for (auto &domain : domains) {
+		if (domain.total_domain == 0) {
+			return fallback;
+		}
+		double fraction = MinValue(1.0, double(domain.rhs_current_domain) / double(domain.total_domain));
+		match_fraction *= fraction;
+		if (fraction < strongest_fraction) {
+			strongest_fraction = fraction;
+			strongest_total_domain = domain.total_domain;
+		}
+		maximum_total_domain = MaxValue(maximum_total_domain, domain.total_domain);
+		preserved_bindings.insert(domain.preserved_binding);
+		rhs_bindings.insert(domain.rhs_binding);
+	}
+	if (domains.size() >= 2 && preserved_bindings.size() >= 2 && rhs_bindings.size() >= 2 && maximum_total_domain > 0) {
+		auto retention = MaxValue(0.0, MinValue(rhs_row_retention, 1.0));
+		auto rhs_base_cardinality = retention > 0 ? double(rhs_cardinality) / retention : double(rhs_cardinality);
+		if (rhs_base_cardinality <= double(maximum_total_domain) * MAX_BASE_CARDINALITY_TO_DOMAIN_RATIO &&
+		    (strongest_total_domain == 0 || double(strongest_total_domain) <= rhs_base_cardinality)) {
+			match_fraction = MaxValue(match_fraction, MinValue(strongest_fraction, retention));
+		}
+	}
+	// Domain sizes cannot prove value containment: same-size disjoint domains (and NULL-heavy preserved keys)
+	// look like full coverage. Keep the match fraction strictly below one so ANTI never collapses to the
+	// one-row floor and SEMI never claims the complete preserved side on size evidence alone.
+	match_fraction = MaxValue(0.0, MinValue(match_fraction, 1.0 - DEFAULT_SELECTIVITY));
+	auto is_anti = join_type == JoinType::ANTI || join_type == JoinType::RIGHT_ANTI;
+	auto selectivity = is_anti ? 1 - match_fraction : match_fraction;
+	return {RoundSemiAntiCardinality(preserved_cardinality, selectivity), true};
+}
+
 optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate &aggregate,
                                                                           const RelationStats &child_stats) {
 	RelationColumnStatsLookup child_columns(child_stats);

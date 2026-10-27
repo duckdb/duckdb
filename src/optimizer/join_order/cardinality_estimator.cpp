@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+template <>
+double CardinalityEstimator::EstimateCardinalityWithSet<double>(JoinRelationSet &new_set);
+
 struct DenomInfo {
 public:
 	DenomInfo(JoinRelationSet &numerator_relations, double denominator)
@@ -37,53 +40,33 @@ public:
 	void Update(const DistinctCount &distinct_count);
 
 private:
-	optional_idx reliable_distinct_count;
-	optional_idx min_max_distinct_count;
-	idx_t fallback_distinct_count;
+	optional<DistinctCount> estimate;
 };
 
-static bool IsReliableDistinctCount(DistinctCountSource source) {
-	return source == DistinctCountSource::HLL || source == DistinctCountSource::EXACT;
-}
-
-static void UpdateMaxDistinctCount(optional_idx &target, idx_t distinct_count) {
-	if (target.IsValid()) {
-		target = MaxValue(target.GetIndex(), distinct_count);
-		return;
-	}
-	target = distinct_count;
-}
-
-DomainEstimate::DomainEstimate() : fallback_distinct_count(NumericLimits<idx_t>::Maximum()) {
+DomainEstimate::DomainEstimate() {
 }
 
 idx_t DomainEstimate::GetDistinctCount() const {
-	if (reliable_distinct_count.IsValid()) {
-		return reliable_distinct_count.GetIndex();
-	}
-	if (min_max_distinct_count.IsValid()) {
-		return min_max_distinct_count.GetIndex();
-	}
-	return fallback_distinct_count;
+	return estimate ? estimate->distinct_count : NumericLimits<idx_t>::Maximum();
 }
 
 bool DomainEstimate::HasReliableDistinctCount() const {
-	return reliable_distinct_count.IsValid();
+	return estimate && (estimate->source == DistinctCountSource::HLL || estimate->source == DistinctCountSource::EXACT);
 }
 
 idx_t DomainEstimate::GetReliableDistinctCount() const {
-	D_ASSERT(reliable_distinct_count.IsValid());
-	return reliable_distinct_count.GetIndex();
+	if (!estimate || (estimate->source != DistinctCountSource::HLL && estimate->source != DistinctCountSource::EXACT)) {
+		throw InternalException("Attempted to access an unreliable distinct count");
+	}
+	return estimate->distinct_count;
 }
 
 void DomainEstimate::Update(const DistinctCount &distinct_count) {
-	if (IsReliableDistinctCount(distinct_count.source)) {
-		UpdateMaxDistinctCount(reliable_distinct_count, distinct_count.distinct_count);
-	} else if (distinct_count.source == DistinctCountSource::MIN_MAX) {
-		UpdateMaxDistinctCount(min_max_distinct_count, distinct_count.distinct_count);
-	} else {
-		fallback_distinct_count = MinValue(distinct_count.distinct_count, fallback_distinct_count);
+	if (!estimate) {
+		estimate = distinct_count;
+		return;
 	}
+	estimate = RelationStatisticsHelper::SelectTotalDomain({*estimate, distinct_count});
 }
 
 struct RelationsSetToStats {
@@ -186,7 +169,6 @@ public:
 struct CardinalityEstimatorState {
 	vector<RelationsSetToStats> relation_set_stats;
 	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
-	vector<RelationStats> relation_stats;
 	vector<optional_ptr<FilterInfo>> or_filters;
 };
 
@@ -288,7 +270,11 @@ void CardinalityEstimator::InitEquivalentRelations() {
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &filter = predicate_ref.get().GetFilter();
 		if (IsJoinOrFilter(filter)) {
-			state->or_filters.push_back(filter);
+			// SEMI/ANTI residuals are owned by their operator occurrence, whose semi/anti estimate already
+			// prices the complete condition. Applying the OR selectivity again would double-charge it.
+			if (filter.join_type != JoinType::SEMI && filter.join_type != JoinType::ANTI) {
+				state->or_filters.push_back(filter);
+			}
 			continue;
 		}
 		if (SingleColumnFilter(filter)) {
@@ -343,10 +329,81 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 		if (entry == state->relation_set_2_cardinality.end()) {
 			continue;
 		}
-		auto &card_helper = entry->second;
-		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
+		auto cardinality = entry->second.cardinality_before_filters;
+		numerator *= cardinality == 0 ? 1 : cardinality;
 	}
 	return numerator;
+}
+
+//! The cached per-set estimate before OR-filter selectivities; the caller applies those exactly once.
+double CardinalityEstimator::GetPreOrCardinality(JoinRelationSet &set) {
+	EstimateCardinalityWithSet<double>(set);
+	auto entry = state->relation_set_2_cardinality.find(set);
+	D_ASSERT(entry != state->relation_set_2_cardinality.end());
+	if (entry == state->relation_set_2_cardinality.end()) {
+		return 0;
+	}
+	return entry->second.cardinality_before_filters;
+}
+
+double CardinalityEstimator::GetSubgraphCardinality(const Subgraph2Denominator &subgraph) {
+	D_ASSERT(subgraph.numerator_relations);
+	if (subgraph.denom >= NumericLimits<double>::Maximum()) {
+		return 0;
+	}
+	double numerator = 1;
+	for (idx_t relation_idx = 0; relation_idx < subgraph.numerator_relations->count; relation_idx++) {
+		auto &relation = set_manager.GetJoinRelation(subgraph.numerator_relations->relations[relation_idx]);
+		auto entry = state->relation_set_2_cardinality.find(relation);
+		D_ASSERT(entry != state->relation_set_2_cardinality.end());
+		if (entry == state->relation_set_2_cardinality.end()) {
+			continue;
+		}
+		numerator *= entry->second.cardinality_before_filters;
+	}
+	return numerator / (subgraph.denom <= 0 ? 1 : subgraph.denom);
+}
+
+bool CardinalityEstimator::IsCardinalityEmpty(JoinRelationSet &set) {
+	auto semi_anti_result = EstimateTopLevelSemiAnti(set);
+	if (semi_anti_result) {
+		return *semi_anti_result <= 0;
+	}
+	auto denom = GetDenominator(set);
+	Subgraph2Denominator subgraph;
+	subgraph.numerator_relations = &denom.numerator_relations;
+	subgraph.denom = denom.denominator;
+	return GetSubgraphCardinality(subgraph) <= 0;
+}
+
+optional<double> CardinalityEstimator::EstimateTopLevelSemiAnti(JoinRelationSet &set) {
+	for (auto predicate_ref : predicate_model.GetPredicates()) {
+		auto &predicate = predicate_ref.get();
+		if (predicate.GetJoinType() != JoinType::SEMI && predicate.GetJoinType() != JoinType::ANTI) {
+			continue;
+		}
+		auto semantic_left = predicate.GetSemanticLeftSetOptional();
+		auto semantic_right = predicate.GetSemanticRightSetOptional();
+		if (!semantic_left || !semantic_right) {
+			continue;
+		}
+		auto &operator_set = set_manager.Union(*semantic_left, *semantic_right);
+		if (!RefersToSameObject(operator_set, set)) {
+			continue;
+		}
+		// Use the pre-OR preserved estimate: the result is cached pre-OR like every other set, and the
+		// caller applies OR-filter selectivities exactly once over the complete operator set.
+		auto preserved_cardinality = GetPreOrCardinality(*semantic_left);
+		// IsCardinalityEmpty treats zero-cardinality relations as empty, unlike GetNumerator's zero guard.
+		if (IsCardinalityEmpty(*semantic_left)) {
+			preserved_cardinality = 0;
+		}
+		auto rhs_cardinality = IsCardinalityEmpty(*semantic_right) ? 0 : 1;
+		return RelationStatisticsHelper::EstimateSemiAntiJoinFallback(preserved_cardinality, rhs_cardinality,
+		                                                              predicate.GetJoinType())
+		    .cardinality;
+	}
+	return {};
 }
 
 vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relations_to_tdom,
@@ -367,6 +424,14 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relatio
 
 static optional_ptr<JoinRelationSet> GetEdgeEndpoint(FilterInfoWithTotalDomains &edge,
                                                      JoinRelationSetManager &set_manager, bool left) {
+	auto join_type = edge.GetPredicate().GetJoinType();
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		auto semantic_set =
+		    left ? edge.GetPredicate().GetSemanticLeftSetOptional() : edge.GetPredicate().GetSemanticRightSetOptional();
+		if (semantic_set) {
+			return semantic_set;
+		}
+	}
 	auto &filter = edge.GetFilter();
 	if (filter.filter && BoundComparisonExpression::IsComparison(*filter.filter)) {
 		auto &binding = edge.GetPredicate().GetStatsBinding(left);
@@ -467,7 +532,7 @@ static double GetEffectiveDenom(double denom) {
 }
 
 double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
-	auto effective_d = filter.GetDistinctCount();
+	auto effective_d = GetEffectiveDenom(filter.GetDistinctCount());
 	auto comparison_type = filter.GetComparisonType();
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
@@ -513,21 +578,29 @@ double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, 
 	return CalculateLeftJoinDenomInfo(left, right, filter).denominator;
 }
 
-double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
-                                                        Subgraph2Denominator &right,
+double CardinalityEstimator::CalculateSemiAntiJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
                                                         FilterInfoWithTotalDomains &filter) {
 	auto &predicate = filter.GetPredicate();
-	if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
-	    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
-		return left.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
+	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
+	auto &preserved = left_is_preserved ? left : right;
+	auto &rhs = left_is_preserved ? right : left;
+	auto preserved_cardinality = GetSubgraphCardinality(preserved);
+	auto semantic_rhs = predicate.GetSemanticRightSetOptional();
+	auto rhs_is_empty = semantic_rhs ? IsCardinalityEmpty(*semantic_rhs) : GetSubgraphCardinality(rhs) <= 0;
+	auto rhs_cardinality = rhs_is_empty ? 0 : 1;
+	auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinFallback(preserved_cardinality, rhs_cardinality,
+	                                                                       predicate.GetJoinType());
+	if (estimate.cardinality <= 0) {
+		return NumericLimits<double>::Maximum();
 	}
-	return right.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
+	return preserved.denom * preserved_cardinality / estimate.cardinality;
 }
 
 // Given two subgraphs, compute the updated denominator for the join between them.
 double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
                                                    FilterInfoWithTotalDomains &filter) {
-	double base_denom = left.denom * right.denom;
+	double base_denom = GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom);
 	switch (filter.GetPredicate().GetJoinType()) {
 	case JoinType::LEFT:
 		return CalculateLeftJoinDenom(left, right, filter);
@@ -535,7 +608,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		return CalculateInnerJoinDenom(base_denom, filter);
 	case JoinType::SEMI:
 	case JoinType::ANTI:
-		return CalculateSemiAntiJoinDenom(base_denom, left, right, filter);
+		return CalculateSemiAntiJoinDenom(left, right, filter);
 	default:
 		// Cross product: no join condition reduces the denominator.
 		return base_denom;
@@ -720,6 +793,8 @@ struct DenominatorState {
 	reference_map_t<JoinRelationSet, CompositeJoinPairStats> join_pair_stats;
 	reference_set_t<JoinRelationSet> capped_join_pairs;
 	unordered_set<idx_t> unused_edge_tdoms;
+	//! Even entries are operator occurrence indexes, odd entries are predicate indexes.
+	unordered_set<idx_t> applied_semi_anti_operators;
 };
 
 static bool DenominatorSubgraphComplete(DenominatorState &state, JoinRelationSet &set) {
@@ -730,6 +805,13 @@ static bool DenominatorSubgraphComplete(DenominatorState &state, JoinRelationSet
 void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
                                                   DenominatorState &state) {
 	auto edge_kind = ClassifyDenominatorEdge(edge, state.applied_equivalence_groups);
+	if (edge_kind == DenominatorEdgeKind::SEMI_ANTI_JOIN) {
+		auto source_index = edge.GetFilter().source_operator_index;
+		auto identity = source_index.IsValid() ? source_index.GetIndex() * 2 : edge.GetPredicate().GetIndex() * 2 + 1;
+		if (!state.applied_semi_anti_operators.insert(identity).second) {
+			return;
+		}
+	}
 	if (DenominatorSubgraphComplete(state, requested_set)) {
 		auto &complete_subgraph = state.subgraphs.at(0);
 		ApplyCompositeJoinPairCaps(complete_subgraph.denom, *complete_subgraph.relations, state.join_pair_stats,
@@ -910,12 +992,17 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	if (it != state->relation_set_2_cardinality.end()) {
 		result = it->second.cardinality_before_filters;
 	} else {
-		// can happen if a table has cardinality 0, or a tdom is set to 0
-		auto denom = GetDenominator(new_set);
-		// we pass numerator relations, because for semi and anti joins, we don't want to
-		// include cardinalities of relations on the RHS of a semi/anti join.
-		auto numerator = GetNumerator(denom.numerator_relations);
-		result = numerator / denom.denominator;
+		auto semi_anti_result = EstimateTopLevelSemiAnti(new_set);
+		if (semi_anti_result) {
+			result = *semi_anti_result;
+		} else {
+			// can happen if a table has cardinality 0, or a tdom is set to 0
+			auto denom = GetDenominator(new_set);
+			// we pass numerator relations, because for semi and anti joins, we don't want to
+			// include cardinalities of relations on the RHS of a semi/anti join.
+			auto numerator = GetNumerator(denom.numerator_relations);
+			result = denom.denominator >= NumericLimits<double>::Maximum() ? 0 : numerator / denom.denominator;
+		}
 		state->relation_set_2_cardinality[new_set] = CardinalityHelper(result);
 	}
 	return ApplyOrFilterSelectivities(new_set, result);

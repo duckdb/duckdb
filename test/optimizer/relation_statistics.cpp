@@ -238,7 +238,8 @@ TEST_CASE("Operator statistics remain aligned across unary and join operators", 
 	semi_join.children.push_back(CreateConstantProjection(TableIndex(20), 1));
 	auto semi_stats = RelationStatisticsHelper::ExtractOperatorStats(semi_join, *connection.context, join_children);
 	REQUIRE(semi_stats);
-	REQUIRE(semi_stats->cardinality == left_stats.cardinality);
+	// SEMI/ANTI joins without domain evidence use the fallback selectivity on the preserved side.
+	REQUIRE(semi_stats->cardinality == 20);
 	REQUIRE(semi_stats->MatchesBindings(semi_join.GetColumnBindings()));
 
 	for (auto join_type :
@@ -249,8 +250,13 @@ TEST_CASE("Operator statistics remain aligned across unary and join operators", 
 		auto join_stats = RelationStatisticsHelper::ExtractOperatorStats(join, *connection.context, join_children);
 		REQUIRE(join_stats);
 		REQUIRE(join_stats->MatchesBindings(join.GetColumnBindings()));
-		REQUIRE(join_stats->cardinality ==
-		        (join_type == JoinType::RIGHT_ANTI ? right_stats.cardinality : left_stats.cardinality));
+		idx_t expected_cardinality = left_stats.cardinality;
+		if (join_type == JoinType::ANTI) {
+			expected_cardinality = 20;
+		} else if (join_type == JoinType::RIGHT_ANTI) {
+			expected_cardinality = 1;
+		}
+		REQUIRE(join_stats->cardinality == expected_cardinality);
 	}
 }
 

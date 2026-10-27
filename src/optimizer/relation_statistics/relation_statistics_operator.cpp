@@ -43,6 +43,64 @@ static idx_t JoinCardinality(LogicalComparisonJoin &join, const RelationStats &l
 	}
 }
 
+static optional_ptr<const RelationColumnStats> GetJoinColumn(const Expression &expression, const RelationStats &stats) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return nullptr;
+	}
+	return stats.GetColumnStats(expression.Cast<BoundColumnRefExpression>().Binding());
+}
+
+SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(LogicalComparisonJoin &join,
+                                                                                          const RelationStats &left,
+                                                                                          const RelationStats &right) {
+	auto preserve_right = join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI;
+	auto &preserved = preserve_right ? right : left;
+	auto &rhs = preserve_right ? left : right;
+	vector<SemiAntiJoinDomain> domains;
+	bool has_residual = false;
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison() || (condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
+		                                  condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+			has_residual = true;
+			continue;
+		}
+		auto lhs_preserved = GetJoinColumn(condition.GetLHS(), preserved);
+		auto rhs_column = GetJoinColumn(condition.GetRHS(), rhs);
+		if (!lhs_preserved || !rhs_column) {
+			lhs_preserved = GetJoinColumn(condition.GetRHS(), preserved);
+			rhs_column = GetJoinColumn(condition.GetLHS(), rhs);
+		}
+		if (!lhs_preserved || !rhs_column) {
+			has_residual = true;
+			continue;
+		}
+		bool seen_domain = false;
+		for (auto &domain : domains) {
+			if (domain.preserved_binding == lhs_preserved->binding && domain.rhs_binding == rhs_column->binding) {
+				seen_domain = true;
+				break;
+			}
+		}
+		if (seen_domain) {
+			continue;
+		}
+		auto rhs_current_domain = rhs_column->GetSupportedSemiAntiDomainSize();
+		if (!rhs_current_domain.IsValid()) {
+			has_residual = true;
+			continue;
+		}
+		auto total_domain = SelectTotalDomain({lhs_preserved->total_domain, rhs_column->total_domain});
+		if (!total_domain || total_domain->distinct_count == 0) {
+			has_residual = true;
+			continue;
+		}
+		domains.push_back(
+		    {total_domain->distinct_count, rhs_current_domain.GetIndex(), lhs_preserved->binding, rhs_column->binding});
+	}
+	return EstimateSemiAntiJoinCardinality(static_cast<double>(preserved.cardinality), rhs.cardinality,
+	                                       rhs.row_retention, join.join_type, domains, has_residual);
+}
+
 static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientContext &context,
                                                         const RelationStats &child_stats) {
 	auto result = RelationStatisticsHelper::ExtractGetStats(get, context);
@@ -91,6 +149,21 @@ static optional<RelationStats> ExtractComparisonJoinStats(LogicalComparisonJoin 
                                                           const vector<reference<const RelationStats>> &child_stats) {
 	if (child_stats.size() != 2) {
 		return {};
+	}
+	if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI ||
+	    join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI) {
+		auto preserve_right = join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI;
+		auto &preserved = child_stats[preserve_right ? 1 : 0].get();
+		auto result = ProjectChildStats(join, child_stats, preserved.cardinality);
+		if (!result) {
+			return {};
+		}
+		result->row_retention = preserved.row_retention;
+		auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(join, child_stats[0], child_stats[1]);
+		auto cardinality = RelationStatisticsHelper::CardinalityFromDouble(estimate.cardinality);
+		RelationStatisticsHelper::ApplyCardinality(*result, cardinality);
+		result->Verify(join.GetColumnBindings());
+		return result;
 	}
 	auto cardinality = JoinCardinality(join, child_stats[0], child_stats[1]);
 	auto result = ProjectChildStats(join, child_stats, cardinality);

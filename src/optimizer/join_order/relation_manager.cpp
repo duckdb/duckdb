@@ -677,10 +677,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		if (delim_join.join_type == JoinType::SEMI || delim_join.join_type == JoinType::ANTI ||
 		    delim_join.join_type == JoinType::RIGHT_SEMI || delim_join.join_type == JoinType::RIGHT_ANTI) {
-			dj_stats.cardinality =
-			    MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(dj_stats.cardinality) /
-			                                            CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY),
-			                    1);
+			auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(delim_join, lhs_stats, rhs_stats);
+			auto cardinality = RelationStatisticsHelper::CardinalityFromDouble(estimate.cardinality);
+			RelationStatisticsHelper::ApplyCardinality(dj_stats, cardinality);
 		}
 
 		if (!AddRelation(input_op, parent, dj_stats)) {
@@ -887,34 +886,29 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				auto right_set = semantic_sets.second;
 				D_ASSERT(left_set && left_set->count > 0);
 				D_ASSERT(right_set && right_set->count == 1);
-				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-				// create a conjunction expression for the semi/anti join.
-				// It's possible multiple LHS relations have a condition in
-				// this join. Suppose we have ((A ⨝ B) ⋉ C). (example in test_4950.test)
-				// If the semi join condition has A.x = C.y AND B.x = C.z then we need to prevent a reordering
-				// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost after it joins with A,
-				// and the condition B.x = C.z will no longer be possible.
-				// if we make a conjunction expression and populate the left set and right set with all
-				// the relations from the conditions in the conjunction expression, we can prevent invalid reordering.
-
-				// Only comparison copies participate in costing. The operator occurrence owns the complete condition.
-				for (auto &cond : conditions) {
-					if (cond.IsComparison()) {
-						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
-						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
-						conjunction_expression->GetChildrenMutable().push_back(std::move(comparison));
-					}
-				}
-
-				D_ASSERT(!conjunction_expression->GetChildrenMutable().empty());
 				auto &full_set = set_manager.Union(*left_set, *right_set);
-				auto filter_index = filters_and_bindings.size();
-				auto filter_info =
-				    make_uniq<FilterInfo>(std::move(conjunction_expression), full_set, filter_index, join.join_type);
-				filter_info->SetLeftSet(left_set);
-				filter_info->SetRightSet(right_set);
-				filters_and_bindings.push_back(std::move(filter_info));
-				operator_predicates[f_op].push_back(filter_index);
+				// Keep each condition as separate costing evidence, while every predicate retains the complete semantic
+				// left/right sets so the operator cannot be applied before all required inputs are available.
+				for (auto &cond : conditions) {
+					unique_ptr<Expression> expression;
+					bool is_residual = false;
+					if (cond.IsComparison()) {
+						expression = BoundComparisonExpression::Create(cond.GetComparisonType(), cond.GetLHS().Copy(),
+						                                               cond.GetRHS().Copy());
+					} else {
+						expression = cond.GetJoinExpression().Copy();
+						is_residual = true;
+					}
+					auto filter_index = filters_and_bindings.size();
+					auto filter_info =
+					    make_uniq<FilterInfo>(std::move(expression), full_set, filter_index, join.join_type);
+					filter_info->SetLeftSet(left_set);
+					filter_info->SetRightSet(right_set);
+					filter_info->from_residual_predicate = is_residual;
+					filters_and_bindings.push_back(std::move(filter_info));
+					operator_predicates[f_op].push_back(filter_index);
+				}
+				D_ASSERT(!operator_predicates[f_op].empty());
 				operator_conditions[f_op] = std::move(conditions);
 				break;
 			}

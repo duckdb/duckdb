@@ -25,7 +25,6 @@ struct Subgraph2Denominator;
 
 class CardinalityEstimator {
 public:
-	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 5;
 	CardinalityEstimator(JoinRelationSetManager &set_manager, const JoinPredicateModel &predicate_model);
 	~CardinalityEstimator();
 
@@ -47,6 +46,10 @@ public:
 
 private:
 	double GetNumerator(JoinRelationSet &set);
+	double GetPreOrCardinality(JoinRelationSet &set);
+	double GetSubgraphCardinality(const Subgraph2Denominator &subgraph);
+	bool IsCardinalityEmpty(JoinRelationSet &set);
+	optional<double> EstimateTopLevelSemiAnti(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
 	void ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
 	                            DenominatorState &state);
@@ -73,7 +76,7 @@ private:
 	                                             FilterInfoWithTotalDomains &filter);
 	double CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                              FilterInfoWithTotalDomains &filter);
-	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,
+	double CalculateSemiAntiJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                                  FilterInfoWithTotalDomains &filter);
 	bool ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
 	                        reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,

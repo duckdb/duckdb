@@ -231,6 +231,12 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	join_operators = std::move(extraction.join_operators);
 	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
 	for (auto &join_operator : join_operators) {
+		for (auto predicate_index : join_operator->costing_predicate_indices) {
+			filters_and_bindings[predicate_index]->semantic_left_set =
+			    optional_ptr<JoinRelationSet>(join_operator->left_total_set.get());
+			filters_and_bindings[predicate_index]->semantic_right_set =
+			    optional_ptr<JoinRelationSet>(join_operator->right_total_set.get());
+		}
 		if (!JoinOrderConflictDetector::MustApplyAsOperator(*join_operator)) {
 			continue;
 		}
