@@ -136,10 +136,12 @@ public:
 	//! whose type is not concrete, such as ANY, takes it as it is
 	DUCKDB_API static Value CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type);
 
-	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
-	//! or fold - only the overload is chosen
+	//! Bind a table in-out function: positional arguments are input columns, while
+	//! named options are folded and cast after selecting the complete signature.
 	DUCKDB_API optional_idx BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                               const vector<LogicalType> &input_types, ErrorData &error);
+	                                               const vector<LogicalType> &input_types,
+	                                               vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                               named_argument_map_t &named_parameters, ErrorData &error);
 
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
