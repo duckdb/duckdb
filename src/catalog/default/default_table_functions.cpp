@@ -1,4 +1,5 @@
 #include "duckdb/catalog/default/default_table_functions.hpp"
+#include "duckdb/catalog/default/default_macro_qualifier.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -15,69 +16,68 @@ static const DefaultTableMacro internal_table_macros[] = {
 WITH bins AS (
    SELECT
       CASE
-      WHEN (NOT (system.main.can_cast_implicitly(system.main.min(col_name), NULL::BIGINT) OR
-            system.main.can_cast_implicitly(system.main.min(col_name), NULL::DOUBLE) OR
-            system.main.can_cast_implicitly(system.main.min(col_name), NULL::TIMESTAMP)) AND technique='auto')
+      WHEN (NOT (can_cast_implicitly(MIN(col_name), NULL::BIGINT) OR
+            can_cast_implicitly(MIN(col_name), NULL::DOUBLE) OR
+            can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
             OR technique='sample'
       THEN
-         system.main.approx_top_k(col_name, bin_count)
+         approx_top_k(col_name, bin_count)
       WHEN technique='equi-height'
       THEN
-         system.main.quantile(col_name, system.main.list_apply(system.main.generate_series(1, bin_count), lambda x: system.main."/"(x, bin_count::DOUBLE)))
+         quantile(col_name, [x / bin_count::DOUBLE for x in generate_series(1, bin_count)])
       WHEN technique='equi-width'
       THEN
-         system.main.equi_width_bins(system.main.min(col_name), system.main.max(col_name), bin_count, false)
+         equi_width_bins(MIN(col_name), MAX(col_name), bin_count, false)
       WHEN technique='equi-width-nice' OR technique='auto'
       THEN
-         system.main.equi_width_bins(system.main.min(col_name), system.main.max(col_name), bin_count, true)
+         equi_width_bins(MIN(col_name), MAX(col_name), bin_count, true)
       ELSE
-         system.main.error(system.main.concat('Unrecognized technique ', technique))
+         error(concat('Unrecognized technique ', technique))
       END AS bins
-   FROM system.main.query_table(source::VARCHAR)
+   FROM query_table(source::VARCHAR)
    )
-SELECT system.main.unnest(system.main.map_keys(histogram)) AS bin,
-       system.main.unnest(system.main.map_values(histogram)) AS count
+SELECT UNNEST(map_keys(histogram)) AS bin, UNNEST(map_values(histogram)) AS count
 FROM (
    SELECT CASE
-      WHEN (NOT (system.main.can_cast_implicitly(system.main.min(col_name), NULL::BIGINT) OR
-            system.main.can_cast_implicitly(system.main.min(col_name), NULL::DOUBLE) OR
-            system.main.can_cast_implicitly(system.main.min(col_name), NULL::TIMESTAMP)) AND technique='auto')
+      WHEN (NOT (can_cast_implicitly(MIN(col_name), NULL::BIGINT) OR
+            can_cast_implicitly(MIN(col_name), NULL::DOUBLE) OR
+            can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
             OR technique='sample'
       THEN
-            system.main.histogram_exact(col_name, bins)
+            histogram_exact(col_name, bins)
       ELSE
-            system.main.histogram(col_name, bins)
+            histogram(col_name, bins)
       END AS histogram
-   FROM system.main.query_table(source::VARCHAR), bins
+   FROM query_table(source::VARCHAR), bins
 );
 )"},
 	{DEFAULT_SCHEMA, "histogram", {"source", "col_name", nullptr}, {{"bin_count", "10"}, {"technique", "'auto'"}, {nullptr, nullptr}},  R"(
 SELECT
    CASE
-   WHEN system.main.is_histogram_other_bin(bin)
+   WHEN is_histogram_other_bin(bin)
    THEN '(other values)'
-   WHEN (NOT (system.main.can_cast_implicitly(bin, NULL::BIGINT) OR
-              system.main.can_cast_implicitly(bin, NULL::DOUBLE) OR
-              system.main.can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
+   WHEN (NOT (can_cast_implicitly(bin, NULL::BIGINT) OR
+              can_cast_implicitly(bin, NULL::DOUBLE) OR
+              can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
               OR technique='sample'
    THEN bin::VARCHAR
-   WHEN system.main.row_number() over () = 1
-   THEN system.main.concat('x <= ', bin::VARCHAR)
-   ELSE system.main.concat(system.main.lag(bin::VARCHAR) over (), ' < x <= ', bin::VARCHAR)
+   WHEN row_number() over () = 1
+   THEN concat('x <= ', bin::VARCHAR)
+   ELSE concat(lag(bin::VARCHAR) over (), ' < x <= ', bin::VARCHAR)
    END AS bin,
    count,
-   system.main.bar(count, 0, system.main.max(count) over ()) AS bar
-FROM system.main.histogram_values(source, col_name, bin_count := bin_count, technique := technique);
+   bar(count, 0, max(count) over ()) AS bar
+FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
 	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
 SELECT * EXCLUDE (message),
-       system.main.unnest(CASE WHEN system.main."~~*"(type, log_type) THEN system.main.parse_duckdb_log_message(log_type, message) END)
-FROM system.main.duckdb_logs(denormalized_table=1)
-WHERE system.main."~~*"(type, log_type)
+       UNNEST(CASE WHEN type ILIKE log_type THEN parse_duckdb_log_message(log_type, message) END)
+FROM duckdb_logs(denormalized_table=1)
+WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
 SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
-  FROM system.main.duckdb_settings(deprecated := false)
+  FROM duckdb_settings(deprecated := false)
   WHERE name IN (
       'enable_profiling',
       'profiling_coverage',
@@ -106,6 +106,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
 		function->default_parameters.insert(Identifier(named_param.name), std::move(default_value));
 	}
+	DefaultMacroQualifier::Qualify(*function, Identifier(default_macro.schema));
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
