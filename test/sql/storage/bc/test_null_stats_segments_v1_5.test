@@ -1,0 +1,86 @@
+# name: test/sql/storage/bc/test_null_stats_segments_v1_5.test
+# description: Propagate legacy NULL statistics across unequal data and validity segment boundaries
+# group: [bc]
+
+require vector_size 2048
+
+# Written by DuckDB v1.5.6 with the following SQL:
+# ATTACH 'null_stats_segments_v1_5.db' AS fixture (BLOCK_SIZE 16384, ROW_GROUP_SIZE 524288, STORAGE_VERSION 'v1.5.0');
+# USE fixture;
+# SET threads=1;
+# SET disabled_compression_methods='roaring';
+# CREATE TABLE constant_data AS SELECT CASE WHEN i BETWEEN 140000 AND 270000 AND i%4=0 THEN NULL ELSE 2 END::BIGINT AS x FROM range(400000) r(i);
+# CHECKPOINT;
+# SET force_compression='uncompressed';
+# CREATE TABLE split_data AS SELECT CASE WHEN i BETWEEN 140000 AND 270000 AND i%4=0 THEN NULL ELSE (i%3)+1 END::BIGINT AS x FROM range(400000) r(i);
+# CHECKPOINT;
+unzip data/storage/null_stats_segments_v1_5.db.gz {TEST_DIR}/null_stats_segments_v1_5.db
+
+statement ok
+ATTACH '{TEST_DIR}/null_stats_segments_v1_5.db' AS old (STORAGE_VERSION 'latest')
+
+# One data segment spans four validity segments, including a NULL-free first segment.
+query II
+SELECT count(*) FILTER (WHERE segment_type = 'BIGINT'), count(*) FILTER (WHERE segment_type = 'VALIDITY')
+FROM pragma_storage_info('old.constant_data')
+----
+1	4
+
+# Many data segments share each validity segment, with boundaries that do not line up.
+query II
+SELECT count(*) FILTER (WHERE segment_type = 'BIGINT'), count(*) FILTER (WHERE segment_type = 'VALIDITY')
+FROM pragma_storage_info('old.split_data')
+----
+196	4
+
+foreach phase initial upgraded
+
+foreach tbl constant_data split_data
+
+query I
+SELECT count(*) FROM old.{tbl} WHERE x IS NULL OR x > 10
+----
+32501
+
+query I
+SELECT count(*) FROM old.{tbl} WHERE coalesce(x, 11) > 10
+----
+32501
+
+query I
+SELECT count(*) FROM old.{tbl} WHERE x IS NOT NULL
+----
+367499
+
+endloop
+
+# The constant segment has min = max = 2 and no NULL flag: without the repair the filter prunes every vector.
+query I
+SELECT count(*) FROM old.constant_data WHERE x IS DISTINCT FROM 2
+----
+32501
+
+# Segments outside the possibly-NULL validity ranges retain their NULL-free statistics.
+query I
+SELECT count(*) FROM pragma_storage_info('old.split_data')
+WHERE segment_type = 'BIGINT' AND NOT stats.has_null::BOOLEAN
+----
+69
+
+# A new checkpoint may retain old row groups, so the repair must also run after upgrading the file.
+statement ok
+CREATE OR REPLACE TABLE old.checkpoint_marker AS SELECT 1
+
+statement ok
+CHECKPOINT old
+
+statement ok
+DETACH old
+
+statement ok
+ATTACH '{TEST_DIR}/null_stats_segments_v1_5.db' AS old
+
+endloop
+
+statement ok
+DETACH old
