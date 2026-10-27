@@ -1,4 +1,3 @@
-#include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -108,27 +107,9 @@ BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, cons
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
-	// resolve the backing name as a written call would, so caller-registered scalar functions keep winning.
-	// when that resolution is not a scalar function (operator syntax rejects macros, it cannot hand them
-	// already-bound children), retry the system catalog so session objects cannot break operators
-	EntryLookupInfo caller_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function_name));
-	auto resolved = GetCatalogEntry(caller_lookup, OnEntryNotFound::RETURN_NULL);
-	if (!resolved || resolved->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-		EntryLookupInfo system_lookup(
-		    CatalogType::SCALAR_FUNCTION_ENTRY,
-		    QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), function_name));
-		auto system_func = GetCatalogEntry(system_lookup, OnEntryNotFound::RETURN_NULL);
-		if (system_func && system_func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-			resolved = system_func;
-		}
-	}
-	if (!resolved) {
-		// preserve the original missing-entry errors
-		FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
-		lookup.SetQueryLocation(op.GetQueryLocation());
-		resolved = &BindFunction(lookup);
-	}
-	auto &func = *resolved;
+	FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
+	lookup.SetQueryLocation(op.GetQueryLocation());
+	auto &func = BindFunction(lookup);
 	if (func.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 		throw BinderException(op, "%s is not a scalar function", function_name.GetIdentifierName());
 	}

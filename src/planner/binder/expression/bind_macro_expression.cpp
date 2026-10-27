@@ -14,7 +14,6 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/planner/column_qualifier.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 
@@ -104,141 +103,6 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
-bool ExpressionBinder::FindSystemFunctionSchema(const Identifier &name, const Identifier &macro_schema,
-                                                Identifier &result_schema) {
-	vector<Identifier> schemas;
-	schemas.push_back(macro_schema);
-	if (!(macro_schema == Identifier::DefaultSchema())) {
-		schemas.push_back(Identifier::DefaultSchema());
-	}
-	for (auto &schema : schemas) {
-		for (auto type : {CatalogType::SCALAR_FUNCTION_ENTRY, CatalogType::TABLE_FUNCTION_ENTRY}) {
-			EntryLookupInfo lookup(type, QualifiedName(Identifier::SystemCatalog(), schema, name));
-			auto entry = GetCatalogEntry(lookup, OnEntryNotFound::RETURN_NULL);
-			if (entry) {
-				result_schema = schema;
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-void ExpressionBinder::QualifySystemMacroReferencesInLambda(FunctionExpression &function,
-                                                            const Identifier &macro_schema,
-                                                            const identifier_set_t &macro_parameters,
-                                                            vector<identifier_set_t> &lambda_params) {
-	for (auto &child : function.GetArgumentsMutable()) {
-		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
-			QualifySystemMacroReferences(child.GetExpressionMutable(), macro_schema, macro_parameters, lambda_params);
-			continue;
-		}
-		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
-		string error_message;
-		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
-		if (!error_message.empty()) {
-			QualifySystemMacroReferences(lambda_expr.LeftMutable(), macro_schema, macro_parameters, lambda_params);
-			QualifySystemMacroReferences(lambda_expr.RightMutable(), macro_schema, macro_parameters, lambda_params);
-			continue;
-		}
-		lambda_params.emplace_back();
-		for (const auto &column_ref_expr : column_ref_expressions) {
-			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
-			lambda_params.back().emplace(column_ref.GetName());
-		}
-		QualifySystemMacroReferences(lambda_expr.RightMutable(), macro_schema, macro_parameters, lambda_params);
-		lambda_params.pop_back();
-	}
-}
-
-void ExpressionBinder::QualifySystemMacroReferences(unique_ptr<ParsedExpression> &expr, const Identifier &macro_schema,
-                                                    const identifier_set_t &macro_parameters,
-                                                    vector<identifier_set_t> &lambda_params) {
-	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::COLUMN_REF: {
-		// a bare name only pins when it converts to a SQL value function and is not a parameter
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (col_ref.IsQualified() || LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName()) ||
-		    macro_parameters.count(col_ref.GetColumnName())) {
-			return;
-		}
-		auto value_function = ColumnQualifier::SQLValueFunctionName(col_ref.GetColumnName());
-		if (value_function.empty()) {
-			return;
-		}
-		Identifier schema;
-		if (!FindSystemFunctionSchema(value_function, macro_schema, schema)) {
-			return;
-		}
-		auto function = make_uniq<FunctionExpression>(
-		    QualifiedName(Identifier::SystemCatalog(), schema, value_function), vector<unique_ptr<ParsedExpression>>());
-		function->SetQueryLocation(col_ref.GetQueryLocation());
-		if (!expr->GetAlias().empty()) {
-			function->SetAlias(expr->GetAlias());
-		}
-		expr = std::move(function);
-		return;
-	}
-	case ExpressionClass::FUNCTION: {
-		auto &function = expr->Cast<FunctionExpression>();
-		if (function.GetQualifiedName().Catalog().empty() && !IsUnnestFunction(function.FunctionName())) {
-			if (!function.GetQualifiedName().Schema().empty()) {
-				// a schema-only reference still resolves its catalog under the caller: anchor it
-				EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY,
-				                       QualifiedName(Identifier::SystemCatalog(), function.GetQualifiedName().Schema(),
-				                                     function.FunctionName()));
-				if (GetCatalogEntry(lookup, OnEntryNotFound::RETURN_NULL)) {
-					function.SetQualifiedName(QualifiedName(
-					    Identifier::SystemCatalog(), function.GetQualifiedName().Schema(), function.FunctionName()));
-				}
-			} else {
-				Identifier schema;
-				if (FindSystemFunctionSchema(function.FunctionName(), macro_schema, schema)) {
-					function.SetQualifiedName(
-					    QualifiedName(Identifier::SystemCatalog(), schema, function.FunctionName()));
-				}
-			}
-		}
-		if (function.IsLambdaFunction()) {
-			return QualifySystemMacroReferencesInLambda(function, macro_schema, macro_parameters, lambda_params);
-		}
-		break;
-	}
-	case ExpressionClass::WINDOW: {
-		// window nodes stored in a body carry their own function name
-		auto &window = expr->Cast<WindowExpression>();
-		auto &window_name = window.GetQualifiedName();
-		if (window_name.Catalog().empty() && window_name.Schema().empty() && !window_name.Name().empty()) {
-			Identifier schema;
-			if (FindSystemFunctionSchema(window_name.Name(), macro_schema, schema)) {
-				window.SetQualifiedName(QualifiedName(Identifier::SystemCatalog(), schema, window_name.Name()));
-			}
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		auto &sq = (expr->Cast<SubqueryExpression>()).Subquery();
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(*sq->node, [&](unique_ptr<ParsedExpression> &child) {
-			QualifySystemMacroReferences(child, macro_schema, macro_parameters, lambda_params);
-		});
-		break;
-	}
-	default:
-		break;
-	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		QualifySystemMacroReferences(child, macro_schema, macro_parameters, lambda_params);
-	});
-}
-
-static identifier_set_t MacroParameterNames(const MacroFunction &macro_def) {
-	identifier_set_t result;
-	for (auto &param : macro_def.parameters) {
-		result.insert(param->Cast<ColumnRefExpression>().GetColumnName());
-	}
-	return result;
-}
-
 // Find aggregate expression children
 void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
                                           vector<reference<unique_ptr<ParsedExpression>>> &exprs) {
@@ -259,16 +123,8 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { FindAggregateExprs(child_expr, exprs); });
 }
 
-void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def,
-                                                   ScalarMacroCatalogEntry &macro_func) {
+void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def) {
 	auto macro_copy = macro_def.expression->Copy();
-	if (macro_func.internal) {
-		// pin the system macro body to its defining context before aggregate detection, so the detection
-		// lookup and the transferred window name cannot be redirected by session objects
-		auto macro_parameters = MacroParameterNames(macro_def);
-		vector<identifier_set_t> body_lambda_params;
-		QualifySystemMacroReferences(macro_copy, macro_func.ParentSchema().name, macro_parameters, body_lambda_params);
-	}
 	vector<reference<unique_ptr<ParsedExpression>>> aggregate_exprs;
 	FindAggregateExprs(macro_copy, aggregate_exprs);
 
@@ -331,16 +187,9 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	// replace current expression with stored macro expression
 	// special case: If this is a window function, then we need to return a window expression
 	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		UnfoldWindowMacroExpression(expr, macro_def, macro_func);
+		UnfoldWindowMacroExpression(expr, macro_def);
 	} else {
 		expr = macro_def.expression->Copy();
-		if (macro_func.internal) {
-			// pin the system macro body to its defining context: its references must not depend on the
-			// caller's name resolution, while the caller's argument expressions (spliced in below) must
-			auto macro_parameters = MacroParameterNames(macro_def);
-			vector<identifier_set_t> body_lambda_params;
-			QualifySystemMacroReferences(expr, macro_func.ParentSchema().name, macro_parameters, body_lambda_params);
-		}
 	}
 
 	// qualify only the macro parameters with a new empty binder that only knows the macro binding

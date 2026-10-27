@@ -147,18 +147,15 @@ CREATE MACRO slice_shadow.array_slice(a,b,c) AS [99];
 statement ok
 SET search_path='slice_shadow,main';
 
-# operator syntax resolves its backing function in the system catalog when the search path
-# yields a macro, so the shadow no longer breaks slicing and the export binds the same way
-
-query I
+statement error
 SELECT b[:] FROM slice_input ORDER BY id;
 ----
-[[1, 2], [3, NULL]]
-[]
-NULL
+<REGEX>:Binder Error:.*array_slice is not a scalar function.*
 
-statement ok
+statement error
 EXPLAIN (SQL) SELECT b[:] FROM slice_input ORDER BY id;
+----
+<REGEX>:Binder Error:.*array_slice is not a scalar function.*
 
 statement ok
 SET search_path='main';

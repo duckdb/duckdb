@@ -43,19 +43,6 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	vector<identifier_set_t> lambda_params;
 
 	auto node = macro_def.Cast<TableMacroFunction>().query_node->Copy();
-	if (macro_func.internal) {
-		// pin the system macro body to its defining context: its references must not depend on the
-		// caller's name resolution, while the caller's argument expressions (spliced in below) must
-		identifier_set_t macro_parameters;
-		for (auto &param : macro_def.parameters) {
-			macro_parameters.insert(param->Cast<ColumnRefExpression>().GetColumnName());
-		}
-		vector<identifier_set_t> body_lambda_params;
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(*node, [&](unique_ptr<ParsedExpression> &child) {
-			eb.QualifySystemMacroReferences(child, macro_func.ParentSchema().name, macro_parameters,
-			                                body_lambda_params);
-		});
-	}
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParameters(child, lambda_params); });
 
