@@ -362,13 +362,14 @@ struct RLEScanState : public SegmentScanState {
 
 	//! Advances past empty entries while validating the current run.
 	ValidatedRun ValidateAndGetCurrentRun() {
-		auto run = layout.ValidateAndGetRun(entry_pos);
-		// Empty runs do not represent rows.
-		while (run.length == 0) {
+		while (true) {
+			auto run = layout.ValidateAndGetRun(entry_pos);
+			if (run.length != 0) {
+				return run;
+			}
+			// Empty runs do not represent rows.
 			ForwardToNextRun();
-			run = layout.ValidateAndGetRun(entry_pos);
 		}
-		return run;
 	}
 
 	inline void SkipInternal(idx_t skip_count) {
