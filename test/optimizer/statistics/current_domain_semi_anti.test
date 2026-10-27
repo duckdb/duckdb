@@ -1,0 +1,498 @@
+# name: test/optimizer/statistics/current_domain_semi_anti.test
+# description: Current-domain cardinality estimates for semi and anti joins
+# group: [statistics]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE domain_sa_left AS SELECT range::INTEGER k, range::INTEGER k2 FROM range(1000);
+
+statement ok
+CREATE TABLE domain_sa_rhs AS
+SELECT ((range % 100) * 10)::INTEGER k, ((range % 100) * 10)::INTEGER k2 FROM range(1000);
+
+statement ok
+ANALYZE domain_sa_left;
+
+statement ok
+ANALYZE domain_sa_rhs;
+
+statement ok
+CREATE TABLE domain_sa_fact AS SELECT (range % 1000)::INTEGER k FROM range(10000);
+
+statement ok
+ANALYZE domain_sa_fact;
+
+statement ok
+CREATE TABLE domain_sa_empty(k INTEGER);
+
+# A provably empty RHS uses the exact SEMI/ANTI exception.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_empty USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN[^~]*Join Type: SEMI[^~]*~0 rows.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+ANTI JOIN domain_sa_empty USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN[^~]*Join Type: ANTI[^~]*~1,000 rows.*
+
+# A preserved-side OR join filter is applied exactly once to the semi/anti operator-set estimate:
+# the preserved estimate is taken pre-OR and the OR selectivity is charged on the operator set.
+statement ok
+CREATE TABLE domain_sa_or_a AS SELECT range::INTEGER k, range::INTEGER x FROM range(1000);
+
+statement ok
+CREATE TABLE domain_sa_or_b AS SELECT range::INTEGER k, range::INTEGER x FROM range(1000);
+
+statement ok
+CREATE TABLE domain_sa_or_empty(k INTEGER, x INTEGER);
+
+statement ok
+ANALYZE domain_sa_or_a;
+
+statement ok
+ANALYZE domain_sa_or_b;
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_or_a a
+JOIN domain_sa_or_b b USING (k)
+ANTI JOIN domain_sa_or_empty r ON a.k = r.k AND b.x = r.x
+WHERE a.x = 1 OR b.x = 2;
+----
+physical_plan	<REGEX>:(?s).*Join Type: ANTI[^~]*~200 rows.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_or_a a
+JOIN domain_sa_or_b b USING (k)
+SEMI JOIN (SELECT * FROM domain_sa_or_empty UNION ALL SELECT 1, 1) r ON a.k = r.k AND b.x = r.x
+WHERE a.x = 1 OR b.x = 2;
+----
+physical_plan	<REGEX>:(?s).*Join Type: SEMI[^~]*~40 rows.*
+
+# A direct-filter domain bound does not survive a LIMIT uncapped.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs WHERE k IN (10, 20, 30, 40) LIMIT 1) one_row_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*Join Type: SEMI[^~]*~1 row.*
+
+# LIMIT PERCENT with OFFSET: the percentage applies to the complete input, the offset caps availability.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs LIMIT 10 PERCENT OFFSET 900) percent_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*Join Type: SEMI.*LIMIT_PERCENT[^~]*~100 rows.*
+
+# An OR residual owned by the operator must not also be charged as a post-join OR filter.
+statement ok
+CREATE TABLE domain_sa_empty_wide(k INTEGER, k2 INTEGER);
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left l
+ANTI JOIN domain_sa_empty_wide r ON l.k = r.k AND (l.k2 < r.k2 OR l.k < r.k2);
+----
+physical_plan	<REGEX>:(?s).*Join Type: ANTI[^~]*~1,000 rows.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left l
+ANTI JOIN domain_sa_rhs r ON l.k = r.k AND (l.k2 < r.k2 OR l.k < r.k2);
+----
+physical_plan	<REGEX>:(?s).*Join Type: ANTI[^~]*~200 rows.*
+
+# Small fallback estimates retain the one-row floor.
+query II
+EXPLAIN SELECT * FROM (VALUES (1)) lhs(k) SEMI JOIN (VALUES (1)) rhs(k) USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~1 row.*
+
+query II
+EXPLAIN SELECT * FROM (VALUES (1), (2)) lhs(k) ANTI JOIN (VALUES (1)) rhs(k) USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~1 row.*
+
+# A child-optimized RHS subtree is registered with its final statistics; the limit and offset
+# must not be applied a second time during relation registration (false-empty otherwise).
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs LIMIT 10 OFFSET 999) limited_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*Join Type: SEMI[^~]*~200 rows.*Offset: 999.*~1 row.*
+
+# Base-domain counts alone do not qualify as coverage evidence.
+query II
+EXPLAIN SELECT * FROM domain_sa_left SEMI JOIN domain_sa_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+query II
+EXPLAIN SELECT * FROM domain_sa_left ANTI JOIN domain_sa_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*
+
+# A direct predicate on the RHS equality key is eligible after plan selection.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~1 row.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+ANTI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~999 rows.*
+
+# Projection reordering and aliases preserve evidence for the projected join key.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (
+	SELECT k2 AS join_key, 42 AS constant_value, k AS other_key
+	FROM domain_sa_rhs
+	WHERE k2 = 20
+) projected_rhs ON domain_sa_left.k = projected_rhs.join_key;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*Conditions: k = join_key.*~1 row.*
+
+# Materialized CTE references rebind the projected evidence to their output columns.
+query II
+EXPLAIN WITH filtered AS MATERIALIZED (
+	SELECT k AS join_key FROM domain_sa_rhs WHERE k = 20
+)
+SELECT * FROM domain_sa_left
+SEMI JOIN filtered ON domain_sa_left.k = filtered.join_key;
+----
+physical_plan	<REGEX>:(?s).*CTE.*CTE Name: filtered.*HASH_JOIN.*Join Type: SEMI.*~1 row.*CTE_SCAN.*
+
+# Grouping sets duplicate and NULL-extend keys, so child evidence is not carried through them.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs WHERE k = 20 GROUP BY ROLLUP(k)) rollup_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Every OR branch must be understood before the filter supplies domain evidence,
+# even when earlier branches already saturate the bound.
+statement ok
+CREATE TABLE domain_sa_tiny AS SELECT (range % 5)::INTEGER k FROM range(1000);
+
+statement ok
+ANALYZE domain_sa_tiny;
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left l
+SEMI JOIN (SELECT k FROM domain_sa_tiny WHERE k IN (0, 1, 2) OR k IN (2, 3, 4) OR k < 2) saturated_rhs
+	ON l.k = saturated_rhs.k;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# A grouped/HAVING RHS remains one relation and supplies its post-HAVING unique-key domain.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs GROUP BY k HAVING count(*) > 5) grouped_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~2[0-9] rows.*
+
+query I
+SELECT count(*)
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs GROUP BY k HAVING count(*) > 5) grouped_rhs USING (k);
+----
+100
+
+# Arithmetic equalities do not satisfy the validated column-binding contract.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT k FROM domain_sa_rhs GROUP BY k HAVING count(*) > 5) grouped_rhs
+	ON domain_sa_left.k + 1 = grouped_rhs.k;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN[^~]*Join Type: SEMI[^~]*~200 rows.*
+
+# A predicate on another RHS column supplies only modeled row-survival evidence.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k2 = 20) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+ANTI JOIN (SELECT * FROM domain_sa_rhs WHERE k2 = 20) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*
+
+# Modeled cross-column coverage keeps the dimension SEMI on the fallback and before the fact join.
+query II
+EXPLAIN SELECT count(*)
+FROM (domain_sa_left
+	SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k2 = 20) filtered_rhs USING (k))
+JOIN domain_sa_fact USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: INNER.*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Selected-child refinement does not rewrite the already-enumerated ancestor estimate. Ancestor plan
+# choices were made against enumeration values; refinement only improves the selected operator itself.
+query II
+EXPLAIN SELECT count(*)
+FROM (domain_sa_left
+	SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k))
+JOIN domain_sa_fact USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: INNER.*~1,6[0-9][0-9] rows.*HASH_JOIN.*Join Type: SEMI.*~1 row.*
+
+# An exact-empty ANTI ancestor also keeps its enumeration estimate after refining the selected child:
+# at reconstruction a zero RHS cardinality cannot be told apart from an estimate rounded to zero, so
+# even the "provably exact" empty-RHS case is not recomputed from the refined child.
+query II
+EXPLAIN SELECT *
+FROM (domain_sa_left
+	SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k = 20) filtered_rhs USING (k)) refined
+ANTI JOIN domain_sa_empty USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*HASH_JOIN.*Join Type: SEMI.*~1 row.*
+
+# A selective preserved-side inner join is chosen before probing a large SEMI RHS.
+query II
+EXPLAIN SELECT count(*)
+FROM (domain_sa_left
+	JOIN (SELECT DISTINCT k FROM domain_sa_rhs WHERE k < 500) selective USING (k))
+SEMI JOIN domain_sa_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: RIGHT_SEMI.*~4 rows.*HASH_JOIN.*Join Type: INNER.*~1[89] rows.*
+
+# DISTINCT makes its single output key eligible for current-domain coverage.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT DISTINCT k FROM domain_sa_rhs WHERE k < 500) distinct_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~9[4-6] rows.*HASH_GROUP_BY.*
+
+# DISTINCT ON supplies uniqueness only for its target key.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT DISTINCT ON (k) k, k2 FROM domain_sa_rhs WHERE k < 500) distinct_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~9[4-6] rows.*HASH_GROUP_BY.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT DISTINCT ON (k2) k, k2 FROM domain_sa_rhs WHERE k2 < 500) distinct_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*HASH_GROUP_BY.*
+
+# Set operations invalidate child evidence before the result is used as an RHS.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (
+	SELECT k FROM domain_sa_rhs WHERE k = 20
+	UNION ALL
+	SELECT k FROM domain_sa_rhs WHERE k = 30
+) union_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*UNION.*
+
+# Unsupported generic joins do not propagate child evidence into selected SEMI refinement.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (
+	SELECT source.k
+	FROM domain_sa_rhs source
+	JOIN domain_sa_left joined ON source.k2 + joined.k > 0
+	WHERE source.k = 20
+) generic_join_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Composite base-domain counts also remain on the fallback.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_rhs ON domain_sa_left.k = domain_sa_rhs.k AND domain_sa_left.k2 = domain_sa_rhs.k2;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Residual predicates use the same fallback without guessing an existence probability.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_rhs ON domain_sa_left.k = domain_sa_rhs.k
+	AND domain_sa_left.k2 = domain_sa_rhs.k2
+	AND domain_sa_left.k < domain_sa_rhs.k2;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Equalities sharing one preserved endpoint are not a composite key.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_rhs ON domain_sa_left.k = domain_sa_rhs.k AND domain_sa_left.k = domain_sa_rhs.k2;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Repeated evidence is counted once.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_rhs ON domain_sa_left.k = domain_sa_rhs.k AND domain_sa_left.k = domain_sa_rhs.k;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Residual predicates do not multiply equality coverage by a selectivity guess.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN domain_sa_rhs ON domain_sa_left.k = domain_sa_rhs.k AND domain_sa_left.k2 < domain_sa_rhs.k2;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+# Enumeration remains on the fallback; selected-plan refinement is tested separately.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+SEMI JOIN (SELECT * FROM domain_sa_rhs WHERE k < 500) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~200 rows.*
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_left
+ANTI JOIN (SELECT * FROM domain_sa_rhs WHERE k < 500) filtered_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*
+
+# Same-size disjoint domains with eligible evidence must not be treated as full coverage:
+# SEMI keeps a clamped share of the preserved side and ANTI keeps at least the complement.
+statement ok
+CREATE TABLE domain_sa_even AS SELECT (range * 2)::INTEGER k FROM range(1000);
+
+statement ok
+CREATE TABLE domain_sa_odd AS SELECT (range * 2 + 1)::INTEGER k FROM range(1000);
+
+statement ok
+ANALYZE domain_sa_even;
+
+statement ok
+ANALYZE domain_sa_odd;
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_even
+SEMI JOIN (SELECT k FROM domain_sa_odd GROUP BY k) disjoint_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~(7[0-9][0-9]|800) rows.*
+
+query I
+SELECT count(*)
+FROM domain_sa_even
+SEMI JOIN (SELECT k FROM domain_sa_odd GROUP BY k) disjoint_rhs USING (k);
+----
+0
+
+query II
+EXPLAIN SELECT *
+FROM domain_sa_even
+ANTI JOIN (SELECT k FROM domain_sa_odd GROUP BY k) disjoint_rhs USING (k);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~2[0-9][0-9] rows.*
+
+query I
+SELECT count(*)
+FROM domain_sa_even
+ANTI JOIN (SELECT k FROM domain_sa_odd GROUP BY k) disjoint_rhs USING (k);
+----
+1000
+
+# Equal distinct counts do not prove full value-set coverage for ANTI joins.
+statement ok
+CREATE SEQUENCE domain_sa_left_seq START 1;
+
+statement ok
+CREATE SEQUENCE domain_sa_right_seq START 1001;
+
+query II
+EXPLAIN SELECT *
+FROM (SELECT nextval('domain_sa_left_seq') x FROM range(1000)) lhs
+ANTI JOIN (SELECT nextval('domain_sa_right_seq') x FROM range(1000)) rhs USING (x);
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*
+
+query I
+SELECT count(*)
+FROM (SELECT nextval('domain_sa_left_seq') x FROM range(1000)) lhs
+ANTI JOIN (SELECT nextval('domain_sa_right_seq') x FROM range(1000)) rhs USING (x);
+----
+1000
+
+statement ok
+CREATE TABLE domain_sa_null_left AS
+SELECT CASE WHEN range = 0 THEN NULL ELSE range::INTEGER END k FROM range(1000);
+
+statement ok
+CREATE TABLE domain_sa_null_rhs AS
+SELECT CASE WHEN range = 0 THEN NULL ELSE range::INTEGER END k FROM range(101);
+
+statement ok
+ANALYZE domain_sa_null_left;
+
+statement ok
+ANALYZE domain_sa_null_rhs;
+
+# IS NOT DISTINCT FROM is eligible under the same rules when its grouped RHS contains NULL.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_null_left lhs
+SEMI JOIN (SELECT k FROM domain_sa_null_rhs GROUP BY k HAVING count(*) > 0) rhs
+	ON lhs.k IS NOT DISTINCT FROM rhs.k;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: SEMI.*~1[0-9] rows.*
+
+query I
+SELECT count(*)
+FROM domain_sa_null_left lhs
+SEMI JOIN (SELECT k FROM domain_sa_null_rhs GROUP BY k HAVING count(*) > 0) rhs
+	ON lhs.k IS NOT DISTINCT FROM rhs.k;
+----
+101
+
+# A residual predicate makes the same null-bearing equality unsupported.
+query II
+EXPLAIN SELECT *
+FROM domain_sa_null_left lhs
+ANTI JOIN (SELECT k FROM domain_sa_null_rhs GROUP BY k HAVING count(*) > 0) rhs
+	ON lhs.k IS NOT DISTINCT FROM rhs.k AND lhs.k < rhs.k;
+----
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: ANTI.*~200 rows.*
+
+query I
+SELECT count(*)
+FROM domain_sa_null_left lhs
+ANTI JOIN (SELECT k FROM domain_sa_null_rhs GROUP BY k HAVING count(*) > 0) rhs
+	ON lhs.k IS NOT DISTINCT FROM rhs.k AND lhs.k < rhs.k;
+----
+1000

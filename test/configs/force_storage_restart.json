@@ -145,6 +145,12 @@
       ]
     },
     {
+      "reason": "EXPLAIN estimates assume in-memory ANALYZE statistics; restarting reloads tables with persisted statistics and shifts the expected row counts.",
+      "paths": [
+        "test/optimizer/statistics/current_domain_semi_anti.test"
+      ]
+    },
+    {
       "reason": "External resource TYPES are registered in an instance-scoped in-memory registry, which a restart between statements discards, so the recipe is gone before it is used.",
       "paths": [
         "test/sql/attach/external_resource_lifecycle.test",
