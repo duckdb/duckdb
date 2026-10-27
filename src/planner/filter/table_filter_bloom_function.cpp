@@ -186,11 +186,14 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024 * 1024;
 	idx_t found_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
 		found_count += LookupOne(hashes[i]);
-		PrefetchHashTableEntry(i, count, [&](idx_t next_idx) { return &bf[hashes[next_idx] & bitmask]; });
+		if (prefetch) {
+			PrefetchHashTableEntry(i, count, [&](idx_t next_idx) { return &bf[hashes[next_idx] & bitmask]; });
+		}
 	}
 	return found_count;
 }
@@ -201,12 +204,15 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &s
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	const bool prefetch = count >= 128 && num_sectors * sizeof(uint64_t) >= 1024 * 1024;
 	idx_t found_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
 		found_count += LookupOne(hashes[sel.get_index_unsafe(i)]);
-		PrefetchHashTableEntry(i, count,
-		                       [&](idx_t next_idx) { return &bf[hashes[sel.get_index_unsafe(next_idx)] & bitmask]; });
+		if (prefetch) {
+			PrefetchHashTableEntry(
+			    i, count, [&](idx_t next_idx) { return &bf[hashes[sel.get_index_unsafe(next_idx)] & bitmask]; });
+		}
 	}
 	return found_count;
 }
