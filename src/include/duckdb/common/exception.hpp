@@ -351,6 +351,8 @@ class InternalException : public Exception {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
 	InternalException(const unordered_map<string, string> &extra_info, const string &msg);
+	//! Throws a fixed message; for templates, so that the throw is not instantiated per type
+	[[noreturn]] DUCKDB_API static void Throw(const char *message);
 
 	template <typename... ARGS>
 	explicit InternalException(const string &msg, ARGS &&...params)
