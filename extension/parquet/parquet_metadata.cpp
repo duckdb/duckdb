@@ -499,7 +499,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// num_values
 	output[7].get().Append(Value::BIGINT(col_meta.num_values));
 	// path_in_schema
-	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", "));
+	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", ",
+	                                        [](const duckdb_parquet::ParquetString &part) { return string(part); }));
 	// type
 	output[9].get().Append(ConvertParquetElementToString(col_meta.type));
 	// stats_min
@@ -537,8 +538,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// key_value_metadata
 	vector<Value> map_keys, map_values;
 	for (auto &entry : col_meta.key_value_metadata) {
-		map_keys.push_back(Value::BLOB_RAW(entry.key));
-		map_values.push_back(Value::BLOB_RAW(entry.value));
+		map_keys.push_back(Value::BLOB_RAW(string(entry.key)));
+		map_values.push_back(Value::BLOB_RAW(string(entry.value)));
 	}
 	output[23].get().Append(
 	    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
@@ -707,7 +708,7 @@ void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t ro
 	// file_name
 	output[0].get().Append(reader.file.path);
 	// name
-	output[1].get().Append(column.name);
+	output[1].get().Append(string(column.name));
 	// type
 	output[2].get().Append(ParquetElementString(column.type, column.__isset.type));
 	// type_length
@@ -765,8 +766,8 @@ void ParquetKeyValueMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	auto &entry = meta_data->key_value_metadata[row_idx];
 
 	output[0].get().Append(Value(reader.file.path));
-	output[1].get().Append(Value::BLOB_RAW(entry.key));
-	output[2].get().Append(Value::BLOB_RAW(entry.value));
+	output[1].get().Append(Value::BLOB_RAW(string(entry.key)));
+	output[2].get().Append(Value::BLOB_RAW(string(entry.value)));
 }
 
 //===--------------------------------------------------------------------===//

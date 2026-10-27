@@ -136,7 +136,8 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
-      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
+      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator),
+      page_header_arena(reader.allocator) {
 }
 
 ColumnReader::~ColumnReader() {
@@ -161,7 +162,7 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 	}
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) {
 	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
@@ -248,8 +249,8 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	throw NotImplementedException("PlainSelect not implemented");
 }
 
-void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
-                                  TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                  const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
@@ -369,7 +370,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	defined_decoder.reset();
 	page_is_filtered_out = false;
 	block.reset();
-	PageHeader page_hdr;
+	page_header_arena.Reset();
+	PageHeader page_hdr(page_header_arena);
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	if (trans.HasPrefetch()) {

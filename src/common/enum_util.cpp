@@ -133,6 +133,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -1633,19 +1634,22 @@ const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" },
-		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS), "WRITTEN_FILE_STATISTICS" }
+		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS), "WRITTEN_FILE_STATISTICS" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_COLUMN_TYPES), "CHANGED_ROWS_AND_COLUMN_TYPES" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST_AND_COLUMN_TYPES), "CHANGED_ROWS_AND_FILE_LIST_AND_COLUMN_TYPES" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS_AND_COLUMN_TYPES), "WRITTEN_FILE_STATISTICS_AND_COLUMN_TYPES" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
-	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 6, "CopyFunctionReturnType", static_cast<uint32_t>(value));
 }
 
 template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
-	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", value));
+	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 6, "CopyFunctionReturnType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyOverwriteModeValues() {
@@ -4598,19 +4602,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PLACEMENT), "PROJECTION_PLACEMENT" },
 		{ static_cast<uint32_t>(OptimizerType::REDUNDANT_ORDER_KEYS), "REDUNDANT_ORDER_KEYS" },
 		{ static_cast<uint32_t>(OptimizerType::DISJUNCTIVE_JOIN_REWRITER), "DISJUNCTIVE_JOIN_REWRITER" },
-		{ static_cast<uint32_t>(OptimizerType::REDUNDANT_ORDER), "REDUNDANT_ORDER" }
+		{ static_cast<uint32_t>(OptimizerType::REDUNDANT_ORDER), "REDUNDANT_ORDER" },
+		{ static_cast<uint32_t>(OptimizerType::WINDOW_JOIN_PUSHDOWN), "WINDOW_JOIN_PUSHDOWN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 49, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 50, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 49, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 50, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -4857,19 +4862,20 @@ PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const 
 const StringUtil::EnumStringLiteral *GetPartitionedTupleDataTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PartitionedTupleDataType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" }
+		{ static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" },
+		{ static_cast<uint32_t>(PartitionedTupleDataType::INTEGER), "INTEGER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType value) {
-	return StringUtil::EnumToString(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPartitionedTupleDataTypeValues(), 3, "PartitionedTupleDataType", static_cast<uint32_t>(value));
 }
 
 template<>
 PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const char *value) {
-	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", value));
+	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 3, "PartitionedTupleDataType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPatternMatchTypeValues() {
@@ -5486,6 +5492,26 @@ const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value) {
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
 	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRecursiveCTEModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveCTEMode::UNION), "UNION" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::UNION_ALL), "UNION_ALL" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::KEY_UNION), "KEY_UNION" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::KEY_UNION_ALL), "KEY_UNION_ALL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEMode>(RecursiveCTEMode value) {
+	return StringUtil::EnumToString(GetRecursiveCTEModeValues(), 4, "RecursiveCTEMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveCTEMode EnumUtil::FromString<RecursiveCTEMode>(const char *value) {
+	return static_cast<RecursiveCTEMode>(StringUtil::StringToEnum(GetRecursiveCTEModeValues(), 4, "RecursiveCTEMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecursiveCTEPipelineMetricTypeValues() {

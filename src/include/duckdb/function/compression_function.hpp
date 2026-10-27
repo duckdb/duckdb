@@ -314,6 +314,9 @@ public:
 	//! Whether the validity mask should be separately compressed
 	//! or this compression function can also be used to decompress the validity
 	CompressionValidity validity = CompressionValidity::REQUIRES_VALIDITY;
+
+	//! Whether persistent segments can be stored without a backing data block.
+	bool supports_null_block = false;
 };
 
 //! The set of compression functions

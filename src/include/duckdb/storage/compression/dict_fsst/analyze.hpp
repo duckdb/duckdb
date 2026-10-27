@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
