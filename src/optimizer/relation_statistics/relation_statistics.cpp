@@ -115,6 +115,7 @@ void RelationStats::Verify(const vector<ColumnBinding> &bindings) const {
 	for (auto &column : columns) {
 		(void)column;
 		D_ASSERT(column.current_domain.distinct_count <= column.total_domain.distinct_count);
+		D_ASSERT(column.current_domain.distinct_count <= cardinality);
 	}
 }
 
