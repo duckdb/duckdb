@@ -1,0 +1,51 @@
+# name: test/optimizer/common_aggregate_positional_consumers.test
+# description: Duplicate aggregate elimination must not change the column count of positionally consumed operators
+# group: [optimizer]
+
+statement ok
+SET explain_output = 'optimized_only';
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# duplicate aggregates in a regular projected aggregate are still merged
+query II
+EXPLAIN SELECT count(*), count() FROM range(3);
+----
+logical_opt	<!REGEX>:.*AGGREGATE.*count_star.*count_star.*
+
+query II
+SELECT count(*), count() FROM range(3);
+----
+3	3
+
+# the grouping sets rewrite materializes an aggregate directly as a CTE definition whose columns are read
+# positionally - the duplicate count(*) aggregates built by decorrelation must stay unmerged there
+query II
+EXPLAIN SELECT o.k, a.c
+FROM (VALUES (7), (8)) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES (1)) AS i(k)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a
+ORDER BY ALL;
+----
+logical_opt	<REGEX>:.*AGGREGATE.*count_star\(\) EXPORT_STATE,.*count_star\(\) EXPORT_STATE.*
+
+query II
+SELECT o.k, a.c
+FROM (VALUES (7), (8)) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES (1)) AS i(k)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a
+ORDER BY ALL;
+----
+7	0
+7	0
+8	0
+8	0
