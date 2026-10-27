@@ -1,0 +1,330 @@
+# name: test/sql/catalog/view/view_catalog_schema_ambiguity.test
+# description: Views keep working when a schema of their catalog has the same name as an attached database (#27646)
+# group: [view]
+
+statement ok
+ATTACH ':memory:' AS db;
+
+statement ok
+ATTACH ':memory:' AS s;
+
+statement ok
+CREATE SCHEMA db.db;
+
+statement ok
+CREATE SCHEMA db.s;
+
+statement ok
+CREATE TABLE db.db.t AS SELECT 1 AS x;
+
+statement ok
+CREATE TABLE db.s.u AS SELECT 2 AS y;
+
+# the view's own catalog is stripped from the stored definition (db.db.t becomes db.t), and "db" names both a schema
+# of the view's catalog and an attached database
+statement ok
+CREATE VIEW db.db.v AS SELECT x FROM db.db.t;
+
+statement ok
+CREATE VIEW db.main.w AS SELECT y FROM db.s.u;
+
+query I
+SELECT * FROM db.db.v;
+----
+1
+
+query I
+SELECT * FROM db.main.w;
+----
+2
+
+# the stored definition is still stripped of the view's catalog
+query II
+SELECT view_name, trim(sql, chr(10)) FROM duckdb_views() WHERE database_name = 'db' ORDER BY view_name;
+----
+v	CREATE VIEW db.v AS SELECT x FROM db.t;
+w	CREATE VIEW w AS SELECT y FROM s.u;
+
+# the same reference in a subquery and in a CTE
+statement ok
+CREATE VIEW db.main.w_subquery AS SELECT (SELECT max(y) FROM db.s.u) AS y;
+
+statement ok
+CREATE VIEW db.main.w_cte AS WITH c AS (SELECT y FROM db.s.u) SELECT y FROM c;
+
+query I
+SELECT * FROM db.main.w_subquery;
+----
+2
+
+query I
+SELECT * FROM db.main.w_cte;
+----
+2
+
+# a scalar macro and a table macro whose schema shares a name with an attached database
+statement ok
+CREATE SCHEMA s.db;
+
+statement ok
+CREATE MACRO s.db.f() AS 42;
+
+statement ok
+CREATE MACRO s.db.tf(x) AS TABLE SELECT x AS v;
+
+statement ok
+CREATE VIEW s.main.v_macro AS SELECT s.db.f() AS z;
+
+statement ok
+CREATE VIEW s.main.v_table_macro AS SELECT * FROM s.db.tf(7);
+
+query I
+SELECT * FROM s.main.v_macro;
+----
+42
+
+query I
+SELECT * FROM s.main.v_table_macro;
+----
+7
+
+# an existing view keeps working when a database with the schema's name is attached afterwards
+statement ok
+CREATE SCHEMA db.later;
+
+statement ok
+CREATE TABLE db.later.t AS SELECT 3 AS z;
+
+statement ok
+CREATE VIEW db.main.v_later AS SELECT z FROM db.later.t;
+
+statement ok
+ATTACH ':memory:' AS later;
+
+query I
+SELECT * FROM db.main.v_later;
+----
+3
+
+# a view in another catalog that references the attached database still binds to the database
+statement ok
+CREATE TABLE later.main.t AS SELECT 4 AS z;
+
+statement ok
+CREATE VIEW s.main.v_other_catalog AS SELECT z FROM later.t;
+
+query I
+SELECT * FROM s.main.v_other_catalog;
+----
+4
+
+# inside a view body a schema of the view's catalog takes precedence over an attached database of the same name
+statement ok
+CREATE MACRO s.main.g() AS 11;
+
+statement ok
+CREATE MACRO db.s.g() AS 22;
+
+statement ok
+CREATE VIEW db.main.v_precedence AS SELECT s.g() AS z;
+
+query I
+SELECT * FROM db.main.v_precedence;
+----
+22
+
+# the aggregates of a recursive CTE with USING KEY are bound by a separate binder
+statement ok
+CREATE VIEW db.main.v_using_key AS
+WITH RECURSIVE r(k, z) USING KEY (k, max(db.s.g()) AS z) AS (
+    SELECT 1 AS k, 0 AS z
+    UNION ALL
+    SELECT k + 1, z FROM r WHERE k < 2
+)
+SELECT z FROM r WHERE k = 2;
+
+query I
+SELECT * FROM db.main.v_using_key;
+----
+22
+
+# a multi-part path that names a nested schema of the view's catalog refers to that schema
+statement ok
+CREATE SCHEMA db.s1;
+
+statement ok
+CREATE SCHEMA db.s1.s2;
+
+statement ok
+CREATE TABLE db.s1.s2.t AS SELECT 7 AS n;
+
+statement ok
+CREATE MACRO db.s1.s2.m() AS 70;
+
+statement ok
+CREATE VIEW db.main.v_nested AS SELECT n, db.s1.s2.m() AS m FROM db.s1.s2.t;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_nested';
+----
+CREATE VIEW v_nested AS SELECT n, s1.s2.m() AS m FROM s1.s2.t;
+
+query II
+SELECT * FROM db.main.v_nested;
+----
+7	70
+
+statement ok
+ATTACH ':memory:' AS s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t AS SELECT 8 AS n;
+
+statement ok
+CREATE MACRO s1.s2.m() AS 80;
+
+# the view keeps reading its own catalog
+query II
+SELECT * FROM db.main.v_nested;
+----
+7	70
+
+# a view in the nested schema itself
+statement ok
+CREATE VIEW db.s1.s2.v_in_nested AS SELECT n FROM db.s1.s2.t;
+
+query I
+SELECT * FROM db.s1.s2.v_in_nested;
+----
+7
+
+# outside of a view the path is the attached catalog
+query II
+SELECT n, s1.s2.m() FROM s1.s2.t;
+----
+8	80
+
+# a path that is not a nested schema of the view's catalog still refers to the attached catalog: s has a schema "db"
+# but no "db.main" below it
+statement ok
+CREATE TABLE db.main.plain AS SELECT 9 AS p;
+
+statement ok
+CREATE VIEW s.main.v_cross AS SELECT p FROM db.main.plain;
+
+query I
+SELECT * FROM s.main.v_cross;
+----
+9
+
+# a window call into a nested schema of the view's catalog
+statement ok
+CREATE MACRO db.s1.s2.w(x) AS sum(x);
+
+statement ok
+CREATE MACRO s1.s2.w(x) AS sum(x) * 10;
+
+statement ok
+CREATE VIEW db.main.v_window AS SELECT db.s1.s2.w(n) OVER () AS total FROM db.s1.s2.t;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_window';
+----
+CREATE VIEW v_window AS SELECT s1.s2.w(n) OVER () AS total FROM s1.s2.t;
+
+query I
+SELECT * FROM db.main.v_window;
+----
+7
+
+# a lone qualifier that names a schema of the view's catalog is that schema, even when the catalog also has a nested
+# schema of the same name below a schema named like the catalog (db.db.s next to db.s)
+statement ok
+CREATE SCHEMA db.db.s;
+
+statement ok
+CREATE MACRO db.db.s.g() AS 33;
+
+query I
+SELECT * FROM db.main.v_precedence;
+----
+22
+
+# the nested schema is reached through its path
+statement ok
+CREATE VIEW db.main.v_nested_explicit AS SELECT db.db.s.g() AS z;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_nested_explicit';
+----
+CREATE VIEW v_nested_explicit AS SELECT db.s.g() AS z;
+
+query I
+SELECT * FROM db.main.v_nested_explicit;
+----
+33
+
+# the schema preference also applies after re-attaching under a different alias
+statement ok
+ATTACH '{TEST_DIR}/view_catalog_schema_ambiguity.db' AS db1;
+
+statement ok
+CREATE SCHEMA db1.db1;
+
+statement ok
+CREATE TABLE db1.db1.t AS SELECT 5 AS i;
+
+statement ok
+CREATE VIEW db1.db1.v AS SELECT i FROM db1.db1.t;
+
+statement ok
+DETACH db1;
+
+statement ok
+ATTACH '{TEST_DIR}/view_catalog_schema_ambiguity.db' AS db2;
+
+query I
+SELECT * FROM db2.db1.v;
+----
+5
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+query I
+SELECT * FROM db2.db1.v;
+----
+5
+
+# outside of a view nothing changes: the reference binds to the attached database, or is ambiguous within its catalog
+query I
+SELECT s.g();
+----
+11
+
+statement ok
+CREATE TABLE db.s.defaults(z INTEGER DEFAULT s.g());
+
+statement ok
+INSERT INTO db.s.defaults DEFAULT VALUES;
+
+query I
+SELECT * FROM db.s.defaults;
+----
+11
+
+statement ok
+USE db;
+
+statement error
+SELECT * FROM db.t;
+----
+Ambiguous reference to catalog or schema "db"
+
+statement error
+SELECT s.g();
+----
+Ambiguous reference to catalog or schema "s"

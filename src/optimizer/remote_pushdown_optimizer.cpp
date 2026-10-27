@@ -1385,24 +1385,17 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	// Also handle 2-part names (schema.func/type) where the schema is actually the remote catalog name
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		// StripCatalogFromName keeps a nested schema path ("db.s1.s2.f" -> "s1.s2.f")
 		auto &func = expr.Cast<FunctionExpression>();
-		if (func.GetQualifiedName().Catalog() == catalog_name) {
-			func.SetQualifiedName(
-			    QualifiedName(Identifier(), func.GetQualifiedName().Schema(), func.GetQualifiedName().Name()));
-		} else if (func.GetQualifiedName().Catalog().empty() && func.GetQualifiedName().Schema() == catalog_name) {
-			func.SetQualifiedName(
-			    QualifiedName(func.GetQualifiedName().Catalog(), Identifier(), func.GetQualifiedName().Name()));
-		}
+		auto name = func.GetQualifiedName();
+		StripCatalogFromName(name, catalog_name);
+		func.SetQualifiedName(std::move(name));
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
-		if (win.GetQualifiedName().Catalog() == catalog_name) {
-			win.SetQualifiedName(
-			    QualifiedName(Identifier(), win.GetQualifiedName().Schema(), win.GetQualifiedName().Name()));
-		} else if (win.GetQualifiedName().Catalog().empty() && win.GetQualifiedName().Schema() == catalog_name) {
-			win.SetQualifiedName(
-			    QualifiedName(win.GetQualifiedName().Catalog(), Identifier(), win.GetQualifiedName().Name()));
-		}
+		auto name = win.GetQualifiedName();
+		StripCatalogFromName(name, catalog_name);
+		win.SetQualifiedName(std::move(name));
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {
 		// The cast target is not an expression child, so EnumerateChildren only visits the value being cast -

@@ -78,6 +78,10 @@ public:
 	optional_ptr<BoundAtClause> GetAtClause() const;
 	void SetAtClause(optional_ptr<BoundAtClause> at_clause);
 
+	//! The catalog of the view whose body is being bound (empty outside of a view body)
+	const Identifier &GetViewCatalog() const;
+	void SetViewCatalog(Identifier catalog);
+
 private:
 	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
 
@@ -87,6 +91,10 @@ private:
 	ClientContext &context;
 	shared_ptr<CatalogSearchPath> search_path;
 	optional_ptr<BoundAtClause> at_clause;
+	//! (optional) the catalog of the view whose body is being bound. CREATE VIEW strips this catalog from the stored
+	//! view definition, so inside the body a qualifier that names one of its schemas refers to that schema even when an
+	//! attached database has the same name
+	Identifier view_catalog;
 };
 
 } // namespace duckdb
