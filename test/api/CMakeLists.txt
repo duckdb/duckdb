@@ -32,6 +32,7 @@ set(TEST_API_OBJECTS
     test_instance_cache.cpp
     test_metadata_pin_race.cpp
     test_storage_extension_alias.cpp
+    test_transaction_start_reentrancy.cpp
     test_storage_extension_remote_path.cpp
     test_static_database_callback.cpp
     test_result_unit.cpp
