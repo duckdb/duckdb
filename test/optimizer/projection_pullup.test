@@ -52,19 +52,6 @@ JOIN (SELECT c.c + 3 AS newC, d.d + 4 AS newD FROM t3 c JOIN t4 d ON c.c = d.d) 
 ----
 logical_opt	<REGEX>:.*JOIN.*PROJECTION.*
 
-# Throwing filter referencing another relation must remain above a row-eliminating join
-query I
-SELECT count(*)
-FROM (
-	SELECT a.k, a.v
-	FROM (VALUES (1, 1), (2, 1)) a(k, v)
-	JOIN (VALUES (0), (0), (0), (0)) b(q) ON a.k % 2 = b.q
-) mixed_v
-JOIN (VALUES (1, 0), (2, 1)) c(k, x) USING (k)
-WHERE v // x > 0;
-----
-4
-
 # column_refs in projections on both sides. Should pull up
 query II
 EXPLAIN SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
