@@ -40,6 +40,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/catalog/schema_scan_filters.hpp"
@@ -1565,11 +1566,14 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	vector<reference<SchemaCatalogEntry>> result;
 
 	auto &db_manager = DatabaseManager::Get(context);
+	auto &meta_transaction = MetaTransaction::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto &database : databases) {
 		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
 			continue;
 		}
+		// keep the database alive until the end of the transaction, the returned schemas reference it
+		meta_transaction.UseDatabase(database);
 		auto &catalog = database->GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());

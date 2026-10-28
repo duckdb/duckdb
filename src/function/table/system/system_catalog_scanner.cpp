@@ -9,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
@@ -124,6 +125,7 @@ vector<reference<SchemaCatalogEntry>> SystemCatalogScanner::GetSchemas(ClientCon
 
 	vector<reference<SchemaCatalogEntry>> result;
 	auto &db_manager = DatabaseManager::Get(context);
+	auto &meta_transaction = MetaTransaction::Get(context);
 	for (auto &database : db_manager.GetDatabases(context)) {
 		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
 			continue; // same skip as Catalog::GetAllSchemas
@@ -136,6 +138,8 @@ vector<reference<SchemaCatalogEntry>> SystemCatalogScanner::GetSchemas(ClientCon
 			continue;
 		}
 		stats.catalogs_scanned++;
+		// keep the database alive until the end of the transaction, the returned schemas reference it
+		meta_transaction.UseDatabase(database);
 		for (auto &schema : catalog.GetSchemasForScan(context, schema_filters)) {
 			stats.schemas_total++;
 			// the catalog may return schemas the filters reject
