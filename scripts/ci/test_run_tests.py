@@ -5,6 +5,7 @@ import shlex
 import sys
 import tempfile
 import textwrap
+
 import threading
 import unittest
 from io import BytesIO, StringIO, TextIOWrapper
@@ -793,7 +794,7 @@ require windows: 2
         helper_path = create_temp_file(
             """
             #!/bin/sh
-            cat <<'EOF'
+            cat <<'EOF' >&2
             Skipped tests for the following reasons:
             require mysql_scanner: 56
             require postgres_scanner: 2

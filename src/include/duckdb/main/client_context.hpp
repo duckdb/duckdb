@@ -108,6 +108,10 @@ public:
 	//! The error of a statement that expands into several, given parameters
 	static constexpr const char *EXPANDING_PARAMETERS_ERROR =
 	    "parameters are not supported for a statement that expands into several";
+	//! The error of a prepared statement with parameters, while CONNECT-ed
+	static constexpr const char *CONNECTED_PARAMETERS_ERROR =
+	    "Parameterized prepared statements cannot be executed while CONNECT-ed; DISCONNECT first, or run the SQL as a "
+	    "fresh statement to route through the CONNECT binding";
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -119,6 +123,11 @@ public:
 	atomic<ClientInterruptState> interrupt_state {ClientInterruptState::NOT_INTERRUPTED};
 	//! The deadline for the current query (milliseconds since epoch)
 	optional_idx query_deadline;
+	//! For an internal connection created on behalf of another client: the outermost client, whose interrupts and
+	//! query deadline also apply. An internal connection runs within a query of its base client.
+	shared_ptr<ClientContext> base_context;
+	//! The number of internal connections between this client and its base client (0 for a base client)
+	idx_t internal_depth = 0;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
@@ -414,6 +423,8 @@ private:
 	//! Ends the statement that finished and starts the next one. Returns the result object a collector built for it,
 	//! which only a statement started inside the submission may have
 	unique_ptr<QueryResult> AdvanceStatementInternal(ClientContextLock &lock);
+	//! Whether this query or, for an internal connection, the base client's query has a deadline
+	bool HasQueryDeadline() const;
 	bool QueryDeadlinePassed() const;
 	//! Ends the statement of the active query that finished, when another one follows
 	void EndStatementInternal(ClientContextLock &lock);

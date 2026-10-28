@@ -49,7 +49,8 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::ATTACHED_DATABASE: {
 		auto db = Load<AttachedDatabase *>(data);
 		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
-		auto attached_db = db_manager.DetachInternal(db->name);
+		// after this transaction detached it, another connection can have attached a database under the name
+		auto attached_db = db_manager.DetachInternal(db->name, db);
 		if (attached_db) {
 			// Teardown runs SQL, which cannot happen under the transaction lock: it would need a
 			// transaction on the same manager, and rollback may not fail. Extracting the deleter is a

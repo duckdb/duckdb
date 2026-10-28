@@ -59,6 +59,7 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
+      runner_linux_slim: ${{ fromJSON(steps.config.outputs.runners).linux_slim }}
       runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
       runner_linux_x64: ${{ fromJSON(steps.config.outputs.runners).linux_x64 }}
       runner_linux_22_x64: ${{ fromJSON(steps.config.outputs.runners).linux_22_x64 }}
@@ -83,6 +84,7 @@ jobs:
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       duckdb_version: ${{ steps.version.outputs.duckdb_version }}
+      is_release_build: ${{ steps.version.outputs.is_release_build }}
       staged_version: ${{ steps.version.outputs.staged_version }}
       extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
@@ -162,7 +164,6 @@ jobs:
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extension/**
             tests:
               - test/**/*.test
             tests_slow:
@@ -215,7 +216,7 @@ jobs:
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
 
-          if [[ "${{ steps.changed.outputs.tests_slow_any_changed }}" == "true" || "${{ github.ref_name }}" == "main" ]]; then
+          if [[ "${{ steps.changed.outputs.tests_slow_any_changed }}" == "true" || "${{ steps.version.outputs.is_release_build }}" == "true" ]]; then
             run_slow_tests=true
           else
             run_slow_tests=false
@@ -755,7 +756,7 @@ jobs:
         echo "::group::CLI check"
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # Fail on non-zero major version.
+          # Fail on a zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
         echo "::endgroup::"
@@ -999,7 +1000,7 @@ jobs:
       run: |
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # Fail on non-zero major version.
+          # Fail on a zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
 
@@ -1106,6 +1107,7 @@ jobs:
     with:
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
+      is_release_build: ${{ fromJson(needs.prepare.outputs.is_release_build) }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
@@ -1132,6 +1134,7 @@ jobs:
     with:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
+      is_release_build: ${{ fromJson(needs.prepare.outputs.is_release_build) }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -1316,7 +1319,7 @@ jobs:
       run: make unittest_threadsan
 
     - name: Test Extra
-      if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
+      if: ${{ fromJson(needs.prepare.outputs.is_release_build) && !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan_extra
 
  # TODO: Consider bringing back fts
@@ -1387,7 +1390,9 @@ jobs:
  summary:
     name: Summary
     if: ${{ always() }}
-    runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_slim }}
+    # No fromJSON here: when prepare is skipped (draft PRs, non-member synchronize) its outputs are
+    # empty and fromJSON('') makes the whole run fail with every job skipped.
+    runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
       - linux-relassert

@@ -515,7 +515,8 @@ ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollec
 
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options_p,
                              const vector<pair<string, string>> &kv_metadata)
-    : context(context), options(std::move(options_p)) {
+    : context(context), options(std::move(options_p)), metadata_arena(BufferAllocator::Get(context)),
+      file_meta_data(metadata_arena) {
 	// initialize the file writer
 	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(), options.open_flags);
 
@@ -542,10 +543,10 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
 	for (auto &kv_pair : kv_metadata) {
-		duckdb_parquet::KeyValue kv;
+		file_meta_data.key_value_metadata.emplace_back();
+		auto &kv = file_meta_data.key_value_metadata.back();
 		kv.__set_key(kv_pair.first);
 		kv.__set_value(kv_pair.second);
-		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
 	}
 
@@ -554,11 +555,11 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
 				continue;
 			}
-			duckdb_parquet::KeyValue kv;
+			file_meta_data.key_value_metadata.emplace_back();
+			auto &kv = file_meta_data.key_value_metadata.back();
 			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
 			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
 			// Readers require this capability before probing the additional normalized hashes.
-			file_meta_data.key_value_metadata.push_back(std::move(kv));
 			file_meta_data.__isset.key_value_metadata = true;
 			break;
 		}
@@ -615,6 +616,8 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 	}
 
 	for (auto &chunk : buffer.Chunks(column_ids)) {
+		// the column writers assume flat vectors, scans can return compact representations
+		chunk.Flatten();
 		idx_t index = 0;
 		for (idx_t i = 0; i < column_writers.size(); i++) {
 			auto &state = states[i];
@@ -636,8 +639,8 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 	}
 }
 
-PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
-	PreparedParquetLayout result;
+PreparedParquetLayout ParquetWriter::ExportPreparedLayout(ArenaAllocator &arena) const {
+	PreparedParquetLayout result(arena);
 	result.schema = file_meta_data.schema;
 	for (auto &column_writer : column_writers) {
 		ShreddingType column_shredding_type;
@@ -740,7 +743,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	InitializeSchemaElements();
 	{
 		lock_guard<mutex> glock(lock);
-		result.layout = ExportPreparedLayout();
+		result.layout = ExportPreparedLayout(*result.arena);
 	}
 
 	auto &states = result.states;
@@ -758,6 +761,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 		}
 
 		for (auto &chunk : buffer.Chunks(column_ids)) {
+			// the column writers assume flat vectors, scans can return compact representations
+			chunk.Flatten();
 			for (idx_t i = 0; i < next; i++) {
 				if (col_writers[i].get().HasAnalyze()) {
 					col_writers[i].get().Analyze(*write_states[i], nullptr, chunk.data[i], chunk.size());
@@ -777,6 +782,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 		}
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
+			// the column writers assume flat vectors, scans can return compact representations
+			chunk.Flatten();
 			for (idx_t i = 0; i < next; i++) {
 				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size(), true);
 			}
@@ -787,6 +794,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 		}
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
+			// the column writers assume flat vectors, scans can return compact representations
+			chunk.Flatten();
 			for (idx_t i = 0; i < next; i++) {
 				col_writers[i].get().Write(*write_states[i], chunk.data[i], chunk.size());
 			}
@@ -888,7 +897,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 		return;
 	}
 
-	PreparedRowGroup prepared_row_group;
+	PreparedRowGroup prepared_row_group(BufferAllocator::Get(context));
 	PrepareRowGroup(buffer, prepared_row_group, transform_data);
 	buffer.Reset();
 
@@ -1460,9 +1469,9 @@ void ParquetWriter::Finalize() {
 	const auto metadata_start_offset = writer->GetTotalWritten();
 	if (options.encryption_config) {
 		// Crypto metadata is written unencrypted
-		FileCryptoMetaData crypto_metadata;
-		duckdb_parquet::AesGcmV1 aes_gcm_v1;
-		duckdb_parquet::EncryptionAlgorithm alg;
+		FileCryptoMetaData crypto_metadata(metadata_arena);
+		duckdb_parquet::AesGcmV1 aes_gcm_v1(metadata_arena);
+		duckdb_parquet::EncryptionAlgorithm alg(metadata_arena);
 		alg.__set_AES_GCM_V1(aes_gcm_v1);
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());

@@ -36,6 +36,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -246,7 +247,9 @@ void ClientContext::ApplyInvalidationPolicy(const ErrorData &error) {
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
-	if (invalidates_transaction && HasActiveTransaction()) {
+	// a statement issued while CONNECT-ed that did not run locally is not part of the local transaction
+	const bool outside_local_transaction = active_query ? active_query->outside_local_transaction : is_connected;
+	if (invalidates_transaction && HasActiveTransaction() && !outside_local_transaction) {
 		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 	}
 }
@@ -501,11 +504,11 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(std::move(plan));
 
-		ColumnBindingResolver resolver;
 		LogicalPlanVerifier::Verify(*this, *plan);
-		resolver.VisitOperator(*plan);
-
+		// the resolver checks the column references against the operator types, which the optimizer leaves stale
 		plan->ResolveOperatorTypes();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
 	});
 	return plan;
 }
@@ -531,6 +534,20 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
+	if (is_connected) {
+		// the connected database runs the statement as written, at each execution
+		if (!statement->named_param_map.empty()) {
+			throw InvalidInputException(CONNECTED_PARAMETERS_ERROR);
+		}
+		if (statement->type != StatementType::DISCONNECT_STATEMENT) {
+			// it runs on the connected database only, also when parsed before CONNECT
+			auto passthrough = make_uniq<PassthroughStatement>();
+			passthrough->query = std::move(statement->query);
+			passthrough->stmt_location = statement->stmt_location;
+			statement = std::move(passthrough);
+		}
+		return make_uniq<PreparedStatement>(shared_from_this(), std::move(statement));
+	}
 	// Only a pragma or a multi-statement can expand, and only one that does not expand into exactly one statement
 	// keeps the statement as written, to expand it again at each execution
 	unique_ptr<SQLStatement> written_statement;
@@ -735,16 +752,15 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
                                                        Retention retention) {
 	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
 	// the normal pipeline. No recursion — the rewrite goes through SubmitStatementInternal, not back here.
+	bool outside_local_transaction = false;
 	if (is_connected) {
 		if (!IsConnectControlStatement(statement->type)) {
 			// Parameterized prepared statements would need parameter substitution we don't do in v0 — reject.
 			// No-param prepared statements have a fully-resolved `query` already, route them.
-			if (HasBoundParameterValues(*statement)) {
-				return ErrorResult<QueryResult>(
-				    ErrorData(InvalidInputException("Parameterized prepared statements cannot be executed while "
-				                                    "CONNECT-ed; DISCONNECT first, or run the SQL as a fresh "
-				                                    "statement to route through the CONNECT binding")),
-				    statement->query);
+			if (HasBoundParameterValues(*statement) ||
+			    (parameters.statement_args && !parameters.statement_args->empty())) {
+				return ErrorResult<QueryResult>(ErrorData(InvalidInputException(CONNECTED_PARAMETERS_ERROR)),
+				                                statement->query);
 			}
 			auto live = TryGetConnectedCatalog();
 			if (!live) {
@@ -757,11 +773,20 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			}
 			// Dispatch via the catalog — Supports(CONNECT) was validated at CONNECT time, so RemoteExecute
 			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
-			auto remote_ref = live->GetCatalog().RemoteExecute(*this, statement->query);
+			unique_ptr<TableRef> remote_ref;
+			try {
+				remote_ref = live->GetCatalog().RemoteExecute(*this, statement->query);
+			} catch (std::exception &ex) {
+				AttachedDatabase::InvokeCloseIfLastReference(live, *this);
+				return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
+			}
 			auto rewritten = WrapAsSelect(std::move(remote_ref));
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
 			statement = std::move(rewritten);
+			// it shares the transaction the local one holds on the connected database, if there is one
+			outside_local_transaction =
+			    !transaction.HasActiveTransaction() || !MetaTransaction::Get(*this).TryGetTransaction(*live);
 			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
 		}
@@ -806,6 +831,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		}
 		return ErrorResult<QueryResult>(std::move(error), query);
 	}
+	active_query->outside_local_transaction = outside_local_transaction;
 
 	unique_ptr<QueryResult> handle;
 	unique_ptr<QueryResult> result;
@@ -1105,6 +1131,8 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                                       const QueryParameters &parameters, bool verify,
                                                       Retention retention) {
+	// before anything that can fail, so a failed statement never reports the previous one's total
+	QueryProfiler::Get(*this).ResetBytesScanned();
 	return SubmitStatement(lock, std::move(statement), parameters, verify, retention);
 }
 
@@ -1114,7 +1142,12 @@ void ClientContext::Interrupt() {
 }
 
 bool ClientContext::IsInterrupted() const {
-	return interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED;
+	auto state = interrupt_state.load(std::memory_order_relaxed);
+	if (state == ClientInterruptState::INTERRUPTS_SUPPRESSED) {
+		return false;
+	}
+	// an internal connection is also interrupted when its base client is
+	return state == ClientInterruptState::INTERRUPTED || (base_context && base_context->IsInterrupted());
 }
 
 void ClientContext::ClearInterrupt() {
@@ -1130,11 +1163,11 @@ void ClientContext::InterruptCheck() const {
 	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
 	thread_local uint32_t timeout_check_counter = 0;
 
-	if (interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
+	if (IsInterrupted()) {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
-	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
+	if (HasQueryDeadline() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
 		BlockingInterruptCheck();
 	}
 }
@@ -1148,12 +1181,19 @@ void ClientContext::BlockingInterruptCheck() const {
 	}
 }
 
+bool ClientContext::HasQueryDeadline() const {
+	return query_deadline.IsValid() || (base_context && base_context->HasQueryDeadline());
+}
+
 bool ClientContext::QueryDeadlinePassed() const {
-	if (!query_deadline.IsValid()) {
-		return false;
+	if (query_deadline.IsValid()) {
+		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		if (now >= query_deadline.GetIndex()) {
+			return true;
+		}
 	}
-	auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
-	return now >= query_deadline.GetIndex();
+	// an internal connection is also out of time when the query it runs on behalf of is
+	return base_context && base_context->QueryDeadlinePassed();
 }
 
 void ClientContext::CancelTransaction() {

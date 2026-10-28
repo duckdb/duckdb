@@ -97,7 +97,7 @@ public:
 	               const PackratMatchState &packrat = {}, bool allow_empty_prefix = false)
 	    : MatchStackFrame(MatcherType::LIST, {matcher_p, state_p}, mark, packrat), matcher(matcher_p),
 	      list_state(state_p) {
-		saved_suggestion_size = matcher_p.suppress_suggestions ? list_state.context.suggestions.size() : 0;
+		saved_suggestion_size = SuppressSuggestions(matcher_p) ? list_state.context.suggestions.size() : 0;
 		auto current = list_state.token_iterator.Current();
 		if (current) {
 			start_offset = optional_idx(current->offset);
@@ -293,7 +293,7 @@ public:
 				next.emplace(MatchInput {child_matcher, list_state});
 				return ListStep::DISPATCH_CHILD;
 			}
-			if (current_matcher.suppress_suggestions) {
+			if (SuppressSuggestions(current_matcher)) {
 				DiscardSuggestions();
 				completed = MatcherResult::Failure();
 				return ListStep::COMPLETE;
@@ -445,8 +445,13 @@ public:
 		return collapsible;
 	}
 
+	//! Rule-level suppression is ignored when suggestions are collected for a memoizable walk
+	bool SuppressSuggestions(const ListMatcher &list_matcher) const {
+		return list_matcher.suppress_suggestions && !list_state.context.memoizable_suggestions;
+	}
+
 	void DiscardSuggestions() {
-		if (!matcher.get().suppress_suggestions) {
+		if (!SuppressSuggestions(matcher.get())) {
 			return;
 		}
 		list_state.context.suggestions.erase(list_state.context.suggestions.begin() +

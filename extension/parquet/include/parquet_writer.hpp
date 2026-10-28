@@ -72,11 +72,20 @@ class PhysicalOperator;
 enum class GeoParquetVersion : uint8_t;
 
 struct PreparedParquetLayout {
-	vector<duckdb_parquet::SchemaElement> schema;
+	explicit PreparedParquetLayout(ArenaAllocator &arena) : schema(arena) {
+	}
+
+	duckdb_parquet::SchemaElementList schema;
 	ShreddingType shredding_types;
 };
 
 struct PreparedRowGroup {
+	explicit PreparedRowGroup(Allocator &allocator)
+	    : arena(make_uniq<ArenaAllocator>(allocator)), row_group(*arena), layout(*arena) {
+	}
+
+	//! Backs the Thrift metadata of this row group - must outlive it
+	unique_ptr<ArenaAllocator> arena;
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
 	PreparedParquetLayout layout;
@@ -294,7 +303,7 @@ private:
 	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);
 	void InitializeColumnWriters();
 	idx_t InitializeColumnWriterSchemaIndices();
-	PreparedParquetLayout ExportPreparedLayout() const;
+	PreparedParquetLayout ExportPreparedLayout(ArenaAllocator &arena) const;
 
 	void VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const;
 #ifdef DEBUG
@@ -308,6 +317,8 @@ private:
 
 	unique_ptr<AsyncFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
+	//! Backs the Thrift metadata of the file - must outlive it
+	ArenaAllocator metadata_arena;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;
 
