@@ -1,0 +1,36 @@
+# name: test/sql/aggregate/aggregates/test_kahan_infinity.test
+# description: Kahan sum and average return the infinity when the sum is infinite, like sum and avg
+# group: [aggregates]
+
+query IIIII
+SELECT fsum(d), kahan_sum(d), sum(d), favg(d), avg(d)
+FROM (VALUES ('-inf'::DOUBLE)) v(d);
+----
+-inf	-inf	-inf	-inf	-inf
+
+query IIIII
+SELECT fsum(d), kahan_sum(d), sum(d), favg(d), avg(d)
+FROM (VALUES ('-inf'::DOUBLE), (1.0), (2.0)) v(d);
+----
+-inf	-inf	-inf	-inf	-inf
+
+query IIII
+SELECT fsum(d), sum(d), favg(d), avg(d)
+FROM (VALUES ('inf'::DOUBLE), ('inf'::DOUBLE)) v(d);
+----
+inf	inf	inf	inf
+
+query IIIII
+SELECT g, fsum(d), sum(d), favg(d), avg(d)
+FROM (VALUES (1, '-inf'::DOUBLE), (1, 1.0), (2, '-inf'::DOUBLE)) v(g, d)
+GROUP BY g ORDER BY g;
+----
+1	-inf	-inf	-inf	-inf
+2	-inf	-inf	-inf	-inf
+
+# inf + (-inf) is still NaN
+query II
+SELECT fsum(d), sum(d)
+FROM (VALUES ('inf'::DOUBLE), ('-inf'::DOUBLE)) v(d);
+----
+nan	nan
