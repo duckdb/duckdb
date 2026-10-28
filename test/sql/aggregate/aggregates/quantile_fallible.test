@@ -1,0 +1,142 @@
+# name: test/sql/aggregate/aggregates/quantile_fallible.test
+# description: Quantile overloads with throwing runtime paths must be registered as fallible
+# group: [aggregates]
+
+# dates outside of the timestamp range raise as a regular error in plain aggregation
+
+statement error
+SELECT quantile_cont(d, 0.5) FROM (VALUES (DATE '5881580-07-10'), (DATE '5881580-07-09')) t(d);
+----
+can't be cast to the destination type INT64
+
+statement error
+SELECT median(d) FROM (VALUES (DATE '5881580-07-10'), (DATE '5881580-07-09')) t(d);
+----
+can't be cast to the destination type INT64
+
+statement error
+SELECT quantile_cont(d, [0.25, 0.75]) FROM (VALUES (DATE '5881580-07-10'), (DATE '5881580-07-09')) t(d);
+----
+can't be cast to the destination type INT64
+
+# the discrete quantile does not interpolate and keeps working on extreme dates
+
+query I
+SELECT quantile_disc(d, 0.5) FROM (VALUES (DATE '5881580-07-10'), (DATE '5881580-07-09')) t(d);
+----
+5881580-07-09
+
+# the continuous INTERVAL implementation (reached through median) interpolates in microseconds,
+# which throws for extreme intervals
+
+statement error
+SELECT median(i) FROM (VALUES (INTERVAL '2147483647 months'), (INTERVAL '2147483647 months')) t(i);
+----
+Could not convert Month to Microseconds
+
+# a high-scale DECIMAL quantile parameter makes the exact discrete rank arithmetic fallible
+
+statement error
+SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) FROM (VALUES (1), (2)) t(v);
+----
+Overflow in multiplication of DECIMAL
+
+statement error
+SELECT quantile_disc(v, [0.5::DECIMAL(38,38)]) FROM (VALUES (1), (2)) t(v);
+----
+Overflow in multiplication of DECIMAL
+
+statement error
+SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM (VALUES (1), (2)) t(v);
+----
+Overflow in multiplication of DECIMAL
+
+# the marking survives plan serialization, which rebuilds the implementation in deserialize
+
+statement ok
+SET debug_verify_serializer=true;
+
+statement error
+SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM (VALUES (1), (2)) t(v);
+----
+Overflow in multiplication of DECIMAL
+
+statement ok
+SET debug_verify_serializer=false;
+
+query I
+SELECT quantile_disc(v, 0.5::DECIMAL(2,1)) FROM (VALUES (1), (2)) t(v);
+----
+1
+
+# the fallible registration is read by the EXPLAIN (SQL) pivot default export
+
+statement ok
+SET pivot_filter_threshold=0;
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',DATE '2000-01-01'),('h','q',DATE '2000-01-02')) t(g,k,v)
+PIVOT (quantile_cont(v, 0.5) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',INTERVAL 1 DAY),('h','q',INTERVAL 2 DAY)) t(g,k,v)
+PIVOT (median(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (quantile_disc(v, 0.5::DECIMAL(38,38)) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+# numeric continuous quantiles and low-scale discrete quantiles cannot throw and stay exportable
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1.0),('h','q',2.0)) t(g,k,v)
+PIVOT (quantile_cont(v, 0.5) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*quantile_cont.*
+
+# continuous quantiles compute their rank in DOUBLE, so a high-scale quantile stays exportable
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1.0),('h','q',2.0)) t(g,k,v)
+PIVOT (quantile_cont(v, 0.5::DECIMAL(38,38)) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*quantile_cont.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (quantile_disc(v, 0.5) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*quantile_disc.*
+
+statement ok
+RESET pivot_filter_threshold;
+
+# the scalarized window form keeps working under dictionary vector verification
+
+statement ok
+SET debug_verify_vector='dictionary_expression';
+
+query I rowsort
+SELECT median(d) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM (VALUES (DATE '2000-01-01'), (DATE '2000-01-03')) t(d);
+----
+2000-01-01 00:00:00
+2000-01-03 00:00:00
+
+statement ok
+RESET debug_verify_vector;
+
+# interpolation within the timestamp range is unaffected
+
+query I
+SELECT median(d) FROM (VALUES (DATE '2000-01-01'), (DATE '2000-01-02')) t(d);
+----
+2000-01-01 12:00:00
