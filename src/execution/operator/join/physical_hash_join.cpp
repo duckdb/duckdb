@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
-#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
@@ -1566,17 +1565,6 @@ static unique_ptr<Expression> PreserveRuntimeFilterCastErrors(unique_ptr<Express
 	                                             std::move(filter_expr));
 }
 
-//! A filter that entered a secure view is pushed in as a WHERE filter would be: if evaluating it is observable (it
-//! can throw), it is wrapped in a barrier, so it is evaluated after the scan's other filters (see PushdownSecureView)
-static unique_ptr<Expression> BarrierIfCrossedSecureView(const JoinFilterPushdownColumn &column,
-                                                         unique_ptr<Expression> filter_expr) {
-	if (column.crossed_secure_view && ExpressionBarrier::Required(*filter_expr) &&
-	    !ExpressionBarrier::Contains(*filter_expr)) {
-		return ExpressionBarrier::Wrap(std::move(filter_expr));
-	}
-	return filter_expr;
-}
-
 void JoinFilterPushdownInfo::DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
                                                 const JoinFilterPushdownFilter &info,
                                                 const JoinFilterPushdownColumn &column, ProjectionIndex filter_col_idx,
@@ -1734,11 +1722,11 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 
 //! How a min/max join filter is checked in the scan
 enum class MinMaxFilterKind : uint8_t {
-	//! Skips whole vectors or row groups by their zone maps; the rows it keeps are not checked
+	//! Only skips whole vectors or row groups by their zone maps; it never removes a single row
 	OPTIONAL,
-	//! Like OPTIONAL, and stops being used when it does not remove enough rows
+	//! Checked on every row until it removes too few of them, then no longer applied
 	SELECTIVITY_OPTIONAL,
-	//! Checked on every row: whether a row is skipped never depends on the other rows in its vector or row group
+	//! Checked on every row
 	EXACT
 };
 
@@ -1801,8 +1789,7 @@ CreateJoinFilterComparisonExpression(ClientContext &context, const JoinFilterPus
 	if (!filter_expr) {
 		return nullptr;
 	}
-	return BarrierIfCrossedSecureView(
-	    column, PreserveRuntimeFilterCastErrors(std::move(filter_expr), std::move(null_check_input)));
+	return PreserveRuntimeFilterCastErrors(std::move(filter_expr), std::move(null_check_input));
 }
 
 bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
@@ -1851,8 +1838,7 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 	}
 
 	auto in_expr = ExpressionFilter::CreateInExpression(std::move(filter_input), std::move(in_list));
-	in_expr = BarrierIfCrossedSecureView(
-	    column, PreserveRuntimeFilterCastErrors(std::move(in_expr), std::move(null_check_input)));
+	in_expr = PreserveRuntimeFilterCastErrors(std::move(in_expr), std::move(null_check_input));
 	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 	return true;
@@ -1864,7 +1850,6 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
                                        const Value &max_val, const LogicalType &condition_type,
                                        bool reconstruct_expression, bool selectivity_optional) {
 	auto filter_column_type = reconstruct_expression ? column.storage_type : condition_type;
-	// zone maps below a secure view include the rows it hides: the rows a filter there keeps must not depend on them
 	const auto kind = column.crossed_secure_view ? MinMaxFilterKind::EXACT
 	                  : selectivity_optional     ? MinMaxFilterKind::SELECTIVITY_OPTIONAL
 	                                             : MinMaxFilterKind::OPTIONAL;
@@ -1952,8 +1937,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto condition_type = min_val.type();
 			auto runtime_filter_input_type =
 			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
-			// bloom and prefix-range filters are not expressions and cannot carry a barrier: they never enter a secure
-			// view
+			// bloom and prefix-range filters are selectivity-optional, so they are not used below a secure view
 			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
 			                                !pushdown_column.crossed_secure_view;
 			if (can_emit_runtime_filters && ht) {
@@ -1986,7 +1970,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
-				// an IN filter is only cheap as an optional filter, which a secure view does not allow
+				// an IN filter is only cheap as an optional filter, so it is not used below a secure view
 				if (!pushdown_column.crossed_secure_view && CanUseInFilter(context, ht, cmp)) {
 					pushed_in_filter =
 					    PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
