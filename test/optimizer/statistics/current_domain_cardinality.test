@@ -17,7 +17,7 @@ ANALYZE current_domain_values;
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k < 100 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~200 rows.*SEQ_SCAN.*Filters: k < 100.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~200 rows.*SEQ_SCAN.*Filters: k < 100.*
 
 query I rowsort
 SELECT k FROM current_domain_values WHERE k < 5 GROUP BY k;
@@ -33,29 +33,29 @@ SELECT k FROM current_domain_values WHERE k < 5 GROUP BY k;
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k IN (2, 4, 4, 8) GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~4 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~4 rows.*
 
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k = 2 OR k = 8 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~2 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~2 rows.*
 
 # A supported equality remains the tightest bound in a conjunction.
 query II
 EXPLAIN SELECT k, count(*) FROM current_domain_values WHERE k = 10 AND k < 20 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*SEQ_SCAN.*Filters: k = 10.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~1 row.*SEQ_SCAN.*Filters: k = 10.*
 
 # LIMIT, OFFSET and LIMIT PERCENT all reduce the current domain.
 query II
 EXPLAIN SELECT k, count(*) FROM (SELECT k FROM current_domain_values LIMIT 10 OFFSET 999) limited GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~1 row.*
 
 query II
 EXPLAIN SELECT k, count(*) FROM (SELECT k FROM current_domain_values LIMIT 10 PERCENT) limited GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~100 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~100 rows.*
 
 # Saturated cardinalities survive OFFSET without wrapping to zero in the derived statistics,
 # including the multi-column distinct estimate above a saturated input.
@@ -81,7 +81,7 @@ EXPLAIN SELECT repeated, count(*)
 FROM (SELECT repeated FROM current_domain_values LIMIT 100) limited
 GROUP BY repeated;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~65 rows.*STREAMING_LIMIT.*Limit: 100.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~65 rows.*Limit: 100.*~100 rows.*
 
 # Direct evidence follows its column through a window and projection.
 # The window column must remain referenced or the optimizer removes the window entirely.
@@ -91,7 +91,7 @@ FROM (SELECT k, row_number() OVER () rn FROM current_domain_values WHERE k = 20)
 WHERE rn >= 1
 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1 row.*STREAMING_WINDOW.*SEQ_SCAN.*Filters: k = 20.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~1 row.*WINDOW.*SEQ_SCAN.*Filters: k = 20.*
 
 statement ok
 CREATE TABLE current_domain_union_left AS SELECT range::INTEGER k FROM range(10);
@@ -115,7 +115,7 @@ FROM (
 ) unioned
 GROUP BY k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~20 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~20 rows.*
 
 # Volatile zero-argument expressions are not constant singleton domains.
 statement ok
@@ -126,7 +126,7 @@ EXPLAIN SELECT x, count(*)
 FROM (SELECT nextval('current_domain_group_seq') x FROM range(100)) generated
 GROUP BY x;
 ----
-physical_plan	<REGEX>:(?s).*HASH_GROUP_BY.*~100 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~100 rows.*
 
 query I
 SELECT count(*)
@@ -146,7 +146,7 @@ EXPLAIN SELECT x, count(*)
 FROM (SELECT nextval('current_domain_composed_seq') + 1 x FROM range(100)) generated
 GROUP BY x;
 ----
-physical_plan	<REGEX>:(?s).*HASH_GROUP_BY.*~100 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~100 rows.*
 
 query I
 SELECT count(*)

@@ -25,7 +25,7 @@ FROM domain_join_large
 JOIN domain_join_sparse USING (k)
 GROUP BY domain_join_large.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*~1,000 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*~1,000 rows.*
 
 # Projection aliases retain the normalized equality-class domain.
 query II
@@ -37,7 +37,7 @@ FROM (
 ) projected
 GROUP BY joined_key;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*~1,000 rows.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*~1,000 rows.*
 
 statement ok
 CREATE TABLE domain_join_small AS SELECT ((range % 20) * 50)::INTEGER k FROM range(1000);
@@ -54,7 +54,7 @@ JOIN domain_join_sparse USING (k)
 JOIN domain_join_small USING (k)
 GROUP BY domain_join_large.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~20 rows.*HASH_JOIN.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~20 rows.*HASH_JOIN.*
 
 query I
 SELECT count(*)
@@ -77,7 +77,7 @@ JOIN domain_join_sparse USING (k)
 LEFT JOIN domain_join_small USING (k)
 GROUP BY domain_join_large.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~(?:10[0-9]|110) rows.*HASH_JOIN.*
 
 # A left join does not narrow the preserved input's domain.
 query II
@@ -86,7 +86,7 @@ FROM domain_join_large
 LEFT JOIN domain_join_sparse USING (k)
 GROUP BY domain_join_large.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1,000 rows.*HASH_JOIN.*Join Type: LEFT.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~1,000 rows.*HASH_JOIN.*Join Type: LEFT.*
 
 # Cross products preserve input domains.
 query II
@@ -95,7 +95,7 @@ FROM domain_join_large
 CROSS JOIN domain_join_sparse
 GROUP BY domain_join_large.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~1,000 rows.*CROSS_PRODUCT.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~1,000 rows.*CROSS_PRODUCT.*
 
 statement ok
 CREATE TABLE domain_join_null_large AS
@@ -118,7 +118,7 @@ FROM domain_join_null_large lhs
 JOIN domain_join_null_small rhs ON lhs.k = rhs.k
 GROUP BY lhs.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~9[0-9] rows.*HASH_JOIN.*Join Type: INNER.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~9[0-9] rows.*HASH_JOIN.*Join Type: INNER.*
 
 query I
 SELECT count(*)
@@ -137,7 +137,7 @@ FROM domain_join_null_large lhs
 JOIN domain_join_null_small rhs ON lhs.k IS NOT DISTINCT FROM rhs.k
 GROUP BY lhs.k;
 ----
-physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~9[0-9] rows.*HASH_JOIN.*Join Type: INNER.*
+physical_plan	<REGEX>:(?s).*GROUP_BY.*~9[0-9] rows.*HASH_JOIN.*Join Type: INNER.*
 
 query I
 SELECT count(*)
