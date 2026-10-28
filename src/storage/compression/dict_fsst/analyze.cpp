@@ -98,6 +98,15 @@ idx_t DictFSSTAnalyzeState::RequiredSpace(idx_t tuple_count, idx_t unique_count,
 	return required_space;
 }
 
+idx_t DictFSSTAnalyzeState::SegmentCharge(idx_t required_space) const {
+	// a segment above the limit is written to a block of its own whose remainder is lost, a smaller one is packed
+	// with other segments, see PartialBlockManager::RetainOrFlush
+	if (required_space > info.GetCompactionFlushLimit()) {
+		return info.GetBlockSize();
+	}
+	return AlignValue<idx_t>(required_space);
+}
+
 bool DictFSSTAnalyzeState::TryAddIndexOnlyTuple() {
 	// the dictionary does not change, so only the index buffer can grow, and only when a new packing group starts
 	idx_t growth = 0;
@@ -140,7 +149,7 @@ void DictFSSTAnalyzeState::AddNewString(const string_t &str, hash_t hash) {
 }
 
 void DictFSSTAnalyzeState::FlushSimulatedBlock() {
-	segment_count++;
+	simulated_space += SegmentCharge(current_required_space);
 	current_tuple_count = 0;
 	current_unique_count = 0;
 	current_dict_size = 0;
@@ -219,8 +228,15 @@ idx_t DictFSSTAnalyzeState::FSSTOnlyEstimate() const {
 	if (!values_per_block) {
 		return DConstants::INVALID_INDEX;
 	}
-	// charge whole blocks: a block that few large values leave mostly empty still costs a full block
-	return ((total_count + values_per_block - 1) / values_per_block) * block_size;
+	// the full blocks and the tail are charged the way they are stored, so a block that a few large values leave
+	// mostly empty still costs a full block unless the partial block manager can pack it with other segments
+	const idx_t full_blocks = total_count / values_per_block;
+	const idx_t tail_values = total_count % values_per_block;
+	idx_t estimate = full_blocks * SegmentCharge(block_overhead + (values_per_block * bits_per_value + 7) / 8);
+	if (tail_values) {
+		estimate += SegmentCharge(block_overhead + (tail_values * bits_per_value + 7) / 8);
+	}
+	return estimate;
 }
 
 idx_t DictFSSTAnalyzeState::FinalAnalyze() {
@@ -233,11 +249,12 @@ idx_t DictFSSTAnalyzeState::FinalAnalyze() {
 	}
 
 	// Every block carries its own dictionary, so a value repeated across blocks is stored once per block.
-	// Charging for the blocks the simulation needed also charges for the space wasted in blocks that a large
-	// dictionary left mostly empty - which a ratio of the raw size cannot express.
-	const idx_t last_block_space =
-	    RequiredSpace(current_tuple_count, current_unique_count, current_dict_size, current_max_string_length);
-	idx_t estimate = segment_count * info.GetBlockSize() + last_block_space;
+	// Charging the simulated segments the way they are stored also charges for the space wasted in blocks that a
+	// large dictionary left mostly empty - which a ratio of the raw size cannot express.
+	idx_t estimate = simulated_space;
+	if (current_tuple_count) {
+		estimate += SegmentCharge(current_required_space);
+	}
 
 	// FSST_ONLY does not deduplicate at all, so it can be the cheaper layout for unique values. It is charged
 	// per block as well, otherwise large unique values would again be estimated without paying for the blocks

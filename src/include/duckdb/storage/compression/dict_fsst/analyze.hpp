@@ -37,6 +37,9 @@ private:
 	//! Account for a value the current block has not seen, flushing the block first if it does not fit
 	void AddNewString(const string_t &str, hash_t hash);
 	void FlushSimulatedBlock();
+	//! Space a flushed segment of the given size takes on disk: the partial block manager packs small segments
+	//! together, but a segment above its limit gets a block of its own
+	idx_t SegmentCharge(idx_t required_space) const;
 	unique_ptr<PrimitiveDictionary<string_t>> MakeSet(idx_t size) const;
 	void GrowSet();
 
@@ -54,7 +57,8 @@ public:
 
 	//! The dictionary is block-local, so the size estimate has to simulate how values pack into blocks:
 	//! duplicates that end up in different blocks are stored once per block, not once in total.
-	idx_t segment_count = 0;
+	//! Space charged for the simulated blocks flushed so far, see SegmentCharge
+	idx_t simulated_space = 0;
 	idx_t current_tuple_count = 0;
 	idx_t current_unique_count = 0;
 	idx_t current_dict_size = 0;
