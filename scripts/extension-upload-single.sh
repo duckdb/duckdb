@@ -45,9 +45,14 @@ get_file_size() {
 
 supported_signature_sizes="256 384 512"
 
+# Hex dump of $3 bytes at offset $2.
+bytes_hex() {
+	dd if="$1" bs=1 skip="$2" count="$3" status=none | od -An -v -tx1 | tr -d ' \n'
+}
+
 # Hex dump of 32-byte metadata field $3 (0-based from block start $2).
 field_hex() {
-	dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | od -An -v -tx1 | tr -d ' \n'
+	bytes_hex "$1" $(( $2 + $3 * 32 )) 32
 }
 
 # Hex of $1 NUL-padded to 32 bytes, the only accepted encoding of a metadata field.
@@ -58,18 +63,34 @@ padded_hex() {
 	printf '%0*d' $(( 64 - ${#hex} )) 0
 }
 
-# Mirror the engine verifier: probe each size legacy-first, block at size-256-S with magic (FIELD1) and marker (FIELD7) == S.
+# Mirror the engine verifier: tail metadata at size-512, marker (FIELD7) empty = 256, else [M1][sig][M2 = M1][256 zeros].
 detect_signature_size() {
-	local file="$1" size probe block marker
-	size=$(get_file_size "$file")
+	local file="$1" size tail_offset probe m1 m2 zeros marker
+	size=$(get_file_size "$file") || return 1
+	if [ "$size" -lt 512 ]; then echo "extension '$file' is too small to contain a footer" >&2; return 1; fi
+	tail_offset=$(( size - 512 ))
+	if [ "$(field_hex "$file" "$tail_offset" 7)" != "$(padded_hex 4)" ]; then
+		echo "could not find extension metadata magic in the footer of '$file'" >&2; return 1
+	fi
+	marker=$(field_hex "$file" "$tail_offset" 1) || return 1
+	if [ "$marker" = "$(padded_hex "")" ]; then echo 256; return 0; fi
 	for probe in $supported_signature_sizes; do
-		block=$(( size - 256 - probe ))
-		if [ "$block" -lt 0 ] || [ "$(field_hex "$file" "$block" 7)" != "$(padded_hex 4)" ]; then continue; fi
-		if [ "$probe" = 256 ]; then marker=""; else marker="$probe"; fi
-		if [ "$(field_hex "$file" "$block" 1)" = "$(padded_hex "$marker")" ]; then echo "$probe"; return 0; fi
-		echo "signature-size marker does not match the ${probe}-byte footer layout in '$file'" >&2; return 1
+		if [ "$probe" = 256 ] || [ "$marker" != "$(padded_hex "$probe")" ]; then continue; fi
+		if [ "$size" -lt $(( 768 + probe )) ]; then
+			echo "extension '$file' is too small for its ${probe}-byte signature footer" >&2; return 1
+		fi
+		zeros=$(bytes_hex "$file" $(( size - 256 )) 256) || return 1
+		if [ "$zeros" != "$(printf '%0512d' 0)" ]; then
+			echo "trailing 256-byte slot of the ${probe}-byte signature footer in '$file' is not zero" >&2; return 1
+		fi
+		m1=$(bytes_hex "$file" $(( size - 768 - probe )) 256) || return 1
+		m2=$(bytes_hex "$file" "$tail_offset" 256) || return 1
+		if [ "${#m1}" != 512 ] || [ "$m1" != "$m2" ]; then
+			echo "the two metadata copies of the ${probe}-byte signature footer in '$file' differ" >&2; return 1
+		fi
+		echo "$probe"; return 0
 	done
-	echo "could not determine signature slot size from extension footer of '$file'" >&2
+	echo "invalid signature-size marker in the footer of '$file'" >&2
 	return 1
 }
 
@@ -83,7 +104,7 @@ key_signature_size() {
 	esac
 }
 
-# The slot size baked into the artifact is authoritative for how many bytes to strip and re-append.
+# The signature size baked into the footer is authoritative for where the signature goes.
 signature_size=$(detect_signature_size "$ext") || exit 1
 
 if [ -n "${DUCKDB_EXTENSION_SIGNING_PK:-}" ]; then
@@ -97,11 +118,17 @@ if [ -n "${DUCKDB_EXTENSION_SIGNING_PK:-}" ]; then
 	fi
 fi
 
-# calculate SHA256 hash of extension binary
-cat "$ext" > "$ext.append"
+# The signed region is the plain prefix before the signature: [0, size-256) legacy, [0, size-512-V) otherwise.
+file_size=$(get_file_size "$ext")
+if [ "$signature_size" = 256 ]; then
+	signed_size=$(( file_size - 256 ))
+else
+	signed_size=$(( file_size - 512 - signature_size ))
+fi
+footer_tail_size=$(( file_size - signed_size - signature_size ))
 
-( command -v truncate >/dev/null 2>&1 && truncate -s -"$signature_size" "$ext.append" ) || \
-	( command -v gtruncate >/dev/null 2>&1 && gtruncate -s -"$signature_size" "$ext.append" ) || exit 1
+# calculate SHA256 hash of extension binary
+head -c "$signed_size" "$ext" > "$ext.append"
 
 # (Optionally) Sign binary
 if [ -n "${DUCKDB_EXTENSION_SIGNING_PK:-}" ]; then
@@ -119,8 +146,9 @@ else
 	dd if=/dev/zero of="$ext.sign" bs="$signature_size" count=1 status=none
 fi
 
-# append signature to extension binary
+# append signature and the footer tail (M2 and the zero slot, empty for legacy) to extension binary
 cat "$ext.sign" >> "$ext.append"
+tail -c "$footer_tail_size" "$ext" >> "$ext.append"
 rm "$ext.sign"
 rm -f "$ext.hash"
 

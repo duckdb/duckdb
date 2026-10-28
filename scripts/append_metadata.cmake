@@ -40,23 +40,54 @@ set(META7 "${SIGNATURE_MARKER}")
 file(READ "${NULL_FILE}" EMPTY_BYTE)
 
 string(REPEAT "${EMPTY_BYTE}" 32 EMPTY_32)
+string(REPEAT "${EMPTY_BYTE}" 256 EMPTY_256)
 string(REPEAT "${EMPTY_BYTE}" ${SIGNATURE_SIZE} EMPTY_SIGNATURE)
 
-# 256 + SIGNATURE_SIZE is a multiple of 128, so both LEB128 lengths share low bytes 147/128 and this high byte.
-math(EXPR SIGNATURE_LEB_HIGH "(256 + ${SIGNATURE_SIZE}) >> 7")
+# Appended after the WASM header: [meta][sig 256] for legacy, else [M1][sig][M2 = M1][256 zeros].
+if(SIGNATURE_SIZE STREQUAL "256")
+  set(FOOTER_SIZE 512)
+else()
+  math(EXPR FOOTER_SIZE "768 + ${SIGNATURE_SIZE}")
+endif()
+
+# Appends the unsigned LEB128 encoding of VALUE to the variable OUT, which must not hold NUL bytes.
+function(append_uleb128 OUT VALUE)
+  set(encoded "${${OUT}}")
+  while(TRUE)
+    math(EXPR byte "${VALUE} & 127")
+    math(EXPR VALUE "${VALUE} >> 7")
+    if(VALUE GREATER 0)
+      math(EXPR byte "${byte} | 128")
+    endif()
+    string(ASCII ${byte} char)
+    string(APPEND encoded "${char}")
+    if(VALUE EQUAL 0)
+      break()
+    endif()
+  endwhile()
+  set(${OUT} "${encoded}" PARENT_SCOPE)
+endfunction()
+
+set(FOOTER_SIZE_LEB "")
+append_uleb128(FOOTER_SIZE_LEB ${FOOTER_SIZE})
+string(LENGTH "${FOOTER_SIZE_LEB}" FOOTER_SIZE_LEB_LENGTH)
+# Outer section length: 1 (name length) + 16 (name) + inner size field + footer
+math(EXPR SECTION_SIZE "1 + 16 + ${FOOTER_SIZE_LEB_LENGTH} + ${FOOTER_SIZE}")
+set(SECTION_SIZE_LEB "")
+append_uleb128(SECTION_SIZE_LEB ${SECTION_SIZE})
 
 # 0 for custom section
 string(APPEND CUSTOM_SECTION "${EMPTY_BYTE}")
-# Outer section length (LEB128 low byte 147, high byte above), then 16 = length of the name.
-string(ASCII 147 ${SIGNATURE_LEB_HIGH} 16 CUSTOM_SECTION_2)
+string(APPEND CUSTOM_SECTION "${SECTION_SIZE_LEB}")
+# 10 in hex = 16 in decimal, length of name, 1 byte
+string(ASCII 16 CUSTOM_SECTION_2)
 string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_2}")
 
 # the name of the WebAssembly custom section, 16 bytes
 string(APPEND CUSTOM_SECTION "duckdb_signature")
 
-# Inner footer size (LEB128): low byte 128, high byte (256 + SIGNATURE_SIZE) >> 7, for a grand total of 2 bytes.
-string(ASCII 128 ${SIGNATURE_LEB_HIGH} CUSTOM_SECTION_3)
-string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_3}")
+# Inner footer size
+string(APPEND CUSTOM_SECTION "${FOOTER_SIZE_LEB}")
 
 # Second metadata-field is special, since content comes from a file
 file(READ "${PLATFORM_FILE}" META2)
@@ -72,17 +103,23 @@ string(SUBSTRING "${META7}${EMPTY_32}" 0 32 METADATA7)
 string(SUBSTRING "${META8}${EMPTY_32}" 0 32 METADATA8)
 
 # Append metadata fields, backwards
-string(APPEND CUSTOM_SECTION "${METADATA8}")
-string(APPEND CUSTOM_SECTION "${METADATA7}")
-string(APPEND CUSTOM_SECTION "${METADATA6}")
-string(APPEND CUSTOM_SECTION "${METADATA5}")
-string(APPEND CUSTOM_SECTION "${METADATA4}")
-string(APPEND CUSTOM_SECTION "${METADATA3}")
-string(APPEND CUSTOM_SECTION "${METADATA2}")
-string(APPEND CUSTOM_SECTION "${METADATA1}")
+string(APPEND METADATA_BLOCK "${METADATA8}")
+string(APPEND METADATA_BLOCK "${METADATA7}")
+string(APPEND METADATA_BLOCK "${METADATA6}")
+string(APPEND METADATA_BLOCK "${METADATA5}")
+string(APPEND METADATA_BLOCK "${METADATA4}")
+string(APPEND METADATA_BLOCK "${METADATA3}")
+string(APPEND METADATA_BLOCK "${METADATA2}")
+string(APPEND METADATA_BLOCK "${METADATA1}")
+string(APPEND CUSTOM_SECTION "${METADATA_BLOCK}")
 
 # Append signature (yet to be computed)
 string(APPEND CUSTOM_SECTION "${EMPTY_SIGNATURE}")
+
+# Larger signatures repeat the metadata at the fixed tail position, followed by a zeroed legacy slot
+if(NOT SIGNATURE_SIZE STREQUAL "256")
+  string(APPEND CUSTOM_SECTION "${METADATA_BLOCK}${EMPTY_256}")
+endif()
 
 # Append generated custom section to the extension
 file(APPEND "${EXTENSION}" "${CUSTOM_SECTION}")
