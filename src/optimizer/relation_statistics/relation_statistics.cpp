@@ -21,6 +21,10 @@ void SemiAntiJoinDomainEvidence::Invalidate() {
 	is_unique = false;
 }
 
+optional_idx SemiAntiJoinDomainEvidence::GetFilterDomainBound() const {
+	return filter_domain_bound;
+}
+
 optional_idx SemiAntiJoinDomainEvidence::GetSupportedDomainSize(idx_t current_domain) const {
 	optional_idx result;
 	if (is_unique) {

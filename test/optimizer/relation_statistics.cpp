@@ -427,3 +427,52 @@ TEST_CASE("SEMI fallback retains fractional cardinalities for enumeration", "[op
 	REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(102, 0, JoinType::SEMI).cardinality == 0);
 	REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(102, 0, JoinType::ANTI).cardinality == 102);
 }
+
+TEST_CASE("Shared key filters restrict domains only with supported input statistics",
+          "[optimizer][relation_statistics]") {
+	for (auto source : {DistinctCountSource::MIN_MAX, DistinctCountSource::HLL, DistinctCountSource::EXACT,
+	                    DistinctCountSource::CARDINALITY}) {
+		for (bool filter_both : {false, true}) {
+			for (idx_t bound : {idx_t(1), idx_t(2)}) {
+				JoinRelationSetManager sets;
+				auto &left = sets.GetJoinRelation(RelationIndex(0));
+				auto &right = sets.GetJoinRelation(RelationIndex(1));
+				auto &joined = sets.Union(left, right);
+				auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+				auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+				FilterInfo filter(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), joined, 0);
+				filter.SetLeftSet(left);
+				filter.SetRightSet(right);
+				filter.left_binding = a;
+				filter.right_binding = b;
+				JoinPredicateModel model;
+				auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+				predicate.SetEqualityClassIndex(optional_idx(0));
+				JoinEqualityClass equality;
+				equality.index = 0;
+				equality.columns = {a, b};
+				equality.relations = {RelationIndex(0), RelationIndex(1)};
+				equality.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a, b);
+				model.AddEqualityClass(std::move(equality));
+				CardinalityEstimator estimator(sets, model);
+				estimator.InitEquivalentRelations();
+				auto left_stats = CreateStats({a}, {1}, 20);
+				auto right_stats = CreateStats({b}, {bound}, 100);
+				left_stats.columns[0].total_domain = DistinctCount(10, DistinctCountSource::MIN_MAX);
+				right_stats.columns[0].total_domain = DistinctCount(10, source);
+				left_stats.columns[0].semi_anti_join_domain_evidence.TightenFilterDomainBound(1);
+				if (filter_both) {
+					right_stats.columns[0].semi_anti_join_domain_evidence.TightenFilterDomainBound(bound);
+				} else {
+					// A modeled current domain or uniqueness is not an explicit filter restriction.
+					right_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
+				}
+				estimator.InitCardinalityEstimatorProps(left, left_stats);
+				estimator.InitCardinalityEstimatorProps(right, right_stats);
+				estimator.RestrictFilterDomains({left_stats, right_stats});
+				auto expected = filter_both && source != DistinctCountSource::CARDINALITY ? 2000 / bound : 200;
+				REQUIRE(estimator.EstimateCardinalityWithSet<idx_t>(joined) == expected);
+			}
+		}
+	}
+}

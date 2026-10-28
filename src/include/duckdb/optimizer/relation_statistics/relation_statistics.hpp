@@ -33,6 +33,7 @@ public:
 	void MarkUnique();
 	void Invalidate();
 	optional_idx GetSupportedDomainSize(idx_t current_domain) const;
+	optional_idx GetFilterDomainBound() const;
 
 private:
 	optional_idx filter_domain_bound;

@@ -38,6 +38,7 @@ public:
 	bool HasReliableDistinctCount() const;
 	idx_t GetReliableDistinctCount() const;
 	void Update(const DistinctCount &distinct_count);
+	void Restrict(idx_t bound);
 
 private:
 	optional<DistinctCount> estimate;
@@ -59,6 +60,11 @@ idx_t DomainEstimate::GetReliableDistinctCount() const {
 		throw InternalException("Attempted to access an unreliable distinct count");
 	}
 	return estimate->distinct_count;
+}
+
+void DomainEstimate::Restrict(idx_t bound) {
+	D_ASSERT(estimate);
+	estimate->distinct_count = MinValue(estimate->distinct_count, bound);
 }
 
 void DomainEstimate::Update(const DistinctCount &distinct_count) {
@@ -1046,6 +1052,35 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			relation_to_tdom.domain_estimate.Update(distinct_count);
 		}
 	}
+}
+
+void CardinalityEstimator::RestrictFilterDomains(const vector<RelationStats> &relation_stats) {
+	for (auto &equivalence : state->relation_set_stats) {
+		bool all_filtered = !equivalence.predicates.empty();
+		for (auto &predicate : equivalence.predicates) {
+			all_filtered &= predicate.get().IsEquivalencePredicate();
+		}
+		idx_t retained_domain = 0;
+		for (auto &binding : equivalence.equivalent_relations) {
+			if (!all_filtered || binding.table_index.index >= relation_stats.size() ||
+			    binding.column_index.GetIndex() >= relation_stats[binding.table_index.index].columns.size()) {
+				all_filtered = false;
+				break;
+			}
+			auto &column = relation_stats[binding.table_index.index].columns[binding.column_index.GetIndex()];
+			auto bound = column.semi_anti_join_domain_evidence.GetFilterDomainBound();
+			// Unknown-NDV filters need their scan selectivities refined before shrinking the join domain.
+			if (!bound.IsValid() || column.total_domain.source == DistinctCountSource::CARDINALITY) {
+				all_filtered = false;
+				break;
+			}
+			retained_domain = MaxValue(retained_domain, bound.GetIndex());
+		}
+		if (all_filtered) {
+			equivalence.domain_estimate.Restrict(retained_domain);
+		}
+	}
+	std::sort(state->relation_set_stats.begin(), state->relation_set_stats.end(), SortTdoms);
 }
 
 // LCOV_EXCL_START

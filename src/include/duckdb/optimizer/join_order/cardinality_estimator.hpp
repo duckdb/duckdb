@@ -35,6 +35,7 @@ public:
 	void InitEquivalentRelations();
 
 	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
+	void RestrictFilterDomains(const vector<RelationStats> &relation_stats);
 
 	//! cost model needs estimated cardinalities to the fraction since the formula captures
 	//! distinct count selectivities and multiplicities. Hence the template
