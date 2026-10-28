@@ -90,10 +90,6 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
-	//! The shared cached file of the path, or one of the handle's own when it cannot use shared caches
-	shared_ptr<CachedFile> GetCachedFile();
-	//! Whether this file's blocks may be kept in, and served from, the external file cache
-	bool ShouldCacheFile() const;
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
@@ -120,8 +116,6 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! False for a file with an ephemeral secret, whose blocks the cache neither keeps nor serves
-	bool can_use_shared_caches;
 	//! Associated cached file.
 	shared_ptr<CachedFile> cached_file;
 

@@ -256,7 +256,7 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 		if (needs_reopen) {
 			file_handle.reset();
 		}
-		cached_file = GetCachedFile();
+		cached_file = external_file_cache.GetOrCreateCachedFile(path);
 		current_cached_file = cached_file;
 	}
 
@@ -311,8 +311,12 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p), validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(),
                                                                                caching_file_system_p.db)),
-      can_use_shared_caches(!path_p.HasSecretName()), cached_file(nullptr), position(0) {
-	cached_file = GetCachedFile();
+      cached_file(nullptr), position(0) {
+	if (path.HasSecretName()) {
+		// the open checks that the file's ephemeral secret serves this read, so the cache serves only an opened file
+		validate = CacheValidationMode::VALIDATE_ALL;
+	}
+	cached_file = external_file_cache.GetOrCreateCachedFile(path);
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -384,7 +388,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	if (!external_file_cache.IsEnabled() || !ShouldCacheFile() || !CanUseCache()) {
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		ReadUncached(buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
@@ -556,20 +560,8 @@ string CachingFileHandle::GetVersionTag() {
 	return validation_info.version_tag;
 }
 
-shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::GetCachedFile() {
-	if (!can_use_shared_caches) {
-		return make_shared_ptr<CachedFile>(path.path, external_file_cache.GetGeneration(),
-		                                   external_file_cache.GetBufferManager().GetBufferPool());
-	}
-	return external_file_cache.GetOrCreateCachedFile(path.path);
-}
-
-bool CachingFileHandle::ShouldCacheFile() const {
-	return can_use_shared_caches && external_file_cache.ShouldCacheFile(path.path);
-}
-
 bool CachingFileHandle::Validate() const {
-	if (!ShouldCacheFile()) {
+	if (!external_file_cache.ShouldCacheFile(path.path)) {
 		// uncached files have no stale state to serve, so their metadata must always be read fresh
 		return true;
 	}
