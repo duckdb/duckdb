@@ -12,6 +12,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -2301,7 +2302,8 @@ bool RowGroupCollection::SupportsPerColumnWrites() {
 // Alter
 //===--------------------------------------------------------------------===//
 shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
-                                                             ExpressionExecutor &default_executor) {
+                                                             ExpressionExecutor &default_executor,
+                                                             optional_ptr<OptimisticDataWriter> writer) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	auto row_groups = GetRowGroups();
@@ -2309,23 +2311,20 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types),
 	                                                  row_groups->GetBaseRowId(), total_rows.load(), row_group_size);
 	result->next_row_id = next_row_id.load();
-
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
-	auto lock = result->stats.GetLock();
-	auto &new_column_stats = result->stats.GetStats(*lock, new_column_idx);
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
-	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
-	auto result_row_groups = result->GetRowGroups();
-	for (auto &node : row_groups->SegmentNodes()) {
-		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, new_column_stats);
-		// merge in the statistics
-		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
-
-		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
-	}
-
+	auto &default_value = *default_executor.expressions[0];
+	auto parallel = !default_value.IsVolatile();
+	AlterRowGroups(context, *result, new_column_idx, parallel, writer,
+	               [&](SegmentNode<RowGroup> &node, ColumnStatistics &column_stats) {
+		               if (!parallel) {
+			               // volatile defaults such as nextval use the executor initialized before the append lock
+			               return node.GetNode().AddColumn(*result, new_column, default_executor, column_stats);
+		               }
+		               ExpressionExecutor executor(context, default_value);
+		               return node.GetNode().AddColumn(*result, new_column, executor, column_stats);
+	               });
 	return result;
 }
 
@@ -2355,7 +2354,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
                                                              const LogicalType &target_type,
                                                              vector<StorageIndex> bound_columns, Expression &cast_expr,
-                                                             TransactionData transaction) {
+                                                             TransactionData transaction,
+                                                             optional_ptr<OptimisticDataWriter> writer) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
 	auto row_groups = GetRowGroups();
@@ -2374,31 +2374,107 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 			scan_types.push_back(types[bound_columns[i].GetPrimaryIndex()]);
 		}
 	}
-	DataChunk scan_chunk;
-	scan_chunk.Initialize(GetAllocator(), scan_types);
-
-	ExpressionExecutor executor(context);
-	executor.AddExpression(cast_expr);
-
-	TableScanState scan_state;
-	scan_state.Initialize(bound_columns);
-	scan_state.table_state.Initialize(context, GetTypes());
-	scan_state.table_state.max_row = row_groups->GetBaseRowId() + next_row_id.load();
+	auto max_row = row_groups->GetBaseRowId() + next_row_id.load();
 
 	// now alter the type of the column within all of the row_groups individually
-	auto lock = result->stats.GetLock();
-	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
-	auto result_row_groups = result->GetRowGroups();
-
-	for (auto &node : row_groups->SegmentNodes()) {
-		auto &current_row_group = node.GetNode();
-		auto new_row_group =
-		    current_row_group.AlterType(*result, target_type, changed_idx, executor, scan_state.table_state, node,
-		                                scan_chunk, transaction, changed_stats);
-		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
-		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
-	}
+	auto parallel = !cast_expr.IsVolatile();
+	AlterRowGroups(context, *result, changed_idx, parallel, writer,
+	               [&](SegmentNode<RowGroup> &node, ColumnStatistics &column_stats) {
+		               DataChunk scan_chunk;
+		               scan_chunk.Initialize(GetAllocator(), scan_types);
+		               ExpressionExecutor executor(context, cast_expr);
+		               TableScanState scan_state;
+		               scan_state.Initialize(bound_columns);
+		               scan_state.table_state.Initialize(context, GetTypes());
+		               scan_state.table_state.max_row = max_row;
+		               return node.GetNode().AlterType(*result, target_type, changed_idx, executor,
+		                                               scan_state.table_state, node, scan_chunk, transaction,
+		                                               column_stats);
+	               });
 	return result;
+}
+
+class AlterRowGroupTask : public BaseExecutorTask {
+public:
+	AlterRowGroupTask(TaskExecutor &executor, const std::function<void(idx_t)> &alter_row_group, idx_t index)
+	    : BaseExecutorTask(executor), alter_row_group(alter_row_group), index(index) {
+	}
+
+	void ExecuteTask() override {
+		alter_row_group(index);
+	}
+
+	string TaskType() const override {
+		return "AlterRowGroupTask";
+	}
+
+private:
+	const std::function<void(idx_t)> &alter_row_group;
+	idx_t index;
+};
+
+void RowGroupCollection::AlterRowGroups(
+    ClientContext &context, RowGroupCollection &result, idx_t column_idx, bool parallel,
+    optional_ptr<OptimisticDataWriter> writer,
+    const std::function<unique_ptr<RowGroup>(SegmentNode<RowGroup> &, ColumnStatistics &)> &alter) {
+	if (writer && !writer->PrepareWriteColumn(*this)) {
+		writer = nullptr;
+	}
+	vector<reference<SegmentNode<RowGroup>>> nodes;
+	for (auto &node : GetRowGroups()->SegmentNodes()) {
+		nodes.push_back(node);
+	}
+	vector<unique_ptr<RowGroup>> new_row_groups(nodes.size());
+	vector<shared_ptr<ColumnStatistics>> new_stats(nodes.size());
+	auto &column_type = result.GetTypes()[column_idx];
+	std::function<void(idx_t)> alter_row_group = [&](idx_t index) {
+		auto &node = nodes[index].get();
+		new_stats[index] = ColumnStatistics::CreateEmptyStats(column_type);
+		new_row_groups[index] = alter(node, *new_stats[index]);
+		// a row group that is not on disk yet is written as a whole later, together with its new column
+		if (writer && node.GetNode().IsPersistent()) {
+			writer->WriteColumn(*new_row_groups[index], column_idx);
+		}
+	};
+	try {
+		// leaving the scope waits for the scheduled tasks, so that they never outlive the state they refer to
+		TaskExecutor executor(context);
+		for (idx_t index = 0; index < nodes.size(); index++) {
+			if (parallel) {
+				executor.ScheduleTask(make_uniq<AlterRowGroupTask>(executor, alter_row_group, index));
+			} else {
+				// volatile values are produced in row order
+				alter_row_group(index);
+			}
+		}
+		executor.WorkOnTasks();
+
+		auto lock = result.stats.GetLock();
+		auto &column_stats = result.stats.GetStats(*lock, column_idx);
+		auto result_row_groups = result.GetRowGroups();
+		for (idx_t index = 0; index < nodes.size(); index++) {
+			new_row_groups[index]->MergeIntoStatistics(column_idx, column_stats.Statistics());
+			column_stats.Merge(*new_stats[index]);
+			result_row_groups->AppendSegment(std::move(new_row_groups[index]), nodes[index].get().GetRowStart());
+		}
+		if (writer) {
+			writer->FinalFlush();
+		}
+	} catch (...) {
+		if (writer) {
+			// release the blocks the column was already written to
+			writer->Rollback();
+			CommitDropState drop_state(&block_manager);
+			for (auto &row_group : new_row_groups) {
+				if (row_group) {
+					row_group->CommitDropColumn(column_idx, drop_state);
+				}
+			}
+			result.CommitDropColumn(column_idx, drop_state);
+			drop_state.FinalizeCommit();
+		}
+		throw;
+	}
 }
 
 void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction,

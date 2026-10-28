@@ -106,10 +106,17 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	OptimisticDataWriter writer(context, *this);
+	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor, writer);
+	written_column = column_definitions.size() - 1;
 
 	// also add this column to client local storage
-	local_storage.AddColumn(parent, *this, new_column, default_executor);
+	try {
+		local_storage.AddColumn(parent, *this, new_column, default_executor);
+	} catch (...) {
+		RollbackWrittenColumn();
+		throw;
+	}
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.version = DataTableVersion::ALTERED;
@@ -223,8 +230,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		auto &transaction_manager = DuckTransactionManager::Get(db);
 		TransactionData rewrite_visibility(transaction.GetTransactionId(),
 		                                   VisibilityBound::Through(transaction_manager.GetLastCommit()));
+		OptimisticDataWriter writer(context, *this);
 		row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr,
-		                                          rewrite_visibility);
+		                                          rewrite_visibility, writer);
+		written_column = changed_idx;
 
 		// scan the original table, and fill the new column with the transformed value
 		local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
@@ -234,8 +243,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 			VerifyNewConstraint(local_storage, *this, *constraint_to_verify);
 		}
 	} catch (...) {
-		// nothing reached the catalog, so no undo entry will restore the parent
+		// nothing reached the catalog, so no undo entry will restore the parent or release the written column
 		parent.version = previous_version;
+		RollbackWrittenColumn();
 		throw;
 	}
 }
@@ -1619,6 +1629,14 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 
 void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
 	row_groups->CommitDropColumn(column_index, drop_state);
+}
+
+void DataTable::RollbackWrittenColumn() {
+	if (written_column.IsValid()) {
+		row_groups->CommitDropColumn(written_column.GetIndex());
+		// releasing the blocks twice would free blocks that other columns still share
+		written_column = optional_idx();
+	}
 }
 
 void DataTable::Destroy() {
