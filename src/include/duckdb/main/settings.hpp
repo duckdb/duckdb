@@ -2643,20 +2643,6 @@ struct WarningsAsErrorsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct WideDecimalArithmeticSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "wide_decimal_arithmetic";
-	static constexpr const char *Description =
-	    "Let arithmetic and comparisons on decimals of up to 38 digits produce results wider than 38 digits (stored as "
-	    "BIGNUM) instead of clamping the result to 38 digits";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct WriteBufferRowGroupCountSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "write_buffer_row_group_count";

@@ -5,11 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
-# result types: fixed-size decimals keep their rules, results only become wide when an input is wide
+# result types grow past 38 digits whenever the arithmetic needs it
 query IIII
 SELECT typeof('1'::DECIMAL(38,2) + '1'::DECIMAL(38,2)), typeof('1'::DECIMAL(39,2) + '1'::DECIMAL(38,2)), typeof('1'::DECIMAL(255,2) + 1), typeof('1'::DECIMAL(50,2) - '1'::DECIMAL(40,10))
 ----
-DECIMAL(38,2)	DECIMAL(40,2)	DECIMAL(255,2)	DECIMAL(59,10)
+DECIMAL(39,2)	DECIMAL(40,2)	DECIMAL(255,2)	DECIMAL(59,10)
 
 query IIII
 SELECT typeof('1'::DECIMAL(40,1) * '1'::DECIMAL(40,1)), typeof('1'::DECIMAL(200,0) * '1'::DECIMAL(100,0)), typeof('1'::DECIMAL(40,1) % '1'::DECIMAL(40,1)), typeof(-('1'::DECIMAL(40,1)))
@@ -132,7 +132,7 @@ DECIMAL(45,2)
 query I
 SELECT typeof(x) FROM (SELECT '1.5'::DECIMAL(38,2) AS x UNION ALL SELECT 1::HUGEINT) LIMIT 1
 ----
-DECIMAL(38,2)
+DECIMAL(40,2)
 
 # abs
 query II
@@ -215,14 +215,17 @@ SELECT count(*) FROM pairs WHERE abs((a * b)::DOUBLE - a::DOUBLE * b::DOUBLE) > 
 ----
 0
 
-# with wide_decimal_arithmetic, fixed-size decimals grow past 38 digits instead of clamping
-statement ok
-SET wide_decimal_arithmetic = true
-
+# fixed-size decimals grow past 38 digits instead of clamping
 query III
 SELECT typeof('1'::DECIMAL(38,2) + '1'::DECIMAL(38,2)), typeof('1'::DECIMAL(38,2) * '1'::DECIMAL(38,2)), typeof('1'::DECIMAL(38,10) % '1'::DECIMAL(38,2))
 ----
 DECIMAL(39,2)	DECIMAL(76,4)	DECIMAL(46,10)
+
+# results that fit in 38 digits keep their fixed-size representation, the int64 tier keeps its checked clamp
+query III
+SELECT typeof('1'::DECIMAL(18,2) * '1'::DECIMAL(18,2)), typeof('1'::DECIMAL(20,2) + '1'::DECIMAL(20,2)), typeof('1'::DECIMAL(19,2) * '1'::DECIMAL(19,2))
+----
+DECIMAL(18,4)	DECIMAL(21,2)	DECIMAL(38,4)
 
 query I
 SELECT repeat('9', 38)::DECIMAL(38,0) * repeat('9', 38)::DECIMAL(38,0)
@@ -234,16 +237,52 @@ SELECT repeat('9', 38)::DECIMAL(38,0) + repeat('9', 38)::DECIMAL(38,0)
 ----
 199999999999999999999999999999999999998
 
-# comparisons no longer truncate the scale of the common type
+query I
+SELECT '1'::DECIMAL(38,2) * '1'::DECIMAL(38,2) * '1'::DECIMAL(38,2) * '1'::DECIMAL(38,2)
+----
+1.00000000
+
+# the product of two 255-digit decimals is clamped to 255 digits and checked for overflow
+query I
+SELECT typeof('1'::DECIMAL(255,0) * '1'::DECIMAL(255,0))
+----
+DECIMAL(255,0)
+
+statement error
+SELECT ('1' || repeat('0', 200))::DECIMAL(255,0) * ('1' || repeat('0', 200))::DECIMAL(255,0)
+----
+<REGEX>:.*Out of Range Error.*
+
+# comparisons and common types no longer truncate the scale
 query I
 SELECT '1.5'::DECIMAL(38,2) = '1.5000000000000000000000000000000000001'::DECIMAL(38,37)
 ----
 false
 
-statement ok
-SET wide_decimal_arithmetic = false
-
-query II
-SELECT typeof('1'::DECIMAL(38,2) + '1'::DECIMAL(38,2)), typeof('1'::DECIMAL(38,2) * '1'::DECIMAL(38,2))
+query I
+SELECT typeof(COALESCE('1.5'::DECIMAL(38,2), '1.5'::DECIMAL(38,37)))
 ----
-DECIMAL(38,2)	DECIMAL(38,4)
+DECIMAL(73,37)
+
+query I
+SELECT typeof(x) FROM (SELECT '1.5'::DECIMAL(38,2) AS x UNION ALL SELECT '1.5'::DECIMAL(38,4)) t LIMIT 1
+----
+DECIMAL(40,4)
+
+# window RANGE frames over wide decimals
+query II
+SELECT x, count(*) OVER (ORDER BY x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM (VALUES ('1'::DECIMAL(40,1)), (2), (3), (10), (repeat('9', 39)::DECIMAL(40,1))) t(x) ORDER BY x
+----
+1.0	2
+2.0	3
+3.0	2
+10.0	1
+999999999999999999999999999999999999999.0	1
+
+# a fixed-size decimal order key at the 38-digit boundary gets a wide range frame
+query II
+SELECT x::INTEGER, count(*) OVER (ORDER BY x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM (VALUES (1::DECIMAL(38,1)), (2), (3)) t(x) ORDER BY x
+----
+1	2
+2	3
+3	2

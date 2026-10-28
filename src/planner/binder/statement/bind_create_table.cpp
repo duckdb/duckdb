@@ -168,7 +168,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	auto check_copy = check.expression->Copy();
 
 	// Bind the constraint and reset the original expression.
-	bound_check.expression = check_binder.BindStoredExpression(check_copy, "CHECK constraints");
+	bound_check.expression = check_binder.Bind(check_copy);
 	return std::move(bound_constraint);
 }
 
@@ -315,7 +315,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto expression = col.GeneratedExpression().Copy();
 
-		auto bound_expression = expr_binder.BindStoredExpression(expression, "Generated columns");
+		auto bound_expression = expr_binder.Bind(expression);
 		D_ASSERT(bound_expression);
 		if (bound_expression->HasSubquery()) {
 			throw BinderException("Failed to bind generated column %s because the expression contains a subquery",

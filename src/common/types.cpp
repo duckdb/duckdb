@@ -1008,9 +1008,8 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	if (other_width > effective_width) {
 		idx_t new_width = idx_t(other_width) + scale;
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
-		auto max_width = Decimal::MaxCombinedWidth(width, other_width);
-		if (new_width > max_width) {
-			new_width = max_width;
+		if (new_width > Decimal::MAX_WIDTH_DECIMAL) {
+			new_width = Decimal::MAX_WIDTH_DECIMAL;
 		}
 		return LogicalType::DECIMAL(NumericCast<uint8_t>(new_width), scale);
 	}
