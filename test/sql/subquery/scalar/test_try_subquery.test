@@ -5,8 +5,8 @@
 # Plain projections get TRY pushed onto the projected expression. Aggregate projections
 # gate the result on HAS_ERROR probes of the aggregate inputs, so an input error turns
 # the aggregated result into NULL. Errors outside these positions (WHERE, ORDER BY, the
-# projection above an aggregation, nested subqueries, the one-row cardinality check)
-# propagate deliberately.
+# projection above an aggregation, inside aggregate execution itself, the one-row
+# cardinality check) propagate deliberately.
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -66,6 +66,34 @@ statement error
 SELECT TRY((SELECT max(s)::INTEGER FROM strings))
 ----
 Could not convert
+
+# the gate probes the aggregate inputs only; an error raised inside aggregate execution itself
+# (state update, combine, finalize) is not a maskable position and propagates
+statement error
+SELECT TRY((SELECT sum(x) FROM (VALUES (99999999999999999999999999999999999999::DECIMAL(38,0)),
+                                       (99999999999999999999999999999999999999::DECIMAL(38,0))) v(x)))
+----
+Overflow in HUGEINT addition
+
+statement error
+SELECT HAS_ERROR((SELECT sum(x) FROM (VALUES (99999999999999999999999999999999999999::DECIMAL(38,0)),
+                                             (99999999999999999999999999999999999999::DECIMAL(38,0))) v(x)))
+----
+Overflow in HUGEINT addition
+
+# the same overflow over scalar inputs is maskable, the aggregate-internal raise is not
+query I
+SELECT TRY(99999999999999999999999999999999999999::DECIMAL(38,0)::HUGEINT +
+           99999999999999999999999999999999999999::DECIMAL(38,0)::HUGEINT)
+----
+NULL
+
+statement error
+SELECT TRY((SELECT sum(x) FROM (VALUES (1::DECIMAL(38,0))) v(x) WHERE false)) a,
+       TRY((SELECT sum(x) FROM (VALUES (99999999999999999999999999999999999999::DECIMAL(38,0)),
+                                       (99999999999999999999999999999999999999::DECIMAL(38,0))) v(x))) b
+----
+Overflow in HUGEINT addition
 
 # plain projection: TRY moves onto the projected expression
 query I
