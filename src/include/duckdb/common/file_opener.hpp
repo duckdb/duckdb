@@ -25,16 +25,15 @@ class Logger;
 //! The file an open, listing or request is for
 struct FileOpenerInfo {
 	FileOpenerInfo() = default;
-	FileOpenerInfo(string file_path_p) // NOLINT: allow implicit conversion from a path
-	    : file_path(std::move(file_path_p)) {
+	FileOpenerInfo(string path) // NOLINT: allow implicit conversion from a path
+	    : file(std::move(path)) {
 	}
-	FileOpenerInfo(const OpenFileInfo &file) // NOLINT: allow implicit conversion from a file
-	    : file_path(file.path), extended_info(file.extended_info) {
+	FileOpenerInfo(OpenFileInfo file_p) // NOLINT: allow implicit conversion from a file
+	    : file(std::move(file_p)) {
 	}
 
-	string file_path;
-	//! The extended information of the file (OpenFileInfo::extended_info), e.g. the ephemeral secret to open it with
-	shared_ptr<ExtendedOpenFileInfo> extended_info;
+	//! The file, with the options it is opened with, e.g. the ephemeral secret to open it with
+	OpenFileInfo file;
 };
 
 //! Abstract type that provide client-specific context to FileSystem.

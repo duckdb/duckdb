@@ -210,10 +210,10 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 	context = opener_p.TryGetClientContext();
 
 	if (info) {
-		path = info->file_path;
+		path = info->file.path;
 	}
 	string secret_name;
-	if (info && info->extended_info && info->extended_info->TryGetSecretName(secret_name)) {
+	if (info && info->file.extended_info && info->file.extended_info->TryGetSecretName(secret_name)) {
 		// the open names its ephemeral secret: look up none by path
 		if (!context) {
 			throw InvalidConfigurationException("The ephemeral secret for '%s' is not available without a client",
