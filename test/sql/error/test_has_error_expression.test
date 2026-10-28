@@ -299,3 +299,16 @@ true	42
 
 statement ok
 DROP MACRO has_error;
+
+# the SQL export spells out the system entry, so a user macro named has_error cannot capture a
+# replay of the exported text
+statement ok
+PRAGMA disable_optimizer;
+
+query TT
+EXPLAIN (SQL) SELECT has_error(1 // i) FROM integers
+----
+sql	<REGEX>:.*"system"\.main\.has_error.*
+
+statement ok
+PRAGMA enable_optimizer;

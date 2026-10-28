@@ -1337,3 +1337,60 @@ statement error
 SELECT TRY((SELECT 1 + (WITH c AS MATERIALIZED (SELECT 1 AS k) SELECT k + (SELECT 1 // x) FROM c ORDER BY 1))) FROM (VALUES (0)) v(x)
 ----
 TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+# value evaluation computes every operand of conjunctions and IN lists, so their transported flags
+# join the gate regardless of operand order
+query I
+SELECT TRY((SELECT (count(*) = 1) AND ((SELECT 1 // 0) = 1)))
+----
+NULL
+
+query I
+SELECT TRY((SELECT ((SELECT 1 // 0) = 1) AND (count(*) = 1)))
+----
+NULL
+
+query I
+SELECT TRY((SELECT (count(*) = 1) AND ((SELECT 1 // 1) = 1)))
+----
+true
+
+query I
+SELECT TRY((SELECT count(*) IN (2, (SELECT 1 // 0))))
+----
+NULL
+
+query I
+SELECT TRY((SELECT count(*) NOT IN (2, (SELECT 1 // 0))))
+----
+NULL
+
+query I
+SELECT TRY((SELECT count(*) IN (1, (SELECT 1 // 1))))
+----
+true
+
+# a CASE WHEN condition evaluates as a selection, where conjunctions short-circuit: the second
+# operand is a conditional position, clean when skipped and re-raising when reached
+query I
+SELECT TRY((SELECT CASE WHEN (count(*) = 2) AND ((SELECT 1 // 0) = 1) THEN 1 ELSE 2 END))
+----
+2
+
+statement error
+SELECT TRY((SELECT CASE WHEN (count(*) = 1) AND ((SELECT 1 // 0) = 1) THEN 1 ELSE 2 END))
+----
+An error was raised in a nested subquery under TRY
+
+# the executor skips later function arguments after a constant NULL argument; the gate still fires
+# for a re-raise in such a position, reading the nested subquery error eagerly (the scalar form
+# TRY(COALESCE(NULLIF(1, 1) + (1 // 0), 42)) follows the skip and yields 42)
+query I
+SELECT TRY((SELECT COALESCE(NULLIF(count(*), 1) + (SELECT 1 // 0), 42)))
+----
+NULL
+
+query I
+SELECT TRY((SELECT COALESCE(NULLIF(count(*), 2) + (SELECT 1 // 1), 42)))
+----
+2

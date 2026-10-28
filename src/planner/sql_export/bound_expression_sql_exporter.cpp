@@ -602,6 +602,13 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 	if (!issues.empty()) {
 		return BoundExpressionSQLExportResult::Failure(std::move(issues));
 	}
+	if (expression.GetExpressionType() == ExpressionType::OPERATOR_HAS_ERROR) {
+		// an unqualified has_error(...) resolves through the catalog, where a user function of the same
+		// name can shadow the built-in, so the export spells out the system entry
+		QualifiedName has_error_name(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("has_error"));
+		return BoundExpressionSQLExportResult::Success(
+		    make_uniq<FunctionExpression>(has_error_name, std::move(children)));
+	}
 	return BoundExpressionSQLExportResult::Success(
 	    make_uniq<OperatorExpression>(expression.GetExpressionType(), std::move(children)));
 }

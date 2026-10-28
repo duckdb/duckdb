@@ -41,22 +41,30 @@ static bool IsTryErrorRethrow(const Expression &expr) {
 
 //! Collect the error flags of re-raises in unconditionally evaluated positions that no TRY or
 //! HAS_ERROR inside the expression consumes. A flag from a conditionally evaluated position (a CASE
-//! branch, a later COALESCE argument, the right side of a short-circuiting conjunction) must not join
-//! the gate: the gate fires eagerly, while evaluation may never reach that re-raise.
-static void CollectTryErrorRethrowFlags(const Expression &expr, vector<unique_ptr<Expression>> &flags) {
+//! branch, a later COALESCE argument, the short-circuited operand of a selection conjunction) must
+//! not join the gate: the gate fires eagerly, while evaluation may never reach that re-raise. The
+//! split follows the executor: value evaluation computes every operand of conjunctions and IN lists,
+//! while selection evaluation (a CASE WHEN condition) short-circuits conjunctions. Function arguments
+//! count as unconditional even though the executor can skip later arguments after a constant NULL:
+//! that eager reading of a nested subquery error is accepted and pinned in tests.
+static void CollectTryErrorRethrowFlags(const Expression &expr, bool select_context,
+                                        vector<unique_ptr<Expression>> &flags) {
 	if (IsTryErrorRethrow(expr)) {
 		flags.push_back(expr.Cast<BoundFunctionExpression>().GetChildren()[0]->Copy());
 		return;
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CASE:
-		// only the first WHEN condition is evaluated unconditionally
-		CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().CaseChecks()[0].when_expr, flags);
+		// only the first WHEN condition is evaluated unconditionally, and it is evaluated as a selection
+		CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().CaseChecks()[0].when_expr, true, flags);
 		return;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		// the executor short-circuits conjunctions, so only the first operand always evaluates
-		CollectTryErrorRethrowFlags(*expr.Cast<BoundConjunctionExpression>().GetChildren()[0], flags);
-		return;
+		if (select_context) {
+			// selection evaluation short-circuits, so only the first operand always evaluates
+			CollectTryErrorRethrowFlags(*expr.Cast<BoundConjunctionExpression>().GetChildren()[0], true, flags);
+			return;
+		}
+		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::OPERATOR_TRY:
@@ -64,9 +72,7 @@ static void CollectTryErrorRethrowFlags(const Expression &expr, vector<unique_pt
 			// the capture consumes re-raises below it
 			return;
 		case ExpressionType::OPERATOR_COALESCE:
-		case ExpressionType::COMPARE_IN:
-		case ExpressionType::COMPARE_NOT_IN:
-			CollectTryErrorRethrowFlags(*expr.Cast<BoundOperatorExpression>().GetChildren()[0], flags);
+			CollectTryErrorRethrowFlags(*expr.Cast<BoundOperatorExpression>().GetChildren()[0], false, flags);
 			return;
 		default:
 			break;
@@ -75,8 +81,9 @@ static void CollectTryErrorRethrowFlags(const Expression &expr, vector<unique_pt
 	default:
 		break;
 	}
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](const Expression &child) { CollectTryErrorRethrowFlags(child, flags); });
+	// everything else evaluates its children as values before producing a result
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { CollectTryErrorRethrowFlags(child, false, flags); });
 }
 
 static unique_ptr<Expression> OrErrorFlags(unique_ptr<Expression> gate, unique_ptr<Expression> flag) {
@@ -289,7 +296,7 @@ optional<LogicalType> ExpressionBinder::LowerTrySubquery(const ParsedExpression 
 		// flags join the gate, and the gated CASE never evaluates the re-raise on an error row; a
 		// re-raise in a conditionally evaluated position stays out of the gate and raises if reached
 		vector<unique_ptr<Expression>> rethrow_flags;
-		CollectTryErrorRethrowFlags(*expr, rethrow_flags);
+		CollectTryErrorRethrowFlags(*expr, false, rethrow_flags);
 		for (auto &flag : rethrow_flags) {
 			gate = OrErrorFlags(std::move(gate), std::move(flag));
 		}
