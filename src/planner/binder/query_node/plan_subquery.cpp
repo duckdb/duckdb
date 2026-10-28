@@ -792,8 +792,9 @@ static unique_ptr<Expression> BindTryRethrowFunction(Binder &binder, const char 
 //! Replace a TRY subquery that was lowered with an exposed error flag by
 //! __internal_try_rethrow(<error flag>, <masked value>), so that errors captured inside the subquery
 //! are re-raised at the use site, where the enclosing TRY, HAS_ERROR or subquery lowering consumes them.
-//! The raised error is always consumed; the original message is not available here, since HAS_ERROR
-//! captures only the fact that an error occurred.
+//! Only a re-raise in a conditionally evaluated position of an aggregate select item escapes to the
+//! user; the original message is not available here, since HAS_ERROR captures only the fact that an
+//! error occurred, so the fixed message states that.
 static unique_ptr<Expression> CreateTryErrorRethrow(Binder &binder, unique_ptr<Expression> subquery_result) {
 	auto flag_input = subquery_result->Copy();
 

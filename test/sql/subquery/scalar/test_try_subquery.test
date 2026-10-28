@@ -1394,3 +1394,24 @@ query I
 SELECT TRY((SELECT COALESCE(NULLIF(count(*), 2) + (SELECT 1 // 1), 42)))
 ----
 2
+
+# a selection OR short-circuits like a selection AND
+query I
+SELECT TRY((SELECT CASE WHEN (count(*) = 1) OR ((SELECT 1 // 0) = 1) THEN 1 ELSE 2 END))
+----
+1
+
+# NOT evaluates its conjunction child as a value, so the flag joins the gate again
+query I
+SELECT TRY((SELECT CASE WHEN NOT ((count(*) = 2) AND ((SELECT 1 // 0) = 1)) THEN 1 ELSE 2 END))
+----
+NULL
+
+# mixed rows under correlation: erroring, clean, and NULL inputs mask row by row
+query II
+SELECT g, TRY((SELECT COALESCE((SELECT 100 // (g % 3)), g, 7))) FROM (VALUES (0), (1), (NULL), (3)) t(g) ORDER BY g NULLS FIRST
+----
+NULL	7
+0	NULL
+1	100
+3	NULL
