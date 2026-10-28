@@ -174,7 +174,7 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+    if: ${{ inputs.run_all }}
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
@@ -231,7 +231,7 @@ jobs:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+   if: ${{ inputs.run_all }}
    runs-on: windows-2025-vs2026
    env:
      GEN: ninja
@@ -338,6 +338,7 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
+     if: ${{ inputs.run_all }}
      runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
