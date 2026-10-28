@@ -262,6 +262,11 @@ NULL
 
 require icu
 
+# under autoloading, an overload miss on the existing "-" does not trigger the icu load,
+# so force it through an icu-registered setting first
+statement ok
+SET TimeZone = 'UTC';
+
 query I
 SELECT ago(INTERVAL 1 DAY) > TIMESTAMPTZ '2020-01-01 00:00:00+00';
 ----
