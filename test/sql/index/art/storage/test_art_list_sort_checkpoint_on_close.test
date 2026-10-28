@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require no_alternative_verify
+
 load {TEST_DIR}/art_list_sort_checkpoint_on_close.db
 
 # keep the changes in the WAL, so that the checkpoint on close has to write them
