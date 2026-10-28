@@ -5,6 +5,8 @@
         rewrites page_locations[page].first_row_index (the new value must encode to a varint of the same length)
     corrupt_page_index.py column_index_minlen <in> <out> <column_index_offset> <page>
         shortens min_values[page] by one byte (the struct shrinks by one byte, a padding byte keeps the layout)
+    corrupt_page_index.py offset_index_swap <in> <out> <offset_index_offset> <page a> <page b>
+        swaps the offsets of two page_locations, so the pages are listed out of byte order
     corrupt_page_index.py offset_index_copy <in> <out> <source column> <target column>
         copies the OffsetIndex bytes of one column chunk of the first row group over those of another chunk, so the
         target chunk's index points at the pages of the source chunk (the target's OffsetIndex has to be the last
@@ -154,6 +156,20 @@ def main():
         data[pos] = length - 1
         del data[value_pos + length - 1]
         data.insert(end - 1, 0)
+    elif mode == "offset_index_swap":
+        offset, page_a, page_b = int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6])
+        fields, _ = read_struct(data, offset)
+        _, pages, _ = list_elements(data, fields[1][1])
+        spans = []
+        for page in (page_a, page_b):
+            location_fields, _ = read_struct(data, pages[page])
+            _, pos = location_fields[1]
+            value, end = read_varint(data, pos)
+            spans.append((pos, end, zigzag_decode(value)))
+        (a_pos, a_end, a_value), (b_pos, b_end, b_value) = sorted(spans)
+        print("page offsets %d <-> %d" % (a_value, b_value))
+        # the two varints may differ in length; the OffsetIndex keeps its total size, so nothing after it moves
+        data[a_pos:b_end] = data[b_pos:b_end] + data[a_end:b_pos] + data[a_pos:a_end]
     elif mode == "offset_index_copy":
         source_column, target_column = int(sys.argv[4]), int(sys.argv[5])
         footer_start = len(data) - 8 - int.from_bytes(data[-8:-4], "little")

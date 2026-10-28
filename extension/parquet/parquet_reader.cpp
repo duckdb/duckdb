@@ -2007,9 +2007,9 @@ void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begi
 			page_index_span_end = span_end;
 		}
 	});
-	// remote reads are cached by the file handle, so one read of the whole index serves every row group and thread;
-	// local reads are not, so they stay small
-	const bool fetch_whole_index = !transport.GetCachingFileHandle().OnDiskFile() &&
+	// when the file handle caches its reads, one read of the whole index serves every row group and thread; without
+	// the cache every row group would download it again, so those reads stay small
+	const bool fetch_whole_index = transport.GetCachingFileHandle().ReadsAreCached() &&
 	                               page_index_span_end > page_index_span_begin &&
 	                               page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT &&
 	                               begin >= page_index_span_begin && end <= page_index_span_end;

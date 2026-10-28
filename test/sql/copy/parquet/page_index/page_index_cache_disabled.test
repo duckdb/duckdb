@@ -1,0 +1,100 @@
+# name: test/sql/copy/parquet/page_index/page_index_cache_disabled.test
+# description: The whole page index is read at once only when the file handle caches the read
+# group: [page_index]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET parquet_prefetch_column_gap = 16384;
+
+# three row groups, BIGINT pages of 512 rows, a payload column with its own pages
+statement ok
+CREATE TABLE data AS
+	SELECT range AS id, (range * 7919) % 100000 AS v, 'p' || (range % 5000)::VARCHAR AS payload
+	FROM range(300000);
+
+statement ok
+COPY data TO '{TEST_DIR}/page_index_cached.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
+
+statement ok
+COPY data TO '{TEST_DIR}/page_index_uncached.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
+
+# the byte span of the page index: from the first ColumnIndex to the end of the last OffsetIndex
+statement ok
+CREATE MACRO index_span(f) AS TABLE
+	SELECT min(least(column_index_offset, offset_index_offset)) AS span_begin,
+	       max(greatest(column_index_offset + column_index_length, offset_index_offset + offset_index_length)) AS span_end
+	FROM parquet_metadata(f);
+
+# bytes of the reads that lie inside that span (the footer read starts in it but runs past it)
+statement ok
+CREATE MACRO index_bytes_read(f) AS (
+	SELECT coalesce(sum(bytes), 0)
+	FROM duckdb_logs_parsed('FileSystem'), index_span(f)
+	WHERE op = 'READ' AND parse_filename(path) = parse_filename(f) AND pos >= span_begin AND pos + bytes <= span_end);
+
+query I
+SELECT span_end - span_begin > 0 FROM index_span('{TEST_DIR}/page_index_cached.parquet');
+----
+true
+
+# cached reads: one lookup fetches the page index of the whole file, so later row groups and threads find it cached
+statement ok
+SET cache_local_files = true;
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query III
+SELECT id, v, payload FROM '{TEST_DIR}/page_index_cached.parquet' WHERE id = 42
+----
+42	32598	p42
+
+statement ok
+CALL disable_logging();
+
+# the cache folds the index read into the block it already holds for the footer, so the coverage of the cache is what
+# shows that the whole index was fetched: the cached ranges reach from before the first ColumnIndex to the file end
+query I
+SELECT min(location) <= span_begin AND max(location + nr_bytes) >= span_end AND sum(nr_bytes) >= span_end - span_begin
+FROM duckdb_external_file_cache(), index_span('{TEST_DIR}/page_index_cached.parquet')
+WHERE parse_filename(path) = 'page_index_cached.parquet' AND location < span_end AND location + nr_bytes > span_begin
+GROUP BY span_begin, span_end;
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# uncached reads: nothing would keep the index around, so only the index of the scanned row group is fetched
+statement ok
+SET enable_external_file_cache = false;
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query III
+SELECT id, v, payload FROM '{TEST_DIR}/page_index_uncached.parquet' WHERE id = 42
+----
+42	32598	p42
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT index_bytes_read('{TEST_DIR}/page_index_uncached.parquet') < span_end - span_begin FROM index_span('{TEST_DIR}/page_index_uncached.parquet');
+----
+true
+
+query I
+SELECT index_bytes_read('{TEST_DIR}/page_index_uncached.parquet') > 0;
+----
+true
+
+statement ok
+SET enable_external_file_cache = true;
