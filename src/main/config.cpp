@@ -1014,6 +1014,11 @@ bool DBConfig::IsOptimizerDisabled(OptimizerType type) const {
 	return options.disabled_optimizers.find(type) != options.disabled_optimizers.end();
 }
 
+LogicalType DBConfig::GetForceVariantShredding() const {
+	std::lock_guard<std::recursive_mutex> guard(config_lock);
+	return options.force_variant_shredding;
+}
+
 set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
 	lock_guard<mutex> guard(disabled_optimizers_lock);
 	return options.disabled_optimizers;
