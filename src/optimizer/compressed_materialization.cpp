@@ -2,10 +2,12 @@
 
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -61,6 +63,14 @@ struct CMHelper {
 
 	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
 	                                                      vector<unique_ptr<Expression>> projections);
+	static unique_ptr<Expression> CreateDefaultStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
+	                                                          const LogicalType &target_type,
+	                                                          const BaseStatistics &input_stats,
+	                                                          unique_ptr<BaseStatistics> &result_stats);
+	static unique_ptr<BaseStatistics> PropagateDefaultCastStatistics(ClientContext &context,
+	                                                                 const LogicalType &source_type,
+	                                                                 const LogicalType &target_type,
+	                                                                 const BaseStatistics &input_stats);
 
 	static void RemapBindingMap(CompressedMaterializationInfo &info,
 	                            const vector<ReplacementBinding> &replacement_bindings);
@@ -78,10 +88,8 @@ struct CMHelper {
 	                                    const LogicalType &target_type);
 	static LogicalType GetIntegralCastType(const LogicalType &source_type, const LogicalType &offset_type,
 	                                       const BaseStatistics &stats);
-	static unique_ptr<BaseStatistics> CreateIntegralCastStats(const LogicalType &target_type,
-	                                                          const BaseStatistics &stats);
 	static unique_ptr<CompressExpression> CreateIntegralCastCompress(ClientContext &context,
-	                                                                 unique_ptr<Expression> input,
+	                                                                 unique_ptr<Expression> &input,
 	                                                                 const LogicalType &target_type,
 	                                                                 const BaseStatistics &stats);
 	static unique_ptr<CompressExpression> CreateIntegralFunctionCompress(unique_ptr<Expression> input,
@@ -119,6 +127,34 @@ unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimi
 		projection->SetEstimatedCardinality(source.estimated_cardinality);
 	}
 	return projection;
+}
+
+unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &context, unique_ptr<Expression> input,
+                                                             const LogicalType &target_type,
+                                                             const BaseStatistics &input_stats,
+                                                             unique_ptr<BaseStatistics> &result_stats) {
+	auto result = BoundCastExpression::AddDefaultCastToType(std::move(input), target_type);
+	if (!BoundCastExpression::IsCast(*result)) { // LCOV_EXCL_START
+		throw InternalException("Expected a cast in CMHelper::CreateDefaultStatsAwareCast");
+	} // LCOV_EXCL_STOP
+	auto &cast = result->Cast<BoundFunctionExpression>();
+	CMUtils::MarkCast(cast);
+	result_stats = BoundCastExpression::PropagateStatistics(cast, input_stats, context);
+	if (!result_stats) { // LCOV_EXCL_START
+		throw InternalException("Could not propagate cast statistics in compressed materialization");
+	}
+	// LCOV_EXCL_STOP
+	return result;
+}
+
+unique_ptr<BaseStatistics> CMHelper::PropagateDefaultCastStatistics(ClientContext &context,
+                                                                    const LogicalType &source_type,
+                                                                    const LogicalType &target_type,
+                                                                    const BaseStatistics &input_stats) {
+	CastFunctionSet default_casts;
+	GetCastFunctionInput get_input(context);
+	auto bound_cast = default_casts.GetCastFunction(source_type, target_type, get_input);
+	return bound_cast.PropagateStatistics(source_type, target_type, input_stats, context);
 }
 
 void CMHelper::RemapBindingMap(CompressedMaterializationInfo &info,
@@ -274,28 +310,19 @@ LogicalType CMHelper::GetIntegralCastType(const LogicalType &source_type, const 
 	return LogicalType::INVALID;
 }
 
-unique_ptr<BaseStatistics> CMHelper::CreateIntegralCastStats(const LogicalType &target_type,
-                                                             const BaseStatistics &stats) {
-	auto compress_stats = BaseStatistics::CreateEmpty(target_type);
-	compress_stats.CopyBase(stats);
-	if (NumericStats::HasMinMax(stats)) {
-		auto cast_min = NumericStats::Min(stats).DefaultTryCastAs(target_type, nullptr, true);
-		auto cast_max = NumericStats::Max(stats).DefaultTryCastAs(target_type, nullptr, true);
-		if (!cast_min || !cast_max) {
-			throw InternalException("Casting failure in CMHelper::CreateIntegralCastStats");
-		}
-		NumericStats::SetMin(compress_stats, *cast_min);
-		NumericStats::SetMax(compress_stats, *cast_max);
-	}
-	return compress_stats.ToUnique();
-}
-
 unique_ptr<CompressExpression> CMHelper::CreateIntegralCastCompress(ClientContext &context,
-                                                                    unique_ptr<Expression> input,
+                                                                    unique_ptr<Expression> &input,
                                                                     const LogicalType &target_type,
                                                                     const BaseStatistics &stats) {
-	auto compress_expr = BoundCastExpression::AddCastToType(context, std::move(input), target_type);
-	auto compress_stats = CreateIntegralCastStats(target_type, stats);
+	const auto source_type = input->GetReturnType();
+	auto compress_stats = PropagateDefaultCastStatistics(context, source_type, target_type, stats);
+	if (!compress_stats) {
+		return nullptr;
+	}
+	if (!PropagateDefaultCastStatistics(context, target_type, source_type, *compress_stats)) {
+		return nullptr;
+	}
+	auto compress_expr = CreateDefaultStatsAwareCast(context, std::move(input), target_type, stats, compress_stats);
 	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
 	                                     CompressedMaterializationType::CAST);
 }
@@ -305,6 +332,8 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralFunctionCompress(unique_p
                                                                         const LogicalType &target_type,
                                                                         const Value &min, const Value &range_value,
                                                                         const BaseStatistics &stats) {
+	// the compression functions are registered for (de)serialization only - their bind throws, so they are
+	// constructed and specialized here rather than resolved through the catalog
 	auto compress_function = CMIntegralCompressFun::GetFunction(source_type, target_type);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
@@ -327,8 +356,30 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralFunctionCompress(unique_p
 // CompressedMaterialization
 //===--------------------------------------------------------------------===//
 CompressedMaterialization::CompressedMaterialization(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                                     const vector<reference<unique_ptr<LogicalOperator>>> &ancestors_p,
                                                      statistics_map_t &statistics_map_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p), statistics_map(statistics_map_p) {
+    : optimizer(optimizer_p), context(optimizer.context), root(&root_p), ancestors(ancestors_p),
+      statistics_map(statistics_map_p) {
+}
+
+void CompressedMaterialization::RebindAncestors(ColumnBindingReplacer &replacer) {
+	// Only the materializing operator consumes compressed values. Its ancestors see the
+	// restored output and must retain their expression types, including explicit collations.
+	ColumnBindingReplacer parent_replacer;
+	for (auto &replacement : replacer.replacement_bindings) {
+		parent_replacer.replacement_bindings.emplace_back(replacement.old_binding, replacement.new_binding);
+	}
+	for (auto &ancestor : ancestors) {
+		auto &ancestor_op = ancestor.get();
+		if (replacer.stop_operator && replacer.stop_operator.get() == ancestor_op.get()) {
+			continue;
+		}
+		if (ancestor_op.get() == ancestors.back().get().get()) {
+			replacer.VisitOperatorBindings(*ancestor_op);
+		} else {
+			parent_replacer.VisitOperatorBindings(*ancestor_op);
+		}
+	}
 }
 
 void CompressedMaterialization::GetReferencedBindings(const Expression &root_expr,
@@ -404,7 +455,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		return;
 	}
 
-	root->ResolveOperatorTypes();
+	op->ResolveOperatorTypes();
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -502,7 +553,11 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 		const auto &old_binding = child_info.bindings_before[col_idx];
 		const auto &new_binding = child_info.bindings_after[col_idx];
 		const auto &new_type = new_types[col_idx];
-		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
+		if (new_type == child_info.types[col_idx]) {
+			replacement_bindings.emplace_back(old_binding, new_binding);
+		} else {
+			replacement_bindings.emplace_back(old_binding, new_binding, new_type);
+		}
 
 		// Remove the old binding from the statistics map
 		statistics_map.erase(old_binding);
@@ -512,7 +567,7 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	replacer.stop_operator = child_op.get();
 
 	// Make the plan consistent again
-	replacer.VisitOperator(*root);
+	RebindAncestors(replacer);
 
 	// Replace in/out exprs in the binding map too
 	CMHelper::RemapBindingMap(info, replacement_bindings);
@@ -529,8 +584,16 @@ unique_ptr<Expression> CompressedMaterialization::CreateRestoreExpression(unique
 		return input;
 	case CompressedMaterializationType::FUNCTION:
 		return GetDecompressExpression(std::move(input), binding_info.type, stats);
-	case CompressedMaterializationType::CAST:
-		return BoundCastExpression::AddCastToType(context, std::move(input), binding_info.type);
+	case CompressedMaterializationType::CAST: {
+		auto source_type = input->GetReturnType();
+		auto source_stats = CMHelper::PropagateDefaultCastStatistics(context, binding_info.type, source_type, stats);
+		if (!source_stats) { // LCOV_EXCL_START
+			throw InternalException("Could not obtain compressed statistics for cast restoration");
+		} // LCOV_EXCL_STOP
+		unique_ptr<BaseStatistics> result_stats;
+		return CMHelper::CreateDefaultStatsAwareCast(context, std::move(input), binding_info.type, *source_stats,
+		                                             result_stats);
+	}
 	default:
 		throw InternalException("Invalid compressed materialization type");
 	}
@@ -590,8 +653,19 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 		const auto &new_type = new_types[col_idx];
 		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 
-		if (statistics[col_idx]) {
+		// only publish statistics that describe the column type: for variant wrapper group expressions,
+		// binding_info holds the wrapped VARIANT stats while the restored column is the wrapper output
+		if (statistics[col_idx] && statistics[col_idx]->GetType() == new_type) {
 			statistics_map[new_binding] = statistics[col_idx]->ToUnique();
+		} else {
+			// pass-through column: move the statistics of the old binding (if any) to the new binding,
+			// so that references rebound to the decompress projection keep their statistics
+			auto stats_it = statistics_map.find(old_binding);
+			if (stats_it != statistics_map.end() && stats_it->second && stats_it->second->GetType() == new_type) {
+				auto old_stats = std::move(stats_it->second);
+				statistics_map.erase(stats_it);
+				statistics_map[new_binding] = std::move(old_stats);
+			}
 		}
 	}
 
@@ -599,7 +673,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	replacer.stop_operator = op.get();
 
 	// Make the plan consistent again
-	replacer.VisitOperator(*root);
+	RebindAncestors(replacer);
 }
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(const ColumnBinding &binding,
@@ -668,7 +742,10 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 
 	const auto value_preserving_cast_type = CMHelper::GetIntegralCastType(type, cast_type, stats);
 	if (value_preserving_cast_type.IsValid()) {
-		return CMHelper::CreateIntegralCastCompress(context, std::move(input), value_preserving_cast_type, stats);
+		auto result = CMHelper::CreateIntegralCastCompress(context, input, value_preserving_cast_type, stats);
+		if (result) {
+			return result;
+		}
 	}
 
 	return CMHelper::CreateIntegralFunctionCompress(std::move(input), type, cast_type, min, range_value, stats);
@@ -914,12 +991,9 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	}
 	if (type.id() == LogicalTypeId::BLOB && stats.GetType().id() == LogicalTypeId::VARIANT) {
 		auto variant = GetVariantDecompress(std::move(input), LogicalType::VARIANT(), stats);
-		auto comparator_function = VariantComparatorFun::GetFunction();
-		BoundScalarFunction bound_function(comparator_function);
-		bound_function.SetReturnType(LogicalType::BLOB);
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(std::move(variant));
-		return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+		return BindBuiltinScalarFunction(context, VariantComparatorFun::Name, std::move(arguments));
 	}
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return GetGeometryDecompress(std::move(input), result_type, stats);
@@ -945,7 +1019,8 @@ unique_ptr<Expression> CompressedMaterialization::GetGeometryDecompress(unique_p
 
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_ptr<Expression> input,
@@ -961,7 +1036,8 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr<Expression> input,
@@ -975,7 +1051,8 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetVariantDecompress(unique_ptr<Expression> input,

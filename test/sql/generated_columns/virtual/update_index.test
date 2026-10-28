@@ -20,3 +20,31 @@ query IIII
 FROM tbl_comp
 ----
 1	2	1	world
+
+statement ok
+CREATE TABLE tbl_only_indexed (
+	gen AS (y + 1),
+	y INT UNIQUE
+);
+
+statement ok
+INSERT INTO tbl_only_indexed (y) VALUES (10), (20);
+
+statement ok
+BEGIN;
+
+statement ok
+UPDATE tbl_only_indexed SET y = 30 WHERE y = 10;
+
+statement ok
+INSERT INTO tbl_only_indexed (y) VALUES (10);
+
+statement ok
+COMMIT;
+
+query II
+SELECT * FROM tbl_only_indexed ORDER BY y;
+----
+11	10
+21	20
+31	30

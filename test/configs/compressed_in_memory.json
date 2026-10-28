@@ -31,7 +31,14 @@
     {
       "reason": "Compression packs validity into one segment, so zonemap pruning cannot skip rows.",
       "paths": [
-        "test/sql/optimizer/nested_null_segment_pruning.test"
+        "test/sql/optimizer/nested_null_segment_pruning.test",
+        "test/sql/optimizer/false_or_null_segment_pruning.test"
+      ]
+    },
+    {
+      "reason": "Compression loses the sign of zero for FLOAT/DOUBLE, unrelated bug, see issue #25580",
+      "paths": [
+        "test/sql/order/order_by_negative_zero.test"
       ]
     }
   ]

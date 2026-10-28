@@ -47,13 +47,13 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		}
 		column_name_set.insert(col_name);
 		if (!table.ColumnExists(col_name)) {
-			throw BinderException("Column with name \"%s\" does not exist", col_name);
+			throw BinderException("Column with name %s does not exist", col_name);
 		}
 		auto &col = table.GetColumn(col_name);
 		// ignore generated column
 		if (col.Generated()) {
 			throw BinderException(
-			    "cannot vacuum or analyze generated column \"%s\" - specify non-generated columns to vacuum or analyze",
+			    "cannot vacuum or analyze generated column %s - specify non-generated columns to vacuum or analyze",
 			    col.GetName());
 		}
 		non_generated_column_names.emplace_back(col_name);

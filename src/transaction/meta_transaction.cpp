@@ -69,8 +69,12 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
-		all_transactions.push_back(db);
+		// Rollback looks every entry of all_transactions up in transactions, so the two must not get out of sync:
+		// reserve first, then insert, so that a failing allocation happens before either is modified and the
+		// push_back that follows cannot allocate.
+		all_transactions.reserve(all_transactions.size() + 1);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(new_transaction)));
+		all_transactions.push_back(db);
 		auto shared_db = db.shared_from_this();
 		UseDatabase(shared_db);
 
@@ -241,9 +245,10 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	if (entry == referenced_databases.end()) {
 		auto used_entry = used_databases.emplace(db_ref.GetName(), db_ref);
 		if (!used_entry.second) {
-			// return used_entry.first->second.get();
-			throw InternalException(
-			    "Database name %s was already used by a different database for this meta transaction",
+			// e.g. a database was detached and another one attached under the same name in this transaction
+			throw TransactionException(
+			    "Database name %s was already used by a different database in this transaction - commit or roll back "
+			    "the transaction before using the name for another database",
 			    db_ref.GetName());
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
@@ -252,8 +257,9 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
-	if (IsReadOnly()) {
-		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
+	// Temporary objects are private to the connection, so a read-only transaction may still write them
+	if (IsReadOnly() && !db.IsTemporary()) {
+		throw TransactionException("Cannot write to database %s - transaction is launched in read-only mode",
 		                           db.GetName());
 	}
 	auto &transaction = GetTransaction(db);
@@ -271,7 +277,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationT
 	}
 	if (&db != modified_database.get()) {
 		throw TransactionException(
-		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
+		    "Attempting to write to database %s in a transaction that has already modified database %s - a "
 		    "single transaction can only write to a single attached database.",
 		    db.GetName(), modified_database->GetName());
 	}

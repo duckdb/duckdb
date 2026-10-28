@@ -315,6 +315,58 @@ SELECT EQUI_WIDTH_BINS(0, 10, 5999, false)
 ----
 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
+# more bins than boundaries in the range used to hang forever (issue #24282)
+query I
+SELECT equi_width_bins(1::BIGINT, 2::BIGINT, 1000000, false)
+----
+[1, 2]
+
+query I
+SELECT equi_width_bins(1::BIGINT, 2::BIGINT, 1000000, true)
+----
+[1, 2]
+
+query I
+SELECT equi_width_bins(0::BIGINT, 10::BIGINT, 1000000, false)
+----
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+query I
+SELECT equi_width_bins(-2::BIGINT, -1::BIGINT, 1000000, false)
+----
+[-1]
+
+query I
+SELECT equi_width_bins(TIMESTAMP '2000-01-01', TIMESTAMP '2000-01-01 00:00:00.000001', 1000000, false)
+----
+['2000-01-01 00:00:00', '2000-01-01 00:00:00.000001']
+
+# a span too small to compute a step size returns a single bucket
+query I
+SELECT equi_width_bins(0.0, 5e-324, 1000000, false)
+----
+[5e-324]
+
+query I
+SELECT equi_width_bins(0.0, 5e-324, 1000000, true)
+----
+[5e-324]
+
+query I
+SELECT equi_width_bins(1.0, 1.0000000000000002, 3, false)
+----
+[1.0000000000000002]
+
+query I
+SELECT equi_width_bins(1.0, 1.0000000000000002, 3, true)
+----
+[1.0000000000000002]
+
+query I
+SELECT equi_width_bins(0.0, 5e-324, 1, true)
+----
+[5e-324]
+
 statement error
 SELECT equi_width_bins(-0.0, -1.0, 5, true);
 ----

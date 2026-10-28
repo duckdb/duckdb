@@ -16,6 +16,7 @@
 namespace duckdb {
 
 class Index;
+class IndexEntry;
 class ConflictInfo;
 
 enum class ConflictManagerMode : uint8_t {
@@ -68,21 +69,25 @@ public:
 	}
 
 	//! Adds an index and its respective delete_index.
-	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
+	void AddIndex(const shared_ptr<IndexEntry> &index, shared_ptr<IndexEntry> delete_index) {
 		matching_indexes.push_back(index);
-		matching_delete_indexes.push_back(delete_index);
-		index_names.insert(index.name);
+		matching_delete_indexes.push_back(std::move(delete_index));
 	}
 	//! Returns true, if the index is in this conflict manager.
-	bool IndexMatches(BoundIndex &index) {
-		return index_names.find(index.name) != index_names.end();
+	bool IndexMatches(const shared_ptr<IndexEntry> &index) const {
+		for (const auto &matching_index : matching_indexes) {
+			if (matching_index == index) {
+				return true;
+			}
+		}
+		return false;
 	}
 	//! Returns a reference to the matching indexes.
-	const vector<reference<BoundIndex>> &MatchingIndexes() const {
+	const vector<shared_ptr<IndexEntry>> &MatchingIndexes() const {
 		return matching_indexes;
 	}
 	//! Returns a reference to the matching delete indexes.
-	const vector<optional_ptr<BoundIndex>> &MatchingDeleteIndexes() const {
+	const vector<shared_ptr<IndexEntry>> &MatchingDeleteIndexes() const {
 		return matching_delete_indexes;
 	}
 
@@ -134,14 +139,10 @@ private:
 	ConflictManagerMode mode;
 
 	//! Indexes matching the conflict target.
-	vector<reference<BoundIndex>> matching_indexes;
+	vector<shared_ptr<IndexEntry>> matching_indexes;
 	//! Delete indexes matching the conflict target.
-	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
-	//! All matching indexes by their name (unique identifier).
-	identifier_set_t index_names;
+	vector<shared_ptr<IndexEntry>> matching_delete_indexes;
 
-	//! Registers all conflicting rows in a data chunk.
-	unordered_set<idx_t> conflict_rows;
 	//! True, if we can skip recording any further conflicts.
 	bool finished = false;
 
@@ -199,7 +200,7 @@ private:
 	//! Returns true, if we register a conflict for the lookup type.
 	bool IsConflict(LookupResultType type);
 	//! Adds a hit to the conflicts.
-	bool AddHit(const idx_t index_in_chunk, const std::function<void()> &callback);
+	bool AddHitInternal(const idx_t index_in_chunk, const row_t row_id, const bool second);
 	//! Determine visible row ID for each index with two possible row IDs.
 	void Finalize(const std::function<bool(const row_t row_id)> &callback);
 	//! Returns true, if the conflict manager should throw an exception, else false.
@@ -222,23 +223,10 @@ private:
 	}
 
 	//! Adds a row ID to the primary conflict data.
-	void AddRowId(const idx_t index_in_chunk, const row_t row_id) {
-		// Only ON CONFLICT DO NOTHING can have multiple conflict targets,
-		// which can cause multiple row IDs per index_in_chunk.
-		// We let them overwrite each other, as we don't need the row IDs later.
-		auto elem = conflict_rows.find(index_in_chunk);
-		if (elem == conflict_rows.end()) {
-			// We have not yet seen this conflict: insert.
-			conflict_rows.insert(index_in_chunk);
-			GetConflictData(FIRST).Insert(index_in_chunk, row_id);
-		}
-	}
+	void AddRowId(const idx_t index_in_chunk, const row_t row_id);
 
 	//! Adds a row ID to the secondary conflict data.
-	void AddSecondRowId(const idx_t index_in_chunk, const row_t row_id) {
-		D_ASSERT(conflict_rows.find(index_in_chunk) != conflict_rows.end());
-		GetConflictData(SECOND).Insert(index_in_chunk, row_id);
-	}
+	void AddSecondRowId(const idx_t index_in_chunk, const row_t row_id);
 };
 
 } // namespace duckdb

@@ -1,0 +1,183 @@
+module: custom type
+#
+# Registration of user-defined types. A custom type is a name bound to a base
+# type: it borrows the base type's internal (physical) representation, so the
+# execution engine needs no special handling for it, while staying logically
+# distinct so it can carry its own cast functions.
+#
+# The handle follows the function families: create it against a connection or
+# a loading extension, configure it with the setters, make it available with
+# `[[connection_register_custom_type]]` or `[[extension_register_custom_type]]`, and destroy it with `[[custom_type_destroy]]`.
+#
+# Values of a custom type are produced and consumed with the base type's
+# vector accessors. To hand a value back out under the custom type's name --
+# from a scalar function's bind callback, say -- alias the base type with
+# `[[factory_create_type_with_alias]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  custom_type:
+    description: |
+      An owned opaque handle to a custom type being built. Created with `[[custom_type_create]]`, configured with `[[custom_type_set_name]]` and
+      `[[custom_type_set_base_type]]`, made available with `[[connection_register_custom_type]]` or `[[extension_register_custom_type]]`, and destroyed with
+      `[[custom_type_destroy]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  custom_type_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a new custom type through a factory.
+
+      The type starts out empty: configure it with `[[custom_type_set_name]]` and `[[custom_type_set_base_type]]`, then
+      make it available with `[[connection_register_custom_type]]` or `[[extension_register_custom_type]]`. The caller
+      owns the returned handle and must destroy it with `[[custom_type_destroy]]`, also after registration.
+
+      The custom type can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: custom_type
+    parameters:
+      factory:
+        type: factory
+        description: The factory to create the custom type through.
+      type:
+        type: custom_type
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created custom type. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  custom_type_set_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Sets the name of the custom type.
+
+      This is the name the type is referred to by in SQL, and the alias carried by every logical type instance of
+      it. The name is borrowed and copied. Calling this again replaces the previous name. A name must be set
+      before registration.
+    parameters:
+      type:
+        type: custom_type
+        description: The type to set the name of.
+      name:
+        type: identifier
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  custom_type_set_base_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Sets the base type of the custom type.
+
+      The custom type shares the base type's internal representation but is logically distinct, so it can carry
+      its own cast functions. The type is borrowed and copied. Calling this again replaces the previous base type.
+      A base type must be set before registration, and it must be a fully defined concrete type -- ANY is a
+      signature wildcard, not something a registered type can be built on.
+    parameters:
+      type:
+        type: custom_type
+        description: The type to set the base type of.
+      base_type:
+        type: logical_type
+        description: The logical type to base the custom type on. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  connection_register_custom_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Registers the custom type, making it available for use in SQL queries.
+
+      The type is registered on the connection's database, visible to every connection, in the connection's transaction:
+      inside an explicit transaction, it is invisible to other connections until the transaction commits, and a rollback
+      undoes it. Registration requires a name and a complete base type. The custom type must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[custom_type_destroy]]`, which does not affect the registered type.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
+      type:
+        type: custom_type
+        description: The custom type to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_custom_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Registers the custom type, making it available for use in SQL queries.
+
+      The type is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. Registration requires a name and a complete base type. The custom type must have been
+      created through a factory of the same database. The caller still owns the handle after registration and must
+      destroy it with `[[custom_type_destroy]]`, which does not affect the registered type.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      type:
+        type: custom_type
+        description: The custom type to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  custom_type_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Destroys the custom type, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Destroying the handle after registration does not affect the registered type.
+    parameters:
+      type:
+        type: custom_type
+        description: The type to destroy.
+        indirection: 1
+    return_type: ERROR

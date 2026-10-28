@@ -49,15 +49,12 @@ public:
 	WindowBoundariesState state;
 };
 
-class WindowExecutorStreamingState : public LocalSourceState {
-public:
-	//! The constant offset
-	int64_t offset = 0;
-};
-
 class WindowExecutor {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
+
+	static unique_ptr<WindowExecutor> Factory(BoundWindowExpression &wexpr, ClientContext &client,
+	                                          WindowSharedExpressions &shared);
 
 	WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 	virtual ~WindowExecutor() {

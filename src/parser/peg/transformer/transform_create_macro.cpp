@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/ast/macro_parameter.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -52,7 +53,7 @@ PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer,
 	for (auto &parameter : *macro_parameters) {
 		D_ASSERT(!parameter.name.empty());
 		if (parameter_names.find(parameter.name) != parameter_names.end()) {
-			throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name.GetIdentifierName());
+			throw ParserException("Duplicate parameter %s in macro definition", parameter.name);
 		}
 		parameter_names.insert(parameter.name);
 		if (parameter.is_default) {

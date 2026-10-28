@@ -45,7 +45,7 @@ public:
 
 	data_ptr_t data_ptr;     // Pointer to next free spot in segment;
 	data_ptr_t metadata_ptr; // Reverse pointer to the next free spot for the metadata; used in decoding to SKIP vectors
-	uint32_t next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
+	AlpConstants::METADATA_POINTER_TYPE next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 
 	T input_vector[AlpConstants::ALP_VECTOR_SIZE]; // Uncompressed data
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
@@ -123,19 +123,20 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushCompressedVector() {
-		Store<uint8_t>(compression_data.vector_encoding_indices.exponent, data_ptr);
+		Store<AlpConstants::EXPONENT_TYPE>(compression_data.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(compression_data.vector_encoding_indices.factor, data_ptr);
+		Store<AlpConstants::FACTOR_TYPE>(compression_data.vector_encoding_indices.factor, data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		Store<uint16_t>(compression_data.exceptions_count, data_ptr);
+		Store<AlpConstants::EXCEPTIONS_COUNT_TYPE>(compression_data.exceptions_count, data_ptr);
 		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		Store<uint64_t>(compression_data.frame_of_reference, data_ptr);
+		Store<AlpConstants::FRAME_OF_REFERENCE_TYPE>(compression_data.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(UnsafeNumericCast<uint8_t>(compression_data.bit_width), data_ptr);
+		Store<AlpConstants::BIT_WIDTH_TYPE>(UnsafeNumericCast<AlpConstants::BIT_WIDTH_TYPE>(compression_data.bit_width),
+		                                    data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		memcpy((void *)data_ptr, (void *)compression_data.values_encoded, compression_data.bp_size);
@@ -160,9 +161,9 @@ public:
 		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
-		metadata_ptr -= sizeof(uint32_t);
-		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
+		Store<AlpConstants::METADATA_POINTER_TYPE>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<AlpConstants::METADATA_POINTER_TYPE>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -173,8 +174,8 @@ public:
 	// Uncompressed mode
 	void FlushUncompressedVector() {
 		// Store a sentinel value instead of the exponent, signaling the coming data is stored uncompressed.
-		constexpr uint8_t sentinel = AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
-		Store<uint8_t>(sentinel, data_ptr);
+		constexpr AlpConstants::EXPONENT_TYPE sentinel = AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		Store<AlpConstants::EXPONENT_TYPE>(sentinel, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
 		// Store uncompressed data
@@ -184,9 +185,9 @@ public:
 		data_bytes_used += AlpConstants::EXPONENT_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
-		metadata_ptr -= sizeof(uint32_t);
-		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
+		Store<AlpConstants::METADATA_POINTER_TYPE>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<AlpConstants::METADATA_POINTER_TYPE>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -213,19 +214,20 @@ public:
 		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD) {
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
-			uint32_t verify_bytes;
-			memcpy((void *)&verify_bytes, metadata_ptr, 4);
+			AlpConstants::METADATA_POINTER_TYPE verify_bytes;
+			memcpy((void *)&verify_bytes, metadata_ptr, AlpConstants::METADATA_POINTER_SIZE);
 #endif
 			memmove(dataptr + metadata_offset, metadata_ptr, bytes_used_by_metadata);
 #ifdef DEBUG
 			//! Now assert that the memmove was correct
-			D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
+			D_ASSERT(verify_bytes == *(AlpConstants::METADATA_POINTER_TYPE *)(dataptr + metadata_offset));
 #endif
 			total_segment_size = metadata_offset + bytes_used_by_metadata;
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
-		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
+		Store<AlpConstants::METADATA_POINTER_TYPE>(NumericCast<AlpConstants::METADATA_POINTER_TYPE>(total_segment_size),
+		                                           dataptr);
 
 		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;

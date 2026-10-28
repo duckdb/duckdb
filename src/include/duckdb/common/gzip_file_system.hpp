@@ -23,6 +23,14 @@ public:
 		return "GZipFileSystem";
 	}
 
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType::GZIP;
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		return IsFileCompressed(fpath, FileCompressionType::GZIP);
+	}
+
 	//! Verifies that a buffer contains a valid GZIP header
 	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file);
 	static bool CheckIsZip(const char *length, idx_t size);

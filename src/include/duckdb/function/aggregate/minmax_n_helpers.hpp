@@ -2,6 +2,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
@@ -16,6 +17,9 @@
 #include <new>
 
 namespace duckdb {
+
+//! The min/max/arg_min/arg_max "n" aggregates require the requested n to be strictly smaller than this value
+static constexpr int64_t MIN_MAX_N_MAX_VALUE = 1000000;
 
 // For basic types
 template <class T>
@@ -90,10 +94,14 @@ struct HeapEntry<string_t> {
 		// double allocation until value fits
 		if (capacity < new_val.GetSize()) {
 			auto old_size = capacity;
-			capacity *= 2;
-			while (capacity < new_val.GetSize()) {
-				capacity *= 2;
+			auto new_size = UnsafeNumericCast<uint32_t>(new_val.GetSize());
+			auto new_capacity = NextPowerOfTwo(new_size);
+			if (new_capacity > string_t::MAX_STRING_SIZE) {
+				throw InvalidInputException("Resulting string/blob too large!");
 			}
+			do {
+				capacity *= 2;
+			} while (capacity < new_val.GetSize());
 			allocated_data = allocator.Reallocate(allocated_data, old_size, capacity);
 		}
 		auto new_size = UnsafeNumericCast<uint32_t>(new_val.GetSize());
@@ -254,11 +262,16 @@ private:
 		} else if (allocated_capacity > capacity / 2) {
 			allocated_capacity = capacity;
 		} else {
-			allocated_capacity *= 2;
+			if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(2), allocated_capacity)) {
+				throw OutOfRangeException("Overflow of 'allocated_capacity' in BinaryAggregateHeap::Grow");
+			}
 		}
 
 		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
-		const auto new_size = allocated_capacity * sizeof(STORAGE_TYPE);
+		idx_t new_size;
+		if (!TryMultiplyOperator::Operation(allocated_capacity, static_cast<idx_t>(sizeof(STORAGE_TYPE)), new_size)) {
+			throw OutOfRangeException("Overflow of 'new_size' in BinaryAggregateHeap::Grow");
+		}
 		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
 		                : allocator.AllocateAligned(new_size);
 		memset(ptr + old_size, 0, new_size - old_size);

@@ -8,12 +8,31 @@
 
 #pragma once
 
+#include <cmath>
 #include <type_traits>
 
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
+
+template <class T>
+T RoundToNearestEven(T value) {
+	static_assert(std::is_floating_point<T>::value, "RoundToNearestEven requires a floating point type");
+	if (!std::isfinite(value)) {
+		return value;
+	}
+	const T truncated = std::trunc(value);
+	const T fraction = std::fabs(value - truncated);
+	if (fraction < static_cast<T>(0.5)) {
+		return truncated;
+	}
+	const T next = value < 0 ? truncated - static_cast<T>(1) : truncated + static_cast<T>(1);
+	if (fraction > static_cast<T>(0.5)) {
+		return next;
+	}
+	return std::fmod(truncated, static_cast<T>(2)) == 0 ? truncated : next;
+}
 
 template <class T>
 struct MakeSigned {

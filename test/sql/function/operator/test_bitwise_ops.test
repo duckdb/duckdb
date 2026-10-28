@@ -77,3 +77,14 @@ statement error
 SELECT 2::UINT32 << 31
 ----
 Overflow in left shift
+
+# shifting 0 by the type width is defined (previously UB in the shift itself)
+query I
+SELECT 0::UBIGINT << 64
+----
+0
+
+query I
+SELECT 0::BIGINT << 64
+----
+0

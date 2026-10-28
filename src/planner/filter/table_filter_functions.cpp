@@ -61,6 +61,9 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	}
 }
 
+// The table filter functions are registered for (de)serialization only - TableFilterFunctions::Bind rejects
+// ordinary binding - so they are constructed and specialized for the column type here rather than resolved
+// through the catalog, and carry no catalog or schema name.
 static unique_ptr<Expression> CreateSingleArgumentFunctionExpression(const ScalarFunction &function,
                                                                      const LogicalType &target_type,
                                                                      unique_ptr<FunctionData> bind_data) {
@@ -89,9 +92,22 @@ unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expr
 
 unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
                                                      const LogicalType &target_type) {
+	return CreateDynamicFilterExpression(std::move(filter_data), target_type, nullptr);
+}
+
+unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
+                                                     const LogicalType &target_type, unique_ptr<Expression> input) {
 	auto function = DynamicFilterScalarFun::GetFunction(target_type);
 	auto bind_data = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
-	return CreateSingleArgumentFunctionExpression(function, target_type, std::move(bind_data));
+	if (!input) {
+		input = make_uniq<BoundReferenceExpression>(target_type, storage_t(0));
+	} else {
+		D_ASSERT(input->GetReturnType() == target_type);
+	}
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(std::move(input));
+	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments),
+	                                          std::move(bind_data));
 }
 
 void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -102,7 +118,8 @@ void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<Fun
 unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	auto key_type = function.GetArguments().empty() ? LogicalType::ANY : function.GetArguments()[0];
 	if (function.GetName() == BloomFilterScalarFun::NAME) {
-		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
+		return make_uniq<BloomFilterFunctionData>(shared_ptr<const BloomFilter>(), false, string(), key_type, 0.0f,
+		                                          idx_t(0));
 	}
 	if (function.GetName() == PrefixRangeScalarFun::NAME) {
 		return make_uniq<PrefixRangeFunctionData>(nullptr, true, string(), key_type, 0.0f, idx_t(0));
@@ -110,7 +127,7 @@ unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializ
 	if (function.GetName() == DynamicFilterScalarFun::NAME) {
 		return make_uniq<DynamicFilterFunctionData>(nullptr);
 	}
-	throw InternalException("Unsupported table filter function \"%s\" during deserialization", function.GetName());
+	throw InternalException("Unsupported table filter function %s during deserialization", function.GetName());
 }
 
 } // namespace duckdb

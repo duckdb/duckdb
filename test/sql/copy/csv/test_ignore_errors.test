@@ -32,7 +32,7 @@ INSERT INTO integers SELECT * FROM read_csv('{DATA_DIR}/csv/test/error_too_littl
 statement error
 INSERT INTO integers SELECT * FROM read_csv('{DATA_DIR}/csv/test/error_too_little.csv', columns={'i': 'INTEGER'}, null_padding=0)
 ----
-table integers has 2 columns but 1 values were supplied
+table "integers" has 2 columns but 1 values were supplied
 
 # not enough columns provided
 query II

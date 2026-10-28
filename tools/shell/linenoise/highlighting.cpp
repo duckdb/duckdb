@@ -3,6 +3,8 @@
 #include "highlighting.hpp"
 
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
@@ -43,8 +45,9 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	vector<highlightToken> tokens;
 	vector<MatcherToken> matcher_tokens;
 	HighlightTokenizerBehavior behavior(sql, matcher_tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	Tokenizer tokenizer(keyword_helper);
+	tokenizer.TokenizeInput(behavior);
 	vector<SimplifiedToken> result;
 	result.reserve(matcher_tokens.size());
 	for (auto &token : matcher_tokens) {

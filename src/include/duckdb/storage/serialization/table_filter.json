@@ -157,8 +157,14 @@
         "id": 200,
         "name": "expr",
         "type": "Expression*"
+      },
+      {
+        "id": 201,
+        "name": "column_indexes",
+        "type": "vector<ProjectionIndex>",
+        "default": "vector<ProjectionIndex>()"
       }
     ],
-    "constructor": ["expr"]
+    "constructor": ["expr", "column_indexes"]
   }
 ]

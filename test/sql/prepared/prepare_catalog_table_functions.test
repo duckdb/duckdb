@@ -1,0 +1,51 @@
+# name: test/sql/prepared/prepare_catalog_table_functions.test
+# description: Prepared table functions that hold a catalog entry must be rebound after DDL
+# group: [prepared]
+
+foreach func pragma_table_info pragma_show pragma_storage_info duckdb_table_sample
+
+statement ok
+CREATE TABLE t(a INTEGER)
+
+statement ok
+PREPARE p AS SELECT * FROM {func}('t')
+
+statement ok
+EXECUTE p
+
+statement ok
+DROP TABLE t
+
+statement error
+EXECUTE p
+----
+<REGEX>:Catalog Error:.*t does not exist.*
+
+statement ok
+DEALLOCATE p
+
+endloop
+
+# a recreated table is picked up by the prepared statement
+statement ok
+CREATE TABLE t(a INTEGER)
+
+statement ok
+PREPARE p AS SELECT name, type FROM pragma_table_info('t')
+
+query II
+EXECUTE p
+----
+a	INTEGER
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(zzz VARCHAR, q DOUBLE)
+
+query II
+EXECUTE p
+----
+zzz	VARCHAR
+q	DOUBLE

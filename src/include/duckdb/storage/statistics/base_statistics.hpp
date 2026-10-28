@@ -123,6 +123,7 @@ public:
 	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
 	void Copy(const BaseStatistics &other);
+	void ResetAdditiveStatistics();
 
 	unique_ptr<BaseStatistics> PushdownExtract(const StorageIndex &index) const;
 	BaseStatistics Copy() const;

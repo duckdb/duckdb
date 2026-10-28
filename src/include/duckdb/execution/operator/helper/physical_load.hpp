@@ -20,7 +20,8 @@ public:
 
 public:
 	explicit PhysicalLoad(PhysicalPlan &physical_plan, unique_ptr<LoadInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(physical_plan, PhysicalOperatorType::LOAD, {LogicalType::BOOLEAN}, estimated_cardinality),
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::LOAD, LoadInfo::GetResultTypes(info->load_type),
+	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

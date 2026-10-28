@@ -56,7 +56,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
 }
 
-PerfectAggregateHashTable::~PerfectAggregateHashTable() {
+PerfectAggregateHashTable::~PerfectAggregateHashTable() { // NOLINT(bugprone-exception-escape)
 	Destroy();
 }
 
@@ -124,11 +124,12 @@ static void ComputeGroupLocation(const Vector &group, Value &min, uintptr_t *add
 }
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+	const auto row_count = groups.size();
 	// first we need to find the location in the HT of each of the groups
-	FlatVector::SetSize(addresses, groups.size());
+	FlatVector::SetSize(addresses, row_count);
 	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	// zero-initialize the address data
-	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
+	memset(address_data, 0, row_count * sizeof(uintptr_t));
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
 
 	// Compute raw group ids first; convert them to state pointers below if needed.
@@ -143,7 +144,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 
 	// Non-clustered path: convert group ids to state pointers and update aggregates.
-	for (idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		const auto group = address_data[i];
 		if (group >= total_groups) {
 			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
@@ -266,9 +267,10 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 			// if it is 0, the value is NULL
 			data.WriteNull();
 		} else {
-			// otherwise we add the value (minus 1) to the min value
+			// otherwise we add the value (minus 1) to the min value - subtracting first, as the min value can be close
+			// to the maximum (e.g. the infinite timestamp)
 			data.WriteValue(UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
-			                                     UnsafeNumericCast<int64_t>(group_index) - 1));
+			                                     (UnsafeNumericCast<int64_t>(group_index) - 1)));
 		}
 	}
 }

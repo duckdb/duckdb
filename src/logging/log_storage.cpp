@@ -1,4 +1,5 @@
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -50,7 +51,7 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	}
 }
 
-vector<string> LogStorage::GetColumnNames(LoggingTargetTable table) {
+vector<Identifier> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS: {
 		auto all_logs = GetColumnNames(LoggingTargetTable::LOG_CONTEXTS);
@@ -77,6 +78,9 @@ bool LogStorage::Scan(LogStorageScanState &state, DataChunk &result) const {
 }
 void LogStorage::InitializeScan(LogStorageScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanEntries");
+}
+optional_idx LogStorage::GetScanRowCount(LoggingTargetTable table) const {
+	return optional_idx();
 }
 void LogStorage::Truncate() {
 	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
@@ -199,7 +203,7 @@ void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
 }
 
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<Identifier> column_names) {
 	writer.options = *reader_options;
 	writer.writer_options = *writer_options;
 
@@ -481,7 +485,7 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context,
 	string sub_query_string =
 	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(sub_query_string);
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 
@@ -539,18 +543,20 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 
 void BufferingLogStorage::ResetLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
+	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
+	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
 	if (normalize_contexts) {
-		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
-		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(),
-		                                                      GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_size);
-
+		auto log_entries = make_uniq<DataChunk>();
+		auto log_contexts = make_uniq<DataChunk>();
+		log_entries->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
+		log_contexts->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS),
+		                         buffer_size);
+		buffers[LoggingTargetTable::LOG_ENTRIES] = std::move(log_entries);
+		buffers[LoggingTargetTable::LOG_CONTEXTS] = std::move(log_contexts);
 	} else {
-		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
-		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		auto all_logs = make_uniq<DataChunk>();
+		all_logs->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		buffers[LoggingTargetTable::ALL_LOGS] = std::move(all_logs);
 	}
 	registered_contexts.clear();
 }
@@ -765,6 +771,11 @@ bool InMemoryLogStorage::Scan(LogStorageScanState &state, DataChunk &result) con
 	unique_lock<mutex> lck(lock);
 	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
 	return GetBuffer(in_mem_scan_state.table).Scan(in_mem_scan_state.scan_state, result);
+}
+
+optional_idx InMemoryLogStorage::GetScanRowCount(LoggingTargetTable table) const {
+	unique_lock<mutex> lck(lock);
+	return GetBuffer(table).Count();
 }
 
 void InMemoryLogStorage::InitializeScan(LogStorageScanState &state) const {

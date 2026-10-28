@@ -35,6 +35,9 @@ public:
 	}
 	explicit Identifier(string &&str) : value(std::move(str)) {
 	}
+	//! Construction from a string view is also explicit to be safe
+	explicit Identifier(const std::string_view str) : value(str) {
+	}
 
 	//! Named constructors for well-known identifiers
 	static Identifier DefaultSchema() {
@@ -89,6 +92,9 @@ public:
 private:
 	string value;
 };
+
+//! Generate an internal name: the given prefix followed by a random UUID
+Identifier GenerateInternalName(const char *prefix);
 
 //! Equality (case-insensitive)
 DUCKDB_API bool operator==(const Identifier &a, const Identifier &b);

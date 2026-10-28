@@ -11,10 +11,11 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+class Binder;
+class FunctionExpression;
 
 class ScalarMacroFunction;
 
@@ -74,7 +75,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast macro to type - macro type mismatch");
+			InternalException::Throw("Failed to cast macro to type - macro type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -82,7 +83,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast macro to type - macro type mismatch");
+			InternalException::Throw("Failed to cast macro to type - macro type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}

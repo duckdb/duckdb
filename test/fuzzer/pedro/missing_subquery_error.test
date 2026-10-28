@@ -2,6 +2,9 @@
 # description: Issue #4570: Missing error message at subquery
 # group: [pedro]
 
+# note: an aggregate with only constant arguments belongs to the clause it appears in, so all three
+# report that clause. Wrapping the query in a subquery used to change the error.
+
 statement error
 WITH t2 AS (SELECT 3 WHERE count(*) FILTER (1)) SELECT 0 FROM t2
 ----
@@ -10,9 +13,9 @@ WITH t2 AS (SELECT 3 WHERE count(*) FILTER (1)) SELECT 0 FROM t2
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*)) SELECT 0 FROM t2);
 ----
-<REGEX>:Binder Error.*Aggregate with only constant.*in the root subquery.*
+<REGEX>:Binder Error.*WHERE clause cannot contain aggregates.*
 
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*) FILTER (1)) SELECT 0 FROM t2);
 ----
-<REGEX>:Binder Error.*Aggregate with only constant.*in the root subquery.*
+<REGEX>:Binder Error.*WHERE clause cannot contain aggregates.*

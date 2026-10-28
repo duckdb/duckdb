@@ -1,0 +1,42 @@
+# name: test/sql/window/test_mode_window_varlen.test
+# description: Test MODE window function with non-inlined VARCHAR keys of varying length (grow/shrink of the arena-backed "current mode" buffer)
+# group: [window]
+
+statement ok
+CREATE TABLE modes_str AS
+SELECT i AS r,
+  CASE
+    WHEN i < 3 THEN repeat('x', 50)
+    WHEN i < 6 THEN repeat('y', 5)
+    WHEN i < 9 THEN repeat('z', 100)
+    ELSE repeat('y', 5)
+  END AS v
+FROM range(12) t(i);
+
+# the winning mode shrinks (x50 -> y5), then grows past its original capacity (y5 -> z100), then shrinks
+# again (z100 -> y5); each transition must correctly resize/preserve the arena-backed buffer
+query III
+SELECT r, substr(m, 1, 1) AS ch, length(m) AS len
+FROM (SELECT r, mode(v) OVER (ORDER BY r ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS m FROM modes_str)
+ORDER BY r;
+----
+0	x	50
+1	x	50
+2	x	50
+3	x	50
+4	y	5
+5	y	5
+6	y	5
+7	z	100
+8	z	100
+9	z	100
+10	y	5
+11	y	5
+
+# every value must be byte-for-byte one of the three known constants, not a truncated/corrupted mix
+query I
+SELECT count(*) FROM (
+    SELECT mode(v) OVER (ORDER BY r ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS m FROM modes_str
+) WHERE m NOT IN (repeat('x', 50), repeat('y', 5), repeat('z', 100));
+----
+0

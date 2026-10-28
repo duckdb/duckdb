@@ -2,7 +2,6 @@
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
-struct MatcherToken;
 
 class HighlightTokenizerBehavior : public TokenizerBehavior {
 public:

@@ -1,0 +1,117 @@
+module: connection
+
+functions:
+  connection_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Opens a connection to an instance.
+
+      Each connection carries its own client context and session-scoped (LOCAL)
+      settings. Connections to the same instance share its catalog, buffer
+      pool, and transaction manager. A connection may be created before any
+      database is attached to the instance; until one is, only the system
+      catalog and the connection's temporary catalog are visible. The caller
+      destroys it via `[[connection_destroy]]`.
+    role: constructor
+    belongs_to: connection
+    parameters:
+      instance:
+        type: instance
+        description: "The instance to connect to."
+      out_conn:
+        type: connection
+        indirection: 1
+        kind: OUT
+        description: "Receives the new connection handle."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys the connection.
+
+      Always succeeds. Releases the connection's reference on the underlying
+      database instance, which survives for as long as anything else still
+      references it. On success the handle is set to null. Safe to call on an
+      already-null slot.
+    role: destructor
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        indirection: 1
+        description: "The connection to destroy."
+    return_type: ERROR
+  connection_interrupt:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Interrupts the query currently executing on the connection.
+
+      The cross-thread (but not cross-connection) cancellation entry point
+      for streaming results: safe to call from any thread within the execution
+      of a query through a connection, including while another thread steps
+      the query's result. A no-op when no query is active. Cancellation surfaces
+      on the consuming side as step status CANCELLED (`[[result_step]]`), or as
+      ERROR_RUNTIME_INTERRUPT (`[[result_fetch_chunk]]`).
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection whose active query to interrupt."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_progress_get:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Captures a snapshot of the active query's execution progress.
+
+      Reads the percentage and row counts from one consistent snapshot
+      of the query currently executing on the connection. Safe to call
+      from any thread, including while another thread steps the query's
+      result.
+
+      Progress is published only when the enable_progress_bar option is
+      set; the bridge does not enable tracking itself. Both row counts
+      are 0 when no information is available. The percentage is -1 when
+      tracking is disabled, no query is active, or no progress has been
+      published yet.
+    role: getter
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      out_percentage:
+        type: f64
+        indirection: 1
+        kind: OUT
+        description: "Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active, or no progress has been published yet."
+      out_rows_processed:
+        type: u64
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of rows processed so far."
+      out_total_rows_to_process:
+        type: u64
+        indirection: 1
+        kind: OUT
+        description: "Receives the total number of rows the query will process."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR

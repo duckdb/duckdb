@@ -26,10 +26,10 @@ tpcds_append_information::tpcds_append_information(duckdb::ClientContext &contex
 	if (mode == TPCDSAppendMode::APPENDER) {
 		appender = duckdb::make_uniq<duckdb::InternalAppender>(context_p, *table, flush_count);
 	} else {
-		if (!table->IsDuckTable()) {
+		table_entry = table->TryGetDuckTableEntry();
+		if (!table_entry) {
 			throw duckdb::InvalidInputException("dsdgen is only supported for DuckDB database files");
 		}
-		table_entry = table->Cast<duckdb::DuckTableEntry>();
 		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(context_p, table_entry->GetStorage());
 		auto collection = optimistic_writer->CreateCollection(table_entry->GetStorage(), types, partial_manager_type);
 		auto &row_collection = *collection->collection;
@@ -156,7 +156,7 @@ void tpcds_append_information::FinalizeOptimisticAppend() {
 		return;
 	}
 	FlushChunk();
-	duckdb::TransactionData transaction_data(0, 0);
+	auto transaction_data = duckdb::TransactionData::Unversioned();
 	auto &row_collection = *optimistic_collection->collection;
 	row_collection.FinalizeAppend(transaction_data, append_state);
 	finalized = true;

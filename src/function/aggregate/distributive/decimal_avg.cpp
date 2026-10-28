@@ -121,7 +121,8 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 	auto &input_type = arguments[0]->GetReturnType();
 
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
-		return nullptr;
+		// unresolved prepared parameter - defer binding until the type is known
+		throw ParameterNotResolvedException();
 	}
 	if (input_type.id() != LogicalTypeId::DECIMAL) {
 		throw InvalidInputException("decimal_average requires a DECIMAL argument, got %s — "
@@ -161,9 +162,10 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 
 AggregateFunctionSet DecimalAverageFun::GetFunctions() {
 	AggregateFunctionSet set("decimal_average");
-	set.AddFunction(AggregateFunction({LogicalType(LogicalTypeId::DECIMAL)}, LogicalType(LogicalTypeId::DECIMAL),
-	                                  nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalAverage));
+	AggregateFunction fun({}, LogicalType(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalAverage);
+	fun.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	set.AddFunction(fun);
 	return set;
 }
 

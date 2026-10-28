@@ -65,6 +65,7 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 	case ExceptionType::PARAMETER_NOT_ALLOWED:
 	case ExceptionType::PARSER:
 	case ExceptionType::PERMISSION:
+	case ExceptionType::RESOURCE_IN_USE:
 		return false;
 	default:
 		return true;
@@ -73,7 +74,6 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
-	case ExceptionType::DATA_CORRUPTION:
 	case ExceptionType::FATAL:
 		return true;
 	default:
@@ -156,7 +156,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::AUTOLOAD, "Extension Autoloading"},
                                                    {ExceptionType::SEQUENCE, "Sequence"},
                                                    {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"},
-                                                   {ExceptionType::DATA_CORRUPTION, "Data Corruption"}};
+                                                   {ExceptionType::DATA_CORRUPTION, "Data Corruption"},
+                                                   {ExceptionType::RESOURCE_IN_USE, "Resource In Use"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -203,6 +204,7 @@ bool Exception::IsExecutionError(ExceptionType type) {
 	case ExceptionType::INVALID_INPUT:
 	case ExceptionType::OUT_OF_RANGE:
 	case ExceptionType::CONVERSION:
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
 		return true;
 	default:
 		return false;
@@ -272,7 +274,8 @@ OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType
 }
 
 OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+                                                 StringUtil::ToString(value) +
                                                  " can't be cast because the value is out of range "
                                                  "for the destination type " +
                                                  TypeIdToString(new_type)) {
@@ -319,6 +322,9 @@ IOException::IOException(const unordered_map<string, string> &extra_info, const 
 DataCorruptionException::DataCorruptionException(const string &msg) : Exception(ExceptionType::DATA_CORRUPTION, msg) {
 }
 
+ResourceInUseException::ResourceInUseException(const string &msg) : Exception(ExceptionType::RESOURCE_IN_USE, msg) {
+}
+
 NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)
     : Exception(extra_info, ExceptionType::NOT_IMPLEMENTED, msg) {
 }
@@ -348,6 +354,10 @@ InterruptException::InterruptException(const string &message) : Exception(Except
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 	// FIXME: Make any log context available to add error logging.
+}
+
+void InternalException::Throw(const char *message) {
+	throw InternalException(message);
 }
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {

@@ -1,5 +1,7 @@
 #include "caching_test_utils.hpp"
 
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -39,8 +41,36 @@ bool SimpleTrackingFileSystem::CanSeek() {
 	return true;
 }
 
-string SimpleTrackingFileSystem::GetVersionTag(FileHandle &handle) {
-	return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+FileMetadata SimpleTrackingFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.version_tag = StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+	return metadata;
+}
+
+unique_ptr<FileHandle> SimpleTrackingFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                          optional_ptr<FileOpener> opener) {
+	if (!StringUtil::StartsWith(path, CACHING_TEST_REMOTE_PREFIX)) {
+		return LocalFileSystem::OpenFile(path, flags, opener);
+	}
+	auto handle = LocalFileSystem::OpenFile(path.substr(CACHING_TEST_REMOTE_PREFIX.size()), flags, opener);
+	handle->path = path;
+	return handle;
+}
+
+void SimpleTrackingFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	{
+		annotated_lock_guard<annotated_mutex> guard(reads_lock);
+		reads.emplace_back(location, NumericCast<idx_t>(nr_bytes));
+	}
+	LocalFileSystem::Read(handle, buffer, nr_bytes, location);
+}
+
+vector<pair<idx_t, idx_t>> SimpleTrackingFileSystem::TakeReads() {
+	annotated_lock_guard<annotated_mutex> guard(reads_lock);
+	auto result = std::move(reads);
+	reads.clear();
+	std::sort(result.begin(), result.end());
+	return result;
 }
 
 string NoValidationMetadataFileSystem::GetName() const {
@@ -55,12 +85,21 @@ bool NoValidationMetadataFileSystem::CanSeek() {
 	return true;
 }
 
-string NoValidationMetadataFileSystem::GetVersionTag(FileHandle &handle) {
-	return "";
+FileMetadata NoValidationMetadataFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.last_modification_time = timestamp_t(0);
+	metadata.version_tag.clear();
+	return metadata;
 }
 
-timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	return timestamp_t(0);
+string FreshnessOnlyFileSystem::GetName() const {
+	return "FreshnessOnlyFileSystem";
+}
+
+FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
+	auto metadata = NoValidationMetadataFileSystem::Stats(handle);
+	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
+	return metadata;
 }
 
 } // namespace duckdb

@@ -70,11 +70,11 @@ void ExtensionLoader::CreateSchema(const Identifier &name) const {
 void ExtensionLoader::UseDefaultSchema(const Identifier &name) {
 	if (loader_info.extension_schema != DEFAULT_SCHEMA && name != DEFAULT_SCHEMA &&
 	    loader_info.extension_schema != name) {
-		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
+		throw InvalidInputException("Cannot set extension schema to %s, schema is already set to %s", name,
 		                            loader_info.extension_schema);
 	}
 	if (name == "pg_catalog") {
-		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
+		throw InvalidInputException("Cannot set default extension schema to %s", name);
 	}
 	if (name == DEFAULT_SCHEMA) {
 		loader_info.extension_schema = Identifier::DefaultSchema();
@@ -87,7 +87,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	// adds an explicitly set extension schema to the search path
 	if (loader_info.extension_schema != schema_name || schema_name == DEFAULT_SCHEMA ||
 	    loader_info.extension_schema == DEFAULT_SCHEMA) {
-		throw InvalidInputException("Cannot add schema '%s' to search path, first set the extension schema explicitly "
+		throw InvalidInputException("Cannot add schema %s to search path, first set the extension schema explicitly "
 		                            "with UseDefaultSchema()",
 		                            schema_name);
 	}
@@ -97,7 +97,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	auto schema = system_catalog.GetSchema(data, schema_name, OnEntryNotFound::RETURN_NULL);
 	if (!schema) {
-		throw InvalidInputException("Cannot add schema '%s' to search path: schema does not exist. "
+		throw InvalidInputException("Cannot add schema %s to search path: schema does not exist. "
 		                            "Call CreateExtensionSchema() first.",
 		                            schema_name);
 	}
@@ -239,10 +239,16 @@ void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	CreatePragmaFunctionInfo info(std::move(function));
+	RegisterFunction(CreatePragmaFunctionInfo(std::move(function)));
+}
+
+void ExtensionLoader::RegisterFunction(CreatePragmaFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = GetRegisteredExtensionName();
-	info.SetQualifiedName(
-	    QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema, info.GetQualifiedName().Name()));
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
+		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema,
+		                                    info.GetQualifiedName().Name()));
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreatePragmaFunction(data, info);
@@ -297,22 +303,24 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
 	auto &scalar_function = GetFunction(function.name);
-	scalar_function.functions.AddFunction(std::move(function));
+	scalar_function.functions.AddFunction(scalar_function.FinalizeFunction(std::move(function)));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
 	auto &scalar_function = GetFunction(functions.name);
 	for (auto &function : functions.functions) {
-		function.name = functions.name;
+		function = scalar_function.FinalizeFunction(*function);
+	}
+	for (auto &function : functions.functions) {
 		scalar_function.functions.AddFunction(std::move(function));
 	}
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
 	auto &table_function = GetTableFunction(functions.name);
+	functions.ApplyToFunctions([&](TableFunction &function) { table_function.FinalizeFunction(function); });
 	for (auto &function : functions.functions) {
-		function.name = functions.name;
 		table_function.functions.AddFunction(std::move(function));
 	}
 }
@@ -332,7 +340,7 @@ optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const Identifier &nam
 ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const Identifier &name) {
 	auto catalog_entry = TryGetFunction(name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetFunction", name);
+		throw InvalidInputException("Function with name %s not found in ExtensionLoader::GetFunction", name);
 	}
 	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
 }
@@ -344,7 +352,7 @@ optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const Identifier
 TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &name) {
 	auto catalog_entry = TryGetTableFunction(name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);
+		throw InvalidInputException("Function with name %s not found in ExtensionLoader::GetTableFunction", name);
 	}
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }
@@ -352,6 +360,16 @@ TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &n
 void ExtensionLoader::RegisterType(string type_name, LogicalType type, bind_logical_type_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
 	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(string type_name, LogicalType type, TypeConstructorSet constructors) {
+	D_ASSERT(!type_name.empty());
+	CreateTypeInfo info(std::move(type_name), std::move(type), std::move(constructors));
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(CreateTypeInfo &info) {
 	info.temporary = true;
 	info.internal = true;
 	info.extension_name = GetRegisteredExtensionName();

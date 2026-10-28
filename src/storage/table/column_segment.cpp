@@ -28,22 +28,32 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
-                                                                 block_id_t block_id, idx_t offset, idx_t count,
-                                                                 CompressionType compression_type,
-                                                                 BaseStatistics statistics,
-                                                                 unique_ptr<ColumnSegmentState> segment_state) {
+                                                                 DataPointer &data_pointer) {
+	auto &block_id = data_pointer.block_pointer.block_id;
+	auto &offset = data_pointer.block_pointer.offset;
+	auto &count = data_pointer.tuple_count;
+	auto &compression_type = data_pointer.compression_type;
+	auto &statistics = data_pointer.statistics;
+	auto &segment_state = data_pointer.segment_state;
+	auto &byte_size = data_pointer.byte_size;
+
 	auto &config = DBConfig::GetConfig(db);
 	shared_ptr<BlockHandle> block;
 
 	auto &type = statistics.GetType();
 	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id == INVALID_BLOCK && !function.get().supports_null_block) {
+		throw DataCorruptionException("Persistent %s segment is missing its data block",
+		                              CompressionTypeToString(compression_type));
+	}
 	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
 	auto segment_size = block_manager.GetBlockSize();
 	return make_uniq<ColumnSegment>(db, std::move(block), ColumnSegmentType::PERSISTENT, count, function,
-	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
+	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state),
+	                                byte_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db,
@@ -87,11 +97,12 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
                              const ColumnSegmentType segment_type, const idx_t count,
                              const CompressionFunction &function_p, BaseStatistics statistics,
                              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
-                             const unique_ptr<ColumnSegmentState> segment_state_p)
+                             const unique_ptr<ColumnSegmentState> segment_state_p,
+                             optional<uint32_t> data_size_in_bytes_p)
 
     : SegmentBase<ColumnSegment>(count), db(db), segment_type(segment_type), block(std::move(block_p)),
       function(function_p), block_id(block_id_p), offset(offset), segment_size(segment_size_p),
-      stats(std::move(statistics)) {
+      data_size_in_bytes(data_size_in_bytes_p), stats(std::move(statistics)) {
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
@@ -103,7 +114,8 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 ColumnSegment::ColumnSegment(ColumnSegment &other)
     : SegmentBase<ColumnSegment>(other.count.load()), db(other.db), segment_type(other.segment_type),
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
-      segment_size(other.segment_size), segment_state(std::move(other.segment_state)), stats(std::move(other.stats)) {
+      segment_size(other.segment_size), data_size_in_bytes(other.data_size_in_bytes),
+      segment_state(std::move(other.segment_state)), stats(std::move(other.stats)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
@@ -143,11 +155,16 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 }
 
 void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
-                           idx_t sel_count) {
+                           idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	if (!function.get().select) {
 		throw InternalException("ColumnSegment::Select not implemented for this compression method");
 	}
-	function.get().select(*this, state, scan_count, result, sel, sel_count);
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
+		D_ASSERT(result_offset == 0);
+	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	}
+	function.get().select(*this, state, scan_count, result, sel, sel_count, result_offset, scan_type);
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
@@ -175,7 +192,7 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+	if (row_id < 0 || NumericCast<idx_t>(row_id) >= count) {
 		throw InternalException("ColumnSegment::FetchRow - row_id out of range for segment");
 	}
 	function.get().fetch_row(*this, state, row_id, result, result_idx);
@@ -253,7 +270,9 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 		// Non-constant block: write the block to disk.
 		// The block data already exists in memory, so we alter the metadata,
 		// which ensures that the buffer points to an on-disk block.
-		block = block_manager->ConvertToPersistent(context, block_id, std::move(block));
+		// transient segments are tagged IN_MEMORY_TABLE, once written they are part of the base table
+		block = block_manager->ConvertToPersistent(context, block_id, std::move(block),
+		                                           ConvertToPersistentMode::DESTRUCTIVE, MemoryTag::BASE_TABLE);
 		return;
 	}
 
@@ -289,6 +308,7 @@ DataPointer ColumnSegment::GetDataPointer(idx_t row_start) {
 	pointer.row_start = row_start;
 	pointer.tuple_count = count;
 	pointer.compression_type = function.get().type;
+	pointer.byte_size = data_size_in_bytes;
 	if (function.get().serialize_state) {
 		pointer.segment_state = function.get().serialize_state(*this);
 	}
@@ -481,8 +501,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		chunk.data.emplace_back(Vector::Ref(vector));
 		chunk.SetChildCardinality(scan_count);
 		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = &sel;
-		if (!sel.IsSet()) {
+		optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+		if (!sel.IsSet() && (vector.GetType().IsNested() || approved_tuple_count != scan_count)) {
 			identity_sel = SelectionVector::Incremental(approved_tuple_count);
 			current_sel = &identity_sel;
 		}

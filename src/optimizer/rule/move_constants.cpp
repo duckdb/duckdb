@@ -37,6 +37,20 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	root = std::move(op);
 }
 
+// Result of a comparison against a constant that cannot be represented in the type, if it can be decided
+static bool TryOutOfRangeComparisonResult(ExpressionType comparison_type, bool &result) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		result = false;
+		return true;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result = true;
+		return true;
+	default:
+		return false;
+	}
+}
+
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                 bool &changes_made, bool is_root) {
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -74,9 +88,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here
 			return ExpressionRewriter::ConstantOrNull(
-			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+			    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+			    Value::BOOLEAN(false));
 		}
-		outer_constant.GetValueMutable() = std::move(*result_value);
+		outer_constant.SetValue(std::move(*result_value));
 	} else if (op_type == "-") {
 		// [x - 1 COMP 10] O R [1 - x COMP 10]
 		// order matters in subtraction:
@@ -93,9 +108,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(false));
 			}
-			outer_constant.GetValueMutable() = std::move(*result_value);
+			outer_constant.SetValue(std::move(*result_value));
 		} else {
 			// [1 - x COMP 10]
 			// change right side to 1-10=-9
@@ -109,9 +125,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(false));
 			}
-			outer_constant.GetValueMutable() = std::move(*result_value);
+			outer_constant.SetValue(std::move(*result_value));
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
 			BoundComparisonExpression::FlipType(comparison);
@@ -138,25 +155,32 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				// the result will be either FALSE or NULL (if COMPARE_EQUAL)
 				// or TRUE or NULL (if COMPARE_NOTEQUAL)
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(is_inequality));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(is_inequality));
 			} else {
 				// not cleanly divisible and we are doing > >= < <=, skip the simplification for now
 				return nullptr;
 			}
 		}
-		if (inner_value < 0) {
-			// multiply by negative value, need to flip expression
-			BoundComparisonExpression::FlipType(comparison);
-		}
-		// else divide the RHS by the LHS
+		// divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division
 		// because e.g. -128 / -1 = 128, which is out of range
 		auto result_value = Value::HUGEINT(outer_value / inner_value).DefaultTryCastAs(constant_type);
 		if (!result_value) {
+			// no representable value satisfies an equality, but ordered comparisons cannot be decided here
+			bool comparison_result;
+			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
+				return nullptr;
+			}
 			return ExpressionRewriter::ConstantOrNull(
-			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+			    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+			    Value::BOOLEAN(comparison_result));
 		}
-		outer_constant.GetValueMutable() = std::move(*result_value);
+		if (inner_value < 0) {
+			// multiply by negative value, need to flip expression
+			BoundComparisonExpression::FlipType(comparison);
+		}
+		outer_constant.SetValue(std::move(*result_value));
 	}
 	// replace left side with x
 	// first extract x from the arithmetic expression
@@ -183,19 +207,6 @@ static bool IsOrderedComparison(ExpressionType comparison_type) {
 	}
 }
 
-static bool TryOutOfRangeComparisonResult(ExpressionType comparison_type, bool &result) {
-	switch (comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		result = false;
-		return true;
-	case ExpressionType::COMPARE_NOTEQUAL:
-		result = true;
-		return true;
-	default:
-		return false;
-	}
-}
-
 static bool CanDuplicateForNaNGuard(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
@@ -205,13 +216,8 @@ static unique_ptr<Expression> CreateIsNanCall(ClientContext &context, const Expr
 	vector<unique_ptr<Expression>> children;
 	children.push_back(expr.Copy());
 
-	ErrorData error;
 	FunctionBinder binder(context);
-	auto isnan = binder.BindScalarFunction(Identifier::DefaultSchema(), "isnan", std::move(children), error);
-	if (!isnan) {
-		error.Throw();
-	}
-	return isnan;
+	return binder.BindScalarFunction(Identifier::DefaultSchema(), "isnan", std::move(children));
 }
 
 static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {
@@ -293,7 +299,7 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		if (!result_value) {
 			return nullptr;
 		}
-		outer_constant.GetValueMutable() = std::move(*result_value);
+		outer_constant.SetValue(std::move(*result_value));
 	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
 		// negate the unscaled integer and reconstruct with the same width/scale
 		hugeint_t negated_value;
@@ -304,19 +310,16 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		auto scale = DecimalType::GetScale(constant_type);
 		switch (constant_type.InternalType()) {
 		case PhysicalType::INT16:
-			outer_constant.GetValueMutable() =
-			    Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(negated_value), width, scale);
+			outer_constant.SetValue(Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(negated_value), width, scale));
 			break;
 		case PhysicalType::INT32:
-			outer_constant.GetValueMutable() =
-			    Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(negated_value), width, scale);
+			outer_constant.SetValue(Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(negated_value), width, scale));
 			break;
 		case PhysicalType::INT64:
-			outer_constant.GetValueMutable() =
-			    Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(negated_value), width, scale);
+			outer_constant.SetValue(Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(negated_value), width, scale));
 			break;
 		case PhysicalType::INT128:
-			outer_constant.GetValueMutable() = Value::DECIMAL(negated_value, width, scale);
+			outer_constant.SetValue(Value::DECIMAL(negated_value, width, scale));
 			break;
 		default:
 			throw InternalException("Unknown DECIMAL physical type");
@@ -333,10 +336,10 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
 				return nullptr;
 			}
-			return ExpressionRewriter::ConstantOrNull(std::move(negation.GetChildrenMutable()[0]),
+			return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(negation.GetChildrenMutable()[0]),
 			                                          Value::BOOLEAN(comparison_result));
 		}
-		outer_constant.GetValueMutable() = std::move(*result_value);
+		outer_constant.SetValue(std::move(*result_value));
 	}
 	// [-x COMP c] => [x FLIPPED_COMP -c]
 	auto inner_expr = std::move(negation.GetChildrenMutable()[0]);

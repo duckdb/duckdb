@@ -1,0 +1,31 @@
+From 1c1d48133cce352ccb1ded39d1c2c20794359fc0 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:08 +0200
+Subject: [PATCH 3/8] Configure transformed thread-local storage for z/OS
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index 6ed12ad..d8dc6be 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -233,6 +233,12 @@
+ #define CPPHTTPLIB_WEBSOCKET_MAX_MISSED_PONGS 0
+ #endif
+ 
++#ifdef __MVS__
++#define REGEX_SCOPE static
++#else
++#define REGEX_SCOPE thread_local
++#endif
++
+ /*
+  * Headers
+  */
+@@ -299,6 +305,7 @@ using socklen_t = int;
+ #endif
+ #ifdef __MVS__
+ #include <strings.h>
++#include <sys/time.h>
+ #ifndef NI_MAXHOST
+ #define NI_MAXHOST 1025
+ #endif

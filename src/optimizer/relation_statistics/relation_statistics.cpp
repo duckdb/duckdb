@@ -86,6 +86,24 @@ void RelationStats::CapCurrentDomainsToCardinality() {
 	}
 }
 
+RelationColumnStatsLookup::RelationColumnStatsLookup(const RelationStats &stats) {
+	AddRelation(stats);
+}
+
+void RelationColumnStatsLookup::AddRelation(const RelationStats &stats) {
+	for (auto &column : stats.columns) {
+		columns.emplace(column.binding, column);
+	}
+}
+
+optional_ptr<const RelationColumnStats> RelationColumnStatsLookup::Find(ColumnBinding binding) const {
+	auto entry = columns.find(binding);
+	if (entry == columns.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
 void RelationStats::Verify(const vector<ColumnBinding> &bindings) const {
 	D_ASSERT(!stats_initialized || MatchesBindings(bindings));
 	if (!stats_initialized) {

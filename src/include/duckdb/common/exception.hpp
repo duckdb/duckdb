@@ -15,6 +15,7 @@
 
 #include <vector>
 #include <stdexcept>
+#include <exception>
 
 namespace duckdb {
 enum class PhysicalType : uint8_t;
@@ -90,7 +91,8 @@ enum class ExceptionType : uint8_t {
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
 	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
-	DATA_CORRUPTION = 43 // Data corruption was detected in persistent storage
+	DATA_CORRUPTION = 43, // Data corruption was detected in persistent storage
+	RESOURCE_IN_USE = 44  // A resource is already in use
 };
 
 class Exception : public std::runtime_error {
@@ -260,6 +262,16 @@ public:
 	}
 };
 
+class ResourceInUseException : public Exception {
+public:
+	DUCKDB_API explicit ResourceInUseException(const string &msg);
+
+	template <typename... ARGS>
+	explicit ResourceInUseException(const string &msg, ARGS &&...params)
+	    : ResourceInUseException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
+
 class MissingExtensionException : public Exception {
 public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
@@ -339,6 +351,8 @@ class InternalException : public Exception {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
 	InternalException(const unordered_map<string, string> &extra_info, const string &msg);
+	//! Throws a fixed message; for templates, so that the throw is not instantiated per type
+	[[noreturn]] DUCKDB_API static void Throw(const char *message);
 
 	template <typename... ARGS>
 	explicit InternalException(const string &msg, ARGS &&...params)

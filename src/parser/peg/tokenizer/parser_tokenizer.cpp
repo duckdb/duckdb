@@ -4,7 +4,10 @@
 namespace duckdb {
 
 static bool IsEmptyQuotedIdentifier(const string &sql, idx_t start, idx_t end, TokenType type) {
-	return type == TokenType::IDENTIFIER && end == start + 2 && sql.substr(start, 2) == "\"\"";
+	if (type != TokenType::IDENTIFIER || end != start + 2) {
+		return false;
+	}
+	return (sql[start] == '"' && sql[start + 1] == '"') || (sql[start] == '`' && sql[start + 1] == '`');
 }
 
 ParserTokenizerBehavior::ParserTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens)
@@ -12,6 +15,11 @@ ParserTokenizerBehavior::ParserTokenizerBehavior(const string &sql, vector<Match
 }
 
 void ParserTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
+	if (type == TokenType::COMMENT && unterminated) {
+		auto comment = sql.substr(start, end - start);
+		throw ParserException::SyntaxError(sql, "unterminated /* comment at or near \"" + comment + "\"",
+		                                   optional_idx(start));
+	}
 	if (IsEmptyQuotedIdentifier(sql, start, end, type)) {
 		throw ParserException::SyntaxError(sql, "zero-length delimited identifier", optional_idx(start));
 	}
@@ -24,7 +32,8 @@ void ParserTokenizerBehavior::OnStatementEnd(idx_t pos) {
 	tokens.emplace_back(";", pos, TokenType::TERMINATOR);
 }
 
-void ParserTokenizerBehavior::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+void ParserTokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word,
+                                          idx_t last_pos) {
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
 		throw ParserException::SyntaxError(sql, "unterminated string literal", optional_idx(last_pos));
@@ -33,7 +42,7 @@ void ParserTokenizerBehavior::OnLastToken(TokenizeState state, string last_word,
 	default:
 		break;
 	}
-	TokenizerBehavior::OnLastToken(state, std::move(last_word), last_pos);
+	TokenizerBehavior::OnLastToken(tokenizer, state, std::move(last_word), last_pos);
 }
 
 } // namespace duckdb

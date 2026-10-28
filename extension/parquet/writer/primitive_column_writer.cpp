@@ -55,8 +55,9 @@ private:
 	AllocatedData compressed_buf;
 };
 
-static PageWriteInformation CreateDictionaryPageWriteInformation(idx_t uncompressed_size, idx_t row_count) {
-	PageWriteInformation write_info;
+static PageWriteInformation CreateDictionaryPageWriteInformation(PrimitiveColumnWriterState &state,
+                                                                 idx_t uncompressed_size, idx_t row_count) {
+	PageWriteInformation write_info(state.row_group.columns.get_allocator());
 	auto &hdr = write_info.page_header;
 	hdr.uncompressed_page_size = UnsafeNumericCast<int32_t>(uncompressed_size);
 	hdr.type = PageType::DICTIONARY_PAGE;
@@ -83,13 +84,15 @@ unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb
 }
 
 void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_group) {
-	duckdb_parquet::ColumnChunk column_chunk;
+	row_group.columns.emplace_back();
+	auto &column_chunk = row_group.columns.back();
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
-	column_chunk.meta_data.path_in_schema = IdentifiersToStrings(schema_path);
+	for (auto &path_part : IdentifiersToStrings(schema_path)) {
+		column_chunk.meta_data.path_in_schema.emplace_back().assign(path_part.data(), path_part.size());
+	}
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
-	row_group.columns.push_back(std::move(column_chunk));
 }
 
 unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
@@ -133,11 +136,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			}
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				if (page_info.estimated_page_size >= page_size_limit) {
-					if (!vector_can_span_multiple_pages && i != 0) {
-						// Vector is not allowed to span multiple pages, and we already started writing it
-						continue;
-					}
+				// a vector that cannot span multiple pages stays on the page it started on
+				if (page_info.estimated_page_size >= page_size_limit && (vector_can_span_multiple_pages || i == 0)) {
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
@@ -167,7 +167,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 			state.page_info.erase_at(page_idx);
 			break;
 		}
-		PageWriteInformation write_info;
+		PageWriteInformation write_info(state.row_group.columns.get_allocator());
 		// set up the header
 		auto &hdr = write_info.page_header;
 		hdr.compressed_page_size = 0;
@@ -281,8 +281,6 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
-	D_ASSERT(hdr.uncompressed_page_size > 0);
-	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
@@ -337,27 +335,56 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		column_chunk.meta_data.encodings.push_back(encoding);
 	};
 
+	auto add_encoding_stat = [&](duckdb_parquet::PageType::type page_type, duckdb_parquet::Encoding::type encoding) {
+		for (auto &existing_stat : column_chunk.meta_data.encoding_stats) {
+			if (existing_stat.page_type == page_type && existing_stat.encoding == encoding) {
+				existing_stat.count++;
+				return;
+			}
+		}
+		column_chunk.meta_data.encoding_stats.emplace_back();
+		auto &stat = column_chunk.meta_data.encoding_stats.back();
+		stat.page_type = page_type;
+		stat.encoding = encoding;
+		stat.count = 1;
+	};
+
 	for (const auto &write_info : state.write_info) {
 		// only care about data page encodings, data_page_header.encoding is meaningless for dict
 		switch (write_info.page_header.type) {
 		case PageType::DATA_PAGE:
 			add_encoding(write_info.page_header.data_page_header.encoding);
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.data_page_header.encoding);
 			break;
 		case PageType::DATA_PAGE_V2:
 			add_encoding(write_info.page_header.data_page_header_v2.encoding);
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.data_page_header_v2.encoding);
+			break;
+		case PageType::DICTIONARY_PAGE:
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.dictionary_page_header.encoding);
 			break;
 		default:
 			break;
 		}
 	}
+	// write_info holds the dictionary page (if any) first, so encoding_stats lists it first -
+	// the physical page order, and the order other writers (parquet-cpp, parquet-rs) produce
+	if (!column_chunk.meta_data.encoding_stats.empty()) {
+		column_chunk.meta_data.__isset.encoding_stats = true;
+	}
 
 	if (!state.stats_state) {
 		return;
 	}
-	auto null_count = MaxRepeat() == 0 ? state.null_count : state.null_count + state.parent_null_count;
-	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
+	// a NULL ancestor counts as a NULL of this column, the children count it once as a parent NULL
+	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count + state.parent_null_count);
 	column_chunk.meta_data.statistics.__isset.null_count = true;
 	column_chunk.meta_data.__isset.statistics = true;
+	if (column_chunk.meta_data.type == duckdb_parquet::Type::FLOAT ||
+	    column_chunk.meta_data.type == duckdb_parquet::Type::DOUBLE) {
+		column_chunk.meta_data.statistics.nan_count = NumericCast<int64_t>(state.stats_state->GetNaNCount());
+		column_chunk.meta_data.statistics.__isset.nan_count = true;
+	}
 
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {
@@ -427,7 +454,6 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	}
 
 	for (auto &write_info : state.write_info) {
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(!write_info.prepared_header);
 		D_ASSERT(!write_info.prepared_payload);
 
@@ -463,7 +489,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(write_info.prepared_header);
 		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)
@@ -495,9 +520,8 @@ idx_t PrimitiveColumnWriter::DictionarySize(PrimitiveColumnWriterState &state) {
 void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
                                             idx_t row_count) {
 	D_ASSERT(temp_writer);
-	D_ASSERT(temp_writer->GetPosition() > 0);
 
-	auto write_info = CreateDictionaryPageWriteInformation(temp_writer->GetPosition(), row_count);
+	auto write_info = CreateDictionaryPageWriteInformation(state, temp_writer->GetPosition(), row_count);
 	write_info.temp_writer = std::move(temp_writer);
 
 	// compress the contents of the dictionary page
@@ -520,7 +544,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
 	D_ASSERT(target_data.data.IsSet());
 	D_ASSERT(target_data.size > 0);
 
-	auto write_info = CreateDictionaryPageWriteInformation(target_data.size, row_count);
+	auto write_info = CreateDictionaryPageWriteInformation(state, target_data.size, row_count);
 
 	// compress the contents of the dictionary page
 	MemoryStream temp_writer(target_data.data.get(), target_data.data.GetSize());
@@ -537,7 +561,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t PrimitiveColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -549,7 +573,8 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	auto &type = schema.type;
 	auto allow_geometry = schema.allow_geometry;
 
-	duckdb_parquet::SchemaElement schema_element;
+	schemas.emplace_back();
+	auto &schema_element = schemas.back();
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type, writer.WriteTimestampAsInt96());
 	schema_element.repetition_type = repetition_type;
 	schema_element.__isset.num_children = false;
@@ -562,7 +587,6 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	}
 	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
 	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());
-	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());
 	return 1;

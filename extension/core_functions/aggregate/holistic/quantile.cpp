@@ -15,7 +15,15 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <cmath>
+
 namespace duckdb {
+
+// Descending order is encoded as a negative quantile parameter. A zero fraction
+// is stored as negative zero, so use the sign bit to detect that case as well.
+static bool QuantileDescending(const Value &q) {
+	return std::signbit(q.GetValue<double>());
+}
 
 template <class INPUT_TYPE>
 struct IndirectLess {
@@ -67,7 +75,7 @@ QuantileBindData::QuantileBindData() {
 }
 
 QuantileBindData::QuantileBindData(const Value &quantile_p)
-    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
+    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(QuantileDescending(quantile_p)) {
 }
 
 QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
@@ -77,7 +85,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	for (idx_t i = 0; i < quantiles_p.size(); ++i) {
 		const auto &q = quantiles_p[i];
 		pos += (q > 0);
-		neg += (q < 0);
+		neg += QuantileDescending(q);
 		normalised.push_back(QuantileAbs(q));
 		order.push_back(i);
 	}
@@ -94,7 +102,8 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	}
 }
 
-QuantileBindData::QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+QuantileBindData::QuantileBindData(const QuantileBindData &other)
+    : FunctionData(other), order(other.order), desc(other.desc) {
 	for (const auto &q : other.quantiles) {
 		quantiles.emplace_back(q);
 	}
@@ -201,8 +210,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 					continue;
 				}
 
-				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n,
-				                                                                                    result, quantile);
+				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(
+				    partition.context.client, data, frames, n, result, quantile);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -219,8 +228,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 				window_state.UpdateSkip(data, frames, included);
 
 				// Find the position(s) needed
-				rdata[ridx] =
-				    window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+				rdata[ridx] = window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                        frames, n, result, quantile);
 
 				//	Save the previous state for next time
 				window_state.prevs = frames;
@@ -330,8 +339,8 @@ struct QuantileListOperation : QuantileOperation {
 					continue;
 				}
 
-				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx,
-				                                                                   bind_data);
+				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                   frames, n, list, lidx, bind_data);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -344,7 +353,8 @@ struct QuantileListOperation : QuantileOperation {
 				}
 
 				window_state.UpdateSkip(data, frames, included);
-				window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+				window_state.template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data, frames, n, list,
+				                                                       lidx, bind_data);
 				window_state.prevs = frames;
 			}
 		}
@@ -396,6 +406,10 @@ struct QuantileListFallback : QuantileOperation {
 //===--------------------------------------------------------------------===//
 template <class OP>
 AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TIME_TZ) {
+		// TIMETZ is ordered by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t>(type);
+	}
 	switch (type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(quantile_types)
 	case PhysicalType::INT8:
@@ -459,6 +473,7 @@ struct ListDiscreteQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(type, LogicalType::LIST(type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -482,7 +497,9 @@ struct ListDiscreteQuantile {
 };
 
 AggregateFunction GetDiscreteQuantile(const LogicalType &type) {
-	return GetDiscreteQuantileTemplated<ScalarDiscreteQuantile>(type);
+	auto fun = GetDiscreteQuantileTemplated<ScalarDiscreteQuantile>(type);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	return fun;
 }
 
 AggregateFunction GetDiscreteQuantileList(const LogicalType &type) {
@@ -538,8 +555,10 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return OP::template GetFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return OP::template GetFunction<dtime_t, dtime_t>(type, type);
+	case LogicalTypeId::TIME_TZ:
+		// TIMETZ is ordered and interpolated by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t, dtime_tz_t>(type, type);
 	case LogicalTypeId::INTERVAL:
 		return OP::template GetFunction<interval_t, interval_t>(type, type);
 	default:
@@ -555,6 +574,7 @@ struct ScalarContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -571,6 +591,7 @@ struct ListContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(input_type, LogicalType::LIST(target_type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -580,7 +601,9 @@ struct ListContinuousQuantile {
 };
 
 AggregateFunction GetContinuousQuantile(const LogicalType &type) {
-	return GetContinuousQuantileTemplated<ScalarContinuousQuantile>(type);
+	auto fun = GetContinuousQuantileTemplated<ScalarContinuousQuantile>(type);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	return fun;
 }
 
 AggregateFunction GetContinuousQuantileList(const LogicalType &type) {
@@ -704,8 +727,9 @@ struct DiscreteQuantileListFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::LIST(LogicalType::DOUBLE));
+		fun.GetSignature().AddParameter("quantile", LogicalType::LIST(LogicalType::DOUBLE));
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -733,8 +757,9 @@ struct DiscreteQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -767,8 +792,9 @@ struct ContinuousQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -800,8 +826,9 @@ struct ContinuousQuantileListFunction {
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
 		auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-		fun.GetSignature().AddParameter(list_of_double);
+		fun.GetSignature().AddParameter("quantile", list_of_double);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -835,6 +862,7 @@ static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalT
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetIsHolistic(true);
 	return fun;
 }
 

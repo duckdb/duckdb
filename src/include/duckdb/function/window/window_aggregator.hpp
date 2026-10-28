@@ -133,11 +133,16 @@ public:
 	//! The aggregator data
 	const WindowAggregator &aggregator;
 
+	//! Partition starts
+	vector<idx_t> partition_offsets;
+
 	//! The aggregate function
 	const AggregateObject aggr;
 
 	//! The filtered rows in inputs.
 	ValidityArray filter_mask;
+	//! Storage of the filter mask (one byte per row), from the buffer allocator so that it counts against the limit
+	AllocatedData filter_mask_data;
 
 	//! Lock for single threading
 	mutable mutex lock;
@@ -147,6 +152,9 @@ public:
 
 	//! Number of finalised states
 	std::atomic<idx_t> finalized;
+
+protected:
+	void BuildPartitionOffsets(const idx_t group_count, const ValidityMask &partition_mask);
 };
 
 class WindowAggregatorLocalState : public LocalSinkState {

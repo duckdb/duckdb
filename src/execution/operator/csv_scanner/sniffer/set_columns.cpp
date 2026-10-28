@@ -1,8 +1,9 @@
 #include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
-SetColumns::SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p)
+SetColumns::SetColumns(const vector<LogicalType> *types_p, const vector<Identifier> *names_p)
     : types(types_p), names(names_p) {
 	if (!types) {
 		D_ASSERT(!types && !names);
@@ -55,9 +56,8 @@ string SetColumns::ToString() const {
 	stringstream ss;
 	ss << "columns = { ";
 	for (idx_t i = 0; i < Size(); ++i) {
-		ss << "'" << names->at(i) << "'"
-		   << " : ";
-		ss << "'" << types->at(i).ToString() << "'";
+		ss << SQLString::ToString(names->at(i).GetIdentifierName()) << " : ";
+		ss << SQLString::ToString(types->at(i).ToString());
 		if (i != Size() - 1) {
 			ss << ", ";
 		}

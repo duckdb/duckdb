@@ -87,8 +87,13 @@ SELECT 100::UTINYINT // 20::UBIGINT, 90::UTINYINT // 20::UBIGINT
 
 
 # division by zero
-query I
+statement error
 SELECT 100::UTINYINT // 0::UTINYINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::UTINYINT // 0::UTINYINT)
 ----
 NULL
 
@@ -100,7 +105,12 @@ SELECT 100::UTINYINT % 20::UTINYINT, 90::UTINYINT % 20::UTINYINT
 
 
 # modulo by zero
-query I
+statement error
 SELECT 100::UTINYINT % 0::UTINYINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::UTINYINT % 0::UTINYINT)
 ----
 NULL

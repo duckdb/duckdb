@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -35,7 +36,7 @@ public:
 	template <class SIGNED, class UNSIGNED>
 	static int SignedLength(SIGNED value) {
 		int sign = -(value < 0);
-		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>((value ^ sign) - sign);
+		UNSIGNED unsigned_value = UNSIGNED(value ^ sign) + UNSIGNED(AbsValue(sign));
 		return UnsignedLength(unsigned_value) - sign;
 	}
 
@@ -307,7 +308,9 @@ struct TimeToStringCast {
 	}
 
 	static void FormatTwoDigits(char *ptr, int32_t value) {
-		D_ASSERT(value >= 0 && value <= 99);
+		if (value < 0 || value > 99) {
+			throw InternalException("FormatTwoDigits called with out-of-range value %d", value);
+		}
 		if (value < 10) {
 			ptr[0] = '0';
 			ptr[1] = UnsafeNumericCast<char>('0' + value);

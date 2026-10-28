@@ -1,0 +1,39 @@
+# name: test/issues/general/test_23940.test
+# description: Issue 23940 - ordered list rewrite must preserve GROUPING bindings
+# group: [general]
+
+query II
+SELECT GROUPING(g), list(v ORDER BY v)
+FROM (VALUES (1, 3), (1, 1)) t(g, v)
+GROUP BY g;
+----
+0	[1, 3]
+
+# Preserve both the value and position of the GROUPING result when grouping sets are present.
+query III
+SELECT GROUPING(g), g, list(v ORDER BY v)
+FROM (VALUES (1, 3), (1, 1), (2, 2)) t(g, v)
+GROUP BY ROLLUP(g)
+ORDER BY GROUPING(g), g;
+----
+0	1	[1, 3]
+0	2	[2]
+1	NULL	[1, 2, 3]
+
+# Multiple rewritten aggregates add private helpers, while every GROUPING result remains externally visible.
+query IIIII
+SELECT GROUPING(g), GROUPING(h), list(v ORDER BY v), list(v ORDER BY v DESC), count(*)
+FROM (VALUES (1, 10, 3), (1, 10, 1)) t(g, h, v)
+GROUP BY g, h;
+----
+0	0	[1, 3]	[3, 1]	2
+
+# GROUPING bindings used only above the rewrite projection must also be remapped.
+query I
+SELECT list(v ORDER BY v)
+FROM (VALUES (1, 3), (1, 1), (2, 2)) t(g, v)
+GROUP BY ROLLUP(g)
+HAVING GROUPING(g) = 1
+ORDER BY GROUPING(g);
+----
+[1, 2, 3]

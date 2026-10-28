@@ -100,6 +100,16 @@ FROM
 ----
 1.2	1.2
 
+# p=0.0 with DESC ordering picks the largest value; negative zero must still read as descending
+query II
+SELECT
+    percentile_disc(0.0) WITHIN GROUP (ORDER BY x DESC),
+    quantile_disc(x, [0.0] ORDER BY x DESC),
+FROM
+    (VALUES (1), (2), (3), (4), (5)) _(x);
+----
+5	[5]
+
 #
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
 #

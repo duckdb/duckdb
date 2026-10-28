@@ -1,17 +1,17 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
+enum class CastBindSource : uint8_t { CONTEXT, DEFAULT };
+
 static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                                        BoundCastInfo bound_cast, bool try_cast) {
+                                                        BoundCastInfo bound_cast, bool try_cast,
+                                                        CastBindSource bind_source) {
 	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
@@ -23,12 +23,15 @@ static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> e
 			return expr;
 		}
 	}
+	if (bind_source == CastBindSource::DEFAULT) {
+		return BoundCastExpression::CreateDefault(std::move(expr), target_type, std::move(bound_cast), try_cast);
+	}
 	return BoundCastExpression::Create(std::move(expr), target_type, std::move(bound_cast), try_cast);
 }
 
 static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                     CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
-                                                    bool try_cast) {
+                                                    bool try_cast, CastBindSource bind_source) {
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
@@ -60,7 +63,8 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 		// Add a regular cast on top instead of invalidating.
 		if (parameter.GetReturnType() == parameter.ParameterData()->return_type) {
 			auto cast_function = cast_functions.GetCastFunction(parameter.GetReturnType(), target_type, get_input);
-			return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
+			return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast,
+			                                 bind_source);
 		}
 		// invalidate the type
 		parameter.ParameterData()->return_type = LogicalType::INVALID;
@@ -76,7 +80,7 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 	}
 
 	auto cast_function = cast_functions.GetCastFunction(expr->GetReturnType(), target_type, get_input);
-	return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
+	return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast, bind_source);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expression> expr,
@@ -84,7 +88,8 @@ unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expr
 	CastFunctionSet default_set;
 	GetCastFunctionInput get_input;
 	get_input.query_location = expr->GetQueryLocation();
-	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast);
+	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast,
+	                             CastBindSource::DEFAULT);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
@@ -92,7 +97,8 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput get_input(context);
 	get_input.query_location = expr->GetQueryLocation();
-	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
+	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast,
+	                             CastBindSource::CONTEXT);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddArrayCastToList(ClientContext &context, unique_ptr<Expression> expr) {
@@ -101,6 +107,48 @@ unique_ptr<Expression> BoundCastExpression::AddArrayCastToList(ClientContext &co
 	}
 	auto &child_type = ArrayType::GetChildType(expr->GetReturnType());
 	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
+}
+
+//! Whether a cast between nested types is invertible: the structure has to stay the same, and all child casts have to
+//! be invertible
+static bool NestedCastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
+	if (source_type.id() != target_type.id()) {
+		return false;
+	}
+	switch (source_type.id()) {
+	case LogicalTypeId::LIST:
+		return BoundCastExpression::CastIsInvertible(ListType::GetChildType(source_type),
+		                                             ListType::GetChildType(target_type));
+	case LogicalTypeId::ARRAY:
+		if (ArrayType::IsAnySize(source_type) || ArrayType::IsAnySize(target_type) ||
+		    ArrayType::GetSize(source_type) != ArrayType::GetSize(target_type)) {
+			return false;
+		}
+		return BoundCastExpression::CastIsInvertible(ArrayType::GetChildType(source_type),
+		                                             ArrayType::GetChildType(target_type));
+	case LogicalTypeId::MAP:
+		return BoundCastExpression::CastIsInvertible(MapType::KeyType(source_type), MapType::KeyType(target_type)) &&
+		       BoundCastExpression::CastIsInvertible(MapType::ValueType(source_type), MapType::ValueType(target_type));
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		// adding or removing fields is not invertible
+		auto &source_children = StructType::GetChildTypes(source_type);
+		auto &target_children = StructType::GetChildTypes(target_type);
+		if (source_children.size() != target_children.size()) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < source_children.size(); child_idx++) {
+			if (source_children[child_idx].first != target_children[child_idx].first ||
+			    !BoundCastExpression::CastIsInvertible(source_children[child_idx].second,
+			                                           target_children[child_idx].second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
 }
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
@@ -117,6 +165,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT) {
 		return false;
 	}
+	if (source_type.IsNested() || target_type.IsNested()) {
+		return NestedCastIsInvertible(source_type, target_type);
+	}
+	if (source_type.id() == LogicalTypeId::ENUM && target_type.id() == LogicalTypeId::ENUM) {
+		return false;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;
@@ -131,7 +185,22 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		if (target_scale < source_scale) {
 			return false;
 		}
-		return true;
+		if (target_type.IsUnsigned()) {
+			// decimals can be negative
+			return false;
+		}
+		// the target needs to fit all digits before the decimal point
+		// integral types do not fit all numbers of their decimal width, e.g. SMALLINT (width 5) does not fit 99999
+		auto source_digits = source_width - source_scale;
+		auto target_digits = target_width - target_scale;
+		if (source_type.id() == LogicalTypeId::HUGEINT || source_type.id() == LogicalTypeId::UHUGEINT) {
+			// (u)hugeint values can have up to 39 digits
+			source_digits++;
+		}
+		if (target_type.id() != LogicalTypeId::DECIMAL) {
+			target_digits--;
+		}
+		return source_digits <= target_digits;
 	}
 	switch (source_type.id()) {
 	case LogicalTypeId::TIMESTAMP:
@@ -163,6 +232,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 			break;
 		}
 		break;
+	case LogicalTypeId::TIME_NS:
+		// a cast to microseconds rounds the nanoseconds
+		if (target_type.id() == LogicalTypeId::TIME) {
+			return false;
+		}
+		break;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::TIME_TZ:
@@ -189,6 +264,17 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	}
 	if (source_type.IsSigned() && target_type.IsUnsigned()) {
 		return false;
+	}
+	if (source_type.IsIntegral() && target_type.IsIntegral()) {
+		// a narrowing integer cast is not invertible: a source value outside the target's range does not
+		// survive the cast, so comparing in the target type is not the same as comparing in the source type
+		auto source_size = GetTypeIdSize(source_type.InternalType());
+		auto target_size = GetTypeIdSize(target_type.InternalType());
+		if (source_type.IsUnsigned() && target_type.IsSigned()) {
+			// the sign bit costs a byte of range, so equal widths are not enough
+			return target_size > source_size;
+		}
+		return target_size >= source_size;
 	}
 	return true;
 }
@@ -255,6 +341,10 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	if (source_type == target_type) {
 		return false;
 	}
+	// Converting VARIANT can hit its traversal depth limit, regardless of the target type or TRY_CAST.
+	if (source_type.id() == LogicalTypeId::VARIANT) {
+		return true;
+	}
 	// Casts involving custom types are implemented by extensions, so we cannot reason about them - they can throw
 	// even for a try_cast, e.g. casting JSON into a MAP throws when a key fails to cast, since map keys cannot be NULL
 	if (source_type.HasAlias() || target_type.HasAlias()) {
@@ -269,6 +359,10 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
 		return false;
 	}
+	// A geometry -> geometry cast only changes CRS metadata (incompatible CRSs are rejected at bind time)
+	if (source_type.id() == LogicalTypeId::GEOMETRY && target_type.id() == LogicalTypeId::GEOMETRY) {
+		return false;
+	}
 	// Casting from a string requires parsing it, which throws whenever the string is not a valid representation of
 	// the target type. Types that sit above VARCHAR in the coercion lattice (e.g. UUID, BLOB, BIT, nested types)
 	// would otherwise be considered safe by the max-type check below.
@@ -279,6 +373,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// BIGNUM has arbitrary precision, so its values do not necessarily fit in any other type, e.g. BIGNUM -> DOUBLE
 	// overflows for large values, even though BIGNUM implicitly casts to DOUBLE
 	if (source_type.id() == LogicalTypeId::BIGNUM) {
+		return true;
+	}
+	// Floating point values that are not finite (NaN, inf) cannot be represented as a BIGNUM
+	if (target_type.id() == LogicalTypeId::BIGNUM &&
+	    (source_type.id() == LogicalTypeId::FLOAT || source_type.id() == LogicalTypeId::DOUBLE)) {
 		return true;
 	}
 	// Casts of nested types are executed on the child types - recurse into them

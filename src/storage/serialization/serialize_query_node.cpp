@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/query_node/list.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
@@ -65,6 +66,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	if (type == QueryNodeType::CTE_NODE) {
 		result = std::move(result->Cast<CTENode>().child);
 	}
+	QueryNode::VerifyDeserialized(result);
 	return result;
 }
 
@@ -127,6 +129,9 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
 	serializer.WritePropertyWithDefault<bool>(208, "default_values", default_values, false);
 	serializer.WritePropertyWithDefault<InsertColumnOrder>(209, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(210, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
@@ -141,7 +146,11 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(210, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(table));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return std::move(result);
 }
 
@@ -211,6 +220,16 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(206, "having", result->having);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(207, "sample", result->sample);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(208, "qualify", result->qualify);
+	if (!result->from_table) {
+		result->from_table = make_uniq<EmptyTableRef>();
+	}
+	for (auto &grouping_set : result->groups.grouping_sets) {
+		for (auto &group_index : grouping_set) {
+			if (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {
+				throw SerializationException("Grouping set refers to a group that does not exist");
+			}
+		}
+	}
 	return std::move(result);
 }
 

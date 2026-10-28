@@ -1,0 +1,74 @@
+# name: test/sql/trigger/temporary_trigger.test
+# description: CREATE TEMPORARY TRIGGER is rejected - a trigger is temporary iff its base table is
+# group: [trigger]
+
+require noforcestorage
+
+load {TEST_DIR}/temporary_trigger.db
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+CREATE TABLE audit(msg VARCHAR)
+
+statement ok
+CREATE TEMPORARY TABLE tmp(i INTEGER)
+
+statement ok
+CREATE TEMPORARY TABLE tmp_audit(msg VARCHAR)
+
+statement error
+CREATE TEMPORARY TRIGGER trg AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES ('x')
+----
+<REGEX>:.*Temporary triggers are not supported.*
+
+statement error
+CREATE TEMP TRIGGER trg AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES ('x')
+----
+<REGEX>:.*Temporary triggers are not supported.*
+
+# also rejected on a temporary base table - the trigger is temporary because the table is
+statement error
+CREATE TEMPORARY TRIGGER trg AFTER INSERT ON tmp FOR EACH STATEMENT INSERT INTO tmp_audit VALUES ('x')
+----
+<REGEX>:.*Temporary triggers are not supported.*
+
+query I
+SELECT count(*) FROM duckdb_triggers()
+----
+0
+
+# a trigger on a temporary table is created in the temp catalog and fires
+statement ok
+CREATE TRIGGER trg AFTER INSERT ON tmp FOR EACH STATEMENT INSERT INTO tmp_audit VALUES ('fired')
+
+query III
+SELECT database_name, trigger_name, temporary FROM duckdb_triggers()
+----
+temp	trg	true
+
+statement ok
+INSERT INTO tmp VALUES (1)
+
+query I
+SELECT * FROM tmp_audit
+----
+fired
+
+# a trigger on a persistent table is not temporary
+statement ok
+CREATE TRIGGER trg_persistent AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES ('fired')
+
+query II
+SELECT trigger_name, temporary FROM duckdb_triggers() WHERE NOT temporary
+----
+trg_persistent	false
+
+restart
+
+# only the persistent trigger survives
+query II
+SELECT trigger_name, temporary FROM duckdb_triggers()
+----
+trg_persistent	false

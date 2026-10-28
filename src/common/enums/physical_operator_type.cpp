@@ -133,6 +133,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_SECRET";
 	case PhysicalOperatorType::RECURSIVE_KEY_JOIN:
 		return "RECURSIVE_KEY_JOIN";
+	case PhysicalOperatorType::MERGE_ACTION_SOURCE:
+		return "MERGE_ACTION_SOURCE";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:
@@ -171,6 +173,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY_DATABASE";
 	case PhysicalOperatorType::VERIFY_VECTOR:
 		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::SECURE_VIEW:
+		return "SECURE_VIEW";
 	case PhysicalOperatorType::UPDATE_EXTENSIONS:
 		return "UPDATE_EXTENSIONS";
 	case PhysicalOperatorType::CONNECT:

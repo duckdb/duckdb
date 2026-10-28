@@ -359,6 +359,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	//	Destruct the result aggregates
 	if (aggr.function.HasStateDestructorCallback()) {
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
+		allocator.FreeAll();
 	}
 }
 

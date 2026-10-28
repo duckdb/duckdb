@@ -8,9 +8,11 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/selection_helpers.hpp"
 
 #include <array>
 #include <functional>
@@ -126,6 +128,8 @@ private:
 		return result;
 	}
 
+	//! Makes a reused result ready for the one-row generic path: like the constant path, a stale NULL does not survive
+	DUCKDB_API static void PrepareConstantResult(Vector &result);
 	DUCKDB_API static bool PrepareGenericResultValidity(const UnifiedVectorFormat *formats, idx_t format_count,
 	                                                    Vector &result, idx_t count, bool preserve_result_validity,
 	                                                    bool adds_nulls);
@@ -187,6 +191,7 @@ private:
 		}
 	}
 
+#if !DUCKDB_SMALLER_BINARY(scalar_executor_constant)
 	template <class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteConstant(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                            bool input_is_null, ADAPTER &adapter, std::index_sequence<Is...>) {
@@ -203,6 +208,7 @@ private:
 		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 		result_data[0] = adapter.Operation(result_validity, 0, *ConstantVector::GetData<ARGS>(inputs[Is].get())...);
 	}
+#endif
 
 	template <idx_t INPUT_INDEX, uint64_t SELECTION_MASK>
 	static inline idx_t GenericInputIndex(const std::array<const sel_t *, 2> &selections, idx_t row) {
@@ -260,12 +266,74 @@ private:
 			                                result_validity, adapter);
 			return;
 		default:
-			throw InternalException("Invalid nullable generic scalar executor selection profile");
+			InternalException::Throw("Invalid nullable generic scalar executor selection profile");
 		}
 	}
 
-	template <bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE,
-	          class ADAPTER, class... ARGS, size_t... Is>
+	template <uint64_t SELECTION_MASK, class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void
+	ExecuteGenericBinaryNoNull(const LEFT_TYPE *__restrict left_data, const RIGHT_TYPE *__restrict right_data,
+	                           const std::array<const sel_t *, 2> &selections, RESULT_TYPE *__restrict result_data,
+	                           idx_t count, ValidityMask &result_validity, ADAPTER &adapter) {
+		auto left_selection = selections[0];
+		auto right_selection = selections[1];
+		auto result_ptr = result_data;
+		auto result_end = result_data + count;
+		idx_t result_idx = 0;
+		while (result_ptr != result_end) {
+			idx_t left_index;
+			idx_t right_index;
+			if constexpr (SELECTION_MASK & 1) {
+				left_index = *left_selection++;
+			} else {
+				left_index = result_idx;
+			}
+			if constexpr (SELECTION_MASK & 2) {
+				right_index = *right_selection++;
+			} else {
+				right_index = result_idx;
+			}
+			*result_ptr =
+			    adapter.Operation(result_validity, result_idx, left_data[left_index], right_data[right_index]);
+			result_ptr++;
+			result_idx++;
+		}
+	}
+
+	template <class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void ExecuteGenericBinaryNoNullSwitch(const LEFT_TYPE *__restrict left_data,
+	                                             const RIGHT_TYPE *__restrict right_data,
+	                                             const std::array<UnifiedVectorFormat, 2> &formats,
+	                                             RESULT_TYPE *__restrict result_data, idx_t count,
+	                                             ValidityMask &result_validity, ADAPTER &adapter) {
+		std::array<const sel_t *, 2> selections = {{formats[0].sel->data(), formats[1].sel->data()}};
+		uint64_t selection_mask = 0;
+		selection_mask |= selections[0] ? 1 : 0;
+		selection_mask |= selections[1] ? 2 : 0;
+		switch (selection_mask) {
+		case 0:
+			ExecuteGenericBinaryNoNull<0>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 1:
+			ExecuteGenericBinaryNoNull<1>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 2:
+			ExecuteGenericBinaryNoNull<2>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		case 3:
+			ExecuteGenericBinaryNoNull<3>(left_data, right_data, selections, result_data, count, result_validity,
+			                              adapter);
+			return;
+		default:
+			InternalException::Throw("Invalid non-null generic scalar executor selection profile");
+		}
+	}
+
+	template <bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool SPECIALIZE_NON_NULL_GENERIC_SELECTIONS,
+	          bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteGeneric(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                           ADAPTER &adapter, std::index_sequence<Is...>) {
 		constexpr idx_t N = sizeof...(ARGS);
@@ -298,6 +366,9 @@ private:
 					}
 				}
 			}
+		} else if constexpr (SPECIALIZE_NON_NULL_GENERIC_SELECTIONS && N == 2) {
+			ExecuteGenericBinaryNoNullSwitch(std::get<0>(input_data), std::get<1>(input_data), formats, result_data,
+			                                 count, result_validity, adapter);
 		} else {
 			for (idx_t row = 0; row < count; row++) {
 				result_data[row] = adapter.Operation(result_validity, row,
@@ -313,8 +384,20 @@ private:
 		static_assert(N > 0, "ScalarExecutor requires at least one input");
 		auto profile = GetInputProfile(inputs, indices);
 		if (profile.all_constant) {
+#if !DUCKDB_SMALLER_BINARY(scalar_executor_constant)
 			ExecuteConstant<RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count, profile.any_constant_null, adapter,
 			                                               indices);
+#else
+			// the generic path computes the one row, which then becomes the constant
+			PrepareConstantResult(result);
+			ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS,
+			               POLICY::SPECIALIZE_NON_NULL_GENERIC_SELECTIONS, POLICY::PRESERVE_RESULT_VALIDITY,
+			               RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, 1, adapter, indices);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
+#endif
 			return;
 		}
 		if constexpr (POLICY::SPECIALIZE_FLAT && N <= 3) {
@@ -375,12 +458,13 @@ private:
 					}
 					break;
 				default:
-					throw InternalException("Invalid flat/constant scalar executor profile");
+					InternalException::Throw("Invalid flat/constant scalar executor profile");
 				}
 			}
 		}
-		ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, POLICY::PRESERVE_RESULT_VALIDITY, RESULT_TYPE,
-		               ADAPTER, ARGS...>(inputs, result, count, adapter, indices);
+		ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, POLICY::SPECIALIZE_NON_NULL_GENERIC_SELECTIONS,
+		               POLICY::PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count, adapter,
+		                                                                                indices);
 	}
 
 	template <bool HAS_TRUE_SELECTION, bool HAS_FALSE_SELECTION>
@@ -389,7 +473,9 @@ private:
 
 		StaticSelectionSink(SelectionVector *true_selection_p, SelectionVector *false_selection_p)
 		    : true_selection(true_selection_p ? true_selection_p->data() : nullptr),
-		      false_selection(false_selection_p ? false_selection_p->data() : nullptr) {
+		      false_selection(false_selection_p ? false_selection_p->data() : nullptr),
+		      true_capacity(true_selection_p ? true_selection_p->Capacity() : 0),
+		      false_capacity(false_selection_p ? false_selection_p->Capacity() : 0) {
 			D_ASSERT(!HAS_TRUE_SELECTION || true_selection);
 			D_ASSERT(!HAS_FALSE_SELECTION || false_selection);
 		}
@@ -402,6 +488,26 @@ private:
 			if constexpr (HAS_FALSE_SELECTION) {
 				false_selection[false_count] = UnsafeNumericCast<sel_t>(result_idx);
 				false_count += !comparison_result;
+			}
+		}
+
+		inline bool CanAppendBatch() const {
+			return HAS_TRUE_SELECTION;
+		}
+
+		inline void AppendBatch(const bool *matches, idx_t count, idx_t offset) {
+			D_ASSERT(CanAppendBatch());
+			D_ASSERT(true_count <= true_capacity);
+			array_ptr<sel_t> destination(true_selection + true_count, true_capacity - true_count);
+			if constexpr (HAS_FALSE_SELECTION) {
+				D_ASSERT(false_count <= false_capacity);
+				array_ptr<sel_t> false_destination(false_selection + false_count, false_capacity - false_count);
+				auto selected =
+				    SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, false_destination, offset);
+				true_count += selected;
+				false_count += count - selected;
+			} else {
+				true_count += SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, {}, offset);
 			}
 		}
 
@@ -439,6 +545,8 @@ private:
 
 		sel_t *true_selection;
 		sel_t *false_selection;
+		idx_t true_capacity;
+		idx_t false_capacity;
 		idx_t true_count = 0;
 		idx_t false_count = 0;
 	};
@@ -456,6 +564,27 @@ private:
 			if (false_selection) {
 				false_selection->set_index(false_count, result_idx);
 				false_count += !comparison_result;
+			}
+		}
+
+		inline bool CanAppendBatch() const {
+			return true_selection;
+		}
+
+		inline void AppendBatch(const bool *matches, idx_t count, idx_t offset) {
+			D_ASSERT(CanAppendBatch());
+			D_ASSERT(true_count <= true_selection->Capacity());
+			array_ptr<sel_t> destination(true_selection->data() + true_count, true_selection->Capacity() - true_count);
+			if (false_selection) {
+				D_ASSERT(false_count <= false_selection->Capacity());
+				array_ptr<sel_t> false_destination(false_selection->data() + false_count,
+				                                   false_selection->Capacity() - false_count);
+				auto selected =
+				    SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, false_destination, offset);
+				true_count += selected;
+				false_count += count - selected;
+			} else {
+				true_count += SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, {}, offset);
 			}
 		}
 
@@ -521,6 +650,20 @@ private:
 			auto validity_entry = input_validity.GetValidityEntry(entry_idx);
 			auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
+				if constexpr (UseBooleanSelectionBatch<ARGS...>()) {
+					if (local_sink.CanAppendBatch() && !sel.IsSet() &&
+					    next - base_idx == ValidityMask::BITS_PER_VALUE) {
+						bool matches[ValidityMask::BITS_PER_VALUE];
+						for (idx_t i = 0; i < ValidityMask::BITS_PER_VALUE; i++) {
+							const bool comparison_result = adapter.Operation(
+							    std::get<Is>(input_data)[InputIndex<Is, CONSTANT_MASK>(base_idx + i)]...);
+							matches[i] = comparison_result;
+						}
+						local_sink.AppendBatch(matches, ValidityMask::BITS_PER_VALUE, base_idx);
+						base_idx = next;
+						continue;
+					}
+				}
 				for (; base_idx < next; base_idx++) {
 					auto result_idx = sel.get_index(base_idx);
 					bool comparison_result =
@@ -777,7 +920,7 @@ public:
 	static idx_t Select(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
 		if (!true_sel && !false_sel) {
-			throw InternalException("Either true or false sel must be set");
+			InternalException::Throw("Either true or false sel must be set");
 		}
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();

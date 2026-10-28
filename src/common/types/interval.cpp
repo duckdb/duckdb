@@ -5,11 +5,13 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -166,14 +168,13 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time, false, nullptr, negative)) {
 		return false;
 	}
-	result.micros += time.value;
-	found_any = true;
-	if (negative) {
-		result.micros = -result.micros;
+	if (!IntervalTryAddition<int64_t>(result.micros, time.value, 1, error_message)) {
+		return false;
 	}
+	found_any = true;
 	goto end_of_string;
 }
 interval_parse_identifier:
@@ -352,8 +353,10 @@ interval_parse_ago:
 		}
 	}
 	// invert all the values
-	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum()) {
-		throw OutOfRangeException("AGO interval value is out of range");
+	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum() ||
+	    result.micros == NumericLimits<int64_t>::Minimum()) {
+		AssignOutOfRangeErrorOrThrow("AGO interval value is out of range", error_message);
+		return false;
 	}
 
 	result.months = -result.months;
@@ -530,10 +533,32 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
 	const auto us_2 = Timestamp::GetEpochMicroSeconds(timestamp_2);
 	int64_t delta_us;
-	if (!TrySubtractOperator::Operation(us_1, us_2, delta_us)) {
+	if (TrySubtractOperator::Operation(us_1, us_2, delta_us)) {
+		return FromMicro(delta_us);
+	}
+	// the days between two finite timestamps always fit, even when their microseconds do not
+	const auto delta = Hugeint::Convert(us_1) - Hugeint::Convert(us_2);
+	const auto micros_per_day = Hugeint::Convert(Interval::MICROS_PER_DAY);
+	interval_t result;
+	result.months = 0;
+	if (!Hugeint::TryCast(delta / micros_per_day, result.days) ||
+	    !Hugeint::TryCast(delta % micros_per_day, result.micros)) {
 		throw ConversionException("Timestamp difference is out of bounds");
 	}
-	return FromMicro(delta_us);
+	return result;
+}
+
+int64_t Interval::GetDifferenceInUnits(int64_t start_us, int64_t end_us, int64_t micros_per_unit) {
+	int64_t delta_us;
+	if (TrySubtractOperator::Operation(end_us, start_us, delta_us)) {
+		return delta_us / micros_per_unit;
+	}
+	const auto delta = Hugeint::Convert(end_us) - Hugeint::Convert(start_us);
+	int64_t units;
+	if (!Hugeint::TryCast(delta / Hugeint::Convert(micros_per_unit), units)) {
+		throw OutOfRangeException("Overflow in the difference of two timestamps");
+	}
+	return units;
 }
 
 interval_t Interval::FromMicro(int64_t delta_us) {
@@ -546,6 +571,15 @@ interval_t Interval::FromMicro(int64_t delta_us) {
 }
 
 interval_t Interval::Invert(interval_t interval) {
+	if (interval.days == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval days value out of range");
+	}
+	if (interval.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
+	if (interval.months == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval months value out of range");
+	}
 	interval.days = -interval.days;
 	interval.micros = -interval.micros;
 	interval.months = -interval.months;
@@ -553,10 +587,19 @@ interval_t Interval::Invert(interval_t interval) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
-	if (!left.IsFinite()) {
-		return left;
-	}
 	date_t result;
+	if (!TryAdd(left, right, result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
+}
+
+bool Interval::TryAdd(date_t left, interval_t right, date_t &result) {
+	if (!left.IsFinite()) {
+		result = left;
+		return true;
+	}
+	result = left;
 	if (right.months != 0) {
 		int32_t year, month, day;
 		Date::Convert(left, year, month, day);
@@ -570,25 +613,38 @@ date_t Interval::Add(date_t left, interval_t right) {
 			year--;
 			month += Interval::MONTHS_PER_YEAR;
 		}
+		if (month < 1 || month > Interval::MONTHS_PER_YEAR) {
+			return false;
+		}
 		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
-		result = Date::FromDate(year, month, day);
-	} else {
+		if (!Date::TryFromDate(year, month, day, result)) {
+			return false;
+		}
+	}
+	if (right.days != 0 && !TryAddOperator::Operation(result.days, right.days, result.days)) {
+		return false;
+	}
+	if (right.micros != 0 &&
+	    !TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
+		return false;
+	}
+	return result.IsFinite();
+}
+
+bool Interval::TryAdd(timestamp_t left, interval_t right, timestamp_t &result) {
+	if (!left.IsFinite()) {
 		result = left;
+		return true;
 	}
-	if (right.days != 0) {
-		if (!TryAddOperator::Operation(result.days, right.days, result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
+	date_t new_date;
+	if (!TryAdd(date, right, new_date)) {
+		return false;
 	}
-	if (right.micros != 0) {
-		if (!TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
-	}
-	if (!result.IsFinite()) {
-		throw OutOfRangeException("Date out of range");
-	}
-	return result;
+	auto new_time = Interval::Add(time, right, new_date);
+	return Timestamp::TryFromDatetime(new_date, new_time, result);
 }
 
 dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {

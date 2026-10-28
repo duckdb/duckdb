@@ -509,8 +509,15 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 			auto &source_col = source.data[col_idx];
 			// Compare the pinned entry by pointer: cheaper than the string id and exact, since pinning keeps the
 			// address stable (no ABA). The type check must come first to guard the Cast against a flat vector.
-			const bool same_dict = source_col.GetVectorType() == VectorType::DICTIONARY_VECTOR &&
-			                       &source_col.Buffer().Cast<DictionaryBuffer>().GetEntry() == slot.entry.get();
+			bool same_dict = false;
+			if (source_col.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+				auto &source_entry = source_col.Buffer().Cast<DictionaryBuffer>().GetEntry();
+				// Reinterpret (e.g. a type-changing function) re-wraps a global dictionary in a new entry per chunk
+				// that keeps its id, so a global dictionary is also matched by id
+				same_dict = &source_entry == slot.entry.get() ||
+				            (slot.entry->global_dictionary && source_entry.global_dictionary &&
+				             !slot.entry->id.empty() && source_entry.id == slot.entry->id);
+			}
 			if (same_dict) {
 				const auto &source_sel = DictionaryVector::SelVector(source_col);
 				for (idx_t row = 0; row < added; row++) {
@@ -634,17 +641,6 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	}
 	case CachingPhysicalOperatorExecuteMode::RETURN_CHUNK:
 		break;
-	}
-
-	// A flushed/reset dict column can leave the reused output chunk holding a DICTIONARY_VECTOR over a null cache
-	// slot that Reset cannot flatten; on an empty result that desyncs the chunk, so flatten stale columns to flat.
-	if (chunk.size() == 0) {
-		for (auto &vector : chunk.data) {
-			const auto vector_type = vector.GetVectorType();
-			if (vector_type != VectorType::FLAT_VECTOR && vector_type != VectorType::CONSTANT_VECTOR) {
-				vector.Initialize();
-			}
-		}
 	}
 
 	return child_result;

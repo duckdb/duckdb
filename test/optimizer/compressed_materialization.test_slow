@@ -108,7 +108,7 @@ from range(10)
 # and if we see it more than twice we're likely compressing and decompressing twice (once for each ORDER BY)
 # but we can compress once, then do both ORDER BYs, then decompress
 query II
-explain select count(i), count(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
+explain select sum(i), sum(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
 ----
 logical_opt	<REGEX>:(.*CAST.*){4}
 
@@ -121,7 +121,7 @@ logical_opt	<REGEX>:(.*CAST.*){3}
 
 # We can't deal with duplicate projections (yet) so this should see 3 compresses instead of 1
 query II
-explain select count(j1), count(j2) from (select j j1, j j2 from (select j from test order by j offset 1) order by j1, j2 offset 1)
+explain select sum(j1), sum(j2) from (select j j1, j j2 from (select j from test order by j offset 1) order by j1, j2 offset 1)
 ----
 logical_opt	<REGEX>:(.*CAST.*){6}
 

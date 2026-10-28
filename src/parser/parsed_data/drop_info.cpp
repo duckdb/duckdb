@@ -14,6 +14,14 @@ DropInfo::DropInfo(const DropInfo &info)
       qualified_name(info.qualified_name) {
 }
 
+DatabaseModificationType DropInfo::GetModifications() const {
+	if (type == CatalogType::TABLE_ENTRY || type == CatalogType::INDEX_ENTRY || cascade) {
+		return DatabaseModificationType::DROP_CATALOG_ENTRY;
+	}
+	// a schema is only dropped without CASCADE when it is empty
+	return DatabaseModificationType();
+}
+
 unique_ptr<DropInfo> DropInfo::Copy() const {
 	return make_uniq<DropInfo>(*this);
 }
@@ -36,6 +44,13 @@ string DropInfo::ToString() const {
 			if (trigger_info.base_table) {
 				result += " ON ";
 				result += trigger_info.base_table->Cast<BaseTableRef>().ToString();
+			}
+		}
+		if (type == CatalogType::SECRET_ENTRY && extra_drop_info) {
+			// Preserve the `FROM <storage>` storage specifier so `DROP SECRET <name> FROM <storage>` round-trips.
+			auto &secret_info = extra_drop_info->Cast<ExtraDropSecretInfo>();
+			if (!secret_info.secret_storage.empty()) {
+				result += " FROM " + SQLIdentifier(secret_info.secret_storage);
 			}
 		}
 		if (cascade) {

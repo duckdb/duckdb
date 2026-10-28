@@ -25,6 +25,7 @@ class CreateIndexScanState;
 class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
+class IndexEntry;
 class TableIndexList;
 class TableStatistics;
 struct TableAppendState;
@@ -36,6 +37,7 @@ struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
+
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
@@ -65,6 +67,24 @@ struct ColumnSegmentInfoScanState {
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> current_row_group;
 	ColumnSegmentInfoScanOptions options;
+};
+
+//! The row groups that existed when the checkpoint started
+struct CollectionCheckpointSnapshot {
+	shared_ptr<RowGroupSegmentTree> row_groups;
+	idx_t segment_count = 0;
+	//! The row group count recorded by the first append that saw this checkpoint, if any
+	optional_idx row_group_count;
+};
+
+//! The rewritten row groups, installed by InstallCheckpoint
+struct CollectionCheckpointResult {
+	//! Null if the table was unchanged
+	shared_ptr<RowGroupSegmentTree> row_groups;
+	idx_t total_rows = 0;
+	idx_t next_row_id = 0;
+	//! The live row groups past this count were appended while the checkpoint ran
+	idx_t checkpointed_row_group_count = 0;
 };
 
 class RowGroupCollection {
@@ -102,9 +122,11 @@ public:
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
 	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-	                                     idx_t vector_index, idx_t max_row);
+	                                     idx_t vector_index, idx_t max_row, bool initialize_columns = true);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
+	//! Claims the next assignment and returns its rows, invalid once none is left, deferring column setup when asked
+	optional_idx NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction);
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction, const vector<StorageIndex> &column_ids);
@@ -127,7 +149,7 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
 	                  optional_ptr<StorageCommitState> commit_state);
@@ -136,18 +158,24 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
-	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count);
+	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
+	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
+	             optional_ptr<DeletedRowIds> deleted_ids = nullptr);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
+	CollectionCheckpointSnapshot SnapshotForCheckpoint(TableDataWriter &writer) const;
+	CollectionCheckpointResult Checkpoint(TableDataWriter &writer, TableStatistics &global_stats,
+	                                      const CollectionCheckpointSnapshot &snapshot);
+	//! Takes over the row groups appended meanwhile. Runs under the table's append lock
+	void InstallCheckpoint(CollectionCheckpointResult result, TableStatistics &checkpoint_stats);
 
 	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy
 	GetVacuumIndexStrategy(AttachedDatabase &attached,
-	                       optional_ptr<vector<reference<BoundIndex>>> remap_indexes = nullptr) const;
+	                       optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes = nullptr) const;
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);
@@ -183,9 +211,9 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
 	                                         TransactionData transaction);
-	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
-	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(const StorageIndex &column_id);
 	unique_ptr<BlockingSample> GetSample();

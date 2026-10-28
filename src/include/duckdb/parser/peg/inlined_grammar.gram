@@ -4,6 +4,7 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
+	ExtensionRepositoryStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -36,13 +37,9 @@ Statement <-
 	AnalyzeStatement /
 	MergeIntoStatement /
 	ConnectStatement /
-	DisconnectStatement /
-	ExpressionStatement
+	DisconnectStatement
 
 AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
-
-ExpressionStatement <- List(ExpressionAlias)
-ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -164,16 +161,17 @@ NumericModType <- 'NUMERIC' TypeModifiers?
 
 QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeNameAsQualifiedName
 TypeNameAsQualifiedName <- TypeName
-CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
+CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification+ ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
+NestedType <- TypeVariations ArrayBounds*
 RowType <- RowOrStruct ColIdTypeList?
-SetofType <- 'SETOF' Type
+SetofType <- 'SETOF' NestedType
 UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
-MapType <- 'MAP' Parens(List(Type))?
-TupleType <- 'TUPLE' Parens(List(Type))
-ColIdType <- ColId Type
+MapType <- 'MAP' Parens(List(NestedType))?
+TupleType <- 'TUPLE' Parens(List(NestedType))
+ColIdType <- ColId NestedType
 ArrayBounds <- ArrayKeywordWithBounds / SquareBracketsArray / ArrayKeyword
 ArrayKeyword <- 'ARRAY'
 ArrayKeywordWithBounds <- 'ARRAY' SquareBracketsArray
@@ -194,6 +192,364 @@ RowOrStruct <- 'ROW' / 'STRUCT'
 List(D) <- D (',' D)* ','?
 Parens(D) <- '(' D ')'
 
+BareLabelKeyword <- 'abort' /
+'absolute' /
+'access' /
+'action' /
+'add' /
+'admin' /
+'after' /
+'aggregate' /
+'also' /
+'alter' /
+'always' /
+'approx' /
+'assertion' /
+'assignment' /
+'attach' /
+'attribute' /
+'backward' /
+'before' /
+'begin' /
+'between' /
+'bigint' /
+'bit' /
+'boolean' /
+'cache' /
+'call' /
+'called' /
+'cascade' /
+'cascaded' /
+'catalog' /
+'chain' /
+'char' /
+'character' /
+'characteristics' /
+'checkpoint' /
+'class' /
+'close' /
+'cluster' /
+'coalesce' /
+'columns' /
+'comment' /
+'comments' /
+'commit' /
+'committed' /
+'compression' /
+'configuration' /
+'conflict' /
+'connect' /
+'connection' /
+'constraints' /
+'content' /
+'continue' /
+'conversion' /
+'copy' /
+'cost' /
+'csv' /
+'cube' /
+'current' /
+'cursor' /
+'cycle' /
+'data' /
+'database' /
+'deallocate' /
+'dec' /
+'decimal' /
+'declare' /
+'defaults' /
+'deferred' /
+'definer' /
+'delete' /
+'delimiter' /
+'delimiters' /
+'depends' /
+'destroy' /
+'detach' /
+'dictionary' /
+'disable' /
+'discard' /
+'disconnect' /
+'distance' /
+'document' /
+'domain' /
+'double' /
+'drop' /
+'each' /
+'enable' /
+'encoding' /
+'encrypted' /
+'enum' /
+'error' /
+'event' /
+'exact' /
+'excluding' /
+'exclusive' /
+'execute' /
+'exists' /
+'explain' /
+'export' /
+'extension' /
+'extensions' /
+'external' /
+'extract' /
+'family' /
+'first' /
+'float' /
+'following' /
+'force' /
+'forward' /
+'function' /
+'functions' /
+'generated' /
+'global' /
+'grant' /
+'granted' /
+'grouping' /
+'grouping_id' /
+'groups' /
+'handler' /
+'header' /
+'hold' /
+'identity' /
+'if' /
+'immediate' /
+'immutable' /
+'implicit' /
+'import' /
+'include' /
+'including' /
+'increment' /
+'index' /
+'indexes' /
+'inherit' /
+'inherits' /
+'inline' /
+'inout' /
+'input' /
+'insensitive' /
+'insert' /
+'install' /
+'instead' /
+'int' /
+'integer' /
+'interval' /
+'invoker' /
+'isolation' /
+'json' /
+'key' /
+'label' /
+'language' /
+'large' /
+'last' /
+'leakproof' /
+'level' /
+'listen' /
+'load' /
+'local' /
+'location' /
+'lock' /
+'locked' /
+'logged' /
+'macro' /
+'map' /
+'mapping' /
+'match' /
+'matched' /
+'materialized' /
+'maxvalue' /
+'merge' /
+'method' /
+'minvalue' /
+'mode' /
+'move' /
+'name' /
+'names' /
+'national' /
+'nchar' /
+'nearest' /
+'new' /
+'next' /
+'no' /
+'none' /
+'nothing' /
+'notify' /
+'nowait' /
+'nullif' /
+'nulls' /
+'numeric' /
+'object' /
+'of' /
+'off' /
+'oids' /
+'old' /
+'operator' /
+'option' /
+'options' /
+'ordinality' /
+'others' /
+'out' /
+'overlay' /
+'overriding' /
+'owned' /
+'owner' /
+'parallel' /
+'parser' /
+'partial' /
+'partition' /
+'partitioned' /
+'passing' /
+'password' /
+'percent' /
+'persistent' /
+'plans' /
+'policy' /
+'position' /
+'pragma' /
+'preceding' /
+'prepare' /
+'prepared' /
+'preserve' /
+'prior' /
+'privileges' /
+'procedural' /
+'procedure' /
+'program' /
+'publication' /
+'quote' /
+'range' /
+'read' /
+'real' /
+'reassign' /
+'recheck' /
+'recursive' /
+'ref' /
+'referencing' /
+'refresh' /
+'register' /
+'reindex' /
+'relative' /
+'release' /
+'repeatable' /
+'replica' /
+'reset' /
+'resource' /
+'resources' /
+'restart' /
+'restrict' /
+'returns' /
+'revoke' /
+'role' /
+'rollback' /
+'rollup' /
+'row' /
+'rows' /
+'rule' /
+'sample' /
+'savepoint' /
+'schema' /
+'schemas' /
+'scope' /
+'scroll' /
+'search' /
+'secret' /
+'secure' /
+'security' /
+'sequence' /
+'sequences' /
+'serializable' /
+'server' /
+'session' /
+'set' /
+'setof' /
+'sets' /
+'share' /
+'similarity' /
+'simple' /
+'skip' /
+'smallint' /
+'snapshot' /
+'sorted' /
+'source' /
+'sql' /
+'stable' /
+'standalone' /
+'start' /
+'statement' /
+'statistics' /
+'stdin' /
+'stdout' /
+'storage' /
+'stored' /
+'strict' /
+'strip' /
+'struct' /
+'subscription' /
+'substring' /
+'sysid' /
+'system' /
+'tables' /
+'tablespace' /
+'target' /
+'temp' /
+'template' /
+'temporary' /
+'text' /
+'ties' /
+'time' /
+'timestamp' /
+'transaction' /
+'transform' /
+'treat' /
+'trigger' /
+'trim' /
+'truncate' /
+'trusted' /
+'try_cast' /
+'tuple' /
+'type' /
+'types' /
+'unbounded' /
+'uncommitted' /
+'unencrypted' /
+'unknown' /
+'unlisten' /
+'unlogged' /
+'until' /
+'update' /
+'use' /
+'user' /
+'vacuum' /
+'valid' /
+'validate' /
+'validator' /
+'value' /
+'values' /
+'varchar' /
+'variable' /
+'version' /
+'view' /
+'views' /
+'virtual' /
+'volatile' /
+'whitespace' /
+'work' /
+'wrapper' /
+'write' /
+'xml' /
+'xmlattributes' /
+'xmlconcat' /
+'xmlelement' /
+'xmlexists' /
+'xmlforest' /
+'xmlnamespaces' /
+'xmlparse' /
+'xmlpi' /
+'xmlroot' /
+'xmlserialize' /
+'xmltable' /
+'yes' /
+'zone'
 ColumnNameKeyword <- 'BETWEEN' /
 'BIGINT' /
 'BIT' /
@@ -312,7 +668,6 @@ ReservedKeyword <- 'ALL' /
 'FROM' /
 'GROUP' /
 'HAVING' /
-'QUALIFY' /
 'IN' /
 'INITIALLY' /
 'INTERSECT' /
@@ -321,6 +676,7 @@ ReservedKeyword <- 'ALL' /
 'LATERAL' /
 'LEADING' /
 'LIMIT' /
+'MATCH_RECOGNIZE' /
 'NOT' /
 'NULL' /
 'OFFSET' /
@@ -329,10 +685,11 @@ ReservedKeyword <- 'ALL' /
 'OR' /
 'ORDER' /
 'PIVOT' /
-'PIVOT_WIDER' /
 'PIVOT_LONGER' /
+'PIVOT_WIDER' /
 'PLACING' /
 'PRIMARY' /
+'QUALIFY' /
 'REFERENCES' /
 'RETURNING' /
 'SELECT' /
@@ -402,6 +759,7 @@ UnreservedKeyword <- 'ABORT' /
 'ASSIGNMENT' /
 'ATTACH' /
 'ATTRIBUTE' /
+'AUTO' /
 'BACKWARD' /
 'BEFORE' /
 'BEGIN' /
@@ -411,8 +769,8 @@ UnreservedKeyword <- 'ABORT' /
 'CASCADE' /
 'CASCADED' /
 'CATALOG' /
-'CENTURY' /
 'CENTURIES' /
+'CENTURY' /
 'CHAIN' /
 'CHARACTERISTICS' /
 'CHECKPOINT' /
@@ -450,10 +808,12 @@ UnreservedKeyword <- 'ABORT' /
 'DEFAULTS' /
 'DEFERRED' /
 'DEFINER' /
+'DEFINES' /
 'DELETE' /
 'DELIMITER' /
 'DELIMITERS' /
 'DEPENDS' /
+'DESTROY' /
 'DETACH' /
 'DICTIONARY' /
 'DISABLE' /
@@ -521,8 +881,8 @@ UnreservedKeyword <- 'ABORT' /
 'INSTALL' /
 'INSTEAD' /
 'INVOKER' /
-'JSON' /
 'ISOLATION' /
+'JSON' /
 'KEY' /
 'LABEL' /
 'LANGUAGE' /
@@ -547,8 +907,8 @@ UnreservedKeyword <- 'ABORT' /
 'METHOD' /
 'MICROSECOND' /
 'MICROSECONDS' /
-'MILLENNIUM' /
 'MILLENNIA' /
+'MILLENNIUM' /
 'MILLISECOND' /
 'MILLISECONDS' /
 'MINUTE' /
@@ -615,6 +975,7 @@ UnreservedKeyword <- 'ABORT' /
 'REF' /
 'REFERENCING' /
 'REFRESH' /
+'REGISTER' /
 'REINDEX' /
 'RELATIVE' /
 'RELEASE' /
@@ -624,6 +985,7 @@ UnreservedKeyword <- 'ABORT' /
 'REPLICA' /
 'RESET' /
 'RESOURCE' /
+'RESOURCES' /
 'RESPECT' /
 'RESTART' /
 'RESTRICT' /
@@ -641,9 +1003,10 @@ UnreservedKeyword <- 'ABORT' /
 'SCOPE' /
 'SCROLL' /
 'SEARCH' /
-'SECRET' /
 'SECOND' /
 'SECONDS' /
+'SECRET' /
+'SECURE' /
 'SECURITY' /
 'SEQUENCE' /
 'SEQUENCES' /
@@ -672,6 +1035,7 @@ UnreservedKeyword <- 'ABORT' /
 'STRICT' /
 'STRIP' /
 'SUBSCRIPTION' /
+'SUBSET' /
 'SYSID' /
 'SYSTEM' /
 'TABLES' /
@@ -729,20 +1093,22 @@ AlterStatement <- 'ALTER' AlterOptions
 AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
-AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
+AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName AlterSchemaOptions
+AlterSchemaOptions <- RenameAlter / SetOptions / ResetOptions
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
+AlterTableOptions <- AddColumn / DropConstraint / DropColumn / AlterColumn / AddConstraint /
         RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
+DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? ConstraintName DropBehavior?
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
 AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
-RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
+RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' ColIdOrString
 NestedColumnName <- IdentifierDot* ColumnName
 IdentifierDot <- Identifier '.'
-RenameAlter <- 'RENAME' 'TO' Identifier
+RenameAlter <- 'RENAME' 'TO' ColIdOrString
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
 SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
@@ -761,7 +1127,7 @@ DropOrSet <- DropNullability / SetNullability
 DropNullability <- 'DROP'
 SetNullability <- 'SET'
 
-AlterType <- SetData? 'TYPE' Type? UsingExpression?
+AlterType <- SetData? 'TYPE' Type? ColumnCollation? UsingExpression?
 SetData <- 'SET' 'DATA'?
 UsingExpression <- 'USING' Expression
 
@@ -793,7 +1159,10 @@ CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
 CheckpointForce <- 'FORCE'
 
-CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
+CommentStatement <- 'COMMENT' 'ON' CommentOnType CommentTarget 'IS' CommentValue
+
+CommentTarget <- DottedIdentifier / CommentStringLiteralIdentifier
+CommentStringLiteralIdentifier <- StringLiteralIdentifier
 
 CommentOnType <-    CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro /
                     CommentView / CommentDatabase / CommentIndex / CommentSchema / CommentType / CommentColumn
@@ -823,19 +1192,23 @@ CatalogSessionTarget <- CatalogName
 CopyStatement <- 'COPY' CopyVariations
 CopyVariations <- CopyTable / CopySelect / CopyFromDatabase
 
-CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyLegacyOption? CopyOptions?
 FromOrTo <- CopyFrom / CopyTo
 CopyFrom <- 'FROM'
 CopyTo <- 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- CopyFileNameExpression / CopyFileNameStringLiteral / CopyFileNameIdentifier / CopyFileNameIdentifierColId
+CopyFileName <- CopyFileNameExpression / CopyFileNameStringLiteral / CopyFileNameIdentifierColId / CopyFileNameIdentifier
 CopyFileNameExpression <- Parameter / ParensExpression
 CopyFileNameStringLiteral <- StringLiteral
 CopyFileNameIdentifier <- Identifier
 CopyFileNameIdentifierColId <- IdentifierColId
-IdentifierColId <- Identifier '.' ColId
+IdentifierColId <- Identifier CopyFileNameSuffix+
+CopyFileNameSuffix <- '.' ColId
+
+CopyLegacyOption <- 'USING'? 'DELIMITERS' StringLiteral
+
 CopyOptions <- 'WITH'? CopyOptionList
 CopyOptionList <- CopyGenericOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption SpecializedOptionTail*
@@ -886,7 +1259,7 @@ SchemaOrData <- CopySchema / CopyData
 CopySchema <- 'SCHEMA'
 CopyData <- 'DATA'
 
-CreateIndexStmt <- UniqueIndex? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
+CreateIndexStmt <- UniqueIndex? 'INDEX' IndexConcurrently? IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
 
 WithList <- 'WITH' RelOptionOrOids
 RelOptionOrOids <- RelOptionList / Oids
@@ -897,10 +1270,11 @@ WithOids <- 'WITH'
 WithoutOids <- 'WITHOUT'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 UniqueIndex <- 'UNIQUE'
+IndexConcurrently <- 'CONCURRENTLY'
 IndexType <- 'USING' Identifier
 RelOption <- RelOptionName RelOptionArgumentOpt?
-RelOptionName <- DottedIdentifierString / StringLiteral
-DottedIdentifierString <- DottedIdentifier
+RelOptionName <- DottedColLabel / StringLiteral
+DottedColLabel <- ColLabel DotColLabel*
 RelOptionArgumentOpt <- '=' DefArg
 DefArg <- DefArgNull / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression / DefArgKeyword
 DefArgNull <- NullLiteral
@@ -924,7 +1298,10 @@ SimpleParameter <- TypeFuncName Type?
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
-CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
+CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName WithOptionList?
+
+WithOptionList <- 'WITH' RelOptionList
+
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
 SecretStorageSpecifier <- 'IN' Identifier
@@ -979,7 +1356,7 @@ CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithL
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
-CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral
+CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification+ ReservedIdentifierOrStringLiteral
 IdentifierOrStringLiteral <- Identifier / StringLiteral
 ReservedIdentifierOrStringLiteral <- ReservedIdentifier / StringLiteral
 CatalogQualification <- CatalogName '.'
@@ -992,20 +1369,27 @@ CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
 CreateTableColumnDefinition <- ColumnDefinition
 CreateTableConstraint <- TopLevelConstraint
-ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
-ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
+ColumnDefinition <- Identifier Type? GeneratedColumn? ColumnConstraint*
+ColumnConstraint <- NameableColumnConstraint / ColumnCollation
+NameableColumnConstraint <- ConstraintNameClause? ColumnConstraintElement
+ColumnConstraintElement <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCompression
 NotNullConstraint <- NullConstraint / NotNullColumnConstraint
 NullConstraint <- 'NULL'
 NotNullColumnConstraint <- 'NOT' 'NULL'
-UniqueConstraint <- 'UNIQUE'
-PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
+UniqueConstraint <- 'UNIQUE' ConstraintTiming?
+PrimaryKeyConstraint <- 'PRIMARY' 'KEY' ConstraintTiming?
+ConstraintTiming <- ImmediateConstraint / DeferredConstraint
+ImmediateConstraint <- 'IMMEDIATE'
+DeferredConstraint <- 'DEFERRED'
 DefaultValue <- 'DEFAULT' ColumnDefaultExpr
 CheckConstraint <- 'CHECK' Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
+ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions?
 ColumnCollation <- 'COLLATE' DottedIdentifier
 ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 
-KeyActions <- UpdateAction? DeleteAction?
+KeyActions <- UpdateFirstKeyActions / DeleteFirstKeyActions
+UpdateFirstKeyActions <- UpdateAction DeleteAction?
+DeleteFirstKeyActions <- DeleteAction UpdateAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
 KeyAction <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
@@ -1017,31 +1401,34 @@ SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
-ConstraintNameClause <- 'CONSTRAINT' Identifier
+ConstraintNameClause <- 'CONSTRAINT' ConstraintName
 TopCheckConstraint <- CheckConstraint
-TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
-TopUniqueConstraint <- 'UNIQUE' ColumnIdList
+TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList ConstraintTiming?
+TopUniqueConstraint <- 'UNIQUE' ColumnIdList ConstraintTiming?
 TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
-QuotedIdentifier <- '"' [^"]* '"'
+QuotedIdentifier <- ('"' [^"]* '"') / ('`' [^`]* '`')
 DottedIdentifier <- Identifier DotColLabel*
 DotColLabel <- '.' ColLabel
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
 ColIdOrString <- ColId / StringLiteralIdentifier
-TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
+TypeFuncName <- UnreservedKeyword / TypeFuncKeyword / Identifier
+TypeFuncKeyword <- TypeNameKeyword / FuncNameKeyword
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier
 ColLabelIdentifier <- ColLabel
+BareColLabel <- BareLabelKeyword / Identifier
 StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
-Generated <- 'GENERATED' AlwaysOrByDefault?
-AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
+Generated <- GeneratedAlways / GeneratedByDefault
+GeneratedAlways <- 'GENERATED' 'ALWAYS'
+GeneratedByDefault <- 'GENERATED' 'BY' 'DEFAULT'
 GeneratedColumnType <- VirtualGeneratedColumn / StoredGeneratedColumn
 
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
@@ -1082,30 +1469,57 @@ CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / CreateTypeFromType
 CreateTypeFromType <- Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
-EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
+EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?) ArrayBounds*
 
-CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateViewStmt <- CreateSecure? CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
 CreateRecursive <- 'RECURSIVE'
+CreateSecure <- 'SECURE'
 
-DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? ColIdOrString
 DeallocatePrepare <- 'PREPARE'
 
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
-TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
-TargetOptAlias <- BaseTableName 'AS'? ColId?
+TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName TruncateOptions?
+# DropBehavior first, so CASCADE/RESTRICT are not consumed as an alias
+TruncateOptions <- TruncateDropBehavior / TruncateAliasOptions
+TruncateAliasOptions <- TargetAlias TruncateDropBehavior?
+TruncateDropBehavior <- DropBehavior
+TargetOptAlias <- BaseTableName TargetAlias?
+TargetAlias <- 'AS'? ColId
 DeleteUsingClause <- 'USING' List(TableRef)
 
-DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName
 
-ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
+# "DESCRIBE (query)" and "SUMMARIZE (query)" describe the query's columns. "SHOW (query)" does too but is deprecated,
+# so ShowDeprecatedSelect is parsed yet suppressed from autocomplete (matcher_factory.cpp) - SHOW won't offer to complete a query.
+ShowDeprecatedSelect <- ShowRule SelectStatementInternal
+DescribeSelect <- DescribeOrSummarize SelectStatementInternal
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'?
-ShowQualifiedName <- ShowOrDescribeOrSummarize DescribeTarget?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+
+# "SHOW name" is settings-first, so its target autocompletes setting names (and the special MySQL forms), not
+# arbitrary tables. "DESCRIBE"/"SUMMARIZE" describe a relation, so their target autocompletes table names.
+ShowByName <- ShowRule ShowTarget?
+DescribeByName <- DescribeOrSummarize DescribeTarget?
+DescribeOrSummarize <- DescribeRule / Summarize
+
+# SHOW's own forms (a settings-first name and the special MySQL forms) plus the describe-style targets it still
+# tolerates for the deprecated "describe via SHOW". Only settings and the special forms are autocompleted after SHOW;
+# a qualified table is parsed but its suggestions are suppressed (see matcher.cpp).
+ShowTarget <- ShowDeprecatedQualifiedTableName / ShowSettingName / DescribeStringLiteral / ShowSpecialForm
+# "SHOW cat.tbl" still describes a table (deprecated), but is suppressed from autocomplete (see matcher.cpp) so SHOW
+# does not complete qualified tables (unlike DESCRIBE, which does). Wraps the generic QualifiedTableName (select.gram).
+ShowDeprecatedQualifiedTableName <- QualifiedTableName
+# A bare identifier is suggested as a setting name (SettingName is overridden to SUGGEST_SETTING_NAME).
+ShowSettingName <- SettingName
+# The special MySQL forms are only here so autocomplete suggests these keywords after SHOW; parsing of e.g.
+# "SHOW databases" resolves through ShowSettingName (the identifier) above, which the transformer special-cases.
+ShowSpecialForm <- 'DATABASES' / 'SCHEMAS' / 'TABLES' / 'VARIABLES'
+
 DescribeTarget <- DescribeBaseTableName / DescribeStringLiteral
 DescribeBaseTableName <- BaseTableName
 DescribeStringLiteral <- StringLiteral
 
-ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
 Summarize <- SummarizeRule
 SummarizeRule <- 'SUMMARIZE'
 ShowOrDescribe <- ShowRule / DescribeRule
@@ -1133,7 +1547,7 @@ DropEntries <-
 DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
+DropTableFunction <- CommentMacroTable IfExists? List(QualifiedTableFunction)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
@@ -1160,7 +1574,8 @@ IfExists <- 'IF' 'EXISTS'
 
 DropSecretStorage <- 'FROM' Identifier
 
-ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
+ExecuteStatement <- 'EXECUTE' ColIdOrString TableFunctionArguments?
+
 ExplainStatement <- 'EXPLAIN' AnalyzeKeyword? ExplainOptionList? ExplainableStatements
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
@@ -1180,22 +1595,29 @@ ExplainableStatements <-
     DropStatement /
     ExecuteStatement /
     InsertStatement /
+    InstallStatement /
     LoadStatement /
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
     ExplainSelectStatement /
     TransactionStatement /
+    TruncateStatement /
+    UpdateExtensionsStatement /
     UpdateStatement /
     VacuumStatement /
     SetStatement /
     ResetStatement
 
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
+ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral ExportOptions?
 ExportSource <- CatalogName 'TO'
+ExportOptions <- GenericCopyOptionList / SpecializedOptionList
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
-ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+ColumnReference <- NestedSchemaTableColumnName / CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+# a column of a table in a nested schema chain - five or more components, where the qualification is deeper than
+# catalog + schema and it is no longer positional which components are schemas and which is the table
+NestedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedSchemaQualification ReservedSchemaQualification+ ReservedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
 SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
 TableReservedColumnName <- TableQualification ReservedColumnName
@@ -1206,7 +1628,7 @@ FunctionArgumentList <- List(FunctionArgument)
 
 FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
 FunctionNameAsQualifiedName <- FunctionName
-CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
+CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification* ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
 DistinctOrAll <- DistinctKeyword / AllKeyword
@@ -1322,6 +1744,10 @@ ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
 
+# RUNNING and FINAL say how much of a MATCH_RECOGNIZE match the call below them reads. They are only
+# meaningful in MEASURES, which is where the binder checks for them.
+MeasureSemanticsExpression <- MeasureSemantics FunctionExpression
+
 SingleExpression <-
     ParensExpression /
 	LiteralExpression /
@@ -1336,6 +1762,7 @@ SingleExpression <-
     CastExpression /
     GroupingExpression /
     MapExpression /
+    MeasureSemanticsExpression /
     FunctionExpression /
     ColumnReference /
     ListComprehensionExpression /
@@ -1364,7 +1791,14 @@ LogicalNotExpression <- NotExpression? IsExpression
 NotExpression <- NotKeyword+
 NotKeyword <- 'NOT'
 # LEVEL 4
-IsExpression <- IsDistinctFromExpression IsTest*
+IsExpression <- IsDistinctFromExpression IsExpressionContinuation?
+IsExpressionContinuation <- IsTest IsExpressionTail*
+IsExpressionTail <- IsTestTail / IsDistinctTail / IsComparisonTail / IsOtherOperatorTail / IsCastTail
+IsTestTail <- IsTest
+IsDistinctTail <- IsDistinctFromTail
+IsComparisonTail <- ComparisonExpressionTail
+IsOtherOperatorTail <- OtherOperatorTail
+IsCastTail <- CastOperator
 IsTest <- IsLiteral / NotNull / IsNull
 IsLiteral <- 'IS' 'NOT'? IsLiteralValue
 IsLiteralValue <- TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral
@@ -1374,13 +1808,16 @@ NotNullKeyword <- 'NOT' 'NULL'
 NotNullOperator <- 'NOTNULL'
 IsNull <- IsNullOperator
 IsNullOperator <- 'ISNULL'
-# LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
+# LEVEL 5 (IS DISTINCT FROM retains the comparison binding)
 IsDistinctFromExpression <- ComparisonExpression IsDistinctFromTail*
 IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
 ComparisonExpression <- BetweenInLikeExpression ComparisonExpressionTail*
-ComparisonExpressionTail <- ComparisonOperator NotExpression? BetweenInLikeExpression
+ComparisonExpressionTail <- ComparisonOperator ComparisonOperand
+ComparisonOperand <- NotComparisonOperand / BetweenInLikeExpression
+# NOT after a comparison operator binds everything up to the IS level: a < NOT b IS NULL is a < (NOT (b IS NULL))
+NotComparisonOperand <- NotExpression IsExpression
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /
@@ -1396,11 +1833,12 @@ OperatorGreaterThan <- '>'
 OperatorLessThanEquals <- '<='
 OperatorGreaterThanEquals <- '>='
 # LEVEL 7
-BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
-BetweenInLikeOp <- 'NOT'? BetweenInLikeOpExpression
-BetweenInLikeOpExpression <- BetweenClause / InClause / LikeClause
+BetweenInLikeExpression <- OtherOperatorExpression InPredicate* BetweenLikeOp?
+InPredicate <- 'NOT'? InClause CastOperator*
+BetweenLikeOp <- 'NOT'? BetweenLikeOpExpression
+BetweenLikeOpExpression <- BetweenClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
-EscapeClause <- 'ESCAPE' ComparisonExpression
+EscapeClause <- 'ESCAPE' OtherOperatorExpression
 
 LikeVariations <- SimilarToToken / RegexInsensitiveMatchToken / RegexMatchToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotRegexInsensitiveMatchOp / NotSimilarToOp
 LikeToken      <- 'LIKE' / '~~'
@@ -1419,31 +1857,31 @@ InExpression <- InExpressionList / InSelectStatement / InContainsExpression
 InContainsExpression <- OtherOperatorExpression
 InExpressionList <- Parens(List(Expression))
 InSelectStatement <- Parens(SelectStatementInternal)
-BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
+BetweenClause <- 'BETWEEN' Asymmetric? OtherOperatorExpression 'AND' OtherOperatorExpression
+Asymmetric <- 'ASYMMETRIC'
 # LEVEL 8
-OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
+OtherOperatorExpression <- InfixOtherOperatorExpression
+InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator
 NamedOtherOperator <-
-    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    QualifiedOperator / OperatorLiteral
 OperatorLiteral <- Identifier
-AnyAllOperator <- AnyOp AnyOrAll
+AnyOperatorLiteral <- Identifier
+AnyAllOperator <- AnyOperatorLiteral AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
-SubqueryAny <- 'ANY'
+SubqueryAny <- 'ANY' / 'SOME'
 SubqueryAll <- 'ALL'
-InetOperator <- '>>=' / '<<='
-JsonOperator <- '->>'
-ListOperator <- '&&' / '@>' / '<@'
-StringOperator <- '^@' / '||'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
-QualifiedOperatorContents <- ColIdDot* AnyOp
-AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '!~*' / '~~*' / '~~~' / '~*' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
+QualifiedOperatorContents <- ColIdDot* AnyOperatorLiteral
 # LEVEL 9
-BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*
-BitwiseExpressionTail <- BitOperator AdditiveExpression
+BitwiseExpression <- TildeExpression BitwiseExpressionTail*
+BitwiseExpressionTail <- BitOperator TildeExpression
 BitOperator <- '&' / '|' / '<<' / '>>'
+# LEVEL 9.5
+TildeExpression <- TildePrefixOperator* AdditiveExpression
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression AdditiveExpressionTail*
 AdditiveExpressionTail <- Term MultiplicativeExpression
@@ -1461,12 +1899,14 @@ CollateExpression <- AtTimeZoneExpression CollateExpressionTail*
 CollateExpressionTail <- CollateOperator AtTimeZoneExpression
 CollateOperator <- 'COLLATE'
 # LEVEL 14
-AtTimeZoneExpression <- PrefixExpression AtTimeZoneExpressionTail*
-AtTimeZoneExpressionTail <- AtTimeZoneOperator PrefixExpression
+AtTimeZoneExpression <- UnaryExpression AtTimeZoneExpressionTail*
+AtTimeZoneExpressionTail <- AtTimeZoneOperator UnaryExpression
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
+UnaryExpression <- PrefixExpression / CustomPrefixExpression
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+CustomPrefixExpression <- OperatorLiteral TildeExpression
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
@@ -1484,10 +1924,11 @@ MethodExpressionArguments <- Parens(MethodExpressionArgumentList)
 MethodExpressionArgumentList <- DistinctOrAll? MethodFunctionArguments? OrderByClause? IgnoreOrRespectNulls?
 MethodFunctionArguments <- List(FunctionArgument)
 SliceExpression <- '[' SliceBound ']'
-SliceBound <- Expression? EndSliceBound? StepSliceBound?
-EndSliceBound <- ':' EndSliceValue?
-EndSliceValue <- Expression / EndSliceMinus
-EndSliceMinus <- '-'
+SliceBound <- Expression? SliceUpperBound?
+SliceUpperBound <- MinusStepSliceBound / EndStepSliceBound
+MinusStepSliceBound <- ':' '-' StepSliceBound
+EndStepSliceBound <- EndSliceBound StepSliceBound?
+EndSliceBound <- ':' Expression?
 StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
@@ -1535,19 +1976,35 @@ ExtractDatePart <-
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
     CenturyKeyword / MillenniumKeyword
 
-ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
+# Every statement about external resources, so the top-level Statement choice carries one entry
+# rather than one per form.
+ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt / AttachToExternalResource / ConnectToExternalResource
 
-CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? ExternalResourceCreationOptions?
-RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
-DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
+CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword StringLiteral AttachAlias? ExternalResourceCreationOptions?
+RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword StringLiteral AttachAlias? 'FROM' Expression
+DestroyExternalResourceStmt <- 'DESTROY' ExternalResourceKeyword ColId
 ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
 ShowAllModifier <- 'ALL'
+
+# Syntax only: the keyword pair every singular form repeats. The plural in SHOW cannot share it.
+ExternalResourceKeyword <- 'EXTERNAL' 'RESOURCE'
 
 # The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
 # distinct, and a statement can carry both.
 ExternalResourceCreationOptions <- GenericCopyOptionList
 
-InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+# The attach alias is mandatory: it separates the recipe's create params, which precede it, from the
+# attachment's own options, which follow. Without it a single option list would be ambiguous.
+# CONNECT has no such separator. Borrowing a registered resource has no create params to be confused
+# with, so a list there is the connection's; provisioning does, and the transformer rejects the second
+# list rather than let position decide.
+AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
+ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
+ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
+ExternalResourceReferenceClause <- ExternalResourceKeyword ColId
+
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? OverridingClause? InsertValues OnConflictClause? ReturningClause?
 
 OrAction <- InsertOrReplace / InsertOrIgnore
 InsertOrReplace <- 'OR' 'REPLACE'
@@ -1557,6 +2014,8 @@ InsertByNameOrder <- 'BY' InsertByName
 InsertByPositionOrder <- 'BY' InsertByPosition
 InsertByName <- 'NAME'
 InsertByPosition <- 'POSITION'
+OverridingClause <- 'OVERRIDING' OverridingScope 'VALUE'
+OverridingScope <- 'USER' / 'SYSTEM'
 
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS' Identifier
@@ -1577,19 +2036,103 @@ OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClauseList WhereClause?
 OnConflictNothing <- 'DO' 'NOTHING'
 
 ReturningClause <- 'RETURNING' TargetList
 
-LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+LoadStatement <- 'LOAD' ColIdOrString FromSource? ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
-InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallStatement <- 'FORCE'? 'INSTALL' InstallAndLoad? IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallAndLoad <- 'AND' 'LOAD'
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
 FromSourceIdentifier <- 'FROM' Identifier
 FromSourceString <- 'FROM' StringLiteral
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
+
+ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / DropExtensionRepositoryStmt
+CreateExtensionRepositoryStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ColIdOrString RepositoryPrefix RepositoryPublicKey?
+RepositoryPrefix <- 'WITH'? 'PREFIX' StringLiteral
+RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)
+DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ColIdOrString
+
+TableMatchRecognizeClause <- 'MATCH_RECOGNIZE' Parens(MatchRecognizeBody) TableAlias?
+MatchRecognizeBody <- MatchRecognizeClause+
+MatchRecognizeClause <- MRPartition / MROrderBy / MRMeasures / MRRows / MRSkip / MRPattern / MRSubset / MRDefineAuto / MRDefine
+MRPartition <- WindowPartition
+MROrderBy <- OrderByClause
+MRMeasures <- MeasuresClause
+MRRows <- RowsPerMatch
+MRSkip <- AfterMatchSkip
+MRPattern <- PatternClause
+MRSubset <- SubsetClause
+MRDefineAuto <- ('DEFINE' / 'DEFINES') 'AUTO'
+MRDefine <- DefineClause
+
+MeasuresClause <- 'MEASURES' List(MeasuresElement)
+MeasuresElement <- Expression 'AS' ColLabelOrString
+MeasureSemantics <- RunningSemantics / FinalSemantics
+RunningSemantics <- 'RUNNING'
+FinalSemantics <- 'FINAL'
+
+RowsPerMatch <- OneRowPerMatch / AllRowsPerMatch
+OneRowPerMatch <- 'ONE' 'ROW' 'PER' 'MATCH'
+AllRowsPerMatch <- 'ALL' 'ROWS' 'PER' 'MATCH' AllRowsEmptyMatches?
+AllRowsEmptyMatches <- ShowEmptyMatches / OmitEmptyMatches / WithUnmatchedRows
+ShowEmptyMatches <- 'SHOW' 'EMPTY' 'MATCHES'
+OmitEmptyMatches <- 'OMIT' 'EMPTY' 'MATCHES'
+WithUnmatchedRows <- 'WITH' 'UNMATCHED' 'ROWS'
+
+AfterMatchSkip <- 'AFTER' 'MATCH' 'SKIP' AfterMatchSkipTarget
+AfterMatchSkipTarget <- SkipToNextRow / SkipPastLastRow / SkipToFirstVar / SkipToLastVar / SkipToVar
+SkipToNextRow <- 'TO' 'NEXT' 'ROW'
+SkipPastLastRow <- 'PAST' 'LAST' 'ROW'
+SkipToFirstVar <- 'TO' 'FIRST' ColLabelOrString
+SkipToLastVar <- 'TO' 'LAST' ColLabelOrString
+# naming a variable without saying which of its rows means its last one
+SkipToVar <- 'TO' ColLabelOrString
+
+PatternClause <- 'PATTERN' Parens(RowPattern)
+
+# alternation binds loosest, then concatenation, then quantifiers
+RowPattern <- RowPatternTerm RowPatternAlternative*
+RowPatternAlternative <- '|' RowPatternTerm
+RowPatternTerm <- RowPatternFactor+
+RowPatternFactor <- RowPatternPrimary RowPatternQuantifier?
+# PERMUTE has to be tried before a plain label, which would otherwise consume the keyword
+RowPatternPrimary <- RowPatternPermute / RowPatternExclusion / RowPatternEmpty / RowPatternGroup / RowPatternAnchor / RowPatternLabel
+RowPatternPermute <- 'PERMUTE' Parens(List(RowPattern))
+# ^ and $ hold at the ends of the partition without taking a row
+RowPatternAnchor <- PatternStart / PatternEnd
+PatternStart <- '^'
+PatternEnd <- '$'
+RowPatternGroup <- Parens(RowPattern)
+# () matches where it stands without taking a row
+RowPatternEmpty <- '(' ')'
+RowPatternExclusion <- '{' '-' RowPattern '-' '}'
+RowPatternLabel <- ColLabelOrString
+
+# a trailing ? makes the quantifier reluctant: it prefers the fewest repetitions rather than the most
+RowPatternQuantifier <- RowPatternQuantifierKind QuantifierReluctant?
+RowPatternQuantifierKind <- QuantifierStar / QuantifierPlus / QuantifierOptional / QuantifierRange
+QuantifierReluctant <- '?'
+QuantifierStar <- '*'
+QuantifierPlus <- '+'
+QuantifierOptional <- '?'
+QuantifierRange <- '{' QuantifierBounds '}'
+QuantifierBounds <- QuantifierMinMax / QuantifierMin / QuantifierMax / QuantifierExact
+QuantifierMinMax <- NumberLiteral ',' NumberLiteral
+QuantifierMin <- NumberLiteral ','
+QuantifierMax <- ',' NumberLiteral
+QuantifierExact <- NumberLiteral
+
+SubsetClause <- 'SUBSET' List(SubsetElement)
+SubsetElement <- ColLabelOrString '=' Parens(List(ColLabelOrString))
+
+DefineClause <- ('DEFINE' / 'DEFINES') List(DefineElement)
+DefineElement <- ColLabelOrString 'AS' Expression
+
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef
 MergeMatch <- MatchedClause / NotMatchedClause
@@ -1608,7 +2151,7 @@ InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'
 ErrorMatchClause <- 'ERROR' Expression?
 UpdateMatchSetClause <- 'SET' UpdateMatchSetInfo
-UpdateMatchSetInfo <- UpdateSetClause / StarSymbol
+UpdateMatchSetInfo <- UpdateSetClauseList / StarSymbol
 AndExpression <- 'AND' Expression
 NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
 BySourceOrTarget <- BySource / ByTarget
@@ -1632,9 +2175,13 @@ UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues OptionalParensNameList
 
 ValueOrValues <- 'VALUE' / 'VALUES'
+
+OptionalParensNameList <- ParenthesizedNameList / BareNameList
+ParenthesizedNameList <- Parens(List(ColIdOrString))
+BareNameList <- List(ColIdOrString)
 
 IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
 IncludeNulls <- 'INCLUDE' 'NULLS'
@@ -1650,7 +2197,7 @@ PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
 PragmaParameters <- Parens(List(Expression))
 
-PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
+PrepareStatement <- 'PREPARE' ColIdOrString TypeList? 'AS' Statement
 
 TypeList <- Parens(List(Type))
 
@@ -1673,20 +2220,21 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
+LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOffsetClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
 OffsetFetchClause <- OffsetClause FetchClause
+FetchOffsetClause <- FetchClause OffsetClause
 FetchOnlyClause <- FetchClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
-SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
+SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SelectSampleClause?
 
 SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+WithStatement <- ColIdOrString ColumnAliases? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- CTESelectBody / CTEDMLBody
 CTESelectBody <- Parens(SelectStatementInternal)
 CTEDMLBody <- Parens(Statement)
@@ -1706,17 +2254,17 @@ DistinctOnTargets <- 'ON' Parens(List(Expression))
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
-TableSubquery <- Lateral? SubqueryReference TableAlias?
+TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias? SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
-ValuesRef <- ValuesClause TableAlias?
+ValuesRef <- TableAliasColon? ValuesClause TableAlias? SampleClause?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
-PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
+PivotGroupByList <- 'GROUP' 'BY' OptionalParensNameList
 TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(TableUnpivotClauseBody) TableAlias?
 TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
@@ -1731,19 +2279,20 @@ UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 
-BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / UnqualifiedBaseTableName
+BaseTableName <- QualifiedTableName / UnqualifiedBaseTableName
 UnqualifiedBaseTableName <- TableName
+QualifiedTableName <- CatalogReservedSchemaTable / SchemaReservedTable
 SchemaReservedTable <- SchemaQualification ReservedTableName
-CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
+CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification+ ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias? SampleClause?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
+QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
-NamedFunctionArgument <- NamedParameter
+NamedFunctionArgument <- TypeFuncName NamedParameterAssignment Expression
 PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
@@ -1783,7 +2332,8 @@ Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
-UsingClause <- 'USING' Parens(List(ColumnName))
+UsingClause <- 'USING' Parens(List(UsingColumnName))
+UsingColumnName <- ColumnName / StringLiteralIdentifier
 
 JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
@@ -1802,7 +2352,8 @@ WhereClause <- 'WHERE' Expression
 GroupByClause <- 'GROUP' 'BY' GroupByExpressions
 HavingClause <- 'HAVING' Expression
 QualifyClause <- 'QUALIFY' Expression
-SampleClause <- (TableSample / UsingSample) SampleEntry
+SampleClause <- TableSample SampleEntry
+SelectSampleClause <- UsingSample SampleEntry
 UsingSample <- 'USING' 'SAMPLE'
 TableSample <- 'TABLESAMPLE'
 WindowClause <- 'WINDOW' List(WindowDefinition)
@@ -1857,26 +2408,33 @@ LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
 LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
-FetchClause <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
+FetchClause <- FetchClauseWithoutValue / FetchClauseWithValue
+FetchClauseWithoutValue <- 'FETCH' FirstOrNext RowOrRows 'ONLY'
+FetchClauseWithValue <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
 FirstOrNext <- 'FIRST' / 'NEXT'
 FetchValue <- Expression
 
 AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression
 ExpressionAsCollabel <- Expression 'AS' ColLabelOrString
-ExpressionOptIdentifier <- Expression Identifier?
+ExpressionOptIdentifier <- Expression BareColLabel?
 
 ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
 
-SetStatement <- 'SET' SetAssignmentOrTimeZone
+SetStatement <- SetKeywordStatement / VariableAssignment
+SetKeywordStatement <- 'SET' SetAssignmentOrTimeZone
+VariableAssignment <- '$' Identifier ':=' Expression
 SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
-ResetStatement <- 'RESET' SetVariableOrSetting
-SetSchema <- 'SCHEMA' StringLiteral
+ResetStatement <- 'RESET' ResetTarget
+ResetTarget <- ResetTimeZone / ResetVariableOrSetting
+ResetTimeZone <- SettingScope? 'TIME' 'ZONE'
+ResetVariableOrSetting <- SetVariableOrSetting
+SetSchema <- SettingScope? 'SCHEMA' StringLiteral
 StandardAssignment <- SetVariableOrSetting SetAssignment
 SetVariableOrSetting <- SetVariable / SetSetting
-SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+SetTimeZone <- SettingScope? 'TIME' 'ZONE' ZoneValue
 
 ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / ZoneLocal / ZoneDefault / ZoneStringLiteral / ZoneIdentifier / NumberLiteral
 ZoneLocal <- 'LOCAL'
@@ -1914,23 +2472,23 @@ ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
-UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
+UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClauseList FromClause? WhereClause? ReturningClause?
 
 UpdateTarget <- BaseTableSet / BaseTableAliasSet
 BaseTableSet <- BaseTableName 'SET'
 BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
 UpdateAlias <- 'AS'? ColId
-UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
+UpdateSetClauseList <- List(UpdateSetClause)
+UpdateSetClause <- UpdateSetElement / UpdateSetTuple
 UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
-UpdateSetElementList <- List(UpdateSetElement)
 UpdateSetElement <- UpdateSetColumnTarget '=' Expression
 UpdateSetColumnTarget <- ColumnName DotIdentifier*
 
 UseStatement <- 'USE' UseTarget
 
 UseTarget <- UseTargetCatalogSchema / SchemaNameAsUseTarget / CatalogNameAsUseTarget
-SchemaNameAsUseTarget <- SchemaName
-CatalogNameAsUseTarget <- CatalogName
+SchemaNameAsUseTarget <- SchemaName / StringLiteral
+CatalogNameAsUseTarget <- CatalogName / StringLiteral
 UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier
 
@@ -1946,5 +2504,5 @@ OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
-NameList <- Parens(List(ColId))
+NameList <- Parens(List(ColIdOrString))
 

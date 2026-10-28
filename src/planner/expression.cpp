@@ -13,6 +13,13 @@ Expression::Expression(ExpressionType type, ExpressionClass expression_class, Lo
     : BaseExpression(type, expression_class), return_type(std::move(return_type)) {
 }
 
+unique_ptr<Expression> Expression::PreserveReturnType(const LogicalType &type, unique_ptr<Expression> replacement) {
+	D_ASSERT(replacement);
+	D_ASSERT(replacement->GetReturnType() == type);
+	replacement->SetReturnType(type);
+	return replacement;
+}
+
 Expression::~Expression() {
 }
 
@@ -69,6 +76,10 @@ bool Expression::PropagatesNullValues() const {
 	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||
 	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND ||
 	    type == ExpressionType::OPERATOR_COALESCE || type == ExpressionType::CASE_EXPR) {
+		return false;
+	}
+	// x IN (NULL, x) is TRUE and x NOT IN (NULL, x) is FALSE: a NULL element does not decide the result
+	if (type == ExpressionType::COMPARE_IN || type == ExpressionType::COMPARE_NOT_IN) {
 		return false;
 	}
 	bool propagate_null_values = true;

@@ -1,0 +1,110 @@
+# name: test/sql/optimizer/pushdown_extract_reapplied.test
+# description: A pushdown-extract column must not be narrowed a second time by a later pruner run
+# group: [optimizer]
+
+statement ok
+SET late_materialization_max_rows = 100;
+
+# Every field holds a distinct value, so reading the wrong one cannot produce the expected result
+statement ok
+CREATE TABLE nested_extract AS SELECT
+    {'id': k + 1000, 'ms': {'a': k + 200, 'b': k + 30, 'c': {'d': k + 7}}} AS v
+FROM range(3) t(k);
+
+# A cast between the two extracts stops the pushdown at v.ms and leaves a struct_extract above the
+# scan. Late materialization runs the pruner again, and that extract is pushed down a second time
+# against the column, so the two fields below resolve to v.id and to v.ms instead.
+query II
+SELECT (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b, (v.ms::STRUCT(b VARCHAR, a VARCHAR)).a
+FROM nested_extract ORDER BY v.id LIMIT 1
+----
+30	200
+
+# Deeper nesting threw from the statistics propagator instead of returning the wrong field
+query I
+SELECT (v.ms::STRUCT(c STRUCT(d VARCHAR), b VARCHAR, a VARCHAR)).c.d
+FROM nested_extract ORDER BY v.id LIMIT 1
+----
+7
+
+# The pruner pushes down variant extracts the same way, but there the second push returned NULL
+statement ok
+CREATE TABLE nested_variant AS
+SELECT {'id': k + 1000, 'ms': {'a': k + 200, 'b': k + 30}}::VARIANT AS v
+FROM range(3) t(k);
+
+query I
+SELECT (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b FROM nested_variant ORDER BY v.id::BIGINT LIMIT 1
+----
+30
+
+# TopNWindowElimination runs the pruner a second time as well. The residual extract has to sit in the
+# window ORDER BY, because a full reference to the column anywhere else clears the child columns.
+# The WHERE clause also exercises table-filter remapping on that scan.
+statement ok
+CREATE TABLE windowed AS SELECT
+    k % 2 AS grp, {'id': k + 1000, 'ms': {'a': k + 200, 'b': 50 - k}} AS v
+FROM range(6) t(k);
+
+query II
+SELECT grp, v.id FROM windowed
+WHERE v.id > 1000
+QUALIFY row_number() OVER (PARTITION BY grp ORDER BY (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b) = 1
+ORDER BY grp
+----
+0	1004
+1	1005
+
+# Pushing the extract down also dropped the sibling field, and with it the cast error it raises
+statement ok
+CREATE TABLE unconvertible AS SELECT
+    {'id': k + 1000, 'ms': {'a': 'xyz', 'b': k + 30}} AS v
+FROM range(3) t(k);
+
+statement error
+SELECT (v.ms::STRUCT(a INTEGER, b VARCHAR)).b FROM unconvertible ORDER BY v.id LIMIT 1
+----
+Conversion Error
+
+# With late materialization disabled this query prunes once, so it was always correct
+statement ok
+SET disabled_optimizers = 'LATE_MATERIALIZATION';
+
+query I
+SELECT (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b FROM nested_extract ORDER BY v.id LIMIT 1
+----
+30
+
+statement ok
+SET disabled_optimizers = '';
+
+# This query only gets a second pruner run when it is planned as a late materialization
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+query II
+EXPLAIN SELECT (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b FROM nested_extract ORDER BY v.id LIMIT 1
+----
+logical_opt	<REGEX>:.*rowid = rowid.*
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
+
+# Without a cast there is nothing to re-push, so the extract still reaches the leaf. A guard that is
+# too broad would keep every result correct, so only the scan projection can show it.
+query II
+EXPLAIN SELECT v.ms.b FROM nested_extract ORDER BY v.id LIMIT 1
+----
+physical_plan	<REGEX>:.*Projections: v\.ms\.b.*
+
+require parquet
+
+# The same over parquet, where the second push is resolved by the multi file column mapper
+statement ok
+COPY nested_extract TO '{TEST_DIR}/nested_extract.parquet' (FORMAT PARQUET)
+
+query I
+SELECT (v.ms::STRUCT(b VARCHAR, a VARCHAR)).b
+FROM '{TEST_DIR}/nested_extract.parquet' ORDER BY v.id LIMIT 1
+----
+30

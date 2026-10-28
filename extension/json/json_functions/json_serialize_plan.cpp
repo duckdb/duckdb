@@ -1,9 +1,11 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "json_common.hpp"
 #include "json_deserializer.hpp"
@@ -83,7 +85,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &i
 			}
 			optimize = BooleanValue::Get(input.GetConstant(i));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", alias));
+			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument %s", alias));
 		}
 	}
 	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
@@ -122,7 +124,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			Parser parser;
+			Parser parser(state.GetContext());
 			parser.ParseQuery(input.GetString());
 			auto plans_arr = yyjson_mut_arr(doc);
 
@@ -132,6 +134,10 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				Planner planner(context);
 				planner.CreatePlan(std::move(stmt));
 				auto plan = std::move(planner.plan);
+				if (!plan) {
+					throw InvalidInputException("json_serialize_plan: statement cannot be planned, parameters need "
+					                            "to have a known value to serialize the plan");
+				}
 
 				if (info.optimize && plan->RequireOptimizer()) {
 					Optimizer optimizer(*planner.binder, context);
@@ -139,7 +145,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				}
 
 				ColumnBindingResolver resolver;
-				resolver.Verify(context, *plan);
+				LogicalPlanVerifier::Verify(context, *plan);
 				resolver.VisitOperator(*plan);
 				plan->ResolveOperatorTypes();
 
@@ -195,6 +201,7 @@ ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 
 	ScalarFunction func({}, LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                    JSONFunctionLocalState::Init);
+	func.GetProperties().SetRequiresExpressionNames(true);
 
 	func.GetSignature()
 	    .AddParameter("sql", LogicalType::VARCHAR)

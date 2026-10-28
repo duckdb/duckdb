@@ -40,6 +40,41 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 }
 
+bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	if (!ExpressionBinder::IsPotentialAlias(colref)) {
+		return false;
+	}
+	auto &alias_map = node.bind_state.alias_map;
+	return alias_map.find(colref.ColumnNames().back()) != alias_map.end();
+}
+
+bool BaseSelectBinder::HasCompoundGroups() {
+	return node.bind_state.has_compound_groups;
+}
+
+ProjectionIndex BaseSelectBinder::FindGroup(ParsedExpression &expr) {
+	if (node.bind_state.group_map.empty() && node.bind_state.group_alias_map.empty()) {
+		return ProjectionIndex();
+	}
+	// the groups are keyed by the qualified form, so qualify against this scope before matching
+	auto qualified = expr.Copy();
+	ExpressionBinder::QualifyColumnNames(binder, qualified);
+	return TryBindGroup(*qualified);
+}
+
+bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
+	return FindGroup(expr).IsValid();
+}
+
+bool BaseSelectBinder::MatchesGroupWithoutSubquery(ParsedExpression &expr) {
+	auto group_index = FindGroup(expr);
+	auto &groups = node.groups.group_expressions;
+	if (!group_index.IsValid() || group_index.GetIndex() >= groups.size()) {
+		return false;
+	}
+	return !groups[group_index]->HasSubquery();
+}
+
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	if (inside_aggregate) {
 		return ProjectionIndex();
@@ -91,8 +126,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 			ExpressionBinder::QualifyColumnNames(binder, child);
 			auto idx = TryBindGroup(*child);
 			if (!idx.IsValid()) {
-				return BindResult(
-				    BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
+				return BindResult(BinderException(op, "GROUPING child %s must be a grouping column", child->GetName()));
 			}
 			group_indexes.push_back(idx);
 		}

@@ -36,6 +36,12 @@ void ThrowArrayPtrIndexOutOfBounds(idx_t index, idx_t size) {
 	throw InternalException("Attempted to access index %lld within array_ptr of size %lld", index, size);
 }
 
+void ThrowArrayPtrSubArrayOutOfBounds(idx_t offset, idx_t count, idx_t size) {
+	throw InternalException(
+	    "Attempted to construct a sub-array at offset %lld with size %lld from array_ptr of size %lld", offset, count,
+	    size);
+}
+
 void ThrowVectorBackOnEmpty() {
 	throw InternalException("'back' called on an empty vector!");
 }

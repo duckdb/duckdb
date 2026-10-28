@@ -1,4 +1,5 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -9,12 +10,104 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
+	const auto save_inside_try = root.inside_try;
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		root.inside_try = true;
+	}
 	for (auto &child : expr.GetChildren()) {
 		result->AddChild(*child);
 	}
+	root.inside_try = save_inside_try;
 
 	result->Finalize();
 	return result;
+}
+
+static idx_t SelectFlatNulls(const ValidityMask &validity, idx_t count, SelectionVector &result) {
+	if (validity.CannotHaveNull()) {
+		return 0;
+	}
+	idx_t result_count = 0;
+	for (idx_t offset = 0; offset < count; offset += ValidityMask::BITS_PER_VALUE) {
+		const auto valid_bits = MinValue<idx_t>(ValidityMask::BITS_PER_VALUE, count - offset);
+		const auto mask = ValidityMask::EntryWithValidBits(valid_bits);
+		auto nulls = ~validity.GetValidityEntryUnsafe(offset / ValidityMask::BITS_PER_VALUE) & mask;
+		if (nulls == mask) {
+			for (idx_t i = 0; i < valid_bits; i++) {
+				result.set_index(result_count++, offset + i);
+			}
+			continue;
+		}
+		while (nulls) {
+			result.set_index(result_count++, offset + CountZeros<validity_t>::Trailing(nulls));
+			nulls &= nulls - 1;
+		}
+	}
+	return result_count;
+}
+
+template <bool HAS_VALID_SEL, bool HAS_NULL_SEL>
+static idx_t SelectNullLoop(const VectorValidityIterator &entries, const SelectionVector &sel, idx_t count,
+                            optional_ptr<SelectionVector> valid_sel, optional_ptr<SelectionVector> null_sel) {
+	idx_t valid_count = 0, null_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto row_idx = sel.get_index(i);
+		const auto valid = entries.IsValid(i);
+		if (HAS_VALID_SEL) {
+			valid_sel->set_index(valid_count, row_idx);
+			valid_count += valid;
+		}
+		if (HAS_NULL_SEL) {
+			null_sel->set_index(null_count, row_idx);
+			null_count += !valid;
+		}
+	}
+	return HAS_VALID_SEL ? valid_count : count - null_count;
+}
+
+static idx_t SelectNulls(const Vector &input, const SelectionVector &sel, idx_t count,
+                         optional_ptr<SelectionVector> valid_sel, optional_ptr<SelectionVector> null_sel) {
+	if (!valid_sel && null_sel && !sel.IsSet() && input.GetVectorType() == VectorType::FLAT_VECTOR) {
+		return count - SelectFlatNulls(FlatVector::Validity(input), count, *null_sel);
+	}
+	auto entries = input.Validity();
+	if (entries.CannotHaveNull() || input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const auto valid = entries.CannotHaveNull() || entries.IsValid(0);
+		auto result_sel = valid ? valid_sel : null_sel;
+		if (result_sel) {
+			for (idx_t i = 0; i < count; i++) {
+				result_sel->set_index(i, sel.get_index(i));
+			}
+		}
+		return valid ? count : 0;
+	}
+	if (valid_sel && null_sel) {
+		return SelectNullLoop<true, true>(entries, sel, count, valid_sel, null_sel);
+	}
+	if (valid_sel) {
+		return SelectNullLoop<true, false>(entries, sel, count, valid_sel, null_sel);
+	}
+	return SelectNullLoop<false, true>(entries, sel, count, valid_sel, null_sel);
+}
+
+idx_t ExpressionExecutor::Select(const BoundOperatorExpression &expr, ExpressionState &state,
+                                 optional_ptr<const SelectionVector> sel, idx_t count,
+                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
+	const auto type = expr.GetExpressionType();
+	if (type != ExpressionType::OPERATOR_IS_NULL && type != ExpressionType::OPERATOR_IS_NOT_NULL) {
+		return DefaultSelect(expr, &state, sel.get(), count, true_sel.get(), false_sel.get());
+	}
+	D_ASSERT(expr.GetChildren().size() == 1);
+	state.intermediate_chunk.Reset();
+	auto &child = state.intermediate_chunk.data[0];
+	Execute(*expr.GetChildren()[0], state.child_states[0].get(), sel.get(), count, child);
+
+	const SelectionVector identity;
+	const auto &input_sel = sel ? *sel : identity;
+	if (type == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		return SelectNulls(child, input_sel, count, true_sel, false_sel);
+	}
+	return count - SelectNulls(child, input_sel, count, false_sel, true_sel);
 }
 
 void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, ExpressionState *state,
@@ -129,9 +222,10 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		}
 
 		// On error, evaluate per row
+		// CASE/COALESCE write their result at the physical row index, so the intermediate must fit that index
 		SelectionVector selvec(1);
 		DataChunk intermediate;
-		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
+		intermediate.Initialize(GetAllocator(), {result.GetType()}, STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
 			intermediate.SetChildCardinality(1);

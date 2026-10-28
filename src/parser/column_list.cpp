@@ -69,7 +69,7 @@ ColumnDefinition &ColumnList::GetColumnMutable(PhysicalIndex physical) {
 ColumnDefinition &ColumnList::GetColumnMutable(const Identifier &name) {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
-		throw InternalException("Column with name \"%s\" does not exist", name.GetIdentifierName());
+		throw InternalException("Column with name %s does not exist", name);
 	}
 	auto logical_index = entry->second;
 	D_ASSERT(logical_index < columns.size());
@@ -95,7 +95,7 @@ const ColumnDefinition &ColumnList::GetColumn(PhysicalIndex physical) const {
 const ColumnDefinition &ColumnList::GetColumn(const Identifier &name) const {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
-		throw InternalException("Column with name \"%s\" does not exist", name);
+		throw InternalException("Column with name %s does not exist", name);
 	}
 	auto logical_index = entry->second;
 	D_ASSERT(logical_index < columns.size());

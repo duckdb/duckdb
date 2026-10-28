@@ -30,6 +30,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SAMPLE = 12,
 	LOGICAL_PIVOT = 14,
 	LOGICAL_COPY_DATABASE = 15,
+	LOGICAL_SECURE_VIEW = 16,
 
 	// -----------------------------
 	// Data sources

@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -89,6 +90,9 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 
 	names.emplace_back("referenced_column_names");
 	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("constraint_check_mode");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -245,6 +249,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	auto &referenced_table = output.data[13];
 	// referenced_column_names, LIST(VARCHAR)
 	auto &referenced_column_names = output.data[14];
+	// constraint_check_mode, VARCHAR
+	auto &constraint_check_mode = output.data[15];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
@@ -326,6 +332,10 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			constraint_name_vec.Append(Value(std::move(constraint_name)));
 			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(info.referenced_table));
 			referenced_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
+			auto check_mode = constraint->type == ConstraintType::UNIQUE
+			                      ? constraint->Cast<UniqueConstraint>().check_mode
+			                      : ConstraintCheckMode::DEFAULT;
+			constraint_check_mode.Append(Value(EnumUtil::ToString(check_mode)));
 			count++;
 		}
 

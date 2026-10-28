@@ -15,6 +15,7 @@
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
@@ -28,6 +29,9 @@ struct RecursiveCTEPlanningInfo {
 	bool using_key = false;
 	vector<idx_t> distinct_indices;
 	vector<idx_t> payload_indices;
+	vector<LogicalType> hash_key_types;
+	vector<LogicalType> aggregate_types;
+	vector<bool> key_requires_normalization;
 	vector<reference<PhysicalRecursiveCTEStateScan>> state_scans;
 };
 
@@ -124,6 +128,8 @@ public:
 
 public:
 	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
+	//! Plans the copy without expanding op.file_path
+	PhysicalOperator &CreatePlan(LogicalCopyToFile &op, PhysicalOperator &plan);
 
 protected:
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);
@@ -161,6 +167,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalExecute &op);
 	PhysicalOperator &CreatePlan(LogicalPragma &op);
 	PhysicalOperator &CreatePlan(LogicalSample &op);
+	PhysicalOperator &CreatePlan(LogicalSecureView &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
 	PhysicalOperator &CreatePlan(LogicalAlter &op);
@@ -199,6 +206,9 @@ private:
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
-	                                                PhysicalOperator &build);
+	                                                PhysicalOperator &build, const idx_t join_cardinality);
+	optional_ptr<PhysicalOperator> PlanAsOfInequalityJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
+	                                                      PhysicalOperator &build, const idx_t lhs_cardinality,
+	                                                      const idx_t rhs_cardinality);
 };
 } // namespace duckdb

@@ -47,8 +47,8 @@ def test_manual_dedup_description(shell):
     )
     result = test.run()
     # regexp_extract has two distinct descriptions grouped across overloads
-    result.check_stdout('1. 2. 4.')
-    result.check_stdout('3. 5.')
+    result.check_stdout('1. 2. 3. 5.')
+    result.check_stdout('4. 6.')
 
 
 def test_manual_case_insensitive(shell):

@@ -109,7 +109,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		return;
 	}
 	default:
-		throw InternalException("Type not implemented for AppenderType");
+		InternalException::Throw("Type not implemented for AppenderType");
 	}
 }
 
@@ -174,7 +174,7 @@ void BaseAppender::AppendValueInternal(T input) {
 			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
 		default:
-			throw InternalException("Internal type not recognized for Decimal");
+			InternalException::Throw("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:
@@ -368,7 +368,8 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// We try to cast the chunk.
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
-	cast_chunk.Initialize(allocator, appender_types);
+	// Chunks converted from Arrow can hold more than STANDARD_VECTOR_SIZE rows
+	cast_chunk.Initialize(allocator, appender_types, MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
 	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -467,10 +468,10 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	}
 }
 
-unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
-                                                      const string &table_name) {
+unique_ptr<SQLStatement> BaseAppender::ParseStatement(ClientContext &context, unique_ptr<TableRef> table_ref,
+                                                      const string &query, const string &table_name) {
 	// Parse the query.
-	Parser parser;
+	Parser parser(context);
 	parser.ParseQuery(query);
 
 	// Must be a single statement.
@@ -512,8 +513,8 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+		throw CatalogException(StringUtil::Format("Table '%s.%s.%s' could not be found", SQLIdentifier(database_name),
+		                                          SQLIdentifier(schema_name), SQLIdentifier(table_name)));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");
@@ -623,7 +624,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
+	auto stmt = ParseStatement(*context_ref, std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(stmt));
 }
 
@@ -651,7 +652,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
-		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
+		    "AppendDefault is not supported for column %s: not a foldable default expressions.", name);
 	}
 	return it->second;
 }
@@ -724,7 +725,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
 	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
-	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
+	auto parsed_statement = ParseStatement(*context_ref, std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
 }
 

@@ -13,6 +13,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -30,6 +31,7 @@ public:
 	~QueryMetrics();
 
 	idx_t system_peak_buffer_memory;
+	idx_t system_peak_streaming_buffer_size;
 	idx_t system_peak_temp_dir_size;
 	double blocked_thread_time;
 
@@ -37,25 +39,49 @@ public:
 
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
+	atomic<idx_t> read_operations;
+	atomic<idx_t> read_time_us;
 	atomic<idx_t> bytes_written;
+	atomic<idx_t> write_operations;
+	atomic<idx_t> write_time_us;
+	// Cumulative bytes written to the temporary (spill) directory
+	atomic<idx_t> bytes_spilled;
+	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
+	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
+	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
 
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
-		string_timings[key] += addition;
+		string_timings[key].Add(addition);
+	}
+
+	void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time) {
+		string_timings[key].Add(addition, start_time, end_time);
 	}
 
 	void UpdateMetricCounter(const string &key, idx_t addition) {
 		string_counters[key] += addition;
 	}
 
-	void UpdateBytesRead(idx_t n) {
+	void UpdateBytesRead(idx_t n, idx_t elapsed_us) {
 		bytes_read += n;
+		read_operations++;
+		read_time_us += elapsed_us;
 	}
 
-	void UpdateBytesWritten(idx_t n) {
+	void UpdateBytesWritten(idx_t n, idx_t elapsed_us) {
 		bytes_written += n;
+		write_operations++;
+		write_time_us += elapsed_us;
+	}
+
+	void UpdateBytesSpilled(idx_t n) {
+		bytes_spilled += n;
+	}
+	void UpdateBytesScanned(idx_t n) {
+		bytes_scanned += n;
 	}
 
 	void UpdateTotalMemoryAllocated(idx_t n) {
@@ -67,7 +93,7 @@ public:
 		if (it == string_timings.end()) {
 			return 0.0;
 		}
-		return static_cast<double>(it->second) / 1e9;
+		return static_cast<double>(it->second.duration) / 1e9;
 	}
 
 	idx_t GetStringCounter(const string &key) const {
@@ -82,15 +108,38 @@ public:
 		return bytes_read.load();
 	}
 
+	idx_t GetReadOperations() const {
+		return read_operations.load();
+	}
+
+	double GetReadTime() const {
+		return static_cast<double>(read_time_us.load()) / 1e6;
+	}
+
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
+	}
+	idx_t GetBytesScanned() const {
+		return bytes_scanned.load();
+	}
+
+	idx_t GetWriteOperations() const {
+		return write_operations.load();
+	}
+
+	double GetWriteTime() const {
+		return static_cast<double>(write_time_us.load()) / 1e6;
+	}
+
+	idx_t GetBytesSpilled() const {
+		return bytes_spilled.load();
 	}
 
 	idx_t GetTotalMemoryAllocated() const {
 		return total_memory_allocated.load();
 	}
 
-	const unordered_map<string, idx_t> &GetMetricTimings() const {
+	const unordered_map<string, MetricTiming> &GetMetricTimings() const {
 		return string_timings;
 	}
 
@@ -98,38 +147,57 @@ public:
 		return string_counters;
 	}
 
+	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
+	void ResetLiveMetrics() {
+		bytes_read = 0;
+		read_operations = 0;
+		read_time_us = 0;
+		bytes_written = 0;
+		write_operations = 0;
+		write_time_us = 0;
+		bytes_spilled = 0;
+		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
+		total_memory_allocated = 0;
+	}
+
 	void Reset() {
+		latency_timer.reset();
 		string_timings.clear();
 		string_counters.clear();
-		bytes_read = 0;
-		bytes_written = 0;
-		total_memory_allocated = 0;
 
-		latency_timer.reset();
 		query_sql = "";
 		system_peak_buffer_memory = 0;
+		system_peak_streaming_buffer_size = 0;
 		system_peak_temp_dir_size = 0;
 		blocked_thread_time = 0;
 	}
 
 	//! Write all query-level metrics into the given GatheredMetrics.
 	void FinalizeMetrics(GatheredMetrics &info);
+	//! The metrics backed by atomic counters, which can be read from any thread while the query runs
+	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
 		for (const auto &entry : other.string_timings) {
-			string_timings[entry.first] += entry.second;
+			string_timings[entry.first].Merge(entry.second);
 		}
 		for (const auto &entry : other.string_counters) {
 			string_counters[entry.first] += entry.second;
 		}
 		bytes_read += other.bytes_read.load();
+		read_operations += other.read_operations.load();
+		read_time_us += other.read_time_us.load();
 		bytes_written += other.bytes_written.load();
+		write_operations += other.write_operations.load();
+		write_time_us += other.write_time_us.load();
+		bytes_spilled += other.bytes_spilled.load();
+		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
 
 private:
 	// String-keyed timings for optimizer, storage and phase timing metrics
-	unordered_map<string, idx_t> string_timings;
+	unordered_map<string, MetricTiming> string_timings;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
 
@@ -147,6 +215,7 @@ public:
 		if (!is_active) {
 			return;
 		}
+		start_time = Timestamp::GetCurrentTimestamp();
 		profiler.Start();
 	}
 	~MetricsTimer() {
@@ -162,12 +231,14 @@ public:
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
 	}
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -179,7 +250,7 @@ public:
 		}
 		is_active = false;
 		profiler.End();
-		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
+		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos(), start_time, Timestamp::GetCurrentTimestamp());
 	}
 
 	void Reset() {
@@ -194,6 +265,7 @@ private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
 	Profiler profiler;
+	timestamp_t start_time = timestamp_t::epoch();
 	bool is_active;
 };
 

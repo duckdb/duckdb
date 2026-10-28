@@ -103,7 +103,7 @@ static string NormalizeColumnName(const string &col_name) {
 	return col_name_cleaned;
 }
 
-static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
+static void ReplaceNames(vector<Identifier> &detected_names, CSVStateMachine &state_machine,
                          unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
                          CSVReaderOptions &options, const MultiFileOptions &file_options,
                          const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
@@ -121,7 +121,7 @@ static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_
 				// we increase our types
 				idx_t col = 0;
 				for (idx_t i = dialect_options.num_cols; i < options.name_list.size(); i++) {
-					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
+					detected_names.emplace_back(GenerateColumnName(options.name_list.size(), col++));
 					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
 				}
 				dialect_options.num_cols = options.name_list.size();
@@ -219,17 +219,17 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 	return true;
 }
 
-vector<string> CSVSniffer::DetectHeaderInternal(
+vector<Identifier> CSVSniffer::DetectHeaderInternal(
     ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
     const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
     CSVReaderOptions &options, const MultiFileOptions &file_options, CSVErrorHandler &error_handler) {
-	vector<string> detected_names;
+	vector<Identifier> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();
 	if (best_header_row.empty()) {
 		dialect_options.header = false;
 		for (idx_t col = 0; col < dialect_options.num_cols; col++) {
-			detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+			detected_names.emplace_back(GenerateColumnName(dialect_options.num_cols, col));
 		}
 		// If the user provided names, we must replace our header with the user provided names
 		ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
@@ -244,7 +244,7 @@ vector<string> CSVSniffer::DetectHeaderInternal(
 		if (options.ignore_errors.GetValue()) {
 			dialect_options.header = false;
 			for (idx_t col = 0; col < dialect_options.num_cols; col++) {
-				detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+				detected_names.emplace_back(GenerateColumnName(dialect_options.num_cols, col));
 			}
 			dialect_options.rows_until_header += 1;
 			ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
@@ -322,12 +322,12 @@ vector<string> CSVSniffer::DetectHeaderInternal(
 				name_collision_count[col_name] += 1;
 				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
-			detected_names.push_back(col_name);
+			detected_names.emplace_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
 		if (best_header_row.size() < dialect_options.num_cols && options.null_padding) {
 			for (idx_t col = best_header_row.size(); col < dialect_options.num_cols; col++) {
-				detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+				detected_names.emplace_back(GenerateColumnName(dialect_options.num_cols, col));
 			}
 		} else if (best_header_row.size() < dialect_options.num_cols) {
 			throw InternalException("Detected header has number of columns inferior to dialect detection");
@@ -336,7 +336,7 @@ vector<string> CSVSniffer::DetectHeaderInternal(
 	} else {
 		dialect_options.header = false;
 		for (idx_t col = 0; col < dialect_options.num_cols; col++) {
-			detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+			detected_names.emplace_back(GenerateColumnName(dialect_options.num_cols, col));
 		}
 	}
 

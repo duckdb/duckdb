@@ -1,0 +1,102 @@
+# name: test/sql/copy/parquet/writer/parquet_encoding_stats.test
+# description: Writer populates ColumnMetaData.encoding_stats (PageEncodingStats)
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE strings AS SELECT (i % 3)::VARCHAR AS s FROM range(1000) tbl(i);
+
+statement ok
+COPY strings TO '{TEST_DIR}/encoding_stats_v1.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+# the dictionary page is listed first: that is the physical page order, and readers exist that
+# check the first entry to decide whether a dictionary page leads the chunk
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_v1.parquet'))
+----
+DICTIONARY_PAGE	PLAIN	1
+DATA_PAGE	PLAIN_DICTIONARY	1
+
+statement ok
+COPY strings TO '{TEST_DIR}/encoding_stats_v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2);
+
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_v2.parquet'))
+----
+DICTIONARY_PAGE	PLAIN	1
+DATA_PAGE	RLE_DICTIONARY	1
+
+# non-dictionary chunk: no DICTIONARY_PAGE entry
+statement ok
+CREATE TABLE distinct_strings AS SELECT i::VARCHAR AS s FROM range(30) tbl(i);
+
+statement ok
+COPY distinct_strings TO '{TEST_DIR}/encoding_stats_plain.parquet' (FORMAT PARQUET);
+
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_plain.parquet'))
+----
+DATA_PAGE	PLAIN	1
+
+# reading the field back from a parquet-mr file that carries it
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s
+      FROM parquet_metadata('data/parquet-testing/enum.parquet')
+      WHERE path_in_schema = 'trace_id')
+----
+DICTIONARY_PAGE	PLAIN_DICTIONARY	1
+DATA_PAGE	PLAIN_DICTIONARY	1
+
+# a file written without the field reads back NULL
+query I
+SELECT encoding_stats FROM parquet_metadata('data/parquet-testing/userdata1.parquet')
+WHERE path_in_schema = 'first_name'
+----
+NULL
+
+# every writer-supported type carries the field, consistent with the chunk's
+# dictionary_page_offset: a dictionary chunk lists DICTIONARY_PAGE first, a chunk
+# without a dictionary opens with DATA_PAGE and lists no DICTIONARY_PAGE at all
+statement ok
+CREATE TABLE all_types AS SELECT
+    i % 3 = 0 AS bool_col,
+    (i % 3)::TINYINT AS tinyint_col,
+    (i % 3)::SMALLINT AS smallint_col,
+    (i % 3)::INTEGER AS int_col,
+    (i % 3)::BIGINT AS bigint_col,
+    (i % 3)::FLOAT AS float_col,
+    (i % 3)::DOUBLE AS double_col,
+    ((i % 3) + 0.5)::DECIMAL(9,2) AS dec9_col,
+    ((i % 3) + 0.5)::DECIMAL(18,3) AS dec18_col,
+    ((i % 3) + 0.5)::DECIMAL(38,4) AS dec38_col,
+    DATE '2024-01-01' + (i % 3)::INTEGER AS date_col,
+    TIME '01:02:03' AS time_col,
+    TIMESTAMP '2024-01-01 01:02:03' + (i % 3) * INTERVAL 1 HOUR AS ts_col,
+    (i % 3)::VARCHAR AS varchar_col,
+    encode((i % 3)::VARCHAR) AS blob_col
+FROM range(1000) tbl(i);
+
+statement ok
+COPY all_types TO '{TEST_DIR}/encoding_stats_all_types.parquet' (FORMAT PARQUET);
+
+query I
+SELECT count(*) FROM parquet_metadata('{TEST_DIR}/encoding_stats_all_types.parquet')
+----
+15
+
+query I
+SELECT count(*)
+FROM (
+    SELECT dictionary_page_offset, (encoding_stats[1]).page_type AS first_page_type
+    FROM parquet_metadata('{TEST_DIR}/encoding_stats_all_types.parquet')
+)
+WHERE first_page_type IS NULL
+   OR (dictionary_page_offset IS NOT NULL AND first_page_type <> 'DICTIONARY_PAGE')
+   OR (dictionary_page_offset IS NULL AND first_page_type <> 'DATA_PAGE')
+----
+0

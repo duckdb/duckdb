@@ -29,6 +29,12 @@ equality joins and keeps the original spatial formulation as a comparison. The
 direct-probe workloads isolate complete-key lookups and sparse partial-key
 fan-out over large recurring states. The tiny-frontier `UNION ALL` workload
 guards fixed per-epoch runtime overhead across many one-row iterations.
+The keyed fan-in pair uses identical duplicated binary-tree edges to compare raw
+candidate frontiers under `UNION ALL` with finalized changed-key frontiers under
+plain `UNION`. Four additional plain-`UNION` workloads protect the runtime
+preaggregation decision for tiny, duplicate-free, wide one-to-one, and stable
+duplicate-heavy frontiers. A wide-to-singleton workload protects epoch-local
+address tracking from retaining high-water reset cost.
 
 None of the eight published algorithms naturally joins recurring state on only
 a proper subset of a composite `USING KEY`. The partial-probe workloads are

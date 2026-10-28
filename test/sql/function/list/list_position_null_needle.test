@@ -1,0 +1,103 @@
+# name: test/sql/function/list/list_position_null_needle.test
+# description: Test list_position with a NULL needle (issue #25355)
+# group: [list]
+
+# list_position finds NULL elements, so a NULL needle must not be folded away by statistics propagation
+
+query TT
+SELECT a, list_position(a, NULL) IS NOT NULL
+FROM VALUES ([2, 2, 3, NULL, NULL]), (NULL), ([]::INTEGER[]), ([NULL]) df(a)
+----
+[2, 2, 3, NULL, NULL]	true
+NULL	false
+[]	false
+[NULL]	true
+
+query TT
+SELECT a, list_position(a, NULL)
+FROM VALUES ([2, 2, 3, NULL, NULL]), (NULL), ([]::INTEGER[]), ([NULL]) df(a)
+----
+[2, 2, 3, NULL, NULL]	4
+NULL	NULL
+[]	NULL
+[NULL]	1
+
+# the same, but reading from a table so that the needle is compared against real column statistics
+
+statement ok
+CREATE TABLE lists AS
+SELECT a FROM VALUES ([2, 2, 3, NULL, NULL]), (NULL), ([]::INTEGER[]), ([NULL]) df(a);
+
+query TT
+SELECT a, list_position(a, NULL) FROM lists
+----
+[2, 2, 3, NULL, NULL]	4
+NULL	NULL
+[]	NULL
+[NULL]	1
+
+query I
+SELECT count(*) FROM lists WHERE list_position(a, NULL) IS NOT NULL
+----
+2
+
+# no list element is NULL: a NULL needle never matches
+
+statement ok
+CREATE TABLE no_null_elements AS SELECT [i, i + 1] AS a FROM range(3) tbl(i);
+
+query TT
+SELECT a, list_position(a, NULL) FROM no_null_elements
+----
+[0, 1]	NULL
+[1, 2]	NULL
+[2, 3]	NULL
+
+query I
+SELECT count(*) FROM no_null_elements WHERE list_position(a, NULL) IS NOT NULL
+----
+0
+
+# every list element is NULL
+
+statement ok
+CREATE TABLE only_null_elements AS SELECT [NULL::INTEGER, NULL] AS a FROM range(3);
+
+query TTT
+SELECT a, list_position(a, NULL), list_position(a, 42) FROM only_null_elements
+----
+[NULL, NULL]	1	NULL
+[NULL, NULL]	1	NULL
+[NULL, NULL]	1	NULL
+
+# the list itself is always NULL
+
+statement ok
+CREATE TABLE null_lists AS SELECT NULL::INTEGER[] AS a FROM range(3);
+
+query TT
+SELECT list_position(a, NULL), list_position(a, 42) FROM null_lists
+----
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# list_contains never matches a NULL needle
+
+query TT
+SELECT a, list_contains(a, NULL) FROM lists
+----
+[2, 2, 3, NULL, NULL]	NULL
+NULL	NULL
+[]	NULL
+[NULL]	NULL
+
+# a non-constant NULL needle
+
+query TT
+SELECT a, list_position(a, b)
+FROM VALUES ([1, NULL], NULL), ([1, NULL], 1), ([1, 2], NULL) df(a, b)
+----
+[1, NULL]	2
+[1, NULL]	1
+[1, 2]	NULL

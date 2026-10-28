@@ -49,21 +49,26 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   fi
 fi
 
-TARGET=$(git log -1 --format=%H | cut -c1-10)
+if [ "${DUCKDB_COMMIT:-}" ]; then
+  TARGET=$(printf '%s' "$DUCKDB_COMMIT" | cut -c1-10)
+else
+  TARGET=$(git log -1 --format=%H | cut -c1-10)
+fi
 
 if [ "${UPLOAD_ASSETS_TO_STAGING_TARGET:-}" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"
 fi
 
 # decide target for staging
-if [ "${OVERRIDE_GIT_DESCRIBE:-}" ]; then
-  TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
+if [ "${DUCKDB_VERSION:-}" ]; then
+  TARGET="$TARGET/$DUCKDB_VERSION"
 fi
 
 if ! command -v rclone >/dev/null 2>&1; then
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
-      python3 scripts/ci/retry.py -- choco install rclone -y --limit-output --no-progress
+      python3 scripts/ci/retry.py -- bash -c \
+        'choco install rclone -y --limit-output --no-progress; command -v rclone >/dev/null 2>&1'
       ;;
     *)
       install_runner=(bash)

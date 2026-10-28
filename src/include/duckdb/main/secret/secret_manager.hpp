@@ -99,6 +99,8 @@ public:
 	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
 	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
 	static constexpr const char *TRANSACTION_STORAGE_NAME = "transaction";
+	//! Connection-scoped storage: secrets live only for the creating connection and are reaped when it closes.
+	static constexpr const char *CONNECTION_STORAGE_NAME = "connection";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
@@ -141,6 +143,8 @@ public:
 
 	//! List all secret types
 	DUCKDB_API vector<SecretType> AllSecretTypes();
+	//! List all secret functions
+	DUCKDB_API vector<CreateSecretFunction> AllSecretFunctions();
 
 	//! Secret Manager settings
 	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled);

@@ -495,12 +495,13 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		return base_denom * effective_d;
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return effective_d > 1 ? base_denom * (effective_d / (effective_d - 1)) : base_denom;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_DISTINCT_FROM:
 		// Assume this blows up, but use the tdom to bound it a bit.
 		return base_denom * pow(effective_d, 2.0 / 3.0);
 	default:
@@ -534,6 +535,15 @@ LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Deno
 
 	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
 	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
+	auto composite_pair = predicate.GetCompositeJoinPair();
+	if (composite_pair) {
+		auto cap = GetJoinPairCap(*composite_pair);
+		CompositeJoinPairStats stats;
+		stats.RegisterDistinctCount(filter.GetDistinctCount());
+		if (stats.CanApplyCap(cap) && filter.GetDistinctCount() > 0 && cap > filter.GetDistinctCount()) {
+			inner_denom = inner_denom / filter.GetDistinctCount() * cap;
+		}
+	}
 	if (inner_denom <= 0) {
 		return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
 	}

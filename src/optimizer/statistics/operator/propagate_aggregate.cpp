@@ -7,9 +7,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/partition_stats.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -28,7 +26,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
@@ -179,6 +176,9 @@ bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) 
 void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
 	if (!aggr.groups.empty()) {
 		// not possible with groups
+		return;
+	}
+	if (aggr.expressions.empty()) {
 		return;
 	}
 	// check if all aggregates are COUNT(*), MIN or MAX
@@ -396,6 +396,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 
 	if (need_to_scan) {
+		// Partial precomputation combines plan-time partition statistics with an execution-time scan that
+		// skips partitions by their index in the row-group list. That list can change in between
+		// (concurrent appends, checkpoints), in which case a skipped partition is scanned again and its
+		// rows are counted twice. Only the full precomputation (no scan) is safe.
+		return;
+	}
+	if (need_to_scan) {
 		// Partial precomputation: some partitions need scanning
 		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results
 		if (!get.function.set_partitions_to_scan) {
@@ -475,10 +482,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 
 	// handle the groups: simply propagate statistics and assign the stats to the group binding
 	aggr.group_stats.resize(aggr.groups.size());
+	// with multiple grouping sets a key appearing in several sets is emitted once per set
+	const bool group_rows_can_repeat = aggr.grouping_sets.size() > 1;
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		auto stats = PropagateExpression(aggr.groups[group_idx]);
 		if (stats && GroupingSetCanIntroduceNull(aggr, group_idx)) {
 			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		if (stats && group_rows_can_repeat) {
+			stats->ResetAdditiveStatistics();
 		}
 		aggr.group_stats[group_idx] = stats ? stats->ToUnique() : nullptr;
 		if (!stats) {
@@ -488,27 +500,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		statistics_map[group_binding] = std::move(stats);
 	}
 
-	// Set up an expression matcher that detects COUNT(x)
-	FunctionBinder function_binder(context);
-	const auto count_fun = CountStarFun::GetFunction();
-	const auto count_matcher = make_uniq<AggregateExpressionMatcher>();
-	count_matcher->function = make_uniq<SpecificFunctionMatcher>("count");
-	count_matcher->policy = SetMatcher::Policy::ORDERED;
-	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
-
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
-
-		// Rewrite COUNT(x) to COUNT(*) if x cannot be NULL
-		vector<reference<Expression>> bindings;
-		if (count_matcher->Match(*expr, bindings)) {
-			auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
-			const auto child_stats = PropagateExpression(aggr_expr.GetChildrenMutable()[0]);
-			if (child_stats && !child_stats->CanHaveNull()) {
-				expr = function_binder.BindAggregateFunction(count_fun, {}, nullptr, AggregateType::NON_DISTINCT);
-			}
-		}
 
 		auto stats = PropagateExpression(expr);
 		if (!stats) {
@@ -547,9 +541,16 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	}
 	aggr.distinct_validity = distinct_validity;
 
+	const auto is_ungrouped = aggr.groups.empty();
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);
 
+	if (is_ungrouped) {
+		// Ungrouped aggregate always returns exactly one row, even over empty input
+		// node_stats holds the input cardinality: do not leak it to the parent operator
+		node_stats.reset();
+		return make_uniq<NodeStatistics>(1U, 1U);
+	}
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique
 	// group)
 	return std::move(node_stats);

@@ -1,0 +1,31 @@
+# name: test/sql/window/test_partition_constant_arguments.test
+# description: Test "partition-constant" arguments in a window
+# group: [window]
+
+query II
+SELECT i, 
+	MIN(i, i // 13 + 1) OVER (
+		PARTITION BY i // 13
+		ORDER BY i
+	) AS window_result
+FROM range(17) AS t(i)
+ORDER BY i;
+----
+0	[0]
+1	[0]
+2	[0]
+3	[0]
+4	[0]
+5	[0]
+6	[0]
+7	[0]
+8	[0]
+9	[0]
+10	[0]
+11	[0]
+12	[0]
+13	[13]
+14	[13, 14]
+15	[13, 14]
+16	[13, 14]
+

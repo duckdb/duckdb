@@ -1,0 +1,48 @@
+# name: test/sql/catalog/test_temporary_index.test
+# description: CREATE TEMPORARY INDEX is rejected - an index is temporary iff its table is
+# group: [catalog]
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+CREATE TEMPORARY TABLE tmp(i INTEGER)
+
+statement error
+CREATE TEMPORARY INDEX i1 ON t(i)
+----
+<REGEX>:.*Temporary indexes are not supported.*
+
+statement error
+CREATE TEMP INDEX i1 ON t(i)
+----
+<REGEX>:.*Temporary indexes are not supported.*
+
+# also rejected on a temporary table, where it would merely be redundant
+statement error
+CREATE TEMPORARY INDEX i1 ON tmp(i)
+----
+<REGEX>:.*Temporary indexes are not supported.*
+
+statement error
+CREATE TEMPORARY INDEX IF NOT EXISTS i1 ON t(i)
+----
+<REGEX>:.*Temporary indexes are not supported.*
+
+query I
+SELECT count(*) FROM duckdb_indexes()
+----
+0
+
+# without TEMPORARY the index inherits the temporariness of its table
+statement ok
+CREATE INDEX i1 ON t(i)
+
+statement ok
+CREATE INDEX i2 ON tmp(i)
+
+query II
+SELECT index_name, database_name='temp' FROM duckdb_indexes() ORDER BY index_name
+----
+i1	false
+i2	true

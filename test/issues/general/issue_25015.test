@@ -1,0 +1,18 @@
+# name: test/issues/general/issue_25015.test
+# description: Issue #25015: CREATE TABLE IF NOT EXISTS must not add foreign key metadata
+# group: [general]
+
+statement ok
+CREATE TABLE parent(i INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE child(i INTEGER);
+
+statement ok
+INSERT INTO parent VALUES (1);
+
+statement ok
+CREATE TABLE IF NOT EXISTS child(i INTEGER REFERENCES parent);
+
+statement ok
+UPDATE parent SET i = i;

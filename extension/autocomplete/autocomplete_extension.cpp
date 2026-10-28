@@ -74,6 +74,9 @@ static vector<shared_ptr<AttachedDatabase>> GetAllCatalogs(ClientContext &contex
 	auto &database_manager = DatabaseManager::Get(context);
 	auto databases = database_manager.GetDatabases(context);
 	for (auto &database : databases) {
+		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		result.push_back(database);
 	}
 	return result;
@@ -366,8 +369,8 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return ::duckdb::SuggestSettingName(context);
 	}
-	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return PEGMatcher::Get(context);
+	shared_ptr<CompiledGrammar> GetCompiledGrammar() override {
+		return CompiledGrammar::Get(context);
 	}
 
 private:
@@ -389,6 +392,9 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	}
 	AutoCompleteParameters parameters;
 	for (auto &param : input.named_parameters) {
+		if (param.second.IsNull()) {
+			throw BinderException("sql_auto_complete %s cannot be NULL", param.first);
+		}
 		if (param.first == "max_suggestion_count") {
 			parameters.max_suggestion_count = UBigIntValue::Get(param.second);
 		} else if (param.first == "max_file_suggestion_count") {
@@ -457,19 +463,24 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
+	auto compiled_grammar = CompiledGrammar::Get(context);
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	compiled_grammar->GetTokenizer().TokenizeInput(behavior);
 
 	// use the parser to annotate any tokens
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
+	TokenIterator token_iterator(tokens);
+	auto identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(context);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, identifier_case_mode);
+	MatchState state(token_iterator, match_context);
 
-	auto peg_matcher = PEGMatcher::Get(context);
-	peg_matcher->ProgramMatcher().Match(state);
+	compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
@@ -543,10 +554,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
-	Tokenizer tokenizer(behavior);
-
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	auto compiled_grammar = CompiledGrammar::Get(context);
+	if (!compiled_grammar->GetTokenizer().TokenizeInput(behavior)) {
 		return nullptr;
 	}
 
@@ -557,17 +566,23 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+	TokenIterator token_iterator(root_tokens);
+	auto identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(context);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, identifier_case_mode);
+	MatchState state(token_iterator, match_context);
 
-	auto peg_matcher = PEGMatcher::Get(context);
-	auto match_result = peg_matcher->ProgramMatcher().Match(state);
-	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
+	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
+	// `+ 1` accounts for the EOI sentinel — the matcher walk may report success without
 	// consuming it.
-	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
+	if (!match_result.IsSuccess() || state.token_iterator.Position() + 1 < root_tokens.size()) {
 		auto error_token = string("<eof>");
-		if (state.token_index < root_tokens.size() && root_tokens[state.token_index].type != TokenType::END_OF_INPUT &&
-		    root_tokens[state.token_index].type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			error_token = root_tokens[state.token_index].text;
+		auto current = state.token_iterator.Current();
+		if (current && current->type != TokenType::END_OF_INPUT &&
+		    current->type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			error_token = current->text;
 		}
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
@@ -581,7 +596,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		throw BinderException(
 		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-		    state.token_index, error_token, token_list);
+		    state.token_iterator.Position(), error_token, token_list);
 	}
 	return nullptr;
 }
@@ -658,33 +673,40 @@ static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
-	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
-	auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
-	auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
-	auto_complete_fun.named_parameters["max_exact_suggestion_count"] = LogicalType::UBIGINT;
+	TableFunction auto_complete_fun("sql_auto_complete",
+	                                FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                                SQLAutoCompleteFunction, SQLAutoCompleteBind, SQLAutoCompleteInit);
+	auto_complete_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("max_suggestion_count", LogicalType::UBIGINT)
+		    .Add("max_file_suggestion_count", LogicalType::UBIGINT)
+		    .Add("max_exact_suggestion_count", LogicalType::UBIGINT);
+	});
 	loader.RegisterFunction(auto_complete_fun);
 
-	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
-	                                   CheckPEGParserBind, nullptr);
+	TableFunction check_peg_parser_fun("check_peg_parser",
+	                                   FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                                   CheckPEGParserFunction, CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
-	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
-	                           SQLTokenizeInit);
+	TableFunction tokenize_fun("sql_tokenize", FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                           SQLTokenizeFunction, SQLTokenizeBind, SQLTokenizeInit);
 
 	loader.RegisterFunction(tokenize_fun);
 
 	const auto map_config_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	ScalarFunctionSet format_sql_set("duckdb_format_sql");
 	// duckdb_format_sql(sql)
-	format_sql_set.AddFunction(
-	    ScalarFunction({{"sql", LogicalType::VARCHAR}}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_unary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_unary.GetSignature().AddParameter("sql", LogicalType::VARCHAR);
+	format_sql_set.AddFunction(format_sql_unary);
 	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
-	format_sql_set.AddFunction(ScalarFunction({{"sql", LogicalType::VARCHAR}, {"config", map_config_type}},
-	                                          LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_binary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_binary.GetSignature().AddParameter("sql", LogicalType::VARCHAR).AddParameter("config", map_config_type);
+	format_sql_set.AddFunction(format_sql_binary);
 	loader.RegisterFunction(format_sql_set);
 }
 
+// LCOV_EXCL_START
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -696,6 +718,7 @@ std::string AutocompleteExtension::Name() {
 std::string AutocompleteExtension::Version() const {
 	return DefaultVersion();
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 extern "C" {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
@@ -100,17 +101,30 @@ public:
 	DUCKDB_API void Reset();
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+	//! Let the next StartQuery reset the live counters, also when the previous call never ended its query.
+	DUCKDB_API void ResetQueryStart();
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
+	//! Snapshot the query-level metrics that are kept up to date while the query runs, keyed by metric name.
+	DUCKDB_API profiler_metrics_t GetLiveMetrics() const;
 
-	//! Track bytes read (always tracked, even when profiling disabled).
-	DUCKDB_API void TrackBytesRead(idx_t amount);
-	//! Track bytes written (always tracked, even when profiling disabled).
-	DUCKDB_API void TrackBytesWritten(idx_t amount);
+	//! Track bytes read and the time spent reading.
+	DUCKDB_API void TrackBytesRead(idx_t amount, idx_t elapsed_us);
+	//! Track bytes written and the time spent writing.
+	DUCKDB_API void TrackBytesWritten(idx_t amount, idx_t elapsed_us);
+	//! Track bytes spilled to the temporary directory (always tracked, even when profiling disabled).
+	DUCKDB_API void TrackBytesSpilled(idx_t amount);
+	//! Track the compressed size of column data scanned (always tracked, even when profiling disabled). Unlike
+	//! query.total_bytes_scanned, the running total includes scans inside secure views
+	DUCKDB_API void TrackBytesScanned(idx_t amount);
+	//! Zero the running total of bytes scanned, at the start of every statement
+	void ResetBytesScanned();
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
+	//! Add parser time measured before the per-statement profiler was started.
+	void AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time);
 
 	//! Set an arbitrary metric value (profiling-only; no-op when profiling is disabled).
 	DUCKDB_API void SetMetric(const string &key, Value new_value);
@@ -132,6 +146,8 @@ public:
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
+	//! Record the peak bytes a streaming result buffered. Called just before the query ends
+	DUCKDB_API void SetStreamingPeakBufferSize(idx_t peak_bytes);
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
 
@@ -161,6 +177,7 @@ public:
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
+	DUCKDB_API idx_t GetBytesScanned() const;
 
 	//! Return the result tree (generating it if it does not yet exist)
 	QueryProfileResult &GetResult();
@@ -174,14 +191,30 @@ private:
 	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
-	//! disabled case. Only used on the terminal-print paths.
-	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+	//! disabled case, followed by `trailer`. Only used on the terminal-print paths; everything they print goes
+	//! through the sink, so a renderer whose sink keeps or discards the output decides what is printed.
+	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer = "") const;
+
+public:
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(root.get());
+	}
+	//! Provides access to the finalized metrics and query tree of the last profiled query, both null while a query is
+	//! running or when there are none, and ensures there are no concurrent modifications
+	DUCKDB_API void GetFinalizedProfileUnderLock(
+	    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback)
+	    const;
 
 private:
 	ClientContext &context;
 
-	//! Whether or not the query profiler is running
-	bool running;
+	//! Atomic so inactive flushes can skip acquiring the profiler lock.
+	atomic<bool> running;
+	//! Whether StartQuery was called for the current query; only the first call resets the live counters
+	bool query_started;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 

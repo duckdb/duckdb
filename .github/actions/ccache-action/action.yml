@@ -8,7 +8,7 @@ inputs:
   save:
     description: 'Whether to save cache after the job'
     required: false
-    default: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) || github.event_name == 'merge_group' }}
+    default: ${{ github.repository != 'duckdb/duckdb' || github.event_name == 'workflow_dispatch' }}
 runs:
   using: "composite"
   steps:

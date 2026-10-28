@@ -43,6 +43,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = MatchRecognizeRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
 		break;
@@ -62,6 +65,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->sample = std::move(sample);
 	result->query_location = query_location;
 	result->query_location.length = query_location_length;
+	result->VerifyDeserialized();
 	return result;
 }
 
@@ -114,6 +118,9 @@ unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
 	auto expected_names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "expected_names");
 	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
+	if (!result->collection) {
+		throw SerializationException("ColumnDataRef is missing its collection");
+	}
 	return std::move(result);
 }
 
@@ -186,6 +193,21 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void MatchRecognizeRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "input", input);
+	serializer.WritePropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", config);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "column_name_alias", column_name_alias);
+}
+
+unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MatchRecognizeRef>(new MatchRecognizeRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "input", result->input);
+	deserializer.ReadPropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", result->config);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
+	return std::move(result);
+}
+
 void PivotRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
@@ -216,6 +238,9 @@ void ShowRef::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
 	serializer.WritePropertyWithDefault<Identifier>(203, "catalog_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<Identifier>(204, "schema_name", qualified_name.Schema());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(205, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
@@ -225,7 +250,11 @@ unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
 	auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name");
 	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(204, "schema_name");
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(205, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog_name), std::move(schema_name), std::move(table_name));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return std::move(result);
 }
 
@@ -244,7 +273,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
 
 void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", SerializableFunction());
 	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<OrdinalityType>(202, "with_ordinality", with_ordinality, OrdinalityType::WITHOUT_ORDINALITY);
 }

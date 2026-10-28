@@ -5,12 +5,12 @@
 statement error
 SET allowed_configs=['lock_configuration']
 ----
-Cannot include 'lock_configuration' in allowed_configs
+Cannot include "lock_configuration" in allowed_configs
 
 statement error
 SET allowed_configs=['allowed_configs']
 ----
-Cannot include 'allowed_configs' in allowed_configs
+Cannot include "allowed_configs" in allowed_configs
 
 statement error
 SET allowed_configs=['']
@@ -21,7 +21,7 @@ Cannot provide an empty string for allowed_configs
 statement error
 SET allowed_configs=['not_a_real_setting']
 ----
-Unknown configuration option 'not_a_real_setting' in allowed_configs
+Unknown configuration option "not_a_real_setting" in allowed_configs
 
 # known extension configs are accepted even when the extension is not yet loaded
 # (the extension can be autoloaded later when the setting is actually used)

@@ -57,6 +57,11 @@ SELECT roundBankers(45.55, 1), roundBankers(45.45, 1)
 ----
 45.6	45.4
 
+query II
+SELECT round_even(128.045, 2), round_even(1.005, 2)
+----
+128.04	1.00
+
 # negative values
 query II
 SELECT roundBankers(-45, -1), roundBankers(-35, -1)
@@ -72,6 +77,11 @@ query II
 SELECT roundBankers(-45.55, 1), roundBankers(-45.45, 1)
 ----
 -45.6	-45.4
+
+query I
+SELECT round_even(-128.045, 2)
+----
+-128.04
 
 # doubles
 query II
@@ -93,3 +103,28 @@ query III
 SELECT roundBankers(NULL, 1), roundBankers(45, NULL), roundBankers(NULL, NULL)
 ----
 NULL	NULL	NULL
+
+# rounding at the scale is no-op
+query I
+SELECT round_even(1.125, 3)
+----
+1.125
+
+# rounding up at a negative precision can widen
+query II
+SELECT round_even(9999::DECIMAL(4,0), -1), typeof(round_even(9999::DECIMAL(4,0), -1))
+----
+10000	DECIMAL(5,0)
+
+# at the maximum width overflows
+statement error
+SELECT round_even(99999999999999999999999999999999999995::DECIMAL(38,0), -1)
+----
+Overflow in ROUND_EVEN of DECIMAL(38)
+
+# hugeint-backed DECIMAL
+query II
+SELECT round_even(12345678901234567890123456789012344.5::DECIMAL(38,1), 0), round_even(-12345678901234567890123456789012344.5::DECIMAL(38,1), 0)
+----
+12345678901234567890123456789012344	-12345678901234567890123456789012344
+

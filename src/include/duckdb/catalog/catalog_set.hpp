@@ -79,7 +79,7 @@ public:
 	//! Verify that the entry referenced by the dependency is still alive
 	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
 	//! Verify we can still drop the entry while committing
-	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
+	DUCKDB_API void CommitDrop(transaction_t commit_id, VisibilityBound visibility_bound, CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 
@@ -100,13 +100,21 @@ public:
 	//! entry
 	void Undo(CatalogEntry &entry);
 
-	//! Scan the catalog set, invoking the callback method for every committed entry
-	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
+	//! Scan the catalog set, invoking the callback method for every entry committed below the bound
+	DUCKDB_API void Scan(VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
 	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
 	                               const Identifier &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback);
+	//! Like Scan, but also invokes conflict_callback for each head entry that has a write-write conflict
+	//! with the current transaction (created by another active transaction, or committed after our start).
+	DUCKDB_API void ScanWithConflictDetection(CatalogTransaction transaction,
+	                                          const std::function<void(CatalogEntry &)> &scan_callback,
+	                                          const std::function<void(CatalogEntry &)> &conflict_callback);
+	//! Returns the raw head of the chain for the given name (may be an uncommitted entry).
+	//! Used for conflict detection — do NOT use for query result production.
+	DUCKDB_API optional_ptr<CatalogEntry> GetHeadEntry(const Identifier &name);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback);
 
@@ -121,7 +129,6 @@ public:
 	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
-	static bool IsCommitted(transaction_t timestamp);
 
 	static void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
@@ -142,7 +149,6 @@ private:
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool &visible);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
-	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const Identifier &name);
 	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);
 

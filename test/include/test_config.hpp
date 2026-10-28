@@ -92,6 +92,7 @@ public:
 	vector<unordered_set<string>> GetSkipTagSets();
 	SelectPolicy GetPolicyForTagSet(const vector<string> &tag_set);
 	vector<ConfigSetting> GetConfigSettings();
+	unordered_map<string, Value> GetMainDatabaseOptions();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

@@ -56,6 +56,7 @@ private:
 	bool HasNullRequiredColumns(const vector<ColumnBinding> &bindings);
 	bool HasRequiredColumns(const vector<ColumnBinding> &bindings);
 	void MarkEliminatedNullColumns(const vector<ColumnBinding> &bindings);
+	void EraseNullRequiredColumns(LogicalOperator &child);
 	vector<ColumnBinding> GetRightBindings(LogicalJoin &join);
 	void SimplifyOuterJoinType(LogicalComparisonJoin &join);
 

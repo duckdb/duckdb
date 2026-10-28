@@ -1,0 +1,64 @@
+# name: test/sql/filter/test_columns_filter.test
+# description: Test COLUMNS expansion in aggregate FILTER predicates
+# group: [filter]
+
+query I
+SELECT sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL)
+FROM (VALUES (1, 10, 100), (2, NULL, 200), (3, 30, NULL)) v(x, a, b);
+----
+1
+
+query I
+SELECT coalesce(sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL), 0)
+FROM (VALUES (1, 10, 100), (2, NULL, 200), (3, 30, NULL)) v(x, a, b);
+----
+1
+
+query I
+SELECT sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) OVER ()
+FROM (VALUES (1, 10, 100), (2, NULL, 200), (3, 30, NULL)) v(x, a, b);
+----
+1
+1
+1
+
+# FILTER star expansion also applies to ORDER BY expressions.
+query II
+SELECT g, sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) AS s
+FROM (VALUES (1, 1000, NULL, 1), (1, 1, 1, 1), (2, 100, 1, 1)) v(g, x, a, b)
+GROUP BY g
+ORDER BY sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL);
+----
+1	1
+2	100
+
+# DISTINCT ON must use the combined filter predicate as one key.
+query II
+SELECT DISTINCT ON (sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL)) g,
+       sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) AS s
+FROM (VALUES (1, 1, 1, NULL), (1, 1, NULL, 1), (2, 1, 1, 1), (2, 1, NULL, NULL)) v(g, x, a, b)
+GROUP BY g
+ORDER BY sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) DESC, g;
+----
+2	1
+1	NULL
+
+# FILTER star expansion also applies to HAVING expressions.
+query II
+SELECT g, sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) AS s
+FROM (VALUES (1, 1, 1, NULL), (1, 1, NULL, 1), (2, 1, 1, 1), (2, 1, NULL, NULL)) v(g, x, a, b)
+GROUP BY g
+HAVING sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) > 0
+ORDER BY g;
+----
+2	1
+
+# FILTER star expansion also applies to QUALIFY window expressions.
+query II
+SELECT g, x
+FROM (VALUES (1, 1, 1, NULL), (1, 1, NULL, 1), (2, 1, 1, 1), (2, 1, NULL, NULL)) v(g, x, a, b)
+QUALIFY sum(x) FILTER (WHERE COLUMNS(*) IS NOT NULL) OVER (PARTITION BY g) > 0
+ORDER BY g, x;
+----
+2	1
+2	1

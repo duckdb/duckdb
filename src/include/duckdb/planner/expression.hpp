@@ -33,9 +33,12 @@ public:
 	const LogicalType &GetReturnType() const {
 		return return_type;
 	}
-	void SetReturnType(LogicalType type) {
+	virtual void SetReturnType(LogicalType type) {
 		return_type = std::move(type);
 	}
+
+	//! Preserve the SQL result type when replacing an expression with an equivalent value.
+	static unique_ptr<Expression> PreserveReturnType(const LogicalType &type, unique_ptr<Expression> replacement);
 
 	const unique_ptr<BaseStatistics> &GetVerificationStats() const {
 		return verification_stats;
@@ -80,7 +83,7 @@ protected:
 		type = other.type;
 		expression_class = other.expression_class;
 		alias = other.alias;
-		return_type = other.return_type;
+		SetReturnType(other.return_type);
 		query_location = other.query_location;
 	}
 };

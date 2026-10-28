@@ -1,0 +1,74 @@
+# name: test/sql/optimizer/topn_window_elimination_max_n.test
+# description: Top-N window elimination must fall back when the limit reaches the min/max/arg_min/arg_max n cap
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE t2 (c_pk INTEGER, c_int INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES (1, 10), (2, 20), (3, 30);
+
+# The rewrite passes the limit as n to arg_min/arg_max, which require n < 1000000.
+# At the boundary (n = 1000000) the optimizer must keep the window plan instead of failing.
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 1000000
+----
+1	10
+2	20
+3	30
+
+# The boundary query keeps the WINDOW operator (rewrite did not apply).
+query II
+EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 1000000
+----
+logical_opt	<REGEX>:.*Window.*
+
+# ROW_NUMBER() < 1000001 has the same effective limit and must also fall back.
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) < 1000001
+----
+1	10
+2	20
+3	30
+
+# A limit well above the cap must also fall back and return the correct rows.
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 5000000
+----
+1	10
+2	20
+3	30
+
+# Just below the boundary (n = 999999) the fast path still applies: the WINDOW is eliminated.
+query II
+EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 999999
+----
+logical_opt	<!REGEX>:.*Window.*
+
+# ROW_NUMBER() < 1000000 (effective limit 999999) also uses the fast path.
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) < 1000000
+----
+1	10
+2	20
+3	30
+
+# Small limits keep using the fast path and return correct results.
+query II
+EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2
+----
+logical_opt	<!REGEX>:.*Window.*
+
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2
+----
+1	10
+2	20
+
+query II
+SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 1
+----
+1	10

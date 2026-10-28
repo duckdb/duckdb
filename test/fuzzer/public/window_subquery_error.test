@@ -8,4 +8,4 @@ CREATE TABLE v00 (c01 INT, c02 STRING);
 statement error
 SELECT 'string' IN ( SELECT string_agg ('str') OVER ( PARTITION BY c02 + 'string' IN ( SELECT 'string' )) );
 ----
-window expression is not supported here
+<REGEX>:.*Referenced column "c02" was not found.*

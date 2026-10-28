@@ -1,5 +1,6 @@
-#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -9,10 +10,11 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/logging/logger.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -23,31 +25,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	D_ASSERT(statement.right);
 
 	auto is_using_key = !statement.key_targets.empty();
-
-	if (is_using_key) {
-		auto setting = Settings::Get<DeprecatedUsingKeySyntaxSetting>(context);
-
-		// The USING KEY currently implement is actually the UNION ALL variant,
-		// but we use UNION syntax. This stands in the way of a possible addition of
-		// the UNION variant, so we will deprecate the UNION syntax for now (with
-		// the ability to still use it via a setting). Once enough time has elapsed
-		// and users have migrated relevant code to using UNION ALL syntax, we can
-		// declare the UNION syntax either as illegal syntax or implement the UNION
-		// variant proper (again with the ability to override the UNION syntax to
-		// use the "old" UNION ALL variant).
-
-		bool warn_deprecated_syntax = setting == DeprecatedUsingKeySyntax::DEFAULT && !statement.union_all;
-		const string msg =
-		    "Deprecated UNION in USING KEY CTE detected."
-		    "Please transition to using UNION ALL, before DuckDB's next release. \n"
-		    "Use SET deprecated_using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
-		    "For more information, see "
-		    "https://duckdb.org/docs/current/sql/query_syntax/with#recursive-ctes-with-using-key.";
-
-		if (warn_deprecated_syntax) {
-			DUCKDB_LOG_WARNING(context, msg);
-		}
-	}
 
 	auto ctename = statement.ctename;
 	auto union_all = statement.union_all;
@@ -65,6 +42,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		if (statement.aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		result.names[i] = statement.aliases[i];
 	}
 
@@ -73,7 +53,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Create temporary binder to bind expressions
 	auto aggregate_binder = Binder::CreateBinder(context, nullptr);
-	ErrorData error;
 	FunctionBinder function_binder(*aggregate_binder);
 	aggregate_binder->bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 	ExpressionBinder expression_binder(*aggregate_binder, context);
@@ -124,10 +103,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY,
-			                                QualifiedName(func_expr.FunctionName()), error_context);
-			auto entry = GetCatalogEntry(func_expr.GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
-			                             function_lookup, OnEntryNotFound::RETURN_NULL);
+			auto function_name = func_expr.GetQualifiedName();
+			BindSchemaOrCatalog(function_name);
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, BindTableName(function_name),
+			                                error_context);
+			auto entry = GetCatalogEntry(function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(
@@ -138,14 +118,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 
-			vector<LogicalType> aggregation_input_types;
 			vector<unique_ptr<Expression>> bound_children;
 
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.GetArgumentsMutable()) {
-				auto bound_child = expression_binder.Bind(child.GetExpressionMutable());
-				aggregation_input_types.push_back(bound_child->GetReturnType());
-				bound_children.push_back(std::move(bound_child));
+				bound_children.push_back(expression_binder.Bind(child.GetExpressionMutable()));
 			}
 
 			ProjectionIndex aggregate_idx;
@@ -155,7 +132,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				auto names_iter = find(result.names.begin(), result.names.end(), func_expr.GetAlias());
 				if (names_iter == result.names.end()) {
 					throw BinderException(expr->GetQueryLocation(),
-					                      "Could not find column with name '%s' to bind aggregate to.",
+					                      "Could not find column with name %s to bind aggregate to.",
 					                      func_expr.GetAlias());
 				}
 				aggregate_idx = ProjectionIndex(NumericCast<idx_t>(std::distance(result.names.begin(), names_iter)));
@@ -170,27 +147,23 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().Binding().column_index;
 			}
 
-			// Find the best matching aggregate function
-			auto best_function_idx =
-			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
-			if (!best_function_idx.IsValid()) {
+			// Bind the best matching aggregate function
+			ErrorData error;
+			auto aggregate = function_binder.BindAggregateFunction(func, std::move(bound_children), error);
+			if (!aggregate) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}
-			// Found a matching function, bind it as an aggregate
-			const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-			auto aggregate = function_binder.BindAggregateFunction(best_function, std::move(bound_children), nullptr,
-			                                                       AggregateType::NON_DISTINCT);
 
 			if (payload_references.find(aggregate_idx) != payload_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
-				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
+				                      "Column %s referenced multiple times in USING KEY clause.\n"
 				                      "Try using an alias for one of the aggregates.",
 				                      result.names[aggregate_idx]);
 			}
 
 			if (key_references.find(aggregate_idx) != key_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
-				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
+				                      "Column %s cannot be used as both key and aggregate in USING KEY clause.\n"
 				                      "Try using an alias for the aggregation.",
 				                      result.names[aggregate_idx]);
 			}
@@ -227,9 +200,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					first_children.push_back(std::move(bound));
 
 					// Create a last aggregate for the newly bound column reference
-					auto first_aggregate = function_binder.BindAggregateFunction(
-					    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
-					    AggregateType::NON_DISTINCT);
+					auto last_fun = GetBuiltinAggregateFunction(context, LastFun::Name, {result.types[i]});
+					auto first_aggregate = function_binder.BindAggregateFunction(last_fun, std::move(first_children),
+					                                                             nullptr, AggregateType::NON_DISTINCT);
 
 					payload_aggregates.push_back(std::move(first_aggregate));
 				} else {
@@ -243,7 +216,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Add bindings of left side to temporary CTE bindings context
 	BindingAlias cte_alias(statement.ctename);
-	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, internal_types);
+	auto &recursive_types = is_using_key && !union_all ? result.types : internal_types;
+	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, recursive_types);
 
 	BindingAlias recurring_alias("recurring", statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
@@ -285,10 +259,60 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename));
 	bool ref_cte = cte_binding && cte_binding->IsReferenced();
 	if (!ref_cte && !ref_recurring) {
-		auto root =
-		    make_uniq<LogicalSetOperation>(setop_index, result.types.size(), std::move(left_node),
-		                                   std::move(right_node), LogicalOperatorType::LOGICAL_UNION, union_all);
-		result.plan = std::move(root);
+		auto root = make_uniq<LogicalSetOperation>(setop_index, internal_types.size(), std::move(left_node),
+		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION,
+		                                           is_using_key || union_all);
+		if (!is_using_key) {
+			result.plan = std::move(root);
+			return result;
+		}
+
+		auto group_index = GenerateTableIndex();
+		auto aggregate_index = GenerateTableIndex();
+		unordered_map<ProjectionIndex, ProjectionIndex> group_bindings;
+		unordered_map<ProjectionIndex, ProjectionIndex> collated_group_bindings;
+		for (idx_t group_idx = 0; group_idx < key_targets.size(); group_idx++) {
+			auto &group = key_targets[group_idx]->Cast<BoundColumnRefExpression>();
+			const auto column_index = group.Binding().column_index;
+			const auto group_type = group.GetReturnType();
+			auto uncollated_group = key_targets[group_idx]->Copy();
+			if (ExpressionBinder::PushCollation(context, key_targets[group_idx], group_type)) {
+				vector<unique_ptr<Expression>> first_children;
+				first_children.push_back(std::move(uncollated_group));
+				FunctionBinder function_binder(*this);
+				auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {group_type});
+				auto first = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				first->SetAlias("__collated_group");
+				collated_group_bindings[column_index] = ProjectionIndex(payload_aggregates.size());
+				payload_aggregates.push_back(std::move(first));
+			} else {
+				group_bindings[column_index] = ProjectionIndex(group_idx);
+			}
+		}
+		auto aggregate = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(payload_aggregates));
+		aggregate->groups = std::move(key_targets);
+		aggregate->AddChild(std::move(root));
+
+		vector<unique_ptr<Expression>> projections;
+		projections.reserve(result.types.size());
+		idx_t payload_idx = 0;
+		for (idx_t column_idx = 0; column_idx < result.types.size(); column_idx++) {
+			auto group_entry = group_bindings.find(ProjectionIndex(column_idx));
+			auto collated_group_entry = collated_group_bindings.find(ProjectionIndex(column_idx));
+			if (group_entry != group_bindings.end()) {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(group_index, group_entry->second)));
+			} else if (collated_group_entry != collated_group_bindings.end()) {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(aggregate_index, collated_group_entry->second)));
+			} else {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(aggregate_index, ProjectionIndex(payload_idx++))));
+			}
+		}
+		auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projections));
+		projection->AddChild(std::move(aggregate));
+		result.plan = std::move(projection);
 	} else {
 		auto root = make_uniq<LogicalRecursiveCTE>(ctename, setop_index, result.types.size(), union_all,
 		                                           std::move(key_targets), std::move(left_node), std::move(right_node));

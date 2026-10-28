@@ -4,7 +4,6 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
@@ -20,6 +19,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 
 #include <utility>
@@ -73,8 +73,8 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 }
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
-      metrics_finalized(false) {
+    : context(context_p), running(false), query_started(false), query_requires_profiling(false),
+      is_explain_analyze(false), metrics_finalized(false) {
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -137,9 +137,13 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
-	// Always reset byte counters at the start of each query so the progress bar shows per-query values
-	query_metrics.bytes_read = 0;
-	query_metrics.bytes_written = 0;
+	// the counters tracked without profiling hold per-query values: reset them once, as StartQuery is called
+	// several times for one query
+	if (!query_started) {
+		query_started = true;
+		query_metrics.ResetLiveMetrics();
+		query_metrics.bytes_scanned = 0;
+	}
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -151,11 +155,23 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 		return;
 	}
 	if (running) {
-		// Called while already running: this should only happen when we print optimizer output
+		// Called while already running: this happens when statement setup follows parser timing,
+		// or when we print optimizer output.
 		// D_ASSERT(PrintOptimizerOutput());
+		query_metrics.query_sql = query;
 		return;
 	}
 	Start(query);
+}
+void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time) {
+	if (!running || !IsEnabled()) {
+		return;
+	}
+	auto parser_time_ns = parser_timer.ElapsedNanos();
+	if (!parser_time_ns) {
+		return;
+	}
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns, start_time, end_time);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -205,13 +221,23 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	}
 }
 
+void QueryProfiler::ResetQueryStart() {
+	lock_guard<std::mutex> guard(lock);
+	query_started = false;
+}
+
 void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	query_started = false;
+	if (!running) {
+		return;
+	}
+	if (!IsEnabled()) {
+		Reset();
 		return;
 	}
 
@@ -226,6 +252,8 @@ void QueryProfiler::EndQuery() {
 	}
 
 	is_explain_analyze = false;
+	// a query that failed before it was planned has no tree to print; its profile still replaces the saved one
+	const bool has_plan = root != nullptr;
 
 	// To log is inexpensive, whether to log or not depends on whether logging is active
 	ToLogInternal();
@@ -234,14 +262,14 @@ void QueryProfiler::EndQuery() {
 
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
-			// print directly through the renderer's print sink
-			auto renderer = GetRenderer();
-			PrintProfilerOutput(renderer.get());
-			Printer::Print("\n");
-		} else {
+		if (!save_location.empty()) {
 			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
+		} else if (has_plan) {
+			// print directly through the renderer's print sink, the blank line that separates consecutive profiles
+			// included: a pluggable renderer (ProfilerExtension) whose sink keeps the output elsewhere prints nothing
+			auto renderer = GetRenderer();
+			PrintProfilerOutput(renderer.get(), "\n\n");
 		}
 	}
 }
@@ -251,12 +279,30 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::TrackBytesRead(const idx_t amount) {
-	query_metrics.UpdateBytesRead(amount);
+profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
+	// StartQuery resets the counters under the lock, so a snapshot never mixes two queries
+	lock_guard<std::mutex> guard(lock);
+	return query_metrics.GetLiveMetrics();
 }
 
-void QueryProfiler::TrackBytesWritten(const idx_t amount) {
-	query_metrics.UpdateBytesWritten(amount);
+void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesRead(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesWritten(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
+	query_metrics.UpdateBytesSpilled(amount);
+}
+
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
+void QueryProfiler::ResetBytesScanned() {
+	query_metrics.bytes_scanned = 0;
 }
 
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
@@ -289,6 +335,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
@@ -375,7 +425,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	return ss.str();
 }
 
-void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer) const {
 	if (!renderer) {
 		// "no_output" format: nothing is rendered, enabled or not
 		return;
@@ -388,6 +438,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 	}
 	renderer->RenderProfiler(*this, *sink);
 	renderer->Finish();
+	*sink << trailer;
 }
 
 void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {
@@ -446,6 +497,8 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	bytes_scanned += other.bytes_scanned;
+	bytes_scanned_reported = bytes_scanned_reported || other.bytes_scanned_reported;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -521,11 +574,14 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 	auto &info = entry->second;
 	if (info.name.empty()) {
-		info.name = EnumUtil::ToString(phys_op.type);
+		info.name = phys_op.GetName();
 	}
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -533,8 +589,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	for (auto &node : profiler.operator_metrics) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
+		// all profiled operators should be registered in the tree
 		D_ASSERT(entry != tree_map.end());
-
+		if (entry == tree_map.end()) {
+			continue;
+		}
 		auto &tree_node = entry->second.get();
 		auto &info = tree_node.GetOperatorMetrics();
 		info.Merge(node.second);
@@ -555,12 +614,23 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
 
 	query_metrics.blocked_thread_time = blocked_thread_time;
+}
+
+void QueryProfiler::SetStreamingPeakBufferSize(idx_t peak_bytes) {
+	lock_guard<std::mutex> guard(lock);
+	if (!IsEnabled() || !running) {
+		return;
+	}
+	query_metrics.system_peak_streaming_buffer_size = peak_bytes;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -710,6 +780,9 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
+	if (info.MetricIsTracked<MetricOperatorName>()) {
+		result["name"] = Value(name);
+	}
 	if (info.MetricIsTracked<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
@@ -724,6 +797,10 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	}
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN &&
+	    bytes_scanned_reported) {
+		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
 	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
@@ -810,7 +887,7 @@ void QueryProfiler::ToLogInternal() const {
 	if (!root) {
 		return;
 	}
-	metrics->WriteMetricsToLog(context);
+	metrics->WriteMetricsToLog(context, query_metrics.GetMetricTimings());
 }
 
 void QueryProfiler::ToLog() const {
@@ -850,6 +927,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 	};
 
 	emit_as("type", "operator_type");
+	emit_as("name", "operator_name");
 	emit_as("timing", "operator_timing");
 	emit_as("rows_scanned", "operator_rows_scanned");
 	emit_as("intermediate_rows", "operator_cardinality");
@@ -860,6 +938,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 		result.AddValue("extra_info", it_extra->second);
 	}
 	result.AddValue("system_peak_buffer_memory", Value::UBIGINT(0));
+	result.AddValue("system_peak_streaming_buffer_size", Value::UBIGINT(0));
 	result.AddValue("system_peak_temp_dir_size", Value::UBIGINT(0));
 
 	LegacyCumulative cumulative;
@@ -911,9 +990,15 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 
 	emit("total_memory_allocated", "system.total_memory_allocated");
 	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_write_operations", "io.total_write_operations");
 	emit("total_bytes_read", "io.total_bytes_read");
+	emit("total_read_operations", "io.total_read_operations");
+	emit("total_write_time", "io.total_write_time");
+	emit("total_read_time", "io.total_read_time");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("total_bytes_spilled", "system.total_bytes_spilled");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
+	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 
 	// rows_returned = root operator's elements_returned (rows sent to client)
 	{
@@ -973,6 +1058,17 @@ QueryProfileResult &QueryProfiler::GetResult() {
 	return *result_tree;
 }
 
+void QueryProfiler::GetFinalizedProfileUnderLock(
+    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback) const {
+	lock_guard<std::mutex> guard(lock);
+	// a profile left over from before profiling was disabled is stale, and a running one is not finalized yet
+	if (!IsEnabled() || running || !metrics_finalized) {
+		callback(nullptr, nullptr);
+		return;
+	}
+	callback(metrics.get(), root.get());
+}
+
 bool QueryProfiler::HasRoot() const {
 	return root != nullptr;
 }
@@ -989,6 +1085,9 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto flags = FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	auto file = fs.OpenFile(path, flags);
+	if (!file) {
+		throw IOException("Could not open the profiling output file \"%s\" for writing", path);
+	}
 	file->Write((void *)info.c_str(), info.size());
 	file->Close();
 }
@@ -1002,7 +1101,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
-	info.name = EnumUtil::ToString(root_p.type);
+	info.name = root_p.GetName();
 	info.operator_type = root_p.type;
 	auto params = root_p.ParamsToString();
 	info.SetExtraInfo(std::move(params));
@@ -1053,6 +1152,19 @@ void QueryProfiler::Print() {
 	PrintProfilerOutput(renderer.get());
 }
 
+static bool HasScanWithoutBytesScanned(ProfilingNode &node) {
+	auto &metrics = node.GetOperatorMetrics();
+	if (metrics.operator_type == PhysicalOperatorType::TABLE_SCAN && !metrics.bytes_scanned_reported) {
+		return true;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		if (HasScanWithoutBytesScanned(*node.GetChild(i))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
 	result.Accumulate(root.GetOperatorMetrics());
@@ -1060,6 +1172,31 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &resu
 	for (idx_t i = 0; i < root.GetChildCount(); i++) {
 		auto child = root.GetChild(i);
 		MergeOperatorMeasurements(*child, result);
+	}
+}
+
+static double SumSubtreeTime(ProfilingNode &node) {
+	auto result = node.GetOperatorMetrics().time;
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		result += SumSubtreeTime(*node.GetChild(i));
+	}
+	return result;
+}
+
+//! Drop the operators of a secure view, keeping only the metrics that describe the view as a whole: the time spent
+//! in it (accumulated over its operators) and the rows it returned, which are observable regardless. The remaining
+//! metrics of the operators inside the view are discarded rather than accumulated, because their sum describes the
+//! contents of the view - how many rows it processed internally, how much of the table it scanned.
+//! This runs before any profiling output is produced, so every consumer (EXPLAIN ANALYZE in any format, the
+//! profiling output, the query profile result) sees the collapsed tree.
+static void CollapseSecureViews(ProfilingNode &node) {
+	if (node.GetOperatorMetrics().operator_type == PhysicalOperatorType::SECURE_VIEW) {
+		node.GetOperatorMetrics().time = SumSubtreeTime(node);
+		node.children.clear();
+		return;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		CollapseSecureViews(*node.GetChild(i));
 	}
 }
 
@@ -1071,6 +1208,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		query_metrics.latency_timer->EndTimer();
 	}
 	if (root) {
+		// collapse secure views first - the query-wide totals are sums over the operator tree, so leaving the
+		// operators of the view in would expose how much of the table behind it was scanned. The time of the view
+		// is accumulated onto its boundary node, so the total CPU time still covers the whole query.
+		CollapseSecureViews(*root);
 		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
 		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
@@ -1079,6 +1220,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		// left out if a scan doesn't count the bytes it scans, as the total would leave that scan out
+		if (!HasScanWithoutBytesScanned(*root)) {
+			metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
+		}
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

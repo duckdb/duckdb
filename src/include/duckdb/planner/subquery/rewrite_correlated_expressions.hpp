@@ -14,6 +14,11 @@
 
 namespace duckdb {
 
+struct CorrelatedAggregateReplacement {
+	ColumnBinding marker;
+	ColumnBinding empty_result;
+};
+
 //! Rewrites correlated expressions through converted algebra, stopping at unconverted dependent-join children.
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
@@ -31,15 +36,15 @@ private:
 	column_binding_map_t<ColumnBinding> &correlated_aliases;
 };
 
-//! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN
-class RewriteCountAggregates : public LogicalOperatorVisitor {
+//! Replaces the NULLs introduced for missing aggregate groups with the aggregate's actual empty-input result.
+class RewriteCorrelatedAggregates : public LogicalOperatorVisitor {
 public:
-	static void Rewrite(LogicalOperator &op, column_binding_map_t<idx_t> &replacement_map);
+	static void Rewrite(LogicalOperator &op, column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map);
 
 private:
-	explicit RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map);
+	explicit RewriteCorrelatedAggregates(column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	column_binding_map_t<idx_t> &replacement_map;
+	column_binding_map_t<CorrelatedAggregateReplacement> &replacement_map;
 };
 
 } // namespace duckdb

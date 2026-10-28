@@ -1,0 +1,226 @@
+# name: test/sql/subquery/scalar/correlated_scope_resolution.test
+# description: Characterize how expressions are resolved against enclosing query scopes
+# group: [scalar]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+statement ok
+CREATE TABLE another_T(col1 INTEGER, col2 INTEGER);
+
+statement ok
+INSERT INTO another_T VALUES (1, 2), (3, 4);
+
+statement ok
+CREATE TABLE lists(l INTEGER[]);
+
+statement ok
+INSERT INTO lists VALUES ([1, 2]), ([3]);
+
+# an aggregate is owned by the innermost level where one of its arguments resolves a column.
+# no argument resolves a column anywhere, so it is owned where it appears
+query I
+SELECT (SELECT SUM(1))
+----
+1
+
+# the argument only resolves in the outer query, so the aggregate is owned there
+query I
+SELECT (SELECT SUM(i1.i)) FROM integers i1
+----
+6
+
+# one argument resolves in the subquery, so the aggregate stays there and only the
+# other argument is resolved against the outer scope
+query I
+SELECT (SELECT SUM(i2.i + i1.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+9
+12
+15
+NULL
+
+# resolution is per leaf, not per expression: the two operands resolve at different levels
+query I
+SELECT (SELECT i2.i + i1.i FROM integers i2 WHERE i2.i = 1) FROM integers i1 ORDER BY 1
+----
+2
+3
+4
+NULL
+
+# an aggregate owned by the outer query makes the outer query an aggregate query,
+# which retroactively invalidates a plain column bound earlier
+statement error
+SELECT i, (SELECT SUM(i1.i)) FROM integers i1
+----
+<REGEX>:.*must appear in the GROUP BY clause.*
+
+# ... but is fine next to another aggregate
+query II
+SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1
+----
+1	6
+
+# an aggregate cannot be hoisted into an enclosing aggregate
+statement error
+SELECT SUM((SELECT SUM(i))) FROM integers
+----
+<REGEX>:.*aggregate function calls cannot be nested.*
+
+# a constant-only aggregate belongs to the level it appears in, so that level reports it
+statement error
+SELECT (WITH t3 AS (SELECT 3 WHERE count(*)) SELECT 0 FROM t3)
+----
+<REGEX>:.*WHERE clause cannot contain aggregates.*
+
+# the clause that ends up owning the aggregate determines the error message
+
+statement error
+SELECT * FROM integers i1 WHERE (SELECT SUM(i1.i) > 0)
+----
+<REGEX>:.*WHERE clause cannot contain aggregates.*
+
+statement error
+SELECT 1 FROM integers i1 GROUP BY (SELECT SUM(i1.i))
+----
+<REGEX>:.*GROUP BY clause cannot contain aggregates.*
+
+statement error
+SELECT * FROM integers i1, (SELECT SUM(i1.i)) t(s)
+----
+<REGEX>:.*LATERAL join cannot contain aggregates.*
+
+statement error
+SELECT sum(c2) c0 FROM (SELECT 1) t1(c2) HAVING (SELECT c0)
+----
+<REGEX>:.*Having clause cannot reference alias.*in correlated subquery.*
+
+statement error
+SELECT i FROM integers i1 QUALIFY (SELECT SUM(i1.i)) > 0
+----
+<REGEX>:.*must appear in the GROUP BY clause.*
+
+# a missing column is reported in preference to the unsupported-aggregate error,
+# and candidate bindings are collected while looking outward
+statement error
+SELECT * FROM integers i1 WHERE (SELECT SUM(nonexistent_col) > 0)
+----
+<REGEX>:.*Referenced column "nonexistent_col" not found.*Candidate bindings: "i".*
+
+# GROUPING is resolved against the groups of the level that owns it
+query I
+SELECT GROUPING(t1.col1) = ALL (SELECT GROUPING(t1.col2))
+FROM another_T t1 GROUP BY CUBE(t1.col1, t1.col2) ORDER BY 1
+----
+false
+false
+false
+false
+true
+true
+true
+
+# GROUPING bits agree whether or not the reference goes through a subquery
+query IIII
+SELECT t1.col1, GROUPING(t1.col1), GROUPING(t1.col2), (SELECT GROUPING(t1.col2))
+FROM another_T t1 GROUP BY CUBE(t1.col1, t1.col2) ORDER BY ALL
+----
+1	0	0	0
+1	0	1	1
+3	0	0	0
+3	0	1	1
+NULL	1	0	0
+NULL	1	0	0
+NULL	1	1	1
+
+statement error
+SELECT (SELECT GROUPING(t1.col1) FROM integers) FROM another_T t1
+----
+<REGEX>:.*GROUPING statement cannot be used without groups.*
+
+# UNNEST resolves its list argument against enclosing scopes
+query I
+SELECT (SELECT SUM(u) FROM (SELECT UNNEST(l1.l) u)) FROM lists l1 ORDER BY 1
+----
+3
+3
+
+# the remaining UNNEST arguments are only ever resolved locally
+query I
+SELECT (SELECT COUNT(*) FROM (SELECT UNNEST(l1.l, max_depth := 2) u)) FROM lists l1 ORDER BY 1
+----
+1
+2
+
+# a window keeps the level it appears in, and a correlated argument is a constant within it,
+# so it agrees with the same query written through a nested subquery
+query II
+SELECT i, (SELECT SUM(i + 1) OVER ()) FROM integers ORDER BY i
+----
+1	2
+2	3
+3	4
+NULL	NULL
+
+# hiding the correlated reference inside its own subquery keeps the window uncorrelated
+query II
+SELECT i, (SELECT SUM((SELECT i + 1)) OVER ()) FROM integers ORDER BY i
+----
+1	2
+2	3
+3	4
+NULL	NULL
+
+# a lambda parameter is bound by the lambda, not by a query scope, so it never decides which scope
+# owns an aggregate - even when it shares a name with a column of an enclosing scope
+query I
+SELECT (SELECT SUM(list_transform([1, 2], lambda i: i + 1)[1])) FROM integers i1 ORDER BY 1
+----
+2
+2
+2
+2
+
+# ... which is the same answer the aggregate gives when the parameter shadows nothing
+query I
+SELECT (SELECT SUM(list_transform([1, 2], lambda unshadowed: unshadowed + 1)[1])) FROM integers i1 ORDER BY 1
+----
+2
+2
+2
+2
+
+# a genuine column reference in a lambda body still owns the aggregate, whether or not the lambda
+# parameter shares the last component of its name
+query I
+SELECT (SELECT SUM(list_transform([1, 2], lambda i: i + i1.i)[1])) FROM integers i1
+----
+9
+
+query I
+SELECT (SELECT SUM(list_transform([1, 2], lambda unshadowed: unshadowed + i1.i)[1])) FROM integers i1
+----
+9
+
+statement ok
+CREATE TABLE files(data VARCHAR);
+
+statement ok
+INSERT INTO files VALUES ('x');
+
+# a table function argument that an enclosing scope can resolve but not bind - "data.csv" reads as a
+# struct extract of the column "data" - is not a lateral parameter, so it falls back to a string
+statement error
+SELECT * FROM files, read_csv(data.csv);
+----
+<REGEX>:.*No files found that match the pattern.*
+
+# a reference that the enclosing scope really does bind is still rejected
+statement error
+SELECT * FROM files, read_csv(files.data);
+----
+<REGEX>:.*does not support lateral join column parameters.*

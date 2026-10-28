@@ -1,0 +1,20 @@
+# Function assigning every member in the derived DuckDB-side header.
+# The function-pointer struct, as the consumer template declares it.
+version_floor: "v2.0.0"
+struct_typename: duckdb_ext_api_v2
+# The vtable variable the mapping macros indirect through, as the consumer
+# template declares it (DUCKDB_EXTENSION_GLOBAL / _EXTERN). Set explicitly
+# because the default is <prefix>ext_api, and this spec's prefix is
+# duckdb_v2_, which would name a variable nothing declares.
+api_variable: duckdb_ext_api
+
+create_method: CreateAPIv2
+# Only the DuckDB-side header derives its macros from this prefix; the
+# extension-facing header takes its version block verbatim from the template.
+# It must therefore differ from V1's DUCKDB_EXTENSION_API_VERSION: the engine
+# includes both internal headers, and two definitions of one macro name would
+# let include order decide which version the loader validates against.
+version_macro_prefix: DUCKDB_EXTENSION_API_V2_VERSION
+# Header the DuckDB-side output includes: duckdb_v2.h behind DuckDB's own
+# Arrow C data interface definitions (see the shim header's comment).
+internal_include: duckdb_v2.h

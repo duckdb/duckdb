@@ -1,0 +1,140 @@
+# name: test/sql/optimizer/aggregate_stats_propagation.test
+# description: Aggregates whose result is bounded by their input's range propagate output statistics
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/aggregate_stats_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 10240 rows -> 5 row groups of 2048 rows; x in [0, 10239], 16 groups
+statement ok
+CREATE TABLE t AS SELECT range::INTEGER AS x, (range % 16)::INTEGER AS g FROM range(10240);
+
+# ---------------------------------------------------------------------------
+# result is one of the input values: min / max / first / last / any_value /
+# arg_min / arg_max / mode -> output stats inherit the input column's min/max
+# ---------------------------------------------------------------------------
+
+# min(x) is bounded by [0, 10239]: a HAVING outside that range folds to an empty result
+query II
+EXPLAIN SELECT g, min(x) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# aggregate results remain nullable, so retain the null-preserving HAVING filter
+query II
+EXPLAIN SELECT g, min(x) AS m FROM t GROUP BY g HAVING m >= 0;
+----
+physical_plan	<REGEX>:.*constant_or_null\(true, m, 0\).*
+
+query I
+SELECT count(*) FROM (SELECT g, min(x) AS m FROM t GROUP BY g HAVING m > 20000) sub;
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT g, min(x) AS m FROM t GROUP BY g HAVING m >= 0) sub;
+----
+16
+
+query II
+EXPLAIN SELECT g, max(x) AS m FROM t GROUP BY g HAVING m < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT g, max(x) AS m FROM t GROUP BY g HAVING m < 0) sub;
+----
+0
+
+query II
+EXPLAIN SELECT g, first(x) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, last(x) AS m FROM t GROUP BY g HAVING m < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, any_value(x) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, arg_min(x, g) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, arg_max(x, g) AS m FROM t GROUP BY g HAVING m < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, mode(x) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# ---------------------------------------------------------------------------
+# result lies within the input's range: median / quantile_cont / quantile_disc
+# (avg is not tested here: it is decomposed into sum/count before statistics propagation runs)
+# ---------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT g, median(x) AS m FROM t GROUP BY g HAVING m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, quantile_cont(x, 0.75) AS q FROM t GROUP BY g HAVING q > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT g, quantile_disc(x, 0.75) AS q FROM t GROUP BY g HAVING q < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# ---------------------------------------------------------------------------
+# the fold also applies to a filter above a subquery, not just HAVING
+# ---------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT * FROM (SELECT g, min(x) AS m FROM t GROUP BY g) sub WHERE m > 20000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# ---------------------------------------------------------------------------
+# correctness guard with NULLs: min/max skip NULLs, bounds still hold, and the
+# fold must never drop non-empty results
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE tn AS
+SELECT CASE WHEN range % 7 = 0 THEN NULL ELSE range END::INTEGER AS x, (range % 16)::INTEGER AS g
+FROM range(10240);
+
+query I
+SELECT count(*) FROM (SELECT g, min(x) AS m FROM tn GROUP BY g HAVING m > 20000) sub;
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT g, min(x) AS m FROM tn GROUP BY g HAVING m <= 20000) sub;
+----
+16
+
+# every value of one group is NULL: the aggregate result is NULL and must survive
+statement ok
+CREATE TABLE tg AS
+SELECT CASE WHEN range % 16 = 3 THEN NULL ELSE range END::INTEGER AS x, (range % 16)::INTEGER AS g
+FROM range(10240);
+
+query I
+SELECT count(*) FROM (SELECT g, min(x) AS m FROM tg GROUP BY g HAVING m IS NULL) sub;
+----
+1

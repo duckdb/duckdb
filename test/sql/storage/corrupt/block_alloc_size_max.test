@@ -1,0 +1,12 @@
+# name: test/sql/storage/corrupt/block_alloc_size_max.test
+# description: Reject the maximum database block allocation size
+# group: [corrupt]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/block_alloc_size_corrupt_max.db.gz {TEST_DIR}/block_alloc_size_corrupt_max.db
+
+statement error
+ATTACH '{TEST_DIR}/block_alloc_size_corrupt_max.db' AS corrupt_db (READ_ONLY)
+----
+Data Corruption Error: Corrupt database file: invalid block allocation size 18446744073709551615

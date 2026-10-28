@@ -418,7 +418,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 			scan_chunk.Reset();
 
 			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+			Scan(TransactionData::Unversioned(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
 
 			// Verify the scan chunk
 			scan_chunk.Verify(GetDatabase());
@@ -514,7 +514,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		scan_chunk.Reset();
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+		Scan(TransactionData::Unversioned(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify(GetDatabase());

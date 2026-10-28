@@ -31,7 +31,7 @@ void Binding::Initialize() {
 		auto &name = names[i];
 		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.GetAlias(), name);
+			throw BinderException("table %s has duplicate column name %s", alias.GetAlias(), name);
 		}
 		name_map[name] = i;
 	}
@@ -65,6 +65,14 @@ void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
 	types[col_idx] = std::move(type_p);
 }
 
+void Binding::SetNullExtended() {
+	null_extended = true;
+}
+
+bool Binding::IsNullExtended() const {
+	return null_extended;
+}
+
 const Identifier &Binding::GetAlias() const {
 	return alias.GetAlias();
 }
@@ -82,7 +90,7 @@ bool Binding::TryGetBindingIndex(const Identifier &column_name, column_t &result
 column_t Binding::GetBindingIndex(const Identifier &column_name) {
 	column_t result;
 	if (!TryGetBindingIndex(column_name, result)) {
-		throw InternalException("Binding index for column \"%s\" not found", column_name);
+		throw InternalException("Binding index for column %s not found", column_name);
 	}
 	return result;
 }
@@ -114,8 +122,8 @@ void Binding::SetBoundColumnAlias(ColumnRefExpression &colref) {
 }
 
 ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
-	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"",
-	                                                           GetAlias(), column_name));
+	return ErrorData(ExceptionType::BINDER,
+	                 StringUtil::Format("Values list %s does not have a column named %s", GetAlias(), column_name));
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -176,8 +184,7 @@ TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p,
 		auto &name = ventry.second.name;
 		if (idx < VIRTUAL_COLUMN_START) {
 			throw BinderException(
-			    "Virtual column index must be larger than VIRTUAL_COLUMN_START - found %d for column \"%s\"", idx,
-			    name);
+			    "Virtual column index must be larger than VIRTUAL_COLUMN_START - found %d for column %s", idx, name);
 		}
 		if (idx == COLUMN_IDENTIFIER_EMPTY) {
 			// the empty column cannot be queried by the user
@@ -320,7 +327,7 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 ErrorData TableBinding::ColumnNotFoundError(const Identifier &column_name) const {
 	auto candidate_message = StringUtil::CandidatesErrorMessage(
 	    IdentifiersToStrings(names), column_name.GetIdentifierName(), "Candidate bindings: ");
-	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
+	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table %s does not have a column named %s\n%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 

@@ -61,6 +61,12 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.par
 ----
 1
 
+# filtering on the value stored in the file prunes the only file away, leaving an empty file list
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet') WHERE part = 999
+----
+0
+
 # the value stored in the file is only visible with hive partitioning turned off
 query II
 SELECT typeof(part), part

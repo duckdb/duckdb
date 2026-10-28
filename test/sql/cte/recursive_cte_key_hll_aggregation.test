@@ -13,7 +13,7 @@ WITH RECURSIVE tbl(key, id, acc) USING KEY (key, approx_count_distinct(acc)) AS 
 	SELECT 1, id, cname
 	FROM customers
 	WHERE id = 1
-		UNION
+		UNION ALL
 	SELECT key, tbl.id + 1, cname
 	FROM tbl
 	JOIN customers AS c ON c.id = tbl.id + 1)

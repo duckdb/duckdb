@@ -5,7 +5,7 @@
 query II
 WITH RECURSIVE tbl(a, b) USING KEY (a , max(b)) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT a, b - 1
 	FROM tbl
 	WHERE b > 0)
@@ -16,7 +16,7 @@ TABLE tbl;
 query II
 WITH RECURSIVE tbl(a, b) USING KEY (a , avg(b)) AS (
 	SELECT 1, 5
-	  UNION
+	UNION ALL
 	SELECT a, b - 1
 	FROM tbl
 	WHERE b > 0)
@@ -27,7 +27,7 @@ TABLE tbl;
 query III
 WITH RECURSIVE tbl(a, b, c) USING KEY (a , avg(b), list(c)) AS (
 	SELECT 1, 5, NULL :: DOUBLE
-	  UNION
+	UNION ALL
 	SELECT tbl.a, tbl.b - 1, rec.b
 	FROM tbl, recurring.tbl AS rec
 	WHERE tbl.b > 0)
@@ -45,7 +45,7 @@ query IIII
 WITH RECURSIVE dvr(here, there, via, len) USING KEY (here, there , arg_min(via, len), min(len)) AS (
 	SELECT n.person1id AS here, n.person2id AS there, n.person2id AS via, 1 AS len
 	FROM knows AS n
-		UNION
+	UNION ALL
 	SELECT n.person1id AS here, dvr.there, dvr.here AS via, 1 + dvr.len AS len
 	FROM dvr
 	JOIN knows AS n ON
@@ -64,7 +64,7 @@ FROM    range(1, 4) AS _(l),
    LATERAL (
      WITH RECURSIVE cte(a, b, c) USING KEY (a , list(b)) AS (
        SELECT 1, l, 3
-         union
+	UNION ALL
        SELECT a, l + 1, c - 1
        FROM   recurring.cte
        WHERE  c > 0)
@@ -81,7 +81,7 @@ FROM    range(1, 4) AS _(l),
 statement error
 WITH RECURSIVE tbl(a,b,c) USING KEY (a, b , list(c), max(c)) AS (
 	SELECT 1, 1, NULL
-    	UNION
+	UNION ALL
     SELECT tbl.a, tbl.b - 1, a.b
 	FROM tbl, recurring.tbl AS a
 	WHERE tbl.b > 0)
@@ -93,7 +93,7 @@ SELECT * FROM tbl;
 statement error
 WITH RECURSIVE tbl(a,b,c) USING KEY (a, c , list(b), max(c)) AS (
 	SELECT 1, 1, NULL
-    	UNION
+	UNION ALL
     SELECT tbl.a, tbl.b - 1, a.b
 	FROM tbl, recurring.tbl AS a
 	WHERE tbl.b > 0)
@@ -104,7 +104,7 @@ SELECT * FROM tbl;
 statement error
 WITH RECURSIVE tbl(a,b,c) USING KEY (list(c)) AS (
 	SELECT 1, 4, NULL
-		UNION
+	UNION ALL
 	SELECT a, b - 1, b
 	FROM tbl
 	WHERE tbl.b > 0)
@@ -116,7 +116,7 @@ SELECT * FROM tbl;
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a, a , list(b)) AS (
 	SELECT 1, 1, NULL :: INT[]
-    	UNION
+	UNION ALL
     SELECT tbl.a, tbl.b - 1, a.b
 	FROM tbl, recurring.tbl AS a
 	WHERE tbl.b > 0)
@@ -128,7 +128,7 @@ SELECT * FROM tbl;
 query II
 WITH RECURSIVE tbl(a,b) USING KEY (a , string_agg(':a') AS b) AS (
 	VALUES (1,2), (1,3)
-		UNION
+	UNION ALL
 	SELECT a, b + 1
 	FROM tbl
 	WHERE b < 4)
@@ -140,7 +140,7 @@ SELECT * FROM tbl;
 query II
 WITH RECURSIVE tbl(a,b) USING KEY (a , string_agg(b, ', ') ) AS (
     SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT tbl.a, tbl.b - 1
     FROM tbl
     WHERE tbl.b > 0)
@@ -152,7 +152,7 @@ TABLE tbl;
 query II
 WITH RECURSIVE tbl(a,b) USING KEY (a , any_value(b)) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT tbl.a, tbl.b - 1
 	FROM tbl
 	WHERE tbl.b > 0)
@@ -163,7 +163,7 @@ TABLE tbl;
 query II
 WITH RECURSIVE tbl(a,b) USING KEY (a , arbitrary(b)) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT tbl.a, tbl.b - 1
 	FROM tbl
 	WHERE tbl.b > 0)
@@ -174,7 +174,7 @@ TABLE tbl;
 query III
 WITH RECURSIVE tbl(key,b,c) USING KEY (key, arg_max(c, b) AS c) AS (
 	SELECT 1, 5, 5/5
-		UNION
+	UNION ALL
 	SELECT key, b - 1, 5 / b
 	FROM tbl
 	WHERE b > 0
@@ -185,7 +185,7 @@ WITH RECURSIVE tbl(key,b,c) USING KEY (key, arg_max(c, b) AS c) AS (
 query II
 WITH RECURSIVE tbl(key,b) USING KEY (key , bit_or(b)) AS (
 	SELECT 1, '0001' :: BIT
-		UNION
+	UNION ALL
 	SELECT key, b << 1
 	FROM tbl
 	WHERE b < '1000' :: BIT
@@ -196,7 +196,7 @@ WITH RECURSIVE tbl(key,b) USING KEY (key , bit_or(b)) AS (
 query II
 WITH RECURSIVE tbl(key,b) USING KEY (key, bit_and(b)) AS (
 	SELECT 1, '1111' :: BIT
-		UNION
+	UNION ALL
 	SELECT key, b << 1
 	FROM tbl
 	WHERE b > '0000' :: BIT
@@ -207,7 +207,7 @@ WITH RECURSIVE tbl(key,b) USING KEY (key, bit_and(b)) AS (
 query II
 WITH RECURSIVE tbl(key,b) USING KEY (key , bit_xor(b)) AS (
 	SELECT 1, '1111' :: BIT
-		UNION
+	UNION ALL
 	SELECT key, b << 1
 	FROM tbl
 	WHERE b > '0000' :: BIT
@@ -226,7 +226,7 @@ WITH RECURSIVE tbl(key, iter, acc) USING KEY (key, bitstring_agg(acc, 1, 12)) AS
 	SELECT c, 1, d
 	FROM tinyints
 	WHERE c = 1
-		UNION
+	UNION ALL
 	SELECT key, iter + 1, d
 	FROM tbl, tinyints AS t(c,d)
 	WHERE c = iter AND iter < 8
@@ -237,7 +237,7 @@ WITH RECURSIVE tbl(key, iter, acc) USING KEY (key, bitstring_agg(acc, 1, 12)) AS
 query IIII
 WITH RECURSIVE tbl(key, iter, b, c) USING KEY (key, bool_and(b), bool_or(c)) AS (
 	SELECT 1, 1, TRUE, TRUE
-		UNION
+	UNION ALL
 	SELECT key, iter + 1, NOT b, NOT c
 	FROM tbl
 	WHERE iter < 8
@@ -248,7 +248,7 @@ WITH RECURSIVE tbl(key, iter, b, c) USING KEY (key, bool_and(b), bool_or(c)) AS 
 query III
 WITH RECURSIVE tbl(key, iter, c) USING KEY (key, count() AS iter, count(c)) AS (
 	SELECT 1, 1, 1
-		UNION
+	UNION ALL
 	SELECT key, iter + 1, c
 	FROM tbl
 	WHERE iter < 8
@@ -259,7 +259,7 @@ WITH RECURSIVE tbl(key, iter, c) USING KEY (key, count() AS iter, count(c)) AS (
 query II
 WITH RECURSIVE tbl(key,b) USING KEY (key, countif(b % 2 = 0) AS b) AS (
 	SELECT 1, 0
-		UNION
+	UNION ALL
 	SELECT key, b + 1
 	FROM tbl
 	WHERE b < 10)
@@ -270,7 +270,7 @@ TABLE tbl;
 query I
 WITH RECURSIVE tbl(key,b) USING KEY (key, histogram(b, [0, 1, 10]) AS b) AS (
 	SELECT 1, 0 :: DOUBLE
-		UNION
+	UNION ALL
 	SELECT key, tbl.b + 0.5
 	FROM tbl
 	WHERE tbl.b < 10)
@@ -281,7 +281,7 @@ WITH RECURSIVE tbl(key,b) USING KEY (key, histogram(b, [0, 1, 10]) AS b) AS (
 query II
 WITH RECURSIVE tbl(key,b) USING KEY (key, min(b, 3) AS b) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT key, b - 1
 	FROM tbl
 	WHERE b > 0)
@@ -292,7 +292,7 @@ TABLE tbl;
 query II
 WITH RECURSIVE tbl(key, b) USING KEY (key, product(b)) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT key, b - 1
 	FROM tbl
 	WHERE b > 1)
@@ -303,7 +303,7 @@ TABLE tbl;
 query I
 WITH RECURSIVE tbl(key, iter, b) USING KEY (key, approx_quantile(b, [0.5, 0.4, 0.1]) AS b) AS (
 	SELECT 1, 1, 0
-		UNION
+	UNION ALL
 	SELECT key, iter + 1, iter
 	FROM tbl, VALUES (2, 1), (3, 2), (4, 10) AS tab(id, col)
 	WHERE iter + 1 = id)
@@ -317,7 +317,7 @@ CREATE TABLE alternating_sequences(it, i) AS SELECT 1, 0 FROM range(10000) UNION
 query I
 WITH RECURSIVE tbl(key, iter, i) USING KEY (key, approx_top_k(i, 3) AS i) AS (
 	SELECT 1, 0, 0
-		UNION
+	UNION ALL
 	SELECT key, iter + 1, i
 	FROM tbl, alternating_sequences AS a
 	WHERE iter + 1 = a.it)
@@ -337,7 +337,7 @@ WITH RECURSIVE tbl(iter, k, v, v2) USING KEY (k, corr(v, v2) AS v2) AS (
 	SELECT it, k, v, v2
 	FROM aggr
 	WHERE it = 1
-		UNION
+	UNION ALL
 	SELECT tbl.iter + 1, tbl.k, a.v, a.v2
 	FROM tbl, aggr AS a
 	WHERE tbl.iter + 1 = a.it AND tbl.k = a.k
@@ -357,7 +357,7 @@ WITH RECURSIVE tbl(key, iter, x, y) USING KEY (key, covar_samp(x,y) AS x, covar_
 	SELECT 1, iter, x, y
 	FROM integers
 	WHERE iter = 1
-		UNION
+	UNION ALL
 	SELECT tbl.key, tbl.iter + 1, a.x, a.y
 	FROM tbl, integers AS a
 	WHERE tbl.iter + 1 = a.iter
@@ -376,7 +376,7 @@ WITH RECURSIVE tbl (key, iter, name) USING KEY (key, entropy(name) AS name) AS (
 	SELECT 1, it, name
 	FROM names
 	WHERE it = 1
-		UNION
+	UNION ALL
 	SELECT tbl.key, tbl.iter + 1, n.name
 	FROM tbl, names AS n
 	WHERE tbl.iter + 1 = n.it)
@@ -406,7 +406,7 @@ WITH RECURSIVE tbl(key, iter, k, v, v2) USING KEY (key, kurtosis(k) AS k, kurtos
 	SELECT 1, it, k, v, v2
 	FROM kur
 	WHERE it = 1
-		UNION
+	UNION ALL
 	SELECT 1, tbl.iter + 1, a.k, a.v, a.v2
 	FROM tbl, kur AS a
 	WHERE tbl.iter + 1 = a.it
@@ -418,7 +418,7 @@ WITH RECURSIVE tbl(key, iter, k, v, v2) USING KEY (key, kurtosis(k) AS k, kurtos
 statement error
 WITH RECURSIVE tbl (a,b) USING KEY (a, b+1) AS (
 	SELECT 1, 1
-   		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -430,7 +430,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl (a,b) USING KEY (a, avg(b) :: INT) AS (
 	SELECT 1, 1
-   		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -442,7 +442,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl (a,b) USING KEY (a, sum(b) OVER ()) AS (
 	SELECT 1, 1
-   		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -454,7 +454,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*)) AS (
 	SELECT 1, 1
-  		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -465,7 +465,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*) AS b) AS (
   	SELECT 1, 1
-  		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -476,7 +476,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a, avg(* :: Int) AS b) AS (
   	SELECT 1, 1
-  		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -487,7 +487,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a AS b, sum(b) AS b) AS (
 	SELECT 1, 1
-  		UNION
+	UNION ALL
   	SELECT a, b + 1
   	FROM tbl
   	WHERE b < 5)
@@ -498,7 +498,7 @@ TABLE tbl;
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a AS b, max(b)) AS (
 	SELECT 1, 5
-		UNION
+	UNION ALL
 	SELECT a, b - 1
 	FROM tbl
 	WHERE b > 0)

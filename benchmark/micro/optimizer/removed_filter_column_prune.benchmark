@@ -1,0 +1,27 @@
+# name: benchmark/micro/optimizer/removed_filter_column_prune.benchmark
+# description: Benchmark of column pruning after statistics propagation removes a redundant filter
+# group: [optimizer]
+
+name Removed Filter Column Prune
+group micro
+subgroup optimizer
+storage persistent
+
+load
+CREATE TABLE events AS
+    SELECT (i % 8) AS grp,
+           md5(i::VARCHAR) || md5((i + 1)::VARCHAR) AS uuid
+    FROM range(5000000) t(i);
+
+run
+SELECT grp, count(*) FROM events WHERE uuid IS NOT NULL GROUP BY grp ORDER BY grp;
+
+result II
+0	625000
+1	625000
+2	625000
+3	625000
+4	625000
+5	625000
+6	625000
+7	625000

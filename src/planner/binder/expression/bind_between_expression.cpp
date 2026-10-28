@@ -12,16 +12,12 @@ namespace duckdb {
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	BindChild(expr.InputMutable(), depth, error);
-	BindChild(expr.LowerBoundMutable(), depth, error);
-	BindChild(expr.UpperBoundMutable(), depth, error);
+	auto input = BindChild(expr.InputMutable(), depth, error);
+	auto lower = BindChild(expr.LowerBoundMutable(), depth, error);
+	auto upper = BindChild(expr.UpperBoundMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
-	// the children have been successfully resolved
-	auto &input = BoundExpression::GetExpression(*expr.InputMutable());
-	auto &lower = BoundExpression::GetExpression(*expr.LowerBoundMutable());
-	auto &upper = BoundExpression::GetExpression(*expr.UpperBoundMutable());
 
 	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
 	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);
@@ -51,8 +47,8 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	PushCollation(context, lower, input_type);
 	PushCollation(context, upper, input_type);
 
-	if (!input->IsVolatile() && !input->HasParameter() && !input->HasSubquery()) {
-		// the expression does not have side effects and can be copied: create two comparisons
+	if (input->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		// the input is a column reference and can be copied cheaply: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
 		auto left_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,

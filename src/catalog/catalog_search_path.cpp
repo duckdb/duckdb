@@ -54,36 +54,24 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 	string entry;
 	bool finished = false;
 normal:
-	for (; idx < input.size(); idx++) {
+	for (; idx < input.size();) {
 		if (input[idx] == '"') {
-			idx++;
-			goto quoted;
+			string quoted;
+			if (!StringUtil::TryParseQuotedString(input, idx, quoted)) {
+				throw ParserException("Unterminated quote in qualified name!");
+			}
+			entry += quoted;
 		} else if (input[idx] == '.') {
 			goto separator;
 		} else if (input[idx] == ',') {
 			finished = true;
 			goto separator;
+		} else {
+			entry += input[idx++];
 		}
-		entry += input[idx];
 	}
 	finished = true;
 	goto separator;
-quoted:
-	//! look for another quote
-	for (; idx < input.size(); idx++) {
-		if (input[idx] == '"') {
-			//! unquote
-			idx++;
-			if (idx < input.size() && input[idx] == '"') {
-				// escaped quote
-				entry += input[idx];
-				continue;
-			}
-			goto normal;
-		}
-		entry += input[idx];
-	}
-	throw ParserException("Unterminated quote in qualified name!");
 separator:
 	if (entry.empty()) {
 		throw ParserException("Unexpected dot - empty CatalogSearchEntry");
@@ -182,11 +170,14 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (path.GetCatalog().empty()) {
 			auto catalog = Catalog::GetCatalogEntry(context, path.GetSchema());
 			if (catalog) {
-				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
-				if (schema) {
-					path.SetCatalog(path.GetSchema());
-					path.SetSchema(schema->name);
-					continue;
+				auto default_schema = catalog->GetDefaultSchema();
+				if (default_schema) {
+					auto schema = catalog->GetSchema(context, *default_schema, OnEntryNotFound::RETURN_NULL);
+					if (schema) {
+						path.SetCatalog(path.GetSchema());
+						path.SetSchema(schema->name);
+						continue;
+					}
 				}
 			}
 		}
@@ -203,8 +194,8 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
 		if (new_paths[0].GetCatalog() == TEMP_CATALOG || new_paths[0].GetCatalog() == SYSTEM_CATALOG) {
-			throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
-			                       new_paths[0].GetCatalog().GetIdentifierName());
+			throw CatalogException("%s cannot be set to internal schema %s", GetSetName(set_type),
+			                       new_paths[0].GetCatalog());
 		}
 	}
 	SetPathsInternal(std::move(new_paths));
@@ -238,7 +229,7 @@ Identifier CatalogSearchPath::GetDefaultSchema(const Identifier &catalog) const 
 	return DEFAULT_SCHEMA;
 }
 
-Identifier CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identifier &catalog) const {
+optional<Identifier> CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identifier &catalog) const {
 	for (auto &path : paths) {
 		if (path.GetCatalog() == TEMP_CATALOG) {
 			continue;
@@ -251,7 +242,7 @@ Identifier CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Ide
 	if (catalog_entry) {
 		return catalog_entry->GetDefaultSchema();
 	}
-	return DEFAULT_SCHEMA;
+	return Identifier(DEFAULT_SCHEMA);
 }
 
 Identifier CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const {
@@ -267,6 +258,17 @@ Identifier CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const 
 		}
 	}
 	return Identifier::InvalidCatalog();
+}
+
+Identifier CatalogSearchPath::ResolveCatalog(const Identifier &schema) const {
+	auto catalog = schema.empty() ? Identifier::InvalidCatalog() : GetDefaultCatalog(schema);
+	if (IsInvalidCatalog(catalog)) {
+		catalog = GetDefault().GetCatalog();
+	}
+	if (IsInvalidCatalog(catalog)) {
+		catalog = DatabaseManager::GetDefaultDatabase(context);
+	}
+	return catalog;
 }
 
 vector<Identifier> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {
@@ -316,7 +318,11 @@ vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientCon
 			if (!catalog_entry) {
 				continue;
 			}
-			res.emplace_back(path.GetCatalog(), catalog_entry->GetDefaultSchema());
+			auto default_schema = catalog_entry->GetDefaultSchema();
+			if (!default_schema) {
+				continue;
+			}
+			res.emplace_back(path.GetCatalog(), *default_schema);
 		} else {
 			res.emplace_back(path);
 		}
@@ -357,7 +363,7 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const Identif
 		if (path.GetCatalog() == catalog_name) {
 			return true;
 		}
-		if (IsInvalidCatalog(path.GetCatalog()) && catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
+		if (IsInvalidCatalog(path.GetCatalog()) && catalog_name == DatabaseManager::TryGetDefaultDatabase(context)) {
 			return true;
 		}
 	}

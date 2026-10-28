@@ -90,8 +90,14 @@ struct BitStringAggOperation {
 				    NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
 			}
 			idx_t len = Bit::ComputeBitstringLen(bit_range);
-			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], UnsafeNumericCast<uint32_t>(len))
-			                                            : string_t(UnsafeNumericCast<uint32_t>(len));
+
+			string_t target;
+			if (len <= string_t::INLINE_LENGTH) {
+				target = string_t(UnsafeNumericCast<uint32_t>(len));
+			} else {
+				target = string_t(char_ptr_cast(unary_input.input.allocator.Allocate(len)),
+				                  UnsafeNumericCast<uint32_t>(len));
+			}
 			Bit::SetEmptyBitString(target, bit_range);
 
 			state.value = target;
@@ -117,15 +123,12 @@ struct BitStringAggOperation {
 		if (min > max) {
 			throw InvalidInputException("Invalid explicit bitstring range: Minimum (%d) > maximum (%d)", min, max);
 		}
-		INPUT_TYPE result;
-		if (!TrySubtractOperator::Operation(max, min, result)) {
+		// the difference of two (at most 64-bit) values does not always fit in their own type, but it fits in a hugeint
+		const auto range = Hugeint::Convert(max) - Hugeint::Convert(min);
+		if (range >= Hugeint::Convert(NumericLimits<idx_t>::Maximum())) {
 			return NumericLimits<idx_t>::Maximum();
 		}
-		auto val = NumericCast<idx_t>(result);
-		if (val == NumericLimits<idx_t>::Maximum()) {
-			return val;
-		}
-		return val + 1;
+		return Hugeint::Cast<idx_t>(range) + 1;
 	}
 
 	template <class INPUT_TYPE, class STATE>
@@ -134,12 +137,12 @@ struct BitStringAggOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &unary_input) {
 		if (!source.is_set) {
 			return;
 		}
 		if (!target.is_set) {
-			Assign(target, source.value);
+			Assign(target, source.value, unary_input);
 			target.is_set = true;
 			target.min = source.min;
 			target.max = source.max;
@@ -149,15 +152,15 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &unary_input) {
 		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
 			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
-			auto ptr = new char[len];
+			auto ptr = unary_input.allocator.Allocate(len);
 			memcpy(ptr, input.GetData(), len);
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+			state.value = string_t(char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -167,13 +170,6 @@ struct BitStringAggOperation {
 			finalize_data.ReturnNull();
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
-		}
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.is_set && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
 		}
 	}
 
@@ -259,7 +255,7 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	    BitstringPropagateStats); // stores min and max from column stats in BitstringAggBindData
 	function.GetSignature().GetParameter(0).SetName("arg");
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
-	function.GetSignature() = FunctionSignature({{"arg", type}, {"min", type}, {"max", type}}, LogicalType::BIT);
+	function.GetSignature().AddParameter("min", type).AddParameter("max", type);
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	// note that the bind folds min and max into the bind data - they stay part of the expression tree, and the
 	// update callback simply does not read them

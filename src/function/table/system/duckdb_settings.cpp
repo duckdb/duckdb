@@ -26,6 +26,17 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+struct DuckDBSettingsBindData : public TableFunctionData {
+	bool debug = false;
+	bool deprecated = false;
+	//! Ignore the debug and deprecated filters
+	bool include_all = false;
+
+	bool Includes(bool is_debug, bool is_deprecated) const {
+		return include_all || (debug == is_debug && deprecated == is_deprecated);
+	}
+};
+
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
@@ -49,16 +60,40 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("typed_value");
 	return_types.emplace_back(LogicalType::VARIANT());
 
-	return nullptr;
+	auto result = make_uniq<DuckDBSettingsBindData>();
+	for (auto name : {"debug", "deprecated", "include_all"}) {
+		auto it = input.named_parameters.find(name);
+		if (it != input.named_parameters.end() && it->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", name);
+		}
+	}
+	if (auto it = input.named_parameters.find("debug"); it != input.named_parameters.end()) {
+		result->debug = it->second.GetValue<bool>();
+	}
+
+	if (auto it = input.named_parameters.find("deprecated"); it != input.named_parameters.end()) {
+		result->deprecated = it->second.GetValue<bool>();
+	}
+
+	if (auto it = input.named_parameters.find("include_all"); it != input.named_parameters.end()) {
+		result->include_all = it->second.GetValue<bool>();
+	}
+	auto &params = input.named_parameters;
+	if (result->include_all && (params.find("debug") != params.end() || params.find("deprecated") != params.end())) {
+		throw InvalidInputException("Cannot combine include_all := true with the debug or deprecated filters");
+	}
+
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBSettingsData>();
+	auto &bind_data = input.bind_data->Cast<DuckDBSettingsBindData>();
 
-	unordered_map<idx_t, vector<Value>> aliases;
+	identifier_map_t<vector<Value>> aliases;
 	for (idx_t i = 0; i < DBConfig::GetAliasCount(); i++) {
 		auto alias = DBConfig::GetAliasByIndex(i);
-		aliases[alias->option_index].emplace_back(alias->alias);
+		aliases[alias->setting_name].emplace_back(alias->alias);
 	}
 
 	auto &config = DBConfig::GetConfig(context);
@@ -66,6 +101,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	for (idx_t i = 0; i < options_count; i++) {
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
+		if (!bind_data.Includes(option->is_debug, option->is_deprecated)) {
+			continue;
+		}
 		DuckDBSettingValue value;
 		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
@@ -82,7 +120,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.description = option->description;
 		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);
-		auto entry = aliases.find(i);
+		auto entry = aliases.find(option->name);
 		if (entry != aliases.end()) {
 			value.aliases = std::move(entry->second);
 		}
@@ -95,6 +133,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.GetExtensionSettings()) {
+		if (!bind_data.Includes(ext_param.second.is_debug, ext_param.second.is_deprecated)) {
+			continue;
+		}
 		Value setting_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
@@ -154,8 +195,13 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit));
+	TableFunction settings_fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
+	settings_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("debug", LogicalType::BOOLEAN)
+		    .Add("deprecated", LogicalType::BOOLEAN)
+		    .Add("include_all", LogicalType::BOOLEAN);
+	});
+	set.AddFunction(settings_fun);
 }
 
 } // namespace duckdb
