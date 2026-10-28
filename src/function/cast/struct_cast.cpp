@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
@@ -22,54 +21,53 @@ StructCastFieldMapping StructBoundCastData::GetFieldMapping(const LogicalType &s
 	auto source_is_unnamed = source_children.empty() || StructType::IsUnnamed(source);
 
 	auto is_unnamed = target_is_unnamed || source_is_unnamed;
-	if (is_unnamed && source_children.size() != target_children.size()) {
-		result.kind = StructCastFieldMapping::MatchKind::SIZE_MISMATCH;
+	if (is_unnamed) {
+		// Unnamed structs cast positionally
+		if (source_children.size() != target_children.size()) {
+			result.kind = StructCastFieldMapping::MatchKind::SIZE_MISMATCH;
+			return result;
+		}
+		for (idx_t i = 0; i < source_children.size(); i++) {
+			result.source_indexes.push_back(i);
+			result.target_indexes.push_back(i);
+		}
 		return result;
 	}
 
-	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> target_children_map;
-	if (!is_unnamed) {
-		for (idx_t i = 0; i < target_children.size(); i++) {
-			auto &name = target_children[i].first;
-			if (target_children_map.find(name) != target_children_map.end()) {
-				result.kind = StructCastFieldMapping::MatchKind::DUPLICATE_TARGET_NAME;
-				result.duplicate_name = name;
-				return result;
-			}
-			target_children_map[name] = i;
+	identifier_map_t<idx_t> target_children_map;
+	for (idx_t i = 0; i < target_children.size(); i++) {
+		auto &name = target_children[i].first;
+		if (target_children_map.find(name) != target_children_map.end()) {
+			result.kind = StructCastFieldMapping::MatchKind::DUPLICATE_TARGET_NAME;
+			result.duplicate_name = name;
+			return result;
 		}
+		target_children_map[name] = i;
 	}
 
-	bool has_any_match = is_unnamed;
+	vector<bool> target_matched(target_children.size(), false);
 	for (idx_t i = 0; i < source_children.size(); i++) {
-		auto &source_child = source_children[i];
-		auto target_idx = i;
-
-		// Map to the correct index for named structs.
-		if (!is_unnamed) {
-			auto target_child = target_children_map.find(source_child.first);
-			if (target_child == target_children_map.end()) {
-				// Skip any children that have no target.
-				continue;
-			}
-			target_idx = target_child->second;
-			target_children_map.erase(target_child);
-			has_any_match = true;
+		auto target_child = target_children_map.find(source_children[i].first);
+		if (target_child == target_children_map.end() || target_matched[target_child->second]) {
+			// Skip source children without a target, and duplicate source names beyond the first match
+			continue;
 		}
-
+		target_matched[target_child->second] = true;
 		result.source_indexes.push_back(i);
-		result.target_indexes.push_back(target_idx);
+		result.target_indexes.push_back(target_child->second);
 	}
 
-	if (!has_any_match) {
+	if (result.source_indexes.empty()) {
 		result.kind = StructCastFieldMapping::MatchKind::NO_MATCHING_FIELD;
 		return result;
 	}
 
 	// The remaining target children have no match in the source struct.
 	// Thus, they become NULL.
-	for (const auto &target_child : target_children_map) {
-		result.target_null_indexes.push_back(target_child.second);
+	for (idx_t i = 0; i < target_children.size(); i++) {
+		if (!target_matched[i]) {
+			result.target_null_indexes.push_back(i);
+		}
 	}
 	return result;
 }
