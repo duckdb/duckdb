@@ -420,7 +420,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.not_null_columns = parquet_bind.not_null_columns;
 
 	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
-	if (!fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
+	// checking a remote path costs a request, so a remote output is opened like one that may exist
+	if (!fs.IsRemoteFile(file_path) && !fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
 		flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 	}
 	options.open_flags = flags;
