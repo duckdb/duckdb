@@ -28,7 +28,8 @@ struct DefaultMacroQualifierState {
 	vector<identifier_set_t> lambda_params;
 
 	QualifiedName Resolve(const Identifier &name) const {
-		if (!(macro_schema == Identifier::DefaultSchema()) && DefaultFunctionGenerator::IsDefaultMacro(macro_schema, name)) {
+		if (!(macro_schema == Identifier::DefaultSchema()) &&
+		    DefaultFunctionGenerator::IsDefaultMacro(macro_schema, name)) {
 			return QualifiedName(Identifier::SystemCatalog(), macro_schema, name);
 		}
 		return QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), name);
@@ -124,7 +125,8 @@ static void QualifyExpression(unique_ptr<ParsedExpression> &expr, DefaultMacroQu
 			for (auto &child : op.GetChildrenMutable()) {
 				children.push_back(std::move(child));
 			}
-			auto function = make_uniq<FunctionExpression>(state.Resolve(Identifier("array_slice")), std::move(children));
+			auto function =
+			    make_uniq<FunctionExpression>(state.Resolve(Identifier("array_slice")), std::move(children));
 			function->SetQueryLocation(op.GetQueryLocation());
 			function->SetAlias(expr->GetAlias());
 			expr = std::move(function);
@@ -153,8 +155,8 @@ static void QualifyExpression(unique_ptr<ParsedExpression> &expr, DefaultMacroQu
 	default:
 		break;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr,
-	                                            [&](unique_ptr<ParsedExpression> &child) { QualifyExpression(child, state); });
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyExpression(child, state); });
 }
 
 void DefaultMacroQualifier::Qualify(MacroFunction &macro, const Identifier &macro_schema) {
