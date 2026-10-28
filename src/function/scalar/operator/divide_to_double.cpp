@@ -42,6 +42,9 @@ unique_ptr<FunctionData> BindDivideToDouble(BindScalarFunctionInput &input) {
 ScalarFunction InternalDivideToDoubleFun::GetFunction() {
 	ScalarFunction function(Name, {LogicalType::HUGEINT, LogicalType::BIGINT}, LogicalType::DOUBLE,
 	                        DivideToDoubleFunction<false>, BindDivideToDouble);
+	// the catalog reports the signature's parameter names, which are the ones in functions.json
+	function.GetSignature().GetParameter(0).SetName("numerator");
+	function.GetSignature().GetParameter(1).SetName("denominator");
 	// division by zero
 	function.SetFallible();
 	return function;
