@@ -1685,19 +1685,23 @@ optional<Identifier> Catalog::GetDefaultSchema() const {
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
 bool Catalog::HasDefaultTable() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return !default_table.empty();
 }
 
 void Catalog::SetDefaultTable(const Identifier &schema, const Identifier &name) {
+	lock_guard<mutex> guard(default_table_lock);
 	default_table = name;
 	default_table_schema = schema;
 }
 
 Identifier Catalog::GetDefaultTable() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return default_table;
 }
 
 Identifier Catalog::GetDefaultTableSchema() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 
