@@ -398,7 +398,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
 		auto combine_function = GetBuiltinAggregateFunction(context, CombineAggrFun::Name, {lower_type});
-		auto upper_aggregate = function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
+		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
 		if (!upper_aggregate->GetReturnType().IsAggregateState()) {
 			return false;
 		}
@@ -565,7 +565,7 @@ static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &conte
 		return nullptr;
 	}
 	FunctionBinder function_binder(context);
-	return function_binder.BindAggregateFunction(std::move(func), std::move(children));
+	return function_binder.BindAggregateFunction(func, std::move(children));
 }
 
 static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,
