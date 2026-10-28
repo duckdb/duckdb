@@ -280,6 +280,8 @@ enum class FunctionCollationHandling : uint8_t;
 
 enum class FunctionErrors : uint8_t;
 
+enum class FunctionKind : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionParameterKind : uint8_t;
@@ -1068,6 +1070,9 @@ const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandli
 
 template<>
 const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionKind>(FunctionKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
@@ -2065,6 +2070,9 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 
 template<>
 FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
+
+template<>
+FunctionKind EnumUtil::FromString<FunctionKind>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);

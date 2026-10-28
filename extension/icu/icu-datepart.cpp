@@ -491,7 +491,7 @@ struct ICUDatePart : public ICUDateFunc {
 			auto &entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, unary_name);
 			auto unary_function = entry.functions.GetFunctionByArguments(context, {arguments[0]->GetReturnType()});
 			FunctionBinder binder(context);
-			auto unary_expression = binder.BindScalarFunction(std::move(unary_function), std::move(arguments));
+			auto unary_expression = binder.BindScalarFunction(unary_function, std::move(arguments));
 			auto &unary = unary_expression->Cast<BoundFunctionExpression>();
 			bound_function = std::move(unary.FunctionMutable());
 			arguments = std::move(unary.GetChildrenMutable());
