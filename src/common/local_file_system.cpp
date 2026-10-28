@@ -1118,11 +1118,9 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
 
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
-	// with the fraction of a second, so that a file rewritten within the same second gets another version tag
-	const auto WINDOWS_TICKS_PER_MICRO = 10;
+	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromEpochMicroSeconds(fileTime64 / WINDOWS_TICKS_PER_MICRO -
-	                                        SEC_TO_UNIX_EPOCH * Interval::MICROS_PER_SEC);
+	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
