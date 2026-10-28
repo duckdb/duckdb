@@ -22,11 +22,11 @@ SELECT round(-0.049999999999999996::DOUBLE, 1)::VARCHAR, round(0.049999999999999
 ----
 -0.0	0.0	-0.0	-0.0	0.0	-0.0
 
-# the largest precision that is corrected
-query TT
-SELECT round(1.5e-22::DOUBLE, 22)::VARCHAR, round(2.5e-22::DOUBLE, 22)::VARCHAR
+# the largest precision that is corrected and the first one that is not
+query TTT
+SELECT round(1.5e-22::DOUBLE, 22)::VARCHAR, round(2.5e-22::DOUBLE, 22)::VARCHAR, round(1.5e-23::DOUBLE, 23)::VARCHAR
 ----
-1e-22	2e-22
+1e-22	2e-22	2e-23
 
 # values from a table
 statement ok
