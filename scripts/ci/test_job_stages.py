@@ -173,7 +173,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertTrue(workflow_dispatch_selection.optimized_release)
             self.assertEqual(
                 workflow_dispatch_selection.extension_opt_in_archs,
-                "windows_arm64;linux_amd64_musl;linux_arm64_musl",
+                "windows_arm64;osx_amd64;linux_amd64_musl;linux_arm64_musl",
             )
             self.assertEqual(len(workflow_dispatch_selection.linux_release_matrix), 4)
             self.assertEqual(
@@ -277,7 +277,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertEqual(selection.reduced_ci_mode, "disabled")
             self.assertEqual(
                 selection.extension_opt_in_archs,
-                "linux_arm64_musl" if event_name == "pull_request" else "",
+                "windows_arm64;linux_arm64_musl" if event_name == "pull_request" else "",
             )
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],

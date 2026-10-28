@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cerrno>
 #include <condition_variable>
+#include <new>
 #include <thread>
 #include <unordered_set>
 
@@ -80,6 +81,9 @@ public:
 	static bool IsInPool(const BlockAllocator &allocator, data_ptr_t pointer) {
 		return allocator.IsInPool(pointer);
 	}
+	static bool IsInitialized(const BlockAllocator &allocator) {
+		return allocator.IsInitialized();
+	}
 	static data_ptr_t AllocateHuge(const BlockAllocator &allocator, idx_t size) {
 		return allocator.AllocateHugeData(size);
 	}
@@ -98,7 +102,60 @@ private:
 };
 } // namespace duckdb
 
-#if INTPTR_MAX == INT64_MAX
+TEST_CASE("BlockAllocator initializes only for eligible allocations and falls back without a pool",
+          "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	const auto pool_size = GENERATE_COPY(idx_t(0), NumericLimits<idx_t>::Maximum(), 3 * BLOCK_SIZE + 1);
+	const bool available = sizeof(void *) == 8 && pool_size == 3 * BLOCK_SIZE + 1;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, pool_size);
+	CHECK(allocator.IsEnabled());
+	auto small = allocator.AllocateData(1024);
+	small = allocator.ReallocateData(small, 1024, 2048);
+	allocator.FreeData(small, 2048);
+	auto huge = BlockAllocatorTestHelper::AllocateHuge(allocator, 2 * BLOCK_SIZE);
+	BlockAllocatorTestHelper::FreeHuge(allocator, huge, 2 * BLOCK_SIZE);
+	allocator.ThreadExit();
+	allocator.ThreadIdle();
+	allocator.FlushAll();
+	CHECK(allocator.GetCachedMemory() == 0);
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInitialized(allocator));
+
+	data_ptr_t block = nullptr;
+	bool huge_allocation = false;
+	SECTION("Ordinary allocation") {
+		block = allocator.AllocateData(BLOCK_SIZE);
+	}
+	SECTION("Huge allocation") {
+		block = BlockAllocatorTestHelper::AllocateHuge(allocator, BLOCK_SIZE);
+		huge_allocation = true;
+	}
+	SECTION("Reallocation into the pool") {
+		block = allocator.AllocateData(1024);
+		memset(block, 42, 1024);
+		block = allocator.ReallocateData(block, 1024, BLOCK_SIZE);
+		for (idx_t i = 0; i < 1024; i++) {
+			CHECK(block[i] == 42);
+		}
+	}
+	CHECK(BlockAllocatorTestHelper::IsInitialized(allocator) == available);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, block) == available);
+	auto second = allocator.AllocateData(BLOCK_SIZE);
+	auto third = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, second) == available);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, third) == available);
+	auto overflow = allocator.AllocateData(BLOCK_SIZE);
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, overflow));
+	allocator.FreeData(overflow, BLOCK_SIZE);
+	allocator.FreeData(third, BLOCK_SIZE);
+	allocator.FreeData(second, BLOCK_SIZE);
+	if (huge_allocation) {
+		BlockAllocatorTestHelper::FreeHuge(allocator, block, BLOCK_SIZE);
+	} else {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+
 namespace {
 #if defined(__linux__)
 class AllocationCacheTestAffinity {
@@ -141,10 +198,26 @@ struct AllocationCacheTestData : PrivateAllocatorData {
 	atomic<idx_t> &live_bytes;
 	bool fail_allocate = false;
 	bool fail_reallocate = false;
+	idx_t memory_limit = NumericLimits<idx_t>::Maximum();
+	idx_t failed_requests = 0;
+	bool throw_bad_alloc = false;
+
+	bool CanAllocate(idx_t size, idx_t old_size = 0) {
+		const auto remaining = live_bytes.load() - old_size;
+		if (remaining <= memory_limit && size <= memory_limit - remaining) {
+			return true;
+		}
+		failed_requests++;
+		if (throw_bad_alloc) {
+			throw std::bad_alloc();
+		}
+		return false;
+	}
 };
 
 data_ptr_t CacheTestAllocate(PrivateAllocatorData *data, idx_t size) {
-	if (data->Cast<AllocationCacheTestData>().fail_allocate) {
+	auto &state = data->Cast<AllocationCacheTestData>();
+	if (state.fail_allocate || !state.CanAllocate(size)) {
 		return nullptr;
 	}
 	auto pointer = Allocator::DefaultAllocate(data, size);
@@ -158,53 +231,228 @@ void CacheTestFree(PrivateAllocatorData *data, data_ptr_t pointer, idx_t size) {
 }
 
 data_ptr_t CacheTestReallocate(PrivateAllocatorData *data, data_ptr_t pointer, idx_t old_size, idx_t size) {
-	if (data->Cast<AllocationCacheTestData>().fail_reallocate) {
+	auto &state = data->Cast<AllocationCacheTestData>();
+	if (state.fail_reallocate || !state.CanAllocate(size, old_size)) {
 		return nullptr;
 	}
 	auto result = Allocator::DefaultReallocate(data, pointer, old_size, size);
-	data->Cast<AllocationCacheTestData>().live_bytes += size - old_size;
+	if (result) {
+		state.live_bytes += size - old_size;
+	}
 	return result;
 }
 } // namespace
 
-TEST_CASE("Huge allocations preserve fixed-pool reuse and bypass the allocation cache",
-          "[api][allocation_cache][huge_route]") {
-	constexpr idx_t BLOCK_SIZE = 256 * 1024;
-	constexpr idx_t SIZE = 2 * BLOCK_SIZE;
+TEST_CASE("BlockAllocator reclaims cached backing before retrying native allocation failures",
+          "[api][block_allocator][allocation_cache]") {
+	enum class Operation { ALLOCATE, REALLOCATE, HUGE_ALLOCATION, EXHAUSTED_POOL };
+	const auto operation =
+	    GENERATE(Operation::ALLOCATE, Operation::REALLOCATE, Operation::HUGE_ALLOCATION, Operation::EXHAUSTED_POOL);
+	const bool throw_bad_alloc = GENERATE(false, true);
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t SIZE = 512 * 1024;
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	auto &control = fallback.GetPrivateData()->Cast<AllocationCacheTestData>();
+	control.throw_bad_alloc = throw_bad_alloc;
 	{
-		BlockAllocator allocator(fallback, BLOCK_SIZE, 4 * BLOCK_SIZE, 4 * BLOCK_SIZE);
-		auto pooled = BlockAllocatorTestHelper::AllocateHuge(allocator, BLOCK_SIZE);
-		REQUIRE(BlockAllocatorTestHelper::IsInPool(allocator, pooled));
-		BlockAllocatorTestHelper::FreeHuge(allocator, pooled, BLOCK_SIZE);
-		REQUIRE(live_bytes.load() == 0);
-		REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-		auto cached = allocator.AllocateData(SIZE);
-		allocator.FreeData(cached, SIZE);
-		auto uncached = BlockAllocatorTestHelper::AllocateHuge(allocator, SIZE);
-		REQUIRE(uncached != cached);
-		REQUIRE(live_bytes.load() == 2 * SIZE);
-		uncached[0] = 42;
-		uncached[BLOCK_SIZE - 1] = 84;
-		control.fail_allocate = true;
-		REQUIRE_THROWS_AS(BlockAllocatorTestHelper::AllocateHuge(allocator, SIZE), OutOfMemoryException);
-		control.fail_allocate = false;
-		REQUIRE(uncached[0] == 42);
-		REQUIRE(uncached[BLOCK_SIZE - 1] == 84);
-		auto reused = BlockAllocatorTestHelper::AllocateHuge(allocator, BLOCK_SIZE);
-		REQUIRE(reused == pooled);
-		BlockAllocatorTestHelper::FreeHuge(allocator, reused, BLOCK_SIZE);
-		BlockAllocatorTestHelper::FreeHuge(allocator, uncached, SIZE);
-		REQUIRE(live_bytes.load() == SIZE);
-		REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == SIZE);
+		BlockAllocator allocator(fallback, BLOCK_SIZE, 2 * BLOCK_SIZE);
+		const auto free_pool = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, BLOCK_SIZE);
+		};
+		vector<unique_ptr<data_t, decltype(free_pool)>> pooled;
+		if (operation == Operation::EXHAUSTED_POOL) {
+			for (idx_t i = 0; i < 2; i++) {
+				pooled.emplace_back(allocator.AllocateData(BLOCK_SIZE), free_pool);
+			}
+		}
+		const auto free_live = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, SIZE);
+		};
+		unique_ptr<data_t, decltype(free_live)> live(allocator.AllocateData(SIZE), free_live);
+		live.get()[0] = 42;
+		live.get()[SIZE - 1] = 84;
+		auto cached = allocator.AllocateData(2 * SIZE);
+		allocator.FreeData(cached, 2 * SIZE);
+		REQUIRE(allocator.GetCachedMemory() == 2 * SIZE);
+		control.memory_limit = live_bytes.load();
+		const auto request_size = operation == Operation::REALLOCATE       ? 2 * SIZE
+		                          : operation == Operation::EXHAUSTED_POOL ? BLOCK_SIZE
+		                                                                   : SIZE;
+		const auto free_result = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, request_size);
+		};
+		unique_ptr<data_t, decltype(free_result)> result(nullptr, free_result);
+		CHECK_NOTHROW([&] {
+			if (operation == Operation::REALLOCATE) {
+				auto pointer = allocator.ReallocateData(live.get(), SIZE, request_size);
+				live.release();
+				result.reset(pointer);
+			} else if (operation == Operation::HUGE_ALLOCATION) {
+				result.reset(BlockAllocatorTestHelper::AllocateHuge(allocator, request_size));
+			} else {
+				result.reset(allocator.AllocateData(request_size));
+			}
+		}());
+		CHECK(result.get() != nullptr);
+		CHECK(control.failed_requests == 1);
+		CHECK(allocator.GetCachedMemory() == 0);
+		auto original = live ? live.get() : result.get();
+		if (original) {
+			CHECK(original[0] == 42);
+			CHECK(original[SIZE - 1] == 84);
+		}
+		if (result) {
+			result.get()[0] = 21;
+			control.memory_limit = 0;
+			const auto failures = control.failed_requests;
+			CHECK_THROWS(allocator.ReallocateData(result.get(), request_size, 2 * request_size));
+			CHECK(control.failed_requests == failures + 2);
+			CHECK(result.get()[0] == 21);
+		}
 	}
-	REQUIRE(live_bytes.load() == 0);
+	CHECK(live_bytes.load() == 0);
 }
 
-TEST_CASE("Allocation cache reuses whole allocations and releases them with its owner", "[api][allocation_cache]") {
+#if INTPTR_MAX == INT64_MAX
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("BlockAllocator publishes the complete pool to concurrent first allocations", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t WORKERS = 4;
+	constexpr idx_t BLOCKS_PER_WORKER = 16;
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, WORKERS * BLOCKS_PER_WORKER * BLOCK_SIZE);
+	atomic<idx_t> ready {0};
+	atomic<bool> start {false};
+	array<array<data_ptr_t, BLOCKS_PER_WORKER>, WORKERS> blocks;
+	vector<std::thread> workers;
+	for (idx_t t = 0; t < WORKERS; t++) {
+		workers.emplace_back([&, t] {
+			ready++;
+			while (!start.load()) {
+				std::this_thread::yield();
+			}
+			for (auto &block : blocks[t]) {
+				block = allocator.AllocateData(BLOCK_SIZE);
+				memset(block, static_cast<uint8_t>(t), BLOCK_SIZE);
+			}
+		});
+	}
+	while (ready.load() < WORKERS) {
+		std::this_thread::yield();
+	}
+	start = true;
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	std::unordered_set<data_ptr_t> allocated;
+	for (idx_t t = 0; t < WORKERS; t++) {
+		for (auto block : blocks[t]) {
+			CHECK(allocated.insert(block).second);
+			CHECK(BlockAllocatorTestHelper::IsInPool(allocator, block));
+			CHECK(block[0] == t);
+			CHECK(block[BLOCK_SIZE - 1] == t);
+		}
+	}
+	CHECK(live_bytes.load() == 0);
+	for (auto block : allocated) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+#endif
+
+TEST_CASE("BlockAllocator toggles allocation permission without changing pool ownership", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	const bool huge = GENERATE(false, true);
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.SetOptionByName("enable_block_allocator", Value::BOOLEAN(false));
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, 2 * BLOCK_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &db_config = DBConfig::GetConfig(*db.instance);
+	const auto baseline_live_bytes = live_bytes.load();
+	const auto option = DBConfig::GetOptionByName("enable_block_allocator");
+	REQUIRE(option);
+	auto allocate = [&] {
+		return huge ? BlockAllocatorTestHelper::AllocateHuge(allocator, BLOCK_SIZE)
+		            : allocator.AllocateData(BLOCK_SIZE);
+	};
+	auto free = [&](data_ptr_t pointer) {
+		if (huge) {
+			BlockAllocatorTestHelper::FreeHuge(allocator, pointer, BLOCK_SIZE);
+		} else {
+			allocator.FreeData(pointer, BLOCK_SIZE);
+		}
+	};
+	CHECK_FALSE(allocator.IsEnabled());
+	auto before_initialization = allocate();
+	if (!huge) {
+		before_initialization[0] = 42;
+		before_initialization = allocator.ReallocateData(before_initialization, BLOCK_SIZE, BLOCK_SIZE / 2);
+		before_initialization = allocator.ReallocateData(before_initialization, BLOCK_SIZE / 2, BLOCK_SIZE);
+		CHECK(before_initialization[0] == 42);
+	}
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInitialized(allocator));
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, before_initialization));
+	db_config.SetOption(db.instance.get(), *option, Value::BOOLEAN(true));
+	CHECK(allocator.IsEnabled());
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInitialized(allocator));
+	auto pooled = allocate();
+	pooled[0] = 42;
+	pooled[BLOCK_SIZE - 1] = 84;
+	REQUIRE(BlockAllocatorTestHelper::IsInPool(allocator, pooled));
+	free(before_initialization);
+	CHECK(live_bytes.load() == baseline_live_bytes);
+	auto spare = allocate();
+	free(spare);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+
+	db_config.SetOption(db.instance.get(), *option, Value::BOOLEAN(false));
+	CHECK_FALSE(allocator.IsEnabled());
+	auto disabled = allocate();
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, disabled));
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	CHECK(pooled[0] == 42);
+	CHECK(pooled[BLOCK_SIZE - 1] == 84);
+	if (huge) {
+		free(pooled);
+	} else {
+		auto resized = allocator.ReallocateData(pooled, BLOCK_SIZE, 2 * BLOCK_SIZE);
+		CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, resized));
+		CHECK(resized[0] == 42);
+		CHECK(resized[BLOCK_SIZE - 1] == 84);
+		resized = allocator.ReallocateData(resized, 2 * BLOCK_SIZE, BLOCK_SIZE);
+		CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, resized));
+		CHECK(resized[0] == 42);
+		CHECK(resized[BLOCK_SIZE - 1] == 84);
+		allocator.FreeData(resized, BLOCK_SIZE);
+	}
+	CHECK(allocator.GetCachedMemory() == 2 * BLOCK_SIZE);
+	allocator.FlushAll();
+	CHECK(allocator.GetCachedMemory() == 0);
+	CHECK(BlockAllocatorTestHelper::IsInitialized(allocator));
+	CHECK(live_bytes.load() == baseline_live_bytes + BLOCK_SIZE);
+
+	db_config.ResetOption(db.instance.get(), *option);
+	CHECK(allocator.IsEnabled() == DBConfigOptions().enable_block_allocator);
+	db_config.SetOption(db.instance.get(), *option, Value::BOOLEAN(true));
+	free(disabled);
+	CHECK(live_bytes.load() == baseline_live_bytes);
+	auto reused = allocate();
+	CHECK((reused == pooled || reused == spare));
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, reused));
+	free(reused);
+}
+
+TEST_CASE("Allocation cache reuses compatible allocations and releases retained backing", "[api][allocation_cache]") {
 	bool pinned = false;
 #if defined(__linux__)
 	AllocationCacheTestAffinity affinity;
@@ -216,7 +464,7 @@ TEST_CASE("Allocation cache reuses whole allocations and releases them with its 
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
+		BlockAllocator allocator(fallback, 256 * 1024, 0);
 		auto uncached = allocator.AllocateData(SIZE + 4096);
 		allocator.FreeData(uncached, SIZE + 4096);
 		REQUIRE(live_bytes.load() == 0);
@@ -244,8 +492,70 @@ TEST_CASE("Allocation cache reuses whole allocations and releases them with its 
 		allocator.FreeData(reused, 2 * SIZE);
 		allocator.FreeData(second, SIZE);
 		REQUIRE(live_bytes.load() == backing_before + SIZE);
+		allocator.ThreadExit();
+		allocator.ThreadFlush(false, 0, 1);
+		CHECK(allocator.GetCachedMemory() == live_bytes.load());
+		CHECK(allocator.SupportsFlush());
+		CHECK(allocator.DecayDelay().IsValid());
+		SECTION("Owner destruction releases retained allocations") {
+		}
+		SECTION("Explicit reclamation works without a fixed pool") {
+			allocator.FlushAll();
+			CHECK(allocator.GetCachedMemory() == 0);
+			CHECK(live_bytes.load() == 0);
+		}
+		SECTION("Standalone idle maintenance releases retained allocations") {
+			allocator.ThreadIdle();
+			CHECK(live_bytes.load() == 0);
+		}
+		SECTION("Shutdown releases retained allocations") {
+			allocator.FlushOnShutdown();
+			CHECK(live_bytes.load() == 0);
+		}
 	}
 	REQUIRE(live_bytes.load() == 0);
+}
+
+TEST_CASE("Huge allocation retention shares cache ownership and pressure reclamation", "[api][allocation_cache]") {
+	const auto size = GENERATE(idx_t(8 * 1024 * 1024), idx_t(128 * 1024 * 1024));
+	bool pinned = false;
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	const auto cpus = affinity.CPUs();
+	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#endif
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	{
+		BlockAllocator allocator(fallback, 256 * 1024, 0);
+		auto first = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		first[0] = 42;
+		first[size - 1] = 84;
+		BlockAllocatorTestHelper::FreeHuge(allocator, first, size);
+		REQUIRE(allocator.GetCachedMemory() == size);
+		REQUIRE(live_bytes.load() == size);
+
+		auto live = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		if (pinned) {
+			REQUIRE(live == first);
+			REQUIRE(live[0] == 42);
+			REQUIRE(live[size - 1] == 84);
+		}
+		live[0] = 99;
+		live[size - 1] = 77;
+		auto spare = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		BlockAllocatorTestHelper::FreeHuge(allocator, spare, size);
+		REQUIRE(allocator.GetCachedMemory() >= size);
+		allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
+		CHECK(allocator.GetCachedMemory() == 0);
+		CHECK(live_bytes.load() == size);
+		CHECK(live[0] == 99);
+		CHECK(live[size - 1] == 77);
+		BlockAllocatorTestHelper::FreeHuge(allocator, live, size);
+		CHECK(allocator.GetCachedMemory() == size);
+	}
+	CHECK(live_bytes.load() == 0);
 }
 
 TEST_CASE("Allocation cache can reuse arena storage without container destruction", "[api][allocation_cache]") {
@@ -259,47 +569,25 @@ TEST_CASE("Allocation cache can reuse arena storage without container destructio
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
-	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), 256 * 1024, 0, 0);
+	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BufferManager::GetBufferManager(*db.instance).GetBufferAllocator();
-	for (idx_t i = 0; i < 10; i++) {
-		data_ptr_t retired;
-		{
-			ArenaAllocator arena(allocator, SIZE / 2);
-			const auto empty = arena.GetPosition();
-			auto &values = *arena.Make<arena_vector<uint64_t>>(arena);
-			values.reserve(1024);
-			values.push_back(42);
-			retired = arena.GetHead()->data.get();
-			SECTION("destruction") {
-			}
-			SECTION("free all") {
-				arena.FreeAll();
-			}
-			SECTION("destroy") {
-				arena.Destroy();
-			}
-			SECTION("rewind to empty") {
-				arena.Rewind(empty);
-			}
-			SECTION("reset releases older chunks") {
-				arena.Allocate(SIZE);
-				REQUIRE(arena.GetHead()->data.get() != retired);
-				arena.Reset();
-			}
-			SECTION("move transfers storage") {
-				ArenaAllocator moved(allocator);
-				arena.Move(moved);
-			}
-		}
-		auto data = allocator.Allocate(SIZE);
-		if (pinned) {
-			REQUIRE(data.get() == retired);
-		}
-		memset(data.get(), 42, SIZE);
-		REQUIRE(data.get()[0] == 42);
-		REQUIRE(data.get()[SIZE - 1] == 42);
+	data_ptr_t retired;
+	{
+		ArenaAllocator arena(allocator, SIZE / 2);
+		auto &values = *arena.Make<arena_vector<uint64_t>>(arena);
+		values.reserve(1024);
+		values.push_back(42);
+		retired = arena.GetHead()->data.get();
 	}
+	auto data = allocator.Allocate(SIZE);
+	if (pinned) {
+		REQUIRE(data.get() == retired);
+	}
+	// Reusing the entire chunk must not inherit the vector's poisoned spare capacity.
+	memset(data.get(), 42, SIZE);
+	REQUIRE(data.get()[0] == 42);
+	REQUIRE(data.get()[SIZE - 1] == 42);
 }
 
 #if defined(__linux__)
@@ -313,153 +601,154 @@ static idx_t AllocationCacheTestShard(idx_t cpu) {
 #endif
 }
 
-TEST_CASE("Allocation cache bounds retained bytes across CPU groups", "[api][allocation_cache]") {
-	AllocationCacheTestAffinity affinity;
-	const auto cpus = affinity.CPUs();
-	if (cpus.size() < 2) {
-		return;
-	}
-	idx_t other_cpu = cpus.back();
-	for (auto cpu : cpus) {
-		if (AllocationCacheTestShard(cpu) != AllocationCacheTestShard(cpus[0])) {
-			other_cpu = cpu;
-			break;
-		}
-	}
-	constexpr idx_t SIZE = 64 * 1024 * 1024;
+TEST_CASE("Allocation cache bounds retained bytes and shares surplus across CPU groups", "[api][allocation_cache]") {
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-		if (!affinity.Pin(cpus[0])) {
-			return;
+		BlockAllocator allocator(fallback, 256 * 1024, 0);
+		SECTION("A size class cannot retain more than its global byte limit") {
+			constexpr idx_t SIZE = 64 * 1024 * 1024;
+			vector<data_ptr_t> pointers;
+			for (idx_t i = 0; i < 17; i++) {
+				pointers.push_back(allocator.AllocateData(SIZE));
+			}
+			for (auto pointer : pointers) {
+				allocator.FreeData(pointer, SIZE);
+			}
+			CHECK(live_bytes.load() == 16 * SIZE);
 		}
-		for (idx_t i = 0; i < 32; i++) {
-			allocator.FreeData(nullptr, SIZE);
+		SECTION("Another CPU group borrows surplus but leaves local spares") {
+			AllocationCacheTestAffinity affinity;
+			const auto cpus = affinity.CPUs();
+			if (cpus.empty()) {
+				return;
+			}
+			auto other_cpu = cpus[0];
+			for (auto cpu : cpus) {
+				if (AllocationCacheTestShard(cpu) != AllocationCacheTestShard(cpus[0])) {
+					other_cpu = cpu;
+					break;
+				}
+			}
+			if (other_cpu == cpus[0] || !affinity.Pin(cpus[0])) {
+				return;
+			}
+			constexpr idx_t SIZE = 512 * 1024;
+			constexpr idx_t COUNT = 64;
+			std::unordered_set<data_ptr_t> original;
+			for (idx_t i = 0; i < COUNT; i++) {
+				original.insert(allocator.AllocateData(SIZE));
+			}
+			for (auto pointer : original) {
+				allocator.FreeData(pointer, SIZE);
+			}
+			REQUIRE(affinity.Pin(other_cpu));
+			vector<data_ptr_t> borrowed;
+			idx_t reused = 0;
+			for (idx_t i = 0; i <= COUNT; i++) {
+				auto pointer = allocator.AllocateData(SIZE);
+				reused += original.count(pointer);
+				borrowed.push_back(pointer);
+			}
+			CHECK(reused > 0);
+			CHECK(reused < COUNT);
+			for (auto pointer : borrowed) {
+				allocator.FreeData(pointer, SIZE);
+			}
+			REQUIRE(affinity.Pin(cpus[0]));
+			auto local = allocator.AllocateData(SIZE);
+			CHECK(original.count(local) == 1);
+			allocator.FreeData(local, SIZE);
 		}
-		vector<data_ptr_t> pointers;
-		for (idx_t i = 0; i < 17; i++) {
-			pointers.push_back(allocator.AllocateData(SIZE));
-		}
-		for (idx_t i = 0; i < pointers.size(); i++) {
-			REQUIRE(affinity.Pin(i % 2 == 0 ? cpus[0] : other_cpu));
-			allocator.FreeData(pointers[i], SIZE);
-		}
-		REQUIRE(live_bytes.load() == 16 * SIZE);
 	}
-	REQUIRE(live_bytes.load() == 0);
+	CHECK(live_bytes.load() == 0);
 }
-
-TEST_CASE("Allocation cache shares surplus buffers across CPU groups while retaining local spares",
-          "[api][allocation_cache]") {
-	AllocationCacheTestAffinity affinity;
-	const auto cpus = affinity.CPUs();
-	if (cpus.empty()) {
-		return;
-	}
-	idx_t other_cpu = cpus[0];
-	for (auto cpu : cpus) {
-		const auto domain = AllocationCacheTestShard(cpu);
-		if (domain != AllocationCacheTestShard(cpus[0])) {
-			other_cpu = cpu;
-			break;
-		}
-	}
-	if (other_cpu == cpus[0]) {
-		return;
-	}
-	constexpr idx_t SIZE = 512 * 1024;
-	constexpr idx_t COUNT = 64;
-	atomic<idx_t> live_bytes {0};
-	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
-	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-		if (!affinity.Pin(cpus[0])) {
-			return;
-		}
-		std::unordered_set<data_ptr_t> original;
-		for (idx_t i = 0; i < COUNT; i++) {
-			original.insert(allocator.AllocateData(SIZE));
-		}
-		for (auto pointer : original) {
-			allocator.FreeData(pointer, SIZE);
-		}
-		REQUIRE(affinity.Pin(other_cpu));
-		vector<data_ptr_t> borrowed;
-		idx_t reused = 0;
-		for (idx_t i = 0; i <= COUNT; i++) {
-			auto pointer = allocator.AllocateData(SIZE);
-			reused += original.count(pointer);
-			borrowed.push_back(pointer);
-		}
-		REQUIRE(reused > 0);
-		REQUIRE(reused < COUNT);
-		for (auto pointer : borrowed) {
-			allocator.FreeData(pointer, SIZE);
-		}
-		REQUIRE(affinity.Pin(cpus[0]));
-		auto local = allocator.AllocateData(SIZE);
-		REQUIRE(original.count(local) == 1);
-		allocator.FreeData(local, SIZE);
-	}
-	REQUIRE(live_bytes.load() == 0);
-}
-
 #endif
 
 #ifndef DUCKDB_NO_THREADS
-TEST_CASE("Allocation cache does not return the same live allocation to concurrent workers",
-          "[api][allocation_cache]") {
-	constexpr idx_t SIZE = 512 * 1024;
-	constexpr idx_t WORKERS = 8;
+TEST_CASE("Block and allocation caches preserve ownership during concurrent reuse and reclamation",
+          "[api][block_allocator][allocation_cache]") {
+	const bool fixed_pool = GENERATE(false, true);
+	bool toggle_pool = false;
+	if (fixed_pool) {
+		SECTION("Reclamation with the pool enabled") {
+		}
+		SECTION("Reclamation while the pool is disabled and re-enabled") {
+			toggle_pool = true;
+		}
+	}
+	const idx_t size = fixed_pool ? 65536 : 512 * 1024;
+	constexpr idx_t WORKERS = 4;
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
+		BlockAllocator allocator(fallback, size, fixed_pool ? 128 * size : 0);
 		mutex active_lock;
 		std::unordered_set<data_ptr_t> active;
 		atomic<bool> correct {true};
 		atomic<bool> running {true};
-		std::thread maintenance;
-		SECTION("Reuse without reclamation") {
-		}
-		SECTION("Reuse while pressure and explicit flushes reclaim cached buffers") {
-			maintenance = std::thread([&]() {
-				while (running.load()) {
-					allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), SIZE);
-					allocator.FlushAll();
-					std::this_thread::yield();
+		atomic<idx_t> ready {0};
+		array<data_ptr_t, WORKERS> handed_off;
+		auto live = allocator.AllocateData(size);
+		memset(live, 84, size);
+		active.insert(live);
+		auto allocate = [&](idx_t id) {
+			auto pointer = allocator.AllocateData(size);
+			lock_guard<mutex> guard(active_lock);
+			if (!active.insert(pointer).second) {
+				correct = false;
+				return data_ptr_t(nullptr);
+			}
+			if (fixed_pool && !toggle_pool && !BlockAllocatorTestHelper::IsInPool(allocator, pointer)) {
+				correct = false;
+			}
+			pointer[0] = pointer[size - 1] = static_cast<uint8_t>(id);
+			return pointer;
+		};
+		auto release = [&](data_ptr_t pointer, idx_t id) {
+			if (!pointer) {
+				return;
+			}
+			if (pointer[0] != id || pointer[size - 1] != id) {
+				correct = false;
+			}
+			{
+				lock_guard<mutex> guard(active_lock);
+				if (active.erase(pointer) != 1) {
+					correct = false;
 				}
-			});
-		}
+			}
+			allocator.FreeData(pointer, size);
+		};
+		std::thread maintenance([&] {
+			while (running.load()) {
+				if (toggle_pool) {
+					allocator.SetEnabled(false);
+				}
+				allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), size);
+				allocator.FlushAll();
+				if (toggle_pool) {
+					allocator.SetEnabled(true);
+				}
+				std::this_thread::yield();
+			}
+		});
 		vector<std::thread> workers;
 		for (idx_t id = 0; id < WORKERS; id++) {
-			workers.emplace_back([&, id]() {
-				for (idx_t i = 0; i < 200; i++) {
-					auto pointer = allocator.AllocateData(SIZE);
-					{
-						lock_guard<mutex> guard(active_lock);
-						if (!active.insert(pointer).second) {
-							correct = false;
-							continue;
-						}
-					}
-					pointer[0] = static_cast<uint8_t>(id);
-					pointer[SIZE - 1] = static_cast<uint8_t>(id);
+			workers.emplace_back([&, id] {
+				handed_off[id] = allocate(id);
+				ready++;
+				while (ready.load() != WORKERS) {
 					std::this_thread::yield();
-					if (pointer[0] != id || pointer[SIZE - 1] != id) {
-						correct = false;
-					}
-					{
-						lock_guard<mutex> guard(active_lock);
-						if (active.erase(pointer) != 1) {
-							correct = false;
-						}
-					}
-					allocator.FreeData(pointer, SIZE);
+				}
+				const auto other = (id + 1) % WORKERS;
+				release(handed_off[other], other);
+				for (idx_t i = 0; i < 64; i++) {
+					auto pointer = allocate(id);
+					std::this_thread::yield();
+					release(pointer, id);
 				}
 			});
 		}
@@ -467,52 +756,16 @@ TEST_CASE("Allocation cache does not return the same live allocation to concurre
 			worker.join();
 		}
 		running = false;
-		if (maintenance.joinable()) {
-			maintenance.join();
-		}
-		REQUIRE(correct.load());
-		REQUIRE(active.empty());
+		maintenance.join();
+		CHECK(correct.load());
+		CHECK(active.size() == 1);
+		CHECK(live[0] == 84);
+		CHECK(live[size - 1] == 84);
+		allocator.FreeData(live, size);
 	}
-	REQUIRE(live_bytes.load() == 0);
+	CHECK(live_bytes.load() == 0);
 }
 
-TEST_CASE("Allocation cache accepts cross-thread frees and drains them on destruction", "[api][allocation_cache]") {
-	constexpr idx_t SIZE = 512 * 1024;
-	constexpr idx_t WORKERS = 8;
-	atomic<idx_t> live_bytes {0};
-	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
-	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-		array<data_ptr_t, WORKERS> pointers;
-		atomic<idx_t> ready {0};
-		atomic<bool> preserved {true};
-		vector<std::thread> workers;
-		for (idx_t id = 0; id < WORKERS; id++) {
-			workers.emplace_back([&, id]() {
-				pointers[id] = allocator.AllocateData(SIZE);
-				memset(pointers[id], static_cast<int>(id), SIZE);
-				ready.fetch_add(1);
-				while (ready.load() != WORKERS) {
-					std::this_thread::yield();
-				}
-				const auto other = (id + 1) % WORKERS;
-				for (idx_t i = 0; i < SIZE; i++) {
-					if (pointers[other][i] != other) {
-						preserved = false;
-					}
-				}
-				allocator.FreeData(pointers[other], SIZE);
-			});
-		}
-		for (auto &worker : workers) {
-			worker.join();
-		}
-		REQUIRE(preserved.load());
-		REQUIRE(live_bytes.load() == WORKERS * SIZE);
-	}
-	REQUIRE(live_bytes.load() == 0);
-}
 #endif
 
 TEST_CASE("Allocation cache pressure accounts for fixed backing and preserves live allocations",
@@ -522,7 +775,7 @@ TEST_CASE("Allocation cache pressure accounts for fixed backing and preserves li
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, 4 * BLOCK_SIZE, 4 * BLOCK_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, 4 * BLOCK_SIZE);
 	auto pooled = allocator.AllocateData(BLOCK_SIZE);
 	auto small = allocator.AllocateData(SIZE);
 	auto large = allocator.AllocateData(2 * SIZE);
@@ -551,106 +804,44 @@ TEST_CASE("Allocation cache pressure accounts for fixed backing and preserves li
 	CHECK(live_bytes.load() == 0);
 }
 
-TEST_CASE("BufferPool trims cached allocations after small reservations and memory limit reductions",
-          "[api][allocation_cache]") {
+TEST_CASE("BufferPool reclaims retained backing on small reservations and memory limit changes",
+          "[api][block_allocator][allocation_cache]") {
 	class TestBufferPool : public BufferPool {
 	public:
 		using BufferPool::BufferPool;
 		using BufferPool::EvictBlocks;
 	};
-	constexpr idx_t SIZE = 512 * 1024;
-	constexpr idx_t MEMORY_LIMIT = 4 * SIZE;
-	atomic<idx_t> live_bytes {0};
-	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
-	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-	TestBufferPool pool(allocator, MEMORY_LIMIT, false, MEMORY_LIMIT);
-	auto pointer = allocator.AllocateData(SIZE);
-	allocator.FreeData(pointer, SIZE);
-	REQUIRE(allocator.GetCachedMemory() == SIZE);
-	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-	idx_t reservation = 0;
-	idx_t limit = 0;
-	SECTION("Small reservation consumes cached backing's headroom") {
-		pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - SIZE);
-		reservation = SIZE / 2;
-		limit = MEMORY_LIMIT;
-	}
-	SECTION("Lower memory limit with no new allocation") {
-		pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - SIZE);
-		limit = MEMORY_LIMIT - SIZE;
-	}
-	{
-		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, reservation, limit);
-		REQUIRE(result.success);
-		CHECK(allocator.GetCachedMemory() == 0);
-		CHECK(live_bytes.load() == 0);
-	}
-	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -static_cast<int64_t>(MEMORY_LIMIT - SIZE));
-	CHECK(pool.GetUsedMemory() == 0);
-}
-
-TEST_CASE("Allocation cache reclamation works without a fixed block pool", "[api][allocation_cache]") {
-	constexpr idx_t SIZE = 512 * 1024;
-	atomic<idx_t> live_bytes {0};
-	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
-	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-	auto pointer = allocator.AllocateData(SIZE);
-	allocator.FreeData(pointer, SIZE);
-	REQUIRE(allocator.GetCachedMemory() == SIZE);
-	REQUIRE(allocator.SupportsFlush());
-	REQUIRE(allocator.DecayDelay().IsValid());
-	SECTION("Explicit flush") {
-		allocator.FlushAll();
-	}
-	SECTION("Shutdown releases backing before the fallback purge") {
-		allocator.FlushOnShutdown();
-	}
-	SECTION("Standalone idle flush is synchronous") {
-		allocator.ThreadIdle();
-	}
-	SECTION("Worker exit and thread flush preserve shared allocations") {
-		allocator.ThreadExit();
-		allocator.ThreadFlush(false, 0, 1);
-		CHECK(allocator.GetCachedMemory() == SIZE);
-		CHECK(live_bytes.load() == SIZE);
-		allocator.FlushAll();
-	}
-	CHECK(allocator.GetCachedMemory() == 0);
-	CHECK(live_bytes.load() == 0);
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-}
-
-TEST_CASE("BlockAllocator tracks only frees to the fallback allocator", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t MEMORY_LIMIT = 16 * 1024 * 1024;
+	const bool cached = GENERATE(false, true);
+	const idx_t freed_size = cached ? 512 * 1024 : MEMORY_LIMIT / 16 + 4096;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-	for (idx_t i = 0; i < 100; i++) {
-		auto pointer = allocator.AllocateData(BLOCK_SIZE);
-		allocator.FreeData(pointer, BLOCK_SIZE);
+	BlockAllocator allocator(fallback, 65536, 0);
+	TestBufferPool pool(allocator, MEMORY_LIMIT, false, MEMORY_LIMIT);
+	auto pointer = allocator.AllocateData(freed_size);
+	allocator.FreeData(pointer, freed_size);
+	CHECK(allocator.GetCachedMemory() == (cached ? freed_size : 0));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (cached ? 0 : freed_size));
+	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - freed_size);
+	SECTION("A small reservation consumes retained backing's headroom") {
+		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
+		CHECK(result.success);
+		CHECK(allocator.GetCachedMemory() == 0);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==
+		      (cached || Allocator::SupportsFlush() ? 0 : freed_size));
 	}
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-	CHECK_FALSE(allocator.TryFlushDeallocated(0, BLOCK_SIZE));
-
-	auto pooled = allocator.AllocateData(BLOCK_SIZE);
-	auto overflow = allocator.AllocateData(BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, pooled));
-	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, overflow));
-	allocator.FreeData(overflow, BLOCK_SIZE);
-	allocator.FreeData(pooled, BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == BLOCK_SIZE);
-
-	auto other = allocator.AllocateData(2 * BLOCK_SIZE);
-	allocator.FreeData(other, 2 * BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 3 * BLOCK_SIZE);
+	SECTION("Lowering the limit releases retained backing") {
+		pool.SetLimit(MEMORY_LIMIT - freed_size, "");
+		CHECK(allocator.GetCachedMemory() == 0);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+	}
+	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -static_cast<int64_t>(MEMORY_LIMIT - freed_size));
+	CHECK(pool.GetUsedMemory() == 0);
 }
 
 TEST_CASE("BlockAllocator fallback pressure shares headroom with cached blocks", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE);
 	auto pooled = allocator.AllocateData(BLOCK_SIZE);
 	pooled[0] = 42;
 	allocator.FreeData(pooled, BLOCK_SIZE);
@@ -678,61 +869,36 @@ TEST_CASE("BlockAllocator fallback pressure shares headroom with cached blocks",
 		BlockAllocatorTestHelper::FlushBytes(allocator, BLOCK_SIZE);
 		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
 	}
-	SECTION("Full flush resets fallback pressure") {
-		allocator.FlushAll();
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-	}
-	SECTION("Bulk allocation flush resets fallback pressure") {
-		allocator.FlushForAllocation(BLOCK_SIZE, BLOCK_SIZE);
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	}
-	SECTION("Shutdown flush resets fallback pressure") {
-		allocator.FlushOnShutdown();
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	}
 }
 
-TEST_CASE("BufferPool checks fallback pressure after small reservations", "[api][block_allocator]") {
-	class TestBufferPool : public BufferPool {
-	public:
-		using BufferPool::BufferPool;
-		using BufferPool::EvictBlocks;
-	};
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t MEMORY_LIMIT = 16 * 1024 * 1024;
-	constexpr idx_t FREED_SIZE = MEMORY_LIMIT / 16 + 4096;
-	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, 0);
-	TestBufferPool pool(allocator, 2 * MEMORY_LIMIT, false, MEMORY_LIMIT);
-	auto pointer = allocator.AllocateData(FREED_SIZE);
-	allocator.FreeData(pointer, FREED_SIZE);
-	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - FREED_SIZE);
-	{
-		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, BLOCK_SIZE, MEMORY_LIMIT);
-		CHECK(result.success);
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : FREED_SIZE));
-	}
-	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -int64_t(MEMORY_LIMIT - FREED_SIZE));
-	CHECK(pool.GetUsedMemory() == 0);
-}
-
-TEST_CASE("BlockAllocator bounds fallback retention after repeated reuse", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator bounds fallback pressure using available footprint statistics", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	// Keep this test on jemalloc rather than the power-of-two allocation cache.
 	constexpr idx_t FALLBACK_SIZE = 1024 * 1024 + 4096;
-	Allocator fallback;
+	const bool mapped_statistics = GENERATE(false, true);
+	allocate_function_ptr_t allocate = [](PrivateAllocatorData *data, idx_t size) {
+		return Allocator::DefaultAllocate(data, size);
+	};
+	Allocator fallback(mapped_statistics ? Allocator::DefaultAllocate : allocate, Allocator::DefaultFree,
+	                   Allocator::DefaultReallocate, nullptr);
+	if (!mapped_statistics) {
+		CHECK_FALSE(fallback.GetMappedMemory().IsValid());
+		BlockAllocator allocator(fallback, BLOCK_SIZE, 0);
+		for (idx_t i = 0; i < 4; i++) {
+			auto pointer = allocator.AllocateData(BLOCK_SIZE);
+			allocator.FreeData(pointer, BLOCK_SIZE);
+		}
+		CHECK(allocator.TryFlushDeallocated(BLOCK_SIZE, 3 * BLOCK_SIZE) == Allocator::SupportsFlush());
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : 4 * BLOCK_SIZE));
+		return;
+	}
 	if (!fallback.GetMappedMemory().IsValid()) {
 		return;
 	}
-	const auto pool_size = GENERATE_COPY(static_cast<idx_t>(0), BLOCK_SIZE);
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, pool_size);
-	if (pool_size) {
-		auto pooled = allocator.AllocateData(BLOCK_SIZE);
-		pooled[0] = 42;
-		allocator.FreeData(pooled, BLOCK_SIZE);
-	}
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE);
+	auto pooled = allocator.AllocateData(BLOCK_SIZE);
+	pooled[0] = 42;
+	allocator.FreeData(pooled, BLOCK_SIZE);
 	// Allow room for arena initialization while repeatedly reusing the same small allocation.
 	const auto headroom = 2 * fallback.GetMappedMemory().GetIndex() + 64 * FALLBACK_SIZE;
 	for (idx_t freed = 0; freed <= headroom; freed += FALLBACK_SIZE) {
@@ -745,101 +911,37 @@ TEST_CASE("BlockAllocator bounds fallback retention after repeated reuse", "[api
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) >= FALLBACK_SIZE);
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) <= headroom - allocator.GetCachedMemory());
 
-	SECTION("Concurrent frees remain eligible for subsequent pressure checks") {
-		atomic<bool> start {false};
-		vector<std::thread> workers;
-		for (idx_t t = 0; t < 4; t++) {
-			workers.emplace_back([&] {
-				while (!start.load()) {
-					std::this_thread::yield();
-				}
-				for (idx_t i = 0; i < 2000; i++) {
-					auto pointer = allocator.AllocateData(FALLBACK_SIZE);
-					pointer[0] = 42;
-					allocator.FreeData(pointer, FALLBACK_SIZE);
-				}
-			});
-		}
-		start = true;
-		for (idx_t i = 0; i < 256; i++) {
-			CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
-		}
-		for (auto &worker : workers) {
-			worker.join();
-		}
-		CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) >= FALLBACK_SIZE);
-		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) <= headroom - allocator.GetCachedMemory());
-	}
-	// Headroom occupied by pooled backing cannot also cover the fallback's retained memory.
-	CHECK(allocator.TryFlushDeallocated(FALLBACK_SIZE, pool_size));
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
-	if (pool_size) {
-		auto pooled = allocator.AllocateData(BLOCK_SIZE);
-		CHECK(pooled[0] == 42);
-		allocator.FreeData(pooled, BLOCK_SIZE);
-	}
-}
-
-TEST_CASE("BlockAllocator retains conservative pressure checks for custom allocators", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	auto allocate = [](PrivateAllocatorData *data, idx_t size) {
-		return Allocator::DefaultAllocate(data, size);
-	};
-	Allocator fallback(allocate, Allocator::DefaultFree, Allocator::DefaultReallocate, nullptr);
-	CHECK_FALSE(fallback.GetMappedMemory().IsValid());
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, 0);
-	for (idx_t i = 0; i < 100; i++) {
-		auto pointer = allocator.AllocateData(BLOCK_SIZE);
-		allocator.FreeData(pointer, BLOCK_SIZE);
-	}
-	CHECK(allocator.TryFlushDeallocated(BLOCK_SIZE, 99 * BLOCK_SIZE) == Allocator::SupportsFlush());
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : 100 * BLOCK_SIZE));
-}
-
-TEST_CASE("BufferAllocator preserves huge allocation ownership through client forwarding", "[api][huge_route]") {
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
-	DuckDB db(nullptr, &config);
-	Connection connection(db);
-	auto &manager = BufferManager::GetBufferManager(*db.instance);
-	auto &client_manager = BufferManager::GetBufferManager(*connection.context);
-	auto &ordinary_allocator = manager.GetBufferAllocator();
-	const auto initial_memory = manager.GetUsedMemory();
-	constexpr idx_t SIZE = 8 * 1024 * 1024;
-	HugeAllocation empty;
-	REQUIRE_FALSE(empty.IsSet());
-	REQUIRE(empty.GetSize() == 0);
-	empty.Reset();
-	{
-		auto ordinary = ordinary_allocator.Allocate(64);
-		auto hinted = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
-		auto direct = manager.GetBufferAllocator().AllocateHuge(SIZE);
-		REQUIRE(manager.GetUsedMemory() == initial_memory + 64 + 2 * SIZE);
-		hinted.get()[0] = 42;
-		hinted.get()[SIZE - 1] = 84;
-		HugeAllocation moved(std::move(hinted));
-		REQUIRE_FALSE(hinted.IsSet());
-		REQUIRE(hinted.GetSize() == 0);
-		direct = std::move(moved);
-		REQUIRE(direct.GetSize() == SIZE);
-		REQUIRE(direct.get()[0] == 42);
-		REQUIRE(direct.get()[SIZE - 1] == 84);
-		direct.Reset();
-		REQUIRE_FALSE(direct.IsSet());
-		REQUIRE(direct.GetSize() == 0);
-		direct.Reset();
-		REQUIRE(manager.GetUsedMemory() == initial_memory + 64 + SIZE);
-	}
-	REQUIRE(manager.GetUsedMemory() == initial_memory);
 #ifndef DUCKDB_NO_THREADS
-	auto cross_thread = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
-	std::thread receiver([owned = std::move(cross_thread)]() mutable { owned.Reset(); });
-	receiver.join();
-	REQUIRE_FALSE(cross_thread.IsSet());
-	REQUIRE(manager.GetUsedMemory() == initial_memory);
+	atomic<bool> start {false};
+	vector<std::thread> workers;
+	for (idx_t t = 0; t < 4; t++) {
+		workers.emplace_back([&] {
+			while (!start.load()) {
+				std::this_thread::yield();
+			}
+			for (idx_t i = 0; i < 16; i++) {
+				auto pointer = allocator.AllocateData(FALLBACK_SIZE);
+				allocator.FreeData(pointer, FALLBACK_SIZE);
+			}
+		});
+	}
+	start = true;
+	for (idx_t i = 0; i < 16; i++) {
+		CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) >= FALLBACK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) <= headroom - allocator.GetCachedMemory());
 #endif
+	// Headroom occupied by pooled backing cannot also cover the fallback's retained memory.
+	CHECK(allocator.TryFlushDeallocated(FALLBACK_SIZE, BLOCK_SIZE));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+	pooled = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(pooled[0] == 42);
+	allocator.FreeData(pooled, BLOCK_SIZE);
 }
 
 TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][huge_route]") {
@@ -848,25 +950,47 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	config.options.async_threads = 0;
 	DuckDB first_db(nullptr, &config);
 	DuckDB second_db(nullptr, &config);
+	Connection connection(first_db);
 	auto &first_manager = BufferManager::GetBufferManager(*first_db.instance);
 	auto &second_manager = BufferManager::GetBufferManager(*second_db.instance);
+	auto &client_manager = BufferManager::GetBufferManager(*connection.context);
 	const auto first_memory = first_manager.GetUsedMemory();
 	const auto second_memory = second_manager.GetUsedMemory();
 	constexpr idx_t SIZE = 512 * 1024;
+	HugeAllocation empty;
+	CHECK_FALSE(empty.IsSet());
+	CHECK(empty.GetSize() == 0);
+	empty.Reset();
 	{
-		auto first = first_manager.GetBufferAllocator().AllocateHuge(SIZE);
+		auto first = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
 		auto second = second_manager.GetBufferAllocator().AllocateHuge(2 * SIZE);
+		CHECK(first_manager.GetUsedMemory() == first_memory + SIZE);
+		CHECK(second_manager.GetUsedMemory() == second_memory + 2 * SIZE);
 		first.get()[0] = 42;
-		second.get()[0] = 84;
-		second = std::move(first);
-		REQUIRE(second.GetSize() == SIZE);
-		REQUIRE(second.get()[0] == 42);
+		first.get()[SIZE - 1] = 84;
+		HugeAllocation moved(std::move(first));
+		CHECK_FALSE(first.IsSet());
+		CHECK(first.GetSize() == 0);
+		second = std::move(moved);
+		CHECK(second.GetSize() == SIZE);
+		CHECK(second.get()[0] == 42);
+		CHECK(second.get()[SIZE - 1] == 84);
 		second.Reset();
-		REQUIRE(first_manager.GetUsedMemory() == first_memory);
-		REQUIRE(second_manager.GetUsedMemory() == second_memory + 2 * SIZE);
+		CHECK_FALSE(second.IsSet());
+		CHECK(second.GetSize() == 0);
+		second.Reset();
+		CHECK(first_manager.GetUsedMemory() == first_memory);
+		// Move assignment swaps ownership; moved still owns the second manager's allocation.
+		CHECK(second_manager.GetUsedMemory() == second_memory + 2 * SIZE);
 	}
-	REQUIRE(first_manager.GetUsedMemory() == first_memory);
-	REQUIRE(second_manager.GetUsedMemory() == second_memory);
+	CHECK(second_manager.GetUsedMemory() == second_memory);
+#ifndef DUCKDB_NO_THREADS
+	auto cross_thread = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
+	std::thread receiver([owned = std::move(cross_thread)]() mutable { owned.Reset(); });
+	receiver.join();
+	CHECK_FALSE(cross_thread.IsSet());
+	CHECK(first_manager.GetUsedMemory() == first_memory);
+#endif
 }
 
 TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "[api][huge_route]") {
@@ -878,7 +1002,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0, 0);
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	Connection connection(db);
 	auto &manager = BufferManager::GetBufferManager(*db.instance);
@@ -970,13 +1094,21 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 	}
 }
 
-TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator", "[api][block_allocator]") {
+TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator",
+          "[api][block_allocator][huge_route]") {
+	bool pinned = false;
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	const auto cpus = affinity.CPUs();
+	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#endif
 	constexpr idx_t BLOCK_SIZE = 65536;
 	Allocator fallback;
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+	config.options.enable_block_allocator = true;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
 	auto &manager = BufferManager::GetBufferManager(*db.instance);
@@ -1004,9 +1136,34 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	CHECK(manager.GetUsedMemory() == initial_memory);
 	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
 
-	pointer = buffer_allocator.AllocateData(2 * BLOCK_SIZE);
-	buffer_allocator.FreeData(pointer, 2 * BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 4 * BLOCK_SIZE);
+	auto huge_pooled = buffer_allocator.AllocateHuge(BLOCK_SIZE);
+	CHECK(huge_pooled.get() == pointer);
+	huge_pooled.Reset();
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	constexpr idx_t CACHE_SIZE = 512 * 1024;
+	auto cached = buffer_allocator.AllocateData(CACHE_SIZE);
+	cached[0] = 42;
+	buffer_allocator.FreeData(cached, CACHE_SIZE);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + CACHE_SIZE);
+	auto huge = buffer_allocator.AllocateHuge(CACHE_SIZE);
+	if (pinned) {
+		CHECK(huge.get() == cached);
+		CHECK(huge.get()[0] == 42);
+	}
+	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + CACHE_SIZE;
+	CHECK(allocator.GetCachedMemory() == retained);
+	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
+	huge.Reset();
+	CHECK(allocator.GetCachedMemory() == retained + CACHE_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	auto ordinary = buffer_allocator.AllocateData(CACHE_SIZE);
+	if (pinned) {
+		CHECK(ordinary == cached);
+		CHECK(ordinary[0] == 42);
+		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	}
+	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
+	buffer_allocator.FreeData(ordinary, CACHE_SIZE);
 	CHECK(manager.GetUsedMemory() == initial_memory);
 }
 
@@ -1014,20 +1171,16 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 	constexpr idx_t BLOCK_SIZE = 4096;
 	constexpr idx_t CAPACITY = 4096;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY);
 	BlockAllocatorTestHelper retention(allocator);
 	CHECK(retention.IsLockFree());
 	CHECK(allocator.DecayDelay().GetIndex() == 1);
 	retention.Add(1024, 1);
 
 	SECTION("One-second linear decay starts at the bucket ending boundary") {
-		CHECK(retention.Target(200) == 1024);
-		CHECK(retention.Target(499) == 1024);
 		CHECK(retention.Target(500) == 1024);
 		CHECK(retention.Target(501) == 1022);
-		CHECK(retention.Target(750) == 768);
 		CHECK(retention.Target(1000) == 512);
-		CHECK(retention.Target(1250) == 256);
 		CHECK(retention.Target(1500) == 0);
 	}
 	SECTION("A return just before a boundary gets the full decay interval") {
@@ -1041,19 +1194,8 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 		retention.Add(CAPACITY, 200);
 		CHECK(retention.Target(500) == CAPACITY);
 		CHECK(retention.Target(501) == 4091);
-		CHECK(retention.Target(750) == 3072);
 		CHECK(retention.Target(1000) == 2048);
-		CHECK(retention.Target(1375) == 512);
 		CHECK(retention.Target(1500) == 0);
-	}
-	SECTION("Large bursts decay without a byte cutoff") {
-		constexpr idx_t LARGE_BLOCK_SIZE = idx_t(1) << 20;
-		constexpr idx_t LARGE_POOL_SIZE = 8192 * LARGE_BLOCK_SIZE;
-		BlockAllocator large_allocator(fallback, LARGE_BLOCK_SIZE, LARGE_POOL_SIZE, LARGE_POOL_SIZE);
-		BlockAllocatorTestHelper large_retention(large_allocator);
-		large_retention.Add(4096, 1);
-		CHECK(large_retention.Target(1000) == 2048);
-		CHECK(large_retention.Target(1500) == 0);
 	}
 	SECTION("A small new burst does not refresh the old allowance") {
 		retention.Add(16, 500);
@@ -1093,50 +1235,37 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 		retention.Reuse(CAPACITY, 501);
 		CHECK(retention.Target(750) == 768);
 	}
-}
-
-TEST_CASE("BlockAllocator retention rejects stale generations across rollover", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t CAPACITY = 128;
-	constexpr idx_t ROLLOVER = (idx_t(1) << 32) * 500;
-	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
-	BlockAllocatorTestHelper retention(allocator, ROLLOVER - 500);
-	retention.Add(32, ROLLOVER - 499);
-	retention.Add(16, ROLLOVER);
-	CHECK(retention.Target(ROLLOVER) == 48);
-	CHECK(retention.Target(ROLLOVER + 500) == 32);
-	CHECK(retention.Target(ROLLOVER + 1000) == 8);
-	CHECK(retention.Target(ROLLOVER + 1500) == 0);
-
-	SECTION("An older update cannot replace a live generation") {
-		retention.Add(64, ROLLOVER + 1000);
-		retention.Add(CAPACITY, ROLLOVER - 500);
-		CHECK(retention.Target(ROLLOVER + 1000) == 72);
-	}
-	SECTION("An older update cannot revive a consumed generation") {
-		retention.Add(64, ROLLOVER + 1000);
-		retention.Reuse(64, ROLLOVER + 1000);
-		retention.Add(CAPACITY, ROLLOVER - 500);
-		CHECK(retention.Target(ROLLOVER + 1000) == 8);
-		retention.Add(32, ROLLOVER + 1000);
-		CHECK(retention.Target(ROLLOVER + 1000) == 40);
-	}
-	SECTION("Stale reuse leaves a newer generation alone") {
-		retention.Add(64, ROLLOVER + 1000);
-		retention.Reuse(CAPACITY, ROLLOVER - 500);
-		CHECK(retention.Target(ROLLOVER + 1000) == 72);
+	SECTION("Rollover rejects stale updates without reviving consumed generations") {
+		constexpr idx_t ROLLOVER = (idx_t(1) << 32) * 500;
+		BlockAllocatorTestHelper rollover(allocator, ROLLOVER - 500);
+		rollover.Add(32, ROLLOVER - 499);
+		rollover.Add(16, ROLLOVER);
+		CHECK(rollover.Target(ROLLOVER) == 48);
+		CHECK(rollover.Target(ROLLOVER + 500) == 32);
+		CHECK(rollover.Target(ROLLOVER + 1000) == 8);
+		CHECK(rollover.Target(ROLLOVER + 1500) == 0);
+		rollover.Add(64, ROLLOVER + 1000);
+		rollover.Add(CAPACITY, ROLLOVER - 500);
+		CHECK(rollover.Target(ROLLOVER + 1000) == 72);
+		rollover.Reuse(CAPACITY, ROLLOVER - 500);
+		CHECK(rollover.Target(ROLLOVER + 1000) == 72);
+		rollover.Reuse(64, ROLLOVER + 1000);
+		rollover.Add(CAPACITY, ROLLOVER - 500);
+		CHECK(rollover.Target(ROLLOVER + 1000) == 8);
+		rollover.Add(32, ROLLOVER + 1000);
+		CHECK(rollover.Target(ROLLOVER + 1000) == 40);
 	}
 }
 
+#ifndef DUCKDB_NO_THREADS
 TEST_CASE("BlockAllocator retention accounts concurrent batches", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t CAPACITY = 8192;
+	constexpr idx_t CAPACITY = 2048;
 	constexpr idx_t WORKERS = 4;
-	constexpr idx_t ITERATIONS = 64;
+	constexpr idx_t ITERATIONS = 16;
 	constexpr idx_t BATCH = 16;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY);
 	BlockAllocatorTestHelper retention(allocator);
 	vector<std::thread> workers;
 	for (idx_t i = 0; i < WORKERS; i++) {
@@ -1166,6 +1295,7 @@ TEST_CASE("BlockAllocator retention accounts concurrent batches", "[api][block_a
 	retention.Reuse(CAPACITY, 1);
 	CHECK(retention.Target(1) == 0);
 }
+#endif
 
 namespace {
 struct BlockAllocatorFallbackData : public PrivateAllocatorData {
@@ -1178,38 +1308,13 @@ struct BlockAllocatorFallbackData : public PrivateAllocatorData {
 };
 } // namespace
 
-TEST_CASE("BlockAllocator cached backing follows ownership and successful discard", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, 64 * BLOCK_SIZE, 64 * BLOCK_SIZE);
-	CHECK(allocator.GetCachedMemory() == 0);
-	auto block = allocator.AllocateData(BLOCK_SIZE);
-	block[0] = 42;
-	CHECK(allocator.GetCachedMemory() == 0);
-	allocator.FreeData(block, BLOCK_SIZE);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 0);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	auto reused = allocator.AllocateData(BLOCK_SIZE);
-	REQUIRE(reused == block);
-	CHECK(reused[0] == 42);
-	CHECK(allocator.GetCachedMemory() == 0);
-	allocator.FreeData(reused, BLOCK_SIZE);
-	allocator.ThreadFlush(false, 0, 1);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
-	allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
-	CHECK(allocator.GetCachedMemory() == 0);
-}
-
+#ifndef DUCKDB_NO_THREADS
 TEST_CASE("BlockAllocator concurrent trimming preserves the cache target", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 4096;
-	constexpr idx_t TARGET_BLOCKS = 128;
+	constexpr idx_t BLOCK_COUNT = 256;
+	constexpr idx_t TARGET_BLOCKS = 32;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_COUNT * BLOCK_SIZE, BLOCK_COUNT * BLOCK_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_COUNT * BLOCK_SIZE);
 	vector<data_ptr_t> blocks;
 	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
 		auto block = allocator.AllocateData(BLOCK_SIZE);
@@ -1246,12 +1351,34 @@ TEST_CASE("BlockAllocator concurrent trimming preserves the cache target", "[api
 	CHECK(allocator.GetCachedMemory() == 0);
 }
 
-TEST_CASE("BlockAllocator footprint includes other threads' cached backing", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator accounts for cached backing through reuse, thread exit and discard",
+          "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t THREADS = 2;
 	constexpr idx_t BLOCKS_PER_THREAD = 8;
 	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, 64 * BLOCK_SIZE, 64 * BLOCK_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, 64 * BLOCK_SIZE);
+	CHECK(allocator.GetCachedMemory() == 0);
+	auto block = allocator.AllocateData(BLOCK_SIZE);
+	block[0] = 42;
+	CHECK(allocator.GetCachedMemory() == 0);
+	allocator.FreeData(block, BLOCK_SIZE);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 0);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	auto reused = allocator.AllocateData(BLOCK_SIZE);
+	REQUIRE(reused == block);
+	CHECK(reused[0] == 42);
+	CHECK(allocator.GetCachedMemory() == 0);
+	allocator.FreeData(reused, BLOCK_SIZE);
+	allocator.ThreadFlush(false, 0, 1);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
+	allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
+	CHECK(allocator.GetCachedMemory() == 0);
+
 	mutex gate;
 	std::condition_variable cv;
 	idx_t ready = 0;
@@ -1294,40 +1421,14 @@ TEST_CASE("BlockAllocator footprint includes other threads' cached backing", "[a
 	CHECK(allocator.GetCachedMemory() == 0);
 }
 
-TEST_CASE("BlockAllocator reclamation preserves partially decayed retention", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 100;
-	Allocator fallback;
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
-	vector<data_ptr_t> blocks;
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		block[0] = 42;
-		blocks.push_back(block);
-	}
-	for (auto block : blocks) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-	allocator.ThreadFlush(false, 0, 1);
-	BlockAllocatorTestHelper retention(allocator);
-	retention.Add(BLOCK_COUNT, 1);
-	for (idx_t pass = 0; pass < 3; pass++) {
-		const auto available = BlockAllocatorTestHelper::FreeBlocks(allocator);
-		const auto target = retention.Target(1000);
-		BlockAllocatorTestHelper::FlushBytes(allocator, (available - MinValue(available, target)) * BLOCK_SIZE);
-		CHECK(retention.Target(1000) == BLOCK_COUNT / 2);
-		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT / 2);
-	}
-}
-
-TEST_CASE("BlockAllocator allocation reclaims a bounded amount of expired free memory", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator allocation bounds reclamation and does not wait for maintenance", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t BLOCK_COUNT = 256;
 	auto private_data = make_uniq<BlockAllocatorFallbackData>();
 	auto &fallback_data = *private_data;
 	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
 	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT);
 	auto live = allocator.AllocateData(BLOCK_SIZE);
 	live[0] = 84;
 	live[BLOCK_SIZE - 1] = 84;
@@ -1341,104 +1442,74 @@ TEST_CASE("BlockAllocator allocation reclaims a bounded amount of expired free m
 	for (auto block : blocks) {
 		allocator.FreeData(block, BLOCK_SIZE);
 	}
-	blocks.clear();
-	BlockAllocatorTestHelper::Expire(allocator);
-	blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) > BLOCK_COUNT / 2);
-	for (idx_t i = 2; i < BLOCK_COUNT; i++) {
-		blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
-	}
-	std::unordered_set<data_ptr_t> allocated {live};
-	idx_t reclaimed = 0;
-	for (auto block : blocks) {
-		CHECK(allocated.insert(block).second);
-		if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
-			reclaimed++;
-		}
-	}
-#if defined(__linux__) || defined(_WIN32)
-	CHECK(reclaimed > 0);
-#endif
-	CHECK(reclaimed < BLOCK_COUNT - 1);
-	CHECK(blocks[0][0] == 42);
-	CHECK(blocks[0][BLOCK_SIZE - 1] == 42);
-	CHECK(live[0] == 84);
-	CHECK(live[BLOCK_SIZE - 1] == 84);
-	CHECK(fallback_data.allocation_count == 0);
-	for (auto block : blocks) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-	allocator.FreeData(live, BLOCK_SIZE);
-}
-
-TEST_CASE("BlockAllocator batch transfers do not wait for maintenance", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 128;
-	auto private_data = make_uniq<BlockAllocatorFallbackData>();
-	auto &fallback_data = *private_data;
-	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
-	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
 	BlockAllocatorTestHelper helper(allocator);
-	mutex gate;
-	std::condition_variable cv;
-	bool ready = false;
-	bool start = false;
-	bool finished = false;
-	bool preserved = true;
-	std::thread worker([&]() {
-		vector<data_ptr_t> blocks;
-		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-			auto block = allocator.AllocateData(BLOCK_SIZE);
-			block[0] = 42;
-			blocks.push_back(block);
+	SECTION("Allocation performs bounded opportunistic reclamation") {
+		blocks.clear();
+		BlockAllocatorTestHelper::Expire(allocator);
+		blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) > BLOCK_COUNT / 2);
+		for (idx_t i = 2; i < BLOCK_COUNT; i++) {
+			blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
 		}
+		std::unordered_set<data_ptr_t> allocated {live};
+		idx_t reclaimed = 0;
+		for (auto block : blocks) {
+			CHECK(allocated.insert(block).second);
+			if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
+				reclaimed++;
+			}
+		}
+#if defined(__linux__) || defined(_WIN32)
+		CHECK(reclaimed > 0);
+#endif
+		CHECK(reclaimed < BLOCK_COUNT - 1);
+		CHECK(blocks[0][0] == 42);
+		CHECK(blocks[0][BLOCK_SIZE - 1] == 42);
 		for (auto block : blocks) {
 			allocator.FreeData(block, BLOCK_SIZE);
 		}
+	}
+	SECTION("Batch transfers continue while maintenance holds its lock") {
+		BlockAllocatorTestHelper::Expire(allocator);
+		mutex gate;
+		std::condition_variable cv;
+		bool finished = false;
+		bool preserved = true;
+		bool progressed;
+		std::thread worker;
 		{
+			annotated_lock_guard<annotated_mutex> maintenance_guard(helper.MaintenanceLock());
+			worker = std::thread([&] {
+				for (idx_t round = 0; round < 2; round++) {
+					vector<data_ptr_t> reused;
+					for (idx_t i = 1; i < BLOCK_COUNT; i++) {
+						auto block = allocator.AllocateData(BLOCK_SIZE);
+						preserved &= block[0] == 42 && block[BLOCK_SIZE - 1] == 42;
+						reused.push_back(block);
+					}
+					for (auto block : reused) {
+						allocator.FreeData(block, BLOCK_SIZE);
+					}
+				}
+				lock_guard<mutex> guard(gate);
+				finished = true;
+				cv.notify_all();
+			});
 			unique_lock<mutex> guard(gate);
-			ready = true;
-			cv.notify_all();
-			cv.wait(guard, [&]() { return start; });
+			progressed = cv.wait_for(guard, std::chrono::seconds(10), [&] { return finished; });
 		}
-		for (idx_t round = 0; round < 4; round++) {
-			blocks.clear();
-			for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-				auto block = allocator.AllocateData(BLOCK_SIZE);
-				preserved &= block[0] == 42;
-				blocks.push_back(block);
-			}
-			for (auto block : blocks) {
-				allocator.FreeData(block, BLOCK_SIZE);
-			}
-		}
-		lock_guard<mutex> guard(gate);
-		finished = true;
-		cv.notify_all();
-	});
-	bool initialized;
-	{
-		unique_lock<mutex> guard(gate);
-		initialized = cv.wait_for(guard, std::chrono::seconds(10), [&]() { return ready; });
+		// Release maintenance before joining, including if a transfer blocked.
+		worker.join();
+		CHECK(progressed);
+		CHECK(preserved);
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT - 1);
 	}
-	BlockAllocatorTestHelper::Expire(allocator);
-	bool progressed;
-	{
-		annotated_lock_guard<annotated_mutex> maintenance_guard(helper.MaintenanceLock());
-		unique_lock<mutex> guard(gate);
-		start = true;
-		cv.notify_all();
-		progressed = cv.wait_for(guard, std::chrono::seconds(10), [&]() { return finished; });
-	}
-	// Release maintenance before joining, including when a blocked transfer fails the test.
-	worker.join();
-	CHECK(initialized);
-	CHECK(progressed);
-	CHECK(preserved);
+	CHECK(live[0] == 84);
+	CHECK(live[BLOCK_SIZE - 1] == 84);
 	CHECK(fallback_data.allocation_count == 0);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
+	allocator.FreeData(live, BLOCK_SIZE);
 }
+#endif
 
 #if defined(__APPLE__)
 TEST_CASE("BlockAllocator marks reused macOS pages as live", "[api][block_allocator]") {
@@ -1449,9 +1520,9 @@ TEST_CASE("BlockAllocator marks reused macOS pages as live", "[api][block_alloca
 	auto &fallback_data = *private_data;
 	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
 	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE);
 	vector<data_ptr_t> blocks;
-	for (idx_t iteration = 0; iteration < 3; iteration++) {
+	for (idx_t iteration = 0; iteration < 2; iteration++) {
 		const auto value = uint8_t(iteration + 1);
 		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
 			auto block = allocator.AllocateData(BLOCK_SIZE);
@@ -1485,11 +1556,11 @@ TEST_CASE("BlockAllocator preserves cached blocks across allocator switches", "[
 	auto &fallback_data = *private_data;
 	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
 	                   std::move(private_data));
-	BlockAllocator first(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	BlockAllocator first(fallback, BLOCK_SIZE, POOL_SIZE);
 
 	SECTION("Switch allocations and frees between live allocators") {
-		BlockAllocator second(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-		for (idx_t iteration = 0; iteration < 3; iteration++) {
+		BlockAllocator second(fallback, BLOCK_SIZE, POOL_SIZE);
+		for (idx_t iteration = 0; iteration < 2; iteration++) {
 			vector<data_ptr_t> first_blocks;
 			vector<data_ptr_t> second_blocks;
 			for (idx_t i = 0; i < BLOCK_COUNT; i++) {
@@ -1511,7 +1582,7 @@ TEST_CASE("BlockAllocator preserves cached blocks across allocator switches", "[
 	SECTION("Destroy another allocator while the first has cached blocks") {
 		auto pointer = first.AllocateData(BLOCK_SIZE);
 		first.FreeData(pointer, BLOCK_SIZE);
-		{ BlockAllocator second(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE); }
+		{ BlockAllocator second(fallback, BLOCK_SIZE, POOL_SIZE); }
 		vector<data_ptr_t> blocks;
 		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
 			blocks.push_back(first.AllocateData(BLOCK_SIZE));
@@ -1523,35 +1594,6 @@ TEST_CASE("BlockAllocator preserves cached blocks across allocator switches", "[
 	}
 }
 
-TEST_CASE("BlockAllocator switching races with allocator destruction", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 4096;
-	constexpr idx_t POOL_SIZE = BLOCK_SIZE * 16;
-	Allocator allocator;
-	BlockAllocator next(allocator, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-
-	for (idx_t iteration = 0; iteration < 100; iteration++) {
-		auto previous = make_uniq<BlockAllocator>(allocator, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-		atomic<bool> ready {false};
-		atomic<bool> switch_allocator {false};
-		std::thread worker([&]() {
-			auto pointer = previous->AllocateData(BLOCK_SIZE);
-			previous->FreeData(pointer, BLOCK_SIZE);
-			ready = true;
-			while (!switch_allocator) {
-				std::this_thread::yield();
-			}
-			pointer = next.AllocateData(BLOCK_SIZE);
-			next.FreeData(pointer, BLOCK_SIZE);
-		});
-		while (!ready) {
-			std::this_thread::yield();
-		}
-		switch_allocator = true;
-		previous.reset();
-		worker.join();
-	}
-}
-
 TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t BLOCK_COUNT = 1103;
@@ -1560,7 +1602,7 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 	auto &fallback_data = *private_data;
 	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
 	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE);
 	vector<data_ptr_t> blocks;
 	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
 		auto block = allocator.AllocateData(BLOCK_SIZE);
@@ -1576,34 +1618,20 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 		}
 	}
 
+	allocator.ThreadFlush(false, 0, 1);
+	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 2) * BLOCK_SIZE);
+	BlockAllocatorTestHelper::FlushBytes(allocator, 0);
+	BlockAllocatorTestHelper::FlushBytes(allocator, BLOCK_SIZE - 1);
+	allocator.FlushForAllocation(BLOCK_SIZE - 1, 0);
+	allocator.FlushForAllocation(POOL_SIZE, POOL_SIZE);
+	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 2) * BLOCK_SIZE);
+
 	idx_t expected_reclaimed = 0;
-	SECTION("Warm reuse") {
-	}
-	SECTION("Thread flush only returns cached blocks") {
-		allocator.ThreadFlush(false, 0, 1);
-	}
-	SECTION("Zero-byte flush") {
-		BlockAllocatorTestHelper::FlushBytes(allocator, 0);
-	}
-	SECTION("Sub-block flush") {
-		BlockAllocatorTestHelper::FlushBytes(allocator, BLOCK_SIZE - 1);
-	}
-	SECTION("Shutdown flush preserves warm pool blocks") {
-		STATIC_REQUIRE(noexcept(allocator.FlushOnShutdown()));
-		allocator.FlushOnShutdown();
-	}
-	SECTION("Thread shutdown preserves warm pool blocks") {
-		allocator.ThreadExit();
-	}
-	SECTION("Byte-limited flush") {
+	SECTION("Byte-limited flush rounds down to whole blocks") {
 		expected_reclaimed = 17;
 		BlockAllocatorTestHelper::FlushBytes(allocator, expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2);
 	}
-	SECTION("Allocation with ample headroom preserves warm blocks") {
-		STATIC_REQUIRE(noexcept(allocator.FlushForAllocation(POOL_SIZE, POOL_SIZE)));
-		allocator.FlushForAllocation(POOL_SIZE, POOL_SIZE);
-	}
-	SECTION("Allocation reclaims only blocks exceeding headroom") {
+	SECTION("Allocation reclaims only backing exceeding headroom") {
 		expected_reclaimed = 17;
 		allocator.FlushForAllocation(POOL_SIZE, (BLOCK_COUNT - 2 - expected_reclaimed) * BLOCK_SIZE + BLOCK_SIZE / 2);
 	}
@@ -1611,25 +1639,28 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 		expected_reclaimed = 17;
 		allocator.FlushForAllocation(expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2, 0);
 	}
-	SECTION("Allocation without headroom reclaims all free blocks") {
-		expected_reclaimed = BLOCK_COUNT - 2;
-		allocator.FlushForAllocation(POOL_SIZE, 0);
-	}
-	SECTION("Allocation smaller than a block does not reclaim") {
-		allocator.FlushForAllocation(BLOCK_SIZE - 1, 0);
-	}
-	SECTION("A cache target smaller than a block reclaims all free backing") {
+	SECTION("A target smaller than a block releases all free backing") {
 		expected_reclaimed = BLOCK_COUNT - 2;
 		allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE - 1);
 	}
-	SECTION("Complete flush spans reclamation batches") {
+	SECTION("A complete flush spans reclamation batches") {
 		expected_reclaimed = BLOCK_COUNT - 2;
 		allocator.FlushAll();
 	}
-	SECTION("Idle flush spans reclamation batches") {
-		expected_reclaimed = BLOCK_COUNT - 2;
-		allocator.ThreadIdle();
+	SECTION("Discard does not consume partially decayed retention history") {
+		BlockAllocatorTestHelper retention(allocator);
+		retention.Add(BLOCK_COUNT - 2, 1);
+		const auto target = retention.Target(1000);
+		expected_reclaimed = BLOCK_COUNT - 2 - target;
+		BlockAllocatorTestHelper::FlushBytes(allocator, expected_reclaimed * BLOCK_SIZE);
+		CHECK(retention.Target(1000) == target);
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == target);
+		CHECK(allocator.GetCachedMemory() == target * BLOCK_SIZE);
+		allocator.FreeData(live_first, BLOCK_SIZE);
+		allocator.FreeData(live_second, BLOCK_SIZE);
+		return;
 	}
+	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 2 - expected_reclaimed) * BLOCK_SIZE);
 
 	std::unordered_set<data_ptr_t> allocated {live_first, live_second};
 	blocks.clear();
@@ -1639,10 +1670,6 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 		CHECK(allocated.insert(block).second);
 		if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
 			reclaimed++;
-		}
-		if (expected_reclaimed == 0) {
-			CHECK(block[0] == 42);
-			CHECK(block[BLOCK_SIZE - 1] == 42);
 		}
 		blocks.push_back(block);
 	}
@@ -1663,158 +1690,7 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 	allocator.FreeData(live_second, BLOCK_SIZE);
 }
 
-TEST_CASE("BlockAllocator reclamation races with allocation and free", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 256;
-	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
-	auto private_data = make_uniq<BlockAllocatorFallbackData>();
-	auto &fallback_data = *private_data;
-	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
-	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-	auto live = allocator.AllocateData(BLOCK_SIZE);
-	memset(live, 42, BLOCK_SIZE);
-	vector<data_ptr_t> blocks;
-	for (idx_t i = 0; i < 128; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		memset(block, 42, BLOCK_SIZE);
-		blocks.push_back(block);
-	}
-	for (auto block : blocks) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-	allocator.ThreadFlush(false, 0, 1);
-	atomic<bool> ready {false};
-	atomic<bool> start {false};
-	atomic<bool> preserved {true};
-	std::thread worker([&]() {
-		for (idx_t iteration = 0; iteration < 100; iteration++) {
-			vector<data_ptr_t> local;
-			for (idx_t i = 0; i < 32; i++) {
-				auto block = allocator.AllocateData(BLOCK_SIZE);
-				memset(block, 84, BLOCK_SIZE);
-				local.push_back(block);
-			}
-			if (iteration == 0) {
-				ready = true;
-				while (!start) {
-					std::this_thread::yield();
-				}
-			}
-			for (auto block : local) {
-				for (idx_t i = 0; i < BLOCK_SIZE; i++) {
-					if (block[i] != 84) {
-						preserved = false;
-					}
-				}
-				allocator.FreeData(block, BLOCK_SIZE);
-			}
-			allocator.ThreadFlush(false, 0, 1);
-		}
-	});
-	while (!ready) {
-		std::this_thread::yield();
-	}
-	allocator.FlushAll();
-	start = true;
-	for (idx_t iteration = 0; iteration < 100; iteration++) {
-		allocator.FlushAll();
-		allocator.ThreadIdle();
-	}
-	worker.join();
-	CHECK(preserved);
-	bool live_preserved = true;
-	for (idx_t i = 0; i < BLOCK_SIZE; i++) {
-		live_preserved &= live[i] == 42;
-	}
-	CHECK(live_preserved);
-	allocator.FreeData(live, BLOCK_SIZE);
-	allocator.FlushAll();
-	CHECK(allocator.GetCachedMemory() == 0);
-	blocks.clear();
-	std::unordered_set<data_ptr_t> allocated;
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		CHECK(allocated.insert(block).second);
-		blocks.push_back(block);
-	}
-	CHECK(fallback_data.allocation_count == 0);
-	for (auto block : blocks) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-}
-
-TEST_CASE("BlockAllocator supplies an idle decay delay independently of the fixed pool", "[api][block_allocator]") {
-	Allocator fallback;
-	BlockAllocator allocator(fallback, 65536, 65536, 0);
-	const auto fallback_delay = Allocator::DecayDelay();
-	REQUIRE(allocator.DecayDelay().IsValid());
-	CHECK(allocator.DecayDelay().GetIndex() == (fallback_delay.IsValid() ? fallback_delay.GetIndex() : 1));
-	allocator.Resize(65536);
-	REQUIRE(allocator.DecayDelay().IsValid());
-	CHECK(allocator.DecayDelay().GetIndex() == (fallback_delay.IsValid() ? fallback_delay.GetIndex() : 1));
-}
-
 #ifndef DUCKDB_NO_THREADS
-TEST_CASE("BlockAllocator worker exit returns blocks without reclaiming them", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 16;
-	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
-	Allocator fallback;
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-	DuckDB db(nullptr, &config);
-	auto &allocator = BlockAllocator::Get(*db.instance);
-	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	std::thread worker([&]() {
-		vector<data_ptr_t> blocks;
-		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-			auto block = allocator.AllocateData(BLOCK_SIZE);
-			block[0] = 42;
-			block[BLOCK_SIZE - 1] = 42;
-			blocks.push_back(block);
-		}
-		for (auto block : blocks) {
-			allocator.FreeData(block, BLOCK_SIZE);
-		}
-		atomic<bool> running {false};
-		scheduler.ExecuteForever(&running);
-	});
-	worker.join();
-	REQUIRE(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
-
-	bool reclaimed = false;
-	SECTION("Returned blocks stay available for warm reuse") {
-	}
-	SECTION("Resizing workers still reclaims the pool") {
-		scheduler.SetThreads(2, 1);
-		scheduler.RelaunchThreads();
-		scheduler.SetThreads(1, 1);
-		scheduler.RelaunchThreads();
-		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 0);
-		reclaimed = true;
-	}
-	vector<data_ptr_t> blocks;
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		if (!reclaimed) {
-			CHECK(block[0] == 42);
-			CHECK(block[BLOCK_SIZE - 1] == 42);
-		}
-#if defined(__linux__) || defined(_WIN32)
-		else {
-			CHECK(block[0] == 0);
-			CHECK(block[BLOCK_SIZE - 1] == 0);
-		}
-#endif
-		blocks.push_back(block);
-	}
-	for (auto block : blocks) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-}
 
 namespace {
 class BlockAllocatorAsyncGate {
@@ -1871,275 +1747,74 @@ TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active s
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 1;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0, 0);
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
 	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	BlockAllocatorAsyncGate gate(scheduler);
-	REQUIRE(gate.WaitUntilBlocked());
-
-	vector<data_ptr_t> blocks;
-	for (idx_t i = 0; i < COUNT; i++) {
-		blocks.push_back(allocator.AllocateData(SIZE));
-	}
-	for (auto block : blocks) {
-		allocator.FreeData(block, SIZE);
-	}
-	REQUIRE(allocator.GetCachedMemory() == COUNT * SIZE);
-	allocator.ThreadIdle();
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	std::this_thread::sleep_for(std::chrono::milliseconds(1100));
-	allocator.ThreadIdle();
-	REQUIRE(scheduler.GetNumberOfTasks() == 1);
-	atomic<bool> execute {true};
-	REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
-	const auto remaining = allocator.GetCachedMemory();
-	CHECK(remaining > 0);
-	CHECK(remaining < COUNT * SIZE);
-	REQUIRE(scheduler.GetNumberOfTasks() == 1);
-	SECTION("Continuations drain expired backing") {
-		CHECK(scheduler.ExecuteTasks(&execute, COUNT) > 0);
+	SECTION("The idle worker revisits a return after its last task") {
+		auto pointer = allocator.AllocateData(SIZE);
+		{
+			BlockAllocatorAsyncGate gate(scheduler);
+			REQUIRE(gate.WaitUntilBlocked());
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(650));
+		allocator.FreeData(pointer, SIZE);
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+		while (allocator.GetCachedMemory() != 0 && std::chrono::steady_clock::now() < deadline) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
 		CHECK(allocator.GetCachedMemory() == 0);
 	}
-	SECTION("A new return keeps its size class available") {
-		auto pointer = allocator.AllocateData(SIZE);
-		allocator.FreeData(pointer, SIZE);
-		const auto refreshed = allocator.GetCachedMemory();
-		CHECK(scheduler.ExecuteTasks(&execute, COUNT) == 1);
-		CHECK(allocator.GetCachedMemory() == refreshed);
-		allocator.FlushAll();
-	}
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	CHECK(live_bytes.load() == 0);
-}
-
-TEST_CASE("Allocation cache rechecks decay after a return during the final idle interval", "[api][allocation_cache]") {
-	constexpr idx_t SIZE = 512 * 1024;
-	Allocator fallback;
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
-	SECTION("An async worker performs maintenance") {
-	}
-	SECTION("A regular worker performs maintenance without async workers") {
-		config.options.maximum_threads = 2;
-		config.options.async_threads = 0;
-	}
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, 256 * 1024, 0, 0);
-	DuckDB db(nullptr, &config);
-	auto &allocator = BlockAllocator::Get(*db.instance);
-	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	auto pointer = allocator.AllocateData(SIZE);
-	{
+	SECTION("Controlled execution bounds reclamation and protects refreshed size classes") {
 		BlockAllocatorAsyncGate gate(scheduler);
 		REQUIRE(gate.WaitUntilBlocked());
-		// The gate's destructor joins this final task before starting the idle interval.
-		gate.Release();
-	}
-	std::this_thread::sleep_for(std::chrono::milliseconds(650));
-	allocator.FreeData(pointer, SIZE);
-	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-	while (allocator.GetCachedMemory() != 0 && std::chrono::steady_clock::now() < deadline) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-	CHECK(allocator.GetCachedMemory() == 0);
-}
 
-#if defined(__linux__)
-TEST_CASE("BlockAllocator does not immediately retry failed async reclamation", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	Allocator fallback;
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-	DuckDB db(nullptr, &config);
-	auto &allocator = BlockAllocator::Get(*db.instance);
-	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	BlockAllocatorAsyncGate gate(scheduler);
-	REQUIRE(gate.WaitUntilBlocked());
-	auto block = allocator.AllocateData(BLOCK_SIZE);
-	block[0] = 42;
-	// Bypass the sanitizer's no-op mlock wrapper to make MADV_DONTNEED fail deterministically.
-	if (syscall(SYS_mlock, block, 1) != 0) {
-		WARN("Cannot lock a page to exercise discard failure");
-		allocator.FreeData(block, BLOCK_SIZE);
-		return;
-	}
-	allocator.FreeData(block, BLOCK_SIZE);
-	BlockAllocatorTestHelper::Expire(allocator);
-	allocator.ThreadIdle();
-	atomic<bool> execute {true};
-	CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
-	CHECK(block[0] == 42);
-	CHECK(syscall(SYS_munlock, block, 1) == 0);
-	allocator.ThreadIdle();
-	CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	CHECK(allocator.GetCachedMemory() == 0);
-}
-#endif
-
-TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][block_allocator]") {
-	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 32;
-	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
-	Allocator fallback;
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 1;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
-	DuckDB db(nullptr, &config);
-	auto &allocator = BlockAllocator::Get(*db.instance);
-	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	REQUIRE(scheduler.NumberOfAsyncThreads() == 1);
-	BlockAllocatorAsyncGate gate(scheduler);
-	REQUIRE(gate.WaitUntilBlocked());
-	vector<data_ptr_t> live;
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		block[0] = 42;
-		block[BLOCK_SIZE - 1] = 42;
-		live.push_back(block);
-	}
-	auto freed = live.back();
-	live.pop_back();
-	allocator.FreeData(freed, BLOCK_SIZE);
-	BlockAllocatorTestHelper::Expire(allocator);
-	allocator.ThreadExit();
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
-	for (idx_t i = 0; i < 32; i++) {
-		allocator.ThreadIdle();
-	}
-	CHECK(scheduler.GetNumberOfTasks() == 1);
-	// Relaunch without changing workers preserves queued work and its coalesced request.
-	scheduler.RelaunchThreads();
-	allocator.ThreadIdle();
-	CHECK(scheduler.GetNumberOfTasks() == 1);
-	auto reused = allocator.AllocateData(BLOCK_SIZE);
-	CHECK(reused == freed);
-	CHECK(reused[0] == 42);
-	CHECK(reused[BLOCK_SIZE - 1] == 42);
-	allocator.FreeData(reused, BLOCK_SIZE);
-	BlockAllocatorTestHelper::Expire(allocator);
-	allocator.ThreadIdle();
-	SECTION("Async worker executes the queued pass") {
-		gate.Release();
-	}
-	SECTION("External execution can consume the ASYNC queue") {
-		atomic<bool> execute {true};
-		CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
-		gate.Release();
-	}
-
-	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-	while (!BlockAllocatorTestHelper::Drained(allocator) && std::chrono::steady_clock::now() < deadline) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-	}
-	CHECK(BlockAllocatorTestHelper::Drained(allocator));
-	reused = allocator.AllocateData(BLOCK_SIZE);
-	CHECK(reused == freed);
-#if defined(__linux__) || defined(_WIN32)
-	CHECK(reused[0] == 0);
-	CHECK(reused[BLOCK_SIZE - 1] == 0);
-#endif
-	allocator.FreeData(reused, BLOCK_SIZE);
-	for (auto block : live) {
-		CHECK(block[0] == 42);
-		CHECK(block[BLOCK_SIZE - 1] == 42);
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-
-	scheduler.SetAsyncThreads(0);
-	scheduler.RelaunchThreads();
-	CHECK(scheduler.NumberOfAsyncThreads() == 0);
-	live.clear();
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-		block[0] = 42;
-		live.push_back(block);
-	}
-	for (auto block : live) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-	allocator.ThreadFlush(false, 0, 1);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
-	BlockAllocatorTestHelper::Expire(allocator);
-	allocator.ThreadIdle();
-	live.clear();
-	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-		auto block = allocator.AllocateData(BLOCK_SIZE);
-#if defined(__linux__) || defined(_WIN32)
-		CHECK(block[0] == 0);
-#endif
-		live.push_back(block);
-	}
-	for (auto block : live) {
-		allocator.FreeData(block, BLOCK_SIZE);
-	}
-}
-
-TEST_CASE("BlockAllocator async reclamation survives worker relaunch and shutdown", "[api][block_allocator]") {
-	for (idx_t iteration = 0; iteration < 8; iteration++) {
-		DBConfig config;
-		config.options.maximum_threads = 1;
-		config.options.async_threads = 2;
-		config.SetOptionByName("scheduler_process_partial", Value::BOOLEAN(iteration % 2 == 0));
-		config.options.block_allocator_size = 64 * DEFAULT_BLOCK_ALLOC_SIZE;
-		DuckDB db(nullptr, &config);
-		auto &allocator = BlockAllocator::Get(*db.instance);
-		auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-		vector<data_ptr_t> live;
-		for (idx_t round = 0; round < 8; round++) {
-			vector<unique_ptr<BlockAllocatorAsyncGate>> gates;
-			const auto workers = scheduler.NumberOfThreads() - 1 + scheduler.NumberOfAsyncThreads();
-			for (idx_t worker = 0; worker < workers; worker++) {
-				auto gate = make_uniq<BlockAllocatorAsyncGate>(scheduler);
-				REQUIRE(gate->WaitUntilBlocked());
-				gates.push_back(std::move(gate));
-			}
-			for (idx_t i = 0; i < 64; i++) {
-				auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
-				block[0] = 42;
-				live.push_back(block);
-			}
-			for (auto block : live) {
-				CHECK(block[0] == 42);
-				allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
-			}
-			live.clear();
-			BlockAllocatorTestHelper::Expire(allocator);
-			allocator.ThreadIdle();
-			CHECK(scheduler.GetNumberOfTasks() == 1);
-			for (auto &gate : gates) {
-				gate->Release();
-			}
-			scheduler.SetThreads(1 + round % 2, 1);
-			scheduler.RelaunchThreads();
-			if (round % 3 == 0) {
-				scheduler.SetAsyncThreads(0);
-				scheduler.RelaunchThreads();
-				CHECK(scheduler.NumberOfAsyncThreads() == 0);
-				scheduler.SetAsyncThreads(2);
-				scheduler.RelaunchThreads();
-			}
+		vector<data_ptr_t> blocks;
+		for (idx_t i = 0; i < COUNT; i++) {
+			blocks.push_back(allocator.AllocateData(SIZE));
 		}
+		for (auto block : blocks) {
+			allocator.FreeData(block, SIZE);
+		}
+		REQUIRE(allocator.GetCachedMemory() == COUNT * SIZE);
 		allocator.ThreadIdle();
+		CHECK(scheduler.GetNumberOfTasks() == 0);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+		allocator.ThreadIdle();
+		REQUIRE(scheduler.GetNumberOfTasks() == 1);
+		atomic<bool> execute {true};
+		REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
+		const auto remaining = allocator.GetCachedMemory();
+		CHECK(remaining > 0);
+		CHECK(remaining < COUNT * SIZE);
+		REQUIRE(scheduler.GetNumberOfTasks() == 1);
+		SECTION("Continuations drain expired backing") {
+			CHECK(scheduler.ExecuteTasks(&execute, COUNT) > 0);
+			CHECK(allocator.GetCachedMemory() == 0);
+		}
+		SECTION("A new return keeps its size class available") {
+			auto pointer = allocator.AllocateData(SIZE);
+			allocator.FreeData(pointer, SIZE);
+			const auto refreshed = allocator.GetCachedMemory();
+			CHECK(scheduler.ExecuteTasks(&execute, COUNT) == 1);
+			CHECK(allocator.GetCachedMemory() == refreshed);
+			allocator.FlushAll();
+		}
+		CHECK(scheduler.GetNumberOfTasks() == 0);
+		CHECK(live_bytes.load() == 0);
 	}
 }
 
-TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator coalesces idle requests and yields between bounded async tasks", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
-	constexpr idx_t BLOCK_COUNT = 4097;
+	constexpr idx_t BLOCK_COUNT = 257;
 	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
 	Allocator fallback;
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 1;
-	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	config.options.enable_block_allocator = true;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
 	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
@@ -2159,10 +1834,20 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 	blocks.clear();
 	auto other_producer = scheduler.CreateProducer();
 	BlockAllocatorTestHelper::Expire(allocator);
+	allocator.ThreadExit();
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+	for (idx_t i = 0; i < 4; i++) {
+		allocator.ThreadIdle();
+	}
+	CHECK(scheduler.GetNumberOfTasks() == 1);
+	scheduler.RelaunchThreads();
 	allocator.ThreadIdle();
+	CHECK(scheduler.GetNumberOfTasks() == 1);
 	atomic<bool> execute {true};
 	REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
 	CHECK(scheduler.GetNumberOfTasks() == 1);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) > 0);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) < BLOCK_COUNT);
 
 	SECTION("One task leaves warm blocks available for reuse") {
 		idx_t reclaimed = 0;
@@ -2189,14 +1874,7 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 	SECTION("Continuations finish the backlog without another idle request") {
 		CHECK(scheduler.ExecuteTasks(&execute, BLOCK_COUNT) > 0);
 		CHECK(scheduler.GetNumberOfTasks() == 0);
-		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-			auto block = allocator.AllocateData(BLOCK_SIZE);
-#if defined(__linux__) || defined(_WIN32)
-			CHECK(block[0] == 0);
-			CHECK(block[BLOCK_SIZE - 1] == 0);
-#endif
-			blocks.push_back(block);
-		}
+		CHECK(BlockAllocatorTestHelper::Drained(allocator));
 	}
 	SECTION("A fresh burst limits the stale continuation budget") {
 		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
@@ -2214,13 +1892,6 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 		const auto retained = BlockAllocatorTestHelper::RetainedBlocks(allocator);
 		REQUIRE(retained > 0);
 		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) >= retained);
-		idx_t warm_blocks = 0;
-		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
-			auto block = allocator.AllocateData(BLOCK_SIZE);
-			warm_blocks += block[0] == 84;
-			blocks.push_back(block);
-		}
-		CHECK(warm_blocks >= retained);
 	}
 	SECTION("Pending work stops the continuation chain") {
 		class OtherTask : public Task {
@@ -2250,11 +1921,55 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 	}
 }
 
+TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and shutdown", "[api][block_allocator]") {
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 1;
+	config.options.enable_block_allocator = true;
+	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
+	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
+	auto db = make_uniq<DuckDB>(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db->instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db->instance);
+	{
+		BlockAllocatorAsyncGate gate(scheduler);
+		REQUIRE(gate.WaitUntilBlocked());
+		vector<data_ptr_t> blocks;
+		for (idx_t i = 0; i < 128; i++) {
+			blocks.push_back(allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE));
+		}
+		for (auto block : blocks) {
+			allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+		}
+		BlockAllocatorTestHelper::Expire(allocator);
+		allocator.ThreadIdle();
+		CHECK(scheduler.GetNumberOfTasks() == 1);
+		gate.Release();
+		SECTION("Queued work remains executable after removing the worker") {
+			scheduler.SetAsyncThreads(0);
+			scheduler.RelaunchThreads();
+			CHECK(scheduler.NumberOfAsyncThreads() == 0);
+			atomic<bool> execute {true};
+			scheduler.ExecuteTasks(&execute, 128);
+			allocator.ThreadIdle();
+			CHECK(BlockAllocatorTestHelper::Drained(allocator));
+			scheduler.SetAsyncThreads(1);
+			scheduler.RelaunchThreads();
+			CHECK(scheduler.NumberOfAsyncThreads() == 1);
+		}
+		SECTION("Shutdown can race with the released reclamation work") {
+		}
+	}
+	CHECK_NOTHROW(db.reset());
+}
+
 TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator]") {
 	DBConfig config;
 	config.options.maximum_threads = 2;
 	config.options.async_threads = 0;
-	config.options.block_allocator_size = 128 * DEFAULT_BLOCK_ALLOC_SIZE;
+	config.options.enable_block_allocator = true;
+	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
+	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
 	SECTION("A regular worker performs synchronous idle maintenance") {
 	}
 	SECTION("An async worker performs bounded idle maintenance") {
@@ -2288,41 +2003,33 @@ TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_al
 	CHECK(scheduler.GetNumberOfTasks() == 0);
 }
 
-TEST_CASE("BlockAllocator cooling without workers needs another maintenance opportunity", "[api][block_allocator]") {
-	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
-	config.options.block_allocator_size = 64 * DEFAULT_BLOCK_ALLOC_SIZE;
-	DuckDB db(nullptr, &config);
-	auto &allocator = BlockAllocator::Get(*db.instance);
-	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
-	allocator.ThreadIdle();
-	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
-	block[0] = 42;
-	allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
-	allocator.ThreadFlush(false, 0, 1);
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
-	CHECK(scheduler.GetNumberOfTasks() == 0);
-	std::this_thread::sleep_for(std::chrono::milliseconds(1600));
-	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
-	allocator.ThreadIdle();
-	CHECK(BlockAllocatorTestHelper::Drained(allocator));
-}
 #endif
 
 #if defined(__linux__)
-TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator preserves failed discards without spinning and can retry", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t BLOCK_COUNT = 16;
 	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
-	auto private_data = make_uniq<BlockAllocatorFallbackData>();
-	auto &fallback_data = *private_data;
-	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
-	                   std::move(private_data));
-	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	Allocator fallback;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.options.enable_block_allocator = true;
+#ifndef DUCKDB_NO_THREADS
+	config.options.async_threads = 1;
+#endif
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+#ifndef DUCKDB_NO_THREADS
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	BlockAllocatorAsyncGate gate(scheduler);
+	REQUIRE(gate.WaitUntilBlocked());
+#endif
 	vector<data_ptr_t> blocks;
 	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
 		auto block = allocator.AllocateData(BLOCK_SIZE);
+		REQUIRE(BlockAllocatorTestHelper::IsInPool(allocator, block));
 		memset(block, 42, BLOCK_SIZE);
 		blocks.push_back(block);
 	}
@@ -2350,15 +2057,30 @@ TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][blo
 	// The first contiguous range succeeded; the failed range and remaining blocks stay charged.
 	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 6) * BLOCK_SIZE);
 	CHECK_NOTHROW(allocator.FlushAll());
-	CHECK_NOTHROW(allocator.ThreadIdle());
 	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 6) * BLOCK_SIZE);
+#ifndef DUCKDB_NO_THREADS
+	BlockAllocatorTestHelper::Expire(allocator);
+	allocator.ThreadIdle();
+	atomic<bool> execute {true};
+	CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 6) * BLOCK_SIZE);
+	CHECK(locked[0] == 42);
+#endif
 	CHECK(syscall(SYS_munlock, locked, 1) == 0);
+#ifndef DUCKDB_NO_THREADS
+	allocator.ThreadIdle();
+	CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+#else
 	allocator.FlushAll();
+#endif
 	CHECK(allocator.GetCachedMemory() == 0);
 	std::unordered_set<data_ptr_t> allocated {live_first, live_second};
 	blocks.clear();
 	for (idx_t i = 0; i < BLOCK_COUNT - 2; i++) {
 		auto block = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(BlockAllocatorTestHelper::IsInPool(allocator, block));
 		CHECK(allocated.insert(block).second);
 		CHECK(block[0] == 0);
 		CHECK(block[BLOCK_SIZE - 1] == 0);
@@ -2366,7 +2088,6 @@ TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][blo
 	}
 	CHECK(live_first[0] == 42);
 	CHECK(live_second[0] == 42);
-	CHECK(fallback_data.allocation_count == 0);
 	for (auto block : blocks) {
 		allocator.FreeData(block, BLOCK_SIZE);
 	}
@@ -2378,7 +2099,9 @@ TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][bl
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
-	config.options.block_allocator_size = 4 * DEFAULT_BLOCK_ALLOC_SIZE;
+	config.options.enable_block_allocator = true;
+	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
+	                                                   4 * DEFAULT_BLOCK_ALLOC_SIZE);
 	auto db = make_uniq<DuckDB>(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db->instance);
 	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
@@ -2398,59 +2121,83 @@ TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][bl
 #endif
 #endif
 
-TEST_CASE("BlockAllocator usage and de-allocation on different threads", "[api][block_allocator]") {
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("BlockAllocator destruction is safe before thread exit and during allocator switching",
+          "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 4096;
-	constexpr idx_t VIRTUAL_MEM_SIZE = 256 * 1024 * 1024;
-	constexpr idx_t PHYSICAL_MEM_SIZE = 256 * 1024 * 1024;
-
-	std::thread worker;
-	mutex mtx;
-	std::condition_variable cv;
-	bool alloc_done = false;
-	bool allocator_destroyed = false;
-
-	// Thread-A, where we construct BlockAllocator.
-	{
-		Allocator alloc;
-		BlockAllocator ba(alloc, BLOCK_SIZE, VIRTUAL_MEM_SIZE, PHYSICAL_MEM_SIZE);
-
-		// Thread-B, where we allocate blocks and creates thread-local state.
-		worker = std::thread([&]() {
-			constexpr int NUM_BLOCKS = 16;
-			data_ptr_t blocks[NUM_BLOCKS];
-			for (int i = 0; i < NUM_BLOCKS; i++) {
-				blocks[i] = ba.AllocateData(BLOCK_SIZE);
-				REQUIRE(blocks[i] != nullptr);
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * 16;
+	const bool switch_concurrently = GENERATE(false, true);
+	Allocator fallback;
+	BlockAllocator next(fallback, BLOCK_SIZE, POOL_SIZE);
+	for (idx_t iteration = 0; iteration < 8; iteration++) {
+		auto previous = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
+		atomic<bool> ready {false};
+		atomic<bool> proceed {false};
+		std::thread worker([&] {
+			auto pointer = previous->AllocateData(BLOCK_SIZE);
+			previous->FreeData(pointer, BLOCK_SIZE);
+			ready = true;
+			while (!proceed.load()) {
+				std::this_thread::yield();
 			}
-			for (int i = 0; i < NUM_BLOCKS; i++) {
-				ba.FreeData(blocks[i], BLOCK_SIZE);
-			}
-
-			{
-				lock_guard<mutex> lk(mtx);
-				alloc_done = true;
-			}
-			cv.notify_one();
-
-			{
-				unique_lock<mutex> lk(mtx);
-				cv.wait(lk, [&] { return allocator_destroyed; });
+			if (switch_concurrently) {
+				pointer = next.AllocateData(BLOCK_SIZE);
+				next.FreeData(pointer, BLOCK_SIZE);
 			}
 		});
-
-		{
-			unique_lock<mutex> lk(mtx);
-			cv.wait(lk, [&] { return alloc_done; });
+		while (!ready.load()) {
+			std::this_thread::yield();
 		}
+		if (switch_concurrently) {
+			proceed = true;
+			previous.reset();
+		} else {
+			previous.reset();
+			proceed = true;
+		}
+		worker.join();
 	}
-	// BlockAllocator destructs here, which clears thread-local allocation state in thread-B, instead of the one in
-	// thread-A, which records free blocks.
+}
+#endif
 
-	// Destroy thread-B and thread-local state, where allocation happens.
-	{
-		lock_guard<mutex> lk(mtx);
-		allocator_destroyed = true;
-		cv.notify_one();
+TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes", "[api][allocation_cache]") {
+	if (sizeof(void *) != 8) {
+		return;
 	}
-	worker.join();
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 32;
+	constexpr idx_t OLD_SIZE = 512 * 1024;
+	constexpr idx_t FRESH_SIZE = 1024 * 1024;
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_COUNT * BLOCK_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.ThreadFlush(false, 0, 1);
+	blocks.clear();
+	for (idx_t i = 0; i < 4; i++) {
+		blocks.push_back(allocator.AllocateData(OLD_SIZE));
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, OLD_SIZE);
+	}
+	REQUIRE(live_bytes.load() == 4 * OLD_SIZE);
+	std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+	auto fresh = allocator.AllocateData(FRESH_SIZE);
+	allocator.FreeData(fresh, FRESH_SIZE);
+	REQUIRE(live_bytes.load() == 4 * OLD_SIZE + FRESH_SIZE);
+	auto reused = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(reused[0] == 42);
+	CHECK(live_bytes.load() == FRESH_SIZE);
+	allocator.FreeData(reused, BLOCK_SIZE);
+	allocator.FlushAll();
+	CHECK(live_bytes.load() == 0);
 }

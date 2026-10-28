@@ -14,6 +14,7 @@
         "test/sql/table_function/external_resource_logging.test",
         "test/sql/table_function/external_resource_discovery.test",
         "test/sql/table_function/external_resource_discovery_error.test",
+        "test/sql/table_function/external_resource_callback_recursion.test",
         "test/sql/attach/external_resource_discovery.test"
       ]
     },
@@ -68,6 +69,7 @@
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test_slow",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/parallelism/async_task_schedule_pool.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",

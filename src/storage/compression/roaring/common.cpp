@@ -85,14 +85,14 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	}
 	D_ASSERT(result.Capacity() >= end);
 	result.EnsureWritable();
-	auto result_data = (validity_t *)result.GetData();
+	auto result_data = unsafe_array_ptr<validity_t>(result.GetData(), ValidityMask::EntryCount(result.Capacity()));
 
 #ifdef DEBUG
 	ValidityMask copy_for_verification(result.Capacity());
 	copy_for_verification.EnsureWritable();
-	for (idx_t i = 0;
-	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
-		copy_for_verification.GetData()[i] = result.GetData()[i];
+	auto copy_data = unsafe_array_ptr<validity_t>(copy_for_verification.GetData(), result_data.size());
+	for (idx_t i = 0; i < result_data.size(); i++) {
+		copy_data[i] = result_data[i];
 	}
 #endif
 	idx_t index = start;
@@ -209,7 +209,7 @@ void RoaringFinalizeCompress(CompressionState &state_p) {
 }
 
 unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<RoaringScanState>(segment);
+	auto result = make_uniq<RoaringScanState>(context, segment);
 	return std::move(result);
 }
 
@@ -267,7 +267,7 @@ void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 // Fetch
 //===--------------------------------------------------------------------===//
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	RoaringScanState scan_state(segment);
+	RoaringScanState scan_state(state.context, segment);
 
 	idx_t internal_offset;
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
@@ -277,7 +277,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 }
 void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                             idx_t result_idx) {
-	RoaringScanState scan_state(segment);
+	RoaringScanState scan_state(state.context, segment);
 
 	idx_t internal_offset;
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);

@@ -109,9 +109,9 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
 
 def extension_opt_in_archs(selection_input: JobSelectionInput) -> str:
     if selection_input.event_name == "workflow_dispatch":
-        return "windows_arm64;linux_amd64_musl;linux_arm64_musl"
+        return "windows_arm64;osx_amd64;linux_amd64_musl;linux_arm64_musl"
     if selection_input.event_name == "pull_request" and "extensions" in selection_input.changed_keys:
-        return "linux_arm64_musl"
+        return "windows_arm64;linux_arm64_musl"
     return ""
 
 

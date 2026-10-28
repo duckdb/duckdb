@@ -455,8 +455,11 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			}
 			result_data[size] = state.current_state;
 			size++;
-			state.current_state =
-			    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment);
+			if (!TryAddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment,
+			                                                                     state.current_state)) {
+				// the next value is outside of the timestamp range: the series ends here
+				state.current_state = state.greater_than_check ? timestamp_t::infinity() : timestamp_t::ninfinity();
+			}
 		}
 		if (size == 0) {
 			// move to next row

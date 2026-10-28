@@ -133,7 +133,10 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 		return false;
 	}
 	auto source_state = GetSourceState();
-	D_ASSERT(source_state);
+	if (!source_state) {
+		// the source state was never initialized, e.g. a recursive pipeline before its first iteration
+		return false;
+	}
 	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
@@ -355,7 +358,7 @@ void Pipeline::ResetSink() {
 	}
 }
 
-void Pipeline::ResetSinkForReschedule() {
+void Pipeline::ResetSinkForReschedule(idx_t scheduled_workers, bool single_producer) {
 	if (!sink) {
 		return;
 	}
@@ -367,10 +370,14 @@ void Pipeline::ResetSinkForReschedule() {
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
+		sink->sink_state->reschedule_worker_limit = scheduled_workers;
+		sink->sink_state->reschedule_single_producer = single_producer;
 		sink->sink_state->Reset(client);
 		return;
 	}
 	sink->sink_state = sink->GetGlobalSinkState(client);
+	sink->sink_state->reschedule_worker_limit = scheduled_workers;
+	sink->sink_state->reschedule_single_producer = single_producer;
 }
 
 void Pipeline::PrepareFinalize() {
@@ -403,11 +410,7 @@ void Pipeline::Reset() {
 	initialized = true;
 }
 
-void Pipeline::ResetForReschedule(bool reset_sink) {
-	NotifyProgressReset();
-	if (reset_sink) {
-		ResetSinkForReschedule();
-	}
+void Pipeline::ResetOperatorsForReschedule() {
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	for (auto &op_ref : operators) {
@@ -418,9 +421,15 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 		}
 		op.op_state = op.GetGlobalOperatorState(client);
 	}
+}
+
+void Pipeline::ResetSourceForReschedule() {
+	NotifyProgressReset();
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
+	auto &client = GetClientContext();
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	auto source_state = GetSourceState();
 	auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
 	if (allow_reuse && source_state && source_state->SupportsReuse()) {
@@ -432,6 +441,14 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 		ResetBatchIndexes();
 	}
 	initialized = true;
+}
+
+void Pipeline::ResetForReschedule(bool reset_sink) {
+	if (reset_sink) {
+		ResetSinkForReschedule(TaskScheduler::GetScheduler(executor.context).NumberOfThreads(), false);
+	}
+	ResetOperatorsForReschedule();
+	ResetSourceForReschedule();
 }
 
 void Pipeline::NotifyProgressReset() {

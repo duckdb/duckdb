@@ -568,8 +568,8 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = GetBuiltinAggregateFunction(context, CountStarFun::Name, {});
 				FunctionBinder function_binder(context);
-				aggr.expressions.push_back(function_binder.BindAggregateFunction(std::move(count_star_fun), {}, nullptr,
-				                                                                 AggregateType::NON_DISTINCT));
+				aggr.expressions.push_back(
+				    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT));
 			}
 		}
 
@@ -1780,10 +1780,14 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	}
 
 	//! No parent path exists, but child paths could already be added, remove them if they exist
+	//! A child is only removed if the new path matches it - a path with different type information does not
+	column_index_set new_path_set;
+	new_path_set.emplace(path);
 	auto it = unique_paths.begin();
 	for (; it != unique_paths.end();) {
 		auto &unique_path = *it;
-		if (unique_path.IsChildPathOf(path)) {
+		if (unique_path.IsChildPathOf(path) &&
+		    FindShortestMatchingPath(new_path_set, unique_path).first != new_path_set.end()) {
 			auto current = it;
 			it++;
 			unique_paths.erase(current);

@@ -136,7 +136,8 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
-      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
+      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator),
+      page_header_arena(reader.allocator) {
 }
 
 ColumnReader::~ColumnReader() {
@@ -153,11 +154,15 @@ const ParquetReader &ColumnReader::Reader() {
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
+		if (size == 0) {
+			// nothing to prefetch
+			return;
+		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) {
 	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
@@ -244,8 +249,8 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	throw NotImplementedException("PlainSelect not implemented");
 }
 
-void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
-                                  TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                  const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
@@ -365,7 +370,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	defined_decoder.reset();
 	page_is_filtered_out = false;
 	block.reset();
-	PageHeader page_hdr;
+	page_header_arena.Reset();
+	PageHeader page_hdr(page_header_arena);
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	if (trans.HasPrefetch()) {
@@ -432,24 +438,25 @@ void ColumnReader::ResetPage() {
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
+	const auto page_body_size = GetPageBodySize(page_hdr);
 	bool uncompressed = false;
 	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
 		uncompressed = true;
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+		if (page_body_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
 			// LCOV_EXCL_START
 			const auto &file_name = Reader().GetFileName();
 			throw InvalidInputException(
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
-			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
+			    page_hdr.uncompressed_page_size, page_body_size);
 			// LCOV_EXCL_STOP
 		}
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
+		ReadData(block->ptr, page_body_size, page_hdr.type);
 		return;
 	}
 
@@ -476,7 +483,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    Reader().GetFileName());
 		// LCOV_EXCL_STOP
 	}
-	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+	if (static_cast<uint64_t>(page_body_size) < uncompressed_bytes) {
 		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
@@ -485,9 +492,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		// LCOV_EXCL_STOP
 	}
 
-	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
+	// only the values are compressed, and an encrypted page body is a single module, so the body is read at once
+	ResizeableBuffer page_buffer;
+	page_buffer.resize(GetAllocator(), page_body_size + 1);
+	ReadData(page_buffer.ptr, page_body_size, page_hdr.type);
+	memcpy(block->ptr, page_buffer.ptr, uncompressed_bytes);
 
-	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	auto compressed_bytes = page_body_size - uncompressed_bytes;
 
 	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
 		// LCOV_EXCL_START
@@ -499,14 +510,31 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 
 	if (compressed_bytes > 0) {
-		ResizeableBuffer compressed_buffer;
-		compressed_buffer.resize(GetAllocator(), compressed_bytes);
-
-		ReadData(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
-
-		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
+		DecompressInternal(chunk->meta_data.codec, page_buffer.ptr + uncompressed_bytes, compressed_bytes,
 		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 	}
+}
+
+uint32_t ColumnReader::GetPageBodySize(const PageHeader &page_hdr) const {
+	uint32_t page_body_size = page_hdr.compressed_page_size;
+	if (chunk->__isset.crypto_metadata) {
+		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
+		if (!file_aad.empty()) {
+			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
+			// Arrow adds the bytes for encryption (len + nonce + tag)
+			// to the compressed page size
+			const uint32_t framing =
+			    ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+			if (page_body_size < framing) {
+				throw DataCorruptionException(
+				    "Parquet file (%s) corrupted: compressed page size %d is smaller than the "
+				    "encryption framing",
+				    reader.GetFileName(), page_hdr.compressed_page_size);
+			}
+			page_body_size -= framing;
+		}
+	}
+	return page_body_size;
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {
@@ -518,19 +546,8 @@ void ColumnReader::AllocateBlock(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
-	uint32_t compressed_page_size = page_hdr.compressed_page_size;
-
-	if (chunk->__isset.crypto_metadata) {
-		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
-		if (!file_aad.empty()) {
-			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
-			// Arrow adds the bytes for encryption (len + nonce + tag)
-			// to the compressed page size
-			compressed_page_size -=
-			    (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
-		}
-	}
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
+	const auto compressed_page_size = GetPageBodySize(page_hdr);
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
@@ -660,11 +677,11 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
 			                            Reader().GetFileName());
 		}
-		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 

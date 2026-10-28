@@ -5,6 +5,9 @@
 #include <io.h>
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
+#define isatty        _isatty
+#define read          _read
+#define write         _write
 #else
 #include <sys/ioctl.h>
 #include <sys/select.h>

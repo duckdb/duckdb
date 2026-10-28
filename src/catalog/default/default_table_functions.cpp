@@ -69,7 +69,8 @@ SELECT
 FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
 	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
-SELECT * EXCLUDE (message), UNNEST(parse_duckdb_log_message(log_type, message))
+SELECT * EXCLUDE (message),
+       UNNEST(CASE WHEN type ILIKE log_type THEN parse_duckdb_log_message(log_type, message) END)
 FROM duckdb_logs(denormalized_table=1)
 WHERE type ILIKE log_type
 )"},

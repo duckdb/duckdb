@@ -185,6 +185,8 @@ public:
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
 	DUCKDB_API static int64_t ToSigned(const string &str);
 	DUCKDB_API static double ToDouble(const string &str);
+	//! Format a double like printf "%f", independent of the C++ standard library
+	DUCKDB_API static string ToString(double value);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
@@ -285,6 +287,9 @@ public:
 	//! example: with an equal penalty of 1, "pg_am" is closer to "depdelay" than "depdelay_minutes"
 	//! with an equal penalty of 3, "depdelay_minutes" is closer to "depdelay" than to "pg_am"
 	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2, idx_t not_equal_penalty = 1);
+
+	//! Like LevenshteinDistance (case-insensitive), but swapping two adjacent characters counts as one edit
+	DUCKDB_API static idx_t DamerauLevenshteinDistance(const string &s1, const string &s2);
 
 	//! Returns the similarity score between two strings (edit distance metric - lower is more similar)
 	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);

@@ -128,6 +128,9 @@ static const case_insensitive_set_t &HTTPRequestHeaderAllowList() {
 
 	    // S3 session authorization (https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateSession.html).
 	    // "x-amz-s3session-token", // Contains S3 Express session credentials.
+
+	    // AWS JSON protocol (https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html), e.g. AWS Glue.
+	    "x-amz-target", // Service and operation name, e.g. AWSGlue.GetTable.
 	};
 	return allow_list;
 }
@@ -194,6 +197,7 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"url", LogicalType::VARCHAR},
 	    {"start_time", LogicalType::TIMESTAMP_TZ},
 	    {"duration_ms", LogicalType::BIGINT},
+	    {"duration_us", LogicalType::BIGINT},
 	    {"request_body_length", LogicalType::UBIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
@@ -279,6 +283,10 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"duration_ms",
 	     request.have_request_timing
 	         ? Value::BIGINT(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end))
+	         : Value()},
+	    {"duration_us",
+	     request.have_request_timing
+	         ? Value::BIGINT(TimePoint::ElapsedMicros(request.request_monotonic_start, request.request_monotonic_end))
 	         : Value()},
 	    {"request_body_length", request.request_body_length ? Value::UBIGINT(request.request_body_length) : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);

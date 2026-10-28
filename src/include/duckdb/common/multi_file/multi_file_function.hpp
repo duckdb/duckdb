@@ -27,6 +27,11 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	//! Whether the scans of this reader report operator.bytes_scanned
+	virtual bool ReportsBytesScanned() const {
+		return false;
+	}
+
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	//! Set the default multi-file options of this reader - called before any option is parsed
 	virtual void InitializeFileOptions(MultiFileOptions &file_options);
@@ -1370,6 +1375,9 @@ public:
 		if (input.local_state) {
 			auto &local = input.local_state->Cast<MultiFileLocalState>();
 			input.operator_metrics.rows_scanned = local.rows_scanned;
+		}
+		if (input.bind_data && input.bind_data->Cast<MultiFileBindData>().interface->ReportsBytesScanned()) {
+			input.operator_metrics.bytes_scanned_reported = true;
 		}
 		auto files_loaded = gstate.files_opened.load();
 		input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(files_loaded));

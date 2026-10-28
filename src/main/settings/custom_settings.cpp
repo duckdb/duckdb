@@ -39,6 +39,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -47,7 +48,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
-#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
@@ -392,30 +392,6 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Block Allocator Memory
-//===----------------------------------------------------------------------===//
-void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto size = ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return config.options.maximum_memory; });
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
-}
-
-void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	const auto size = DBConfigOptions().block_allocator_size;
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
-}
-
-Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
-}
-
-//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -592,6 +568,9 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
+	for (auto &entry : list) {
+		StringUtil::Trim(entry);
+	}
 	fs.SetDisabledFileSystems(list);
 }
 
@@ -654,6 +633,29 @@ void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input)
 	if (info.db || info.context) {
 		throw InvalidInputException("Cannot change vacuum_rebuild_indexes setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Block Allocator
+//===----------------------------------------------------------------------===//
+void EnableBlockAllocatorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", EnableBlockAllocatorSetting::Name);
+	}
+	const auto enabled = input.GetValue<bool>();
+	if (db) {
+		BlockAllocator::Get(*db).SetEnabled(enabled);
+	} else {
+		config.options.enable_block_allocator = enabled;
+	}
+}
+
+void EnableBlockAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	SetGlobal(db, config, Value::BOOLEAN(DBConfigOptions().enable_block_allocator));
+}
+
+Value EnableBlockAllocatorSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(BlockAllocator::Get(*context.db).IsEnabled());
 }
 
 //===----------------------------------------------------------------------===//
@@ -2019,66 +2021,11 @@ Value ActiveGrammarExtensionsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Deprecated Settings
 //===----------------------------------------------------------------------===//
-//! Settings below are still honored, but are scheduled for removal. Setting one emits a deprecation warning;
-//! resetting it back to its default does not.
-static void WarnDeprecatedSetting(SettingCallbackInfo &info, const char *name) {
-	if (info.is_reset) {
-		return;
-	}
-	auto message = StringUtil::Format("The '%s' setting is deprecated and will be removed in a future release.", name);
-	if (info.context) {
-		DUCKDB_LOG_WARNING(*info.context, message);
-	} else if (info.db) {
-		DUCKDB_LOG_WARNING(*info.db, message);
-	}
-}
-
-void DelimJoinAsCteSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, DelimJoinAsCteSetting::Name);
-}
-
-void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
-}
-
-void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
-}
-
-void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
-}
-
-void ForceColumnMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ForceColumnMetadataReuseSetting::Name);
-}
-
-void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, LegacyDisableNullTypeSetting::Name);
-}
-
-void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
-}
-
-void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ProduceArrowStringViewSetting::Name);
-}
-
-void ExtensionDirectorySetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ExtensionDirectorySetting::Name);
-}
-
-void OldImplicitCastingSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, OldImplicitCastingSetting::Name);
-}
-
 void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
 	}
 	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(input));
-	WarnDeprecatedSetting(info, RegexMatchOperatorSemanticsSetting::Name);
 }
 
 void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -2086,6 +2033,5 @@ void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, 
 		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
 	}
 	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(input));
-	WarnDeprecatedSetting(info, TableFunctionIdentifierConversionSetting::Name);
 }
 } // namespace duckdb

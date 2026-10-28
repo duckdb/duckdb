@@ -5,6 +5,7 @@ import shlex
 import sys
 import tempfile
 import textwrap
+
 import threading
 import unittest
 from io import BytesIO, StringIO, TextIOWrapper
@@ -793,7 +794,7 @@ require windows: 2
         helper_path = create_temp_file(
             """
             #!/bin/sh
-            cat <<'EOF'
+            cat <<'EOF' >&2
             Skipped tests for the following reasons:
             require mysql_scanner: 56
             require postgres_scanner: 2
@@ -2174,34 +2175,34 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         )
 
     def test_generic_failure_extracts_sqllogictest_assertion_details(self):
-        batch = ["test/sql/copy/partitioned/partitioned_order_by_flush_race.test"]
+        batch = ["test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow"]
         stdout = """
-Filters: test/sql/copy/partitioned/partitioned_order_by_flush_race.test
-[0/1] (0%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+Filters: test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow
+[0/1] (0%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 unittest is a Catch v2.13.7 host application.
 Run with -? for options
 
 -------------------------------------------------------------------------------
-test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow
 -------------------------------------------------------------------------------
 /Users/sander/dev/duckdb/duckdb/test/sqlite/test_sqllogictest.cpp:41
 ...............................................................................
 
-test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27: FAILED:
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow:27: FAILED:
 explicitly with message:
   0
 
-[1/1] (100%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test took 1.086s
+[1/1] (100%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow took 1.086s
 ===============================================================================
 test cases: 1 | 1 failed
 assertions: 8 | 7 passed | 1 failed
 """
         stderr = """
-1. test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27
+1. test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow:27
 ================================================================================
 
-::error::Query unexpectedly failed! (test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27)!
+::error::Query unexpectedly failed! (test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow:27)!
 ================================================================================
 COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
 TO 'duckdb_unittest_tempdir/11276/large_ordered_partitioned_1'
@@ -2224,7 +2225,7 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertEqual(
             strip_ansi_lines(lines)[1:],
             [
-                "error: FAIL test/sql/copy/partitioned/partitioned_order_by_flush_race.test",
+                "error: FAIL test/sql/copy/partitioned/partitioned_order_by_flush_race.test_slow",
                 "",
                 "  > 27  statement ok",
                 "    28  COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)",

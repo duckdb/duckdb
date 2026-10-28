@@ -110,8 +110,8 @@ public:
 
 public:
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
-	virtual void InitializeRead(idx_t row_group_index, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
-	                            TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, idx_t row_group_num_rows,
+	                            const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p);
 	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
 	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
 	                    idx_t approved_tuple_count);
@@ -175,7 +175,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns);
 	void ValidateColumnMetadata(idx_t row_group_num_rows, const ColumnChunk &column);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
@@ -277,8 +277,10 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			if (copy_count > 0) {
+				memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
+				plain_data.unsafe_inc(copy_count);
+			}
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);
@@ -384,6 +386,8 @@ private:
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
+	//! The size of the page body in the file, without the encryption framing that Arrow includes
+	uint32_t GetPageBodySize(const PageHeader &page_hdr) const;
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
@@ -407,6 +411,8 @@ private:
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
 	CryptoMetaData aad_crypto_metadata;
+	//! Backs the Thrift page header of the page that is currently being read
+	ArenaAllocator page_header_arena;
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];

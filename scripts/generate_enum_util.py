@@ -13,6 +13,7 @@ blacklist = [
     "Flags",
     "FlushState",
     "ReclaimMode",
+    "PoolState",
     "ContainerType",
     "Type",
     "DictionaryAppendState",

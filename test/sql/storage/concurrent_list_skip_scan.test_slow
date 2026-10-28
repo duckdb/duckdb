@@ -2,7 +2,7 @@
 # description: Scans of a LIST column concurrent with storage-modifying statements must not read offset[-1] in Skip
 # group: [storage]
 
-load __TEST_DIR__/concurrent_list_skip_scan.db
+load {TEST_DIR}/concurrent_list_skip_scan.db
 
 statement ok
 SET threads=4

@@ -285,6 +285,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 	}
 
 	auto deleter = attached_db->ExtractDeleter();
+	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
@@ -386,12 +387,13 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 	}
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name,
+                                                             optional_ptr<AttachedDatabase> database) {
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(name);
-		if (entry == databases.end()) {
+		if (entry == databases.end() || (database && entry->second.get() != database.get())) {
 			return nullptr;
 		}
 		attached_db = std::move(entry->second);
