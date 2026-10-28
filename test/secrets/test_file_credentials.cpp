@@ -274,6 +274,9 @@ struct CredentialsFixture {
 		fs->files["mem://bucket/table/b.bin"] = "def";
 		REQUIRE_NO_FAIL(con.Query("CREATE SECRET by_path (TYPE file_credentials_test, SCOPE 'mem://bucket/', "
 		                          "KEY_ID 'path-key', REGION 'path-region')"));
+		// names of ephemeral secrets take random bits from the crypto module that writes encrypted files; without
+		// httpfs, that is mbedtls, which generates them only when forced
+		REQUIRE_NO_FAIL(con.Query("SET force_mbedtls_unsafe = true"));
 	}
 	ClientContext &Context() {
 		return *con.context;

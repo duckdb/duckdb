@@ -3,6 +3,7 @@
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -21,8 +22,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-
-#include <random>
 
 namespace duckdb {
 
@@ -581,17 +580,17 @@ struct EphemeralSecret {
 	}
 };
 
-//! 128 bits of std::random_device as 32 hex digits, so a statement can name an ephemeral secret only when handed the
-//! name
-string NewEphemeralSecretName() {
+//! 128 cryptographically secure random bits as 32 hex digits, so that a statement can name an ephemeral secret only
+//! when it is given the name
+string NewEphemeralSecretName(DatabaseInstance &db) {
 	static constexpr const char *HEX_DIGITS = "0123456789abcdef";
-	std::random_device random_device;
+	static constexpr idx_t NAME_BYTES = 16;
+	data_t bits[NAME_BYTES];
+	EncryptionEngine::GenerateRandomKey(db, bits, NAME_BYTES);
 	string name;
-	for (idx_t word = 0; word < 4; word++) {
-		auto bits = static_cast<uint32_t>(random_device());
-		for (idx_t digit = 0; digit < 8; digit++) {
-			name += HEX_DIGITS[(bits >> (4 * digit)) & 0xF];
-		}
+	for (auto byte : bits) {
+		name += HEX_DIGITS[byte >> 4];
+		name += HEX_DIGITS[byte & 0xF];
 	}
 	return name;
 }
@@ -601,9 +600,8 @@ string NewEphemeralSecretName() {
 //! the first registration after the transaction ends drops it
 class EphemeralSecretState : public ClientContextState {
 public:
-	//! Adds `secret` under a new name, and drops those that serve a transaction other than `current`
-	string Register(shared_ptr<EphemeralSecret> secret, const optional_idx &current) {
-		auto name = NewEphemeralSecretName();
+	//! Adds `secret` as `name`, and drops those that serve a transaction other than `current`
+	void Register(const string &name, shared_ptr<EphemeralSecret> secret, const optional_idx &current) {
 		// destroyed after the lock is released
 		vector<shared_ptr<EphemeralSecret>> ended;
 		lock_guard<mutex> guard(lock);
@@ -615,8 +613,9 @@ public:
 			ended.push_back(std::move(entry->second));
 			entry = secrets.erase(entry);
 		}
-		secrets.emplace(name, std::move(secret));
-		return name;
+		if (!secrets.emplace(name, std::move(secret)).second) {
+			throw InternalException("Two ephemeral secrets were given the same name");
+		}
 	}
 	//! The ephemeral secret `name`, when it serves `current`
 	shared_ptr<EphemeralSecret> Find(const string &name, const optional_idx &current) {
@@ -682,8 +681,10 @@ string SecretManager::RegisterEphemeralSecret(ClientContext &context, string sco
 	}
 	secret->scope = std::move(scope);
 	secret->vend = std::move(vend);
+	auto name = NewEphemeralSecretName(*context.db);
 	auto state = context.registered_state->GetOrCreate<EphemeralSecretState>(EPHEMERAL_SECRET_STATE_KEY);
-	return state->Register(std::move(secret), current);
+	state->Register(name, std::move(secret), current);
+	return name;
 }
 
 shared_ptr<SecretEntry> SecretManager::GetEphemeralSecret(ClientContext &context, const string &name,
