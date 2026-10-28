@@ -1,0 +1,96 @@
+# name: test/sql/join/redundant_equality_conditions.test
+# description: Remove transitive equality keys after join reconstruction
+# group: [join]
+
+statement ok
+CREATE TABLE redundant_comments AS SELECT i cid, (i % 100)::BIGINT personid FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE redundant_people AS SELECT i pid FROM range(100) t(i);
+
+statement ok
+CREATE TABLE redundant_edges AS SELECT i src, ((i + 1) % 100)::BIGINT dst, i % 2 = 0 rev FROM range(100) t(i);
+
+# Filter pullup exposes the equality triangle. The direct column key is sufficient.
+query I
+SELECT count(*) FROM redundant_comments c
+JOIN (redundant_people p JOIN redundant_edges e ON p.pid = CASE WHEN e.rev THEN e.src ELSE e.dst END)
+ON c.personid = p.pid WHERE e.src % 10 = 3;
+----
+1000
+
+query II
+EXPLAIN SELECT count(*) FROM redundant_comments c
+JOIN (redundant_people p JOIN redundant_edges e ON p.pid = CASE WHEN e.rev THEN e.src ELSE e.dst END)
+ON c.personid = p.pid WHERE e.src % 10 = 3;
+----
+physical_plan	<!REGEX>:[\s\S]*personid = CASE[\s\S]*
+
+statement ok
+CREATE TABLE equality_a(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO equality_a VALUES (1,10),(1,20),(2,30),(NULL,40);
+
+statement ok
+CREATE TABLE equality_b AS SELECT * FROM equality_a;
+
+statement ok
+CREATE TABLE equality_c AS SELECT * FROM equality_a;
+
+# A cycle must retain a spanning set of predicates, including NULL rejection.
+query I
+SELECT count(*) FROM equality_a a JOIN equality_b b ON a.k=b.k
+JOIN equality_c c ON b.k=c.k AND a.k=c.k;
+----
+9
+
+# A genuine second key must remain even when the first key is transitively redundant.
+query I
+SELECT count(*) FROM equality_a a JOIN equality_b b ON a.k=b.k
+JOIN equality_c c ON b.k=c.k AND a.k=c.k AND a.v=c.v;
+----
+5
+
+# Null-safe equality must not prove an ordinary equality that rejects NULL.
+query I
+SELECT count(*) FROM equality_a a JOIN equality_b b ON a.k IS NOT DISTINCT FROM b.k
+JOIN equality_c c ON b.k IS NOT DISTINCT FROM c.k AND a.k=c.k;
+----
+9
+
+# Equality inside an outer join does not hold for its null-extended output.
+# Keep the outer join intact so this test reaches the reconstruction boundary.
+statement ok
+SET disabled_optimizers='filter_pushdown,outer_join_simplification';
+
+query II
+EXPLAIN SELECT count(*) FROM (equality_a a LEFT JOIN equality_b b ON a.k=b.k AND b.v=10)
+JOIN equality_c c ON a.k=c.k AND b.k=c.k;
+----
+physical_plan	<REGEX>:[\s\S]*Join Type: (LEFT|RIGHT)[\s\S]*
+
+query I
+SELECT count(*) FROM (equality_a a LEFT JOIN equality_b b ON a.k=b.k AND b.v=10)
+JOIN equality_c c ON a.k=c.k AND b.k=c.k;
+----
+4
+
+statement ok
+SET disabled_optimizers='';
+
+# A nullable self-comparison must continue rejecting NULL.
+query I
+SELECT count(*) FROM equality_a a JOIN equality_b b ON a.v=b.v AND a.k=a.k;
+----
+3
+
+# Disabled join ordering keeps the same result.
+statement ok
+SET disabled_optimizers='join_order';
+
+query I
+SELECT count(*) FROM equality_a a JOIN equality_b b ON a.k=b.k
+JOIN equality_c c ON b.k=c.k AND a.k=c.k AND a.v=c.v;
+----
+5
