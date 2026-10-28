@@ -39,16 +39,41 @@ static bool IsTryErrorRethrow(const Expression &expr) {
 	return expr.Cast<BoundFunctionExpression>().Function().GetName() == TryRethrowFun::Name;
 }
 
-//! Collect the error flags of re-raises that no TRY or HAS_ERROR inside the expression consumes
+//! Collect the error flags of re-raises in unconditionally evaluated positions that no TRY or
+//! HAS_ERROR inside the expression consumes. A flag from a conditionally evaluated position (a CASE
+//! branch, a later COALESCE argument, the right side of a short-circuiting conjunction) must not join
+//! the gate: the gate fires eagerly, while evaluation may never reach that re-raise.
 static void CollectTryErrorRethrowFlags(const Expression &expr, vector<unique_ptr<Expression>> &flags) {
 	if (IsTryErrorRethrow(expr)) {
 		flags.push_back(expr.Cast<BoundFunctionExpression>().GetChildren()[0]->Copy());
 		return;
 	}
-	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY ||
-	    expr.GetExpressionType() == ExpressionType::OPERATOR_HAS_ERROR) {
-		// the capture consumes re-raises below it
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CASE:
+		// only the first WHEN condition is evaluated unconditionally
+		CollectTryErrorRethrowFlags(*expr.Cast<BoundCaseExpression>().CaseChecks()[0].when_expr, flags);
 		return;
+	case ExpressionClass::BOUND_CONJUNCTION:
+		// the executor short-circuits conjunctions, so only the first operand always evaluates
+		CollectTryErrorRethrowFlags(*expr.Cast<BoundConjunctionExpression>().GetChildren()[0], flags);
+		return;
+	case ExpressionClass::BOUND_OPERATOR:
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::OPERATOR_TRY:
+		case ExpressionType::OPERATOR_HAS_ERROR:
+			// the capture consumes re-raises below it
+			return;
+		case ExpressionType::OPERATOR_COALESCE:
+		case ExpressionType::COMPARE_IN:
+		case ExpressionType::COMPARE_NOT_IN:
+			CollectTryErrorRethrowFlags(*expr.Cast<BoundOperatorExpression>().GetChildren()[0], flags);
+			return;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
 	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](const Expression &child) { CollectTryErrorRethrowFlags(child, flags); });
@@ -261,7 +286,8 @@ optional<LogicalType> ExpressionBinder::LowerTrySubquery(const ParsedExpression 
 			return optional<LogicalType>();
 		}
 		// re-raises of nested subqueries next to the aggregates have no consuming TRY above them: their
-		// flags join the gate, and the gated CASE never evaluates the re-raise on an error row
+		// flags join the gate, and the gated CASE never evaluates the re-raise on an error row; a
+		// re-raise in a conditionally evaluated position stays out of the gate and raises if reached
 		vector<unique_ptr<Expression>> rethrow_flags;
 		CollectTryErrorRethrowFlags(*expr, rethrow_flags);
 		for (auto &flag : rethrow_flags) {
@@ -334,6 +360,30 @@ void ExpressionBinder::CheckTrySubqueryNode(const SubqueryExpression &subquery_e
 	}
 }
 
+//! A select item that is itself a scalar subquery takes the direct TRY lowering recursively: unlike the
+//! exposed-flag transport, the direct form also covers result modifiers inside the nested subquery
+static void PushTryIntoBareSubqueryItem(SubqueryExpression &subquery_expr) {
+	auto &node = *subquery_expr.SubqueryMutable()->node;
+	D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
+	auto &select_node = node.Cast<SelectNode>();
+	if (select_node.select_list.size() != 1) {
+		return;
+	}
+	auto &select_item = select_node.select_list[0];
+	if (select_item->GetExpressionClass() != ExpressionClass::SUBQUERY ||
+	    select_item->Cast<SubqueryExpression>().GetSubqueryType() != SubqueryType::SCALAR) {
+		return;
+	}
+	auto alias = select_item->GetAlias();
+	auto try_item = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+	try_item->SetQueryLocation(select_item->GetQueryLocation());
+	try_item->GetChildrenMutable().push_back(std::move(select_item));
+	if (!alias.empty()) {
+		try_item->SetAlias(alias);
+	}
+	select_item = std::move(try_item);
+}
+
 //! TRY over a scalar subquery binds the subquery as an ordinary subquery and lowers the TRY onto the bound
 //! plan before the subquery is flattened, so names, types, overloads and aggregate ownership resolve exactly
 //! as without TRY. In the plain projection case, TRY moves onto the projected expression, which yields a NULL
@@ -353,6 +403,7 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 	auto &subquery_expr = op.GetChildrenMutable()[0]->Cast<SubqueryExpression>();
 	D_ASSERT(subquery_expr.GetSubqueryType() == SubqueryType::SCALAR);
 	CheckTrySubqueryNode(subquery_expr, op);
+	PushTryIntoBareSubqueryItem(subquery_expr);
 
 	// bind as an ordinary scalar subquery, so inner scopes, overload resolution and aggregate
 	// ownership resolve exactly as without TRY

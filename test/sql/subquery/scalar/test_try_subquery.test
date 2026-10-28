@@ -1190,9 +1190,15 @@ Division by zero
 
 # GROUP BY ALL may turn the item into a group expression, so the item does not transport
 statement error
-SELECT TRY((SELECT (SELECT 1//x) FROM (VALUES (0)) t(y) GROUP BY ALL)) FROM (VALUES (0)) v(x)
+SELECT TRY((SELECT 1 + (SELECT 1//x) FROM (VALUES (0)) t(y) GROUP BY ALL)) FROM (VALUES (0)) v(x)
 ----
 Division by zero
+
+# a bare item under GROUP BY ALL takes the direct lowering, which masks inside the nested plan
+query I
+SELECT TRY((SELECT (SELECT 1//x) FROM (VALUES (0)) t(y) GROUP BY ALL)) FROM (VALUES (0)) v(x)
+----
+NULL
 
 # the comparison child of IN lands in the join condition of the flattened subquery and does not
 # transport
@@ -1267,3 +1273,67 @@ query II
 EXPLAIN SELECT (SELECT 1 + (SELECT 1//x)) FROM (VALUES (1)) v(x)
 ----
 physical_plan	<!REGEX>:.*try_rethrow.*
+
+# a re-raise in a conditionally evaluated position must not join the eager aggregate gate: the
+# skipped branch cannot NULL the result
+query I
+SELECT TRY((SELECT count(*) + COALESCE(42, (SELECT 1 // 0))))
+----
+43
+
+query I
+SELECT TRY((SELECT count(*) + CASE WHEN false THEN (SELECT 1 // 0) ELSE 42 END))
+----
+43
+
+query I
+SELECT HAS_ERROR((SELECT count(*) + COALESCE(42, (SELECT 1 // 0))))
+----
+false
+
+query I
+SELECT TRY((SELECT count(*) + COALESCE(NULL, (SELECT 5))))
+----
+6
+
+# when the conditional branch is reached, the masked inner error re-raises and propagates; the
+# original message is consumed inside the nested plan and cannot be restored
+statement error
+SELECT TRY((SELECT count(*) + COALESCE(NULL, (SELECT 1 // 0))))
+----
+An error was raised in a nested subquery under TRY
+
+# a bare nested subquery takes the direct lowering recursively, which also covers result modifiers
+# inside the nested subquery
+query I
+SELECT TRY((SELECT (SELECT DISTINCT 10 // i FROM (VALUES (0)) t(i))))
+----
+NULL
+
+query I
+SELECT TRY((SELECT (SELECT 10 // i FROM (VALUES (0)) t(i) ORDER BY i LIMIT 1)))
+----
+NULL
+
+query I
+SELECT TRY((SELECT (SELECT DISTINCT 10 // i FROM (VALUES (1)) t(i))))
+----
+10
+
+# the stranding rejection triggers on the tolerant path itself: the intermediate subquery is
+# transported, its deeper subquery has already transported, and the fallback is refused
+statement error
+SELECT TRY((SELECT 1 + (SELECT 1 + (SELECT 1 // x) ORDER BY 1))) FROM (VALUES (0)) v(x)
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY((SELECT 1 + (SELECT random() * 0 + (SELECT 1 // x)))) FROM (VALUES (0)) v(x)
+----
+TRY can not be used in combination with a volatile function
+
+# the stranding marker survives the CTE binder handoff
+statement error
+SELECT TRY((SELECT 1 + (WITH c AS MATERIALIZED (SELECT 1 AS k) SELECT k + (SELECT 1 // x) FROM c ORDER BY 1))) FROM (VALUES (0)) v(x)
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY

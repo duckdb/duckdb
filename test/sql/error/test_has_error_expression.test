@@ -266,3 +266,36 @@ query I
 SELECT (1 // 0).has_error()
 ----
 true
+
+# named arguments and aggregate-only modifiers are rejected for the built-in
+statement error
+SELECT has_error(expr := 1)
+----
+Named arguments are not supported in HAS_ERROR expression
+
+statement error
+SELECT has_error(DISTINCT 1)
+----
+only applicable to window and aggregate functions
+
+statement error
+SELECT has_error(1) FILTER (WHERE false)
+----
+only applicable to window and aggregate functions
+
+statement error
+SELECT has_error(1 ORDER BY 1)
+----
+only applicable to window and aggregate functions
+
+# explicit system qualification reaches the built-in even while a user macro shadows the name
+statement ok
+CREATE MACRO has_error(a) AS 42;
+
+query II
+SELECT system.main.has_error(1 // 0), has_error(7)
+----
+true	42
+
+statement ok
+DROP MACRO has_error;

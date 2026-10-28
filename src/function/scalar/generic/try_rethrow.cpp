@@ -8,7 +8,8 @@ namespace {
 void TryRethrowFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	for (auto entry : args.data[0].Values<bool>()) {
 		if (entry.IsValid() && entry.GetValue()) {
-			throw InvalidInputException("Error raised in TRY subquery");
+			throw InvalidInputException(
+			    "An error was raised in a nested subquery under TRY (the original message is not preserved)");
 		}
 	}
 	result.Reference(args.data[1]);
