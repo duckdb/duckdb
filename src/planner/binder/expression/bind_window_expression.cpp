@@ -166,6 +166,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
 	inside_window = true;
+	InaccessibleLambdaBindings inaccessible_lambdas(*this, window_function_kind);
 	ErrorData error;
 	vector<unique_ptr<Expression>> bound_args;
 	for (auto &child : window.GetArgumentsMutable()) {
