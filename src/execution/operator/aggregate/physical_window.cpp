@@ -709,8 +709,9 @@ public:
 	}
 	//! Assign the next task
 	bool TryAssignTask();
-	//! Execute a step in the current task
-	void ExecuteTask(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
+	//! Execute a step in the current task. Returns HAVE_MORE_OUTPUT (with an empty chunk) or BLOCKED if a window
+	//! function yields or blocks while finalizing, and FINISHED otherwise.
+	SourceResultType ExecuteTask(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
@@ -726,6 +727,8 @@ public:
 	unique_ptr<WindowCollectionChunkScanner> scanner;
 	//! Buffer for window results
 	DataChunk output_chunk;
+	//! The next executor to finalize in the current FINALIZE task (they can yield or block)
+	idx_t finalize_idx = 0;
 
 protected:
 	//! Sort the partition
@@ -737,7 +740,7 @@ protected:
 	//! Sink tuples into function global states
 	void Sink(ExecutionContext &context, InterruptState &interrupt);
 	//! Post process function global state construction
-	void Finalize(ExecutionContext &context, InterruptState &interrupt);
+	SourceResultType Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Get a chunk by evaluating functions
 	void GetData(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
 
@@ -895,7 +898,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 	window_hash_group->sunk += task_blocks;
 }
 
-void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
+SourceResultType WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
@@ -906,19 +909,24 @@ void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState 
 	}
 
 	// Finalize all the executors.
-	// Parallel finalisation is handled internally by the executor,
-	// and should not return until all threads have completed work.
+	// Parallel finalisation is handled internally by the executor, and the task is not done until all threads have
+	// completed work. Executors can yield or block in between, then they are called again (with the same local state).
 	const auto &executors = gsink.executors;
 	auto &gestates = window_hash_group->gestates;
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
-	for (idx_t w = 0; w < executors.size(); ++w) {
-		OperatorSinkInput sink {*gestates[w], *local_states[w], interrupt};
-		executors[w]->Finalize(context, window_hash_group->collection, sink);
+	for (; finalize_idx < executors.size(); ++finalize_idx) {
+		OperatorSinkInput sink {*gestates[finalize_idx], *local_states[finalize_idx], interrupt};
+		const auto result = executors[finalize_idx]->Finalize(context, window_hash_group->collection, sink);
+		if (result != SourceResultType::FINISHED) {
+			return result;
+		}
 	}
+	finalize_idx = 0;
 
 	//	Mark this range as done
 	window_hash_group->finalized += (task->end_idx - task->begin_idx);
 	task->begin_idx = task->end_idx;
+	return SourceResultType::FINISHED;
 }
 
 WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
@@ -1025,7 +1033,8 @@ bool WindowLocalSourceState::TryAssignTask() {
 	return gsource.TryNextTask(task, task_local);
 }
 
-void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
+SourceResultType WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result,
+                                                     InterruptState &interrupt) {
 	// Update the hash group
 	window_hash_group = gsource.window_hash_groups[task->group_idx].get();
 
@@ -1047,10 +1056,16 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		Sink(context, interrupt);
 		D_ASSERT(TaskFinished());
 		break;
-	case WindowGroupStage::FINALIZE:
-		Finalize(context, interrupt);
+	case WindowGroupStage::FINALIZE: {
+		const auto finalize_result = Finalize(context, interrupt);
+		if (finalize_result != SourceResultType::FINISHED) {
+			// Call the executors again later
+			D_ASSERT(!TaskFinished());
+			return finalize_result;
+		}
 		D_ASSERT(TaskFinished());
 		break;
+	}
 	case WindowGroupStage::GETDATA:
 		D_ASSERT(!TaskFinished());
 		GetData(context, result, interrupt);
@@ -1063,6 +1078,7 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	if (TaskFinished()) {
 		++gsource.finished;
 	}
+	return SourceResultType::FINISHED;
 }
 
 void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
@@ -1182,11 +1198,18 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
+			SourceResultType result;
 			try {
-				lsource.ExecuteTask(context, chunk, source.interrupt_state);
+				result = lsource.ExecuteTask(context, chunk, source.interrupt_state);
 			} catch (...) {
 				gsource.stopped = true;
 				throw;
+			}
+			if (result != SourceResultType::FINISHED) {
+				// A window function yields (so return an empty chunk, which lets the pipeline task yield too), or
+				// blocks (and has registered the interrupt state to be called again)
+				D_ASSERT(chunk.size() == 0);
+				return result;
 			}
 		} else {
 			annotated_lock_guard<annotated_mutex> guard(gsource.lock);

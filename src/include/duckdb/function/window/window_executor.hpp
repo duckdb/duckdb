@@ -68,7 +68,9 @@ public:
 	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
 	                  OperatorSinkInput &sink) const;
 
-	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const;
+	//! See window_finalize_function_t for the result
+	virtual SourceResultType Finalize(ExecutionContext &context, CollectionPtr collection,
+	                                  OperatorSinkInput &sink) const;
 
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
 	              OperatorSinkInput &sink, idx_t count) const;

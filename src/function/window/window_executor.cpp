@@ -98,15 +98,16 @@ void WindowExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, Data
 	}
 }
 
-void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
+SourceResultType WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collection,
+                                          OperatorSinkInput &sink) const {
 	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
 	lbstate.state.Finalize(collection);
 
 	if (wexpr.WindowFunction() && wexpr.WindowFunction()->HasFinalizeCallback()) {
-		wexpr.WindowFunction()->Finalize(context, collection, sink);
-	} else {
-		lbstate.Finalize(context, collection, sink);
+		return wexpr.WindowFunction()->Finalize(context, collection, sink);
 	}
+	lbstate.Finalize(context, collection, sink);
+	return SourceResultType::FINISHED;
 }
 
 void WindowExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,

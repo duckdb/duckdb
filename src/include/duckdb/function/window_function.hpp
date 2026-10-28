@@ -120,9 +120,13 @@ typedef unique_ptr<LocalSinkState> (*window_local_function_t)(ExecutionContext &
 typedef void (*window_sink_function_t)(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                        idx_t input_idx, OperatorSinkInput &sink);
 
-//! Finalizes the thread-local state (builds all data structures needed for
-typedef void (*window_finalize_function_t)(ExecutionContext &context, optional_ptr<WindowCollection> collection,
-                                           OperatorSinkInput &sink);
+//! Finalizes the thread-local state (builds all data structures needed for evaluation).
+//! Returns FINISHED once done, HAVE_MORE_OUTPUT to be called again (e.g. to yield the thread in between steps of a
+//! long computation), or BLOCKED to be called again once the task has been rescheduled through the callback of
+//! sink.interrupt_state (e.g. when waiting for other threads).
+typedef SourceResultType (*window_finalize_function_t)(ExecutionContext &context,
+                                                       optional_ptr<WindowCollection> collection,
+                                                       OperatorSinkInput &sink);
 
 //! Computes the function for a single chunk
 typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
@@ -449,7 +453,8 @@ public:
 		return GetSinkCallback()(context, sink_chunk, coll_chunk, input_idx, sink);
 	}
 
-	void Finalize(ExecutionContext &context, optional_ptr<WindowCollection> collection, OperatorSinkInput &sink) const {
+	SourceResultType Finalize(ExecutionContext &context, optional_ptr<WindowCollection> collection,
+	                          OperatorSinkInput &sink) const {
 		D_ASSERT(HasFinalizeCallback());
 		return GetFinalizeCallback()(context, collection, sink);
 	}
