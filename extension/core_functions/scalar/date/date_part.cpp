@@ -2355,7 +2355,7 @@ ScalarFunctionSet GetTimePartFunction(const LogicalType &result_type = LogicalTy
 	    DatePart::UnaryFunction<timestamp_ns_t, TR, OP>, ScalarFunction::UnaryFunction<interval_t, TR, OP>,
 	    ScalarFunction::UnaryFunction<dtime_t, TR, OP>, ScalarFunction::UnaryFunction<dtime_ns_t, TR, OP>,
 	    ScalarFunction::UnaryFunction<dtime_tz_t, TR, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>, StatisticsPropagator::PropagateFiniteMonotoneBounds,
+	    OP::template PropagateStatistics<timestamp_t>, OP::template PropagateStatistics<timestamp_ns_t>,
 	    OP::template PropagateStatistics<dtime_t>, OP::template PropagateStatistics<dtime_ns_t>,
 	    OP::template PropagateStatistics<dtime_tz_t>, param_name);
 }
@@ -2696,7 +2696,7 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(tstz_fun);
 
 	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
-	auto tsns_stats = StatisticsPropagator::PropagateFiniteMonotoneBounds;
+	auto tsns_stats = OP::template PropagateStatistics<timestamp_ns_t>;
 	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tstz_ns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ_NS);
 	operator_set.AddFunction(tstz_ns_fun);
