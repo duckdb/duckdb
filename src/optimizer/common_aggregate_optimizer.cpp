@@ -6,9 +6,6 @@
 
 namespace duckdb {
 
-CommonAggregateOptimizer::CommonAggregateOptimizer(bool preserve_arity) : preserve_arity(preserve_arity) {
-}
-
 void CommonAggregateOptimizer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	if (!aggregate_map.empty()) {
@@ -18,35 +15,12 @@ void CommonAggregateOptimizer::StandardVisitOperator(LogicalOperator &op) {
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// a projection absorbs binding remaps and fixes the column count of the chain above it
-		CommonAggregateOptimizer common_aggregate(false);
-		common_aggregate.StandardVisitOperator(op);
-		return;
-	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		// children are consumed positionally (set operation columns, CTE scans):
-		// binding remaps cannot reach those consumers, so the children's column count must not change
-		for (auto &child : op.children) {
-			CommonAggregateOptimizer child_optimizer(true);
-			child_optimizer.VisitOperator(*child);
-		}
-		return;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		// the aggregate consumes its child by binding - the child chain's column count is unconstrained
-		auto parent_preserve_arity = preserve_arity;
-		preserve_arity = false;
-		StandardVisitOperator(op);
-		preserve_arity = parent_preserve_arity;
-		if (!preserve_arity) {
-			// removing duplicate aggregates changes this operator's column count
-			ExtractCommonAggregates(op.Cast<LogicalAggregate>());
-		}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		CommonAggregateOptimizer common_aggregate;
+		common_aggregate.StandardVisitOperator(op);
 		return;
 	}
 	default:
@@ -54,6 +28,9 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	}
 
 	StandardVisitOperator(op);
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
+	}
 }
 
 unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpression &expr,

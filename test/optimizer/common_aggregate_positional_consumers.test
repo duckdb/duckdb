@@ -1,5 +1,5 @@
 # name: test/optimizer/common_aggregate_positional_consumers.test
-# description: Duplicate aggregate elimination must not change the column count of positionally consumed operators
+# description: Duplicate aggregate elimination must not change the column layout read by positional CTE consumers
 # group: [optimizer]
 
 statement ok
@@ -27,8 +27,9 @@ SELECT g, count(*), count(v) FROM tbl GROUP BY g ORDER BY g;
 1	2	2
 2	1	1
 
-# the grouping sets rewrite materializes an aggregate directly as a CTE definition whose columns are read
-# positionally - the duplicate count(*) aggregates built by decorrelation must stay unmerged there
+# the grouping sets rewrite materializes an aggregate as a CTE definition whose columns are read positionally:
+# the identity projection cap lets the duplicate count(*) aggregates built by decorrelation merge
+# while preserving the CTE's column layout
 query II
 EXPLAIN SELECT o.k, a.c
 FROM (VALUES (7), (8)) AS o(k),
@@ -40,7 +41,20 @@ LATERAL (
 ) AS a
 ORDER BY ALL;
 ----
-logical_opt	<REGEX>:.*AGGREGATE.*count_star\(\) EXPORT_STATE,.*count_star\(\) EXPORT_STATE.*
+logical_opt	<!REGEX>:.*EXPORT_STATE.*EXPORT_STATE.*
+
+query II
+EXPLAIN SELECT o.k, a.c
+FROM (VALUES (7), (8)) AS o(k),
+LATERAL (
+    SELECT count(*) AS c
+    FROM (VALUES (1)) AS i(k)
+    WHERE i.k = o.k
+    GROUP BY GROUPING SETS ((), ())
+) AS a
+ORDER BY ALL;
+----
+logical_opt	<REGEX>:.*count_star\(\) EXPORT_STATE.*
 
 query II
 SELECT o.k, a.c
