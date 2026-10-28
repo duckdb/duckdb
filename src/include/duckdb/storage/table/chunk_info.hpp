@@ -123,8 +123,8 @@ private:
 	transaction_t GetDeleteId(idx_t row) const;
 	//! Whether the rows (0, 1, ..., count - 1 if rows is nullptr) are all rows outside of the mask
 	bool RowsAreAllOutsideMask(const uint16_t rows[], idx_t count) const;
-	//! Gives the rows (0, 1, ..., count - 1 if rows is nullptr) the id, if the vector needs no per-row ids for it
-	bool AssignId(const uint16_t rows[], idx_t count, transaction_t id);
+	//! Gives the rows (0, 1, ..., count - 1 if rows is nullptr) the id, in per-row ids only if the mask cannot hold it
+	void AssignId(const uint16_t rows[], idx_t count, transaction_t id);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
 	template <class F>
 	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);

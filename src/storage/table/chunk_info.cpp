@@ -505,20 +505,15 @@ void ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[], 
 	}
 	// the ids are not visible to all transactions yet - re-arm the compression check
 	recheck_compression = true;
-	if (!AssignId(written.GetStoredRows(), written.count, id)) {
-		SetIds(written.GetStoredRows(), written.count, [&](transaction_t, idx_t) { return id; });
-	}
+	AssignId(written.GetStoredRows(), written.count, id);
 }
 
-bool ChunkVectorInfo::AssignId(const uint16_t rows[], idx_t count, transaction_t id) {
+void ChunkVectorInfo::AssignId(const uint16_t rows[], idx_t count, transaction_t id) {
 	if (count == STANDARD_VECTOR_SIZE) {
 		// all rows get the id
 		FreeDeleteData();
 		constant_delete_id = id;
-		return true;
-	}
-	if (delete_state == DeleteIdState::ARRAY) {
-		return false;
+		return;
 	}
 	if (HasConstantDeleteId()) {
 		D_ASSERT(constant_delete_id != id);
@@ -534,26 +529,29 @@ bool ChunkVectorInfo::AssignId(const uint16_t rows[], idx_t count, transaction_t
 		D_ASSERT(!IsDeleteId(constant_delete_id));
 		delete_state = DeleteIdState::MASKED;
 	}
-	if (id == mask_delete_id || id == constant_delete_id) {
-		// the rows join the rows that hold the id
-		auto in_mask = id == mask_delete_id;
-		for (idx_t i = 0; i < count; i++) {
-			auto row = rows ? rows[i] : i;
-			in_mask ? deleted_mask.SetValidUnsafe(row) : deleted_mask.SetInvalidUnsafe(row);
+	if (delete_state == DeleteIdState::MASKED) {
+		if (id == mask_delete_id || id == constant_delete_id) {
+			// the rows join the rows that hold the id
+			auto in_mask = id == mask_delete_id;
+			for (idx_t i = 0; i < count; i++) {
+				auto row = rows ? rows[i] : i;
+				in_mask ? deleted_mask.SetValidUnsafe(row) : deleted_mask.SetInvalidUnsafe(row);
+			}
+			if (in_mask ? deleted_mask.CheckAllValid(STANDARD_VECTOR_SIZE)
+			            : deleted_mask.CheckAllInvalid(STANDARD_VECTOR_SIZE)) {
+				FreeDeleteData();
+				constant_delete_id = id;
+			}
+			return;
 		}
-		if (in_mask ? deleted_mask.CheckAllValid(STANDARD_VECTOR_SIZE)
-		            : deleted_mask.CheckAllInvalid(STANDARD_VECTOR_SIZE)) {
-			FreeDeleteData();
+		if (IsDeleteId(mask_delete_id) && !IsDeleteId(id) && RowsAreAllOutsideMask(rows, count)) {
+			// the rows that are not deleted keep sharing one id
 			constant_delete_id = id;
+			return;
 		}
-		return true;
 	}
-	if (IsDeleteId(mask_delete_id) && !IsDeleteId(id) && RowsAreAllOutsideMask(rows, count)) {
-		// the rows that are not deleted keep sharing one id
-		constant_delete_id = id;
-		return true;
-	}
-	return false;
+	// the rows need per-row ids
+	SetIds(rows, count, [&](transaction_t, idx_t) { return id; });
 }
 
 template <class F>
@@ -601,10 +599,11 @@ void ChunkVectorInfo::RollbackWrite(const uint16_t rows[], idx_t count, const tr
                                     idx_t previous_id_count) {
 	D_ASSERT(previous_id_count == 1 || previous_id_count == count);
 	recheck_compression = true;
-	if (previous_id_count == 1 && AssignId(rows, count, previous_ids[0])) {
+	if (previous_id_count == 1) {
+		AssignId(rows, count, previous_ids[0]);
 		return;
 	}
-	SetIds(rows, count, [&](transaction_t, idx_t i) { return previous_ids[previous_id_count == 1 ? 0 : i]; });
+	SetIds(rows, count, [&](transaction_t, idx_t i) { return previous_ids[i]; });
 }
 
 void ChunkVectorInfo::VerifyCachedCompressionState() const {
