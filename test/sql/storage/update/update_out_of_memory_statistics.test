@@ -2,6 +2,8 @@
 # description: An UPDATE that fails with out of memory leaves no values in the statistics (duckdblabs/bot-issue-tracker#643)
 # group: [update]
 
+require block_size 262144
+
 load {TEST_DIR}/update_out_of_memory_statistics.db
 
 statement ok

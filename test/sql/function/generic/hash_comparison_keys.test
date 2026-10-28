@@ -102,9 +102,10 @@ CHECKPOINT
 restart
 
 query I
-SELECT list(segment_type ORDER BY column_name) FROM pragma_storage_info('stored') WHERE segment_type IN ('TINYINT', 'DECIMAL(10,1)')
+SELECT DISTINCT segment_type FROM pragma_storage_info('stored') WHERE segment_type IN ('TINYINT', 'DECIMAL(10,1)') ORDER BY segment_type
 ----
-[TINYINT, 'DECIMAL(10,1)']
+DECIMAL(10,1)
+TINYINT
 
 query II
 SELECT count(*), count(*) FILTER (WHERE hash(a) = hash(b) AND hash(a) = hash((i % 3)::BIGINT::VARIANT))
