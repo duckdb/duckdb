@@ -1064,6 +1064,54 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 	}
 }
 
+TEST_CASE("Test internal connections follow the interrupts of their base client", "[api]") {
+	DuckDB db;
+	Connection con(db);
+	auto child = Connection::CreateInternal(*con.context);
+	auto grandchild = Connection::CreateInternal(*child.context);
+	REQUIRE(grandchild.context->base_context == con.context);
+	REQUIRE(grandchild.context->internal_depth == 2);
+
+	SECTION("Interrupting the base interrupts every internal connection") {
+		con.context->Interrupt();
+		REQUIRE(child.context->IsInterrupted());
+		REQUIRE(grandchild.context->IsInterrupted());
+		REQUIRE_THROWS(grandchild.context->InterruptCheck());
+		con.context->ClearInterrupt();
+		REQUIRE(!grandchild.context->IsInterrupted());
+	}
+
+	SECTION("Interrupting an internal connection does not interrupt the base") {
+		child.context->Interrupt();
+		REQUIRE(!con.context->IsInterrupted());
+		child.context->ClearInterrupt();
+	}
+
+	SECTION("The base client's query deadline applies to internal connections while it is set") {
+		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+		// a deadline in the past, as a base query that ran out of time would leave it
+		con.context->query_deadline = 1;
+		REQUIRE_THROWS(grandchild.context->BlockingInterruptCheck());
+		REQUIRE_THROWS(child.context->BlockingInterruptCheck());
+		con.context->query_deadline.SetInvalid();
+		REQUIRE_NOTHROW(grandchild.context->BlockingInterruptCheck());
+	}
+
+	SECTION("A query running on behalf of the base stops when the base is interrupted") {
+		REQUIRE_NO_FAIL(
+		    con.Query("CREATE MACRO slow_deleter(h) AS TABLE SELECT sum(i) AS s FROM range(100000000000) t(i)"));
+		auto start = std::chrono::steady_clock::now();
+		std::thread interrupter([&]() {
+			std::this_thread::sleep_for(std::chrono::milliseconds(200));
+			con.Interrupt();
+		});
+		auto result = con.Query("FROM destroy_external_resource('slow_deleter', 1)");
+		interrupter.join();
+		REQUIRE(result->HasError());
+		REQUIRE(std::chrono::steady_clock::now() - start < std::chrono::seconds(30));
+	}
+}
+
 TEST_CASE("Test ExtractStatements error location", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

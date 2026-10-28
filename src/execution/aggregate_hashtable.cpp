@@ -378,7 +378,8 @@ void GroupedAggregateHashTable::ReinsertTuples(PartitionedTupleData &data) {
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
 		const auto row_locations = iterator.GetRowLocations();
 		do {
-			for (idx_t i = 0; i < iterator.GetCurrentChunkCount(); i++) {
+			const auto row_count = iterator.GetCurrentChunkCount();
+			for (idx_t i = 0; i < row_count; i++) {
 				const auto &row_location = row_locations[i];
 				const auto hash = Load<hash_t>(row_location + hash_offset);
 				const auto salt = ht_entry_t::ExtractSalt(hash);
