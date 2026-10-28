@@ -416,6 +416,10 @@ struct NumericStringAnalyzeState : public AnalyzeState {
 };
 
 static unique_ptr<AnalyzeState> InitAnalyze(ColumnData &col_data, PhysicalType type) {
+	if (col_data.type.id() != LogicalTypeId::VARCHAR) {
+		// BLOB shares the physical type but its bytes are not text
+		return nullptr;
+	}
 	auto &storage_manager = col_data.GetStorageManager();
 	if (!StorageManager::TargetAtLeastVersion(StorageVersion::V2_1_0, storage_manager.GetStorageVersion())) {
 		// not supported by the target storage version
@@ -502,7 +506,7 @@ struct NumericStringCompressionState : public CompressionState {
 	      inner_checkpoint_data(inner_checkpoint_state, checkpoint_data.GetColumnData(), checkpoint_data.GetDatabase(),
 	                            checkpoint_data.GetRowGroup(), checkpoint_data.GetStorageManager(),
 	                            LogicalType::BIGINT),
-	      mantissas(LogicalType::BIGINT), stats_writer(LogicalType::VARCHAR) {
+	      mantissas(LogicalType::BIGINT), stats_writer(checkpoint_data.GetColumnData().type) {
 		detector = analyze_state->detector;
 		inner_state = inner.init_compression(inner_checkpoint_data, std::move(analyze_state->Best().state));
 	}
@@ -528,7 +532,7 @@ struct NumericStringCompressionState : public CompressionState {
 		if (!ConvertToMantissas(input, mantissas, detector, last_mantissa, stats_writer)) {
 			throw InternalException("NumericString compression: value does not match the analyzed layout");
 		}
-		auto stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		auto stats = BaseStatistics::CreateEmpty(checkpoint_data.GetColumnData().type);
 		stats_writer.Merge(stats);
 		pending_stats.emplace_back(rows_appended, input.size(), std::move(stats));
 		rows_appended += input.size();
@@ -544,7 +548,7 @@ struct NumericStringCompressionState : public CompressionState {
 	//! wider than the segment itself.
 	BaseStatistics SegmentStats(idx_t count) {
 		auto segment_end = rows_flushed + count;
-		auto stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		auto stats = BaseStatistics::CreateEmpty(checkpoint_data.GetColumnData().type);
 		for (auto &entry : pending_stats) {
 			if (entry.row_start >= segment_end) {
 				break;
