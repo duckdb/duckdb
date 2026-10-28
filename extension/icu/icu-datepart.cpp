@@ -502,6 +502,22 @@ struct ICUDatePart : public ICUDateFunc {
 		return BindAdapter<data_t>(context, bound_function, arguments, nullptr);
 	}
 
+	//! The epoch is read from the instant itself, every other part from the calendar of the settings
+	static FunctionStability PartCodeStability(DatePartSpecifier part_code) {
+		return part_code == DatePartSpecifier::EPOCH ? FunctionStability::CONSISTENT
+		                                             : FunctionStability::CONSISTENT_WITHIN_QUERY;
+	}
+
+	static void SetPartCodesStability(BoundScalarFunction &bound_function,
+	                                  const vector<DatePartSpecifier> &part_codes) {
+		for (auto part_code : part_codes) {
+			if (PartCodeStability(part_code) != FunctionStability::CONSISTENT) {
+				return;
+			}
+		}
+		bound_function.SetStability(FunctionStability::CONSISTENT);
+	}
+
 	static duckdb::unique_ptr<FunctionData> BindStruct(BindScalarFunctionInput &input) {
 		auto &bound_function = input.GetBoundFunction();
 		auto &context = input.GetClientContext();
@@ -543,6 +559,7 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 
 		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
+		SetPartCodesStability(bound_function, part_codes);
 		return make_uniq<BindStructData>(context, std::move(part_codes));
 	}
 
@@ -560,6 +577,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto tz_setting = deserializer.ReadProperty<string>(100, "tz_setting");
 		auto cal_setting = deserializer.ReadProperty<string>(101, "cal_setting");
 		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(102, "part_codes");
+		SetPartCodesStability(bound_function, part_codes);
 		return make_uniq<BindStructData>(tz_setting, cal_setting, std::move(part_codes));
 	}
 
@@ -578,6 +596,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
 		set.SetFallible();
+		set.SetStability(PartCodeStability(GetDatePartSpecifier(name.GetIdentifierName())));
 		set.SetUnaryArgProperties(unary_arg0_props);
 		if (IsKnownMonotonic(unary_arg0_props.monotonicity)) {
 			set.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
@@ -609,6 +628,7 @@ struct ICUDatePart : public ICUDateFunc {
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, double>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 
@@ -631,6 +651,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 
@@ -652,6 +673,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 
@@ -673,6 +695,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 };
