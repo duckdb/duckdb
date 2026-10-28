@@ -112,16 +112,9 @@ void DuckTransaction::PushWrite(UndoFlags type, DuckTableEntry &table_entry, Row
 	delete_info->is_consecutive = written.is_consecutive;
 	delete_info->previous_id_count = written.previous_id_count;
 	if (!written.is_consecutive) {
-		// if rows are not consecutive
-		auto delete_rows = delete_info->GetRows();
-		for (idx_t i = 0; i < written.count; i++) {
-			delete_rows[i] = written.rows[i];
-		}
+		std::copy_n(written.rows, written.count, delete_info->GetRows());
 	}
-	auto stored_ids = delete_info->GetPreviousIds();
-	for (idx_t i = 0; i < written.previous_id_count; i++) {
-		stored_ids[i] = written.previous_ids[i];
-	}
+	std::copy_n(written.previous_ids, written.previous_id_count, delete_info->GetPreviousIds());
 }
 
 void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, idx_t row_count) {

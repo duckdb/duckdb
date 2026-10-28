@@ -827,18 +827,17 @@ void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 //===--------------------------------------------------------------------===//
 // Find the update of the transaction
 //===--------------------------------------------------------------------===//
-//! Sets node_ref to the transaction's own update of the vector, if any (conflicts are detected in the version info)
-static void GetTransactionUpdate(UndoBufferPointer next_ptr, TransactionData transaction,
-                                 UndoBufferReference &node_ref) {
+//! The transaction's own update of the vector, if any (conflicts are detected in the version info)
+static UndoBufferReference GetTransactionUpdate(UndoBufferPointer next_ptr, TransactionData transaction) {
 	while (next_ptr.IsSet()) {
 		auto pin = next_ptr.Pin();
 		auto &info = UpdateInfo::Get(pin);
 		if (info.version_number == transaction.GetTransactionId()) {
-			node_ref = std::move(pin);
-			return;
+			return pin;
 		}
 		next_ptr = info.next;
 	}
+	return UndoBufferReference();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1535,8 +1534,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	auto &root_info = UpdateInfo::Get(root_pin);
 	if (transaction.transaction) {
 		// search for the update info that belongs to this transaction
-		UndoBufferReference node_ref;
-		GetTransactionUpdate(root_info.next, transaction, node_ref);
+		auto node_ref = GetTransactionUpdate(root_info.next, transaction);
 		optional_ptr<UpdateInfo> node;
 		if (node_ref.IsSet()) {
 			node = &UpdateInfo::Get(node_ref);
