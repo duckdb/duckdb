@@ -299,6 +299,83 @@ SELECT * FROM db2.db1.v;
 ----
 5
 
+# the precedence also applies to a lone qualifier that named an attached database when the view was created: once a
+# schema of the view's catalog has the same name, the view binds to that schema (main throws the ambiguity error here)
+statement ok
+ATTACH ':memory:' AS q;
+
+statement ok
+CREATE TABLE q.main.t AS SELECT 'attached_q' AS src;
+
+statement ok
+CREATE VIEW db.main.v_captured AS SELECT src FROM q.t;
+
+# the same reference inside a macro body, which is bound when the view is bound
+statement ok
+CREATE MACRO db.main.m_q() AS TABLE SELECT src FROM q.t;
+
+statement ok
+CREATE VIEW db.main.v_captured_macro AS SELECT src FROM db.main.m_q();
+
+# with the schema spelled out the reference is a three-part name
+statement ok
+CREATE VIEW db.main.v_three_part AS SELECT src FROM q.main.t;
+
+query I
+SELECT * FROM db.main.v_captured;
+----
+attached_q
+
+query I
+SELECT * FROM db.main.v_captured_macro;
+----
+attached_q
+
+query I
+SELECT * FROM db.main.v_three_part;
+----
+attached_q
+
+statement ok
+CREATE SCHEMA db.q;
+
+statement ok
+CREATE TABLE db.q.t AS SELECT 'db_schema_q' AS src;
+
+query I
+SELECT * FROM db.main.v_captured;
+----
+db_schema_q
+
+query I
+SELECT * FROM db.main.v_captured_macro;
+----
+db_schema_q
+
+# called directly, the macro is bound with the client's search path and still reads the database
+query I
+SELECT * FROM db.main.m_q();
+----
+attached_q
+
+# a three-part name keeps binding to the database until the view's catalog has that nested schema path, which then
+# takes precedence like any nested path of the view's catalog (see v_cross)
+query I
+SELECT * FROM db.main.v_three_part;
+----
+attached_q
+
+statement ok
+CREATE SCHEMA db.q.main;
+
+statement ok
+CREATE TABLE db.q.main.t AS SELECT 'db_nested_q_main' AS src;
+
+query I
+SELECT * FROM db.main.v_three_part;
+----
+db_nested_q_main
+
 # outside of a view nothing changes: the reference binds to the attached database, or is ambiguous within its catalog
 query I
 SELECT s.g();
