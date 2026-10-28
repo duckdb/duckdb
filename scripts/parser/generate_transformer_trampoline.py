@@ -802,16 +802,14 @@ class UseGramPreviewEmitter:
         lines = []
         if plan.list_child:
             list_child = plan.list_child
-            lines.append(f"\tauto dynamic_list_items = ExtractParseResultsFromList({list_child.parse_expr});")
-            lines.append("\tauto dynamic_child_count = dynamic_list_items.size();")
+            lines.append(f"\tauto dynamic_child_count = CountParseResultsFromList({list_child.parse_expr});")
         elif plan.optional_list_child:
             list_child = plan.optional_list_child
             lines.append("\tidx_t dynamic_child_count = 0;")
             lines.append(f"\tauto &dynamic_list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
             lines.append("\tif (dynamic_list_opt.HasResult()) {")
             child_expr = list_child.result_expr_template.format(opt="dynamic_list_opt")
-            lines.append(f"\t\tauto dynamic_list_items = ExtractParseResultsFromList({child_expr});")
-            lines.append("\t\tdynamic_child_count = dynamic_list_items.size();")
+            lines.append(f"\t\tdynamic_child_count = CountParseResultsFromList({child_expr});")
             lines.append("\t}")
         elif plan.required_repeat_child:
             repeat_child = plan.required_repeat_child
