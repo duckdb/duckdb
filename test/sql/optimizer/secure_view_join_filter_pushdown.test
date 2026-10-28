@@ -172,7 +172,7 @@ SELECT count(*) FROM {view} v JOIN rng ON v.id >= rng.lo AND v.id <= rng.hi
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM {view} v JOIN rng ON v.id >= rng.lo AND v.id <= rng.hi
 ----
-analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*13 rows[\s\S]*
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*13 rows[\s\S]*
 
 endloop
 

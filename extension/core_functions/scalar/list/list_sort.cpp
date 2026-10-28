@@ -285,13 +285,11 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 
 			// construct the selection vector with the new order from the result vectors
-			auto row_count = result_chunk.size();
-			Vector result_vector(Vector::Ref(result_chunk.data[0]));
-
-			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
-			for (idx_t i = 0; i < row_count; i++) {
-				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
-				D_ASSERT(result_data[i] < lists_size);
+			auto result_data = result_chunk.data[0].Values<uint32_t>();
+			for (auto entry : result_data) {
+				auto payload_index = entry.GetValue();
+				sel_sorted.set_index(sel_sorted_idx, payload_index);
+				D_ASSERT(payload_index < lists_size);
 				sel_sorted_idx++;
 			}
 		}

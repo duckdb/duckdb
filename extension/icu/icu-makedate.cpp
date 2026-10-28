@@ -127,7 +127,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, [&](T micros) {
 			const auto result = timestamp_t(micros);
 			if (!Timestamp::IsValid(result)) {
-				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
+				throw ConversionException("Timestamp microseconds out of range: %lld", micros);
 			}
 			return result;
 		});

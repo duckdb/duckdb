@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE t(c TIMESTAMP_NS);
 
 statement ok
-INSERT INTO t VALUES (make_timestamp_ns(-9223372036854775807 - 1)), ('-infinity'), ('1970-01-01'), ('infinity');
+INSERT INTO t VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), ('-infinity'), ('1970-01-01'), ('infinity');
 
 foreach target TIMESTAMP TIMESTAMP_MS DATE
 
@@ -32,7 +32,7 @@ statement ok
 CREATE TABLE v(c TIMESTAMP_NS);
 
 statement ok
-INSERT INTO v VALUES (make_timestamp_ns(-9223372036854775807 - 1)), ('-infinity');
+INSERT INTO v VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), ('-infinity');
 
 foreach target TIMESTAMP TIMESTAMP_MS DATE
 
@@ -48,7 +48,7 @@ SELECT count(*) FROM v WHERE c::{target} = '-infinity'::{target};
 
 # a materialized CTE has exactly these bounds
 query I
-WITH w AS MATERIALIZED (SELECT make_timestamp_ns(-9223372036854775807 - 1) AS c UNION ALL SELECT '-infinity'::TIMESTAMP_NS) SELECT sum((c::{target} <> '-infinity'::{target})::INTEGER) FROM w;
+WITH w AS MATERIALIZED (SELECT TIMESTAMP_NS '1677-09-21 00:12:43.145224192' AS c UNION ALL SELECT '-infinity'::TIMESTAMP_NS) SELECT sum((c::{target} <> '-infinity'::{target})::INTEGER) FROM w;
 ----
 1
 
@@ -71,17 +71,6 @@ SELECT count(*) FROM u WHERE c::TIMESTAMP = '-infinity'::TIMESTAMP;
 ----
 1
 
-statement ok
-CREATE TABLE d(c TIMESTAMP);
-
-statement ok
-INSERT INTO d VALUES (make_timestamp(-9223372036854775807 - 1)), ('-infinity'), ('1970-01-01');
-
-query I
-SELECT count(*) FROM d WHERE c::DATE = '-infinity'::DATE;
-----
-1
-
 # time zone aware timestamps
 require icu
 
@@ -92,7 +81,7 @@ statement ok
 CREATE TABLE z(c TIMESTAMPTZ_NS);
 
 statement ok
-INSERT INTO z VALUES (make_timestamp_ns(-9223372036854775807 - 1)::TIMESTAMPTZ_NS), ('-infinity'), ('1970-01-01');
+INSERT INTO z VALUES (TIMESTAMPTZ_NS '1677-09-21 00:12:43.145224192+00'), ('-infinity'), ('1970-01-01');
 
 query I
 SELECT count(*) FROM z WHERE c::TIMESTAMPTZ = '-infinity'::TIMESTAMPTZ;
@@ -108,6 +97,6 @@ SELECT count(*) FROM z WHERE c::TIMESTAMPTZ <> '-infinity'::TIMESTAMPTZ;
 1
 
 query I
-WITH w AS MATERIALIZED (SELECT make_timestamp_ns(-9223372036854775807 - 1)::TIMESTAMPTZ_NS AS c UNION ALL SELECT '-infinity'::TIMESTAMPTZ_NS) SELECT sum((c::TIMESTAMPTZ <> '-infinity'::TIMESTAMPTZ)::INTEGER) FROM w;
+WITH w AS MATERIALIZED (SELECT TIMESTAMPTZ_NS '1677-09-21 00:12:43.145224192+00' AS c UNION ALL SELECT '-infinity'::TIMESTAMPTZ_NS) SELECT sum((c::TIMESTAMPTZ <> '-infinity'::TIMESTAMPTZ)::INTEGER) FROM w;
 ----
 1

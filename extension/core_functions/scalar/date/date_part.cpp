@@ -7,6 +7,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/date_lookup_cache.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -540,11 +541,11 @@ struct DatePart {
 			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, [&](int64_t input) {
 				int64_t micros_value;
 				if (!TryMultiplyOperator::Operation(input, Interval::MICROS_PER_MSEC, micros_value)) {
-					throw ConversionException("Timestamp milliseconds out of range: %ld", input);
+					throw ConversionException("Timestamp milliseconds out of range: %lld", input);
 				}
 				auto micros = timestamp_t(micros_value);
 				if (!Timestamp::IsValid(micros)) {
-					throw ConversionException("Timestamp milliseconds out of range: %ld", input);
+					throw ConversionException("Timestamp milliseconds out of range: %lld", input);
 				}
 				return micros;
 			});
@@ -2761,6 +2762,11 @@ ScalarFunctionSet EpochFun::GetFunctions() {
 ScalarFunctionSet EpochNsFun::GetFunctions() {
 	using OP = DatePart::EpochNanosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>(LogicalType::BIGINT, "temporal");
+	operator_set.ApplyToFunctions([](ScalarFunction &function) {
+		if (function.GetSignature().GetParameter(0).GetType().id() == LogicalTypeId::TIMESTAMP_NS) {
+			function.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
+		}
+	});
 
 	//	TIMESTAMP(NS) WITH TIME ZONE has the same representation as TIMESTAMP(NS) so no need to defer to ICU
 	auto tstz_func = DatePart::UnaryFunction<timestamp_t, int64_t, OP>;
@@ -2770,7 +2776,7 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(tstz_fun);
 
 	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
-	auto tsns_stats = OP::template PropagateStatistics<timestamp_ns_t>;
+	auto tsns_stats = StatisticsPropagator::PropagateFiniteMonotoneBounds;
 	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tstz_ns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ_NS);
 	operator_set.AddFunction(tstz_ns_fun);
