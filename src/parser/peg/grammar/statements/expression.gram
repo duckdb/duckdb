@@ -62,7 +62,13 @@ RenameEntry <- ExcludeName 'AS' Identifier
 SubqueryExpression <- SubqueryNot? SubqueryExists? SubqueryReference
 SubqueryNot <- 'NOT'
 SubqueryExists <- 'EXISTS'
-CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
+CaseExpression <- SimpleCaseExpression / SearchedCaseExpression
+SimpleCaseExpression <- 'CASE' Expression SimpleCaseWhenThen+ CaseElse? 'END'
+SearchedCaseExpression <- 'CASE' CaseWhenThen+ CaseElse? 'END'
+SimpleCaseWhenThen <- 'WHEN' SimpleCaseWhenOperand 'THEN' Expression
+# WHEN < 0 compares the CASE operand with <, a WHEN operand without an operator compares with =
+SimpleCaseWhenOperand <- ComparisonExpressionTail / SimpleCaseWhenEquals
+SimpleCaseWhenEquals <- Expression
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- Type StringLiteral
