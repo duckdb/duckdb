@@ -548,17 +548,17 @@ jobs:
 
           private_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing-validation.XXXXXX.pem")
           public_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing-validation.XXXXXX.pub")
-          trap 'rm -f "$private_key_file" "$public_key_file"' EXIT
+          trap 'rm -f "$private_key_file" "$public_key_file"; rm -rf "$DUCKDB_EXTENSION_SIGNING_OUTPUT_DIR"' EXIT
 
           openssl genrsa -out "$private_key_file" 2048
           openssl rsa -in "$private_key_file" -pubout -out "$public_key_file"
           DUCKDB_EXTENSION_SIGNING_PK="$(cat "$private_key_file")"
           export DUCKDB_EXTENSION_SIGNING_PK
 
-          rm -rf /tmp/repository_signed_validation
+          rm -rf "$DUCKDB_EXTENSION_SIGNING_OUTPUT_DIR"
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
           make verify-extension-signing \
-            SIGNED_EXTENSIONS_DIR=/tmp/repository_signed_validation \
+            SIGNED_EXTENSIONS_DIR="$DUCKDB_EXTENSION_SIGNING_OUTPUT_DIR" \
             EXTENSION_SIGNING_PUBLIC_KEY_FILE="$public_key_file"
 
       - name: Deploy extensions
