@@ -204,8 +204,18 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 	// When all aggregates are clustered-aware, we can skip maintaining per-tuple addresses.
 	bool skip_addresses = clustered_state.all_clustered;
 	if (!skip_addresses) {
+		// The clusterer masks group ids, but per-row addresses use the raw ids.
+		uintptr_t combined_groups = 0;
 		for (idx_t i = 0; i < count; i++) {
-			address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;
+			auto group = address_data[i];
+			combined_groups |= group;
+			address_data[i] = uintptr_t(data) + group * tuple_size;
+		}
+		// total_groups is a power of two, so OR preserves any out-of-range bit.
+		// Reject invalid integer addresses before any aggregate dereferences them.
+		if (combined_groups >= total_groups) {
+			throw DataCorruptionException("Perfect hash aggregate: aggregate group exceeded total groups %llu.",
+			                              total_groups);
 		}
 	}
 
