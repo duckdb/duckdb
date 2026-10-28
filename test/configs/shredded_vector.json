@@ -23,9 +23,10 @@
 			]
 		},
 		{
-			"reason": "VariantShreddingStats::GetShreddedTypeInternal recurses once per nesting level; shredding the depth-50000 fixture overflows the stack",
+			"reason": "Shredding a VARIANT recurses once per nesting level: the depth-50000 fixture overflows the stack, and the depth-500 fixture exceeds the VariantVisitor recursion limit",
 			"paths": [
-				"test/sql/types/variant/json_cast_depth.test"
+				"test/sql/types/variant/json_cast_depth.test",
+				"test/sql/types/variant/json_cast_depth_thread.test"
 			]
 		}
 	]
