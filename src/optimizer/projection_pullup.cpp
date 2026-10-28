@@ -185,22 +185,19 @@ static bool HasJoinBelow(const LogicalOperator &op) {
 }
 
 // Filter pushdown keeps throwing expressions above projections. Removing a projection over a join would let the join
-// order optimizer push them below the joins that remove rows before they are evaluated.
+// order optimizer evaluate them before the joins that remove rows, also when they reference other relations.
 static bool IsThrowingProjectionFilter(const Expression &expr,
                                        const column_binding_map_t<unique_ptr<Expression>> &projection_map) {
 	if (!expr.CanThrow()) {
 		return false;
 	}
 	bool references_projection = false;
-	bool references_other = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		if (projection_map.find(colref.Binding()) != projection_map.end()) {
 			references_projection = true;
-		} else {
-			references_other = true;
 		}
 	});
-	return references_projection && !references_other;
+	return references_projection;
 }
 
 void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map,
