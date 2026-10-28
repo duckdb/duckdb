@@ -71,6 +71,7 @@
         "test/sql/copy/parquet/page_index/page_index_reference.test",
         "test/sql/copy/parquet/page_index/page_index_robustness.test",
         "test/sql/copy/parquet/page_index/page_index_cache.test",
+        "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",

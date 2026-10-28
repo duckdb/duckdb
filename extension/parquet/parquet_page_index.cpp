@@ -81,8 +81,16 @@ bool ParquetPageIndexUtils::OffsetIndexIsValid(const duckdb_parquet::OffsetIndex
 		if (NumericCast<idx_t>(location.first_row_index) >= row_group_num_rows) {
 			return false;
 		}
-		if (page_idx > 0 && location.first_row_index <= locations[page_idx - 1].first_row_index) {
-			return false;
+		if (page_idx > 0) {
+			// pages are stored in row order, so both the rows and the bytes have to increase
+			auto &previous = locations[page_idx - 1];
+			if (location.first_row_index <= previous.first_row_index) {
+				return false;
+			}
+			if (NumericCast<idx_t>(location.offset) <
+			    NumericCast<idx_t>(previous.offset) + NumericCast<idx_t>(previous.compressed_page_size)) {
+				return false;
+			}
 		}
 	}
 	return true;
