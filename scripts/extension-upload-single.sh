@@ -43,39 +43,43 @@ get_file_size() {
 	if stat -c%s "$1" >/dev/null 2>&1; then stat -c%s "$1"; else stat -f%z "$1"; fi
 }
 
-# Read 32-byte metadata field $3 (0-based from block start $2); strip trailing NUL then trailing spaces.
-field_at() {
-	dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | LC_ALL=C tr -d '\000' | sed 's/[[:space:]]*$//'
+supported_signature_sizes="256 384 512"
+
+# Hex dump of 32-byte metadata field $3 (0-based from block start $2).
+field_hex() {
+	dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | od -An -v -tx1 | tr -d ' \n'
 }
 
-# The empty signature slot was sized by append_metadata, so the size to strip comes from the file, not the key.
-# Mirror the engine verifier's legacy-first, magic-keyed dual probe: metadata block (256 bytes) at file_size-512 then
-# file_size-640; marker is field index 6 (reader numbering = FIELD7, block offset 32), magic is field 0 (FIELD1).
+# Hex of $1 NUL-padded to 32 bytes, the only accepted encoding of a metadata field.
+padded_hex() {
+	local hex
+	hex=$(printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n')
+	printf '%s' "$hex"
+	printf '%0*d' $(( 64 - ${#hex} )) 0
+}
+
+# Mirror the engine verifier: probe each size legacy-first, block at size-256-S with magic (FIELD1) and marker (FIELD7) == S.
 detect_signature_size() {
-	local file="$1" size marker
+	local file="$1" size probe block marker
 	size=$(get_file_size "$file")
-	if [ "$size" -ge 512 ] && [ "$(field_at "$file" $(( size - 512 )) 7)" = "4" ]; then
-		marker=$(field_at "$file" $(( size - 512 )) 1)
-		if [ -z "$marker" ] || [ "$marker" = "256" ]; then echo 256; return 0; fi
-		echo "unrecognized signature-size marker '$marker' (legacy offset) in '$file'" >&2; return 1
-	fi
-	if [ "$size" -ge 640 ] && [ "$(field_at "$file" $(( size - 640 )) 7)" = "4" ]; then
-		marker=$(field_at "$file" $(( size - 640 )) 1)
-		if [ "$marker" = "384" ]; then echo 384; return 0; fi
-		echo "unrecognized signature-size marker '$marker' (rsa-3072 offset) in '$file'" >&2; return 1
-	fi
+	for probe in $supported_signature_sizes; do
+		block=$(( size - 256 - probe ))
+		if [ "$block" -lt 0 ] || [ "$(field_hex "$file" "$block" 7)" != "$(padded_hex 4)" ]; then continue; fi
+		if [ "$probe" = 256 ]; then marker=""; else marker="$probe"; fi
+		if [ "$(field_hex "$file" "$block" 1)" = "$(padded_hex "$marker")" ]; then echo "$probe"; return 0; fi
+		echo "signature-size marker does not match the ${probe}-byte footer layout in '$file'" >&2; return 1
+	done
 	echo "could not determine signature slot size from extension footer of '$file'" >&2
 	return 1
 }
 
-# RSA PKCS#1 v1.5 signature length equals the key modulus (2048 bit -> 256, 3072 bit -> 384).
+# RSA PKCS#1 v1.5 signature length equals the key modulus in bytes (2048/3072/4096 bit -> 256/384/512).
 key_signature_size() {
 	local bits
 	bits=$(openssl pkey -in "$1" -noout -text 2>/dev/null | grep -oE '\(([0-9]+) bit' | grep -oE '[0-9]+' | head -n1) || true
 	case "$bits" in
-		2048) echo 256 ;;
-		3072) echo 384 ;;
-		*) echo "unsupported signing key size '${bits:-unknown}' bits: only 2048 (RSA-2048) and 3072 (RSA-3072) are supported" >&2; return 1 ;;
+		2048|3072|4096) echo $(( bits / 8 )) ;;
+		*) echo "unsupported signing key size '${bits:-unknown}' bits: only 2048, 3072 and 4096 are supported" >&2; return 1 ;;
 	esac
 }
 

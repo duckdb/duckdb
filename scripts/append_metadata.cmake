@@ -14,21 +14,27 @@ set(ABI_TYPE "" CACHE STRING "Metadata field: the ABI type of the extension")
 set(META6 "" CACHE STRING "Metadata field")
 set(META7 "" CACHE STRING "Metadata field")
 set(META8 "" CACHE STRING "Metadata field")
-set(SIGNATURE_SIZE "256" CACHE STRING "Size in bytes of the trailing signature slot: 256 for RSA-2048, 384 for RSA-3072")
+set(SIGNATURE_SIZE "256" CACHE STRING "Size in bytes of the trailing signature slot: 256/384/512 for RSA-2048/3072/4096")
+set(SUPPORTED_SIGNATURE_SIZES 256 384 512)
 
-if(NOT SIGNATURE_SIZE STREQUAL "256" AND NOT SIGNATURE_SIZE STREQUAL "384")
-  message(FATAL_ERROR "SIGNATURE_SIZE must be 256 (RSA-2048) or 384 (RSA-3072), got '${SIGNATURE_SIZE}'")
+if(NOT SIGNATURE_SIZE IN_LIST SUPPORTED_SIGNATURE_SIZES)
+  message(FATAL_ERROR "SIGNATURE_SIZE must be one of ${SUPPORTED_SIGNATURE_SIZES}, got '${SIGNATURE_SIZE}'")
 endif()
 
-# "384" marker in reserved field index 6 (reader numbering = the METADATA7 slot) selects RSA-3072; empty/"256" keeps
-# the legacy RSA-2048 layout byte-for-byte identical. The marker is inside the signed region.
-# META7 is reserved for this marker: it may only be empty or equal to SIGNATURE_SIZE.
-if(NOT META7 STREQUAL "" AND NOT META7 STREQUAL "${SIGNATURE_SIZE}")
-  message(FATAL_ERROR "META7 is reserved for the signature-size marker; it must be empty or '${SIGNATURE_SIZE}', got '${META7}'")
+# META7 (reader field 6) holds the signature-size marker: empty for legacy 256, else the size in decimal.
+if(SIGNATURE_SIZE STREQUAL "256")
+  set(SIGNATURE_MARKER "")
+else()
+  set(SIGNATURE_MARKER "${SIGNATURE_SIZE}")
 endif()
-if(SIGNATURE_SIZE STREQUAL "384")
-  set(META7 "384")
+if(NOT META7 STREQUAL "" AND NOT META7 STREQUAL "${SIGNATURE_MARKER}")
+  if(SIGNATURE_MARKER STREQUAL "")
+    message(FATAL_ERROR "META7 is reserved for the signature-size marker; it must be empty, got '${META7}'")
+  else()
+    message(FATAL_ERROR "META7 is reserved for the signature-size marker; it must be empty or '${SIGNATURE_MARKER}', got '${META7}'")
+  endif()
 endif()
+set(META7 "${SIGNATURE_MARKER}")
 
 # null.txt should contain exactly 1 byte of value \x00
 file(READ "${NULL_FILE}" EMPTY_BYTE)
@@ -36,8 +42,7 @@ file(READ "${NULL_FILE}" EMPTY_BYTE)
 string(REPEAT "${EMPTY_BYTE}" 32 EMPTY_32)
 string(REPEAT "${EMPTY_BYTE}" ${SIGNATURE_SIZE} EMPTY_SIGNATURE)
 
-# WASM custom-section LEB128 lengths: outer = 1+16+2+8x32+SIGNATURE_SIZE (531->659), inner = 8x32+SIGNATURE_SIZE
-# (512->640). Low bytes (147, 128) are invariant; only the shared high byte (= value >> 7, same bucket for both) grows.
+# 256 + SIGNATURE_SIZE is a multiple of 128, so both LEB128 lengths share low bytes 147/128 and this high byte.
 math(EXPR SIGNATURE_LEB_HIGH "(256 + ${SIGNATURE_SIZE}) >> 7")
 
 # 0 for custom section

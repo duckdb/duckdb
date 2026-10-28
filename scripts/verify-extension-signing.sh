@@ -10,7 +10,7 @@ fi
 signed_extensions_dir="$1"
 public_key_file="$2"
 script_dir="$(dirname "$(readlink -f "$0")")"
-# Minimum footer size; the real per-file signature size is detected from the footer marker (detect_signature_size).
+# Minimum footer size; the per-file size (256/384/512) is detected from the footer marker.
 signature_size=256
 
 get_file_size() {
@@ -67,34 +67,30 @@ cat "$file_list" | xargs -0 -n 1 -P "${CI_CPU_COUNT:-1}" bash -c '
 		fi
 	}
 
-	# Signature size is detected from the file, not assumed: the marker in reader field 6 (the FIELD7 slot, block
-	# offset 32) is located via a legacy-first, magic-keyed dual probe mirroring the engine verifier.
-	field_at() {
-		# field_at <file> <block_start> <field_index_from_block_start> -> trimmed ASCII field value.
-		dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | LC_ALL=C tr -d '\''\000'\'' | sed '\''s/[[:space:]]*$//'\''
+	# Hex dump of 32-byte metadata field $3 (0-based from block start $2).
+	field_hex() {
+		dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | od -An -v -tx1 | tr -d '\'' \n'\''
 	}
 
+	# Hex of $1 NUL-padded to 32 bytes, the only accepted encoding of a metadata field.
+	padded_hex() {
+		local hex
+		hex=$(printf '\''%s'\'' "$1" | od -An -v -tx1 | tr -d '\'' \n'\'')
+		printf '\''%s'\'' "$hex"
+		printf '\''%0*d'\'' $(( 64 - ${#hex} )) 0
+	}
+
+	# Mirror the engine verifier: probe each size legacy-first, block at size-256-S with magic (FIELD1) and marker (FIELD7) == S.
 	detect_signature_size() {
-		local file="$1" size="$2" block_2048 block_3072 magic marker
-		if [ "$size" -ge 512 ]; then
-			block_2048=$(( size - 512 ))
-			magic=$(field_at "$file" "$block_2048" 7)
-			if [ "$magic" = "4" ]; then
-				marker=$(field_at "$file" "$block_2048" 1)
-				if [ -z "$marker" ] || [ "$marker" = "256" ]; then echo 256; return 0; fi
-				echo "unrecognized signature-size marker '\''$marker'\'' (legacy offset)"; return 1
-			fi
-		fi
-		if [ "$size" -ge 640 ]; then
-			block_3072=$(( size - 640 ))
-			magic=$(field_at "$file" "$block_3072" 7)
-			if [ "$magic" = "4" ]; then
-				marker=$(field_at "$file" "$block_3072" 1)
-				if [ "$marker" = "384" ]; then echo 384; return 0; fi
-				echo "unrecognized signature-size marker '\''$marker'\'' (rsa-3072 offset)"; return 1
-			fi
-		fi
-		echo "could not locate extension metadata magic at either signature offset"
+		local file="$1" size="$2" probe block marker
+		for probe in 256 384 512; do
+			block=$(( size - 256 - probe ))
+			if [ "$block" -lt 0 ] || [ "$(field_hex "$file" "$block" 7)" != "$(padded_hex 4)" ]; then continue; fi
+			if [ "$probe" = 256 ]; then marker=""; else marker="$probe"; fi
+			if [ "$(field_hex "$file" "$block" 1)" = "$(padded_hex "$marker")" ]; then echo "$probe"; return 0; fi
+			echo "signature-size marker does not match the ${probe}-byte footer layout"; return 1
+		done
+		echo "could not locate extension metadata magic at any supported signature offset"
 		return 1
 	}
 
