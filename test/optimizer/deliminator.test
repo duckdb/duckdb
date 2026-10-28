@@ -301,8 +301,9 @@ INSERT INTO evidence_b VALUES (2), (4), (NULL);
 statement ok
 INSERT INTO evidence_c VALUES (1), (1), (4);
 
+# Keep overlapping ranges so statistics cannot prune the second ANTI join.
 statement ok
-INSERT INTO evidence_d VALUES (4);
+INSERT INTO evidence_d VALUES (3);
 
 statement ok
 INSERT INTO evidence_a_flag SELECT id, true FROM evidence_a;

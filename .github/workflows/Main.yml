@@ -164,7 +164,6 @@ jobs:
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extension/**
             tests:
               - test/**/*.test
             tests_slow:
@@ -448,23 +447,29 @@ jobs:
         core:
           config: duckdb/.github/config/core.cmake
           extra_toolchains: unixodbc;parser_tools
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         cloud:
           config: duckdb/.github/config/cloud.cmake
           extra_toolchains: unixodbc;parser_tools
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         search:
           config: duckdb/.github/config/search.cmake
           extra_toolchains: unixodbc;parser_tools
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         scanner:
           config: duckdb/.github/config/scanner.cmake
           extra_toolchains: unixodbc;parser_tools
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         rust:
-          config:
-            - duckdb/.github/config/rust_based_extensions.cmake
-            - duckdb/.github/config/external_extensions.cmake
+          config: duckdb/.github/config/rust_based_extensions.cmake
+          default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
+          toolchain: rust
+        external:
+          config: duckdb/.github/config/external_extensions.cmake
           default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
           toolchain: rust
       extension_repository: duckdb/extension-template
@@ -472,7 +477,6 @@ jobs:
       ci_tools_repository: duckdb/extension-ci-tools
       ci_tools_version: main
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
       windows_vcpkg_toolchain: cl

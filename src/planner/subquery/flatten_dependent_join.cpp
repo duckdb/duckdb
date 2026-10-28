@@ -85,7 +85,10 @@ FlattenDependentJoins::GetCurrentBindings(const vector<ColumnBinding> &state) co
 }
 
 void FlattenDependentJoins::RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state) {
-	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	if (!correlated_aliases.empty()) {
+		// only references to correlated columns are rewritten, without any there is nothing to visit
+		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	}
 	InvalidateAccessCache();
 }
 
@@ -646,7 +649,6 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
 		auto &col = op.correlated_columns[i];
 		duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		mark_types.push_back(col.type);
 	}
 	outer_state.replacement_graph.Merge(right_state.replacement_graph);
 	for (auto &binding : output.left_payload) {
@@ -718,6 +720,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 
 	vector<JoinCondition> conditions;
 	CreateDelimJoinConditions(conditions, op.correlated_columns, right_state.bindings, op.perform_delim);
+	for (auto &condition : conditions) {
+		mark_types.push_back(condition.GetLHS().GetReturnType());
+	}
 	if (op.condition) {
 		if (op.any_join) {
 			D_ASSERT(BoundComparisonExpression::IsComparison(*op.condition));
@@ -816,8 +821,8 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 
 		auto first_aggregate = GetBuiltinAggregateFunction(binder.context, FirstFun::Name, {col.type});
 		FunctionBinder function_binder(binder.context);
-		auto first_fun = function_binder.BindAggregateFunction(std::move(first_aggregate), std::move(aggr_children),
-		                                                       nullptr, AggregateType::NON_DISTINCT);
+		auto first_fun = function_binder.BindAggregateFunction(first_aggregate, std::move(aggr_children), nullptr,
+		                                                       AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }
