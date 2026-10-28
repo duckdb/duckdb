@@ -289,10 +289,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// Bind the function
-	ThrowIfReplacedWhileBindingArguments(aggr, func_liveness);
+	auto &function_entry = FunctionEntryAfterArguments(aggr, func, func_liveness, CatalogType::AGGREGATE_FUNCTION_ENTRY)
+	                           .Cast<AggregateFunctionCatalogEntry>();
 	FunctionBinder function_binder(binder);
 	auto aggregate =
-	    function_binder.BindAggregateFunction(func, std::move(arguments), error, std::move(bound_filter),
+	    function_binder.BindAggregateFunction(function_entry, std::move(arguments), error, std::move(bound_filter),
 	                                          aggr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	// No function found, throw an error
 	if (!aggregate) {
@@ -303,7 +304,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// If the function cannot be used as an aggregate, but can be used as a window function, throw a specific error
 	// message
 	if (!aggregate->Function().CanAggregate() && aggregate->Function().CanWindow()) {
-		auto msg = StringUtil::Format("Function %s can only be used as a window function", func.name);
+		auto msg = StringUtil::Format("Function %s can only be used as a window function", function_entry.name);
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();

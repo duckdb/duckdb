@@ -18,13 +18,7 @@ statement ok
 set autoload_known_extensions=true
 
 # epoch(TIMESTAMPTZ) is icu's: binding it autoloads icu, which also adds overloads to the enclosing -, replacing
-# its catalog entry while its arguments are bound; that is reported instead of binding against the destroyed entry
-statement error
-SELECT epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ) - epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)
-----
-autoloading in this position is not supported yet
-
-# icu is loaded now, so the same query binds
+# its catalog entry while its arguments are bound; the function is looked up again and binds against the new entry
 query I
 SELECT epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ) - epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)
 ----
@@ -58,7 +52,45 @@ set autoinstall_known_extensions=true
 statement ok
 set autoload_known_extensions=true
 
+# the same for an aggregate
 query I
 SELECT sum(epoch('2024-01-01 00:00:00+00'::TIMESTAMPTZ)) FROM range(2)
 ----
 3408134400.0
+
+restart
+
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_operator_overloads'
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoload_known_extensions=true
+
+# icu also adds TIMESTAMPTZ overloads to the range table function, whose entry is replaced while its parameters
+# are bound
+query I
+SELECT * FROM range(epoch('1970-01-01 00:00:02+00'::TIMESTAMPTZ)::BIGINT)
+----
+0
+1
+
+restart
+
+statement ok
+set extension_directory='{TEST_DIR}/autoloading_operator_overloads'
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoload_known_extensions=true
+
+# a parameter bound after the one that autoloads
+query I
+SELECT * FROM range(epoch('1970-01-01 00:00:00+00'::TIMESTAMPTZ)::BIGINT, 2)
+----
+0
+1

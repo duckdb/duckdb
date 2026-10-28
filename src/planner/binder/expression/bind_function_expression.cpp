@@ -261,17 +261,22 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 
 //! Binding a function's arguments can autoload an extension that adds overloads to that very function (icu adds
 //! TIMESTAMPTZ overloads to + and -, and epoch(TIMESTAMPTZ) autoloads it). That replaces the function's catalog entry
-//! and destroys the one the binder holds, so the binder checks the entry's liveness token before using it again.
-void ExpressionBinder::ThrowIfReplacedWhileBindingArguments(const FunctionExpression &function,
-                                                            const weak_ptr<const bool> &liveness) {
+//! and destroys the one the binder holds, so the binder checks the entry's liveness token before using it again, and
+//! looks the function up again when it expired. The bound arguments own nothing from the old entry.
+CatalogEntry &ExpressionBinder::FunctionEntryAfterArguments(FunctionExpression &function, CatalogEntry &entry,
+                                                            const weak_ptr<const bool> &liveness,
+                                                            CatalogType expected_type) {
 	if (!liveness.expired()) {
-		return;
+		return entry;
 	}
-	throw BinderException(function,
-	                      "Function %s gained overloads from an extension that was autoloaded while its arguments "
-	                      "were bound; autoloading in this position is not supported yet. Run the query again, or LOAD "
-	                      "the extension before running it.",
-	                      function.FunctionName());
+	auto &replacement = BindFunction(function);
+	if (replacement.type != expected_type) {
+		throw BinderException(function,
+		                      "Function %s was replaced by an extension that was autoloaded while its arguments were "
+		                      "bound, and is no longer a function of the same kind",
+		                      function.FunctionName());
+	}
+	return replacement;
 }
 
 CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
@@ -423,13 +428,16 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		}
 	}
 
-	ThrowIfReplacedWhileBindingArguments(function, func_liveness);
+	auto &function_entry =
+	    FunctionEntryAfterArguments(function, func, func_liveness, CatalogType::SCALAR_FUNCTION_ENTRY)
+	        .Cast<ScalarFunctionCatalogEntry>();
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
+	auto result =
+	    function_binder.BindScalarFunction(function_entry, std::move(arguments), error, function.IsOperator(), &binder);
 	if (!result && !named_arguments.empty()) {
 		// a legacy call that does not bind positionally may use names the function declares (e.g. **kwargs)
 		ErrorData named_error;
-		result = function_binder.BindScalarFunction(func, std::move(named_arguments), named_error,
+		result = function_binder.BindScalarFunction(function_entry, std::move(named_arguments), named_error,
 		                                            function.IsOperator(), &binder);
 	}
 	if (!result) {
@@ -564,10 +572,12 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.LambdaExprMutable(), capture_bind_lambda,
 	                     override_bind_lambda_context, capture_child_types);
 
-	ThrowIfReplacedWhileBindingArguments(function, func_liveness);
+	auto &function_entry =
+	    FunctionEntryAfterArguments(function, func, func_liveness, CatalogType::SCALAR_FUNCTION_ENTRY)
+	        .Cast<ScalarFunctionCatalogEntry>();
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(func, std::move(children), error, function.IsOperator(), &binder);
+	    function_binder.BindScalarFunction(function_entry, std::move(children), error, function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
