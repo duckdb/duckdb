@@ -174,7 +174,19 @@ public:
 		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
+	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false) override {
+		if (type == TokenType::OPERATOR && end == sql.size() && end == start + 1 && sql[start] == '.') {
+			last_word = ".";
+			last_pos = start;
+			return;
+		}
+		TokenizerBehavior::PushToken(start, end, type, unterminated);
+	}
+
 	void OnLastToken(const Tokenizer &, TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (last_word_p.empty() && last_word == ".") {
+			return;
+		}
 		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}

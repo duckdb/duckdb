@@ -442,7 +442,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				break;
 			}
 			if (c == '.' && (i + 1 >= sql.size() || !StringUtil::CharacterIsDigit(sql[i + 1]))) {
-				tokens.emplace_back(".", last_pos, TokenType::OPERATOR);
+				behavior.PushToken(last_pos, i + 1, TokenType::OPERATOR);
 				last_pos = i + 1;
 				break;
 			}

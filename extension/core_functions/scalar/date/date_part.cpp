@@ -538,9 +538,11 @@ struct DatePart {
 			D_ASSERT(input.ColumnCount() == 1);
 
 			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, [&](int64_t input) {
-				// millisecond amounts provided to epoch_ms should never be considered infinite
-				// instead such values will just throw when converted to microseconds
-				auto micros = Timestamp::FromEpochMsPossiblyInfinite(input);
+				int64_t micros_value;
+				if (!TryMultiplyOperator::Operation(input, Interval::MICROS_PER_MSEC, micros_value)) {
+					throw ConversionException("Timestamp milliseconds out of range: %ld", input);
+				}
+				auto micros = timestamp_t(micros_value);
 				if (!Timestamp::IsValid(micros)) {
 					throw ConversionException("Timestamp milliseconds out of range: %ld", input);
 				}
@@ -2743,7 +2745,15 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 }
 
 ScalarFunctionSet EpochFun::GetFunctions() {
+	using OP = DatePart::EpochOperator;
 	auto set = GetTimePartFunction<DatePart::EpochOperator, double>(LogicalType::DOUBLE, "temporal");
+
+	auto tz_ns_func = DatePart::UnaryFunction<timestamp_ns_t, double, OP>;
+	auto tz_ns_stats = OP::template PropagateStatistics<timestamp_ns_t>;
+	ScalarFunction tz_ns_fun({}, LogicalType::DOUBLE, tz_ns_func, nullptr, tz_ns_stats);
+	tz_ns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ_NS);
+	set.AddFunction(tz_ns_fun);
+
 	SetNonDecreasingExceptInterval(set);
 	return set;
 }
