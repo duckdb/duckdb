@@ -149,69 +149,23 @@ SELECT '1000._5'::DECIMAL(39,1)
 ----
 Conversion Error
 
-# the result type of fixed-size decimal arithmetic depends on the wide_decimal_arithmetic setting, so stored
-# expressions cannot use it while the setting is enabled
+# stored expressions (index keys, CHECK constraints, generated columns) can have wide results
 statement ok
 CREATE TABLE prod(a DECIMAL(38,0), b DECIMAL(38,0));
-
-statement ok
-SET wide_decimal_arithmetic = true;
 
 query I
 SELECT typeof(a * b) FROM (VALUES (1::DECIMAL(38,0), 1::DECIMAL(38,0))) t(a, b)
 ----
 DECIMAL(76,0)
 
-statement error
+statement ok
 CREATE UNIQUE INDEX prod_idx ON prod((a * b))
-----
-Index keys cannot contain decimal arithmetic whose result type depends on the wide_decimal_arithmetic setting
 
-statement error
-CREATE UNIQUE INDEX prod_idx ON prod((a + b))
-----
-wide_decimal_arithmetic
-
-statement error
+statement ok
 CREATE TABLE checked(a DECIMAL(38,0), b DECIMAL(38,0), CHECK (a * b > 0))
-----
-CHECK constraints cannot contain decimal arithmetic whose result type depends on the wide_decimal_arithmetic setting
 
-statement error
+statement ok
 CREATE TABLE generated(a DECIMAL(38,0), b DECIMAL(38,0), c AS (a * b))
-----
-Generated columns cannot contain decimal arithmetic whose result type depends on the wide_decimal_arithmetic setting
-
-# results that do not depend on the setting are fine
-statement ok
-CREATE INDEX prod_narrow_idx ON prod((a::DECIMAL(18,0) * b::DECIMAL(18,0)))
-
-statement ok
-CREATE TABLE checked(a DECIMAL(38,0), b DECIMAL(38,0), CHECK (a::DECIMAL(18,0) * b::DECIMAL(18,0) > 0))
-
-statement ok
-CREATE TABLE generated(a DECIMAL(38,0), b DECIMAL(38,0), c AS (a::DECIMAL(18,0) * b::DECIMAL(18,0)))
-
-# wide inputs give wide results regardless of the setting
-statement ok
-CREATE TABLE wide_prod(a DECIMAL(40,0), b DECIMAL(40,0), c AS (a * b), CHECK (a * b > 0))
-
-statement ok
-CREATE INDEX wide_prod_idx ON wide_prod((a * b))
-
-statement ok
-SET wide_decimal_arithmetic = false;
-
-query I
-SELECT typeof(a * b) FROM (VALUES (1::DECIMAL(38,0), 1::DECIMAL(38,0))) t(a, b)
-----
-DECIMAL(38,0)
-
-statement ok
-CREATE UNIQUE INDEX prod_idx ON prod((a * b))
-
-statement ok
-CREATE TABLE checked_fixed(a DECIMAL(38,0), b DECIMAL(38,0), CHECK (a * b > 0))
 
 statement ok
 INSERT INTO prod VALUES (2, 3)
@@ -221,35 +175,42 @@ INSERT INTO prod VALUES (3, 2)
 ----
 <REGEX>:Constraint Error.*
 
-# the stored expressions are bound again after a restart, the setting must not change their types then
-restart
-
-statement ok
-SET wide_decimal_arithmetic = true;
-
-statement error
-INSERT INTO prod VALUES (3, 2)
-----
-Index keys cannot contain decimal arithmetic whose result type depends on the wide_decimal_arithmetic setting
-
-statement error
-INSERT INTO checked_fixed VALUES (3, 2)
-----
-CHECK constraints cannot contain decimal arithmetic whose result type depends on the wide_decimal_arithmetic setting
-
 statement ok
 INSERT INTO checked VALUES (3, 2)
 
+statement error
+INSERT INTO checked VALUES (-3, 2)
+----
+<REGEX>:Constraint Error.*
+
 statement ok
-SET wide_decimal_arithmetic = false;
+INSERT INTO generated VALUES (repeat('9', 38)::DECIMAL(38,0), repeat('9', 38)::DECIMAL(38,0))
+
+query II
+SELECT c, typeof(c) FROM generated
+----
+9999999999999999999999999999999999999800000000000000000000000000000000000001	DECIMAL(76,0)
+
+# the stored expressions are bound again after a restart
+restart
 
 statement error
 INSERT INTO prod VALUES (3, 2)
 ----
 <REGEX>:Constraint Error.*
 
+statement error
+INSERT INTO checked VALUES (-3, 2)
+----
+<REGEX>:Constraint Error.*
+
 statement ok
-INSERT INTO checked_fixed VALUES (3, 2)
+INSERT INTO prod VALUES (repeat('9', 38)::DECIMAL(38,0), repeat('9', 38)::DECIMAL(38,0))
+
+query I
+SELECT count(*) FROM prod WHERE a * b = repeat('9', 38)::DECIMAL(38,0) * repeat('9', 38)::DECIMAL(38,0)
+----
+1
 
 # wide decimal columns need storage version v2.0.0
 statement ok

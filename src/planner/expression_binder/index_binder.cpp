@@ -42,7 +42,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
 		auto copy = expr->Copy();
-		unbound_expressions.push_back(BindStoredExpression(copy, "Index keys"));
+		unbound_expressions.push_back(Bind(copy));
 	}
 
 	CreateIndexInput input(context, unbound_index.table_io_manager, unbound_index.db, create_info.constraint_type,
@@ -105,7 +105,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	vector<unique_ptr<Expression>> expressions;
 	for (auto &expr : create_index_info->expressions) {
 		properties.always_require_rebind = false;
-		expressions.push_back(BindStoredExpression(expr, "Index keys"));
+		expressions.push_back(Bind(expr));
 		if (properties.always_require_rebind) {
 			throw BinderException("Index keys cannot contain expressions with side effects.");
 		}

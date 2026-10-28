@@ -56,10 +56,6 @@ public:
 	static bool IsWide(uint8_t width) {
 		return width > MAX_WIDTH_INT128;
 	}
-	//! The widest result of combining decimals of the given widths, fixed-size unless an input is already wide
-	static uint8_t MaxCombinedWidth(uint8_t left_width, uint8_t right_width) {
-		return IsWide(left_width) || IsWide(right_width) ? MAX_WIDTH_DECIMAL : MAX_WIDTH_INT128;
-	}
 	static string ToString(int16_t value, uint8_t width, uint8_t scale);
 	static string ToString(int32_t value, uint8_t width, uint8_t scale);
 	static string ToString(int64_t value, uint8_t width, uint8_t scale);

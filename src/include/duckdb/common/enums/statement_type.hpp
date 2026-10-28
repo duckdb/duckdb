@@ -75,7 +75,7 @@ class ClientContext;
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT),
-	      parameter_count(0), always_require_rebind(false), depends_on_wide_decimal_setting(false) {
+	      parameter_count(0), always_require_rebind(false) {
 	}
 
 	struct CatalogIdentity {
@@ -111,8 +111,6 @@ struct StatementProperties {
 	idx_t parameter_count;
 	//! Whether or not the statement ALWAYS requires a rebind
 	bool always_require_rebind;
-	//! Whether a bound decimal operation only has a wide result because of the wide_decimal_arithmetic setting
-	bool depends_on_wide_decimal_setting;
 
 	bool IsReadOnly() const {
 		return modified_databases.empty();

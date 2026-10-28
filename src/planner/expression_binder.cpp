@@ -274,20 +274,6 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-unique_ptr<Expression> ExpressionBinder::BindStoredExpression(unique_ptr<ParsedExpression> &expr,
-                                                              const string &expression_kind) {
-	auto &properties = binder.GetStatementProperties();
-	properties.depends_on_wide_decimal_setting = false;
-	auto result = Bind(expr);
-	if (properties.depends_on_wide_decimal_setting) {
-		throw BinderException("%s cannot contain decimal arithmetic whose result type depends on the "
-		                      "wide_decimal_arithmetic setting, disable the setting or cast the operands to narrower "
-		                      "DECIMAL types",
-		                      expression_kind);
-	}
-	return result;
-}
-
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
 	// bind the main expression - a name that reaches out of this scope is resolved where it occurs

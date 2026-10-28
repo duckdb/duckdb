@@ -116,8 +116,6 @@ public:
 	idx_t inaccessible_lambda_binding_count = 0;
 
 public:
-	//! Binds an expression that is stored in the catalog, its result type must not depend on session settings
-	unique_ptr<Expression> BindStoredExpression(unique_ptr<ParsedExpression> &expr, const string &expression_kind);
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
 	                            bool root_expression = true);
 

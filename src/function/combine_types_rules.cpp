@@ -146,10 +146,9 @@ static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, cons
 	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
 	idx_t width = idx_t(extra_width) + scale;
-	auto max_width = Decimal::MaxCombinedWidth(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
-	if (width > max_width) {
+	if (width > Decimal::MAX_WIDTH_DECIMAL) {
 		// if the resulting decimal does not fit, we truncate the scale
-		width = max_width;
+		width = Decimal::MAX_WIDTH_DECIMAL;
 		scale = NumericCast<uint8_t>(width - extra_width);
 	}
 	result = LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);

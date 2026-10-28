@@ -1613,13 +1613,6 @@
         ]
     },
     {
-        "name": "wide_decimal_arithmetic",
-        "description": "Let arithmetic and comparisons on decimals of up to 38 digits produce results wider than 38 digits (stored as BIGNUM) instead of clamping the result to 38 digits",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false"
-    },
-    {
         "name": "write_buffer_row_group_count",
         "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
         "type": "UBIGINT",

@@ -48,16 +48,10 @@ SELECT abs(n) FROM abs_repro;
 170141183460469231731687303715884105728
 
 # a scale-255 result that needs no extra integer digit is representable
-statement ok
-SET wide_decimal_arithmetic = true;
-
 query I
 SELECT '1e-255'::NUMERIC + 0 = '1e-255'::NUMERIC;
 ----
 true
-
-statement ok
-RESET wide_decimal_arithmetic;
 
 # scientific notation counts the digits of the resulting value, not of the literal
 query II
