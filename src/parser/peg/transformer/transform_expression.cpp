@@ -68,17 +68,6 @@ static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string 
 		}
 		return std::move(try_expression);
 	}
-	if (lowercase_name == "has_error") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to HAS_ERROR expression");
-		}
-		reject_named_arguments("HAS_ERROR expression");
-		auto has_error_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR);
-		for (auto &arg : function_children) {
-			has_error_expression->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
-		}
-		return std::move(has_error_expression);
-	}
 	if (lowercase_name == "construct_array") {
 		reject_named_arguments("array constructors");
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);

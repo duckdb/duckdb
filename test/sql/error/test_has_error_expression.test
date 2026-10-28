@@ -218,3 +218,50 @@ query I
 SELECT try((SELECT count(regexp_matches(s, '(')) FROM (VALUES ('abc'), ('def')) v(s)))
 ----
 NULL
+
+# has_error resolves through the catalog like an ordinary function, so a user function of the
+# same name shadows the built-in instead of being silently hijacked
+statement ok
+CREATE MACRO has_error(a) AS 42;
+
+query I
+SELECT has_error(1)
+----
+42
+
+query I
+SELECT main.has_error(1)
+----
+42
+
+statement ok
+DROP MACRO has_error;
+
+query I
+SELECT has_error(1)
+----
+false
+
+# the built-in resolves under explicit qualification as well
+query I
+SELECT system.main.has_error(1 // 0)
+----
+true
+
+# the built-in is listed in the catalog
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'has_error' AND database_name = 'system'
+----
+1
+
+# the quoted spelling also resolves through the catalog
+query I
+SELECT "has_error"(1 // 0)
+----
+true
+
+# the method-chain spelling resolves through the catalog
+query I
+SELECT (1 // 0).has_error()
+----
+true

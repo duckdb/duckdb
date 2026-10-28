@@ -5,6 +5,7 @@ add_library_unity(
   constant_or_null.cpp
   error.cpp
   getvariable.cpp
+  has_error.cpp
   invoke.cpp)
 
 set(ALL_OBJECT_FILES
