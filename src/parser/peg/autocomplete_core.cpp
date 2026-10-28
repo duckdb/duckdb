@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -173,7 +174,19 @@ public:
 		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
+	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false) override {
+		if (type == TokenType::OPERATOR && end == sql.size() && end == start + 1 && sql[start] == '.') {
+			last_word = ".";
+			last_pos = start;
+			return;
+		}
+		TokenizerBehavior::PushToken(start, end, type, unterminated);
+	}
+
 	void OnLastToken(const Tokenizer &, TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (last_word_p.empty() && last_word == ".") {
+			return;
+		}
 		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
@@ -214,8 +227,11 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		// run the root matcher
 		TokenIterator token_iterator(tokens);
 		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		// memoize match results so backtracking over unbalanced input stays polynomial
+		ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+		ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
 		MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE);
+		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE, &packrat_cache);
 		MatchState state(token_iterator, match_context);
 		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}

@@ -150,8 +150,12 @@ private:
 	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
+	//! Fetch the value of a constant or foldable expression
+	bool TryGetConstantValue(Expression &expr, Value &result);
 	bool ExpressionIsConstant(Expression &expr, const Value &val);
 	bool ExpressionIsConstantOrNull(Expression &expr, const Value &val);
+	//! Whether the expression is a constant or foldable expression that evaluates to NULL
+	bool ExpressionIsNull(Expression &expr);
 
 	unique_ptr<NodeStatistics> PropagateUnion(LogicalSetOperation &setop, unique_ptr<LogicalOperator> &node_ptr);
 

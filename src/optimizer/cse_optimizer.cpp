@@ -75,6 +75,13 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 		}
 	}
 
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		// TRY turns errors raised while evaluating its child into NULL. Extracting a subexpression of the child into
+		// the projection below would evaluate it outside of the TRY, so errors would no longer be caught.
+		// The TRY expression as a whole can still be extracted, but nothing inside of it.
+		return;
+	}
+
 	// If we have a function that uses short circuiting, then we can only extract CSEs from the leftmost
 	// side of the argument tree (child_no == 0)
 	switch (expr.GetExpressionClass()) {

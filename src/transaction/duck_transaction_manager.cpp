@@ -247,6 +247,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	CheckpointOptions options;
+	options.explicit_checkpoint = true;
 	if (GetLastCommit() >= LowestVisibilityBound()) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
@@ -336,7 +337,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined state, as those commits were made assuming this one was already committed
-		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
+		// we must write the WAL if an unbound index has buffered replays: the checkpoint may be skipped
+		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context) &&
+		    !db.GetStorageManager().HasBufferedIndexReplays()) {
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}

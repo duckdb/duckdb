@@ -207,18 +207,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 			return nullptr;
 		}
 
-		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
-		if (root.GetChildrenMutable().size() == 3) {
-			root.GetChildrenMutable().pop_back();
-			D_ASSERT(root.GetChildrenMutable().size() == 2);
-		}
-
-		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = BindBuiltinScalarFunction(GetContext(), "contains", std::move(root.GetChildrenMutable()));
-
-		contains->GetChildrenMutable()[1] = std::move(parameter);
-
-		return std::move(contains);
+		// convert to contains over the string and the escaped literal; the regexp options (if any) are dropped so the
+		// new contains expression can be matched by other optimizers
+		vector<unique_ptr<Expression>> children;
+		children.push_back(std::move(root.GetChildrenMutable()[0]));
+		children.push_back(make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string))));
+		return BindBuiltinScalarFunction(GetContext(), "contains", std::move(children));
 	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
 		like_string = LikeMatchFromRegex(pattern);
 	} else {
@@ -229,20 +223,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr;
 	}
 
-	// if regexp had options, remove them so the new Like Expression can be matched for other optimizers.
-	if (root.GetChildrenMutable().size() == 3) {
-		root.GetChildrenMutable().pop_back();
-		D_ASSERT(root.GetChildrenMutable().size() == 2);
-	}
-
-	auto like_expression = BindBuiltinScalarFunction(GetContext(), LikeFun::Name, std::move(root.GetChildrenMutable()));
-
-	// Clear the bind info, as the LikeFun bind info is not valid for this new expression.
-	like_expression->BindInfoMutable().reset();
-
-	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
-	like_expression->GetChildrenMutable()[1] = std::move(parameter);
-	return std::move(like_expression);
+	// convert to LIKE over the string and the like pattern; the regexp options (if any) are dropped so the new LIKE
+	// expression can be matched by other optimizers, and the bind of LIKE derives its matcher from the actual pattern
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(root.GetChildrenMutable()[0]));
+	children.push_back(make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string))));
+	return BindBuiltinScalarFunction(GetContext(), LikeFun::Name, std::move(children));
 }
 
 RegexpReplaceExtractRule::RegexpReplaceExtractRule(ExpressionRewriter &rewriter) : Rule(rewriter) {

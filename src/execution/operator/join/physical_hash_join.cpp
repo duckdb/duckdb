@@ -1720,21 +1720,37 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 	gstate.deferred_runtime_filters.clear();
 }
 
+//! How a min/max join filter is checked in the scan
+enum class MinMaxFilterKind : uint8_t {
+	//! Only skips whole vectors or row groups by their zone maps; it never removes a single row
+	OPTIONAL,
+	//! Checked on every row until it removes too few of them, then no longer applied
+	SELECTIVITY_OPTIONAL,
+	//! Checked on every row
+	EXACT
+};
+
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<Expression> filter_expr,
-                                      const LogicalType &column_type, bool selectivity_optional) {
+                                      const LogicalType &column_type, MinMaxFilterKind kind) {
 	if (!filter_expr) {
 		return;
 	}
-	if (selectivity_optional) {
+	switch (kind) {
+	case MinMaxFilterKind::EXACT:
+		info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(filter_expr)));
+		break;
+	case MinMaxFilterKind::SELECTIVITY_OPTIONAL:
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
 		    CreateSelectivityOptionalExpressionFilter(std::move(filter_expr), column_type,
 		                                              SelectivityOptionalFilterType::MIN_MAX));
-	} else {
+		break;
+	case MinMaxFilterKind::OPTIONAL:
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
 		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(filter_expr), column_type)));
+		break;
 	}
 }
 
@@ -1834,6 +1850,9 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
                                        const Value &max_val, const LogicalType &condition_type,
                                        bool reconstruct_expression, bool selectivity_optional) {
 	auto filter_column_type = reconstruct_expression ? column.storage_type : condition_type;
+	const auto kind = column.crossed_secure_view ? MinMaxFilterKind::EXACT
+	                  : selectivity_optional     ? MinMaxFilterKind::SELECTIVITY_OPTIONAL
+	                                             : MinMaxFilterKind::OPTIONAL;
 	switch (cmp) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_GREATERTHAN:
@@ -1842,7 +1861,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		                          CreateJoinFilterComparisonExpression(context, column,
 		                                                               ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 		                                                               min_val, condition_type, reconstruct_expression),
-		                          filter_column_type, selectivity_optional);
+		                          filter_column_type, kind);
 		break;
 	}
 	default:
@@ -1856,7 +1875,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		                          CreateJoinFilterComparisonExpression(context, column,
 		                                                               ExpressionType::COMPARE_LESSTHANOREQUALTO,
 		                                                               max_val, condition_type, reconstruct_expression),
-		                          filter_column_type, selectivity_optional);
+		                          filter_column_type, kind);
 		break;
 	}
 	default:
@@ -1918,7 +1937,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto condition_type = min_val.type();
 			auto runtime_filter_input_type =
 			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
-			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
+			// bloom and prefix-range filters are selectivity-optional, so they are not used below a secure view
+			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
+			                                !pushdown_column.crossed_secure_view;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
 			}
@@ -1949,7 +1970,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
-				if (CanUseInFilter(context, ht, cmp)) {
+				// an IN filter is only cheap as an optional filter, so it is not used below a secure view
+				if (!pushdown_column.crossed_secure_view && CanUseInFilter(context, ht, cmp)) {
 					pushed_in_filter =
 					    PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
 				}

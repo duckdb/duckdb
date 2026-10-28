@@ -190,6 +190,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 		set.AddFunction(GetDateTruncFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}

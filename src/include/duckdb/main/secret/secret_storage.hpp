@@ -173,6 +173,13 @@ public:
 	LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db, const string &name_p,
 	                       const string &secret_path);
 
+public:
+	//! The file name of a persistent secret: path separators, ':', NUL, '%' and a leading '.' in the name are
+	//! percent-encoded
+	static string SecretFileName(const string &secret_name);
+	//! The secret name for a persistent secret file name (reverses SecretFileName)
+	static string SecretNameFromFileName(const string &file_name);
+
 protected:
 	//! Implements the writes to disk
 	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override;

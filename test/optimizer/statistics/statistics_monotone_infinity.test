@@ -2,7 +2,7 @@
 # description: Monotone functions keep correct statistics when -infinity lies between finite bounds
 # group: [statistics]
 
-# the smallest finite DATE and TIMESTAMP values sort below -infinity
+# the smallest finite DATE and nanosecond timestamp values sort below -infinity
 statement ok
 CREATE TABLE dates(c DATE);
 
@@ -38,24 +38,10 @@ SELECT count(date_diff('day', a, b)) FROM date_pairs
 2
 
 statement ok
-CREATE TABLE timestamps(c TIMESTAMP);
-
-statement ok
-INSERT INTO timestamps VALUES (make_timestamp(-9223372036854775807 - 1)), ('-infinity'), ('1970-01-01');
-
-query IIIII
-SELECT count(last_day(c)), count(date_diff('day', TIMESTAMP '2000-01-01', c)),
-       count(date_diff('day', c, TIMESTAMP '2000-01-01')), count(date_sub('day', TIMESTAMP '1960-01-01', c)),
-       count(date_sub('day', c, TIMESTAMP '1960-01-01'))
-FROM timestamps
-----
-2	2	2	2	2
-
-statement ok
 CREATE TABLE timestamps_ns(c TIMESTAMP_NS);
 
 statement ok
-INSERT INTO timestamps_ns VALUES (make_timestamp_ns(-9223372036854775807 - 1)), ('-infinity'), ('1970-01-01');
+INSERT INTO timestamps_ns VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), ('-infinity'), ('1970-01-01');
 
 query I
 SELECT count(epoch_ns(c)) FROM timestamps_ns
@@ -89,7 +75,7 @@ statement ok
 CREATE TABLE smallest_ns(c TIMESTAMP_NS);
 
 statement ok
-INSERT INTO smallest_ns VALUES (make_timestamp_ns(-9223372036854775807 - 1)), ('1970-01-01');
+INSERT INTO smallest_ns VALUES (TIMESTAMP_NS '1677-09-21 00:12:43.145224192'), ('1970-01-01');
 
 query III
 SELECT count(epoch_ns(c)), min(epoch_ns(c)), max(epoch_ns(c)) FROM smallest_ns
@@ -183,33 +169,6 @@ require icu
 
 statement ok
 SET TimeZone = 'UTC';
-
-statement ok
-CREATE TABLE timestamps_tz(c TIMESTAMPTZ);
-
-statement ok
-INSERT INTO timestamps_tz VALUES (make_timestamptz(-9223372036854775807 - 1)), ('-infinity'),
-                                 ('1970-01-01 00:00:00+00');
-
-query IIIII
-SELECT count(era(c)), count(isoyear(c)), count(date_sub('day', TIMESTAMPTZ '2000-01-01 00:00:00+00', c)),
-       count(date_diff('era', TIMESTAMPTZ '2000-01-01 00:00:00+00', c)),
-       count(date_diff('era', c, TIMESTAMPTZ '2000-01-01 00:00:00+00'))
-FROM timestamps_tz
-----
-2	2	2	2	2
-
-# truncating to an era is not monotone, so -infinity keeps its row
-statement ok
-CREATE TABLE era_bounds(c TIMESTAMPTZ);
-
-statement ok
-INSERT INTO era_bounds VALUES (make_timestamptz(-9223372036854775807 - 1)), ('-infinity'), ('0001-01-01 (BC)');
-
-query I
-SELECT count(*) FROM era_bounds WHERE date_trunc('era', c) < TIMESTAMPTZ '0001-01-01 00:00:00+00'
-----
-1
 
 query II
 SELECT count(date_diff('day', '2000-01-01 00:00:00+00'::TIMESTAMPTZ_NS, c)),

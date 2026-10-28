@@ -61,6 +61,9 @@ static void AddProjectedColumns(vector<ProjectionIndex> &result, const vector<Pr
 }
 
 bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
+	if (mode != StatisticsPropagationMode::FULL) {
+		return false;
+	}
 	switch (join.join_type) {
 	case JoinType::RIGHT_SEMI:
 	case JoinType::SEMI: {
@@ -189,7 +192,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		}
 		switch (join.join_type) {
 		case JoinType::INNER:
-		case JoinType::SEMI: {
+		case JoinType::SEMI:
+		case JoinType::RIGHT_SEMI: {
 			UpdateFilterStatistics(condition.GetLHS(), condition.GetRHS(), condition.GetComparisonType());
 			auto updated_stats_left = PropagateExpression(condition.LeftReference());
 			auto updated_stats_right = PropagateExpression(condition.RightReference());

@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
@@ -22,7 +23,7 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<Ta
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
-unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index) {
+unique_ptr<BoundIndex> IndexBinder::BindIndex(UnboundIndex &unbound_index) {
 	auto &index_type_name = unbound_index.GetIndexType();
 	// Do we know the type of this index now?
 	auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
@@ -48,7 +49,13 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	                       create_info.GetIndexName(), create_info.column_ids, unbound_expressions, storage_info,
 	                       create_info.options);
 
-	return index_type->create_instance(input);
+	try {
+		return index_type->create_instance(input);
+	} catch (std::exception &ex) {
+		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried.
+		ErrorData error(ex);
+		unbound_index.ThrowBindFailure(error, "Failed to load the storage");
+	}
 }
 
 void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema) {
@@ -105,8 +112,10 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	for (auto &expr : create_index_info->expressions) {
 		properties.always_require_rebind = false;
 		expressions.push_back(Bind(expr));
-		if (properties.always_require_rebind) {
-			throw BinderException("Index keys cannot contain expressions with side effects.");
+		// casts are bound without the binder, so a cast that reads settings such as TimeZone is found in the key
+		if (properties.always_require_rebind || expressions.back()->RequiresRebind()) {
+			throw BinderException("Index keys cannot contain expressions with side effects. They also cannot depend on "
+			                      "settings such as TimeZone.");
 		}
 	}
 	properties.always_require_rebind = statement_requires_rebind;

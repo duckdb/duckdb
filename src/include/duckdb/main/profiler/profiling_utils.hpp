@@ -54,14 +54,17 @@ public:
 
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
+		lock_guard<mutex> guard(string_metrics_lock);
 		string_timings[key].Add(addition);
 	}
 
 	void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time) {
+		lock_guard<mutex> guard(string_metrics_lock);
 		string_timings[key].Add(addition, start_time, end_time);
 	}
 
 	void UpdateMetricCounter(const string &key, idx_t addition) {
+		lock_guard<mutex> guard(string_metrics_lock);
 		string_counters[key] += addition;
 	}
 
@@ -89,6 +92,7 @@ public:
 	}
 
 	double GetStringMetricInSeconds(const string &key) const {
+		lock_guard<mutex> guard(string_metrics_lock);
 		auto it = string_timings.find(key);
 		if (it == string_timings.end()) {
 			return 0.0;
@@ -97,6 +101,7 @@ public:
 	}
 
 	idx_t GetStringCounter(const string &key) const {
+		lock_guard<mutex> guard(string_metrics_lock);
 		auto it = string_counters.find(key);
 		if (it == string_counters.end()) {
 			return 0;
@@ -162,6 +167,7 @@ public:
 
 	void Reset() {
 		latency_timer.reset();
+		lock_guard<mutex> guard(string_metrics_lock);
 		string_timings.clear();
 		string_counters.clear();
 
@@ -178,6 +184,7 @@ public:
 	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
+		lock_guard<mutex> guard(string_metrics_lock);
 		for (const auto &entry : other.string_timings) {
 			string_timings[entry.first].Merge(entry.second);
 		}
@@ -196,6 +203,8 @@ public:
 	}
 
 private:
+	//! Guards the string-keyed maps, which timers on different threads can update concurrently
+	mutable mutex string_metrics_lock;
 	// String-keyed timings for optimizer, storage and phase timing metrics
 	unordered_map<string, MetricTiming> string_timings;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")

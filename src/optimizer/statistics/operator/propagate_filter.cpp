@@ -17,19 +17,29 @@ static bool IsCompareDistinct(ExpressionType type) {
 	return type == ExpressionType::COMPARE_DISTINCT_FROM || type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 }
 
+bool StatisticsPropagator::TryGetConstantValue(Expression &expr, Value &result) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		result = expr.Cast<BoundConstantExpression>().GetValue();
+		return true;
+	}
+	if (expr.IsFoldable()) {
+		return ExpressionExecutor::TryEvaluateScalar(context, expr, result);
+	}
+	return false;
+}
+
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	Value expr_value;
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		expr_value = expr.Cast<BoundConstantExpression>().GetValue();
-	} else if (expr.IsFoldable()) {
-		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
-			return false;
-		}
-	} else {
+	if (!TryGetConstantValue(expr, expr_value)) {
 		return false;
 	}
 	D_ASSERT(expr_value.type() == val.type());
 	return Value::NotDistinctFrom(expr_value, val);
+}
+
+bool StatisticsPropagator::ExpressionIsNull(Expression &expr) {
+	Value expr_value;
+	return TryGetConstantValue(expr, expr_value) && expr_value.IsNull();
 }
 
 bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {
@@ -239,9 +249,8 @@ FilterPropagateResult StatisticsPropagator::ClassifyFilter(Expression &condition
 
 	if (ExpressionIsConstant(condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	} else if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(false)) ||
-	           ExpressionIsConstant(condition, Value(LogicalType::BOOLEAN))) {
-		// a condition that is always NULL rejects every row too
+	} else if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(false)) || ExpressionIsNull(condition)) {
+		// a filter that is NULL for every row passes no row, like constant_or_null(false, ...)
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 

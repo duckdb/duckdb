@@ -441,8 +441,12 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				last_pos = i + 1;
 				break;
 			}
+			if (c == '.' && (i + 1 >= sql.size() || !StringUtil::CharacterIsDigit(sql[i + 1]))) {
+				behavior.PushToken(last_pos, i + 1, TokenType::OPERATOR);
+				last_pos = i + 1;
+				break;
+			}
 			if (CharacterIsInitialNumber(c)) {
-				// parse a numeric literal
 				state = TokenizeState::NUMERIC;
 				last_pos = i;
 				break;

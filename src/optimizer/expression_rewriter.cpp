@@ -93,9 +93,18 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context,
                                                           vector<unique_ptr<Expression>> children, Value value) {
+	auto result_type = value.type();
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(std::move(value)));
-	// constant_or_null has the type of the leading constant, also when a typed NULL child folds the call
-	return BindBuiltinScalarExpression(context, ConstantOrNullFun::Name, std::move(children));
+	// the bind of constant_or_null derives the return type and the bind data from the leading constant
+	auto result = BindBuiltinScalarFunction(context, ConstantOrNullFun::Name, std::move(children));
+	if (result->GetReturnType() != result_type) {
+		// the call was folded away before its bind could derive the return type; the only such fold is the one for a
+		// NULL constant argument, which yields an untyped NULL - the result is NULL of the value's type
+		D_ASSERT(result->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		         result->Cast<BoundConstantExpression>().GetValue().IsNull());
+		result = make_uniq<BoundConstantExpression>(Value(std::move(result_type)));
+	}
+	return result;
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {

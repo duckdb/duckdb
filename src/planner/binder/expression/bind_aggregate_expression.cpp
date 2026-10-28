@@ -114,6 +114,7 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 }
 
 BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
+	auto func_liveness = func.GetLivenessToken();
 	auto count_star = binder.TryRewriteQualifiedCountStar(aggr);
 	if (count_star) {
 		return BindAggregate(count_star->Cast<FunctionExpression>(), func, depth);
@@ -288,6 +289,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// Bind the function
+	ThrowIfReplacedWhileBindingArguments(aggr, func_liveness);
 	FunctionBinder function_binder(binder);
 	auto aggregate =
 	    function_binder.BindAggregateFunction(func, std::move(arguments), error, std::move(bound_filter),

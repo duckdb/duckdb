@@ -146,6 +146,7 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 
 //! The average of timestamps with an infinity is that infinity, or NULL with both, as for DOUBLE it is NaN. A state
 //! that saw an infinity has the maximum count and the infinities as its value
+template <class TIMESTAMP_TYPE>
 struct TimestampAverageOperation : public DiscreteAverageOperation {
 	static constexpr uint64_t INFINITE_COUNT = NumericLimits<uint64_t>::Maximum();
 	static constexpr uint64_t POSITIVE_INFINITY = 1;
@@ -198,7 +199,7 @@ struct TimestampAverageOperation : public DiscreteAverageOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		if (DUCKDB_UNLIKELY(!timestamp_t(input).IsFinite())) {
+		if (DUCKDB_UNLIKELY(!TIMESTAMP_TYPE(input).IsFinite())) {
 			AddInfinities(state, GetInfinity(input));
 		} else if (state.count != INFINITE_COUNT) {
 			DiscreteAverageOperation::Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
@@ -208,7 +209,7 @@ struct TimestampAverageOperation : public DiscreteAverageOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
-		if (DUCKDB_UNLIKELY(!timestamp_t(input).IsFinite())) {
+		if (DUCKDB_UNLIKELY(!TIMESTAMP_TYPE(input).IsFinite())) {
 			AddInfinities(state, GetInfinity(input));
 		} else if (state.count != INFINITE_COUNT) {
 			DiscreteAverageOperation::ConstantOperation<INPUT_TYPE, STATE, OP>(state, input, unary_input, count);
@@ -220,9 +221,9 @@ struct TimestampAverageOperation : public DiscreteAverageOperation {
 		if (state.count != INFINITE_COUNT) {
 			DiscreteAverageOperation::Finalize<T, STATE>(state, target, finalize_data);
 		} else if (state.value == hugeint_t(POSITIVE_INFINITY)) {
-			target = timestamp_t::infinity().value;
+			target = TIMESTAMP_TYPE::infinity().value;
 		} else if (state.value == hugeint_t(NEGATIVE_INFINITY)) {
-			target = timestamp_t::ninfinity().value;
+			target = TIMESTAMP_TYPE::ninfinity().value;
 		} else {
 			finalize_data.ReturnNull();
 		}
@@ -231,11 +232,11 @@ struct TimestampAverageOperation : public DiscreteAverageOperation {
 
 //! A state with the maximum count holds only infinities, reject imported ones that hold other values
 void ValidateTimestampAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
+	using operation = TimestampAverageOperation<timestamp_t>;
 	for (idx_t i = 0; i < count; i++) {
 		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
-		if (state.count == TimestampAverageOperation::INFINITE_COUNT &&
-		    (state.value < hugeint_t(TimestampAverageOperation::POSITIVE_INFINITY) ||
-		     state.value > hugeint_t(TimestampAverageOperation::BOTH_INFINITIES))) {
+		if (state.count == operation::INFINITE_COUNT && (state.value < hugeint_t(operation::POSITIVE_INFINITY) ||
+		                                                 state.value > hugeint_t(operation::BOTH_INFINITIES))) {
 			throw InvalidInputException(
 			    "Invalid avg state - with a count of %llu the value must be 1 (infinity), 2 (-infinity) or 3 (both), "
 			    "not %s",
@@ -268,6 +269,27 @@ void ValidateTimeAverageStates(const_data_ptr_t states, idx_t count, idx_t strid
 AggregateStateLayout TimeAverageStateLayout(AggregateLayoutInput &input) {
 	auto layout = AggregateFunction::StructStateLayout<AvgState<hugeint_t>>(input);
 	layout.validate_state = ValidateTimeAverageStates;
+	return layout;
+}
+
+//! The average of TIME_NS values is within a day - reject imported states that average outside of it
+void ValidateTimeNSAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
+	for (idx_t i = 0; i < count; i++) {
+		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
+		if (state.count == 0) {
+			continue;
+		}
+		const auto max_value = hugeint_t(0, state.count) * hugeint_t(Interval::NANOS_PER_DAY);
+		if (state.value < 0 || state.value > max_value) {
+			throw InvalidInputException("Invalid avg state - the average of %s over %llu values is not a valid time",
+			                            state.value.ToString(), state.count);
+		}
+	}
+}
+
+AggregateStateLayout TimeNSAverageStateLayout(AggregateLayoutInput &input) {
+	auto layout = AggregateFunction::StructStateLayout<AvgState<hugeint_t>>(input);
+	layout.validate_state = ValidateTimeNSAverageStates;
 	return layout;
 }
 
@@ -457,16 +479,16 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	numeric_avg.GetSignature().GetParameter(0).SetName("x");
 	avg.AddFunction(numeric_avg);
 
-	auto timestamp_avg =
-	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimestampAverageOperation>(
-	        LogicalType::TIMESTAMP, LogicalType::TIMESTAMP);
+	auto timestamp_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                       TimestampAverageOperation<timestamp_t>>(
+	    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP);
 	timestamp_avg.GetSignature().GetParameter(0).SetName("x");
 	timestamp_avg.SetStructStateExport(TimestampAverageStateLayout);
 	avg.AddFunction(timestamp_avg);
 
-	auto timestamp_tz_avg =
-	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimestampAverageOperation>(
-	        LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ);
+	auto timestamp_tz_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                          TimestampAverageOperation<timestamp_t>>(
+	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ);
 	timestamp_tz_avg.GetSignature().GetParameter(0).SetName("x");
 	timestamp_tz_avg.SetStructStateExport(TimestampAverageStateLayout);
 	avg.AddFunction(timestamp_tz_avg);
@@ -483,6 +505,27 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	time_tz_avg.GetSignature().GetParameter(0).SetName("x");
 	time_tz_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_tz_avg);
+
+	auto timestamp_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                          TimestampAverageOperation<timestamp_ns_t>>(
+	    LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_NS);
+	timestamp_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	timestamp_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
+	avg.AddFunction(timestamp_ns_avg);
+
+	auto timestamp_tz_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                             TimestampAverageOperation<timestamp_tz_ns_t>>(
+	    LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_TZ_NS);
+	timestamp_tz_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	timestamp_tz_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
+	avg.AddFunction(timestamp_tz_ns_avg);
+
+	auto time_ns_avg =
+	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	        LogicalType::TIME_NS, LogicalType::TIME_NS);
+	time_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	time_ns_avg.SetStructStateExport(TimeNSAverageStateLayout);
+	avg.AddFunction(time_ns_avg);
 
 	return avg;
 }
