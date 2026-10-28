@@ -315,8 +315,7 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 				    state_types[aggr_idx], ColumnBinding(cte_ref_index, ProjectionIndex(state_pos))));
 				auto combine_function =
 				    GetBuiltinAggregateFunction(optimizer.context, CombineAggrFun::Name, {state_types[aggr_idx]});
-				auto combine_aggregate =
-				    function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
+				auto combine_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
 				if (combine_aggregate->GetReturnType() != state_types[aggr_idx]) {
 					return false;
 				}

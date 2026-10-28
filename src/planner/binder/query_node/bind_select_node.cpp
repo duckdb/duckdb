@@ -415,7 +415,7 @@ static unique_ptr<Expression> BindUncollatedFirst(Binder &binder, unique_ptr<Exp
 	vector<unique_ptr<Expression>> first_children;
 	first_children.push_back(std::move(uncollated_expr));
 	FunctionBinder function_binder(binder);
-	auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
+	auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 	function->SetAlias("__collated_group");
 	return std::move(function);
 }
