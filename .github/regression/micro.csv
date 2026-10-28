@@ -43,6 +43,7 @@ benchmark/micro/functions/nested_macros.benchmark
 benchmark/micro/result_collection/stream_drop.benchmark
 benchmark/micro/result_collection/stream_materialize.benchmark
 benchmark/parquet/dlba_read-long-1000000.benchmark
+benchmark/micro/parquet/read_ahead_delayed_files.benchmark
 benchmark/micro/update/upsert_select_cast_key.benchmark
 benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/aggregate/min_double.benchmark
