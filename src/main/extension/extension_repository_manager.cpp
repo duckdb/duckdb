@@ -76,7 +76,7 @@ string ExtensionRepositoryManager::ToCompactPublicKey(const string &public_key) 
 	}
 
 	if (!duckdb_mbedtls::MbedTlsWrapper::IsValidRSAPublicKey(ToPEMPublicKey(result))) {
-		throw InvalidInputException("Invalid public key: extensions are signed using 2048 or 3072 bit RSA keys, "
+		throw InvalidInputException("Invalid public key: extensions are signed using 2048, 3072 or 4096 bit RSA keys, "
 		                            "provide the public key either in PEM format or as the base64 encoded body of "
 		                            "the PEM format");
 	}

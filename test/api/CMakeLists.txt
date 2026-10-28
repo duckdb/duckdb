@@ -25,6 +25,7 @@ set(TEST_API_OBJECTS
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
     test_extension_repositories.cpp
+    test_extension_footer.cpp
     test_external_extension_provider.cpp
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp

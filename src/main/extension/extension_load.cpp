@@ -383,37 +383,65 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
 
-	// Reserved metadata field index 6 (the first of the three reserved spare fields after the ABI type) carries the
-	// signature-size marker: a short ASCII decimal string, NUL/space-padded like the other fields. Semantics:
-	//   empty / all-zero -> legacy RSA-2048, 256-byte signature (unchanged behavior)
-	//   "256"            -> RSA-2048, 256-byte signature
-	//   "384"            -> RSA-3072, 384-byte signature
-	//   anything else    -> reject (the marker is in the signed region, so an unknown value is malformed/tampered)
-	// The marker is read here but the signed region and signature offset are derived from signature_size by the caller.
-	auto signature_size_marker = FilterZeroAtEnd(metadata_field[6]);
-	// trim trailing spaces as well, mirroring how fields may be space-padded
-	while (!signature_size_marker.empty() && signature_size_marker.back() == ' ') {
-		signature_size_marker.pop_back();
+	// field 6 holds the signature size as a canonical decimal string; empty means legacy RSA-2048
+	auto marker = metadata_field[6];
+	while (!marker.empty() && marker.back() == '\0') {
+		marker.pop_back();
 	}
-	if (signature_size_marker.empty() ||
-	    signature_size_marker == std::to_string(ParsedExtensionMetaData::SIGNATURE_SIZE)) {
-		result.signature_size = ParsedExtensionMetaData::SIGNATURE_SIZE;
-	} else if (signature_size_marker == std::to_string(ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072)) {
-		result.signature_size = ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072;
-	} else {
-		// keep a safe default and record the error so the load is rejected via GetInvalidMetadataError()
-		result.signature_size = ParsedExtensionMetaData::SIGNATURE_SIZE;
-		result.metadata_error = "The extension footer contains an unrecognized signature-size marker '" +
-		                        signature_size_marker + "'; only 256 (RSA-2048) and 384 (RSA-3072) are supported";
+	if (!marker.empty()) {
+		bool supported = false;
+		for (auto size : ParsedExtensionMetaData::SUPPORTED_SIGNATURE_SIZES) {
+			if (marker == std::to_string(size)) {
+				result.signature_size = size;
+				supported = true;
+			}
+		}
+		if (!supported) {
+			for (auto &c : marker) {
+				c = (c >= ' ' && c <= '~') ? c : '?';
+			}
+			result.metadata_error = "The extension footer contains an unrecognized signature-size marker '" + marker +
+			                        "'; supported sizes are 256, 384 and 512";
+		}
 	}
 
 	return result;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &handle) {
-	const string engine_version = string(ExtensionHelper::GetVersionDirectoryName());
-	const string engine_platform = string(DuckDB::Platform());
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionFooter(const char *footer, idx_t footer_size) noexcept {
+	ParsedExtensionMetaData result;
+	ParsedExtensionMetaData mismatch;
+	bool have_mismatch = false;
+	// legacy-first probe of each supported layout; the signed marker must agree with the probed size
+	for (auto size : ParsedExtensionMetaData::SUPPORTED_SIGNATURE_SIZES) {
+		if (footer_size < ParsedExtensionMetaData::METADATA_SIZE + size) {
+			break;
+		}
+		auto probe = ParseExtensionMetaData(footer + footer_size - ParsedExtensionMetaData::METADATA_SIZE - size);
+		if (size == ParsedExtensionMetaData::SIGNATURE_SIZE) {
+			result = probe;
+		}
+		if (!probe.AppearsValid()) {
+			continue;
+		}
+		if (probe.metadata_error.empty() && probe.signature_size == size) {
+			return probe;
+		}
+		if (!have_mismatch) {
+			if (probe.metadata_error.empty()) {
+				probe.metadata_error = StringUtil::Format(
+				    "The extension footer's signature-size marker '%llu' does not match the footer layout",
+				    probe.signature_size);
+			}
+			probe.signature_size = size;
+			mismatch = probe;
+			have_mismatch = true;
+		}
+	}
+	return have_mismatch ? mismatch : result;
+}
 
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &handle) {
 	auto file_size = handle.GetFileSize();
 	if (file_size < ParsedExtensionMetaData::FOOTER_SIZE) {
 		throw InvalidInputException(
@@ -421,44 +449,10 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 		    ParsedExtensionMetaData::FOOTER_SIZE);
 	}
 
-	// Dual-probe, legacy-first, keyed on the magic value. The 256-byte metadata block always directly precedes the
-	// trailing signature, whose length (256 or 384) is NOT known before the block is read. We resolve the ambiguity
-	// by probing the two possible block positions and keeping the one whose magic value is valid:
-	//
-	//   legacy probe : signature_size = 256 -> block at file_size - (METADATA_SIZE + 256) = file_size - FOOTER_SIZE
-	//   rsa3072 probe: signature_size = 384 -> block at file_size - (METADATA_SIZE + 384)
-	//
-	// Legacy is tried first so every existing RSA-2048 extension parses byte-for-byte as before. A 3072 file's legacy
-	// probe reads 256 bytes starting inside its 384-byte signature, so its magic fails and we fall through to the
-	// rsa3072 probe. This makes detection a property of the FILE (the signed magic + marker), never of the trust store.
-	auto read_metadata_block = [&](idx_t signature_size) {
-		string metadata_segment;
-		metadata_segment.resize(ParsedExtensionMetaData::METADATA_SIZE);
-		handle.Read((void *)metadata_segment.data(), metadata_segment.size(),
-		            file_size - (ParsedExtensionMetaData::METADATA_SIZE + signature_size));
-		return ParseExtensionMetaData(metadata_segment.data());
-	};
-
-	// legacy / RSA-2048 probe (also the position for a footer that explicitly marks "256")
-	auto result = read_metadata_block(ParsedExtensionMetaData::SIGNATURE_SIZE);
-	if (result.AppearsValid()) {
-		return result;
-	}
-
-	// RSA-3072 probe: only attempted when the legacy probe did not find a valid magic, and only accepted when the
-	// resolved marker actually says 384 - a valid magic at this offset with any other marker is not a well-formed
-	// 3072 footer and is left to be reported as invalid by the caller.
-	if (file_size >= ParsedExtensionMetaData::METADATA_SIZE + ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072) {
-		auto rsa3072_result = read_metadata_block(ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072);
-		if (rsa3072_result.AppearsValid() &&
-		    rsa3072_result.signature_size == ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072) {
-			return rsa3072_result;
-		}
-	}
-
-	// Neither probe produced a valid 3072 footer: return the legacy-probe result (invalid magic), which the caller
-	// surfaces as "not a DuckDB extension".
-	return result;
+	auto footer_size = MinValue<idx_t>(file_size, ParsedExtensionMetaData::MAX_FOOTER_SIZE);
+	string footer(footer_size, '\0');
+	handle.Read((void *)footer.data(), footer_size, file_size - footer_size);
+	return ParseExtensionFooter(footer.data(), footer_size);
 }
 
 static bool CheckKnownSignatures(DatabaseInstance &db, const string &two_level_hash, const string &signature,
@@ -481,9 +475,7 @@ static bool CheckKnownSignatures(DatabaseInstance &db, const string &two_level_h
 bool ExtensionHelper::CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
                                               ParsedExtensionMetaData &parsed_metadata,
                                               ExtensionRepositoryType repository_type, const string &repository_name) {
-	// The trailing signature is parsed_metadata.signature_size bytes (256 for RSA-2048, 384 for RSA-3072). The signed
-	// region is everything before it, [0, signature_offset), which still includes the 256-byte metadata block (and
-	// therefore the signed signature-size marker). The chunk-hash scheme below is unchanged.
+	// signed region is everything before the trailing signature, including the metadata block and its marker
 	auto signature_offset = handle.GetFileSize() - parsed_metadata.signature_size;
 
 	vector<string> hash_chunks;
@@ -494,14 +486,11 @@ bool ExtensionHelper::CheckExtensionSignature(DatabaseInstance &db, FileHandle &
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
-	// The signature placeholder from ParseExtensionMetaData is sized to the legacy 256; resize to the resolved length
-	// so the full trailing signature is read (a no-op for legacy 256-byte signatures).
-	parsed_metadata.signature.resize(parsed_metadata.signature_size);
-
 	// TODO maybe we should do a stream read / hash update here
-	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
+	string signature(parsed_metadata.signature_size, '\0');
+	handle.Read((void *)signature.data(), signature.size(), signature_offset);
 
-	return CheckKnownSignatures(db, resulting_hash, parsed_metadata.signature, repository_type, repository_name);
+	return CheckKnownSignatures(db, resulting_hash, signature, repository_type, repository_name);
 }
 
 bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
@@ -524,8 +513,15 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
                                                     ExtensionRepositoryType repository_type,
                                                     const string &repository_name,
                                                     optional_ptr<string> signature_key_fingerprint) {
-	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
-	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
+	auto footer_size = MinValue<idx_t>(total_buffer_length, ParsedExtensionMetaData::MAX_FOOTER_SIZE);
+	auto parsed = ParseExtensionFooter(buffer + total_buffer_length - footer_size, footer_size);
+	// without a valid footer keep the legacy layout; a trusted signature is still required either way
+	auto signature_size = parsed.AppearsValid() ? parsed.signature_size : ParsedExtensionMetaData::SIGNATURE_SIZE;
+	if (total_buffer_length < signature_size) {
+		return false;
+	}
+	auto signature_offset = total_buffer_length - signature_size;
+	string signature = std::string(buffer + signature_offset, signature_size);
 
 	return CheckExtensionBufferSignature(db, buffer, signature_offset, signature, repository_type, repository_name,
 	                                     signature_key_fingerprint);
@@ -740,7 +736,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 			}
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
-	} else if (!Settings::Get<AllowExtensionsMetadataMismatchSetting>(db)) {
+	} else if (!Settings::Get<AllowExtensionsMetadataMismatchSetting>(db) || parsed_metadata.HasFooterError()) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes

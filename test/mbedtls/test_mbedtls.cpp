@@ -32,8 +32,8 @@ TEST_CASE("Test that we can verify a signature", "[mbedtls]") {
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(borked_pubkey, signature, hash));
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(empty_string, signature, hash));
 
-	// wrong-length signatures or hashes should never happen either
-	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey, empty_string, hash));
+	// a signature not matching the key modulus is rejected, a wrong-length hash should never happen
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey, empty_string, hash));
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey, signature, empty_string));
 
 	// lets flip some bits in the file, it should not validate
@@ -87,9 +87,9 @@ TEST_CASE("Test that we can verify an RSA-3072 (384-byte) signature", "[mbedtls]
 	auto borked_hash = MbedTlsWrapper::ComputeSha256Hash(borked_file);
 	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, signature_3072, borked_hash));
 
-	// (d) wrong-size rejection: a truncated 3072 signature (not 256 or 384) is rejected by the length guard (throws)
+	// (d) a truncated 3072 signature is rejected
 	auto truncated_signature = signature_3072.substr(0, 300);
-	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, truncated_signature, hash));
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, truncated_signature, hash));
 
 	// defense-in-depth: a 384-byte signature presented against a 2048-bit key is rejected (modulus mismatch), FALSE
 	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_2048, signature_3072, hash));
@@ -100,4 +100,26 @@ TEST_CASE("Test that we can verify an RSA-3072 (384-byte) signature", "[mbedtls]
 	REQUIRE(MbedTlsWrapper::IsValidRSAPublicKey(pubkey_3072));
 	// as is the legacy 2048-bit key
 	REQUIRE(MbedTlsWrapper::IsValidRSAPublicKey(pubkey_2048));
+}
+
+TEST_CASE("Test that we can verify an RSA-4096 (512-byte) signature", "[mbedtls]") {
+	auto file_content = file_to_string("test/mbedtls/dummy_file");
+	auto hash = MbedTlsWrapper::ComputeSha256Hash(file_content);
+	auto signature_4096 = file_to_string("test/mbedtls/dummy_file.signature_4096");
+	auto pubkey_4096 = file_to_string("test/mbedtls/public_4096.pem");
+	auto signature_3072 = file_to_string("test/mbedtls/dummy_file.signature_3072");
+	auto pubkey_3072 = file_to_string("test/mbedtls/public_3072.pem");
+	REQUIRE(signature_4096.size() == 512);
+
+	REQUIRE(MbedTlsWrapper::IsValidSha256Signature(pubkey_4096, signature_4096, hash));
+	REQUIRE(MbedTlsWrapper::IsValidRSAPublicKey(pubkey_4096));
+
+	auto borked_signature = signature_4096;
+	borked_signature[10]++;
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_4096, borked_signature, hash));
+
+	// signature length must match the key modulus
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, signature_4096, hash));
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_4096, signature_3072, hash));
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_4096, signature_4096.substr(0, 384), hash));
 }

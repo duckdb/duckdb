@@ -160,6 +160,8 @@ public:
 	                                          ExtensionRepositoryType repository_type, const string &repository_name,
 	                                          optional_ptr<string> signature_key_fingerprint = nullptr);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
+	//! Parse the footer at the end of [footer, footer + footer_size), probing every supported signature size
+	static ParsedExtensionMetaData ParseExtensionFooter(const char *footer, idx_t footer_size) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name

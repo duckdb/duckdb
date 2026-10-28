@@ -15,7 +15,9 @@ namespace duckdb {
 constexpr const idx_t ParsedExtensionMetaData::FOOTER_SIZE;
 constexpr const idx_t ParsedExtensionMetaData::METADATA_SIZE;
 constexpr const idx_t ParsedExtensionMetaData::SIGNATURE_SIZE;
-constexpr const idx_t ParsedExtensionMetaData::SIGNATURE_SIZE_RSA3072;
+constexpr const idx_t ParsedExtensionMetaData::SUPPORTED_SIGNATURE_SIZES[];
+constexpr const idx_t ParsedExtensionMetaData::MAX_SIGNATURE_SIZE;
+constexpr const idx_t ParsedExtensionMetaData::MAX_FOOTER_SIZE;
 
 Extension::~Extension() {
 }
@@ -53,8 +55,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 		return "The file is not a DuckDB extension. The metadata at the end of the file is invalid";
 	}
 
-	// An invalid signature-size marker is rejected before any version/platform check: the marker lives in the signed
-	// region of the footer, so an unrecognized value means the footer is malformed or tampered with.
+	// the signature-size marker is signed, so a bad marker means a malformed or tampered footer
 	if (!metadata_error.empty()) {
 		return metadata_error;
 	}

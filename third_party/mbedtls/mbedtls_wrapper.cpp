@@ -57,16 +57,18 @@ std::string MbedTlsWrapper::ComputeSha256Hash(const std::string &file_content) {
 	return hash;
 }
 
+static bool IsSupportedRSAKeySize(size_t bitlen) {
+	return bitlen == 2048 || bitlen == 3072 || bitlen == 4096;
+}
+
 bool MbedTlsWrapper::IsValidRSAPublicKey(const std::string &pubkey) {
 	mbedtls_pk_context pk_context;
 	mbedtls_pk_init(&pk_context);
 
 	bool valid = mbedtls_pk_parse_public_key(&pk_context, reinterpret_cast<const unsigned char *>(pubkey.c_str()),
 	                                         pubkey.size() + 1) == 0;
-	// extension signatures are RSA PKCS#1 v1.5, so only 2048-bit (256-byte signature) or 3072-bit (384-byte signature)
-	// RSA keys can produce valid signatures
-	size_t bitlen = valid ? mbedtls_pk_get_bitlen(&pk_context) : 0;
-	valid = valid && mbedtls_pk_can_do(&pk_context, MBEDTLS_PK_RSA) && (bitlen == 2048 || bitlen == 3072);
+	valid = valid && mbedtls_pk_can_do(&pk_context, MBEDTLS_PK_RSA) &&
+	        IsSupportedRSAKeySize(mbedtls_pk_get_bitlen(&pk_context));
 
 	mbedtls_pk_free(&pk_context);
 	return valid;
@@ -74,12 +76,8 @@ bool MbedTlsWrapper::IsValidRSAPublicKey(const std::string &pubkey) {
 
 bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature,
                                             const std::string &sha256_hash) {
-
-	// RSA PKCS#1 v1.5 signature length equals the key modulus length: 2048-bit -> 256 bytes, 3072-bit -> 384 bytes.
-	// Accept exactly these two lengths and reject anything else; the SHA-256 hash is always 32 bytes.
-	if ((signature.size() != 256 && signature.size() != 384) || sha256_hash.size() != 32) {
-		throw std::runtime_error("Invalid input lengths, expected signature length 256 or 384, got " +
-		                         std::to_string(signature.size()) + ", hash length 32, got " +
+	if (sha256_hash.size() != 32) {
+		throw std::runtime_error("Invalid input lengths, expected hash length 32, got " +
 		                         std::to_string(sha256_hash.size()));
 	}
 
@@ -88,15 +86,14 @@ bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std
 
 	if (mbedtls_pk_parse_public_key(&pk_context, reinterpret_cast<const unsigned char *>(pubkey.c_str()),
 	                                pubkey.size() + 1)) {
+		mbedtls_pk_free(&pk_context);
 		throw std::runtime_error("RSA public key import error");
 	}
 
-	// Defense-in-depth: the signature length must match the key modulus (2048 -> 256, 3072 -> 384). mbedtls_pk_verify
-	// is modulus-length-agnostic, so without this check a 384-byte signature could be presented against a 2048-bit key
-	// (or vice versa). Reject such mismatches explicitly before verifying.
+	// the signature must be exactly as long as the modulus of a supported RSA key
 	size_t bitlen = mbedtls_pk_get_bitlen(&pk_context);
-	size_t expected_signature_size = bitlen / 8;
-	if (!mbedtls_pk_can_do(&pk_context, MBEDTLS_PK_RSA) || signature.size() != expected_signature_size) {
+	if (!mbedtls_pk_can_do(&pk_context, MBEDTLS_PK_RSA) || !IsSupportedRSAKeySize(bitlen) ||
+	    signature.size() != bitlen / 8) {
 		mbedtls_pk_free(&pk_context);
 		return false;
 	}

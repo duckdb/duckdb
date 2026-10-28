@@ -42,16 +42,15 @@ enum class ExtensionABIType : uint8_t {
 
 //! The parsed extension metadata footer
 struct ParsedExtensionMetaData {
-	// The footer trails the extension file as [METADATA_SIZE bytes of metadata] + [signature_size bytes of signature].
-	// The metadata block is always METADATA_SIZE bytes and directly precedes the trailing signature; only the trailing
-	// signature length varies with the RSA key size (2048 -> 256, 3072 -> 384). FOOTER_SIZE is the legacy total for a
-	// 256-byte signature (256 metadata + 256 signature) and stays the probe window for the legacy-first detection.
+	//! Footer layout: [METADATA_SIZE metadata][signature_size signature]; FOOTER_SIZE is the smallest (legacy) footer
 	static constexpr const idx_t FOOTER_SIZE = 512;
 	static constexpr const idx_t METADATA_SIZE = 256;
-	//! Legacy/default signature length (RSA-2048). Kept as the default so unmarked legacy footers parse unchanged.
+	//! Legacy RSA-2048 signature size, used when the footer carries no signature-size marker
 	static constexpr const idx_t SIGNATURE_SIZE = 256;
-	//! Signature length for an RSA-3072 key.
-	static constexpr const idx_t SIGNATURE_SIZE_RSA3072 = 384;
+	//! Supported signature sizes (RSA-2048/3072/4096), probed in this order
+	static constexpr const idx_t SUPPORTED_SIGNATURE_SIZES[] = {256, 384, 512};
+	static constexpr const idx_t MAX_SIGNATURE_SIZE = 512;
+	static constexpr const idx_t MAX_FOOTER_SIZE = METADATA_SIZE + MAX_SIGNATURE_SIZE;
 	static constexpr const char *EXPECTED_MAGIC_VALUE = {
 	    "4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"};
 
@@ -70,15 +69,18 @@ struct ParsedExtensionMetaData {
 	string signature;
 	string extension_abi_metadata;
 
-	//! The resolved trailing-signature length in bytes (256 for legacy RSA-2048, 384 for RSA-3072). Derived from the
-	//! signed size-marker in reserved metadata field index 6, defaulting to the legacy length.
+	//! Trailing signature size, from the signed marker in metadata field 6
 	idx_t signature_size = SIGNATURE_SIZE;
-	//! Non-empty when the footer carried an unrecognized/invalid signature-size marker. Surfaced by
-	//! GetInvalidMetadataError() so the load is rejected, since the marker lives in the signed region.
+	//! Set when the signature-size marker is invalid or does not match the footer layout
 	string metadata_error;
 
 	bool AppearsValid() {
 		return magic_value == EXPECTED_MAGIC_VALUE;
+	}
+
+	//! A malformed footer structure, which no setting can override
+	bool HasFooterError() {
+		return AppearsValid() && !metadata_error.empty();
 	}
 
 	// Returns an error string describing which parts of the metadata are mismatcheds
