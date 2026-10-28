@@ -1016,7 +1016,20 @@ struct RoundOperatorPrecision {
 			}
 		} else {
 			double modifier = std::pow(10, TA(precision));
-			rounded_value = ROUND_POLICY::Nearest(input * modifier) / modifier;
+			double scaled = input * modifier;
+			double nearest;
+			// the product can round onto a midpoint that the input itself is not on, as 2.675 * 100 becomes 267.5
+			// while the stored 2.675 is below it, so the exact product decides (10^22 is the largest exact modifier)
+			double error = 0;
+			if (precision > 0 && precision <= 22 && std::fabs(scaled - std::trunc(scaled)) == 0.5) {
+				error = std::fma(double(input), modifier, -scaled);
+			}
+			if (error != 0) {
+				nearest = error < 0 ? std::floor(scaled) : std::ceil(scaled);
+			} else {
+				nearest = ROUND_POLICY::Nearest(scaled);
+			}
+			rounded_value = nearest / modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 				return input;
 			}
