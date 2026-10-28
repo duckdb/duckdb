@@ -11,21 +11,21 @@ SELECT * FROM query('SELECT $n')
 ----
 10
 
-# inside PREPARE the parameter can never receive a value, so it is rejected up front
+# inside PREPARE a parameter that only appears inside the string can never receive a value, so it is rejected
 statement error
 PREPARE stmt AS SELECT * FROM query('SELECT $n')
 ----
-Prepared statement parameters are not supported inside query(): use getvariable()
+Prepared statement parameter "$n" only appears inside query()
 
 statement error
 PREPARE stmt AS SELECT * FROM query('SELECT $1')
 ----
-Prepared statement parameters are not supported inside query()
+Prepared statement parameter "$1" only appears inside query()
 
 statement error
 PREPARE stmt AS SELECT * FROM query('SELECT ?')
 ----
-Prepared statement parameters are not supported inside query()
+Prepared statement parameter "$1" only appears inside query()
 
 # getvariable is the supported way to read a variable inside query()
 statement ok
@@ -69,3 +69,26 @@ query I
 EXECUTE stmt_table
 ----
 1
+
+# a parameter that the outer statement declares as well is shared with the inner query
+statement ok
+PREPARE stmt_shared AS SELECT $customer::INTEGER AS supplied, * FROM query('SELECT $customer::INTEGER AS value')
+
+query II
+EXECUTE stmt_shared(customer := 42)
+----
+42	42
+
+statement ok
+PREPARE stmt_shared_positional AS SELECT $1::INTEGER AS supplied, * FROM query('SELECT $1::INTEGER AS value')
+
+query II
+EXECUTE stmt_shared_positional(7)
+----
+7	7
+
+# declaring one parameter does not cover another
+statement error
+PREPARE stmt_partial AS SELECT $a, * FROM query('SELECT $a + $b')
+----
+Prepared statement parameter "$b" only appears inside query()

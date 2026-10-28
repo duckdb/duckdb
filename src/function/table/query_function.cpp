@@ -18,10 +18,15 @@ static unique_ptr<SubqueryRef> ParseSubquery(const string &query, TableFunctionB
 	}
 
 	auto &stmt = parser.statements[0];
-	// the prepared statement cannot see parameters inside the string, so they would never receive a value
-	if (!stmt->named_param_map.empty() && input.binder && input.binder->GetBindingMode() == BindingMode::PREPARE) {
-		throw BinderException(
-		    "Prepared statement parameters are not supported inside query(): use getvariable() to read a variable");
+	// a parameter that only appears inside the string is invisible to the prepared statement and never gets a value
+	if (input.binder && input.binder->GetBindingMode() == BindingMode::PREPARE) {
+		for (auto &entry : stmt->named_param_map) {
+			if (!input.binder->StatementHasParameter(entry.first)) {
+				throw BinderException("Prepared statement parameter \"$%s\" only appears inside query(): declare it in "
+				                      "the outer statement as well, or use getvariable() to read a variable",
+				                      entry.first.GetIdentifierName());
+			}
+		}
 	}
 
 	if (stmt->type == StatementType::SELECT_STATEMENT) {
