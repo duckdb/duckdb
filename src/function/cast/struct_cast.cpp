@@ -13,9 +13,8 @@
 
 namespace duckdb {
 
-unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastInput &input, const LogicalType &source,
-                                                                      const LogicalType &target) {
-	vector<BoundCastInfo> child_cast_info;
+StructCastFieldMapping StructBoundCastData::GetFieldMapping(const LogicalType &source, const LogicalType &target) {
+	StructCastFieldMapping result;
 	auto &source_children = StructType::GetChildTypes(source);
 	auto &target_children = StructType::GetChildTypes(target);
 
@@ -24,7 +23,8 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 
 	auto is_unnamed = target_is_unnamed || source_is_unnamed;
 	if (is_unnamed && source_children.size() != target_children.size()) {
-		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
+		result.kind = StructCastFieldMapping::MatchKind::SIZE_MISMATCH;
+		return result;
 	}
 
 	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> target_children_map;
@@ -32,22 +32,20 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;
 			if (target_children_map.find(name) != target_children_map.end()) {
-				throw NotImplementedException("Error while casting - duplicate name %s in struct", name);
+				result.kind = StructCastFieldMapping::MatchKind::DUPLICATE_TARGET_NAME;
+				result.duplicate_name = name;
+				return result;
 			}
 			target_children_map[name] = i;
 		}
 	}
 
-	vector<idx_t> source_indexes;
-	vector<idx_t> target_indexes;
-	vector<idx_t> target_null_indexes;
 	bool has_any_match = is_unnamed;
-
 	for (idx_t i = 0; i < source_children.size(); i++) {
 		auto &source_child = source_children[i];
 		auto target_idx = i;
 
-		// Map to the correct index for names structs.
+		// Map to the correct index for named structs.
 		if (!is_unnamed) {
 			auto target_child = target_children_map.find(source_child.first);
 			if (target_child == target_children_map.end()) {
@@ -59,25 +57,49 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 			has_any_match = true;
 		}
 
-		source_indexes.push_back(i);
-		target_indexes.push_back(target_idx);
-		auto child_cast = input.GetCastFunction(source_child.second, target_children[target_idx].second);
-		child_cast_info.push_back(std::move(child_cast));
+		result.source_indexes.push_back(i);
+		result.target_indexes.push_back(target_idx);
 	}
 
 	if (!has_any_match) {
-		throw BinderException("STRUCT to STRUCT cast must have at least one matching member, inputs are (%s) and (%s)",
-		                      source.ToString(), target.ToString());
+		result.kind = StructCastFieldMapping::MatchKind::NO_MATCHING_FIELD;
+		return result;
 	}
 
 	// The remaining target children have no match in the source struct.
 	// Thus, they become NULL.
 	for (const auto &target_child : target_children_map) {
-		target_null_indexes.push_back(target_child.second);
+		result.target_null_indexes.push_back(target_child.second);
+	}
+	return result;
+}
+
+unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastInput &input, const LogicalType &source,
+                                                                      const LogicalType &target) {
+	auto mapping = GetFieldMapping(source, target);
+	switch (mapping.kind) {
+	case StructCastFieldMapping::MatchKind::SIZE_MISMATCH:
+		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
+	case StructCastFieldMapping::MatchKind::DUPLICATE_TARGET_NAME:
+		throw NotImplementedException("Error while casting - duplicate name %s in struct", mapping.duplicate_name);
+	case StructCastFieldMapping::MatchKind::NO_MATCHING_FIELD:
+		throw BinderException("STRUCT to STRUCT cast must have at least one matching member, inputs are (%s) and (%s)",
+		                      source.ToString(), target.ToString());
+	default:
+		break;
 	}
 
-	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(source_indexes),
-	                                      std::move(target_indexes), std::move(target_null_indexes));
+	auto &source_children = StructType::GetChildTypes(source);
+	auto &target_children = StructType::GetChildTypes(target);
+	vector<BoundCastInfo> child_cast_info;
+	for (idx_t i = 0; i < mapping.source_indexes.size(); i++) {
+		auto &source_child_type = source_children[mapping.source_indexes[i]].second;
+		auto &target_child_type = target_children[mapping.target_indexes[i]].second;
+		child_cast_info.push_back(input.GetCastFunction(source_child_type, target_child_type));
+	}
+
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(mapping.source_indexes),
+	                                      std::move(mapping.target_indexes), std::move(mapping.target_null_indexes));
 }
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
