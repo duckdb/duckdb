@@ -13,8 +13,17 @@
 
 using namespace duckdb;
 
-// Builds an unsigned stub extension: body + metadata block (fields written in reverse)
-static string MakeUnsignedStub(const string &marker, idx_t body_size = 1000) {
+static constexpr idx_t METADATA_SIZE = ParsedExtensionMetaData::METADATA_SIZE;
+// byte offsets of reader fields within a metadata block, which stores its fields in reverse
+static constexpr idx_t MARKER_FIELD_OFFSET = 32;
+static constexpr idx_t VERSION_FIELD_OFFSET = 4 * 32;
+
+static string MarkerFor(idx_t signature_size) {
+	return signature_size == ParsedExtensionMetaData::SIGNATURE_SIZE ? "" : std::to_string(signature_size);
+}
+
+// Builds the signed prefix of a stub extension: body + metadata block (fields written in reverse)
+static string MakeSignedPrefix(const string &marker, idx_t body_size = 1000) {
 	string fields[8];
 	fields[0] = "4";
 	fields[1] = DuckDB::Platform();
@@ -31,13 +40,40 @@ static string MakeUnsignedStub(const string &marker, idx_t body_size = 1000) {
 	return result;
 }
 
-// Builds a stub extension with a placeholder trailing signature
-static string MakeStubExtension(idx_t signature_size, const string &marker, idx_t body_size = 1000) {
-	return MakeUnsignedStub(marker, body_size) + string(signature_size, 's');
+// Appends the signature and, for larger signatures, the tail metadata copy and the zero trailer
+static string FinishExtension(const string &prefix, const string &signature) {
+	if (signature.size() == ParsedExtensionMetaData::SIGNATURE_SIZE) {
+		return prefix + signature;
+	}
+	return prefix + signature + prefix.substr(prefix.size() - METADATA_SIZE) + string(256, '\0');
+}
+
+static string MakeStubExtension(idx_t signature_size, idx_t body_size = 1000) {
+	return FinishExtension(MakeSignedPrefix(MarkerFor(signature_size), body_size), string(signature_size, 's'));
+}
+
+static string MakeStubWithMarker(idx_t signature_size, const string &marker) {
+	return FinishExtension(MakeSignedPrefix(marker), string(signature_size, 's'));
+}
+
+static idx_t SignatureOffset(const string &file, idx_t signature_size) {
+	if (signature_size == ParsedExtensionMetaData::SIGNATURE_SIZE) {
+		return file.size() - signature_size;
+	}
+	return file.size() - ParsedExtensionMetaData::FOOTER_SIZE - signature_size;
+}
+
+// The metadata block covered by the signature (the only one in a legacy footer)
+static idx_t SignedMetadataOffset(const string &file, idx_t signature_size) {
+	return SignatureOffset(file, signature_size) - METADATA_SIZE;
+}
+
+static idx_t TailMetadataOffset(const string &file) {
+	return file.size() - ParsedExtensionMetaData::FOOTER_SIZE;
 }
 
 static ParsedExtensionMetaData ParseFooter(const string &file) {
-	return ExtensionHelper::ParseExtensionFooter(file.data(), file.size());
+	return ExtensionHelper::ParseExtensionFooter(file.data(), file.size(), file.size());
 }
 
 static void RequireValidFooter(const string &file, idx_t expected_size) {
@@ -46,12 +82,14 @@ static void RequireValidFooter(const string &file, idx_t expected_size) {
 	REQUIRE(parsed.metadata_error.empty());
 	REQUIRE(parsed.GetInvalidMetadataError().empty());
 	REQUIRE(parsed.signature_size == expected_size);
+	REQUIRE(parsed.signature_offset == SignatureOffset(file, expected_size));
 	REQUIRE(parsed.extension_version == "v0.0.1");
 }
 
 static void RequireFooterError(const string &file, const string &expected_error) {
 	auto parsed = ParseFooter(file);
 	REQUIRE(parsed.AppearsValid());
+	REQUIRE(parsed.HasFooterError());
 	REQUIRE(StringUtil::Contains(parsed.GetInvalidMetadataError(), expected_error));
 }
 
@@ -62,73 +100,161 @@ static string WriteStubFile(const string &name, const string &content) {
 	return path;
 }
 
-TEST_CASE("Extension footer parses every supported signature size", "[extension_footer]") {
-	// legacy footers, with and without an explicit marker
-	RequireValidFooter(MakeStubExtension(256, ""), 256);
-	RequireValidFooter(MakeStubExtension(256, "256"), 256);
-	RequireValidFooter(MakeStubExtension(384, "384"), 384);
-	RequireValidFooter(MakeStubExtension(512, "512"), 512);
-	// footers without a body
-	RequireValidFooter(MakeStubExtension(256, "", 0), 256);
-	RequireValidFooter(MakeStubExtension(512, "512", 0), 512);
+static const char *const UNKNOWN_MARKER = "unrecognized signature-size marker";
+static const char *const TRUNCATED = "footer is truncated";
+static const char *const NONZERO_TRAILER = "must be zero";
+static const char *const COPY_MISMATCH = "metadata copies do not match";
 
-	// a legacy footer parses exactly as the plain metadata parser at the legacy offset
-	auto legacy = MakeStubExtension(256, "");
-	auto direct =
-	    ExtensionHelper::ParseExtensionMetaData(legacy.data() + legacy.size() - ParsedExtensionMetaData::FOOTER_SIZE);
-	auto probed = ParseFooter(legacy);
-	REQUIRE(probed.magic_value == direct.magic_value);
-	REQUIRE(probed.platform == direct.platform);
-	REQUIRE(probed.duckdb_version == direct.duckdb_version);
-	REQUIRE(probed.extension_version == direct.extension_version);
-	REQUIRE(probed.signature == direct.signature);
-	REQUIRE(probed.signature_size == direct.signature_size);
+// Every malformed footer of a larger signature, with the error it must report
+static vector<std::pair<string, string>> MalformedFooters(idx_t signature_size) {
+	vector<std::pair<string, string>> result;
+	auto stub = MakeStubExtension(signature_size);
+	result.emplace_back(MakeStubWithMarker(signature_size, "0" + MarkerFor(signature_size)), UNKNOWN_MARKER);
+	auto trailer = stub;
+	trailer[trailer.size() - 1] = 1;
+	result.emplace_back(trailer, NONZERO_TRAILER);
+	auto signed_copy = stub;
+	signed_copy[SignedMetadataOffset(stub, signature_size) + VERSION_FIELD_OFFSET]++;
+	result.emplace_back(signed_copy, COPY_MISMATCH);
+	auto tail_copy = stub;
+	tail_copy[TailMetadataOffset(stub) + VERSION_FIELD_OFFSET]++;
+	result.emplace_back(tail_copy, COPY_MISMATCH);
+	result.emplace_back(
+	    stub.substr(stub.size() - (ParsedExtensionMetaData::FOOTER_SIZE + METADATA_SIZE + signature_size - 1)),
+	    TRUNCATED);
+	return result;
 }
 
-TEST_CASE("Extension footer rejects a marker that does not match the layout", "[extension_footer]") {
-	const string mismatch = "does not match the footer layout";
-	RequireFooterError(MakeStubExtension(256, "384"), mismatch);
-	RequireFooterError(MakeStubExtension(256, "512"), mismatch);
-	RequireFooterError(MakeStubExtension(384, ""), mismatch);
-	RequireFooterError(MakeStubExtension(384, "256"), mismatch);
-	RequireFooterError(MakeStubExtension(384, "512"), mismatch);
-	RequireFooterError(MakeStubExtension(512, "384"), mismatch);
-	// the size used downstream is the layout's, never the disagreeing marker
-	REQUIRE(ParseFooter(MakeStubExtension(256, "384")).signature_size == 256);
+TEST_CASE("Extension footer parses every supported signature size", "[extension_footer]") {
+	for (idx_t size : {idx_t(256), idx_t(384), idx_t(512)}) {
+		INFO(size);
+		RequireValidFooter(MakeStubExtension(size), size);
+		RequireValidFooter(MakeStubExtension(size, 0), size);
+	}
+	REQUIRE(ParseFooter(MakeStubExtension(384)).signature_offset == 1000 + METADATA_SIZE);
+	REQUIRE(ParseFooter(MakeStubExtension(512)).signature_offset == 1000 + METADATA_SIZE);
+
+	// a legacy footer parses exactly as the plain metadata parser at the legacy offset
+	auto legacy = MakeStubExtension(256);
+	auto direct = ExtensionHelper::ParseExtensionMetaData(legacy.data() + TailMetadataOffset(legacy));
+	auto parsed = ParseFooter(legacy);
+	REQUIRE(parsed.magic_value == direct.magic_value);
+	REQUIRE(parsed.platform == direct.platform);
+	REQUIRE(parsed.duckdb_version == direct.duckdb_version);
+	REQUIRE(parsed.extension_version == direct.extension_version);
+	REQUIRE(parsed.signature == direct.signature);
+	REQUIRE(parsed.signature_size == direct.signature_size);
+	REQUIRE(parsed.signature_offset == legacy.size() - 256);
+
+	// only the tail of the file is needed
+	auto tail = legacy.substr(legacy.size() - ParsedExtensionMetaData::FOOTER_SIZE);
+	auto from_tail = ExtensionHelper::ParseExtensionFooter(tail.data(), tail.size(), legacy.size());
+	REQUIRE(from_tail.metadata_error.empty());
+	REQUIRE(from_tail.signature_offset == legacy.size() - 256);
 }
 
 TEST_CASE("Extension footer rejects non-canonical or unsupported markers", "[extension_footer]") {
-	const string unrecognized = "unrecognized signature-size marker";
 	for (auto &marker :
-	     {"300", "0384", "abc", " 384", "+384", "384x", "38\0014", "0", "0256", "1024", "256  ", "384 "}) {
+	     {"300", "0384", "abc", "+384", " 384", "384 ", "384x", "38\0014", "\001", "0", "256", "0256", "1024"}) {
 		INFO(marker);
-		RequireFooterError(MakeStubExtension(384, marker), unrecognized);
-		RequireFooterError(MakeStubExtension(256, marker), unrecognized);
+		RequireFooterError(MakeStubWithMarker(384, marker), UNKNOWN_MARKER);
+		RequireFooterError(MakeStubWithMarker(512, marker), UNKNOWN_MARKER);
+		RequireFooterError(MakeStubWithMarker(256, marker), UNKNOWN_MARKER);
+	}
+	// a valid marker in a legacy-shaped file is checked against the larger layout
+	RequireFooterError(MakeStubWithMarker(256, "384"), NONZERO_TRAILER);
+}
+
+TEST_CASE("Extension footer rejects malformed larger-signature layouts", "[extension_footer]") {
+	for (idx_t size : {idx_t(384), idx_t(512)}) {
+		INFO(size);
+		for (auto &malformed : MalformedFooters(size)) {
+			INFO(malformed.second);
+			RequireFooterError(malformed.first, malformed.second);
+		}
+		auto stub = MakeStubExtension(size);
+		auto trailer = stub;
+		trailer[trailer.size() - 256] = 1;
+		RequireFooterError(trailer, NONZERO_TRAILER);
+		// the shortest file that holds the footer is accepted
+		RequireValidFooter(MakeStubExtension(size, 0), size);
+		REQUIRE(MakeStubExtension(size, 0).size() == ParsedExtensionMetaData::FOOTER_SIZE + METADATA_SIZE + size);
 	}
 }
 
-TEST_CASE("Extension footer rejects truncated files", "[extension_footer]") {
-	auto legacy = MakeStubExtension(256, "", 0);
+TEST_CASE("Extension footer rejects files that are too small", "[extension_footer]") {
+	auto legacy = MakeStubExtension(256, 0);
 	for (idx_t size : {idx_t(0), idx_t(1), idx_t(255), idx_t(256), idx_t(511)}) {
 		auto tail = legacy.substr(legacy.size() - size);
-		REQUIRE(!ExtensionHelper::ParseExtensionFooter(tail.data(), tail.size()).AppearsValid());
+		REQUIRE(!ParseFooter(tail).AppearsValid());
 	}
-	// only the legacy layout fits, so a 512-byte-signature footer missing its metadata is not found
-	auto large = MakeStubExtension(512, "512", 0);
-	auto tail = large.substr(large.size() - 600);
-	REQUIRE(!ExtensionHelper::ParseExtensionFooter(tail.data(), tail.size()).AppearsValid());
 
 	DuckDB db(nullptr);
-	REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(*db.instance, tail.data(), 100,
+	auto tail = legacy.substr(1);
+	REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(*db.instance, tail.data(), tail.size(),
 	                                                        ExtensionRepositoryType::CORE, ""));
 	Connection con(db);
-	auto path = WriteStubFile("footer_truncated", legacy.substr(0, 511));
+	auto path = WriteStubFile("footer_truncated", tail);
 	auto result = con.Query(StringUtil::Format("LOAD '%s'", path));
 	REQUIRE(result->HasError());
 	REQUIRE(StringUtil::Contains(result->GetError(), "must be at least"));
 }
 
-TEST_CASE("Extension install and load use the probing footer parser", "[extension_footer]") {
+// Engine-style parse: only the last min(file_size, MAX_FOOTER_SIZE) bytes are passed in
+static ParsedExtensionMetaData ParseFooterTail(const string &file) {
+	auto tail_size = MinValue<idx_t>(file.size(), ParsedExtensionMetaData::MAX_FOOTER_SIZE);
+	return ExtensionHelper::ParseExtensionFooter(file.data() + file.size() - tail_size, tail_size, file.size());
+}
+
+TEST_CASE("Extension footer parses from a bounded tail at the size boundaries", "[extension_footer]") {
+	REQUIRE(ParsedExtensionMetaData::MAX_FOOTER_SIZE == 1280);
+	for (idx_t size : {idx_t(256), idx_t(384), idx_t(512)}) {
+		INFO(size);
+		auto minimal = MakeStubExtension(size, 0);
+		auto minimal_size = size == ParsedExtensionMetaData::SIGNATURE_SIZE
+		                        ? ParsedExtensionMetaData::FOOTER_SIZE
+		                        : ParsedExtensionMetaData::FOOTER_SIZE + METADATA_SIZE + size;
+		REQUIRE(minimal.size() == minimal_size);
+		for (idx_t body_size : {idx_t(0), idx_t(1), ParsedExtensionMetaData::MAX_FOOTER_SIZE - minimal_size,
+		                        ParsedExtensionMetaData::MAX_FOOTER_SIZE - minimal_size + 1, idx_t(100000)}) {
+			INFO(body_size);
+			auto file = MakeStubExtension(size, body_size);
+			auto parsed = ParseFooterTail(file);
+			REQUIRE(parsed.AppearsValid());
+			REQUIRE(parsed.metadata_error.empty());
+			REQUIRE(parsed.signature_size == size);
+			REQUIRE(parsed.signature_offset == SignatureOffset(file, size));
+			REQUIRE(parsed.signature_offset == body_size + METADATA_SIZE);
+		}
+		if (size != ParsedExtensionMetaData::SIGNATURE_SIZE) {
+			// one byte short of the footer, both as the whole file and as a tail of a larger file
+			auto truncated = minimal.substr(1);
+			auto parsed = ParseFooterTail(truncated);
+			REQUIRE(parsed.HasFooterError());
+			REQUIRE(StringUtil::Contains(parsed.GetInvalidMetadataError(), TRUNCATED));
+			auto large = string(100000, 'x') + truncated;
+			parsed = ParseFooterTail(large);
+			REQUIRE(ParsedExtensionMetaData::MAX_FOOTER_SIZE < large.size());
+			REQUIRE(parsed.HasFooterError());
+		}
+	}
+	REQUIRE(MakeStubExtension(384, 0).size() == 1152);
+	REQUIRE(MakeStubExtension(512, 0).size() == 1280);
+}
+
+TEST_CASE("Larger-signature footers keep legacy-readable metadata and a zero trailer at the tail",
+          "[extension_footer]") {
+	for (idx_t size : {idx_t(384), idx_t(512)}) {
+		auto stub = MakeStubExtension(size);
+		// the legacy reader parses the metadata at the fixed tail position and takes the last 256 bytes as signature
+		auto legacy_view = ExtensionHelper::ParseExtensionMetaData(stub.data() + TailMetadataOffset(stub));
+		REQUIRE(legacy_view.AppearsValid());
+		REQUIRE(legacy_view.extension_version == "v0.0.1");
+		REQUIRE(stub.substr(stub.size() - 256) == string(256, '\0'));
+	}
+}
+
+TEST_CASE("Extension install and load use the footer parser", "[extension_footer]") {
 	DBConfig config;
 	config.SetOptionByName("extension_directory", TestCreatePath("footer_ext_dir"));
 	config.SetOptionByName("allow_unsigned_extensions", true);
@@ -137,47 +263,45 @@ TEST_CASE("Extension install and load use the probing footer parser", "[extensio
 
 	for (idx_t size : {idx_t(256), idx_t(384), idx_t(512)}) {
 		auto name = "footer_ok_" + std::to_string(size);
-		auto path = WriteStubFile(name, MakeStubExtension(size, std::to_string(size)));
+		auto path = WriteStubFile(name, MakeStubExtension(size));
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("INSTALL '%s'", path)));
 		auto version = con.Query(
 		    StringUtil::Format("SELECT extension_version FROM duckdb_extensions() WHERE extension_name = '%s'", name));
 		REQUIRE(CHECK_COLUMN(version, 0, {"v0.0.1"}));
 	}
 
-	auto mismatch_path = WriteStubFile("footer_mismatch", MakeStubExtension(256, "384"));
-	auto result = con.Query(StringUtil::Format("INSTALL '%s'", mismatch_path));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "does not match the footer layout"));
-
-	result = con.Query(StringUtil::Format("LOAD '%s'", mismatch_path));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "does not match the footer layout"));
-
-	auto unknown_path = WriteStubFile("footer_unknown", MakeStubExtension(384, "0384"));
-	result = con.Query(StringUtil::Format("LOAD '%s'", unknown_path));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "unrecognized signature-size marker"));
-
-	// a malformed footer is never overridable, unlike a version or platform mismatch
-	auto foreign = MakeStubExtension(256, "256");
-	foreign[foreign.size() - ParsedExtensionMetaData::FOOTER_SIZE + 6 * 32] = 'Z';
+	// a platform mismatch is overridable, unlike a malformed footer
+	auto foreign = MakeStubExtension(384);
+	foreign[SignedMetadataOffset(foreign, 384) + 6 * 32]++;
+	foreign[TailMetadataOffset(foreign) + 6 * 32]++;
 	auto foreign_path = WriteStubFile("footer_foreign", foreign);
 	REQUIRE_FAIL(con.Query(StringUtil::Format("INSTALL '%s'", foreign_path)));
+
 	REQUIRE_NO_FAIL(con.Query("SET allow_extensions_metadata_mismatch=true"));
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("INSTALL '%s'", foreign_path)));
-	for (auto &statement : {"FORCE INSTALL '%s'", "LOAD '%s'"}) {
-		result = con.Query(StringUtil::Format(statement, mismatch_path));
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "does not match the footer layout"));
+	idx_t index = 0;
+	for (idx_t size : {idx_t(384), idx_t(512)}) {
+		for (auto &malformed : MalformedFooters(size)) {
+			INFO(malformed.second);
+			auto path = WriteStubFile("footer_malformed_" + std::to_string(index++), malformed.first);
+			for (auto &statement : {"INSTALL '%s'", "FORCE INSTALL '%s'", "LOAD '%s'"}) {
+				auto result = con.Query(StringUtil::Format(statement, path));
+				REQUIRE(result->HasError());
+				REQUIRE(StringUtil::Contains(result->GetError(), malformed.second));
+			}
+		}
 	}
+	auto unknown_path = WriteStubFile("footer_unknown", MakeStubWithMarker(256, "256"));
+	auto result = con.Query(StringUtil::Format("INSTALL '%s'", unknown_path));
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), UNKNOWN_MARKER));
 }
 
 TEST_CASE("Signed extension loading rejects stubs of every footer size", "[extension_footer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	for (idx_t size : {idx_t(256), idx_t(384), idx_t(512)}) {
-		auto path =
-		    WriteStubFile("footer_unsigned_" + std::to_string(size), MakeStubExtension(size, std::to_string(size)));
+		auto path = WriteStubFile("footer_unsigned_" + std::to_string(size), MakeStubExtension(size));
 		auto result = con.Query(StringUtil::Format("LOAD '%s'", path));
 		REQUIRE(result->HasError());
 		REQUIRE(StringUtil::Contains(result->GetError(), "signature is either missing or invalid"));
@@ -240,10 +364,10 @@ static string SignHash(const string &private_key_pem, const string &hash) {
 }
 
 static string MakeSignedStub(const TestSigningKey &key) {
-	auto stub = MakeUnsignedStub(std::to_string(key.signature_size));
-	auto signature = SignHash(ReadTestFile(key.private_key_path), ComputeExtensionHash(stub));
+	auto prefix = MakeSignedPrefix(MarkerFor(key.signature_size));
+	auto signature = SignHash(ReadTestFile(key.private_key_path), ComputeExtensionHash(prefix));
 	REQUIRE(signature.size() == key.signature_size);
-	return stub + signature;
+	return FinishExtension(prefix, signature);
 }
 
 static void WriteBinaryFile(const string &path, const string &content) {
@@ -261,6 +385,11 @@ TEST_CASE("Signed extensions of every footer size verify against a trusted repos
 	auto &instance = *db.instance;
 	LocalFileSystem fs;
 	REQUIRE(!Settings::Get<AllowUnsignedExtensionsSetting>(instance));
+
+	auto check = [&](const string &file, const string &repository) {
+		return ExtensionHelper::CheckExtensionBufferSignature(instance, file.data(), file.size(),
+		                                                      ExtensionRepositoryType::USER_PROVIDED, repository);
+	};
 
 	vector<string> prefixes;
 	vector<string> stubs;
@@ -280,8 +409,7 @@ TEST_CASE("Signed extensions of every footer size verify against a trusted repos
 		    con.Query(StringUtil::Format("CREATE EXTENSION REPOSITORY %s WITH PREFIX '%s' USING PUBLIC KEY '%s'",
 		                                 repository, prefix, ReadTestFile(key.public_key_path))));
 
-		REQUIRE(ExtensionHelper::CheckExtensionBufferSignature(instance, stub.data(), stub.size(),
-		                                                       ExtensionRepositoryType::USER_PROVIDED, repository));
+		REQUIRE(check(stub, repository));
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("INSTALL %s FROM %s", name, repository)));
 		// the stub is not a shared library, so a load that passed signature verification fails opening it
 		auto result = con.Query(StringUtil::Format("LOAD %s FROM %s", name, repository));
@@ -291,13 +419,30 @@ TEST_CASE("Signed extensions of every footer size verify against a trusted repos
 
 		auto tampered_body = stub;
 		tampered_body[10]++;
-		REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(instance, tampered_body.data(), tampered_body.size(),
-		                                                        ExtensionRepositoryType::USER_PROVIDED, repository));
+		REQUIRE(!check(tampered_body, repository));
 		auto tampered_marker = stub;
-		tampered_marker[stub.size() - key.signature_size - ParsedExtensionMetaData::METADATA_SIZE + 32]++;
-		REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(instance, tampered_marker.data(),
-		                                                        tampered_marker.size(),
-		                                                        ExtensionRepositoryType::USER_PROVIDED, repository));
+		tampered_marker[SignedMetadataOffset(stub, key.signature_size) + MARKER_FIELD_OFFSET]++;
+		REQUIRE(!check(tampered_marker, repository));
+		auto tampered_signature = stub;
+		tampered_signature[SignatureOffset(stub, key.signature_size) + 5]++;
+		REQUIRE(!check(tampered_signature, repository));
+		// the same field changed in both metadata copies passes the copy check but not the signature
+		auto tampered_metadata = stub;
+		tampered_metadata[SignedMetadataOffset(stub, key.signature_size) + VERSION_FIELD_OFFSET]++;
+		if (key.signature_size != ParsedExtensionMetaData::SIGNATURE_SIZE) {
+			tampered_metadata[TailMetadataOffset(stub) + VERSION_FIELD_OFFSET]++;
+		}
+		auto tampered_parsed = ParseFooter(tampered_metadata);
+		REQUIRE(tampered_parsed.metadata_error.empty());
+		REQUIRE(tampered_parsed.extension_version == "w0.0.1");
+		REQUIRE(!check(tampered_metadata, repository));
+		if (key.signature_size != ParsedExtensionMetaData::SIGNATURE_SIZE) {
+			// what an older reader verifies: the prefix before the zero trailer, against the trailer
+			auto legacy_offset = stub.size() - 256;
+			REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(
+			    instance, stub.data(), legacy_offset, stub.substr(legacy_offset),
+			    ExtensionRepositoryType::USER_PROVIDED, repository));
+		}
 
 		WriteBinaryFile(extension_path, tampered_body);
 		result = con.Query(StringUtil::Format("FORCE INSTALL %s FROM %s", name, repository));
@@ -309,8 +454,7 @@ TEST_CASE("Signed extensions of every footer size verify against a trusted repos
 	}
 
 	// a 384-byte signature never verifies against a 2048-bit key
-	REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(instance, stubs[1].data(), stubs[1].size(),
-	                                                        ExtensionRepositoryType::USER_PROVIDED, "signed256"));
+	REQUIRE(!check(stubs[1], "signed256"));
 	auto extension_dir =
 	    fs.JoinPath(fs.JoinPath(prefixes[0], ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
 	WriteBinaryFile(fs.JoinPath(extension_dir, "footer_wrong_key.duckdb_extension"), stubs[1]);
