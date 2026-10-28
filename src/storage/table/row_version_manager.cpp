@@ -216,8 +216,7 @@ void RowVersionManager::CommitWrite(transaction_t old_id, transaction_t new_id, 
 			oldest_uncheckpointed_delete_commit = new_id;
 		}
 	}
-	GetVectorInfo(info.vector_idx)
-	    .CommitWrite(old_id, new_id, info.is_consecutive ? nullptr : info.GetRows(), info.count);
+	GetVectorInfo(info.vector_idx).CommitWrite(old_id, new_id, info.GetStoredRows(), info.count);
 }
 
 void RowVersionManager::RollbackWrite(idx_t vector_idx, const uint16_t rows[], idx_t count,

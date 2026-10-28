@@ -41,8 +41,14 @@ struct DeleteInfo {
 		}
 		return rows;
 	}
+	//! The rows, or nullptr if they are consecutive
+	const uint16_t *GetStoredRows() const {
+		return is_consecutive ? nullptr : rows;
+	}
+	//! The previous ids are stored after the rows, aligned
 	transaction_t *GetPreviousIds() {
-		return reinterpret_cast<transaction_t *>(GetPreviousIdsAddress());
+		auto rows_end = reinterpret_cast<uintptr_t>(rows) + (is_consecutive ? 0 : count * sizeof(uint16_t));
+		return reinterpret_cast<transaction_t *>(AlignValue<uintptr_t, sizeof(transaction_t)>(rows_end));
 	}
 	//! The size of the entry (an upper bound, as the rows start before the end of the struct)
 	static idx_t GetAllocationSize(idx_t count, bool is_consecutive, idx_t previous_id_count) {
@@ -51,12 +57,6 @@ struct DeleteInfo {
 	}
 
 private:
-	//! The previous ids are stored after the rows, aligned
-	uintptr_t GetPreviousIdsAddress() const {
-		auto rows_end = reinterpret_cast<uintptr_t>(rows) + (is_consecutive ? 0 : count * sizeof(uint16_t));
-		return AlignValue<uintptr_t, sizeof(transaction_t)>(rows_end);
-	}
-
 	//! The per-vector row identifiers (actual row id is base_row + rows[x])
 	uint16_t rows[1];
 };

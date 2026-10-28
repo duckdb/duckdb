@@ -39,8 +39,8 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_ROWS: {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// the rows fall back to the ids they held before the delete or update
-		info->version_info->RollbackWrite(info->vector_idx, info->is_consecutive ? nullptr : info->GetRows(),
-		                                  info->count, info->GetPreviousIds(), info->previous_id_count);
+		info->version_info->RollbackWrite(info->vector_idx, info->GetStoredRows(), info->count, info->GetPreviousIds(),
+		                                  info->previous_id_count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
