@@ -96,6 +96,9 @@ public:
 
 			ResetStreamInternal();
 		}
+		if (out_size != 0) {
+			FormatException("Failed to decompress GZIP block: produced less data than expected");
+		}
 	}
 
 	static size_t MaxCompressedLength(size_t input_size) {
