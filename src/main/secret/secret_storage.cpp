@@ -233,7 +233,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 				string full_path = fs.JoinPath(secret_path, fname);
 
 				if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
-					string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
+					string secret_name = SecretNameFromFileName(fname.substr(0, fname.size() - 14)); // size of file ext
 					persistent_secrets.insert(Identifier(secret_name));
 				}
 			});
@@ -281,6 +281,53 @@ static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const Base
 	file_writer.Flush();
 }
 
+struct SecretNameEscape {
+	char character;
+	const char *escaped;
+};
+
+static const SecretNameEscape SECRET_NAME_ESCAPES[] = {{'%', "%25"}, {'/', "%2F"},  {'\\', "%5C"},
+                                                       {':', "%3A"}, {'\0', "%00"}, {'.', "%2E"}};
+
+string LocalFileSecretStorage::SecretFileName(const string &secret_name) {
+	string result;
+	for (idx_t i = 0; i < secret_name.size(); i++) {
+		auto c = secret_name[i];
+		bool escaped = false;
+		for (auto &escape : SECRET_NAME_ESCAPES) {
+			// a dot is only escaped at the start of the name, so that the file is never "." or ".." or hidden
+			if (c == escape.character && (c != '.' || i == 0)) {
+				result += escape.escaped;
+				escaped = true;
+				break;
+			}
+		}
+		if (!escaped) {
+			result += c;
+		}
+	}
+	return result + ".duckdb_secret";
+}
+
+string LocalFileSecretStorage::SecretNameFromFileName(const string &file_name) {
+	string result;
+	for (idx_t i = 0; i < file_name.size(); i++) {
+		bool unescaped = false;
+		for (auto &escape : SECRET_NAME_ESCAPES) {
+			if (file_name.compare(i, 3, escape.escaped) == 0) {
+				result += escape.character;
+				i += 2;
+				unescaped = true;
+				break;
+			}
+		}
+		if (!unescaped) {
+			result += file_name[i];
+		}
+	}
+	return result;
+}
+
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
 	auto &fs = FileSystem::GetLocal(db);
 
@@ -299,7 +346,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		}
 	}
 
-	string file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+	string file_path = fs.JoinPath(secret_path, SecretFileName(secret.GetName().GetIdentifierName()));
 	string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	// If persistent file already exists remove
@@ -314,7 +361,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
 	auto &fs = FileSystem::GetLocal(db);
-	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
+	string file = fs.JoinPath(secret_path, SecretFileName(secret));
 	persistent_secrets.erase(Identifier(secret));
 	try {
 		fs.RemoveFile(file);
