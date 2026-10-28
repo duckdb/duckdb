@@ -1,0 +1,135 @@
+# name: test/sql/aggregate/aggregates/kahan_sum_large_cancellation.test
+# description: fsum and favg keep the small terms when a large input cancels out again (#27961)
+# group: [aggregates]
+
+statement ok
+CREATE TABLE cancel AS SELECT * FROM (VALUES (1.0::DOUBLE), (1e100), (1.0), (-1e100)) t(v);
+
+# the classic Kahan update lost the compensation when the input was larger than the running sum: 0.0 instead of 2.0
+query IIII
+SELECT fsum(v), favg(v), kahan_sum(v), sumkahan(v) FROM cancel;
+----
+2.0	0.5	2.0	2.0
+
+query II
+SELECT fsum(v), favg(v) FROM (VALUES (1.0::DOUBLE), (1e16), (1.0), (-1e16)) t(v);
+----
+2.0	0.5
+
+query II
+SELECT fsum(v), favg(v) FROM (VALUES (1e100::DOUBLE), (1.0), (-1e100), (1.0)) t(v);
+----
+2.0	0.5
+
+query II
+SELECT fsum(v), favg(v) FROM (VALUES (-1.0::DOUBLE), (-1e100), (-1.0), (1e100)) t(v);
+----
+-2.0	-0.5
+
+# grouped
+query III
+SELECT g, fsum(v), favg(v)
+FROM (SELECT v, 1 AS g FROM cancel UNION ALL SELECT v * 2, 2 FROM cancel)
+GROUP BY g ORDER BY g;
+----
+1	2.0	0.5
+2	4.0	1.0
+
+# combined from exported states: the compensation of each state carries over
+query II
+SELECT finalize(combine((SELECT fsum(v) EXPORT_STATE FROM cancel WHERE v > 0),
+                        (SELECT fsum(v) EXPORT_STATE FROM cancel WHERE v < 0))),
+       finalize(combine((SELECT favg(v) EXPORT_STATE FROM cancel WHERE v > 0),
+                        (SELECT favg(v) EXPORT_STATE FROM cancel WHERE v < 0)));
+----
+2.0	0.5
+
+# a window frame, which combines and finalizes partial states
+query I
+SELECT fsum(v) OVER (ORDER BY rowid ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM cancel LIMIT 1;
+----
+2.0
+
+# the exact cases keep their results
+query II
+SELECT fsum(v)::BIGINT, favg(v) FROM (VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE)) t(v);
+----
+9007199254740994	2251799813685248.5
+
+query II
+SELECT fsum(v), favg(v) FROM (VALUES (NULL::DOUBLE)) t(v);
+----
+NULL	NULL
+
+# the compensation is divided together with the exact remainder of the division, so an average whose compensation is
+# below half an ulp of the sum still comes out correctly rounded: (1 + 2^-53) / 3
+query II
+SELECT printf('%.17g', favg(v)), printf('%.17g', fsum(v)) FROM (VALUES (1.0::DOUBLE), (1.1102230246251565e-16), (0.0)) t(v);
+----
+0.33333333333333337	1
+
+query I
+SELECT printf('%.17g', favg(v)) FROM (VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE)) t(v);
+----
+3002399751580331.5
+
+# infinities propagate instead of turning into NaN through the compensation
+query IIII
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR, kahan_sum(v)::VARCHAR, sumkahan(v)::VARCHAR FROM (VALUES (1.0::DOUBLE), ('inf')) t(v);
+----
+inf	inf	inf	inf
+
+query II
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('inf'::DOUBLE), (1.0)) t(v);
+----
+inf	inf
+
+query II
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('-inf'::DOUBLE), (1.0), (1e308)) t(v);
+----
+-inf	-inf
+
+query II
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES (1e308::DOUBLE), (1e308)) t(v);
+----
+inf	inf
+
+query II
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('inf'::DOUBLE), ('-inf')) t(v);
+----
+nan	nan
+
+query II
+SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('nan'::DOUBLE), (1.0)) t(v);
+----
+nan	nan
+
+# states exported by an older version: an infinite sum next to a NaN compensation, and a finite one
+query III
+SELECT finalize(to_aggregate_state({'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'fsum', ['DOUBLE']))::VARCHAR,
+       finalize(to_aggregate_state({'count': 2::UBIGINT, 'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'favg', ['DOUBLE']))::VARCHAR,
+       printf('%.17g', finalize(to_aggregate_state({'count': 3::UBIGINT, 'value': 1.0::DOUBLE, 'err': -1.1102230246251565e-16::DOUBLE}, 'favg', ['DOUBLE'])));
+----
+inf	inf	0.33333333333333337
+
+# (1 + 2^-55) / 3 is exactly halfway between two doubles: ties to even
+query I
+SELECT printf('%.17g', favg(v)) FROM (VALUES (1.0::DOUBLE), (2.775557561562891e-17), (0.0)) t(v);
+----
+0.33333333333333337
+
+# a state holding a negative zero keeps its sign through the finalize
+query II
+SELECT signbit(finalize(to_aggregate_state({'count': 2::UBIGINT, 'value': -0.0::DOUBLE, 'err': 0.0::DOUBLE}, 'favg', ['DOUBLE']))),
+       signbit(finalize(to_aggregate_state({'value': -0.0::DOUBLE, 'err': 0.0::DOUBLE}, 'fsum', ['DOUBLE'])));
+----
+true	true
+
+# a legacy state with an infinite sum combines in either order
+query IIII
+SELECT finalize(combine(to_aggregate_state({'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'fsum', ['DOUBLE']), (SELECT fsum(v) EXPORT_STATE FROM cancel)))::VARCHAR,
+       finalize(combine((SELECT fsum(v) EXPORT_STATE FROM cancel), to_aggregate_state({'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'fsum', ['DOUBLE'])))::VARCHAR,
+       finalize(combine(to_aggregate_state({'count': 1::UBIGINT, 'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'favg', ['DOUBLE']), (SELECT favg(v) EXPORT_STATE FROM cancel)))::VARCHAR,
+       finalize(combine((SELECT favg(v) EXPORT_STATE FROM cancel), to_aggregate_state({'count': 1::UBIGINT, 'value': 'inf'::DOUBLE, 'err': 'nan'::DOUBLE}, 'favg', ['DOUBLE'])))::VARCHAR;
+----
+inf	inf	inf	inf
