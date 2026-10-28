@@ -347,8 +347,8 @@ ScalarFunctionSet BitCountFun::GetFunctions() {
 	    ScalarFunction({}, LogicalType::TINYINT, ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>),
 	    LogicalType::BIGINT));
 	functions.AddFunction(
-	    NameXArgument(ScalarFunction({}, LogicalType::TINYINT,
-	                                 ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>),
+	    NameXArgument(ScalarFunction({}, LogicalType::SMALLINT,
+	                                 ScalarFunction::UnaryFunction<hugeint_t, int16_t, HugeIntBitCntOperator>),
 	                  LogicalType::HUGEINT));
 	functions.AddFunction(
 	    NameXArgument(ScalarFunction({}, LogicalType::BIGINT,

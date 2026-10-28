@@ -1139,6 +1139,8 @@ static const char *const PEG_RULE_NAMES[] = {
     "ValuesClause",
     "ValuesExpressions",
     "SetStatement",
+    "SetKeywordStatement",
+    "VariableAssignment",
     "SetAssignmentOrTimeZone",
     "ResetStatement",
     "ResetTarget",

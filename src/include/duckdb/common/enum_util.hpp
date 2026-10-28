@@ -142,6 +142,8 @@ enum class ClientInterruptState : uint8_t;
 
 enum class ColumnDataAllocatorType : uint8_t;
 
+enum class ColumnDataRepresentation : uint8_t;
+
 enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
@@ -277,6 +279,8 @@ enum class ForeignKeyType : uint8_t;
 enum class FunctionCollationHandling : uint8_t;
 
 enum class FunctionErrors : uint8_t;
+
+enum class FunctionKind : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
 
@@ -499,6 +503,8 @@ enum class QueryResultMemoryType : uint8_t;
 enum class QueryResultState : uint8_t;
 
 enum class RecoveryMode : uint8_t;
+
+enum class RecursiveCTEMode : uint8_t;
 
 enum class RecursiveCTEPipelineMetricType : uint8_t;
 
@@ -857,6 +863,9 @@ template<>
 const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
 
 template<>
+const char* EnumUtil::ToChars<ColumnDataRepresentation>(ColumnDataRepresentation value);
+
+template<>
 const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties value);
 
 template<>
@@ -1059,6 +1068,9 @@ const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandli
 
 template<>
 const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionKind>(FunctionKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
@@ -1392,6 +1404,9 @@ const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEMode>(RecursiveCTEMode value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value);
@@ -1845,6 +1860,9 @@ template<>
 ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char *value);
 
 template<>
+ColumnDataRepresentation EnumUtil::FromString<ColumnDataRepresentation>(const char *value);
+
+template<>
 ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const char *value);
 
 template<>
@@ -2047,6 +2065,9 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 
 template<>
 FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
+
+template<>
+FunctionKind EnumUtil::FromString<FunctionKind>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
@@ -2380,6 +2401,9 @@ QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
+
+template<>
+RecursiveCTEMode EnumUtil::FromString<RecursiveCTEMode>(const char *value);
 
 template<>
 RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value);

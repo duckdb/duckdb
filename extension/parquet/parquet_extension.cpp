@@ -420,7 +420,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.not_null_columns = parquet_bind.not_null_columns;
 
 	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
-	if (!fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
+	// checking a remote path costs a request, so a remote output is opened like one that may exist
+	if (!fs.IsRemoteFile(file_path) && !fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
 		flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 	}
 	options.open_flags = flags;
@@ -883,6 +884,9 @@ static void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const Phy
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct ParquetWriteBatchData : public PreparedBatchData {
+	explicit ParquetWriteBatchData(Allocator &allocator) : prepared_row_group(allocator) {
+	}
+
 	PreparedRowGroup prepared_row_group;
 };
 
@@ -890,7 +894,7 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	auto result = make_uniq<ParquetWriteBatchData>();
+	auto result = make_uniq<ParquetWriteBatchData>(BufferAllocator::Get(context));
 	unique_ptr<ParquetWriteTransformData> transform_data;
 	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
@@ -1087,6 +1091,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(full_meta_fun));
 
 	// variant_to_parquet_variant
+	loader.RegisterType("PARQUET_VARIANT", VariantColumnWriter::GetParquetVariantType());
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant
