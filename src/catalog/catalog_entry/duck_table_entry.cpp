@@ -12,6 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -451,27 +452,21 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 	});
 }
 
-// Keep struct literal defaults aligned with nested field renames.
+//! Remaps the default of a struct column with the mapping and the field defaults of the remap_struct call
 static unique_ptr<ParsedExpression> RemapStructDefault(unique_ptr<ParsedExpression> default_value,
-                                                       const LogicalType &new_type,
-                                                       unique_ptr<ParsedExpression> mapping) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(default_value));
-	children.push_back(ConstantExpression::FromValue(Value(new_type)));
-	children.push_back(std::move(mapping));
-	children.push_back(ConstantExpression::Null());
-	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
-}
-
-//! The mapping argument of the remap_struct call, so nested defaults can be remapped with the same mapping
-static unique_ptr<ParsedExpression> GetRemapStructMapping(ChangeColumnTypeInfo &info) {
+                                                       const LogicalType &new_type, ChangeColumnTypeInfo &info) {
 	D_ASSERT(info.expression);
 	D_ASSERT(info.expression->GetExpressionClass() == ExpressionClass::FUNCTION);
 	auto &function = info.expression->Cast<FunctionExpression>();
 	D_ASSERT(function.FunctionName() == "remap_struct");
 	auto &arguments = function.GetArguments();
 	D_ASSERT(arguments.size() == 4);
-	return arguments[2].GetExpression().Copy();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(default_value));
+	children.push_back(ConstantExpression::FromValue(Value(new_type)));
+	children.push_back(arguments[2].GetExpression().Copy());
+	children.push_back(arguments[3].GetExpression().Copy());
+	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
@@ -1255,9 +1250,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
 			}
 			copy.SetType(info.target_type);
-			if (alter_table_type == AlterTableType::RENAME_FIELD && copy.HasDefaultValue()) {
-				copy.SetDefaultValue(
-				    RemapStructDefault(copy.DefaultValue().Copy(), info.target_type, GetRemapStructMapping(info)));
+			if ((alter_table_type == AlterTableType::RENAME_FIELD || alter_table_type == AlterTableType::ADD_FIELD) &&
+			    copy.HasDefaultValue()) {
+				// the stored default is not cast yet, the mapping is for the old type of the column
+				auto old_default = make_uniq<CastExpression>(col.Type(), copy.DefaultValue().Copy());
+				copy.SetDefaultValue(RemapStructDefault(std::move(old_default), info.target_type, info));
 			}
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
