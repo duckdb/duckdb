@@ -1,0 +1,163 @@
+# name: test/sql/aggregate/aggregates/sum_avg_overflow_fallible.test
+# description: Aggregates with checked HUGEINT/interval accumulation must be registered as fallible
+# group: [aggregates]
+
+# accumulation overflow raises as a regular error
+
+statement error
+SELECT sum(d) FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(38,0)),
+                           ('99999999999999999999999999999999999999'::DECIMAL(38,0))) t(d);
+----
+Overflow in HUGEINT addition
+
+# a sum that fits in HUGEINT but not in DECIMAL(38) raises in finalize
+
+statement error
+SELECT sum(d) FROM (VALUES ('60000000000000000000000000000000000000'::DECIMAL(38,0)),
+                           ('60000000000000000000000000000000000000'::DECIMAL(38,0))) t(d);
+----
+Overflow in SUM of DECIMAL
+
+statement error
+SELECT sum(h) FROM (VALUES (170141183460469231731687303715884105727::HUGEINT), (1::HUGEINT)) t(h);
+----
+Overflow in HUGEINT addition
+
+statement error
+SELECT avg(d) FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(38,0)),
+                           ('99999999999999999999999999999999999999'::DECIMAL(38,0))) t(d);
+----
+Overflow in HUGEINT addition
+
+statement error
+SELECT avg(h) FROM (VALUES (170141183460469231731687303715884105727::HUGEINT),
+                           (170141183460469231731687303715884105727::HUGEINT)) t(h);
+----
+Overflow in HUGEINT addition
+
+statement error
+SELECT avg(i) FROM (VALUES (INTERVAL '2147483647 months'), (INTERVAL '2147483647 months')) t(i);
+----
+Overflow in addition
+
+statement error
+SELECT decimal_average(d) FROM (VALUES ('99999999999999999999999999999999999999'::DECIMAL(38,0)),
+                                       ('99999999999999999999999999999999999999'::DECIMAL(38,0))) t(d);
+----
+decimal_average: intermediate sum overflowed HUGEINT range
+
+# sum_no_overflow bound by name has no statistics proof for its int64 accumulator
+
+statement error
+SELECT sum_no_overflow(9223372036854775807::BIGINT) FROM range(2);
+----
+Overflow in repeated aggregate state combine
+
+# the fallible registration is read by the EXPLAIN (SQL) pivot default export, which must reject
+# moving a fallible default into the generated query
+
+statement ok
+SET pivot_filter_threshold=0;
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(38,0)),('h','q','2'::DECIMAL(38,0))) t(g,k,v)
+PIVOT (sum(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(38,0)),('h','q','2'::DECIMAL(38,0))) t(g,k,v)
+PIVOT (avg(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',1::HUGEINT),('h','q',2::HUGEINT)) t(g,k,v)
+PIVOT (sum(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',INTERVAL 1 DAY),('h','q',INTERVAL 2 DAY)) t(g,k,v)
+PIVOT (avg(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(38,0)),('h','q','2'::DECIMAL(38,0))) t(g,k,v)
+PIVOT (decimal_average(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p',1::BIGINT),('h','q',2::BIGINT)) t(g,k,v)
+PIVOT (sum_no_overflow(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+# integer and narrow decimal sums accumulate losslessly below the HUGEINT range and stay exportable
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (sum(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*sum.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(9,0)),('h','q','2'::DECIMAL(9,0))) t(g,k,v)
+PIVOT (sum(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*sum.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(9,0)),('h','q','2'::DECIMAL(9,0))) t(g,k,v)
+PIVOT (avg(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*avg.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::DECIMAL(18,0)),('h','q','2'::DECIMAL(18,0))) t(g,k,v)
+PIVOT (sum(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*sum.*
+
+statement ok
+RESET pivot_filter_threshold;
+
+# the reconstructed name-bound sum_no_overflow still raises after a serializer round trip (the flag
+# itself is only observable through metadata consumers at plan time)
+
+statement ok
+SET debug_verify_serializer=true;
+
+statement error
+SELECT sum_no_overflow(9223372036854775807::BIGINT) FROM range(2);
+----
+Overflow in repeated aggregate state combine
+
+statement ok
+SET debug_verify_serializer=false;
+
+# the scalarized window form keeps working under dictionary vector verification
+
+statement ok
+SET debug_verify_vector='dictionary_expression';
+
+query I rowsort
+SELECT sum(d) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM (VALUES (1.5::DECIMAL(38,1)), (2.5::DECIMAL(38,1))) t(d);
+----
+1.5
+2.5
+
+statement ok
+RESET debug_verify_vector;
+
+# valid aggregation is unaffected
+
+query IIII
+SELECT sum(d), avg(h), avg(i), decimal_average(d)
+FROM (VALUES (1.0::DECIMAL(38,1), 2::HUGEINT, INTERVAL 1 DAY),
+             (2.0::DECIMAL(38,1), 4::HUGEINT, INTERVAL 3 DAY)) t(d, h, i);
+----
+3.0	3.0	2 days	1.5
