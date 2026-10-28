@@ -275,7 +275,10 @@ SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinFa
 	if (rhs_cardinality == 0) {
 		return {is_anti ? MaxValue(0.0, preserved_cardinality) : 0, false};
 	}
-	return {RoundSemiAntiCardinality(preserved_cardinality, DEFAULT_SELECTIVITY), false};
+	// Keep fractional estimates while composing costs. Rounding a small preserved input
+	// can otherwise make equivalent selectivities depend on where the SEMI/ANTI is placed.
+	auto estimate = MinValue(preserved_cardinality, MaxValue(1.0, preserved_cardinality * DEFAULT_SELECTIVITY));
+	return {MaxValue(0.0, estimate), false};
 }
 
 static constexpr double MAX_BASE_CARDINALITY_TO_DOMAIN_RATIO = 8;

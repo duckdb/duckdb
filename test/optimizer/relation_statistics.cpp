@@ -415,3 +415,15 @@ TEST_CASE("Relation statistics extraction rejects recurring and cyclic CTEs", "[
 	REQUIRE_FALSE(cyclic_extractor.Extract(cyclic));
 	REQUIRE(cyclic_extractor.ExtractedOperatorCount() == 1);
 }
+
+TEST_CASE("SEMI fallback retains fractional cardinalities for enumeration", "[optimizer][relation_statistics]") {
+	for (auto join_type : {JoinType::SEMI, JoinType::ANTI}) {
+		auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinFallback(102, 1, join_type);
+		REQUIRE(estimate.cardinality == Approx(20.4));
+		REQUIRE_FALSE(estimate.used_domain_evidence);
+		REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(0, 1, join_type).cardinality == 0);
+		REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(0.5, 1, join_type).cardinality == 0.5);
+	}
+	REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(102, 0, JoinType::SEMI).cardinality == 0);
+	REQUIRE(RelationStatisticsHelper::EstimateSemiAntiJoinFallback(102, 0, JoinType::ANTI).cardinality == 102);
+}

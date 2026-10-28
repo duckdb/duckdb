@@ -174,7 +174,7 @@ FROM (domain_sa_left
 	JOIN (SELECT DISTINCT k FROM domain_sa_rhs WHERE k < 500) selective USING (k))
 SEMI JOIN domain_sa_rhs USING (k);
 ----
-physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: RIGHT_SEMI.*~4 rows.*HASH_JOIN.*Join Type: INNER.*~1[89] rows.*
+physical_plan	<REGEX>:(?s).*HASH_JOIN.*Join Type: RIGHT_SEMI.*~3 rows.*HASH_JOIN.*Join Type: INNER.*~1[89] rows.*
 
 # DISTINCT makes its single output key eligible for current-domain coverage.
 query II
