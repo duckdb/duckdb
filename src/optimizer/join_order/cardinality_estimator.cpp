@@ -768,7 +768,8 @@ struct DenominatorState {
 	reference_map_t<JoinRelationSet, CompositeJoinPairStats> join_pair_stats;
 	reference_set_t<JoinRelationSet> capped_join_pairs;
 	unordered_set<idx_t> unused_edge_tdoms;
-	unordered_set<string> applied_semi_anti_operators;
+	unordered_set<idx_t> applied_semi_anti_operators;
+	unordered_set<idx_t> applied_semi_anti_predicates;
 };
 
 static bool DenominatorSubgraphComplete(DenominatorState &state, JoinRelationSet &set) {
@@ -781,9 +782,10 @@ void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &ed
 	auto edge_kind = ClassifyDenominatorEdge(edge, state.applied_equivalence_groups);
 	if (edge_kind == DenominatorEdgeKind::SEMI_ANTI_JOIN) {
 		auto source_index = edge.GetFilter().source_operator_index;
-		auto identity = source_index.IsValid() ? "operator:" + to_string(source_index.GetIndex())
-		                                       : "predicate:" + to_string(edge.GetPredicate().GetIndex());
-		if (!state.applied_semi_anti_operators.insert(identity).second) {
+		// Predicates without an operator descriptor have a separate identity namespace.
+		auto &applied = source_index.IsValid() ? state.applied_semi_anti_operators : state.applied_semi_anti_predicates;
+		auto identity = source_index.IsValid() ? source_index.GetIndex() : edge.GetPredicate().GetIndex();
+		if (!applied.insert(identity).second) {
 			return;
 		}
 	}

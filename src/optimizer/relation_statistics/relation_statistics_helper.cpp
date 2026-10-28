@@ -182,18 +182,18 @@ optional<RelationStats> RelationStatisticsHelper::ExtractProjectionStats(Logical
 		auto expression_binding = GetChildColumnBinding(expression);
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);
 		SemiAntiJoinDomainEvidence semi_anti_join_domain_evidence;
+		optional_ptr<const RelationColumnStats> child_column;
 		if (expression_binding.expression_is_constant) {
 			distinct_count = DistinctCount(MinValue<idx_t>(result.cardinality, 1), DistinctCountSource::EXACT);
 		} else if (expression_binding.FoundColumnRef()) {
-			auto child_column = child_columns.Find(expression_binding.child_binding);
+			child_column = child_columns.Find(expression_binding.child_binding);
 			if (!child_column) {
 				return {};
 			}
 			distinct_count = child_column->total_domain;
 		}
 		auto current_domain = distinct_count;
-		if (expression_binding.FoundColumnRef()) {
-			auto child_column = child_columns.Find(expression_binding.child_binding);
+		if (child_column) {
 			current_domain = child_column->current_domain;
 			if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
