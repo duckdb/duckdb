@@ -106,6 +106,12 @@
       "paths": [
         "test/sql/collate/collate_distinct_aggregate_icu.test"
       ]
+    },
+    {
+      "reason": "FIXME: the rendered SQL keeps the input casts of a decimal multiplication, so the rebind multiplies DECIMAL(19,2) by DECIMAL(21,0) and gets a wide intermediate that carries no numeric statistics",
+      "paths": [
+        "test/optimizer/statistics/statistics_numeric.test"
+      ]
     }
   ]
 }
