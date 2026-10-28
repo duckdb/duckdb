@@ -565,7 +565,20 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		}
 	}
 
+	bloom_filter_fallback_memory = make_shared_ptr<ParquetBloomFilterMemory>(options.bloom_filter_fallback_max_bytes);
 	InitializeColumnWriters();
+}
+
+bool ParquetWriter::BloomFilterFallbackEnabled(const vector<Identifier> &schema_path) const {
+	if (!options.enable_bloom_filters || options.encryption_config || schema_path.size() != 1) {
+		return false;
+	}
+	for (const auto &name : options.bloom_filter_fallback_columns) {
+		if (schema_path[0] == Identifier(name)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void ParquetWriter::InitializeColumnWriters() {

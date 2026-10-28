@@ -112,6 +112,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool enable_bloom_filters = true;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
+	vector<string> bloom_filter_fallback_columns;
+	idx_t bloom_filter_fallback_max_bytes = ParquetBloomFilterMemory::DEFAULT_LIMIT;
 
 	//! After how many row groups to rotate to a new file
 	optional_idx row_groups_per_file;
@@ -155,6 +157,8 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
 	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	copy_options["bloom_filter_fallback_columns"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["bloom_filter_fallback_max_bytes"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
@@ -172,6 +176,66 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+}
+
+static bool SupportsBloomFilterFallback(const LogicalType &type, bool timestamp_as_int96) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::SQLNULL:
+		return true;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return !timestamp_as_int96;
+	case LogicalTypeId::DECIMAL:
+		return DecimalType::GetWidth(type) <= 18;
+	default:
+		return false;
+	}
+}
+
+static void BindBloomFilterFallback(ParquetWriteBindData &bind_data, const vector<Identifier> &names,
+                                    const vector<LogicalType> &types) {
+	identifier_set_t selected;
+	for (auto &name : bind_data.bloom_filter_fallback_columns) {
+		const Identifier identifier(name);
+		if (!selected.insert(identifier).second) {
+			throw BinderException("Duplicate column \"%s\" in BLOOM_FILTER_FALLBACK_COLUMNS", name);
+		}
+		idx_t column_idx = 0;
+		while (column_idx < names.size() && names[column_idx] != identifier) {
+			column_idx++;
+		}
+		if (column_idx == names.size()) {
+			throw BinderException("Column \"%s\" in BLOOM_FILTER_FALLBACK_COLUMNS is not a top-level output column",
+			                      name);
+		}
+		if (!SupportsBloomFilterFallback(types[column_idx], bind_data.write_timestamp_as_int96)) {
+			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s%s", name,
+			                      types[column_idx], bind_data.write_timestamp_as_int96 ? " (INT96 enabled)" : "");
+		}
+		name = names[column_idx].GetIdentifierName();
+	}
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
@@ -321,6 +385,22 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			bind_data->data_page_size_limit = val;
 		} else if (option_name == "write_bloom_filter") {
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
+		} else if (option_name == "bloom_filter_fallback_columns") {
+			const auto &value = option_values[0];
+			if (value.IsNull() || value.type().id() != LogicalTypeId::LIST) {
+				throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS requires a list of column names");
+			}
+			for (const auto &column : ListValue::GetChildren(value)) {
+				if (column.IsNull() || column.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS requires non-NULL string column names");
+				}
+				bind_data->bloom_filter_fallback_columns.push_back(StringValue::Get(column));
+			}
+		} else if (option_name == "bloom_filter_fallback_max_bytes") {
+			if (option_values[0].IsNull()) {
+				throw BinderException("BLOOM_FILTER_FALLBACK_MAX_BYTES cannot be NULL");
+			}
+			bind_data->bloom_filter_fallback_max_bytes = option_values[0].GetValue<idx_t>();
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
 			auto val = option_values[0].GetValue<double>();
 			if (!(val > 0 && val <= 1)) {
@@ -375,6 +455,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
+	BindBloomFilterFallback(*bind_data, names, sql_types);
 
 	return std::move(bind_data);
 }
@@ -412,6 +493,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.data_page_size_limit = parquet_bind.data_page_size_limit;
 	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
 	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
+	options.bloom_filter_fallback_columns = parquet_bind.bloom_filter_fallback_columns;
+	options.bloom_filter_fallback_max_bytes = parquet_bind.bloom_filter_fallback_max_bytes;
 	options.compression_level = parquet_bind.compression_level;
 	options.parquet_version = parquet_bind.parquet_version,
 	options.geoparquet_version = parquet_bind.geoparquet_version;
@@ -813,6 +896,13 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                  default_value.not_null_columns);
 	serializer.WritePropertyWithDefault(121, "data_page_size_limit", bind_data.data_page_size_limit,
 	                                    default_value.data_page_size_limit);
+	serializer.WritePropertyWithDefault(122, "enable_bloom_filters", bind_data.enable_bloom_filters,
+	                                    default_value.enable_bloom_filters);
+	serializer.WritePropertyWithDefault(123, "bloom_filter_fallback_columns", bind_data.bloom_filter_fallback_columns,
+	                                    default_value.bloom_filter_fallback_columns);
+	serializer.WritePropertyWithDefault(124, "bloom_filter_fallback_max_bytes",
+	                                    bind_data.bloom_filter_fallback_max_bytes,
+	                                    default_value.bloom_filter_fallback_max_bytes);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -855,6 +945,12 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
 	data->data_page_size_limit =
 	    deserializer.ReadPropertyWithExplicitDefault(121, "data_page_size_limit", default_value.data_page_size_limit);
+	data->enable_bloom_filters =
+	    deserializer.ReadPropertyWithExplicitDefault(122, "enable_bloom_filters", default_value.enable_bloom_filters);
+	data->bloom_filter_fallback_columns = deserializer.ReadPropertyWithExplicitDefault(
+	    123, "bloom_filter_fallback_columns", default_value.bloom_filter_fallback_columns);
+	data->bloom_filter_fallback_max_bytes = deserializer.ReadPropertyWithExplicitDefault(
+	    124, "bloom_filter_fallback_max_bytes", default_value.bloom_filter_fallback_max_bytes);
 
 	return std::move(data);
 }

@@ -16,6 +16,7 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -82,6 +83,7 @@ public:
 
 	PrimitiveDictionary<SRC, TGT, OP> dictionary;
 	duckdb_parquet::Encoding::type encoding;
+	bool fallback_bloom_filter = false;
 };
 
 template <class SRC, class TGT, class OP>
@@ -264,6 +266,54 @@ public:
 
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return OP::template InitializeStats<SRC, TGT>();
+	}
+
+	void BeginWrite(ColumnWriterState &state_p) override {
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
+		if (writer.BloomFilterFallbackEnabled(schema_path) && !HasDictionary(state)) {
+			idx_t value_count = 0;
+			for (const auto &page : state.page_info) {
+				value_count += page.row_count - page.empty_count - page.null_count;
+			}
+			const auto entries_per_value = OP::template BloomFilterEntriesPerValue<SRC, TGT>();
+			if (value_count <= NumericLimits<idx_t>::Maximum() / entries_per_value) {
+				state.bloom_filter = ParquetBloomFilter::TryCreate(
+				    BufferAllocator::Get(writer.GetContext()), value_count * entries_per_value,
+				    writer.BloomFilterFalsePositiveRatio(), writer.BloomFilterFallbackMemory());
+				state.fallback_bloom_filter = state.bloom_filter != nullptr;
+			}
+		}
+		PrimitiveColumnWriter::BeginWrite(state_p);
+	}
+
+	void Write(ColumnWriterState &state_p, Vector &input, idx_t count) override {
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
+		if (state.fallback_bloom_filter) {
+			auto values = input.Values<SRC>();
+			for (idx_t i = 0; i < count; i++) {
+				auto entry = values[i];
+				if (!entry.IsValid()) {
+					continue;
+				}
+				const auto &source_value = entry.GetValue();
+				const auto target_value = OP::template Operation<SRC, TGT>(source_value);
+				state.bloom_filter->FilterInsert(OP::template XXHash64<SRC, TGT>(target_value));
+				auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(source_value, target_value);
+				if (extra_hash) {
+					state.bloom_filter->FilterInsert(*extra_hash);
+				}
+			}
+		}
+		PrimitiveColumnWriter::Write(state_p, input, count);
+	}
+
+	void PrepareWrite(ColumnWriterState &state_p) override {
+		PrimitiveColumnWriter::PrepareWrite(state_p);
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
+		if (state.fallback_bloom_filter) {
+			state.bloom_filter->FoldToTarget(BufferAllocator::Get(writer.GetContext()),
+			                                 writer.BloomFilterFalsePositiveRatio());
+		}
 	}
 
 	bool HasDictionary(PrimitiveColumnWriterState &state_p) override {

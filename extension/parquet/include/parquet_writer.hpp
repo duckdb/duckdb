@@ -184,6 +184,10 @@ struct ParquetWriterOptions {
 	bool enable_bloom_filters;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
 	double bloom_filter_false_positive_ratio;
+	//! Top-level columns eligible for non-dictionary Bloom filters
+	vector<string> bloom_filter_fallback_columns;
+	//! Per-file budget for fallback filters, including concurrent construction and scratch space
+	idx_t bloom_filter_fallback_max_bytes = ParquetBloomFilterMemory::DEFAULT_LIMIT;
 	//! For the given 'codec', the compression level to use
 	int64_t compression_level;
 	//! Parquet version to use, higher versions enable more advanced compression modes
@@ -252,6 +256,10 @@ public:
 	}
 	double BloomFilterFalsePositiveRatio() const {
 		return options.bloom_filter_false_positive_ratio;
+	}
+	bool BloomFilterFallbackEnabled(const vector<Identifier> &schema_path) const;
+	shared_ptr<ParquetBloomFilterMemory> BloomFilterFallbackMemory() const {
+		return bloom_filter_fallback_memory;
 	}
 	int64_t CompressionLevel() const {
 		return options.compression_level;
@@ -326,6 +334,7 @@ private:
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 	vector<ParquetBloomFilterEntry> bloom_filters;
+	shared_ptr<ParquetBloomFilterMemory> bloom_filter_fallback_memory;
 
 	optional_ptr<CopyFunctionFileStatistics> written_stats;
 	unique_ptr<ParquetStatsAccumulator> stats_accumulator;

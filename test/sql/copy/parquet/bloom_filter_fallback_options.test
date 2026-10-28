@@ -1,0 +1,78 @@
+# name: test/sql/copy/parquet/bloom_filter_fallback_options.test
+# description: Validate Bloom fallback column selection and budget options
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE options_test(k VARCHAR, n INTEGER, nested STRUCT(k VARCHAR), items INTEGER[],
+                         b BOOLEAN, big HUGEINT, d DECIMAL(38,2), ts TIMESTAMP)
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS 'k')
+----
+requires a list of column names
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS NULL)
+----
+requires a list of column names
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [NULL])
+----
+requires non-NULL string column names
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [1])
+----
+requires non-NULL string column names
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['k', 'K'])
+----
+Duplicate column
+
+foreach name missing nested.k
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
+----
+is not a top-level output column
+
+endloop
+
+foreach name nested items b big d
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
+----
+does not support column
+
+endloop
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet'
+(BLOOM_FILTER_FALLBACK_COLUMNS ['ts'], WRITE_TIMESTAMP_AS_INT96 TRUE)
+----
+INT96 enabled
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES NULL)
+----
+NULL is not supported
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES -1)
+----
+expected an argument of type UBIGINT
+
+# Dots are literal parts of a top-level column name.
+statement ok
+COPY (SELECT i AS "nested.k" FROM range(4096) t(i)) TO '{TEST_DIR}/dot.parquet'
+(BLOOM_FILTER_FALLBACK_COLUMNS ['nested.k'], DICTIONARY_SIZE_LIMIT 0)
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/dot.parquet')
+----
+1
