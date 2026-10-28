@@ -803,6 +803,83 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 	}
 }
 
+TEST_CASE("A scan with a file secret and a read by path of the same files both succeed, each with its own key",
+          "[file_credentials]") {
+	CredentialsFixture f;
+	f.EnableCaches(f.con);
+	// the scan with the file secret ("secret") and the read by path ("path"), in this order
+	vector<string> order;
+	bool one_query = true;
+	bool cached_by_path = false;
+	SECTION("one query, the scan first") {
+		order = {"secret", "path"};
+	}
+	SECTION("one query, the read by path first") {
+		order = {"path", "secret"};
+	}
+	SECTION("one transaction, the scan first") {
+		order = {"secret", "path"};
+		one_query = false;
+	}
+	SECTION("one transaction, the read by path first") {
+		order = {"path", "secret"};
+		one_query = false;
+	}
+	SECTION("one query, with the files cached by an earlier read by path") {
+		order = {"secret", "path"};
+		cached_by_path = true;
+	}
+	for (auto &format : f.Formats()) {
+		INFO(format);
+		f.WriteFiles(format);
+		auto secret_glob = CredentialsFixture::Glob(format, "");
+		auto path_glob = CredentialsFixture::Glob(format, "t");
+		// a scan with a file secret caches nothing, so the caches are still empty after it
+		auto alone = f.ScanAlone(f.con, format, secret_glob, "key-a");
+		if (cached_by_path) {
+			REQUIRE_NO_FAIL(f.con.Query(CredentialsFixture::Scan(format, path_glob)));
+		}
+		vector<string> scans;
+		for (auto &read : order) {
+			scans.push_back(CredentialsFixture::Scan(format, read == "secret" ? secret_glob : path_glob));
+		}
+		vector<string> statements = scans;
+		if (one_query) {
+			statements = {"SELECT (" + scans[0] + "), (" + scans[1] + ")"};
+		}
+		f.con.BeginTransaction();
+		f.fs->listing_secrets = {{secret_glob, f.FileSecret("key-a")}};
+		f.fs->ClearAccesses();
+		for (auto &statement : statements) {
+			INFO(statement);
+			auto result = f.con.Query(statement);
+			REQUIRE_NO_FAIL(*result);
+			for (idx_t column = 0; column < result->ColumnCount(); column++) {
+				REQUIRE(result->Collection().GetValue(column, 0).ToString() == SAME_FILES_SUM);
+			}
+		}
+		f.fs->listing_secrets.clear();
+		f.con.Rollback();
+		// the scan opened and read every file itself, as often as alone: nothing the read by path cached served it
+		f.RequireUses("key-a", alone.first, alone.second);
+		// every other open and read was the read by path's, with the secret matched to the path
+		REQUIRE(f.fs->Accesses("open").size() == alone.first + f.fs->CountKey("open", "path-key"));
+		REQUIRE(f.fs->Accesses("read").size() == alone.second + f.fs->CountKey("read", "path-key"));
+		if (!cached_by_path) {
+			// with nothing cached before, the read by path read every file itself: the scan cached nothing for it
+			for (auto &file : {"t1.", "t2."}) {
+				auto path = "mem://bucket/table/" + string(file) + format;
+				INFO(path);
+				bool read_by_path = false;
+				for (auto &access : f.fs->Accesses("read")) {
+					read_by_path = read_by_path || (access.path == path && access.key_id == "path-key");
+				}
+				REQUIRE(read_by_path);
+			}
+		}
+	}
+}
+
 TEST_CASE("A file secret vends on first use, once, also when several threads use it first", "[file_credentials]") {
 	CredentialsFixture f;
 	auto &context = f.Context();
