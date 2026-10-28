@@ -329,7 +329,7 @@ RelationStatisticsHelper::ExtractOperatorStats(LogicalOperator &op, ClientContex
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return ExtractProjectionStats(op.Cast<LogicalProjection>(), child_stats[0].get());
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return ExtractAggregationStats(op.Cast<LogicalAggregate>(), child_stats[0].get());
+		return ExtractAggregationStats(op.Cast<LogicalAggregate>(), child_stats[0].get(), context);
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return ExtractWindowStats(op.Cast<LogicalWindow>(), child_stats[0].get());
 	case LogicalOperatorType::LOGICAL_DISTINCT:

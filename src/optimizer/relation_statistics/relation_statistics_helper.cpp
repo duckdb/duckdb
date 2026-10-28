@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -325,8 +326,71 @@ SemiAntiJoinCardinalityEstimate RelationStatisticsHelper::EstimateSemiAntiJoinCa
 	return {RoundSemiAntiCardinality(preserved_cardinality, selectivity), true};
 }
 
+static optional_idx EstimateUnionGroups(LogicalOperator &input, vector<idx_t> groups, idx_t maximum,
+                                        ClientContext &context) {
+	RelationStatsExtractor extractor(context);
+	vector<pair<reference<LogicalOperator>, vector<idx_t>>> pending;
+	pending.emplace_back(input, std::move(groups));
+	idx_t result = 0;
+	bool found_union = false;
+	while (!pending.empty()) {
+		auto entry = std::move(pending.back());
+		pending.pop_back();
+		while (entry.first.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &projection = entry.first.get();
+			auto bindings = projection.children[0]->GetColumnBindings();
+			vector<idx_t> mapped;
+			for (auto index : entry.second) {
+				auto &expr = *projection.expressions[index];
+				if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+					break;
+				}
+				auto binding = expr.Cast<BoundColumnRefExpression>().Binding();
+				auto match = std::find(bindings.begin(), bindings.end(), binding);
+				if (match == bindings.end()) {
+					break;
+				}
+				mapped.push_back(idx_t(match - bindings.begin()));
+			}
+			if (mapped.size() != entry.second.size()) {
+				break;
+			}
+			entry.first = *projection.children[0];
+			entry.second = std::move(mapped);
+		}
+		auto &op = entry.first.get();
+		if (op.type == LogicalOperatorType::LOGICAL_UNION) {
+			found_union = true;
+			for (auto &child : op.children) {
+				pending.emplace_back(*child, entry.second);
+			}
+			continue;
+		}
+		if (!found_union) {
+			return {};
+		}
+		auto stats = extractor.Extract(op);
+		if (!stats) {
+			return {};
+		}
+		auto cardinality = op.has_estimated_cardinality ? op.estimated_cardinality : stats->cardinality;
+		auto estimate = MinValue<idx_t>(cardinality, 1);
+		for (auto index : entry.second) {
+			auto domain = MaxValue<idx_t>(stats->columns[index].current_domain.distinct_count, 1);
+			if (estimate > cardinality / domain) {
+				estimate = cardinality;
+				break;
+			}
+			estimate *= domain;
+		}
+		result += MinValue(estimate, maximum - result);
+	}
+	return optional_idx(result);
+}
+
 optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate &aggregate,
-                                                                          const RelationStats &child_stats) {
+                                                                          const RelationStats &child_stats,
+                                                                          ClientContext &context) {
 	RelationColumnStatsLookup child_columns(child_stats);
 	vector<DistinctCount> cardinality_counts;
 	for (auto &grouping_set : aggregate.grouping_sets) {
@@ -357,6 +421,19 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 	auto bindings = aggregate.GetColumnBindings();
 	auto preserves_group_evidence =
 	    aggregate.grouping_sets.size() == 1 && aggregate.grouping_sets[0].size() == aggregate.groups.size();
+	if (preserves_group_evidence && !aggregate.groups.empty() && aggregate.children.size() == 1 &&
+	    cardinality_counts.size() == aggregate.groups.size()) {
+		vector<idx_t> groups;
+		for (auto &group : aggregate.groups) {
+			groups.push_back(child_stats.FindColumn(group->Cast<BoundColumnRefExpression>().Binding()).GetIndex());
+		}
+		auto union_groups =
+		    EstimateUnionGroups(*aggregate.children[0], std::move(groups), child_stats.cardinality, context);
+		if (union_groups.IsValid()) {
+			// Per-arm domain products avoid inventing cross-arm combinations of grouping keys.
+			result.cardinality = MinValue(result.cardinality, union_groups.GetIndex());
+		}
+	}
 	for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
 		auto &group = *aggregate.groups[group_idx];
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);

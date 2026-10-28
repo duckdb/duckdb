@@ -61,7 +61,7 @@ public:
 	static optional<RelationStats> ExtractProjectionStats(LogicalProjection &projection,
 	                                                      const RelationStats &child_stats);
 	static optional<RelationStats> ExtractAggregationStats(LogicalAggregate &aggregate,
-	                                                       const RelationStats &child_stats);
+	                                                       const RelationStats &child_stats, ClientContext &context);
 	static optional<RelationStats> ExtractWindowStats(LogicalWindow &window, const RelationStats &child_stats);
 	static optional<RelationStats> ExtractDistinctStats(LogicalDistinct &distinct, const RelationStats &child_stats);
 	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats);

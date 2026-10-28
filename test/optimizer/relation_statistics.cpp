@@ -289,6 +289,8 @@ TEST_CASE("Projection and window preserve the statistics source", "[optimizer][r
 }
 
 TEST_CASE("Grouping sets discard inherited SEMI domain evidence", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
 	auto input = ColumnBinding(TableIndex(10), ProjectionIndex(0));
 	auto child_stats = CreateStats({input}, {1}, 1);
 	child_stats.columns[0].semi_anti_join_domain_evidence.MarkUnique();
@@ -297,15 +299,16 @@ TEST_CASE("Grouping sets discard inherited SEMI domain evidence", "[optimizer][r
 	aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, input));
 	aggregate.grouping_sets.emplace_back();
 	aggregate.grouping_sets[0].insert(ProjectionIndex(0));
-	auto ordinary = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+	auto ordinary = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats, *connection.context);
 	REQUIRE(ordinary);
 	REQUIRE(ordinary->columns[0].GetSupportedSemiAntiDomainSize().IsValid());
 	aggregate.grouping_sets.emplace_back();
-	auto rollup = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+	auto rollup = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats, *connection.context);
 	REQUIRE(rollup);
 	REQUIRE_FALSE(rollup->columns[0].GetSupportedSemiAntiDomainSize().IsValid());
 	aggregate.grouping_sets[1].insert(ProjectionIndex(0));
-	auto duplicate_groups = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+	auto duplicate_groups =
+	    RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats, *connection.context);
 	REQUIRE(duplicate_groups);
 	REQUIRE_FALSE(duplicate_groups->columns[0].GetSupportedSemiAntiDomainSize().IsValid());
 }
