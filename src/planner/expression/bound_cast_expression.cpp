@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -311,14 +312,18 @@ static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType
 		if (target_type.id() != LogicalTypeId::STRUCT) {
 			return true;
 		}
-		auto &source_children = StructType::GetChildTypes(source_type);
-		auto &target_children = StructType::GetChildTypes(target_type);
-		if (source_children.size() != target_children.size()) {
+		// Pair the fields as the cast executes them: positionally for unnamed structs, by name otherwise.
+		// Unmatched target fields become NULL and unmatched source fields are dropped, which does not throw.
+		auto mapping = StructBoundCastData::GetFieldMapping(source_type, target_type);
+		if (mapping.kind != StructCastFieldMapping::MatchKind::VALID) {
+			// Binding the cast fails, which throws when the cast is bound lazily
 			return true;
 		}
-		for (idx_t child_idx = 0; child_idx < source_children.size(); child_idx++) {
-			if (BoundCastExpression::CastCanThrow(source_children[child_idx].second, target_children[child_idx].second,
-			                                      false)) {
+		auto &source_children = StructType::GetChildTypes(source_type);
+		auto &target_children = StructType::GetChildTypes(target_type);
+		for (idx_t i = 0; i < mapping.source_indexes.size(); i++) {
+			if (BoundCastExpression::CastCanThrow(source_children[mapping.source_indexes[i]].second,
+			                                      target_children[mapping.target_indexes[i]].second, false)) {
 				return true;
 			}
 		}
