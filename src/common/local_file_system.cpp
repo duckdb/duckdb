@@ -6,6 +6,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
@@ -241,7 +242,16 @@ static void CloseFileAndAppendError(int fd, string &extended_error) {
 static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
-	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+#ifdef __APPLE__
+	const auto &modification_time = s.st_mtimespec;
+#else
+	const auto &modification_time = s.st_mtim;
+#endif
+	// with the fraction of a second, so that a file rewritten within the same second gets another version tag
+	const auto modification_seconds = Timestamp::FromEpochSeconds(static_cast<int64_t>(modification_time.tv_sec));
+	file_metadata.last_modification_time =
+	    Timestamp::FromEpochMicroSeconds(AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(
+	        modification_seconds.value, static_cast<int64_t>(modification_time.tv_nsec) / Interval::NANOS_PER_MICRO));
 	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
 	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 
@@ -1108,9 +1118,11 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
 
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
-	const auto WINDOWS_TICK = 10000000;
+	// with the fraction of a second, so that a file rewritten within the same second gets another version tag
+	const auto WINDOWS_TICKS_PER_MICRO = 10;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return Timestamp::FromEpochMicroSeconds(fileTime64 / WINDOWS_TICKS_PER_MICRO -
+	                                        SEC_TO_UNIX_EPOCH * Interval::MICROS_PER_SEC);
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
@@ -2161,7 +2173,21 @@ static bool IsSymbolicLink(const string &path) {
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
                                                            bool absolute_path) {
 	vector<OpenFileInfo> result;
-	if (FileExists(path, opener) || IsPipe(path, opener)) {
+	// a regular file comes with its type, size, modification time and version tag, as from a glob
+	auto add_file = [&](const string &file_path) {
+		OpenFileInfo info(file_path);
+		auto file_metadata = GetStatsIfExists(info, opener);
+		if (file_metadata) {
+			info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+			auto &options = info.extended_info->options;
+			options.emplace("type", Value("file"));
+			FillFileOptions(*file_metadata, options);
+		}
+		result.push_back(std::move(info));
+	};
+	if (FileExists(path, opener)) {
+		add_file(path);
+	} else if (IsPipe(path, opener)) {
 		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
@@ -2170,7 +2196,9 @@ vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, o
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
+				if (FileExists(joined_path, opener)) {
+					add_file(joined_path);
+				} else if (IsPipe(joined_path, opener)) {
 					result.emplace_back(joined_path);
 				}
 			}
