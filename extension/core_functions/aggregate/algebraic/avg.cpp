@@ -235,9 +235,8 @@ void ValidateTimestampAverageStates(const_data_ptr_t states, idx_t count, idx_t 
 	using operation = TimestampAverageOperation<timestamp_t>;
 	for (idx_t i = 0; i < count; i++) {
 		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
-		if (state.count == operation::INFINITE_COUNT &&
-		    (state.value < hugeint_t(operation::POSITIVE_INFINITY) ||
-		     state.value > hugeint_t(operation::BOTH_INFINITIES))) {
+		if (state.count == operation::INFINITE_COUNT && (state.value < hugeint_t(operation::POSITIVE_INFINITY) ||
+		                                                 state.value > hugeint_t(operation::BOTH_INFINITIES))) {
 			throw InvalidInputException(
 			    "Invalid avg state - with a count of %llu the value must be 1 (infinity), 2 (-infinity) or 3 (both), "
 			    "not %s",
@@ -510,16 +509,15 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(time_tz_avg);
 
 	auto timestamp_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
-	                                                             TimestampAverageOperation<timestamp_ns_t>>(
+	                                                          TimestampAverageOperation<timestamp_ns_t>>(
 	    LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_NS);
 	timestamp_ns_avg.GetSignature().GetParameter(0).SetName("x");
 	timestamp_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
 	avg.AddFunction(timestamp_ns_avg);
 
-	auto timestamp_tz_ns_avg =
-	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
-	                                      TimestampAverageOperation<timestamp_tz_ns_t>>(
-	        LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_TZ_NS);
+	auto timestamp_tz_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                             TimestampAverageOperation<timestamp_tz_ns_t>>(
+	    LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_TZ_NS);
 	timestamp_tz_ns_avg.GetSignature().GetParameter(0).SetName("x");
 	timestamp_tz_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
 	avg.AddFunction(timestamp_tz_ns_avg);
