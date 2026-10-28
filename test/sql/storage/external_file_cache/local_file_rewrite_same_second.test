@@ -4,6 +4,9 @@
 
 require parquet
 
+# the modification time of a file on Windows does not change on every write
+require notwindows
+
 # the Parquet metadata cache, with the column statistics of the file
 statement ok
 SET parquet_metadata_cache = true;
