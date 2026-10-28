@@ -267,6 +267,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_TRAMPOLINE:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
