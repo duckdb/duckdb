@@ -18,7 +18,7 @@ SELECT round_even(2.675::DOUBLE, 2)::VARCHAR, round_even(-2.675::DOUBLE, 2)::VAR
 
 # values just below a half whose product is not a midpoint keep their result
 query TTTTTT
-SELECT round(nextafter(-0.05::DOUBLE, 0::DOUBLE), 1)::VARCHAR, round(nextafter(0.05::DOUBLE, 0::DOUBLE), 1)::VARCHAR, round(nextafter(-0.5::DOUBLE, 0::DOUBLE), 0)::VARCHAR, round_even(nextafter(-0.05::DOUBLE, 0::DOUBLE), 1)::VARCHAR, round_even(nextafter(0.05::DOUBLE, 0::DOUBLE), 1)::VARCHAR, round_even(nextafter(-0.5::DOUBLE, 0::DOUBLE), 0)::VARCHAR
+SELECT round(-0.049999999999999996::DOUBLE, 1)::VARCHAR, round(0.049999999999999996::DOUBLE, 1)::VARCHAR, round(-0.49999999999999994::DOUBLE, 0)::VARCHAR, round_even(-0.049999999999999996::DOUBLE, 1)::VARCHAR, round_even(0.049999999999999996::DOUBLE, 1)::VARCHAR, round_even(-0.49999999999999994::DOUBLE, 0)::VARCHAR
 ----
 -0.0	0.0	-0.0	-0.0	0.0	-0.0
 
@@ -30,7 +30,7 @@ SELECT round(1.5e-22::DOUBLE, 22)::VARCHAR, round(2.5e-22::DOUBLE, 22)::VARCHAR
 
 # values from a table
 statement ok
-CREATE TABLE doubles AS SELECT * FROM (VALUES (2.675::DOUBLE, 2), (1.005::DOUBLE, 2), (0.125::DOUBLE, 2), (nextafter(-0.05::DOUBLE, 0::DOUBLE), 1), (NULL, 2), (2.675::DOUBLE, NULL)) t(d, p)
+CREATE TABLE doubles AS SELECT * FROM (VALUES (2.675::DOUBLE, 2), (1.005::DOUBLE, 2), (0.125::DOUBLE, 2), (-0.049999999999999996::DOUBLE, 1), (NULL, 2), (2.675::DOUBLE, NULL)) t(d, p)
 
 query TT
 SELECT round(d, p)::VARCHAR, round_even(d, p)::VARCHAR FROM doubles
