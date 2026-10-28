@@ -1278,10 +1278,6 @@ static string PushCollations(ClientContext &context, BoundSimpleFunction &bound_
 		auto &target_type = argument_types[i].IsComplete() ? argument_types[i] : source_type;
 		ExtractCollationFromType(source_type, target_type, collations);
 	}
-	if (collations.collation.empty() && collations.fields.empty()) {
-		// no collation to push
-		return string();
-	}
 	// push collations to the children
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto &arg = children[i];
