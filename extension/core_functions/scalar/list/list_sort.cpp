@@ -78,6 +78,11 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(sort_key_p));
+	if (is_grade_up) {
+		// break ties on the original position, so equal elements are graded in a deterministic order
+		auto position_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::UINTEGER, 2U);
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(position_expr));
+	}
 	sort =
 	    unique_ptr<Sort>(new Sort(context, orders, {LogicalType::USMALLINT, child_type, LogicalType::UINTEGER}, {2}));
 }
