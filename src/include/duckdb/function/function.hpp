@@ -37,6 +37,7 @@ class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
+class FunctionProperties;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
@@ -484,6 +485,9 @@ private:
 	QualifiedName qualified_name;
 };
 
+//! The kinds of functions that are selected by their arguments - every subclass of SimpleFunction is one kind
+enum class FunctionKind : uint8_t { SCALAR, AGGREGATE, WINDOW, TABLE, PRAGMA, TYPE };
+
 class SimpleFunction : public Function {
 public:
 	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
@@ -495,8 +499,15 @@ protected:
 	FunctionSignature signature;
 
 public:
-	DUCKDB_API string ToString() const;
+	//! How the function reads in errors, e.g. as a candidate of a call
+	DUCKDB_API virtual string ToString() const;
+	//! What kind of function this is
+	virtual FunctionKind GetKind() const = 0;
 	DUCKDB_API hash_t Hash() const;
+	//! The properties of scalar, aggregate and window functions - other functions have none
+	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {
+		return nullptr;
+	}
 
 	FunctionSignature &GetSignature() {
 		return signature;
@@ -685,9 +696,8 @@ public:
 class BindFunctionInput {
 public:
 	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
-	                  vector<unique_ptr<Expression>> &arguments_p,
-	                  optional_ptr<const vector<Identifier>> argument_names_p)
-	    : context(context_p), function(function_p), arguments(arguments_p), argument_names(argument_names_p) {
+	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p)
+	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p) {
 	}
 
 	ClientContext &GetClientContext() const {
@@ -696,10 +706,9 @@ public:
 	vector<unique_ptr<Expression>> &GetArguments() const {
 		return arguments;
 	}
-	//! The resolved name of every argument, parallel to GetArguments(). Not set if the names are unavailable.
-	optional_ptr<const vector<Identifier>> GetArgumentNames() const {
-		return argument_names;
-	}
+	//! The resolved name of an argument: the parameter name for standard and keyword-only parameters, the name the
+	//! caller wrote for "**kwargs", and an empty name for "*args"
+	DUCKDB_API const Identifier &GetArgumentName(idx_t arg_idx) const;
 
 	//! Get the constant value of an argument.
 	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
@@ -732,8 +741,8 @@ private:
 private:
 	ClientContext &context;
 	const BoundSimpleFunction &function;
+	const FunctionSignature &signature;
 	vector<unique_ptr<Expression>> &arguments;
-	optional_ptr<const vector<Identifier>> argument_names;
 };
 
 } // namespace duckdb

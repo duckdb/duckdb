@@ -60,7 +60,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
 			return;
 		}
 
