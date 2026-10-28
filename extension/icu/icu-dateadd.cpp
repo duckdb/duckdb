@@ -80,12 +80,6 @@ timestamp_tz_t ICUCalendarAdd::Operation(timestamp_tz_t timestamp, interval_t in
 		--millis;
 	}
 
-	// Make sure the value is still in range
-	date_t d;
-	dtime_t t;
-	auto us = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
-	Timestamp::Convert(timestamp_t(us), d, t);
-
 	// Now use the calendar to add the other parts
 	calendar->SetTime(millis);
 

@@ -274,11 +274,14 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 		idx_t scan_count =
 		    MinValue<idx_t>(target_count - scanned_count, current_start + current.count - state.offset_in_column);
 		segment_internal_index = state.offset_in_column;
-		// gather the selected rows that fall within this segment
-		idx_t segment_sel_count = 0;
-		while (sel_offset + segment_sel_count < sel_count &&
-		       sel.get_index(sel_offset + segment_sel_count) < scanned_count + scan_count) {
-			segment_sel_count++;
+		// The final segment contains all remaining selected rows.
+		idx_t segment_sel_count = sel_count - sel_offset;
+		if (scanned_count + scan_count < target_count) {
+			segment_sel_count = 0;
+			while (sel_offset + segment_sel_count < sel_count &&
+			       sel.get_index(sel_offset + segment_sel_count) < scanned_count + scan_count) {
+				segment_sel_count++;
+			}
 		}
 		if (segment_sel_count > 0) {
 			// the indices must be relative to the start of the segment scan - for the first segment this is

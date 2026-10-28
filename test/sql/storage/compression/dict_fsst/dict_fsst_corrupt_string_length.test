@@ -19,7 +19,7 @@ DICT_FSST
 statement error
 SELECT sum(length(s)) FROM t;
 ----
-Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
+Data Corruption Error: Corrupted DICT_FSST segment: string lengths exceed the dictionary size
 
 restart
 
@@ -29,10 +29,10 @@ SET debug_force_fetch_row=true;
 statement error
 SELECT sum(length(s)) FROM t;
 ----
-Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
+Data Corruption Error: Corrupted DICT_FSST segment: string lengths exceed the dictionary size
 
 # a single row only unpacks the lengths of its own group
 statement error
 SELECT s FROM t WHERE rowid = 999;
 ----
-Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
+Data Corruption Error: Corrupted DICT_FSST segment: string lengths exceed the dictionary size

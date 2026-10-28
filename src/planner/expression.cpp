@@ -78,6 +78,10 @@ bool Expression::PropagatesNullValues() const {
 	    type == ExpressionType::OPERATOR_COALESCE || type == ExpressionType::CASE_EXPR) {
 		return false;
 	}
+	// x IN (NULL, x) is TRUE and x NOT IN (NULL, x) is FALSE: a NULL element does not decide the result
+	if (type == ExpressionType::COMPARE_IN || type == ExpressionType::COMPARE_NOT_IN) {
+		return false;
+	}
 	bool propagate_null_values = true;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
 		if (!child.PropagatesNullValues()) {
