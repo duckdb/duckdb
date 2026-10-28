@@ -16,6 +16,7 @@
 #include "duckdb/common/vector.hpp"
 
 #include <iosfwd>
+#include <string_view>
 
 namespace duckdb {
 
@@ -81,10 +82,10 @@ public:
 	}
 
 	//! Whether the identifier starts with the given prefix (case-insensitive)
-	DUCKDB_API bool StartsWith(const string &prefix) const;
+	DUCKDB_API bool StartsWith(std::string_view prefix) const;
 
 	//! Whether the identifier ends with the given suffix (case-insensitive)
-	DUCKDB_API bool EndsWith(const string &suffix) const;
+	DUCKDB_API bool EndsWith(std::string_view suffix) const;
 
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;

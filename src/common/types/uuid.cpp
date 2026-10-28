@@ -8,7 +8,7 @@ namespace duckdb {
 //////////////////
 // Base UUID
 //////////////////
-bool BaseUUID::FromString(const string &str, hugeint_t &result, bool strict) {
+bool BaseUUID::FromString(std::string_view str, hugeint_t &result, bool strict) {
 	auto hex2char = [](char ch) -> unsigned char {
 		if (ch >= '0' && ch <= '9') {
 			return UnsafeNumericCast<unsigned char>(ch - '0');
@@ -41,8 +41,7 @@ bool BaseUUID::FromString(const string &str, hugeint_t &result, bool strict) {
 		if (str.length() != 36) {
 			return false;
 		}
-		const auto c_str = str.c_str();
-		if (c_str[8] != '-' || c_str[13] != '-' || c_str[18] != '-' || c_str[23] != '-') {
+		if (str[8] != '-' || str[13] != '-' || str[18] != '-' || str[23] != '-') {
 			return false;
 		}
 	}

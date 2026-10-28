@@ -11,11 +11,11 @@ Identifier GenerateInternalName(const char *prefix) {
 	return Identifier(prefix + UUID::ToString(UUID::GenerateRandomUUID()));
 }
 
-bool Identifier::StartsWith(const string &prefix) const {
+bool Identifier::StartsWith(std::string_view prefix) const {
 	return StringUtil::CIStartsWith(value, prefix);
 }
 
-bool Identifier::EndsWith(const string &suffix) const {
+bool Identifier::EndsWith(std::string_view suffix) const {
 	return StringUtil::CIEndsWith(value, suffix);
 }
 
@@ -33,10 +33,10 @@ bool operator==(const string &a, const Identifier &b) {
 	return StringUtil::CIEquals(a, b.GetIdentifierName());
 }
 bool operator==(const Identifier &a, const char *b) {
-	return StringUtil::CIEquals(a.GetIdentifierName(), string(b));
+	return StringUtil::CIEquals(a.GetIdentifierName(), b);
 }
 bool operator==(const char *a, const Identifier &b) {
-	return StringUtil::CIEquals(string(a), b.GetIdentifierName());
+	return StringUtil::CIEquals(a, b.GetIdentifierName());
 }
 
 bool operator<(const Identifier &a, const Identifier &b) {
