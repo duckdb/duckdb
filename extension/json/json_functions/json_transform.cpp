@@ -335,7 +335,12 @@ static bool TransformFromValueString(yyjson_val *vals[], yyjson_alc *alc, Vector
 			validity.SetInvalid(i);
 			continue;
 		}
-		GetValueString(val, alc, data[i], string_vector);
+		if (unsafe_yyjson_is_raw(val)) {
+			// a number kept as text (NumbersAsRaw) is cast from its exact text
+			data[i] = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+		} else {
+			GetValueString(val, alc, data[i], string_vector, nullptr);
+		}
 	}
 
 	bool success = true;
