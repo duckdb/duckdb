@@ -295,8 +295,8 @@ SELECT TRY((SELECT (SELECT max(10 // (i - 3)) FROM integers)))
 ----
 NULL
 
-# nested subqueries inside a larger select item are flattened before TRY is lowered;
-# the surrounding expression is maskable, errors inside the nested subquery propagate
+# nested subqueries inside a larger select item transport their error flag to the lowering,
+# so their errors mask the whole result exactly like errors in the surrounding expression
 query I
 SELECT TRY((SELECT (SELECT 1) + 1))
 ----
@@ -307,10 +307,22 @@ SELECT TRY((SELECT (SELECT 3) // 0))
 ----
 NULL
 
-statement error
+query I
 SELECT TRY((SELECT (SELECT 10 // (i - 3) FROM integers WHERE i = 3) + 1))
 ----
-Division by zero
+NULL
+
+# the masked error does not leak into sibling expressions of the same item
+query I
+SELECT TRY((SELECT COALESCE((SELECT 10 // (i - 3) FROM integers WHERE i = 3), 42) + 1))
+----
+NULL
+
+# a clean nested subquery keeps its value
+query I
+SELECT TRY((SELECT (SELECT 10 // (i - 1) FROM integers WHERE i = 3) + 1))
+----
+6
 
 # EXISTS nested inside the select item binds normally
 query I
@@ -549,11 +561,21 @@ SELECT TRY(1 + (SELECT DISTINCT i FROM (VALUES (1), (1)) t(i)))
 ----
 TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
 
-# a nested subquery selecting another scalar subquery would lose the error flag and is rejected
-statement error
+# a nested subquery selecting another scalar subquery transports the flag recursively
+query I
 SELECT TRY(COALESCE((SELECT (SELECT 1 // 0)), 42))
 ----
-TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+NULL
+
+query I
+SELECT TRY(COALESCE((SELECT (SELECT 1 // 1)), 42))
+----
+1
+
+query I
+SELECT TRY(COALESCE((SELECT (SELECT NULL::INTEGER)), 42))
+----
+42
 
 # USING SAMPLE attaches below the select list projection, so it is not a result modifier and both
 # forms transport correctly
@@ -626,18 +648,23 @@ SELECT TRY(1 + (WITH c AS MATERIALIZED (SELECT DISTINCT i FROM (VALUES (1)) t(i)
 ----
 2
 
-# the WITH clause does not hide a nested scalar select item from the rejection
-statement error
+# the WITH clause does not hide a nested scalar select item from the transport
+query I
 SELECT TRY(COALESCE((WITH c AS MATERIALIZED (SELECT 1 AS x) SELECT (SELECT 1 // 0) FROM c), 42))
 ----
-TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+NULL
 
-# a cast or function around a deeper subquery is not the exact-shape recursion; its errors
-# propagate from the deeper subplan instead of silently becoming NULL
-statement error
+# a cast or function around a deeper subquery transports as well: the flag reaches the enclosing
+# capture instead of the error silently becoming NULL inside the COALESCE
+query I
 SELECT TRY(COALESCE((SELECT CAST((SELECT 1 // 0) AS INTEGER)), 42))
 ----
-Division by zero
+NULL
+
+query I
+SELECT TRY(COALESCE((SELECT CAST((SELECT 1 // 1) AS INTEGER)), 42))
+----
+1
 
 # TRY captures over cast and COALESCE compositions of rethrowing subqueries
 query IIIIII
@@ -1067,3 +1094,176 @@ query I
 SELECT TRY('abc'::INTEGER)
 ----
 NULL
+
+# ---- nested scalar subqueries inside the select item transport their error flag ----
+
+# nesting depth composes, both over the direct form and inside a TRY argument
+query I
+SELECT TRY(1 + (SELECT 1 + (SELECT 1//x))) FROM (VALUES (0)) v(x)
+----
+NULL
+
+query I
+SELECT TRY(1 + (SELECT 1 + (SELECT 1//x))) FROM (VALUES (1)) v(x)
+----
+3
+
+# correlated transport
+query II
+SELECT o.x, TRY((SELECT o.x + (SELECT 1//o.x))) FROM (VALUES (0), (1)) o(x) ORDER BY o.x
+----
+0	NULL
+1	2
+
+# the flag reaches the enclosing capture: an inner error must not surface as an inner NULL
+query I
+SELECT TRY((SELECT COALESCE((SELECT 1//x), 42))) FROM (VALUES (0)) v(x)
+----
+NULL
+
+query I
+SELECT TRY((SELECT COALESCE((SELECT 1//x), 42))) FROM (VALUES (1)) v(x)
+----
+1
+
+# a user TRY inside the item consumes its own flag before the lowering sees it
+query I
+SELECT TRY((SELECT COALESCE(TRY(1 + (SELECT 1//0)), 99)))
+----
+99
+
+# an aggregate next to a transported subquery: both error sources gate the result
+query I
+SELECT TRY((SELECT max(i) + (SELECT 1//x) FROM (VALUES (5)) t(i))) FROM (VALUES (0)) v(x)
+----
+NULL
+
+query I
+SELECT TRY((SELECT max(i) + (SELECT 1//x) FROM (VALUES (5)) t(i))) FROM (VALUES (1)) v(x)
+----
+6
+
+query I
+SELECT TRY((SELECT max(10 // i) + (SELECT x) FROM (VALUES (0)) t(i))) FROM (VALUES (7)) v(x)
+----
+NULL
+
+query I
+SELECT TRY((SELECT max(i) + COALESCE(TRY(1 + (SELECT 1//0)), 9) FROM (VALUES (5)) t(i)))
+----
+14
+
+# count(*) has no inputs to probe; the transported flag alone gates the result
+query I
+SELECT TRY((SELECT count(*) + (SELECT 1//x) FROM (VALUES (5)) t(i))) FROM (VALUES (0)) v(x)
+----
+NULL
+
+# shapes the transport cannot cover fall back to the plain subquery, whose errors propagate
+statement error
+SELECT TRY((SELECT 1 + (SELECT 10 // i FROM (VALUES (0), (1)) t(i) ORDER BY i LIMIT 1)))
+----
+Division by zero
+
+query I
+SELECT TRY((SELECT 1 + (SELECT i FROM (VALUES (1), (2)) t(i) ORDER BY i LIMIT 1)))
+----
+2
+
+# a volatile nested subquery falls back and stays evaluated once in its flattened subplan
+query I
+SELECT TRY((SELECT 1 + (SELECT 1 + random() * 0 FROM (VALUES (1)) q(z))::INTEGER))
+----
+2
+
+# a window function inside the nested subquery falls back
+query I
+SELECT TRY((SELECT 1 + (SELECT row_number() OVER ())))
+----
+2
+
+# a set operation falls back
+statement error
+SELECT TRY((SELECT 1 + (SELECT 1//x UNION ALL SELECT 2 LIMIT 1))) FROM (VALUES (0)) v(x)
+----
+Division by zero
+
+# GROUP BY ALL may turn the item into a group expression, so the item does not transport
+statement error
+SELECT TRY((SELECT (SELECT 1//x) FROM (VALUES (0)) t(y) GROUP BY ALL)) FROM (VALUES (0)) v(x)
+----
+Division by zero
+
+# the comparison child of IN lands in the join condition of the flattened subquery and does not
+# transport
+statement error
+SELECT TRY((SELECT (SELECT 1//x) IN (SELECT 1))) FROM (VALUES (0)) v(x)
+----
+Division by zero
+
+# when a fallback would strand the re-raise of an already transported deeper subquery, the shape
+# is rejected instead
+statement error
+SELECT TRY(1 + (SELECT 1 + (SELECT 1//x) ORDER BY 1)) FROM (VALUES (0)) v(x)
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY((SELECT random() * 0 + (SELECT 1//x))) FROM (VALUES (0)) v(x)
+----
+TRY can not be used in combination with a volatile function
+
+# the one-row cardinality check of a transported subquery still propagates
+statement error
+SELECT TRY((SELECT (SELECT y FROM (VALUES (1), (2)) q(y))))
+----
+More than one row returned by a subquery
+
+# an aggregate owned by the TRY node but referenced only through a nested subquery is outside the
+# maskable positions, so its input errors propagate
+statement error
+SELECT TRY((SELECT 1 + (SELECT sum(10//x)) FROM (VALUES (0)) v(x)))
+----
+Division by zero
+
+# HAS_ERROR composes with the transport
+query II
+SELECT HAS_ERROR((SELECT 1 + (SELECT 1//x))), TRY((SELECT 1 + (SELECT 1//x))) FROM (VALUES (0)) v(x)
+----
+true	NULL
+
+# prepared statements rebind the transport per execution
+statement ok
+PREPARE try_transport AS SELECT TRY((SELECT 1 + (SELECT 1 // CAST(? AS INTEGER))))
+
+query I
+EXECUTE try_transport(0)
+----
+NULL
+
+query I
+EXECUTE try_transport(1)
+----
+2
+
+statement ok
+DEALLOCATE try_transport
+
+# the transport survives a view round trip
+statement ok
+CREATE VIEW try_transport_view AS SELECT TRY((SELECT 1 + (SELECT 1//x))) AS a FROM (VALUES (0), (1)) v(x)
+
+query I
+SELECT a FROM try_transport_view ORDER BY a NULLS FIRST
+----
+NULL
+2
+
+statement ok
+DROP VIEW try_transport_view
+
+# protection: a plain nested subquery without TRY does not pick up the re-raise machinery
+query II
+EXPLAIN SELECT (SELECT 1 + (SELECT 1//x)) FROM (VALUES (1)) v(x)
+----
+physical_plan	<!REGEX>:.*try_rethrow.*

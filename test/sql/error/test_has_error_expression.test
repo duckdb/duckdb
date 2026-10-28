@@ -146,16 +146,17 @@ SELECT has_error((SELECT 10 // i FROM (VALUES (0)) t(i) USING SAMPLE 100 PERCENT
 ----
 true
 
-# result modifiers and recursive scalar select items cannot transport the error flag
+# result modifiers cannot transport the error flag
 statement error
 SELECT has_error((SELECT DISTINCT i FROM (VALUES (1), (1)) t(i)))
 ----
 TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
 
-statement error
-SELECT has_error((SELECT (SELECT 1 // 0)))
+# a recursive scalar select item transports the flag through both levels
+query II
+SELECT has_error((SELECT (SELECT 1 // 0))), has_error((SELECT (SELECT 1 // 1)))
 ----
-TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+true	false
 
 # aggregates are rejected, as in TRY
 statement error

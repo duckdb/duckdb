@@ -131,6 +131,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(TableFilterOptionalFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterPrefixRangeFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterSelectivityOptionalFun),
+	DUCKDB_SCALAR_FUNCTION(TryRethrowFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(AddFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(AnyValueFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArbitraryFun),

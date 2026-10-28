@@ -29,6 +29,14 @@
         "type": "scalar_function"
     },
     {
+        "name": "__internal_try_rethrow",
+        "struct": "TryRethrowFun",
+        "parameters": "error,value",
+        "description": "Raises an error when the flag is set and returns the value otherwise. Created by the TRY subquery lowering to re-raise a captured error at the use site.",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
         "name": "__internal_barrier",
         "struct": "BarrierFun",
         "parameters": "arg",

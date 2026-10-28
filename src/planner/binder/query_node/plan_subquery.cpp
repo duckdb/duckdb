@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -789,11 +790,11 @@ static unique_ptr<Expression> BindTryRethrowFunction(Binder &binder, const char 
 }
 
 //! Replace a TRY subquery that was lowered with an exposed error flag by
-//! CASE WHEN <error flag> THEN error(...) ELSE <masked value> END, so that errors captured inside the
-//! subquery are re-raised at the use site, where the enclosing TRY or HAS_ERROR consumes them per row
+//! __internal_try_rethrow(<error flag>, <masked value>), so that errors captured inside the subquery
+//! are re-raised at the use site, where the enclosing TRY, HAS_ERROR or subquery lowering consumes them.
+//! The raised error is always consumed; the original message is not available here, since HAS_ERROR
+//! captures only the fact that an error occurred.
 static unique_ptr<Expression> CreateTryErrorRethrow(Binder &binder, unique_ptr<Expression> subquery_result) {
-	auto struct_type = subquery_result->GetReturnType();
-	auto value_type = StructType::GetChildType(struct_type, 0);
 	auto flag_input = subquery_result->Copy();
 
 	vector<unique_ptr<Expression>> value_children;
@@ -806,20 +807,10 @@ static unique_ptr<Expression> CreateTryErrorRethrow(Binder &binder, unique_ptr<E
 	flag_children.push_back(make_uniq<BoundConstantExpression>(Value("error")));
 	auto flag = BindTryRethrowFunction(binder, "struct_extract", std::move(flag_children));
 
-	// the raised error is always consumed by the enclosing TRY or HAS_ERROR; the original message is
-	// not available here, HAS_ERROR captures only the fact that an error occurred
-	vector<unique_ptr<Expression>> error_children;
-	error_children.push_back(make_uniq<BoundConstantExpression>(Value("Error raised in TRY subquery")));
-	auto raise = BindTryRethrowFunction(binder, "error", std::move(error_children));
-	auto then_expr = BoundCastExpression::AddCastToType(binder.context, std::move(raise), value_type);
-
-	auto case_expr = make_uniq<BoundCaseExpression>(value_type);
-	BoundCaseCheck check;
-	check.when_expr = std::move(flag);
-	check.then_expr = std::move(then_expr);
-	case_expr->CaseChecksMutable().push_back(std::move(check));
-	case_expr->ElseMutable() = std::move(value);
-	return std::move(case_expr);
+	vector<unique_ptr<Expression>> rethrow_children;
+	rethrow_children.push_back(std::move(flag));
+	rethrow_children.push_back(std::move(value));
+	return BindTryRethrowFunction(binder, TryRethrowFun::Name, std::move(rethrow_children));
 }
 
 unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {

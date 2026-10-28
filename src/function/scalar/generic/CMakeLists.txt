@@ -6,7 +6,8 @@ add_library_unity(
   error.cpp
   getvariable.cpp
   has_error.cpp
-  invoke.cpp)
+  invoke.cpp
+  try_rethrow.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_generic_main>
