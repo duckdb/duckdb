@@ -52,6 +52,15 @@ JOIN (SELECT c.c + 3 AS newC, d.d + 4 AS newD FROM t3 c JOIN t4 d ON c.c = d.d) 
 ----
 logical_opt	<REGEX>:.*JOIN.*PROJECTION.*
 
+statement ok
+CREATE VIEW anti_v AS SELECT tbl.a, tbl.b FROM tbl ANTI JOIN t2 ON tbl.a = t2.b;
+
+# Throwing filter above a projection over a join. Cannot pull up
+query II
+EXPLAIN SELECT * FROM anti_v WHERE a + b > 5;
+----
+logical_opt	<REGEX>:.*FILTER.*PROJECTION.*ANTI.*
+
 # column_refs in projections on both sides. Should pull up
 query II
 EXPLAIN SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
