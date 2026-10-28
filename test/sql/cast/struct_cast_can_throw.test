@@ -156,22 +156,25 @@ SELECT CAST(s AS STRUCT(y BIGINT, x STRUCT(b SMALLINT, a BIGINT))) FROM nested
 ----
 {'y': 1, 'x': {'b': 1, 'a': 100000}}
 
-# unnamed structs keep positional pairing
+# unnamed structs keep positional pairing (constructed at query time, TUPLE columns need v2 storage)
 statement ok
-CREATE TABLE unnamed AS SELECT ROW(100000, 1::TINYINT) AS r;
+CREATE TABLE unnamed(x INTEGER, y TINYINT);
+
+statement ok
+INSERT INTO unnamed VALUES (100000, 1);
 
 statement error
-SELECT CAST(r AS STRUCT(a SMALLINT, b BIGINT)) FROM unnamed
+SELECT CAST(ROW(x, y) AS STRUCT(a SMALLINT, b BIGINT)) FROM unnamed
 ----
 <REGEX>:Conversion Error.*out of range.*
 
 query I
-SELECT CAST(r AS STRUCT(a BIGINT, b SMALLINT)) FROM unnamed
+SELECT CAST(ROW(x, y) AS STRUCT(a BIGINT, b SMALLINT)) FROM unnamed
 ----
 {'a': 100000, 'b': 1}
 
 statement error
-SELECT CAST(r AS STRUCT(a BIGINT)) FROM unnamed
+SELECT CAST(ROW(x, y) AS STRUCT(a BIGINT)) FROM unnamed
 ----
 <REGEX>:.*Cannot cast STRUCTs of different size.*
 
