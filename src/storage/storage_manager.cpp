@@ -769,9 +769,8 @@ unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(Qu
 static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
 	vector<reference<DuckTableEntry>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	auto bound = VisibilityBound::AllCommitted();
-	catalog.ScanSchemas(bound, [&](DuckSchemaEntry &schema) {
-		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
+	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry.Cast<DuckTableEntry>());
 			}
