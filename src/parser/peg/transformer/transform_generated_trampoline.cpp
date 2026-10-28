@@ -14898,16 +14898,29 @@ PEGTransformerFactory::FinalizeSearchedCaseExpressionTrampoline(PEGTransformer &
 void PEGTransformerFactory::InitializeSimpleCaseWhenThenTrampoline(PEGTransformer &transformer,
                                                                    GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(3)}, 1);
-	process.PushChild({transformer.GetRule(PEGRuleId::SimpleCaseWhenOperand), list_pr.GetChild(1)}, 0);
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(2 + dynamic_child_count - 1);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(3)}, 1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule(PEGRuleId::SimpleCaseWhenOperand), list_items[child_idx].get()},
+		                  0 + child_idx);
+	}
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSimpleCaseWhenThenTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
-	auto simple_case_when_operand = process.TakeResult<ComparisonExpressionTail>(0);
-	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<ComparisonExpressionTail> simple_case_when_operand;
+	simple_case_when_operand.reserve(dynamic_child_count);
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		simple_case_when_operand.push_back(process.TakeResult<ComparisonExpressionTail>(i));
+	}
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1 + dynamic_child_count - 1);
 	auto result = TransformSimpleCaseWhenThen(transformer, std::move(simple_case_when_operand), std::move(expression));
 	return transformer.MakeResult<SimpleCaseCheck>(std::move(result));
 }

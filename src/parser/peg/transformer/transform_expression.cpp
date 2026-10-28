@@ -2731,8 +2731,17 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleCaseExpressio
     optional<unique_ptr<ParsedExpression>> case_else) {
 	auto result = make_uniq<CaseExpression>();
 	for (auto &case_expr : simple_case_when_then) {
+		vector<unique_ptr<ParsedExpression>> comparisons;
+		for (auto &when : case_expr.when) {
+			comparisons.push_back(ApplyComparisonTail(expression->Copy(), std::move(when)));
+		}
 		CaseCheck new_case;
-		new_case.when_expr = ApplyComparisonTail(expression->Copy(), std::move(case_expr.when));
+		if (comparisons.size() == 1) {
+			new_case.when_expr = std::move(comparisons[0]);
+		} else {
+			new_case.when_expr =
+			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(comparisons));
+		}
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
@@ -2751,9 +2760,10 @@ PEGTransformerFactory::TransformSearchedCaseExpression(PEGTransformer &transform
 	return std::move(result);
 }
 
-SimpleCaseCheck PEGTransformerFactory::TransformSimpleCaseWhenThen(PEGTransformer &transformer,
-                                                                   ComparisonExpressionTail simple_case_when_operand,
-                                                                   unique_ptr<ParsedExpression> expression) {
+SimpleCaseCheck
+PEGTransformerFactory::TransformSimpleCaseWhenThen(PEGTransformer &transformer,
+                                                   vector<ComparisonExpressionTail> simple_case_when_operand,
+                                                   unique_ptr<ParsedExpression> expression) {
 	SimpleCaseCheck result;
 	result.when = std::move(simple_case_when_operand);
 	result.then_expr = std::move(expression);

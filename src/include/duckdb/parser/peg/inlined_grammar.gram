@@ -1681,8 +1681,9 @@ SubqueryExists <- 'EXISTS'
 CaseExpression <- SimpleCaseExpression / SearchedCaseExpression
 SimpleCaseExpression <- 'CASE' Expression SimpleCaseWhenThen+ CaseElse? 'END'
 SearchedCaseExpression <- 'CASE' CaseWhenThen+ CaseElse? 'END'
-SimpleCaseWhenThen <- 'WHEN' SimpleCaseWhenOperand 'THEN' Expression
+SimpleCaseWhenThen <- 'WHEN' List(SimpleCaseWhenOperand) 'THEN' Expression
 # WHEN < 0 compares the CASE operand with <, a WHEN operand without an operator compares with =
+# WHEN 0, 1 matches if any of the operands matches
 SimpleCaseWhenOperand <- ComparisonExpressionTail / SimpleCaseWhenEquals
 SimpleCaseWhenEquals <- Expression
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression

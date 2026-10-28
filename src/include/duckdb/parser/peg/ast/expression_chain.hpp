@@ -43,7 +43,7 @@ struct IsExpressionTail {
 };
 
 struct SimpleCaseCheck {
-	ComparisonExpressionTail when;
+	vector<ComparisonExpressionTail> when;
 	unique_ptr<ParsedExpression> then_expr;
 };
 

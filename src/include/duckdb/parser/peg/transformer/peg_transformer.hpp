@@ -5267,7 +5267,7 @@ public:
 	TransformSearchedCaseExpression(PEGTransformer &transformer, vector<CaseCheck> case_when_then,
 	                                optional<unique_ptr<ParsedExpression>> case_else);
 	static SimpleCaseCheck TransformSimpleCaseWhenThen(PEGTransformer &transformer,
-	                                                   ComparisonExpressionTail simple_case_when_operand,
+	                                                   vector<ComparisonExpressionTail> simple_case_when_operand,
 	                                                   unique_ptr<ParsedExpression> expression);
 	static ComparisonExpressionTail TransformSimpleCaseWhenEquals(PEGTransformer &transformer,
 	                                                              unique_ptr<ParsedExpression> expression);
