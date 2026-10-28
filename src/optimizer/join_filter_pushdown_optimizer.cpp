@@ -159,25 +159,6 @@ static void PushdownProjectionColumns(LogicalProjection &proj, const vector<Join
 	}
 }
 
-//! Whether the runtime filter of a column that entered a secure view may be wrapped in a barrier when it is built: its
-//! cast chain contains a cast that can throw. Such a filter must never pass an operator in the view that removes rows
-static bool MayRequireBarrier(const JoinFilterPushdownColumn &column) {
-	if (!column.crossed_secure_view) {
-		return false;
-	}
-	for (auto &step : column.runtime_filter_casts) {
-		if (step.mode == RuntimeFilterCastMode::DEFAULT_CAST) {
-			return true;
-		}
-	}
-	return false;
-}
-
-//! Keep only the columns whose filters may pass an operator that removes rows
-static void RemoveBarrierColumns(vector<JoinFilterPushdownColumn> &columns) {
-	columns.erase(std::remove_if(columns.begin(), columns.end(), MayRequireBarrier), columns.end());
-}
-
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
                                                            vector<PushdownFilterTarget> &targets,
@@ -198,11 +179,6 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		// these remove rows: a filter that may be barred stays above them
-		RemoveBarrierColumns(columns);
-		if (columns.empty()) {
-			return;
-		}
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
@@ -210,11 +186,6 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		// Only remove left rows where that cannot introduce null-extended rows or change volatile predicates.
 		if (join.join_type != JoinType::INNER || join.condition->IsVolatile()) {
 			break;
-		}
-		// removes rows: a filter that may be barred stays above it
-		RemoveBarrierColumns(columns);
-		if (columns.empty()) {
-			return;
 		}
 		GetPushdownFilterTargets(*join.children[0], std::move(columns), targets, cross_secure_views);
 		break;
@@ -235,13 +206,6 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = probe_child.Cast<LogicalSetOperation>();
-		if (probe_child.type != LogicalOperatorType::LOGICAL_UNION) {
-			// removes rows: a filter that may be barred stays above it
-			RemoveBarrierColumns(columns);
-			if (columns.empty()) {
-				return;
-			}
-		}
 		for (auto &child : probe_child.children) {
 			// rewrite the filters for each of the children of the union
 			vector<JoinFilterPushdownColumn> child_columns;
@@ -331,9 +295,9 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		if (!cross_secure_views) {
 			break;
 		}
-		// the filter enters the view as a pushed WHERE filter does (see PushdownSecureView): if evaluating it is
-		// observable it is wrapped in a barrier when it is built (PhysicalHashJoin), and it never passes an operator in
-		// the view that removes rows
+		// a join filter enters the view as a pushed WHERE filter would, and needs no barrier: it cannot fail, as a cast
+		// that can fail is a TRY_CAST that keeps the rows it cannot convert for the join
+		// (PreserveRuntimeFilterCastErrors)
 		for (auto &filter : columns) {
 			filter.crossed_secure_view = true;
 		}

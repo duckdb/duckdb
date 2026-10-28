@@ -199,7 +199,7 @@ SELECT count(*) FROM variant_cast_secure sv JOIN ik ON sv.vi = ik.k
 ----
 20
 
-# a cast on the join key that can fail is barred inside the view: it still raises its error on a row the view emits...
+# a cast on the join key that can fail keeps its error for a row the view emits (the join raises it)...
 statement ok
 CREATE TABLE wide_visible AS SELECT i::BIGINT AS id, true AS visible FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT, true;
 
@@ -211,7 +211,7 @@ SELECT count(*) FROM wide_visible_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 Conversion Error
 
-# ... and never sees a row the view hides, whether the view filters in its scan or with a join
+# ... and never fails on a row the view hides, whether the view filters in its scan or with a join
 statement ok
 CREATE TABLE wide_hidden AS SELECT i::BIGINT AS id, i % 2 AS g, true AS visible FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT, 1, false;
 
@@ -243,6 +243,32 @@ query I
 SELECT count(*) FROM wide_any_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 10
+
+# ... nor through a view that unnests a list or takes a cross product, which remove rows when empty
+statement ok
+CREATE TABLE str_lists AS SELECT (i % 100)::VARCHAR AS s, [i] AS l FROM range(100) t(i) UNION ALL SELECT 'x', []::BIGINT[];
+
+statement ok
+CREATE SECURE VIEW unnest_secure AS SELECT s, unnest(l) AS u FROM str_lists;
+
+query I
+SELECT count(*) FROM unnest_secure w JOIN ik ON w.s::INTEGER = ik.k
+----
+20
+
+statement ok
+CREATE TABLE no_rows AS SELECT 1 AS o;
+
+statement ok
+DELETE FROM no_rows;
+
+statement ok
+CREATE SECURE VIEW cross_secure AS SELECT str_lists.s FROM str_lists, no_rows;
+
+query I
+SELECT count(*) FROM cross_secure w JOIN ik ON w.s::INTEGER = ik.k
+----
+0
 
 # only the join filters cross a secure view: a TopN filter on a UNION still reaches its plain inputs
 statement ok
