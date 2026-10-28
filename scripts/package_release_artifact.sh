@@ -99,10 +99,7 @@ else
 fi
 
 if [[ "$artifact_kind" == "cli-zip" ]]; then
-	(
-		cd "$staging_dir"
-		"${PYTHON:-python3}" -m zipfile -c "$temporary_archive" "${members[@]}"
-	)
+	"${PYTHON:-python3}" -m zipfile -c "$temporary_archive" "$staging_dir/${members[0]}"
 else
 	tar -C "$staging_dir" -czf "$temporary_archive" "${members[@]}"
 fi
