@@ -1,0 +1,87 @@
+# name: test/sql/aggregate/aggregates/bitagg_fallible.test
+# description: BIT overloads of bit_and/bit_or/bit_xor validate lengths and must be registered as fallible
+# group: [aggregates]
+
+# mismatched bit string lengths raise as regular errors
+
+statement error
+SELECT bit_and(v) FROM (VALUES ('1'::BIT), ('10'::BIT)) t(v);
+----
+Cannot AND bit strings of different sizes
+
+statement error
+SELECT bit_or(v) FROM (VALUES ('1'::BIT), ('10'::BIT)) t(v);
+----
+Cannot OR bit strings of different sizes
+
+statement error
+SELECT bit_xor(v) FROM (VALUES ('1'::BIT), ('10'::BIT)) t(v);
+----
+Cannot XOR bit strings of different sizes
+
+# the fallible registration is read by the EXPLAIN (SQL) pivot default export
+
+statement ok
+SET pivot_filter_threshold=0;
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
+PIVOT (bit_and(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
+PIVOT (bit_or(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
+PIVOT (bit_xor(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+# the integral overloads cannot throw and stay exportable
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (bit_and(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*bit_and.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (bit_or(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*bit_or.*
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
+PIVOT (bit_xor(v) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*bit_xor.*
+
+statement ok
+RESET pivot_filter_threshold;
+
+# the scalarized window form keeps working under dictionary vector verification
+
+statement ok
+SET debug_verify_vector='dictionary_expression';
+
+query I rowsort
+SELECT bit_xor(v) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) FROM (VALUES ('10'::BIT), ('01'::BIT)) t(v);
+----
+01
+10
+
+statement ok
+RESET debug_verify_vector;
+
+# matching lengths keep working
+
+query III
+SELECT bit_and(v), bit_or(v), bit_xor(v) FROM (VALUES ('10'::BIT), ('11'::BIT)) t(v);
+----
+10	11	01
