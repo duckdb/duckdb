@@ -32,6 +32,9 @@ SELECT count(*), count(DISTINCT x), max(x) FROM t, LATERAL range(TIMESTAMP '2020
 
 require icu
 
+statement ok
+SET TimeZone='UTC';
+
 query III
 SELECT count(*), count(DISTINCT x), max(x) = TIMESTAMPTZ '2020-01-03 00:00:00+00' FROM t, LATERAL generate_series(TIMESTAMPTZ '2020-01-01 00:00:00+00', TIMESTAMPTZ '2020-01-01 00:00:00+00' + (t.val1 % 3) * INTERVAL 1 DAY, INTERVAL 1 DAY) r(x);
 ----
