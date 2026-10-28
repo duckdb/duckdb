@@ -1,0 +1,162 @@
+# name: test/sql/cte/dml_cte_statistics.test
+# description: Planning statistics must account for writes in the same statement
+# group: [cte]
+
+statement ok
+SET threads=1
+
+# Partitioned ORDER BY must not synthesize ranges that exclude the newly inserted NULL.
+statement ok
+CREATE TABLE partitioned AS SELECT i::INTEGER AS i FROM range(5000000) r(i)
+
+query I
+WITH ins AS (INSERT INTO partitioned VALUES (NULL) RETURNING i)
+SELECT count(*) FROM (SELECT i FROM partitioned ORDER BY i LIMIT 6000000) g
+----
+5000001
+
+statement ok
+DROP TABLE partitioned
+
+# Pruning by pre-delete row-group counts must not reduce the OFFSET.
+statement ok
+CREATE TABLE offset_rows AS SELECT i::INTEGER AS i FROM range(122882) r(i)
+
+query I
+WITH del AS (DELETE FROM offset_rows WHERE i=0 RETURNING i)
+SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 122880
+----
+122881
+
+statement ok
+DROP TABLE offset_rows
+
+# A pre-insert maximum cardinality must not remove the LIMIT.
+statement ok
+CREATE TABLE limit_rows AS SELECT i FROM range(2) r(i)
+
+query I
+WITH ins AS (INSERT INTO limit_rows SELECT i FROM range(10) r(i) RETURNING i)
+SELECT count(*) FROM (SELECT i FROM limit_rows LIMIT 5) limited
+----
+5
+
+statement ok
+DROP TABLE limit_rows
+
+statement ok
+CREATE TABLE stats_t AS SELECT i::INTEGER AS i FROM range(3) r(i)
+
+query IIIIR
+WITH ins AS (INSERT INTO stats_t VALUES (NULL), (100) RETURNING i)
+SELECT count(*), count(i), min(i), max(i), avg(i) FROM stats_t
+----
+5	4	0	100	25.75
+
+query III
+WITH upd AS (UPDATE stats_t SET i=200 WHERE i=100 RETURNING i)
+SELECT count(*), min(i), max(i) FROM stats_t
+----
+5	0	200
+
+query III
+WITH upd AS (UPDATE stats_t SET i=NULL WHERE i=1 RETURNING i)
+SELECT count(*), count(i), count(*) FILTER (WHERE i IS NULL) FROM stats_t
+----
+5	3	2
+
+query III
+WITH del AS (DELETE FROM stats_t WHERE i IS NULL RETURNING i)
+SELECT count(*), min(i), max(i) FROM stats_t
+----
+3	0	200
+
+query I
+WITH ins AS (INSERT INTO stats_t VALUES (300) RETURNING i)
+MERGE INTO stats_t USING (VALUES (300)) s(i) ON stats_t.i=s.i
+WHEN MATCHED THEN UPDATE SET i=301 RETURNING stats_t.i
+----
+301
+
+query III
+SELECT count(*), min(i), max(i) FROM stats_t
+----
+4	0	301
+
+statement ok
+CREATE VIEW stats_view AS SELECT * FROM stats_t
+
+# Both writes must be reflected when reading through a view.
+query III
+WITH a AS (INSERT INTO stats_t VALUES (-1) RETURNING i),
+     b AS (INSERT INTO stats_t VALUES (NULL) RETURNING i)
+SELECT count(*), count(alias.i), min(alias.i) FROM stats_view alias
+----
+6	5	-1
+
+# Prepared re-execution must not reuse old bounds.
+statement ok
+PREPARE add_row AS WITH ins AS (INSERT INTO stats_t VALUES ($1) RETURNING i)
+SELECT count(*), max(i) FROM stats_t
+
+query II
+EXECUTE add_row(400)
+----
+7	400
+
+query II
+EXECUTE add_row(500)
+----
+8	500
+
+statement ok
+BEGIN
+
+query I
+WITH del AS (DELETE FROM stats_t RETURNING i) SELECT count(*) FROM stats_t
+----
+0
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM stats_t
+----
+8
+
+# A trigger target is modified even when it is not the statement's explicit target.
+statement ok
+CREATE TABLE trigger_source(i INTEGER)
+
+statement ok
+CREATE TABLE trigger_target(i INTEGER)
+
+statement ok
+INSERT INTO trigger_target VALUES (1)
+
+statement ok
+CREATE TRIGGER write_null AFTER INSERT ON trigger_source FOR EACH STATEMENT
+INSERT INTO trigger_target VALUES (NULL)
+
+query II
+WITH ins AS (INSERT INTO trigger_source VALUES (1) RETURNING i)
+SELECT count(*), count(i) FROM trigger_target
+----
+2	1
+
+# Simplifying filters over nested CTEs must keep their producers reachable.
+query I
+WITH a AS MATERIALIZED (SELECT 1 AS i), b AS MATERIALIZED (SELECT i FROM a)
+SELECT * FROM b WHERE constant_or_null(true, i)
+----
+1
+
+# Date comparison simplification introduces constant_or_null(false, d) below a projection.
+query I
+SELECT count(*) FROM (
+	WITH c AS (SELECT DATE '2020-01-01' AS d)
+	SELECT d FROM c WHERE d = TIMESTAMP '2020-01-01 12:00:00'
+) s
+----
+0

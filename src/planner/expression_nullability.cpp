@@ -32,9 +32,8 @@ bool ExpressionBecomesNull(const Expression &expr,
 	return child_becomes_null;
 }
 
-NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p,
-                                                     optional_ptr<LogicalOperator> plan_root_p)
-    : context(context_p), plan_root(plan_root_p) {
+NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p, LogicalOperator &plan_root_p)
+    : context(context_p), plan_root(plan_root_p), has_dml_cte(plan_root.CTEContainsDML()) {
 }
 
 static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) {
@@ -107,11 +106,8 @@ static bool JoinOutputPreservesChildNonNullability(JoinType join_type, idx_t chi
 }
 
 optional_ptr<LogicalCTE> NotNullExpressionAnalyzer::FindCTE(TableIndex cte_index) {
-	if (!plan_root) {
-		return nullptr;
-	}
 	vector<reference<LogicalOperator>> operators;
-	operators.push_back(*plan_root);
+	operators.push_back(plan_root);
 	while (!operators.empty()) {
 		auto &op = operators.back().get();
 		operators.pop_back();
@@ -208,7 +204,7 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 			}
 		}
 		auto table = get.GetTable();
-		if (!table) {
+		if (!table || has_dml_cte) {
 			return false;
 		}
 		auto &column_index = get.GetColumnIndex(binding);

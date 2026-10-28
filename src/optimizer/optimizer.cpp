@@ -382,10 +382,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = limit_pushdown.Optimize(std::move(plan));
 	});
 
-	RunOptimizer(OptimizerType::ROW_GROUP_PRUNER, [&]() {
-		RowGroupPruner row_group_pruner(context);
-		plan = row_group_pruner.Optimize(std::move(plan));
-	});
+	if (!plan->CTEContainsDML()) {
+		RunOptimizer(OptimizerType::ROW_GROUP_PRUNER, [&]() {
+			RowGroupPruner row_group_pruner(context);
+			plan = row_group_pruner.Optimize(std::move(plan));
+		});
+	}
 
 	// perform sampling pushdown
 	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
@@ -469,10 +471,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// split pipelines into partitions and union them back together
-	RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
-		PartitionedExecution partitioned_execution(*this, plan);
-		partitioned_execution.Optimize(plan);
-	});
+	if (!plan->CTEContainsDML()) {
+		RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
+			PartitionedExecution partitioned_execution(*this, plan);
+			partitioned_execution.Optimize(plan);
+		});
+	}
 
 	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {

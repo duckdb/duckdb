@@ -32,7 +32,8 @@ bool FilterRejectsNull(const Expression &filter, const Expression &expr);
 //! Conservatively proves that an expression cannot be NULL at a logical operator's output.
 class NotNullExpressionAnalyzer {
 public:
-	explicit NotNullExpressionAnalyzer(ClientContext &context, optional_ptr<LogicalOperator> plan_root = nullptr);
+	//! The complete plan is required to detect writes in DML CTEs.
+	NotNullExpressionAnalyzer(ClientContext &context, LogicalOperator &plan_root);
 
 	bool IsNotNull(LogicalOperator &op, const Expression &expr);
 
@@ -42,7 +43,8 @@ private:
 
 private:
 	ClientContext &context;
-	optional_ptr<LogicalOperator> plan_root;
+	LogicalOperator &plan_root;
+	bool has_dml_cte;
 };
 
 } // namespace duckdb
