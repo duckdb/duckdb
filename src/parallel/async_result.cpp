@@ -183,6 +183,8 @@ void AsyncResult::ExecuteTasksSynchronously(ClientContext &context) {
 		async_tasks[0]->Execute();
 	} else {
 		// the tasks are independent (they run concurrently when scheduled on the pool): run them side by side
+		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "SYNCHRONOUS_" + EnumUtil::ToString(pool_type),
+		           async_tasks.size());
 		TaskExecutor executor(context, pool_type);
 		for (auto &async_task : async_tasks) {
 			executor.ScheduleTask(make_uniq<ExecutorAsyncTask>(executor, std::move(async_task)));
