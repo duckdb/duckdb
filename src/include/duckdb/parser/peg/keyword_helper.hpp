@@ -30,6 +30,11 @@ public:
 	bool IsKeyword(const string &text) const {
 		return LookupKeyword(text).IsKeyword();
 	}
+	//! Whether the grammar matches the word literally, keyword or not (e.g. REPOSITORY in CREATE EXTENSION
+	//! REPOSITORY): highlighting shows those as keywords
+	bool IsGrammarWord(const string &text) const {
+		return LookupKeyword(text).LiteralId() != 0;
+	}
 	//! Opaque flags accepted in this identifier position, computed when creating a matcher.
 	virtual keyword_categories_t GetIdentifierMask(SuggestionState type) const = 0;
 	virtual vector<ParserKeyword> KeywordList() const = 0;
