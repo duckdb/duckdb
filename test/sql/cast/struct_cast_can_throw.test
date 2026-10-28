@@ -103,6 +103,42 @@ SELECT CAST(m AS MAP(INTEGER, STRUCT(b SMALLINT, a BIGINT))) FROM struct_maps
 ----
 {1={'b': 1, 'a': 100000}}
 
+# a map key cast that drops a struct field can merge distinct keys: the uniqueness check throws
+statement ok
+CREATE TABLE merge_keys(m MAP(STRUCT(a INTEGER, b INTEGER), INTEGER));
+
+statement ok
+INSERT INTO merge_keys VALUES (map([{'a': 1, 'b': 10}, {'a': 1, 'b': 20}], [100, 200]));
+
+statement error
+SELECT CAST(m AS MAP(STRUCT(a BIGINT), INTEGER)) FROM merge_keys
+----
+<REGEX>:Invalid Input Error.*Map keys must be unique.*
+
+# the same key cast succeeds when the remaining fields stay unique
+query I
+SELECT CAST(m AS MAP(STRUCT(b BIGINT), INTEGER)) FROM merge_keys
+----
+{{'b': 10}=100, {'b': 20}=200}
+
+# a non-invertible scalar key cast can also merge keys, even though no child cast throws
+statement ok
+CREATE TABLE double_keys(m MAP(BIGINT, INTEGER));
+
+statement ok
+INSERT INTO double_keys VALUES (map([9007199254740993, 9007199254740992], [1, 2]));
+
+statement error
+SELECT CAST(m AS MAP(DOUBLE, INTEGER)) FROM double_keys
+----
+<REGEX>:Invalid Input Error.*Map keys must be unique.*
+
+# an invertible widening key cast cannot merge keys
+query I
+SELECT CAST(m AS MAP(HUGEINT, INTEGER)) FROM double_keys
+----
+{9007199254740993=1, 9007199254740992=2}
+
 # reordering at both struct levels
 statement ok
 CREATE TABLE nested(s STRUCT(x STRUCT(a INTEGER, b TINYINT), y INTEGER));

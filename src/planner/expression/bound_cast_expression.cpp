@@ -329,14 +329,22 @@ static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType
 		}
 		return false;
 	}
-	case LogicalTypeId::MAP:
+	case LogicalTypeId::MAP: {
 		if (target_type.id() != LogicalTypeId::MAP) {
 			return true;
 		}
+		auto &source_key = MapType::KeyType(source_type);
+		auto &target_key = MapType::KeyType(target_type);
+		// Map keys must stay unique: a key cast that can map distinct keys onto the same key (is not invertible)
+		// throws the duplicate-key error even when none of the child casts throws
+		if (source_key != target_key && !BoundCastExpression::CastIsInvertible(source_key, target_key)) {
+			return true;
+		}
 		// Map keys cannot be NULL, so a failing key cast throws even when the value cast would default to NULL
-		return BoundCastExpression::CastCanThrow(MapType::KeyType(source_type), MapType::KeyType(target_type), false) ||
+		return BoundCastExpression::CastCanThrow(source_key, target_key, false) ||
 		       BoundCastExpression::CastCanThrow(MapType::ValueType(source_type), MapType::ValueType(target_type),
 		                                         false);
+	}
 	default:
 		return true;
 	}
