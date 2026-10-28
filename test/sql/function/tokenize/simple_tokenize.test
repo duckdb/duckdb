@@ -170,3 +170,11 @@ select start, token_type, word from sql_tokenize($$select r.e100$$);
 7	TABLE_NAME	r
 8	OPERATOR	.
 9	COLUMN_NAME	e100
+
+query III
+select start, token_type, word from sql_tokenize($$select r.*$$);
+----
+0	KEYWORD	select
+7	IDENTIFIER	r
+8	OPERATOR	.
+9	OPERATOR	*
