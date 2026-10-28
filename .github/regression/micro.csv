@@ -49,3 +49,4 @@ benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/pushdown/view_filter_below_delim_join.benchmark
 benchmark/micro/table_function/lateral_generate_series.benchmark
 benchmark/micro/optimizer/right_semi_distinct_filter.benchmark
+benchmark/micro/json/lateral_json_each.benchmark
