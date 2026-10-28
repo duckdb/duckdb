@@ -50,6 +50,15 @@ void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChun
 	result.Verify();
 }
 
+bool WindowExecutor::HasProgress() const {
+	return wexpr.WindowFunction() && wexpr.WindowFunction()->HasProgressCallback();
+}
+
+ProgressData WindowExecutor::GetProgress(ClientContext &client, const GlobalSinkState &gstate) const {
+	D_ASSERT(HasProgress());
+	return wexpr.WindowFunction()->GetProgress(client, gstate);
+}
+
 WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor,
                                                      const idx_t payload_count, const ValidityMask &partition_mask,
                                                      const ValidityMask &order_mask)

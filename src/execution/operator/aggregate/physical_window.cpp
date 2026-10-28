@@ -84,6 +84,34 @@ public:
 		return stage;
 	}
 
+	//! The number of stages that each block goes through
+	static constexpr idx_t STAGE_COUNT = idx_t(WindowGroupStage::DONE) - idx_t(WindowGroupStage::SORT);
+
+	//! The progress of the group, in blocks done over all the stages (of ChunkCount() * STAGE_COUNT)
+	double GetProgress(ClientContext &client, const vector<unique_ptr<WindowExecutor>> &executors) const {
+		auto finalize = double(finalized.load());
+		if (stage.load() == WindowGroupStage::FINALIZE && finalize < double(blocks)) {
+			//	The blocks are only finalized once the window functions are done, so let the ones that do a lot of work
+			//	report their progress (the global states are created in the SINK stage)
+			double fraction = 0;
+			idx_t reporting = 0;
+			for (idx_t w = 0; w < executors.size(); ++w) {
+				if (!executors[w]->HasProgress()) {
+					continue;
+				}
+				const auto progress = executors[w]->GetProgress(client, *gestates[w]);
+				if (progress.IsValid() && progress.total > 0) {
+					fraction += MinValue(progress.ProgressDone(), 1.0);
+					++reporting;
+				}
+			}
+			if (reporting) {
+				finalize = MaxValue(finalize, double(blocks) * fraction / double(reporting));
+			}
+		}
+		return double(sorted.load() + materialized.load() + masked.load() + sunk.load() + evaluated.load()) + finalize;
+	}
+
 	bool TryPrepareNextStage() {
 		lock_guard<mutex> prepare_guard(lock);
 		switch (stage.load()) {
@@ -197,6 +225,8 @@ public:
 	atomic<idx_t> sunk;
 	//! Count of finalized blocks
 	atomic<idx_t> finalized;
+	//! Count of evaluated blocks
+	atomic<idx_t> evaluated;
 	//! Count of completed tasks
 	atomic<idx_t> completed;
 	//! The output ordering batch index this hash group starts at
@@ -421,6 +451,8 @@ public:
 	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
 	//! Select a task with the lock held, after the previous task has been retired.
 	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
+	//! The progress of all the hash groups, in blocks done over all the stages (of total_blocks * STAGE_COUNT)
+	double GetProgress(ClientContext &client);
 
 	//! Context for executing computations
 	ClientContext &client;
@@ -430,6 +462,12 @@ public:
 	GlobalStatePtr hashed_source;
 	//! The sorted hash groups
 	vector<WindowHashGroupPtr> window_hash_groups;
+	//! Keeps the hash groups alive while computing the progress. The source lock can not be used for that, since the
+	//! progress is computed while holding the executor lock, which is acquired while holding the source lock (when
+	//! rescheduling tasks).
+	mutex progress_lock;
+	//! The number of blocks of the hash groups that are done (and released)
+	idx_t released_blocks = 0;
 	//! The total number of blocks to process;
 	idx_t total_blocks = 0;
 	//! The sorted list of (blocks, group_idx) pairs
@@ -529,7 +567,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &c
                                  idx_t bin_idx)
     : gsink(gsink), count(chunk_row.count), blocks(chunk_row.chunks), stage(WindowGroupStage::SORT),
       group_idx(group_idx), bin_idx(bin_idx), sorted(0), materialized(0), masked(0), sunk(0), finalized(0),
-      completed(0), batch_base(0) {
+      evaluated(0), completed(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
@@ -1000,6 +1038,17 @@ bool WindowGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local)
 	return false;
 }
 
+double WindowGlobalSourceState::GetProgress(ClientContext &client) {
+	lock_guard<mutex> progress_guard(progress_lock);
+	auto result = double(released_blocks * WindowHashGroup::STAGE_COUNT);
+	for (const auto &window_hash_group : window_hash_groups) {
+		if (window_hash_group) {
+			result += window_hash_group->GetProgress(client, gsink.executors);
+		}
+	}
+	return result;
+}
+
 WindowGlobalSourceState::WindowHashGroupPtr WindowGlobalSourceState::FinishTask(TaskPtr task) {
 	if (!task) {
 		return nullptr;
@@ -1011,6 +1060,8 @@ WindowGlobalSourceState::WindowHashGroupPtr WindowGlobalSourceState::FinishTask(
 
 	WindowHashGroupPtr finished_group;
 	if (++finished_hash_group->completed >= finished_hash_group->GetTaskCount()) {
+		lock_guard<mutex> progress_guard(progress_lock);
+		released_blocks += finished_hash_group->ChunkCount();
 		finished_group = std::move(finished_hash_group);
 		//	Remove it from the active groups
 		auto &v = active_groups;
@@ -1122,6 +1173,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 
 	// Move to the next chunk
 	++task->begin_idx;
+	++window_hash_group->evaluated;
 
 	result.Verify(context.client.db);
 }
@@ -1166,12 +1218,12 @@ ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceStat
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.count.load();
-	const auto finished = gsource.finished.load();
 
 	ProgressData res;
 	if (count) {
-		res.done = double(finished);
-		res.total = double(gsource.total_tasks);
+		//	The progress of every block through every stage (including the work done by the window functions)
+		res.total = double(gsource.total_blocks * WindowHashGroup::STAGE_COUNT);
+		res.done = MinValue(gsource.GetProgress(client), res.total);
 		//	Convert to tuples.
 		res.Normalize(double(count));
 	} else {

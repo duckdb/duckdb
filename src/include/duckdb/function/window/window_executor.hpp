@@ -75,6 +75,11 @@ public:
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
 	              OperatorSinkInput &sink, idx_t count) const;
 
+	//! Does the function report the progress of finalizing a hash group?
+	virtual bool HasProgress() const;
+	//! The progress of finalizing the hash group with the given global state (see window_progress_function_t)
+	virtual ProgressData GetProgress(ClientContext &client, const GlobalSinkState &gstate) const;
+
 	// The function
 	const BoundWindowExpression &wexpr;
 

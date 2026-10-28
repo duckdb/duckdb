@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/execution/progress_data.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 
@@ -143,6 +144,11 @@ typedef unique_ptr<WindowExecutorStreamingState> (*window_streaming_state_functi
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
+//! The progress of finalizing the hash group with the given global state (the fraction done / total, or invalid if
+//! unknown), for functions that do a lot of work while finalizing. This can be called at any time from any thread,
+//! concurrently with the other callbacks (but only while the global state exists).
+typedef ProgressData (*window_progress_function_t)(ClientContext &client, const GlobalSinkState &gstate);
+
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                    const BoundWindowFunction &function);
@@ -167,6 +173,8 @@ public:
 	window_finalize_function_t finalize = nullptr;
 	//! The thread-local evaluation function
 	window_evaluate_function_t evaluate = nullptr;
+	//! The progress of the finalize operation
+	window_progress_function_t progress = nullptr;
 
 	//! Can the function stream?
 	window_canstream_function_t can_stream = nullptr;
@@ -273,6 +281,10 @@ public: // Callbacks
 	auto HasEvaluateCallback() const -> bool { return callbacks.evaluate != nullptr; }
 	auto GetEvaluateCallback() const -> window_evaluate_function_t { return callbacks.evaluate; }
 	auto SetEvaluateCallback(window_evaluate_function_t callback) -> void { callbacks.evaluate = callback; }
+
+	auto HasProgressCallback() const -> bool { return callbacks.progress != nullptr; }
+	auto GetProgressCallback() const -> window_progress_function_t { return callbacks.progress; }
+	auto SetProgressCallback(window_progress_function_t callback) -> void { callbacks.progress = callback; }
 
 	auto HasCanStreamCallback() const -> bool { return callbacks.can_stream != nullptr; }
 	auto GetCanStreamCallback() const -> window_canstream_function_t { return callbacks.can_stream; }
@@ -463,6 +475,11 @@ public:
 	              OperatorSinkInput &sink) const {
 		D_ASSERT(HasEvaluateCallback());
 		return GetEvaluateCallback()(context, eval_chunk, bounds, result, row_idx, sink);
+	}
+
+	ProgressData GetProgress(ClientContext &client, const GlobalSinkState &gstate) const {
+		D_ASSERT(HasProgressCallback());
+		return GetProgressCallback()(client, gstate);
 	}
 
 	bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) const {
