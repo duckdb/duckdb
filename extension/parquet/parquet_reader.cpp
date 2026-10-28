@@ -1980,11 +1980,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
-//! Page indexes up to this size are fetched in one read (ColumnIndexes and OffsetIndexes together): a row group that
-//! fetches its own indexes pays a round trip before any of its data can be requested, so a few MB up front are cheaper
-static constexpr idx_t PAGE_INDEX_SINGLE_READ_LIMIT = 8 * 1048576;
-
-void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begin, idx_t end) const {
+bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) const {
 	CallOnce(page_index_span_computed, [&] {
 		idx_t span_begin = NumericLimits<idx_t>::Maximum();
 		idx_t span_end = 0;
@@ -2007,17 +2003,26 @@ void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begi
 			page_index_span_end = span_end;
 		}
 	});
-	// when the file handle caches its reads, one read of the whole index serves every row group and thread; without
-	// the cache every row group would download it again, so those reads stay small
-	const bool fetch_whole_index = transport.GetCachingFileHandle().ReadsAreCached() &&
-	                               page_index_span_end > page_index_span_begin &&
-	                               page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT &&
-	                               begin >= page_index_span_begin && end <= page_index_span_end;
-	if (fetch_whole_index) {
-		transport.Prefetch(page_index_span_begin, page_index_span_end - page_index_span_begin);
-		return;
+	if (page_index_span_end <= page_index_span_begin) {
+		return false;
 	}
-	transport.Prefetch(begin, end - begin);
+	// the cost model decides: the whole index is worth one request when it is no larger than a coalesced read
+	const auto span_size = page_index_span_end - page_index_span_begin;
+	if (span_size > transport.GetAcceptedColumnGap()) {
+		return false;
+	}
+	{
+		lock_guard<mutex> guard(page_index_buffer_lock);
+		if (!page_index_buffer_loaded) {
+			auto buffer = allocator.Allocate(span_size);
+			auto handles = transport.GetCachingFileHandle().Read(span_size, page_index_span_begin);
+			handles.CopyTo(buffer.get(), span_size);
+			page_index_buffer = std::move(buffer);
+			page_index_buffer_loaded = true;
+		}
+	}
+	transport.AddFilledReadHead(page_index_span_begin, span_size, page_index_buffer.get());
+	return true;
 }
 
 void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanState &state) {
@@ -2110,15 +2115,21 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		                            GetFileName());
 	}
 
-	// the ColumnIndex of the filter columns is fetched in one read; when the whole page index of the row group is
-	// small, the OffsetIndexes come along in that read (a remote request costs more than the few extra bytes)
+	// the page index of the whole file is read once per reader when it fits one coalesced read; otherwise this row
+	// group fetches the ColumnIndexes of its filter columns, and the OffsetIndexes of its scanned columns join that
+	// read when the bytes between the two ranges are within the accepted column gap
+	const bool whole_index_attached = TryAttachPageIndexBuffer(trans);
 	const auto index_begin = MinValue(column_index_begin, offset_index_begin);
 	const auto index_end = MaxValue(column_index_end, offset_index_end);
-	const bool fetch_indexes_together = index_end - index_begin <= PAGE_INDEX_SINGLE_READ_LIMIT;
-	if (fetch_indexes_together) {
-		PrefetchPageIndex(trans, index_begin, index_end);
-	} else {
-		PrefetchPageIndex(trans, column_index_begin, column_index_end);
+	const auto covered = (column_index_end - column_index_begin) + (offset_index_end - offset_index_begin);
+	const auto gap_between = index_end - index_begin > covered ? index_end - index_begin - covered : 0;
+	const bool fetch_indexes_together = !whole_index_attached && gap_between <= trans.GetAcceptedColumnGap();
+	if (!whole_index_attached) {
+		if (fetch_indexes_together) {
+			trans.Prefetch(index_begin, index_end - index_begin);
+		} else {
+			trans.Prefetch(column_index_begin, column_index_end - column_index_begin);
+		}
 	}
 	vector<vector<bool>> page_may_match(filter_columns.size());
 	bool any_page_pruned = false;
@@ -2147,8 +2158,8 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		return;
 	}
 
-	if (!fetch_indexes_together) {
-		PrefetchPageIndex(trans, offset_index_begin, offset_index_end);
+	if (!whole_index_attached && !fetch_indexes_together) {
+		trans.Prefetch(offset_index_begin, offset_index_end - offset_index_begin);
 	}
 	state.page_index.offset_indexes.resize(group.columns.size());
 	for (auto column_chunk_idx : scanned_column_chunks) {
