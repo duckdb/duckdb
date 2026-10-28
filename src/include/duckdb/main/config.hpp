@@ -266,6 +266,10 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+	//! The amount of unflushed row group data after which the optimistic writer flushes (reads under the config lock)
+	DUCKDB_API idx_t GetWriteBufferMemoryLimit() const;
+	//! A copy of the configured extension directories (read under the config lock)
+	DUCKDB_API vector<string> GetExtensionDirectories() const;
 	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static idx_t GetAliasCount();
@@ -398,7 +402,7 @@ public:
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
 private:
-	mutable mutex config_lock;
+	mutable std::recursive_mutex config_lock;
 	//! Guards allowed_paths and allowed_directories, which a running instance can extend while files are being opened
 	mutable mutex allowed_paths_lock;
 	//! Guards disabled_optimizers, which can be changed while other connections plan queries

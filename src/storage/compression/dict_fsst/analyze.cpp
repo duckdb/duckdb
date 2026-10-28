@@ -1,6 +1,11 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 
+#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/dict_fsst/common.hpp"
 
 namespace duckdb {
 namespace dict_fsst {

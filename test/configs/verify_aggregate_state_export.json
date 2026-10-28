@@ -83,6 +83,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_sampling.test",
+        "test/sql/aggregate/group/aggregate_combine_grow_arena.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepared_statistics_optimization.test",
@@ -90,7 +91,8 @@
         "test/sql/types/timestamp/test_infinite_time.test",
         "test/sql/variant/variant_comparator.test",
         "test/sql/window/test_window_agg_stats_propagation.test",
-        "test/sql/sql_export/call_values.test"
+        "test/sql/sql_export/call_values.test",
+        "test/sql/sql_export/quantile_constant_arguments.test"
       ]
     },
     {

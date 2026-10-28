@@ -270,6 +270,26 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	idx_t field_count = source_children.size();
 	idx_t total_count = count * field_count;
 
+	// The STRUCT field names become the MAP keys, so the key cast is independent of the row data.
+	// When every row is NULL the result is an all-NULL MAP: skip the key cast entirely so that the
+	// field-name -> key-type conversion is not forced (and cannot throw) for an all-NULL input.
+	auto validity_entries = source.Validity();
+	bool has_valid_row = false;
+	for (idx_t i = 0; i < count; i++) {
+		if (validity_entries.IsValid(i)) {
+			has_valid_row = true;
+			break;
+		}
+	}
+	if (!has_valid_row) {
+		auto null_list_data = FlatVector::Writer<list_entry_t>(result, count);
+		for (idx_t i = 0; i < count; i++) {
+			null_list_data.WriteNull();
+		}
+		ListVector::SetListSize(result, 0);
+		return true;
+	}
+
 	// Allocate result
 	ListVector::Reserve(result, total_count);
 
@@ -318,7 +338,6 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	}
 
 	// Check for nulls in the source rows, and set the list data
-	auto validity_entries = source.Validity();
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity_entries.IsValid(i)) { // is row null?

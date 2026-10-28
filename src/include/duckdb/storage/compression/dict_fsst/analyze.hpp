@@ -1,10 +1,9 @@
 #pragma once
 
-#include "duckdb/storage/compression/dict_fsst/common.hpp"
+#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/types/string_heap.hpp"
-#include "duckdb/common/bitpacking.hpp"
-#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
 

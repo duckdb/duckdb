@@ -555,11 +555,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 			search_directories.push_back(custom_extension_directory);
 		}
 
-		if (!db.config.options.extension_directories.empty()) {
-			// Add all configured extension directories
-			for (const auto &dir : db.config.options.extension_directories) {
-				search_directories.push_back(dir);
-			}
+		// Add all configured extension directories
+		for (auto &dir : db.config.GetExtensionDirectories()) {
+			search_directories.push_back(std::move(dir));
 		}
 
 		// Add default extension directory if no custom directories configured
