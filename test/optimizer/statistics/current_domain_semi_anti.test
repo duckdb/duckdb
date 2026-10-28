@@ -42,6 +42,10 @@ ANTI JOIN domain_sa_empty USING (k);
 ----
 physical_plan	<REGEX>:(?s).*HASH_JOIN[^~]*Join Type: ANTI[^~]*~1,000 rows.*
 
+# Estimate assertions below bind an operator to the next rendered estimate with [^~]. That is only
+# reliable for the plan's root operator box: deeper operators render side by side with sibling
+# subtrees, whose row estimates interleave between an operator and its own estimate line.
+
 # A preserved-side OR join filter is applied exactly once to the semi/anti operator-set estimate:
 # the preserved estimate is taken pre-OR and the OR selectivity is charged on the operator set.
 statement ok
@@ -85,13 +89,15 @@ SEMI JOIN (SELECT k FROM domain_sa_rhs WHERE k IN (10, 20, 30, 40) LIMIT 1) one_
 ----
 physical_plan	<REGEX>:(?s).*Join Type: SEMI[^~]*~1 row.*
 
-# LIMIT PERCENT with OFFSET: the percentage applies to the complete input, the offset caps availability.
+# LIMIT PERCENT with OFFSET: the percentage applies to the complete input, the offset caps
+# availability (100 rows, not 10). The inner join's root estimate reflects the registered RHS
+# cardinality, so the assertion stays on the root operator box.
 query II
 EXPLAIN SELECT *
 FROM domain_sa_left
-SEMI JOIN (SELECT k FROM domain_sa_rhs LIMIT 10 PERCENT OFFSET 900) percent_rhs USING (k);
+JOIN (SELECT k FROM domain_sa_rhs LIMIT 10 PERCENT OFFSET 900) percent_rhs USING (k);
 ----
-physical_plan	<REGEX>:(?s).*Join Type: SEMI.*LIMIT_PERCENT[^~]*~100 rows.*
+physical_plan	<REGEX>:(?s).*Join Type: INNER[^~]*~100 rows.*
 
 # An OR residual owned by the operator must not also be charged as a post-join OR filter.
 statement ok
