@@ -72,7 +72,8 @@ public:
 public:
 	vector<RelationColumnStats> columns;
 	idx_t cardinality;
-	//! Cumulative estimated fraction of rows retained from the statistics source.
+	//! Cumulative estimated fraction of rows retained from the most recent statistics source.
+	//! Aggregation and DISTINCT establish a new source.
 	double row_retention = 1;
 	bool stats_initialized = false;
 	Identifier table_name;

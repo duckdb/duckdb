@@ -115,7 +115,7 @@ static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientC
 			return {};
 		}
 		result.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
-		                            child_column->name, child_column->semi_anti_join_domain_evidence);
+		                            child_column->name);
 	}
 	result.CapCurrentDomainsToCardinality();
 	result.Verify(get.GetColumnBindings());

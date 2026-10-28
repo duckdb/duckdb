@@ -153,15 +153,17 @@ public:
 
 struct CardinalityHelper {
 public:
-	CardinalityHelper() : cardinality_before_filters(0) {
+	CardinalityHelper() : CardinalityHelper(0, true) {
 	}
-	explicit CardinalityHelper(double cardinality_before_filters)
-	    : cardinality_before_filters(cardinality_before_filters) {
+	CardinalityHelper(double cardinality_before_filters, bool is_empty)
+	    : cardinality_before_filters(cardinality_before_filters), is_empty(is_empty) {
 	}
 
 public:
 	// Must be a double. Otherwise we can lose significance between different join orders.
 	double cardinality_before_filters;
+	//! Structural emptiness is independent of the numerator's zero-to-one substitution.
+	bool is_empty;
 	vector<string> table_names_joined;
 	vector<string> column_names;
 };
@@ -259,6 +261,9 @@ bool CardinalityEstimator::SingleColumnFilter(const FilterInfo &filter_info) {
 }
 
 static bool IsJoinOrFilter(const FilterInfo &filter) {
+	if (filter.join_type == JoinType::SEMI || filter.join_type == JoinType::ANTI) {
+		return false;
+	}
 	return filter.filter && filter.filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	       filter.filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter.set.get().count >= 2;
 }
@@ -349,18 +354,6 @@ double CardinalityEstimator::GetSubgraphCardinality(const Subgraph2Denominator &
 	return numerator / (subgraph.denom <= 0 ? 1 : subgraph.denom);
 }
 
-bool CardinalityEstimator::IsCardinalityEmpty(JoinRelationSet &set) {
-	auto semi_anti_result = EstimateTopLevelSemiAnti(set);
-	if (semi_anti_result) {
-		return *semi_anti_result <= 0;
-	}
-	auto denom = GetDenominator(set);
-	Subgraph2Denominator subgraph;
-	subgraph.numerator_relations = &denom.numerator_relations;
-	subgraph.denom = denom.denominator;
-	return GetSubgraphCardinality(subgraph) <= 0;
-}
-
 optional<double> CardinalityEstimator::EstimateTopLevelSemiAnti(JoinRelationSet &set) {
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &predicate = predicate_ref.get();
@@ -376,11 +369,10 @@ optional<double> CardinalityEstimator::EstimateTopLevelSemiAnti(JoinRelationSet 
 		if (!RefersToSameObject(operator_set, set)) {
 			continue;
 		}
-		auto preserved_cardinality = EstimateCardinalityWithSet<double>(*semantic_left);
-		if (IsCardinalityEmpty(*semantic_left)) {
-			preserved_cardinality = 0;
-		}
-		auto rhs_cardinality = IsCardinalityEmpty(*semantic_right) ? 0 : 1;
+		D_ASSERT(semantic_left->count < set.count && semantic_right->count < set.count);
+		auto &preserved = GetCardinalityBeforeFilters(*semantic_left);
+		auto preserved_cardinality = preserved.is_empty ? 0 : preserved.cardinality_before_filters;
+		auto rhs_cardinality = GetCardinalityBeforeFilters(*semantic_right).is_empty ? 0 : 1;
 		return RelationStatisticsHelper::EstimateSemiAntiJoinFallback(preserved_cardinality, rhs_cardinality,
 		                                                              predicate.GetJoinType())
 		    .cardinality;
@@ -569,7 +561,8 @@ double CardinalityEstimator::CalculateSemiAntiJoinDenom(Subgraph2Denominator &le
 	auto &rhs = left_is_preserved ? right : left;
 	auto preserved_cardinality = GetSubgraphCardinality(preserved);
 	auto semantic_rhs = predicate.GetSemanticRightSetOptional();
-	auto rhs_is_empty = semantic_rhs ? IsCardinalityEmpty(*semantic_rhs) : GetSubgraphCardinality(rhs) <= 0;
+	auto rhs_is_empty =
+	    semantic_rhs ? GetCardinalityBeforeFilters(*semantic_rhs).is_empty : GetSubgraphCardinality(rhs) <= 0;
 	auto rhs_cardinality = rhs_is_empty ? 0 : 1;
 	auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinFallback(preserved_cardinality, rhs_cardinality,
 	                                                                       predicate.GetJoinType());
@@ -967,27 +960,33 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 // groups. INNER equality predicates use transitive equality classes, composite same-pair equalities can apply an FK/PK
 // cap, disconnected predicate subgraphs are merged by cross product, and LEFT/SEMI/ANTI joins adjust the numerator side
 // according to their output semantics. Non-equality predicates still use a heuristic total-domain penalty.
-template <>
-double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-	double result;
+const CardinalityHelper &CardinalityEstimator::GetCardinalityBeforeFilters(JoinRelationSet &new_set) {
 	auto it = state->relation_set_2_cardinality.find(new_set);
 	if (it != state->relation_set_2_cardinality.end()) {
-		result = it->second.cardinality_before_filters;
-	} else {
-		auto semi_anti_result = EstimateTopLevelSemiAnti(new_set);
-		if (semi_anti_result) {
-			result = *semi_anti_result;
-		} else {
-			// can happen if a table has cardinality 0, or a tdom is set to 0
-			auto denom = GetDenominator(new_set);
-			// we pass numerator relations, because for semi and anti joins, we don't want to
-			// include cardinalities of relations on the RHS of a semi/anti join.
-			auto numerator = GetNumerator(denom.numerator_relations);
-			result = denom.denominator >= NumericLimits<double>::Maximum() ? 0 : numerator / denom.denominator;
-		}
-		state->relation_set_2_cardinality[new_set] = CardinalityHelper(result);
+		return it->second;
 	}
-	return ApplyOrFilterSelectivities(new_set, result);
+	double result;
+	bool is_empty;
+	auto semi_anti_result = EstimateTopLevelSemiAnti(new_set);
+	if (semi_anti_result) {
+		result = *semi_anti_result;
+		is_empty = result <= 0;
+	} else {
+		// SEMI/ANTI denominators exclude RHS relations from the numerator.
+		auto denom = GetDenominator(new_set);
+		auto numerator = GetNumerator(denom.numerator_relations);
+		result = denom.denominator >= NumericLimits<double>::Maximum() ? 0 : numerator / denom.denominator;
+		Subgraph2Denominator subgraph;
+		subgraph.numerator_relations = &denom.numerator_relations;
+		subgraph.denom = denom.denominator;
+		is_empty = GetSubgraphCardinality(subgraph) <= 0;
+	}
+	return state->relation_set_2_cardinality.emplace(new_set, CardinalityHelper(result, is_empty)).first->second;
+}
+
+template <>
+double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+	return ApplyOrFilterSelectivities(new_set, GetCardinalityBeforeFilters(new_set).cardinality_before_filters);
 }
 
 double CardinalityEstimator::ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const {
@@ -1018,7 +1017,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	D_ASSERT(stats.stats_initialized);
 	auto relation_cardinality = stats.cardinality;
 
-	auto card_helper = CardinalityHelper((double)relation_cardinality);
+	auto card_helper = CardinalityHelper((double)relation_cardinality, relation_cardinality == 0);
 	state->relation_set_2_cardinality[*set] = card_helper;
 
 	UpdateTotalDomains(set, stats);

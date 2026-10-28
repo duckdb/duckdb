@@ -171,6 +171,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractProjectionStats(Logical
                                                                          const RelationStats &child_stats) {
 	RelationStats result;
 	result.cardinality = child_stats.cardinality;
+	result.row_retention = child_stats.row_retention;
 	result.table_name = Identifier(projection.GetName());
 	result.stats_initialized = true;
 	auto bindings = projection.GetColumnBindings();
@@ -351,6 +352,8 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 	result.table_name = Identifier(aggregate.GetName());
 	result.stats_initialized = true;
 	auto bindings = aggregate.GetColumnBindings();
+	auto preserves_group_evidence =
+	    aggregate.grouping_sets.size() == 1 && aggregate.grouping_sets[0].size() == aggregate.groups.size();
 	for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
 		auto &group = *aggregate.groups[group_idx];
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);
@@ -361,7 +364,9 @@ optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(Logica
 				return {};
 			}
 			distinct_count = child_column->total_domain;
-			semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
+			if (preserves_group_evidence) {
+				semi_anti_join_domain_evidence = child_column->semi_anti_join_domain_evidence;
+			}
 		}
 		auto current_domain = distinct_count;
 		if (group.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
@@ -395,6 +400,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractWindowStats(LogicalWind
                                                                      const RelationStats &child_stats) {
 	RelationStats result;
 	result.cardinality = child_stats.cardinality;
+	result.row_retention = child_stats.row_retention;
 	result.table_name = Identifier(window.GetName());
 	result.stats_initialized = true;
 	RelationColumnStatsLookup child_columns(child_stats);
@@ -453,6 +459,7 @@ optional<RelationStats> RelationStatisticsHelper::ExtractDistinctStats(LogicalDi
 	if (!result) {
 		return {};
 	}
+	result->row_retention = 1;
 	vector<DistinctCount> distinct_counts;
 	if (distinct.distinct_targets.empty()) {
 		for (auto &column : child_stats.columns) {

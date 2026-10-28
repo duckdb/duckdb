@@ -32,6 +32,9 @@ static optional<RelationStats> CombineReorderableStats(const vector<ColumnBindin
                                                        idx_t root_cardinality) {
 	RelationStats result;
 	result.cardinality = root_cardinality;
+	if (relation_stats.size() == 1) {
+		result.row_retention = relation_stats[0].row_retention;
+	}
 	result.stats_initialized = true;
 	for (auto &stats : relation_stats) {
 		if (!stats.stats_initialized) {

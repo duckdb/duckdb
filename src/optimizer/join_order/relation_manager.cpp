@@ -581,6 +581,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 		if (output_stats && op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			output_stats->cardinality = cte_cardinality;
+			output_stats->row_retention = 1;
 			// Statistics from one recursive term do not describe the complete fixpoint. Keep the output layout, but
 			// represent each fixpoint domain using the standard cardinality-based fallback.
 			for (auto &column : output_stats->columns) {
@@ -671,6 +672,10 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			auto estimate = RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(delim_join, lhs_stats, rhs_stats);
 			auto cardinality = LossyNumericCast<idx_t>(estimate.cardinality);
 			RelationStatisticsHelper::ApplyCardinality(dj_stats, cardinality);
+		} else {
+			for (auto &column : dj_stats.columns) {
+				column.semi_anti_join_domain_evidence.Invalidate();
+			}
 		}
 
 		if (!AddRelation(input_op, parent, dj_stats)) {

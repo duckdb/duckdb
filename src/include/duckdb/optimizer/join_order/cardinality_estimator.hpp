@@ -16,6 +16,7 @@ namespace duckdb {
 class FilterInfo;
 class JoinPredicateModel;
 struct CardinalityEstimatorState;
+struct CardinalityHelper;
 struct CompositeJoinPairStats;
 struct DenomInfo;
 struct DenominatorState;
@@ -47,7 +48,7 @@ public:
 private:
 	double GetNumerator(JoinRelationSet &set);
 	double GetSubgraphCardinality(const Subgraph2Denominator &subgraph);
-	bool IsCardinalityEmpty(JoinRelationSet &set);
+	const CardinalityHelper &GetCardinalityBeforeFilters(JoinRelationSet &set);
 	optional<double> EstimateTopLevelSemiAnti(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
 	void ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,

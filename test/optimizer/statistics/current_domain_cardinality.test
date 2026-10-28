@@ -67,7 +67,7 @@ physical_plan	<REGEX>:(?s).*PERFECT_HASH_GROUP_BY.*~65 rows.*STREAMING_LIMIT.*Li
 
 # Direct evidence follows its column through a window and projection.
 query II
-EXPLAIN SELECT k, count(*)
+EXPLAIN SELECT k, count(*), max(rn)
 FROM (SELECT k, row_number() OVER () rn FROM current_domain_values WHERE k = 20) windowed
 GROUP BY k;
 ----
