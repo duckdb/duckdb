@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/vector.hpp"
@@ -76,10 +77,16 @@ public:
 	//! Insert value into dictionary (if not full)
 	template <bool ADD_TO_TARGET = false>
 	void Insert(SRC value) {
+		Insert<ADD_TO_TARGET>(value, Hash(value));
+	}
+
+	//! Insert value into dictionary (if not full), reusing the hash a Lookup computed for it
+	template <bool ADD_TO_TARGET = false>
+	void Insert(SRC value, hash_t hash) {
 		if (full) {
 			return;
 		}
-		auto &entry = Lookup(value);
+		auto &entry = Lookup(value, hash);
 		if (entry.IsEmpty()) {
 			if (size + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
 				full = true;
@@ -169,7 +176,12 @@ public:
 	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
-		auto offset = Hash(value) & capacity_mask;
+		return Lookup(value, Hash(value));
+	}
+
+	//! Look up a value with its precomputed hash
+	primitive_dictionary_entry_t &Lookup(const SRC &value, hash_t hash) const {
+		auto offset = hash & capacity_mask;
 		while (!dictionary[offset].IsEmpty() && dictionary[offset].value != value) {
 			++offset &= capacity_mask;
 		}

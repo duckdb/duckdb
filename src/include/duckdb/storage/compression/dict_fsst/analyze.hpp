@@ -3,6 +3,7 @@
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
@@ -32,7 +33,10 @@ public:
 	idx_t FSSTOnlyEstimate() const;
 
 private:
-	bool FitsInBlock(idx_t tuple_count, idx_t unique_count, idx_t dict_size, idx_t max_string_length) const;
+	//! Account for a tuple that reuses a dictionary index (NULL or a repeated value); false if the block is full
+	bool TryAddIndexOnlyTuple();
+	//! Account for a value the current block has not seen, flushing the block first if it does not fit
+	void AddNewString(const string_t &str, hash_t hash);
 	void FlushSimulatedBlock();
 	unique_ptr<PrimitiveDictionary<string_t>> MakeSet(idx_t size) const;
 	void GrowSet();
@@ -56,6 +60,10 @@ public:
 	idx_t current_unique_count = 0;
 	idx_t current_dict_size = 0;
 	idx_t current_max_string_length = 0;
+	//! Bit width of the dictionary indices and the space the block needs in its current state, cached so a tuple
+	//! that reuses an index only has to add a packing group now and then instead of recomputing the layout
+	bitpacking_width_t current_indices_width = 0;
+	idx_t current_required_space = 0;
 	//! Whether a simulated block ever held the same value twice. A segment holds one block worth of values, so
 	//! this is also whether FSST_ONLY - which requires every value in a segment to be unique - is reachable.
 	bool block_had_repeated_value = false;

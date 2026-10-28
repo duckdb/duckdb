@@ -1,5 +1,7 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 
+#include "duckdb/common/types/hash.hpp"
+
 namespace duckdb {
 namespace dict_fsst {
 
@@ -55,6 +57,7 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : Analyz
 	// most blocks hold few distinct values, so start small and grow the set only when it runs out of room
 	current_set_size = MinValue(INITIAL_SET_SIZE, max_set_size);
 	current_set = MakeSet(current_set_size);
+	current_required_space = RequiredSpace(0, 0, 0, 0);
 }
 
 unique_ptr<PrimitiveDictionary<string_t>> DictFSSTAnalyzeState::MakeSet(idx_t size) const {
@@ -90,9 +93,45 @@ idx_t DictFSSTAnalyzeState::RequiredSpace(idx_t tuple_count, idx_t unique_count,
 	return required_space;
 }
 
-bool DictFSSTAnalyzeState::FitsInBlock(idx_t tuple_count, idx_t unique_count, idx_t dict_size,
-                                       idx_t max_str_length) const {
-	return RequiredSpace(tuple_count, unique_count, dict_size, max_str_length) <= info.GetBlockSize();
+bool DictFSSTAnalyzeState::TryAddIndexOnlyTuple() {
+	// the dictionary does not change, so only the index buffer can grow, and only when a new packing group starts
+	idx_t growth = 0;
+	if (current_tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {
+		growth = BitpackingPrimitives::GetRequiredSize(BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE,
+		                                               current_indices_width);
+	}
+	if (current_required_space + growth > info.GetBlockSize()) {
+		return false;
+	}
+	current_tuple_count++;
+	current_required_space += growth;
+	D_ASSERT(current_required_space ==
+	         RequiredSpace(current_tuple_count, current_unique_count, current_dict_size, current_max_string_length));
+	return true;
+}
+
+void DictFSSTAnalyzeState::AddNewString(const string_t &str, hash_t hash) {
+	const idx_t str_len = str.GetSize();
+	// a new value changes the dictionary size and with it the alignment of the sections after it: recompute
+	idx_t required_space = RequiredSpace(current_tuple_count + 1, current_unique_count + 1, current_dict_size + str_len,
+	                                     MaxValue(current_max_string_length, str_len));
+	if (required_space > info.GetBlockSize()) {
+		FlushSimulatedBlock();
+		required_space = RequiredSpace(1, 1, str_len, str_len);
+	}
+	current_tuple_count++;
+	current_unique_count++;
+	current_dict_size += str_len;
+	current_max_string_length = MaxValue(current_max_string_length, str_len);
+	current_indices_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count);
+	current_required_space = required_space;
+
+	if (current_set->GetSize() == current_set_size) {
+		GrowSet();
+	}
+	current_set->Insert(heap.AddBlob(str), hash);
+	// RequiredSpace keeps the distinct count below what the largest set holds
+	D_ASSERT(!current_set->IsFull());
 }
 
 void DictFSSTAnalyzeState::FlushSimulatedBlock() {
@@ -101,9 +140,12 @@ void DictFSSTAnalyzeState::FlushSimulatedBlock() {
 	current_unique_count = 0;
 	current_dict_size = 0;
 	current_max_string_length = 0;
+	current_indices_width = 0;
+	current_required_space = RequiredSpace(0, 0, 0, 0);
 	current_set->Clear();
-	// the strings are only referenced by 'current_set', which we just cleared
-	heap.Destroy();
+	// the strings are only referenced by 'current_set', which we just cleared; keep the current chunk for the next
+	// block
+	heap.GetAllocator().Reset();
 }
 
 bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
@@ -111,11 +153,11 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		if (!entry.IsValid()) {
 			contains_nulls = true;
 			// NULL is dictionary index 0, it does not occupy a dictionary entry of its own
-			if (!FitsInBlock(current_tuple_count + 1, current_unique_count, current_dict_size,
-			                 current_max_string_length)) {
+			if (!TryAddIndexOnlyTuple()) {
 				FlushSimulatedBlock();
+				// an empty block always has room for one more index
+				TryAddIndexOnlyTuple();
 			}
-			current_tuple_count++;
 			continue;
 		}
 		auto &str = entry.GetValue();
@@ -134,35 +176,16 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 			disable_fsst = true;
 		}
 
-		bool new_string = current_set->Lookup(str).IsEmpty();
-		if (!new_string) {
+		const auto hash = Hash(str);
+		if (!current_set->Lookup(str, hash).IsEmpty()) {
 			block_had_repeated_value = true;
-		}
-		auto next_unique_count = current_unique_count + (new_string ? 1 : 0);
-		auto next_dict_size = current_dict_size + (new_string ? str_len : 0);
-		auto next_max_length = new_string ? MaxValue(current_max_string_length, str_len) : current_max_string_length;
-
-		if (!FitsInBlock(current_tuple_count + 1, next_unique_count, next_dict_size, next_max_length)) {
-			FlushSimulatedBlock();
-			// the next block starts with an empty dictionary, so this value has to be stored again
-			new_string = true;
-			next_unique_count = 1;
-			next_dict_size = str_len;
-			next_max_length = str_len;
-		}
-
-		current_tuple_count++;
-		current_unique_count = next_unique_count;
-		current_dict_size = next_dict_size;
-		current_max_string_length = next_max_length;
-		if (new_string) {
-			if (current_set->GetSize() == current_set_size) {
-				GrowSet();
+			if (TryAddIndexOnlyTuple()) {
+				continue;
 			}
-			current_set->Insert(heap.AddBlob(str));
-			// FitsInBlock keeps the distinct count below what the largest set holds
-			D_ASSERT(!current_set->IsFull());
+			// the next block starts with an empty dictionary, so this value has to be stored again
+			FlushSimulatedBlock();
 		}
+		AddNewString(str, hash);
 	}
 	total_count += input.size();
 	return true;
