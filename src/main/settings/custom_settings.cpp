@@ -312,7 +312,7 @@ void AllowedConfigsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value AllowedConfigsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> configs;
-	for (auto &cfg : config.options.allowed_configs) {
+	for (auto &cfg : config.GetAllowedConfigs()) {
 		configs.emplace_back(cfg);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(configs));
