@@ -266,6 +266,8 @@ enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
 
+enum class FileSecretLifetime : uint8_t;
+
 enum class FileSyncMode : uint8_t;
 
 enum class FileWriteMode : uint8_t;
@@ -1043,6 +1045,9 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
+
+template<>
+const char* EnumUtil::ToChars<FileSecretLifetime>(FileSecretLifetime value);
 
 template<>
 const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value);
@@ -2034,6 +2039,9 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
+
+template<>
+FileSecretLifetime EnumUtil::FromString<FileSecretLifetime>(const char *value);
 
 template<>
 FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value);

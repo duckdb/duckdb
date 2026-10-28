@@ -171,6 +171,7 @@
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
@@ -2768,6 +2769,24 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileSecretLifetimeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileSecretLifetime::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(FileSecretLifetime::CONNECTION), "CONNECTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileSecretLifetime>(FileSecretLifetime value) {
+	return StringUtil::EnumToString(GetFileSecretLifetimeValues(), 2, "FileSecretLifetime", static_cast<uint32_t>(value));
+}
+
+template<>
+FileSecretLifetime EnumUtil::FromString<FileSecretLifetime>(const char *value) {
+	return static_cast<FileSecretLifetime>(StringUtil::StringToEnum(GetFileSecretLifetimeValues(), 2, "FileSecretLifetime", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileSyncModeValues() {

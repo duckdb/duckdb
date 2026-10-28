@@ -16,12 +16,26 @@
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 struct BoundStatement;
 struct DBConfig;
 class SecretManager;
 class SchemaCatalogEntry;
+
+//! Returns the secret of a file secret (SecretManager::RegisterFileSecret): on first use, and again on a refresh
+using file_secret_vend_t = std::function<shared_ptr<const KeyValueSecret>(ClientContext &context)>;
+
+//! What a file secret serves (SecretManager::RegisterFileSecret)
+enum class FileSecretLifetime : uint8_t {
+	//! The transaction that registers it, until it ends
+	TRANSACTION,
+	//! The connection that registers it, in and outside transactions, until it closes. Only for a connection that runs
+	//! no queries but those of the registrant
+	CONNECTION
+};
 
 //! A Secret Entry in the secret manager
 struct SecretEntry {
@@ -141,17 +155,19 @@ public:
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
-	//! Registers a file secret in the current transaction of `context` and returns its name: the secret `vend` returns
-	//! on first use, and again on a refresh, for reading the files under `scope` whose "secret" option names it
+	//! Registers a file secret on the connection of `context` and returns its name: the secret `vend` returns on first
+	//! use, and again on a refresh, for reading the files under `scope` whose "secret" option names it
 	//! (ExtendedOpenFileInfo::FILE_SECRET_OPTION). The name is 128 random bits, and no lookup by path, listing of
-	//! secrets or lookup by name sees the secret, so only a statement that is given the name can use it. It serves only
-	//! that transaction, which keeps it until it ends: register one per table and transaction, and name it on every
-	//! scan of the table
-	DUCKDB_API string RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend);
-	//! The file secret `name` for reading `path`; throws when the current transaction of `context` has no such secret,
-	//! or when `path` is outside its scope
+	//! secrets or lookup by name sees the secret, so only a statement that is given the name can use it. It serves what
+	//! `lifetime` says: by default only the current transaction, which must be active, so register one per table and
+	//! transaction, and name it on every scan of the table
+	DUCKDB_API string RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend,
+	                                     FileSecretLifetime lifetime = FileSecretLifetime::TRANSACTION);
+	//! The file secret `name` for reading `path`; throws when the connection of `context` has no such secret that
+	//! serves its current transaction, or when `path` is outside its scope
 	DUCKDB_API shared_ptr<SecretEntry> GetFileSecret(ClientContext &context, const string &name, const string &path);
-	//! Vends the file secret `name` again, after the store rejected it as expired; false when there is no such secret
+	//! Vends the file secret `name` again, after the store rejected it as expired; false when the connection of
+	//! `context` has no such secret that serves its current transaction
 	DUCKDB_API bool RefreshFileSecret(ClientContext &context, const string &name);
 
 	//! List all secret types
@@ -210,8 +226,8 @@ private:
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
 	optional_ptr<SecretStorage> GetSecretStorage(const Identifier &name);
-	optional_ptr<TransactionSecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
-	TransactionSecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
+	optional_ptr<SecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
+	SecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
 
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();

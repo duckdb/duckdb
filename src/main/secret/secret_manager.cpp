@@ -22,6 +22,8 @@
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
+#include <random>
+
 namespace duckdb {
 
 SecretCatalogEntry::SecretCatalogEntry(unique_ptr<SecretEntry> secret_p, Catalog &catalog)
@@ -560,35 +562,156 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	return result;
 }
 
-string SecretManager::RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend) {
-	if (scope.empty() || !vend || !context.transaction.HasActiveTransaction()) {
-		throw InternalException("A file secret needs a scope, a vend function and an active transaction");
-	}
-	auto &storage = GetOrCreateTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
-	return storage.RegisterFileSecret(std::move(scope), std::move(vend));
-}
+namespace {
 
-shared_ptr<SecretEntry> SecretManager::GetFileSecret(ClientContext &context, const string &name, const string &path) {
+constexpr const char *FILE_SECRET_STATE_KEY = "file_secret_storage";
+
+struct FileSecret {
+	//! The transaction it serves; invalid when it serves the connection
+	optional_idx transaction;
+	string scope;
+	file_secret_vend_t vend;
+	//! Held while vending, so that concurrent first uses share one vend
+	mutex lock;
+	//! The vended secret. A refresh replaces it; a reader of the previous one keeps that alive
 	shared_ptr<SecretEntry> entry;
-	if (context.transaction.HasActiveTransaction()) {
-		auto storage = GetTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
-		if (storage) {
-			entry = storage->GetFileSecret(context, name, path);
+
+	bool Serves(const optional_idx &current) const {
+		return !transaction.IsValid() || transaction == current;
+	}
+};
+
+//! 128 bits of std::random_device as 32 hex digits, so a statement can name a file secret only when handed the name
+string NewFileSecretName() {
+	static constexpr const char *HEX_DIGITS = "0123456789abcdef";
+	std::random_device random_device;
+	string name;
+	for (idx_t word = 0; word < 4; word++) {
+		auto bits = static_cast<uint32_t>(random_device());
+		for (idx_t digit = 0; digit < 8; digit++) {
+			name += HEX_DIGITS[(bits >> (4 * digit)) & 0xF];
 		}
 	}
-	if (!entry) {
-		throw InvalidConfigurationException(
-		    "The file secret for '%s' is not available: it serves only the transaction that registered it", path);
+	return name;
+}
+
+//! The file secrets of a connection, apart from its secrets, so that no lookup by path, listing of secrets or lookup
+//! by name sees them. Every lookup checks the transaction a file secret serves, so no hook has to end it; the first
+//! registration after the transaction ends drops it
+class FileSecretState : public ClientContextState {
+public:
+	//! Adds `file_secret` under a new name, and drops those that serve a transaction other than `current`
+	string Register(shared_ptr<FileSecret> file_secret, const optional_idx &current) {
+		auto name = NewFileSecretName();
+		// destroyed after the lock is released
+		vector<shared_ptr<FileSecret>> ended;
+		lock_guard<mutex> guard(lock);
+		for (auto entry = file_secrets.begin(); entry != file_secrets.end();) {
+			if (entry->second->Serves(current)) {
+				entry++;
+				continue;
+			}
+			ended.push_back(std::move(entry->second));
+			entry = file_secrets.erase(entry);
+		}
+		file_secrets.emplace(name, std::move(file_secret));
+		return name;
 	}
+	//! The file secret `name`, when it serves `current`
+	shared_ptr<FileSecret> Find(const string &name, const optional_idx &current) {
+		lock_guard<mutex> guard(lock);
+		auto entry = file_secrets.find(name);
+		if (entry == file_secrets.end() || !entry->second->Serves(current)) {
+			return nullptr;
+		}
+		return entry->second;
+	}
+
+private:
+	mutex lock;
+	unordered_map<string, shared_ptr<FileSecret>> file_secrets;
+};
+
+//! The current transaction of `context`; invalid outside one
+optional_idx CurrentTransaction(ClientContext &context) {
+	if (!context.transaction.HasActiveTransaction()) {
+		return optional_idx();
+	}
+	return MetaTransaction::Get(context).global_transaction_id;
+}
+
+//! The file secret `name` of the connection of `context`, when it serves the current transaction
+shared_ptr<FileSecret> FindFileSecret(ClientContext &context, const string &name) {
+	auto state = context.registered_state->Get<FileSecretState>(FILE_SECRET_STATE_KEY);
+	return state ? state->Find(name, CurrentTransaction(context)) : nullptr;
+}
+
+//! Whether `path` has a ".." segment, which a server may resolve to a path outside a file secret's scope
+bool HasParentSegment(const string &path) {
+	return StringUtil::Contains("/" + StringUtil::Replace(path, "\\", "/") + "/", "/../");
+}
+
+shared_ptr<SecretEntry> VendFileSecret(ClientContext &context, const FileSecret &file_secret) {
+	auto secret = file_secret.vend(context);
+	if (!secret) {
+		throw InternalException("The file secret of '%s' vended no secret", file_secret.scope);
+	}
+	auto serves_transaction = file_secret.transaction.IsValid();
+	auto entry = make_shared_ptr<SecretEntry>(nullptr);
+	entry->secret = secret->Clone();
+	entry->persist_type = serves_transaction ? SecretPersistType::TRANSACTION : SecretPersistType::TEMPORARY;
+	entry->storage_mode =
+	    serves_transaction ? SecretManager::TRANSACTION_STORAGE_NAME : SecretManager::CONNECTION_STORAGE_NAME;
 	return entry;
 }
 
+} // namespace
+
+string SecretManager::RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend,
+                                         FileSecretLifetime lifetime) {
+	auto current = CurrentTransaction(context);
+	auto serves_transaction = lifetime == FileSecretLifetime::TRANSACTION;
+	if (scope.empty() || !vend || (serves_transaction && !current.IsValid())) {
+		throw InvalidInputException(
+		    "A file secret needs a scope, a vend function and, unless it serves the connection, an active transaction");
+	}
+	auto file_secret = make_shared_ptr<FileSecret>();
+	if (serves_transaction) {
+		file_secret->transaction = current;
+	}
+	file_secret->scope = std::move(scope);
+	file_secret->vend = std::move(vend);
+	auto state = context.registered_state->GetOrCreate<FileSecretState>(FILE_SECRET_STATE_KEY);
+	return state->Register(std::move(file_secret), current);
+}
+
+shared_ptr<SecretEntry> SecretManager::GetFileSecret(ClientContext &context, const string &name, const string &path) {
+	auto file_secret = FindFileSecret(context, name);
+	if (!file_secret) {
+		throw InvalidConfigurationException("The file secret for '%s' is not available: it serves only the transaction "
+		                                    "or the connection that registered it",
+		                                    path);
+	}
+	if (!StringUtil::StartsWith(path, file_secret->scope) || HasParentSegment(path)) {
+		throw InvalidConfigurationException("The file secret of '%s' cannot be used for '%s'", file_secret->scope,
+		                                    path);
+	}
+	lock_guard<mutex> guard(file_secret->lock);
+	if (!file_secret->entry) {
+		file_secret->entry = VendFileSecret(context, *file_secret);
+	}
+	return file_secret->entry;
+}
+
 bool SecretManager::RefreshFileSecret(ClientContext &context, const string &name) {
-	if (!context.transaction.HasActiveTransaction()) {
+	auto file_secret = FindFileSecret(context, name);
+	if (!file_secret) {
 		return false;
 	}
-	auto storage = GetTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
-	return storage && storage->RefreshFileSecret(context, name);
+	lock_guard<mutex> guard(file_secret->lock);
+	// a vend that throws keeps the current secret
+	file_secret->entry = VendFileSecret(context, *file_secret);
+	return true;
 }
 
 vector<SecretType> SecretManager::AllSecretTypes() {
@@ -754,7 +877,7 @@ optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const Identifier &na
 	return nullptr;
 }
 
-optional_ptr<TransactionSecretStorage> SecretManager::GetTransactionSecretStorage(CatalogTransaction transaction) {
+optional_ptr<SecretStorage> SecretManager::GetTransactionSecretStorage(CatalogTransaction transaction) {
 	if (!transaction.HasContext()) {
 		return nullptr;
 	}
@@ -763,7 +886,7 @@ optional_ptr<TransactionSecretStorage> SecretManager::GetTransactionSecretStorag
 	return meta_transaction.transaction_secret_storage.get();
 }
 
-TransactionSecretStorage &SecretManager::GetOrCreateTransactionSecretStorage(CatalogTransaction transaction) {
+SecretStorage &SecretManager::GetOrCreateTransactionSecretStorage(CatalogTransaction transaction) {
 	if (!transaction.HasContext()) {
 		throw InvalidInputException("Transaction secrets require an active client transaction");
 	}

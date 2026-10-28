@@ -21,7 +21,7 @@ namespace duckdb {
 class AttachedDatabase;
 class ClientContext;
 class SecretManager;
-class TransactionSecretStorage;
+class SecretStorage;
 struct DatabaseModificationType;
 class Transaction;
 
@@ -105,7 +105,7 @@ private:
 	//! Map of name -> database for databases that are in-use by this transaction.
 	identifier_map_t<reference<AttachedDatabase>> used_databases;
 	//! Secrets that only live for the duration of this transaction.
-	unique_ptr<TransactionSecretStorage> transaction_secret_storage;
+	unique_ptr<SecretStorage> transaction_secret_storage;
 };
 
 } // namespace duckdb

@@ -609,8 +609,57 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	REQUIRE(f.FileSecret("later-key") != name);
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File(path, name)); }, "is not available");
 	f.con.Rollback();
-	// file secrets are registered only in a transaction
+	// file secrets for a transaction are registered only in one
 	RequireThrowsWith([&]() { f.FileSecret("table-key"); }, "an active transaction");
+}
+
+TEST_CASE("A file secret for the connection serves it in and outside transactions, and no other connection",
+          "[file_credentials]") {
+	CredentialsFixture f;
+	Connection other(f.db);
+	auto &context = f.Context();
+	const string path = "mem://bucket/table/a.bin";
+	auto for_connection = [&](const string &key_id) {
+		return SecretManager::Get(context).RegisterFileSecret(
+		    context, "mem://bucket/table/",
+		    [&f, key_id](ClientContext &) {
+			    f.vends++;
+			    return TestSecret(key_id);
+		    },
+		    FileSecretLifetime::CONNECTION);
+	};
+	auto held = make_shared_ptr<idx_t>(0);
+	// registered outside a transaction, and in one that rolls back
+	auto name = for_connection("connection-key");
+	f.con.BeginTransaction();
+	auto in_transaction = for_connection("rolled-back-key");
+	SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [held](ClientContext &) {
+		return TestSecret("table-key#" + to_string(*held));
+	});
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
+	f.con.Rollback();
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, in_transaction)) == "rolled-back-key");
+	// the next registration drops the file secrets of the transaction that ended, and keeps those of the connection
+	REQUIRE(held.use_count() == 2);
+	f.con.BeginTransaction();
+	f.FileSecret("later-key");
+	REQUIRE(held.use_count() == 1);
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
+	f.con.Commit();
+	// each vended once; a refresh needs no transaction
+	REQUIRE(f.vends == 2);
+	REQUIRE(SecretManager::Get(context).RefreshFileSecret(context, name));
+	REQUIRE(f.vends == 3);
+	// it still serves only its scope, and only its connection
+	RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, "mem://bucket/other/c.bin"); },
+	                  "cannot be used for");
+	RequireThrowsWith(
+	    [&]() {
+		    FileSystem::GetFileSystem(*other.context)
+		        .OpenFile(CredentialsFixture::File(path, name), FileFlags::FILE_FLAGS_READ);
+	    },
+	    "is not available");
 }
 
 TEST_CASE("Only a statement given the name of a file secret reads with it, and none can match, list or drop it",
