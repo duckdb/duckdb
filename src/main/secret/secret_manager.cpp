@@ -772,7 +772,8 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 	auto &fs = FileSystem::GetLocal(catalog.GetDatabase());
 
 	string base_secret_path = secret_manager.PersistentSecretPath();
-	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");
+	string secret_path =
+	    fs.JoinPath(base_secret_path, LocalFileSecretStorage::SecretFileName(entry_name.GetIdentifierName()));
 
 	// Note each file should contain 1 secret
 	try {
