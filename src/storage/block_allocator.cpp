@@ -198,6 +198,11 @@ private:
 	vector<uint32_t> touched;
 };
 
+#ifndef __MVS__
+//! Whether this thread created its state. A bool needs no thread_local destructor, so reading it allocates nothing
+static thread_local bool thread_local_state_created = false; // NOLINT
+#endif
+
 BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAllocator &block_allocator) {
 #ifdef __MVS__
 	auto allocator_state = BlockAllocatorThreadLocalState(block_allocator);
@@ -207,8 +212,19 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 	return *local_state;
 #else
 	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
+	thread_local_state_created = true;
 	local_state.TryInitialize(block_allocator);
 	return local_state;
+#endif
+}
+
+//! A thread that never created its state has no blocks to give back. Creating it registers a thread_local
+//! destructor, which glibc cannot fail to allocate without ending the process
+static bool ThreadHasLocalState() {
+#ifdef __MVS__
+	return true;
+#else
+	return thread_local_state_created;
 #endif
 }
 
@@ -359,7 +375,7 @@ bool BlockAllocator::SupportsFlush() const {
 }
 
 void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const {
-	if (IsActive() && IsEnabled()) {
+	if (IsActive() && IsEnabled() && ThreadHasLocalState()) {
 		GetBlockAllocatorThreadLocalState(*this).Clear();
 	}
 	if (Allocator::SupportsFlush()) {

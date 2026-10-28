@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Counts the evaluations of volatile filters that only the optimizer pushes down or keeps above.",
+      "paths": [
+        "test/optimizer/pushdown/volatile_filter_aggregate_distinct.test"
+      ]
+    },
+    {
       "reason": "Checks evaluation counts after optimizer filter pushdown.",
       "paths": [
         "test/optimizer/pushdown/lateral_projection_evaluation.test",

@@ -8,7 +8,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "json_structure.hpp"
+#include "json_schema_inference.hpp"
 #include "json_transform.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 

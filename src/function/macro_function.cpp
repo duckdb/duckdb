@@ -81,14 +81,14 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth);
 			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
-		if (!arg.GetExpression().GetAlias().empty()) {
+		if (arg.HasName()) {
 			// Default argument
-			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
-				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated %s", name,
-				                                          arg.GetExpression().GetAlias()));
+			if (named_arguments.find(arg.GetName()) != named_arguments.end()) {
+				return MacroBindResult(
+				    StringUtil::Format("Macro %s() has named argument repeated %s", name, arg.GetName()));
 			}
-			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));
-			named_arguments[arg.GetExpression().GetAlias()] = std::move(arg.GetExpressionMutable());
+			named_arg_types.insert(arg.GetName(), std::move(arg_type));
+			named_arguments[arg.GetName()] = std::move(arg.GetExpressionMutable());
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));

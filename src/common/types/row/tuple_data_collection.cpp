@@ -645,6 +645,14 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 	state.chunk_state.column_ids = std::move(column_ids);
 }
 
+void TupleDataCollection::SeekScan(TupleDataScanState &state, const TupleDataChunkPosition &position) const {
+	D_ASSERT(state.pin_state.row_handles.begin() == state.pin_state.row_handles.end());
+	D_ASSERT(position.segment_index < segments.size());
+	D_ASSERT(position.chunk_index < segments[position.segment_index]->ChunkCount());
+	state.segment_index = position.segment_index;
+	state.chunk_index = position.chunk_index;
+}
+
 void TupleDataCollection::InitializeScan(TupleDataParallelScanState &gstate, TupleDataPinProperties properties) const {
 	InitializeScan(gstate.scan_state, properties);
 }

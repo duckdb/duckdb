@@ -20,6 +20,7 @@ add_library_unity(
   test_hugeint_constexpr.cpp
   test_http_transport_manager.cpp
   test_http_retry_budget.cpp
+  test_httplib_header_length.cpp
   test_httplib_sigpipe.cpp
   test_literal.cpp
   test_lru_cache.cpp

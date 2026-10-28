@@ -42,6 +42,31 @@ uint64_t ReadLiveMetric<MetricSystemTotalMemoryAllocated>(const QueryMetrics &me
 	return metrics.GetTotalMemoryAllocated();
 }
 
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalReadOperations>(const QueryMetrics &metrics) {
+	return metrics.GetReadOperations();
+}
+
+template <>
+double ReadLiveMetric<MetricIOTotalReadTime>(const QueryMetrics &metrics) {
+	return metrics.GetReadTime();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalWriteOperations>(const QueryMetrics &metrics) {
+	return metrics.GetWriteOperations();
+}
+
+template <>
+double ReadLiveMetric<MetricIOTotalWriteTime>(const QueryMetrics &metrics) {
+	return metrics.GetWriteTime();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricSystemTotalBytesSpilled>(const QueryMetrics &metrics) {
+	return metrics.GetBytesSpilled();
+}
+
 template <class... METRICS>
 static profiler_metrics_t ReadLiveMetrics(const QueryMetrics &metrics, MetricList<METRICS...>) {
 	profiler_metrics_t result;
@@ -53,7 +78,9 @@ profiler_metrics_t QueryMetrics::GetLiveMetrics() const {
 	return ReadLiveMetrics(*this, LiveMetrics());
 }
 
-QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
+QueryMetrics::QueryMetrics()
+    : bytes_read(0), read_operations(0), read_time_us(0), bytes_written(0), write_operations(0), write_time_us(0),
+      bytes_spilled(0), bytes_scanned(0), total_memory_allocated(0) {
 	Reset();
 }
 

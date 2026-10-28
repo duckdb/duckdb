@@ -329,7 +329,7 @@ public:
 	template <class T>
 	T TakeResult(idx_t slot) {
 		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing transformer result for slot %llu in rule '%s'", slot, info.name);
+			ThrowMissingResult(slot);
 		}
 		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
 		if (!result_value) {
@@ -339,7 +339,7 @@ public:
 				child_results[slot].reset();
 				return bridged_result;
 			}
-			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
+			ThrowUnexpectedResultType(slot);
 		}
 		auto result = std::move(*result_value);
 		child_results[slot].reset();
@@ -349,14 +349,17 @@ public:
 	template <class T>
 	T &GetResult(idx_t slot) {
 		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing transformer result for slot %llu in rule '%s'", slot, info.name);
+			ThrowMissingResult(slot);
 		}
 		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
 		if (!result_value) {
-			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
+			ThrowUnexpectedResultType(slot);
 		}
 		return *result_value;
 	}
+
+	[[noreturn]] void ThrowMissingResult(idx_t slot) const;
+	[[noreturn]] void ThrowUnexpectedResultType(idx_t slot) const;
 
 	ParseResult &parse_result;
 	const TransformFrameOps &info;

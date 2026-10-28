@@ -39,7 +39,16 @@ public:
 
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
+	atomic<idx_t> read_operations;
+	atomic<idx_t> read_time_us;
 	atomic<idx_t> bytes_written;
+	atomic<idx_t> write_operations;
+	atomic<idx_t> write_time_us;
+	// Cumulative bytes written to the temporary (spill) directory
+	atomic<idx_t> bytes_spilled;
+	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
+	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
+	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
 
@@ -56,12 +65,23 @@ public:
 		string_counters[key] += addition;
 	}
 
-	void UpdateBytesRead(idx_t n) {
+	void UpdateBytesRead(idx_t n, idx_t elapsed_us) {
 		bytes_read += n;
+		read_operations++;
+		read_time_us += elapsed_us;
 	}
 
-	void UpdateBytesWritten(idx_t n) {
+	void UpdateBytesWritten(idx_t n, idx_t elapsed_us) {
 		bytes_written += n;
+		write_operations++;
+		write_time_us += elapsed_us;
+	}
+	void UpdateBytesScanned(idx_t n) {
+		bytes_scanned += n;
+	}
+
+	void UpdateBytesSpilled(idx_t n) {
+		bytes_spilled += n;
 	}
 
 	void UpdateTotalMemoryAllocated(idx_t n) {
@@ -88,8 +108,31 @@ public:
 		return bytes_read.load();
 	}
 
+	idx_t GetReadOperations() const {
+		return read_operations.load();
+	}
+
+	double GetReadTime() const {
+		return static_cast<double>(read_time_us.load()) / 1e6;
+	}
+
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
+	}
+	idx_t GetBytesScanned() const {
+		return bytes_scanned.load();
+	}
+
+	idx_t GetWriteOperations() const {
+		return write_operations.load();
+	}
+
+	double GetWriteTime() const {
+		return static_cast<double>(write_time_us.load()) / 1e6;
+	}
+
+	idx_t GetBytesSpilled() const {
+		return bytes_spilled.load();
 	}
 
 	idx_t GetTotalMemoryAllocated() const {
@@ -107,7 +150,13 @@ public:
 	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
 	void ResetLiveMetrics() {
 		bytes_read = 0;
+		read_operations = 0;
+		read_time_us = 0;
 		bytes_written = 0;
+		write_operations = 0;
+		write_time_us = 0;
+		bytes_spilled = 0;
+		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
 		total_memory_allocated = 0;
 	}
 
@@ -136,7 +185,13 @@ public:
 			string_counters[entry.first] += entry.second;
 		}
 		bytes_read += other.bytes_read.load();
+		read_operations += other.read_operations.load();
+		read_time_us += other.read_time_us.load();
 		bytes_written += other.bytes_written.load();
+		write_operations += other.write_operations.load();
+		write_time_us += other.write_time_us.load();
+		bytes_spilled += other.bytes_spilled.load();
+		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
 

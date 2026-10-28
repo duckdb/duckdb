@@ -53,8 +53,15 @@ private:
 
 //! TupleDataCollection represents a set of buffer-managed data stored in row format
 //! FIXME: rename to RowDataCollection after we phase it out
+//! The position of a chunk within a TupleDataCollection
+struct TupleDataChunkPosition {
+	idx_t segment_index = 0;
+	idx_t chunk_index = 0;
+};
+
 class TupleDataCollection {
 	friend class TupleDataChunkIterator;
+	friend class TupleDataChunkCursor;
 	friend class PartitionedTupleData;
 
 public:
@@ -196,6 +203,8 @@ public:
 	//! Initializes a Scan state for scanning a subset of the columns
 	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Positions a freshly initialized scan so that the next Scan reads the chunk at the given position
+	void SeekScan(TupleDataScanState &state, const TupleDataChunkPosition &position) const;
 	//! Initialize a parallel scan over the tuple data collection over all columns
 	void InitializeScan(TupleDataParallelScanState &state,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;

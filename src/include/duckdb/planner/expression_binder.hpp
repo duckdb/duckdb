@@ -154,6 +154,11 @@ public:
 
 	//! Whether this scope groups by the given expression, i.e. whether a reference to it resolves to a group
 	virtual bool MatchesGroup(ParsedExpression &expr);
+	//! Whether this scope groups by the given expression and the bound group contains no subquery - the scopes
+	//! a subquery resolves in are only known once bound, e.g. when it is hidden in a macro
+	virtual bool MatchesGroupWithoutSubquery(ParsedExpression &expr);
+	//! Whether this scope groups by an expression other than a plain column reference
+	virtual bool HasCompoundGroups();
 
 	//! Whether the name matches a select-list alias of this scope. Such a scope owns the name even
 	//! though qualification cannot resolve it, and it is the one that reports any error.
@@ -180,6 +185,14 @@ public:
 	//! arguments resolves a column. Invalid when no argument resolves a column at or beyond `start` -
 	//! at `start == 0` that pins a constant-only aggregate to the scope it appears in.
 	optional_idx ResolveAggregateOwner(FunctionExpression &aggregate, idx_t start);
+	//! The innermost scope at or beyond `start` in which any column of the expression resolves
+	optional_idx ResolveExpressionOwner(ParsedExpression &expr, idx_t start);
+	//! The innermost scope at or beyond `start` in which any of the columns resolves
+	optional_idx ResolveOwner(vector<reference<ColumnRefExpression>> &columns, idx_t start);
+	//! The enclosing scope that owns all of the expression's columns and groups by the expression, if any
+	optional_idx ResolveOuterGroupOwner(ParsedExpression &expr);
+	//! Bind an expression as a reference to the group of the enclosing scope `owner`
+	BindResult BindGroupInEnclosingScope(unique_ptr<ParsedExpression> &expr_ptr, idx_t owner, idx_t depth);
 	//! The innermost scope at or beyond `start` whose groups all of the expressions match
 	optional_idx ResolveOuterGroup(vector<reference<ParsedExpression>> &expressions, idx_t start);
 	//! Merge the error of a newly probed scope into the error accumulated over the previous ones,

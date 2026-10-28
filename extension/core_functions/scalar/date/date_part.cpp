@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 
@@ -2539,12 +2540,23 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	return operator_set;
 }
 
+//! timezone_hour and timezone_minute throw on every DATE and INTERVAL, but not on the other types
+static ScalarFunctionSet SetDateAndIntervalFallible(ScalarFunctionSet set) {
+	set.ApplyToFunctions([](ScalarFunction &function) {
+		auto type = function.GetSignature().GetParameter(0).GetType().id();
+		if (type == LogicalTypeId::DATE || type == LogicalTypeId::INTERVAL) {
+			function.SetFallible();
+		}
+	});
+	return set;
+}
+
 ScalarFunctionSet TimezoneHourFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneHourOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneHourOperator>());
 }
 
 ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneMinuteOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneMinuteOperator>());
 }
 
 ScalarFunctionSet EpochFun::GetFunctions() {
@@ -2564,10 +2576,11 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	tstz_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ);
 	operator_set.AddFunction(tstz_fun);
 	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
-	ScalarFunction tsns_fun({}, LogicalType::BIGINT, tsns_func);
+	auto tsns_stats = StatisticsPropagator::PropagateFiniteMonotoneBounds;
+	ScalarFunction tsns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tsns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_NS);
 	operator_set.AddFunction(tsns_fun);
-	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func);
+	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tstz_ns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ_NS);
 	operator_set.AddFunction(tstz_ns_fun);
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
@@ -2697,6 +2710,7 @@ ScalarFunctionSet LastDayFun::GetFunctions() {
 	last_day.AddFunction(ts_fun);
 	last_day.SetFallible();
 	last_day.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	last_day.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 	return last_day;
 }
 

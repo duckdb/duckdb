@@ -247,7 +247,9 @@ void ClientContext::ApplyInvalidationPolicy(const ErrorData &error) {
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
-	if (invalidates_transaction && HasActiveTransaction()) {
+	// a statement issued while CONNECT-ed that did not run locally is not part of the local transaction
+	const bool outside_local_transaction = active_query ? active_query->outside_local_transaction : is_connected;
+	if (invalidates_transaction && HasActiveTransaction() && !outside_local_transaction) {
 		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 	}
 }
@@ -502,11 +504,11 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(std::move(plan));
 
-		ColumnBindingResolver resolver;
 		LogicalPlanVerifier::Verify(*this, *plan);
-		resolver.VisitOperator(*plan);
-
+		// the resolver checks the column references against the operator types, which the optimizer leaves stale
 		plan->ResolveOperatorTypes();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
 	});
 	return plan;
 }
@@ -750,6 +752,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
                                                        Retention retention) {
 	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
 	// the normal pipeline. No recursion — the rewrite goes through SubmitStatementInternal, not back here.
+	bool outside_local_transaction = false;
 	if (is_connected) {
 		if (!IsConnectControlStatement(statement->type)) {
 			// Parameterized prepared statements would need parameter substitution we don't do in v0 — reject.
@@ -781,6 +784,9 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
 			statement = std::move(rewritten);
+			// it shares the transaction the local one holds on the connected database, if there is one
+			outside_local_transaction =
+			    !transaction.HasActiveTransaction() || !MetaTransaction::Get(*this).TryGetTransaction(*live);
 			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
 		}
@@ -825,6 +831,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		}
 		return ErrorResult<QueryResult>(std::move(error), query);
 	}
+	active_query->outside_local_transaction = outside_local_transaction;
 
 	unique_ptr<QueryResult> handle;
 	unique_ptr<QueryResult> result;
@@ -1124,6 +1131,8 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                                       const QueryParameters &parameters, bool verify,
                                                       Retention retention) {
+	// before anything that can fail, so a failed statement never reports the previous one's total
+	QueryProfiler::Get(*this).ResetBytesScanned();
 	return SubmitStatement(lock, std::move(statement), parameters, verify, retention);
 }
 

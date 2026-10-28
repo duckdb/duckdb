@@ -283,12 +283,24 @@ profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
 	return query_metrics.GetLiveMetrics();
 }
 
-void QueryProfiler::TrackBytesRead(const idx_t amount) {
-	query_metrics.UpdateBytesRead(amount);
+void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesRead(amount, elapsed_us);
 }
 
-void QueryProfiler::TrackBytesWritten(const idx_t amount) {
-	query_metrics.UpdateBytesWritten(amount);
+void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesWritten(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
+	query_metrics.UpdateBytesSpilled(amount);
+}
+
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
+void QueryProfiler::ResetBytesScanned() {
+	query_metrics.bytes_scanned = 0;
 }
 
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
@@ -321,6 +333,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
@@ -479,6 +495,8 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	bytes_scanned += other.bytes_scanned;
+	bytes_scanned_reported = bytes_scanned_reported || other.bytes_scanned_reported;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -778,6 +796,10 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
 	}
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN &&
+	    bytes_scanned_reported) {
+		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
+	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["total_row_groups_to_scan"] = Value::UBIGINT(total_row_groups_to_scan);
@@ -966,8 +988,13 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 
 	emit("total_memory_allocated", "system.total_memory_allocated");
 	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_write_operations", "io.total_write_operations");
 	emit("total_bytes_read", "io.total_bytes_read");
+	emit("total_read_operations", "io.total_read_operations");
+	emit("total_write_time", "io.total_write_time");
+	emit("total_read_time", "io.total_read_time");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("total_bytes_spilled", "system.total_bytes_spilled");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
 	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 
@@ -1123,6 +1150,19 @@ void QueryProfiler::Print() {
 	PrintProfilerOutput(renderer.get());
 }
 
+static bool HasScanWithoutBytesScanned(ProfilingNode &node) {
+	auto &metrics = node.GetOperatorMetrics();
+	if (metrics.operator_type == PhysicalOperatorType::TABLE_SCAN && !metrics.bytes_scanned_reported) {
+		return true;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		if (HasScanWithoutBytesScanned(*node.GetChild(i))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
 	result.Accumulate(root.GetOperatorMetrics());
@@ -1178,6 +1218,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		// left out if a scan doesn't count the bytes it scans, as the total would leave that scan out
+		if (!HasScanWithoutBytesScanned(*root)) {
+			metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
+		}
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;
