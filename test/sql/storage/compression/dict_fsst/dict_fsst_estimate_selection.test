@@ -5,8 +5,9 @@
 statement ok
 SET threads = 1;
 
+# DICT_FSST needs storage v1.3.0, so the version is explicit and does not depend on the test config
 statement ok
-ATTACH '{TEST_DIR}/dict_fsst_estimate_selection.db' AS db (BLOCK_SIZE 16384);
+ATTACH '{TEST_DIR}/dict_fsst_estimate_selection.db' AS db (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.3.0');
 
 statement ok
 USE db;
