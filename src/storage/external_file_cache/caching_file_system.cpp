@@ -311,7 +311,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p), validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(),
                                                                                caching_file_system_p.db)),
-      can_use_shared_caches(!path_p.HasFileSecret()), cached_file(nullptr), position(0) {
+      can_use_shared_caches(!path_p.HasSecretName()), cached_file(nullptr), position(0) {
 	cached_file = GetCachedFile();
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file

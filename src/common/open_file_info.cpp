@@ -149,26 +149,26 @@ bool ExtendedOpenFileInfo::TryGetOption(const string &name, timestamp_t &result)
 	return true;
 }
 
-bool ExtendedOpenFileInfo::TryGetFileSecret(string &name) const {
-	return TryGetOption(FILE_SECRET_OPTION, name);
+bool ExtendedOpenFileInfo::TryGetSecretName(string &name) const {
+	return TryGetOption(SECRET_OPTION, name);
 }
 
-string OpenFileInfo::GetFileSecret() const {
+string OpenFileInfo::GetSecretName() const {
 	string name;
 	if (extended_info) {
-		extended_info->TryGetFileSecret(name);
+		extended_info->TryGetSecretName(name);
 	}
 	return name;
 }
 
-OpenFileInfo OpenFileInfo::WithFileSecret(const string &name) const {
-	if (name.empty() || HasFileSecret()) {
+OpenFileInfo OpenFileInfo::WithSecretName(const string &name) const {
+	if (name.empty() || HasSecretName()) {
 		return *this;
 	}
 	OpenFileInfo result(*this);
 	result.extended_info =
 	    extended_info ? make_shared_ptr<ExtendedOpenFileInfo>(*extended_info) : make_shared_ptr<ExtendedOpenFileInfo>();
-	result.extended_info->options[ExtendedOpenFileInfo::FILE_SECRET_OPTION] = Value(name);
+	result.extended_info->options[ExtendedOpenFileInfo::SECRET_OPTION] = Value(name);
 	return result;
 }
 

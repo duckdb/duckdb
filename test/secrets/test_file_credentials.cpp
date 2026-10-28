@@ -85,8 +85,8 @@ struct MemoryFileHandle : public FileHandle {
 };
 
 //! Serves files from memory under mem://, and records every open, read and glob with the key id of the secret the
-//! secret reader chose for it. A glob lists the files under the pattern's prefix, each with the glob's file secret,
-//! or with the one `listing_secrets` gives its pattern, as a catalog lists a table
+//! secret reader chose for it. A glob lists the files under the pattern's prefix, each with the glob's ephemeral
+//! secret, or with the one `listing_secrets` gives its pattern, as a catalog lists a table
 class MemoryFileSystem : public FileSystem {
 public:
 	duckdb::map<string, string> files;
@@ -197,15 +197,15 @@ protected:
 	}
 	unique_ptr<MultiFileList> GlobFilesExtended(const string &pattern, const FileGlobInput &input,
 	                                            optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info(OpenFileInfo(pattern).WithFileSecret(input.file_secret));
+		FileOpenerInfo info(OpenFileInfo(pattern).WithSecretName(input.secret_name));
 		string key_id;
 		string region;
 		ReadSecret(opener, info, key_id, region);
 		Record("glob", pattern, key_id, region);
-		auto file_secret = input.file_secret;
+		auto secret_name = input.secret_name;
 		auto listed_with = listing_secrets.find(listing_secrets.count(pattern) ? pattern : "");
 		if (listed_with != listing_secrets.end()) {
-			file_secret = listed_with->second;
+			secret_name = listed_with->second;
 		}
 		auto star = pattern.find('*');
 		auto listed_prefix = pattern.substr(0, star);
@@ -221,8 +221,8 @@ protected:
 			}
 			OpenFileInfo listed(path);
 			listed.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-			if (!file_secret.empty()) {
-				listed.extended_info->options[ExtendedOpenFileInfo::FILE_SECRET_OPTION] = Value(file_secret);
+			if (!secret_name.empty()) {
+				listed.extended_info->options[ExtendedOpenFileInfo::SECRET_OPTION] = Value(secret_name);
 			}
 			if (listing_metadata) {
 				listed.extended_info->options["last_modified"] = Value::TIMESTAMP(Timestamp::FromEpochSeconds(1000));
@@ -263,7 +263,7 @@ string ReadLocalFile(const string &path) {
 }
 
 //! A database with the test secret type, mem:// files, and a secret matched to every mem:// path, which a read that
-//! loses a file's file secret would use
+//! loses a file's ephemeral secret would use
 struct CredentialsFixture {
 	CredentialsFixture() : db(nullptr), con(db) {
 		RegisterTestSecretType(*db.instance);
@@ -278,38 +278,38 @@ struct CredentialsFixture {
 	ClientContext &Context() {
 		return *con.context;
 	}
-	//! Registers a file secret for mem://bucket/table/ in the transaction of `context`, whose vends return `key_id`
-	//! and count in `vends`; returns its name
-	string FileSecret(ClientContext &context, const string &key_id, const char *type = TEST_TYPE) {
-		return SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/",
-		                                                      [this, key_id, type](ClientContext &) {
-			                                                      vends++;
-			                                                      return TestSecret(key_id, type);
-		                                                      });
+	//! Registers an ephemeral secret for mem://bucket/table/ in the transaction of `context`, whose vends return
+	//! `key_id` and count in `vends`; returns its name
+	string EphemeralSecret(ClientContext &context, const string &key_id, const char *type = TEST_TYPE) {
+		return SecretManager::Get(context).RegisterEphemeralSecret(context, "mem://bucket/table/",
+		                                                           [this, key_id, type](ClientContext &) {
+			                                                           vends++;
+			                                                           return TestSecret(key_id, type);
+		                                                           });
 	}
-	string FileSecret(const string &key_id, const char *type = TEST_TYPE) {
-		return FileSecret(Context(), key_id, type);
+	string EphemeralSecret(const string &key_id, const char *type = TEST_TYPE) {
+		return EphemeralSecret(Context(), key_id, type);
 	}
-	static shared_ptr<SecretEntry> GetFileSecret(ClientContext &context, const string &name, const string &path) {
-		return SecretManager::Get(context).GetFileSecret(context, name, path);
+	static shared_ptr<SecretEntry> GetEphemeralSecret(ClientContext &context, const string &name, const string &path) {
+		return SecretManager::Get(context).GetEphemeralSecret(context, name, path);
 	}
 	static string KeyOf(const shared_ptr<SecretEntry> &entry) {
 		return entry->secret->Cast<KeyValueSecret>().TryGetValue("key_id").ToString();
 	}
 	static OpenFileInfo File(const string &path, const string &name) {
-		return OpenFileInfo(path).WithFileSecret(name);
+		return OpenFileInfo(path).WithSecretName(name);
 	}
 	//! Open `file` through the client's file system and return the key id the open used
 	string OpenKey(const OpenFileInfo &file) {
 		auto handle = FileSystem::GetFileSystem(Context()).OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		return handle->Cast<MemoryFileHandle>().key_id;
 	}
-	//! Runs `scan` in a transaction with a file secret of key `key_id` on every listed file, and the external file
-	//! cache on; returns the row count
+	//! Runs `scan` in a transaction with an ephemeral secret of key `key_id` on every listed file, and the external
+	//! file cache on; returns the row count
 	idx_t ScanWith(const string &scan, const string &key_id = "table-key") {
 		REQUIRE_NO_FAIL(con.Query("SET enable_external_file_cache = true"));
 		con.BeginTransaction();
-		fs->listing_secrets = {{"", FileSecret(key_id)}};
+		fs->listing_secrets = {{"", EphemeralSecret(key_id)}};
 		fs->ClearAccesses();
 		auto result = con.Query(scan);
 		fs->listing_secrets.clear();
@@ -365,11 +365,11 @@ struct CredentialsFixture {
 	static string Scan(const string &format, const string &glob) {
 		return "SELECT sum(i) FROM read_" + format + "('" + glob + "')";
 	}
-	//! Runs the scan of `glob` on `c`, its files listed with a file secret of `c` for `key_id`; returns how often it
-	//! opened and read them
+	//! Runs the scan of `glob` on `c`, its files listed with an ephemeral secret of `c` for `key_id`; returns how often
+	//! it opened and read them
 	std::pair<idx_t, idx_t> ScanAlone(Connection &c, const string &format, const string &glob, const string &key_id) {
 		c.BeginTransaction();
-		fs->listing_secrets = {{glob, FileSecret(*c.context, key_id)}};
+		fs->listing_secrets = {{glob, EphemeralSecret(*c.context, key_id)}};
 		fs->ClearAccesses();
 		auto result = c.Query(Scan(format, glob));
 		fs->listing_secrets.clear();
@@ -405,25 +405,25 @@ void RequireThrowsWith(const std::function<void()> &call, const string &message)
 
 } // namespace
 
-TEST_CASE("An open with a file secret uses it, and no secret or setting chosen by path", "[file_credentials]") {
+TEST_CASE("An open with an ephemeral secret uses it, and no secret or setting chosen by path", "[file_credentials]") {
 	CredentialsFixture f;
 	REQUIRE_NO_FAIL(f.con.Query("SET file_credentials_test_region = 'setting-region'"));
 	f.con.BeginTransaction();
-	auto name = f.FileSecret("table-key");
+	auto name = f.EphemeralSecret("table-key");
 	REQUIRE(f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", name)) == "table-key");
-	// the file secret sets no region: neither the secret matched to the path nor the setting fills it
+	// the ephemeral secret sets no region: neither the secret matched to the path nor the setting fills it
 	REQUIRE(f.fs->Accesses("open")[0].region == NO_KEY);
-	// the same path without a file secret reads with the secret matched to it
+	// the same path without an ephemeral secret reads with the secret matched to it
 	REQUIRE(f.OpenKey(OpenFileInfo("mem://bucket/table/a.bin")) == "path-key");
 	REQUIRE(f.fs->Accesses("open")[1].region == "path-region");
 	f.con.Rollback();
 }
 
-TEST_CASE("A file secret of another type fails the read, and a reader of several types takes any of them",
+TEST_CASE("An ephemeral secret of another type fails the read, and a reader of several types takes any of them",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.con.BeginTransaction();
-	auto name = f.FileSecret("other-key", OTHER_TYPE);
+	auto name = f.EphemeralSecret("other-key", OTHER_TYPE);
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", name)); },
 	                  "is a secret of type \"file_credentials_test_other\", which this read does not take");
 	ClientContextFileOpener opener(f.Context());
@@ -434,37 +434,37 @@ TEST_CASE("A file secret of another type fails the read, and a reader of several
 	f.con.Rollback();
 }
 
-TEST_CASE("A glob with a file secret lists with it, and each file it lists carries it", "[file_credentials]") {
+TEST_CASE("A glob with an ephemeral secret lists with it, and each file it lists carries it", "[file_credentials]") {
 	CredentialsFixture f;
 	f.fs->files["mem://bucket/table/dir/x.parquet"] = "x";
 	f.con.BeginTransaction();
-	auto name = f.FileSecret("table-key");
+	auto name = f.EphemeralSecret("table-key");
 	auto &client_fs = FileSystem::GetFileSystem(f.Context());
 	FileGlobInput input(FileGlobOptions::DISALLOW_EMPTY);
-	input.file_secret = name;
+	input.secret_name = name;
 	auto files = client_fs.GlobFiles("mem://bucket/table/*.bin", input);
 	REQUIRE(files.size() == 2);
 	REQUIRE(f.fs->Accesses("glob")[0].key_id == "table-key");
 	for (auto &file : files) {
-		REQUIRE(file.GetFileSecret() == name);
+		REQUIRE(file.GetSecretName() == name);
 		REQUIRE(f.OpenKey(file) == "table-key");
 	}
-	// WithFileSecret copies the extended information, and keeps the file secret a file has
-	auto own = f.FileSecret("own-key");
+	// WithSecretName copies the extended information, and keeps the ephemeral secret a file has
+	auto own = f.EphemeralSecret("own-key");
 	OpenFileInfo given("mem://bucket/table/a.bin");
 	given.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	given.extended_info->options["file_size"] = Value::UBIGINT(3);
-	auto with = given.WithFileSecret(name);
+	auto with = given.WithSecretName(name);
 	REQUIRE(with.extended_info->options.count("file_size") == 1);
-	REQUIRE(given.GetFileSecret().empty());
-	REQUIRE(with.WithFileSecret(own).GetFileSecret() == name);
-	REQUIRE_FALSE(OpenFileInfo("mem://bucket/table/a.bin").WithFileSecret("").extended_info);
+	REQUIRE(given.GetSecretName().empty());
+	REQUIRE(with.WithSecretName(own).GetSecretName() == name);
+	REQUIRE_FALSE(OpenFileInfo("mem://bucket/table/a.bin").WithSecretName("").extended_info);
 	// the name is an option of the file, so it also travels in a file struct
-	REQUIRE(OpenFileInfo::FromValue(with.ToValue(), Identifier("test")).GetFileSecret() == name);
+	REQUIRE(OpenFileInfo::FromValue(with.ToValue(), Identifier("test")).GetSecretName() == name);
 	f.con.Rollback();
 }
 
-TEST_CASE("A read with a file secret neither fills nor is served from the external file cache or the Parquet "
+TEST_CASE("A read with an ephemeral secret neither fills nor is served from the external file cache or the Parquet "
           "metadata cache",
           "[file_credentials]") {
 	CredentialsFixture f;
@@ -498,7 +498,7 @@ TEST_CASE("A read with a file secret neither fills nor is served from the extern
 	f.fs->ClearAccesses();
 	REQUIRE_NO_FAIL(f.con.Query(scan));
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
-	// a read with a file secret reads the files itself, as often as when nothing was cached
+	// a read with an ephemeral secret reads the files itself, as often as when nothing was cached
 	f.ScanWith(scan);
 	REQUIRE(f.fs->CountKey("read", "table-key") == uncached_reads);
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
@@ -508,7 +508,7 @@ TEST_CASE("A read with a file secret neither fills nor is served from the extern
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
 }
 
-TEST_CASE("read_csv, read_json and read_parquet open and read every listed file with its file secret",
+TEST_CASE("read_csv, read_json and read_parquet open and read every listed file with its ephemeral secret",
           "[file_credentials]") {
 	CredentialsFixture f;
 	string csv = "i\n";
@@ -560,7 +560,8 @@ TEST_CASE("read_csv, read_json and read_parquet open and read every listed file 
 	REQUIRE(f.CachedEntries("mem://bucket/table/t1.csv") == 0);
 }
 
-TEST_CASE("A file secret serves only its client and its scope, until its transaction ends", "[file_credentials]") {
+TEST_CASE("An ephemeral secret serves only its client and its scope, until its transaction ends",
+          "[file_credentials]") {
 	CredentialsFixture f;
 	Connection other(f.db);
 	string outcome;
@@ -576,21 +577,22 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	const string path = "mem://bucket/table/a.bin";
 	auto &context = f.Context();
 	REQUIRE_NO_FAIL(f.con.Query("BEGIN"));
-	auto name = f.FileSecret("table-key");
-	REQUIRE(CredentialsFixture::GetFileSecret(context, name, path));
+	auto name = f.EphemeralSecret("table-key");
+	REQUIRE(CredentialsFixture::GetEphemeralSecret(context, name, path));
 	for (auto &outside : {"mem://bucket/other/c.bin", "mem://bucket/table", "mem://bucket/table_archive/a.bin",
 	                      "mem://bucket/table/../other/c.bin", "mem://bucket/table/x/..", "mem://bucket/table/..\\c"}) {
 		INFO(outside);
-		RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, outside); }, "cannot be used for");
+		RequireThrowsWith([&]() { CredentialsFixture::GetEphemeralSecret(context, name, outside); },
+		                  "cannot be used for");
 	}
-	// another connection of the database, outside a transaction and in one with file secrets of its own
+	// another connection of the database, outside a transaction and in one with ephemeral secrets of its own
 	auto open_on_other = [&]() {
 		FileSystem::GetFileSystem(*other.context)
 		    .OpenFile(CredentialsFixture::File(path, name), FileFlags::FILE_FLAGS_READ);
 	};
 	RequireThrowsWith(open_on_other, "is not available");
 	other.BeginTransaction();
-	f.FileSecret(*other.context, "other-key");
+	f.EphemeralSecret(*other.context, "other-key");
 	RequireThrowsWith(open_on_other, "is not available");
 	other.Rollback();
 	// an opener without a client
@@ -601,58 +603,59 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	if (context.transaction.HasActiveTransaction()) {
 		REQUIRE_NO_FAIL(f.con.Query("ROLLBACK"));
 	}
-	RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, path); }, "is not available");
-	REQUIRE_FALSE(SecretManager::Get(context).RefreshFileSecret(context, name));
-	// a later transaction's file secrets take other names, and an open that names it fails rather than falling back
-	// to the secret matched to the path
+	RequireThrowsWith([&]() { CredentialsFixture::GetEphemeralSecret(context, name, path); }, "is not available");
+	REQUIRE_FALSE(SecretManager::Get(context).RefreshEphemeralSecret(context, name));
+	// a later transaction's ephemeral secrets take other names, and an open that names it fails rather than falling
+	// back to the secret matched to the path
 	f.con.BeginTransaction();
-	REQUIRE(f.FileSecret("later-key") != name);
+	REQUIRE(f.EphemeralSecret("later-key") != name);
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File(path, name)); }, "is not available");
 	f.con.Rollback();
-	// file secrets for a transaction are registered only in one
-	RequireThrowsWith([&]() { f.FileSecret("table-key"); }, "an active transaction");
+	// ephemeral secrets for a transaction are registered only in one
+	RequireThrowsWith([&]() { f.EphemeralSecret("table-key"); }, "an active transaction");
 }
 
-TEST_CASE("A file secret for the connection serves it in and outside transactions, and no other connection",
+TEST_CASE("An ephemeral secret for the connection serves it in and outside transactions, and no other connection",
           "[file_credentials]") {
 	CredentialsFixture f;
 	Connection other(f.db);
 	auto &context = f.Context();
 	const string path = "mem://bucket/table/a.bin";
 	auto for_connection = [&](const string &key_id) {
-		return SecretManager::Get(context).RegisterFileSecret(
+		return SecretManager::Get(context).RegisterEphemeralSecret(
 		    context, "mem://bucket/table/",
 		    [&f, key_id](ClientContext &) {
 			    f.vends++;
 			    return TestSecret(key_id);
 		    },
-		    FileSecretLifetime::CONNECTION);
+		    EphemeralSecretLifetime::CONNECTION);
 	};
 	auto held = make_shared_ptr<idx_t>(0);
 	// registered outside a transaction, and in one that rolls back
 	auto name = for_connection("connection-key");
 	f.con.BeginTransaction();
 	auto in_transaction = for_connection("rolled-back-key");
-	SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [held](ClientContext &) {
+	SecretManager::Get(context).RegisterEphemeralSecret(context, "mem://bucket/table/", [held](ClientContext &) {
 		return TestSecret("table-key#" + to_string(*held));
 	});
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
 	f.con.Rollback();
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, in_transaction)) == "rolled-back-key");
-	// the next registration drops the file secrets of the transaction that ended, and keeps those of the connection
+	// the next registration drops the ephemeral secrets of the transaction that ended, and keeps those of the
+	// connection
 	REQUIRE(held.use_count() == 2);
 	f.con.BeginTransaction();
-	f.FileSecret("later-key");
+	f.EphemeralSecret("later-key");
 	REQUIRE(held.use_count() == 1);
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, name)) == "connection-key");
 	f.con.Commit();
 	// each vended once; a refresh needs no transaction
 	REQUIRE(f.vends == 2);
-	REQUIRE(SecretManager::Get(context).RefreshFileSecret(context, name));
+	REQUIRE(SecretManager::Get(context).RefreshEphemeralSecret(context, name));
 	REQUIRE(f.vends == 3);
 	// it still serves only its scope, and only its connection
-	RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, "mem://bucket/other/c.bin"); },
+	RequireThrowsWith([&]() { CredentialsFixture::GetEphemeralSecret(context, name, "mem://bucket/other/c.bin"); },
 	                  "cannot be used for");
 	RequireThrowsWith(
 	    [&]() {
@@ -662,7 +665,7 @@ TEST_CASE("A file secret for the connection serves it in and outside transaction
 	    "is not available");
 }
 
-TEST_CASE("Only a statement given the name of a file secret reads with it, and none can match, list or drop it",
+TEST_CASE("Only a statement given the name of an ephemeral secret reads with it, and none can match, list or drop it",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.fs->files["mem://bucket/table/t1.csv"] = "i\n1\n";
@@ -673,18 +676,18 @@ TEST_CASE("Only a statement given the name of a file secret reads with it, and n
 		                   "'}])");
 	};
 	f.con.BeginTransaction();
-	auto name = f.FileSecret("table-key");
+	auto name = f.EphemeralSecret("table-key");
 	// 128 random bits, as hex digits
 	REQUIRE(name.size() == 32);
 	REQUIRE(name.find_first_not_of("0123456789abcdef") == string::npos);
-	REQUIRE(f.FileSecret("table-key") != name);
+	REQUIRE(f.EphemeralSecret("table-key") != name);
 	auto result = f.con.Query("SELECT name FROM which_secret('mem://bucket/table/t1.csv', 'file_credentials_test')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
 	result = f.con.Query("SELECT string_agg(name, ',') FROM duckdb_secrets()");
 	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
 	REQUIRE_FALSE(
 	    SecretManager::Get(context).GetSecretByName(CatalogTransaction::GetSystemCatalogTransaction(context), name));
-	// a file struct that names the file secret reads the file with it
+	// a file struct that names the ephemeral secret reads the file with it
 	result = read_with(name);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(f.fs->Accesses("open").size() > 0);
@@ -693,8 +696,8 @@ TEST_CASE("Only a statement given the name of a file secret reads with it, and n
 	RequireThrowsWith([&]() { f.con.Query("DROP SECRET \"" + name + "\" FROM transaction")->ThrowError(); },
 	                  "non-existent transaction secret");
 	f.con.Rollback();
-	// one that names no file secret of its transaction fails, rather than reading with the secret matched to the path,
-	// and the error does not repeat the name
+	// one that names no ephemeral secret of its transaction fails, rather than reading with the secret matched to the
+	// path, and the error does not repeat the name
 	for (auto &other : {name, string(32, '0')}) {
 		INFO(other);
 		result = read_with(other);
@@ -705,12 +708,12 @@ TEST_CASE("Only a statement given the name of a file secret reads with it, and n
 	}
 }
 
-TEST_CASE("Opens of one path with two file secrets each use their own, also between opens by path",
+TEST_CASE("Opens of one path with two ephemeral secrets each use their own, also between opens by path",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.con.BeginTransaction();
-	auto a = f.FileSecret("key-a");
-	auto b = f.FileSecret("key-b");
+	auto a = f.EphemeralSecret("key-a");
+	auto b = f.EphemeralSecret("key-b");
 	const string path = "mem://bucket/table/a.bin";
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, a)) == "key-a");
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, b)) == "key-b");
@@ -720,7 +723,8 @@ TEST_CASE("Opens of one path with two file secrets each use their own, also betw
 	f.con.Rollback();
 }
 
-TEST_CASE("Two scans of the same files in one query each read them with their own file secret", "[file_credentials]") {
+TEST_CASE("Two scans of the same files in one query each read them with their own ephemeral secret",
+          "[file_credentials]") {
 	CredentialsFixture f;
 	f.EnableCaches(f.con);
 	for (auto &format : f.Formats()) {
@@ -732,7 +736,7 @@ TEST_CASE("Two scans of the same files in one query each read them with their ow
 		auto alone_b = f.ScanAlone(f.con, format, glob_b, "key-b");
 		REQUIRE(alone_a.second > 0);
 		f.con.BeginTransaction();
-		f.fs->listing_secrets = {{glob_a, f.FileSecret("key-a")}, {glob_b, f.FileSecret("key-b")}};
+		f.fs->listing_secrets = {{glob_a, f.EphemeralSecret("key-a")}, {glob_b, f.EphemeralSecret("key-b")}};
 		f.fs->ClearAccesses();
 		auto result = f.con.Query("SELECT (" + CredentialsFixture::Scan(format, glob_a) + "), (" +
 		                          CredentialsFixture::Scan(format, glob_b) + ")");
@@ -754,7 +758,7 @@ TEST_CASE("Two scans of the same files in one query each read them with their ow
 	}
 }
 
-TEST_CASE("Two connections reading the same files at once each read them with their own file secret",
+TEST_CASE("Two connections reading the same files at once each read them with their own ephemeral secret",
           "[file_credentials]") {
 	CredentialsFixture f;
 	Connection other(f.db);
@@ -770,8 +774,8 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 		auto alone_b = f.ScanAlone(other, format, CredentialsFixture::Glob(format, "t"), "key-b");
 		f.con.BeginTransaction();
 		other.BeginTransaction();
-		f.fs->listing_secrets = {{CredentialsFixture::Glob(format, ""), f.FileSecret("key-a")},
-		                         {CredentialsFixture::Glob(format, "t"), f.FileSecret(*other.context, "key-b")}};
+		f.fs->listing_secrets = {{CredentialsFixture::Glob(format, ""), f.EphemeralSecret("key-a")},
+		                         {CredentialsFixture::Glob(format, "t"), f.EphemeralSecret(*other.context, "key-b")}};
 		f.fs->ClearAccesses();
 		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_a;
 		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_b;
@@ -796,18 +800,18 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 				REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
 			}
 		}
-		// a read that took the other connection's file secret would fail; one that lost its own would read by path
+		// a read that took the other connection's ephemeral secret would fail; one that lost its own would read by path
 		f.RequireUses("key-a", alone_a.first * RUNS, alone_a.second * RUNS);
 		f.RequireUses("key-b", alone_b.first * RUNS, alone_b.second * RUNS);
 		f.RequireUses("path-key", 0, 0);
 	}
 }
 
-TEST_CASE("A scan with a file secret and a read by path of the same files both succeed, each with its own key",
+TEST_CASE("A scan with an ephemeral secret and a read by path of the same files both succeed, each with its own key",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.EnableCaches(f.con);
-	// the scan with the file secret ("secret") and the read by path ("path"), in this order
+	// the scan with the ephemeral secret ("secret") and the read by path ("path"), in this order
 	vector<string> order;
 	bool one_query = true;
 	bool cached_by_path = false;
@@ -834,7 +838,7 @@ TEST_CASE("A scan with a file secret and a read by path of the same files both s
 		f.WriteFiles(format);
 		auto secret_glob = CredentialsFixture::Glob(format, "");
 		auto path_glob = CredentialsFixture::Glob(format, "t");
-		// a scan with a file secret caches nothing, so the caches are still empty after it
+		// a scan with an ephemeral secret caches nothing, so the caches are still empty after it
 		auto alone = f.ScanAlone(f.con, format, secret_glob, "key-a");
 		if (cached_by_path) {
 			REQUIRE_NO_FAIL(f.con.Query(CredentialsFixture::Scan(format, path_glob)));
@@ -848,7 +852,7 @@ TEST_CASE("A scan with a file secret and a read by path of the same files both s
 			statements = {"SELECT (" + scans[0] + "), (" + scans[1] + ")"};
 		}
 		f.con.BeginTransaction();
-		f.fs->listing_secrets = {{secret_glob, f.FileSecret("key-a")}};
+		f.fs->listing_secrets = {{secret_glob, f.EphemeralSecret("key-a")}};
 		f.fs->ClearAccesses();
 		for (auto &statement : statements) {
 			INFO(statement);
@@ -880,22 +884,24 @@ TEST_CASE("A scan with a file secret and a read by path of the same files both s
 	}
 }
 
-TEST_CASE("A file secret vends on first use, once, also when several threads use it first", "[file_credentials]") {
+TEST_CASE("An ephemeral secret vends on first use, once, also when several threads use it first",
+          "[file_credentials]") {
 	CredentialsFixture f;
 	auto &context = f.Context();
 	f.con.BeginTransaction();
-	auto name = SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [&](ClientContext &) {
-		f.vends++;
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-		return TestSecret("table-key");
-	});
+	auto name =
+	    SecretManager::Get(context).RegisterEphemeralSecret(context, "mem://bucket/table/", [&](ClientContext &) {
+		    f.vends++;
+		    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		    return TestSecret("table-key");
+	    });
 	REQUIRE(f.vends == 0);
 	vector<std::thread> threads;
 	std::atomic<idx_t> served {0};
 	for (idx_t i = 0; i < 8; i++) {
 		threads.emplace_back([&]() {
 			if (CredentialsFixture::KeyOf(
-			        CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin")) == "table-key") {
+			        CredentialsFixture::GetEphemeralSecret(context, name, "mem://bucket/table/a.bin")) == "table-key") {
 				served++;
 			}
 		});
@@ -914,23 +920,25 @@ TEST_CASE("A failed vend throws and the next use vends again; a refresh replaces
 	auto &context = f.Context();
 	f.con.BeginTransaction();
 	bool fail = true;
-	auto name = SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [&](ClientContext &) {
-		auto vend = ++f.vends;
-		if (fail) {
-			throw IOException("the vend failed");
-		}
-		return TestSecret("table-key#" + to_string(vend));
-	});
+	auto name =
+	    SecretManager::Get(context).RegisterEphemeralSecret(context, "mem://bucket/table/", [&](ClientContext &) {
+		    auto vend = ++f.vends;
+		    if (fail) {
+			    throw IOException("the vend failed");
+		    }
+		    return TestSecret("table-key#" + to_string(vend));
+	    });
 	auto key = [&]() {
-		return CredentialsFixture::KeyOf(CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin"));
+		return CredentialsFixture::KeyOf(
+		    CredentialsFixture::GetEphemeralSecret(context, name, "mem://bucket/table/a.bin"));
 	};
 	auto refresh = [&]() {
-		return SecretManager::Get(context).RefreshFileSecret(context, name);
+		return SecretManager::Get(context).RefreshEphemeralSecret(context, name);
 	};
 	REQUIRE_THROWS_AS(key(), IOException);
 	fail = false;
 	REQUIRE(key() == "table-key#2");
-	auto before = CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin");
+	auto before = CredentialsFixture::GetEphemeralSecret(context, name, "mem://bucket/table/a.bin");
 	REQUIRE(refresh());
 	REQUIRE(key() == "table-key#3");
 	// a reader of the secret a refresh replaced keeps it

@@ -212,23 +212,24 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 	if (info) {
 		path = info->file_path;
 	}
-	string file_secret;
-	if (info && info->extended_info && info->extended_info->TryGetFileSecret(file_secret)) {
-		// the open names its secret: look up none by path
+	string secret_name;
+	if (info && info->extended_info && info->extended_info->TryGetSecretName(secret_name)) {
+		// the open names its ephemeral secret: look up none by path
 		if (!context) {
-			throw InvalidConfigurationException("The file secret for '%s' is not available without a client", path);
+			throw InvalidConfigurationException("The ephemeral secret for '%s' is not available without a client",
+			                                    path);
 		}
-		secret_entry = SecretManager::Get(*context).GetFileSecret(*context, file_secret, path);
+		secret_entry = SecretManager::Get(*context).GetEphemeralSecret(*context, secret_name, path);
 		auto &type = secret_entry->secret->GetType();
 		for (idx_t i = 0; i < secret_types_len; i++) {
 			if (StringUtil::CIEquals(type.GetIdentifierName(), secret_types[i])) {
 				secret = secret_entry->secret->Cast<KeyValueSecret>();
-				is_file_secret = true;
+				is_ephemeral_secret = true;
 				return;
 			}
 		}
 		throw InvalidConfigurationException(
-		    "The file secret for '%s' is a secret of type %s, which this read does not take", path, type);
+		    "The ephemeral secret for '%s' is a secret of type %s, which this read does not take", path, type);
 	}
 
 	Initialize(secret_types, secret_types_len);
@@ -249,7 +250,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const Identif
 	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
-	if (is_file_secret) {
+	if (is_ephemeral_secret) {
 		// a setting is something the query's caller can change
 		return SettingLookupResult();
 	}

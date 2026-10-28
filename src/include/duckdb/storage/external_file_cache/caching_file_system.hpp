@@ -120,7 +120,7 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! False for a file with a file secret, whose blocks the cache neither keeps nor serves
+	//! False for a file with an ephemeral secret, whose blocks the cache neither keeps nor serves
 	bool can_use_shared_caches;
 	//! Associated cached file.
 	shared_ptr<CachedFile> cached_file;

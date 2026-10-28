@@ -564,13 +564,13 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 
 namespace {
 
-constexpr const char *FILE_SECRET_STATE_KEY = "file_secret_storage";
+constexpr const char *EPHEMERAL_SECRET_STATE_KEY = "ephemeral_secret_storage";
 
-struct FileSecret {
+struct EphemeralSecret {
 	//! The transaction it serves; invalid when it serves the connection
 	optional_idx transaction;
 	string scope;
-	file_secret_vend_t vend;
+	ephemeral_secret_vend_t vend;
 	//! Held while vending, so that concurrent first uses share one vend
 	mutex lock;
 	//! The vended secret. A refresh replaces it; a reader of the previous one keeps that alive
@@ -581,8 +581,9 @@ struct FileSecret {
 	}
 };
 
-//! 128 bits of std::random_device as 32 hex digits, so a statement can name a file secret only when handed the name
-string NewFileSecretName() {
+//! 128 bits of std::random_device as 32 hex digits, so a statement can name an ephemeral secret only when handed the
+//! name
+string NewEphemeralSecretName() {
 	static constexpr const char *HEX_DIGITS = "0123456789abcdef";
 	std::random_device random_device;
 	string name;
@@ -595,33 +596,33 @@ string NewFileSecretName() {
 	return name;
 }
 
-//! The file secrets of a connection, apart from its secrets, so that no lookup by path, listing of secrets or lookup
-//! by name sees them. Every lookup checks the transaction a file secret serves, so no hook has to end it; the first
-//! registration after the transaction ends drops it
-class FileSecretState : public ClientContextState {
+//! The ephemeral secrets of a connection, apart from its secrets, so that no lookup by path, listing of secrets or
+//! lookup by name sees them. Every lookup checks the transaction an ephemeral secret serves, so no hook has to end it;
+//! the first registration after the transaction ends drops it
+class EphemeralSecretState : public ClientContextState {
 public:
-	//! Adds `file_secret` under a new name, and drops those that serve a transaction other than `current`
-	string Register(shared_ptr<FileSecret> file_secret, const optional_idx &current) {
-		auto name = NewFileSecretName();
+	//! Adds `secret` under a new name, and drops those that serve a transaction other than `current`
+	string Register(shared_ptr<EphemeralSecret> secret, const optional_idx &current) {
+		auto name = NewEphemeralSecretName();
 		// destroyed after the lock is released
-		vector<shared_ptr<FileSecret>> ended;
+		vector<shared_ptr<EphemeralSecret>> ended;
 		lock_guard<mutex> guard(lock);
-		for (auto entry = file_secrets.begin(); entry != file_secrets.end();) {
+		for (auto entry = secrets.begin(); entry != secrets.end();) {
 			if (entry->second->Serves(current)) {
 				entry++;
 				continue;
 			}
 			ended.push_back(std::move(entry->second));
-			entry = file_secrets.erase(entry);
+			entry = secrets.erase(entry);
 		}
-		file_secrets.emplace(name, std::move(file_secret));
+		secrets.emplace(name, std::move(secret));
 		return name;
 	}
-	//! The file secret `name`, when it serves `current`
-	shared_ptr<FileSecret> Find(const string &name, const optional_idx &current) {
+	//! The ephemeral secret `name`, when it serves `current`
+	shared_ptr<EphemeralSecret> Find(const string &name, const optional_idx &current) {
 		lock_guard<mutex> guard(lock);
-		auto entry = file_secrets.find(name);
-		if (entry == file_secrets.end() || !entry->second->Serves(current)) {
+		auto entry = secrets.find(name);
+		if (entry == secrets.end() || !entry->second->Serves(current)) {
 			return nullptr;
 		}
 		return entry->second;
@@ -629,7 +630,7 @@ public:
 
 private:
 	mutex lock;
-	unordered_map<string, shared_ptr<FileSecret>> file_secrets;
+	unordered_map<string, shared_ptr<EphemeralSecret>> secrets;
 };
 
 //! The current transaction of `context`; invalid outside one
@@ -640,23 +641,23 @@ optional_idx CurrentTransaction(ClientContext &context) {
 	return MetaTransaction::Get(context).global_transaction_id;
 }
 
-//! The file secret `name` of the connection of `context`, when it serves the current transaction
-shared_ptr<FileSecret> FindFileSecret(ClientContext &context, const string &name) {
-	auto state = context.registered_state->Get<FileSecretState>(FILE_SECRET_STATE_KEY);
+//! The ephemeral secret `name` of the connection of `context`, when it serves the current transaction
+shared_ptr<EphemeralSecret> FindEphemeralSecret(ClientContext &context, const string &name) {
+	auto state = context.registered_state->Get<EphemeralSecretState>(EPHEMERAL_SECRET_STATE_KEY);
 	return state ? state->Find(name, CurrentTransaction(context)) : nullptr;
 }
 
-//! Whether `path` has a ".." segment, which a server may resolve to a path outside a file secret's scope
+//! Whether `path` has a ".." segment, which a server may resolve to a path outside an ephemeral secret's scope
 bool HasParentSegment(const string &path) {
 	return StringUtil::Contains("/" + StringUtil::Replace(path, "\\", "/") + "/", "/../");
 }
 
-shared_ptr<SecretEntry> VendFileSecret(ClientContext &context, const FileSecret &file_secret) {
-	auto secret = file_secret.vend(context);
+shared_ptr<SecretEntry> VendEphemeralSecret(ClientContext &context, const EphemeralSecret &ephemeral_secret) {
+	auto secret = ephemeral_secret.vend(context);
 	if (!secret) {
-		throw InternalException("The file secret of '%s' vended no secret", file_secret.scope);
+		throw InternalException("The ephemeral secret of '%s' vended no secret", ephemeral_secret.scope);
 	}
-	auto serves_transaction = file_secret.transaction.IsValid();
+	auto serves_transaction = ephemeral_secret.transaction.IsValid();
 	auto entry = make_shared_ptr<SecretEntry>(nullptr);
 	entry->secret = secret->Clone();
 	entry->persist_type = serves_transaction ? SecretPersistType::TRANSACTION : SecretPersistType::TEMPORARY;
@@ -667,50 +668,51 @@ shared_ptr<SecretEntry> VendFileSecret(ClientContext &context, const FileSecret 
 
 } // namespace
 
-string SecretManager::RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend,
-                                         FileSecretLifetime lifetime) {
+string SecretManager::RegisterEphemeralSecret(ClientContext &context, string scope, ephemeral_secret_vend_t vend,
+                                              EphemeralSecretLifetime lifetime) {
 	auto current = CurrentTransaction(context);
-	auto serves_transaction = lifetime == FileSecretLifetime::TRANSACTION;
+	auto serves_transaction = lifetime == EphemeralSecretLifetime::TRANSACTION;
 	if (scope.empty() || !vend || (serves_transaction && !current.IsValid())) {
-		throw InvalidInputException(
-		    "A file secret needs a scope, a vend function and, unless it serves the connection, an active transaction");
+		throw InvalidInputException("An ephemeral secret needs a scope, a vend function and, unless it serves the "
+		                            "connection, an active transaction");
 	}
-	auto file_secret = make_shared_ptr<FileSecret>();
+	auto secret = make_shared_ptr<EphemeralSecret>();
 	if (serves_transaction) {
-		file_secret->transaction = current;
+		secret->transaction = current;
 	}
-	file_secret->scope = std::move(scope);
-	file_secret->vend = std::move(vend);
-	auto state = context.registered_state->GetOrCreate<FileSecretState>(FILE_SECRET_STATE_KEY);
-	return state->Register(std::move(file_secret), current);
+	secret->scope = std::move(scope);
+	secret->vend = std::move(vend);
+	auto state = context.registered_state->GetOrCreate<EphemeralSecretState>(EPHEMERAL_SECRET_STATE_KEY);
+	return state->Register(std::move(secret), current);
 }
 
-shared_ptr<SecretEntry> SecretManager::GetFileSecret(ClientContext &context, const string &name, const string &path) {
-	auto file_secret = FindFileSecret(context, name);
-	if (!file_secret) {
-		throw InvalidConfigurationException("The file secret for '%s' is not available: it serves only the transaction "
-		                                    "or the connection that registered it",
+shared_ptr<SecretEntry> SecretManager::GetEphemeralSecret(ClientContext &context, const string &name,
+                                                          const string &path) {
+	auto secret = FindEphemeralSecret(context, name);
+	if (!secret) {
+		throw InvalidConfigurationException("The ephemeral secret for '%s' is not available: it serves only the "
+		                                    "transaction or the connection that registered it",
 		                                    path);
 	}
-	if (!StringUtil::StartsWith(path, file_secret->scope) || HasParentSegment(path)) {
-		throw InvalidConfigurationException("The file secret of '%s' cannot be used for '%s'", file_secret->scope,
+	if (!StringUtil::StartsWith(path, secret->scope) || HasParentSegment(path)) {
+		throw InvalidConfigurationException("The ephemeral secret of '%s' cannot be used for '%s'", secret->scope,
 		                                    path);
 	}
-	lock_guard<mutex> guard(file_secret->lock);
-	if (!file_secret->entry) {
-		file_secret->entry = VendFileSecret(context, *file_secret);
+	lock_guard<mutex> guard(secret->lock);
+	if (!secret->entry) {
+		secret->entry = VendEphemeralSecret(context, *secret);
 	}
-	return file_secret->entry;
+	return secret->entry;
 }
 
-bool SecretManager::RefreshFileSecret(ClientContext &context, const string &name) {
-	auto file_secret = FindFileSecret(context, name);
-	if (!file_secret) {
+bool SecretManager::RefreshEphemeralSecret(ClientContext &context, const string &name) {
+	auto secret = FindEphemeralSecret(context, name);
+	if (!secret) {
 		return false;
 	}
-	lock_guard<mutex> guard(file_secret->lock);
+	lock_guard<mutex> guard(secret->lock);
 	// a vend that throws keeps the current secret
-	file_secret->entry = VendFileSecret(context, *file_secret);
+	secret->entry = VendEphemeralSecret(context, *secret);
 	return true;
 }
 

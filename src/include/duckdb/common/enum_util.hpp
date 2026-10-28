@@ -214,6 +214,8 @@ enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
 
+enum class EphemeralSecretLifetime : uint8_t;
+
 enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
@@ -265,8 +267,6 @@ enum class FileIOMode : uint8_t;
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
-
-enum class FileSecretLifetime : uint8_t;
 
 enum class FileSyncMode : uint8_t;
 
@@ -969,6 +969,9 @@ template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
+const char* EnumUtil::ToChars<EphemeralSecretLifetime>(EphemeralSecretLifetime value);
+
+template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
 
 template<>
@@ -1045,9 +1048,6 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
-
-template<>
-const char* EnumUtil::ToChars<FileSecretLifetime>(FileSecretLifetime value);
 
 template<>
 const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value);
@@ -1963,6 +1963,9 @@ template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
+EphemeralSecretLifetime EnumUtil::FromString<EphemeralSecretLifetime>(const char *value);
+
+template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);
 
 template<>
@@ -2039,9 +2042,6 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
-
-template<>
-FileSecretLifetime EnumUtil::FromString<FileSecretLifetime>(const char *value);
 
 template<>
 FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value);

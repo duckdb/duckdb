@@ -2107,6 +2107,24 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	return static_cast<DistinctType>(StringUtil::StringToEnum(GetDistinctTypeValues(), 2, "DistinctType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetEphemeralSecretLifetimeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(EphemeralSecretLifetime::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(EphemeralSecretLifetime::CONNECTION), "CONNECTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<EphemeralSecretLifetime>(EphemeralSecretLifetime value) {
+	return StringUtil::EnumToString(GetEphemeralSecretLifetimeValues(), 2, "EphemeralSecretLifetime", static_cast<uint32_t>(value));
+}
+
+template<>
+EphemeralSecretLifetime EnumUtil::FromString<EphemeralSecretLifetime>(const char *value) {
+	return static_cast<EphemeralSecretLifetime>(StringUtil::StringToEnum(GetEphemeralSecretLifetimeValues(), 2, "EphemeralSecretLifetime", value));
+}
+
 const StringUtil::EnumStringLiteral *GetErrorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ErrorType::UNSIGNED_EXTENSION), "UNSIGNED_EXTENSION" },
@@ -2769,24 +2787,6 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetFileSecretLifetimeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(FileSecretLifetime::TRANSACTION), "TRANSACTION" },
-		{ static_cast<uint32_t>(FileSecretLifetime::CONNECTION), "CONNECTION" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<FileSecretLifetime>(FileSecretLifetime value) {
-	return StringUtil::EnumToString(GetFileSecretLifetimeValues(), 2, "FileSecretLifetime", static_cast<uint32_t>(value));
-}
-
-template<>
-FileSecretLifetime EnumUtil::FromString<FileSecretLifetime>(const char *value) {
-	return static_cast<FileSecretLifetime>(StringUtil::StringToEnum(GetFileSecretLifetimeValues(), 2, "FileSecretLifetime", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileSyncModeValues() {

@@ -33,7 +33,7 @@ struct FileOpenerInfo {
 	}
 
 	string file_path;
-	//! The extended information of the file (OpenFileInfo::extended_info), e.g. the file secret to open it with
+	//! The extended information of the file (OpenFileInfo::extended_info), e.g. the ephemeral secret to open it with
 	shared_ptr<ExtendedOpenFileInfo> extended_info;
 };
 
