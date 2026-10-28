@@ -2,6 +2,8 @@
 # description: Adding a field with a default to a struct column also adds the field to the default of the column (duckdblabs/bot-issue-tracker#489)
 # group: [struct]
 
+require core_functions
+
 load {TEST_DIR}/add_col_struct_column_default.db
 
 statement ok
