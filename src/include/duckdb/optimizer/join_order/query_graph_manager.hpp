@@ -48,7 +48,7 @@ public:
 	                                        const vector<RelationStats> &relation_stats);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
-	//! Add the explicit cross-product edges required to connect the predicate graph.
+	//! Admit original cross-product edges when the current hyperedges cannot complete enumeration.
 	bool ActivateRequiredCrossProducts();
 	//! Whether the predicate graph still has disconnected components.
 	bool RequiresCrossProduct() const;

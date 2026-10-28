@@ -1072,27 +1072,14 @@ bool QueryGraphManager::ActivateRequiredCrossProducts() {
 	required_cross_products_activated = true;
 
 	bool added_edge = false;
-	// Operators are stored in postorder. Required child cross products therefore connect each input scope before its
-	// parent is considered.
+	// Hypergraph connectivity does not guarantee that an operator's input sets can be assembled.
+	// On a stall, admit the original cross products and let the eligibility checks enforce their legality.
 	for (auto &operator_ptr : join_operators) {
 		auto &op = *operator_ptr;
 		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT) {
 			continue;
 		}
 		D_ASSERT(!op.left_relations.get().Empty() && !op.right_relations.get().Empty());
-		bool connects_components = false;
-		for (idx_t left_idx = 0; left_idx < op.left_relations.get().count && !connects_components; left_idx++) {
-			auto left_root = FindGraphComponent(op.left_relations.get().relations[left_idx]);
-			for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
-				if (left_root != FindGraphComponent(op.right_relations.get().relations[right_idx])) {
-					connects_components = true;
-					break;
-				}
-			}
-		}
-		if (!connects_components) {
-			continue;
-		}
 		for (idx_t left_idx = 0; left_idx < op.left_relations.get().count; left_idx++) {
 			auto &left = set_manager.GetJoinRelation(op.left_relations.get().relations[left_idx]);
 			for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
