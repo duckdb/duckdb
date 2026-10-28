@@ -1387,8 +1387,8 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
 		if (func.GetQualifiedName().Catalog() == catalog_name) {
-			func.SetQualifiedName(
-			    QualifiedName(Identifier(), func.GetQualifiedName().Schema(), func.GetQualifiedName().Name()));
+			// keep the whole schema path, which a nested schema makes longer than one schema
+			func.SetQualifiedName(func.GetQualifiedName().WithCatalog(Identifier()));
 		} else if (func.GetQualifiedName().Catalog().empty() && func.GetQualifiedName().Schema() == catalog_name) {
 			func.SetQualifiedName(
 			    QualifiedName(func.GetQualifiedName().Catalog(), Identifier(), func.GetQualifiedName().Name()));
@@ -1397,8 +1397,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
 		if (win.GetQualifiedName().Catalog() == catalog_name) {
-			win.SetQualifiedName(
-			    QualifiedName(Identifier(), win.GetQualifiedName().Schema(), win.GetQualifiedName().Name()));
+			win.SetQualifiedName(win.GetQualifiedName().WithCatalog(Identifier()));
 		} else if (win.GetQualifiedName().Catalog().empty() && win.GetQualifiedName().Schema() == catalog_name) {
 			win.SetQualifiedName(
 			    QualifiedName(win.GetQualifiedName().Catalog(), Identifier(), win.GetQualifiedName().Name()));
