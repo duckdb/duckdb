@@ -326,6 +326,8 @@ public:
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
+	//! Whether a reference to the given CTE is inside the non-recursive term of that (recursive) CTE
+	bool IsInRecursiveCTEAnchor(const BindingAlias &name);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
@@ -434,6 +436,8 @@ private:
 	bool legacy_can_contain_nulls = false;
 	//! Whether this binder is inside a subquery boundary
 	bool inside_subquery = false;
+	//! The recursive CTE whose non-recursive term is bound by this binder (if any)
+	Identifier recursive_cte_anchor;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! The table macros that are being expanded by this binder
