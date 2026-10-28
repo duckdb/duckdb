@@ -5,6 +5,7 @@ namespace duckdb {
 
 void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricQuerySQL>(query_sql);
+	lock_guard<mutex> guard(string_metrics_lock);
 	for (const auto &[key, timing] : string_timings) {
 		info.SetMetric(key, static_cast<double>(timing.duration) / 1e9);
 	}
