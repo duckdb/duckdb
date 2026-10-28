@@ -832,7 +832,7 @@ void ForceVariantShredding::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 
 Value ForceVariantShredding::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.force_variant_shredding.ToString());
+	return Value(config.GetForceVariantShredding().ToString());
 }
 
 //===----------------------------------------------------------------------===//

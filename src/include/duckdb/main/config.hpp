@@ -397,6 +397,8 @@ public:
 	HTTPUtil &GetHTTPUtil() const;
 	//! Replace how external extensions are installed and loaded, before the database runs queries
 	DUCKDB_API void SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider);
+	//! Returns a copy of the forced variant shredding type (INVALID if unset), safe to call while it is being modified
+	DUCKDB_API LogicalType GetForceVariantShredding() const;
 	DUCKDB_API ExternalExtensionProvider &GetExternalExtensionProvider() const;
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
