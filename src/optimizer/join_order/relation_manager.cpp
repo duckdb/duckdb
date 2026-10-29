@@ -443,7 +443,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
 		// the view is one relation: its contents are optimized on their own, and only what the view reports crosses
-		// the boundary - its own estimate, and the distinct counts of its columns only if it may propagate statistics
+		// the boundary - its own estimate, and the domains of its columns only if it may propagate statistics
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
@@ -453,24 +453,22 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		secure_view.SetEstimatedCardinality(stats.cardinality);
 		stats.table_name = Identifier(secure_view.view_name);
 		stats.stats_initialized = true;
+		if (secure_view.propagate_statistics) {
+			stats.row_retention = child_stats.row_retention;
+		}
 		RelationColumnStatsLookup child_columns(child_stats);
 		for (auto &binding : secure_view.GetColumnBindings()) {
-			DistinctCount distinct_count(MaxValue<idx_t>(stats.cardinality, 1), DistinctCountSource::CARDINALITY);
-			Identifier name;
 			auto child_column = child_columns.Find(binding);
-			if (child_column) {
-				name = child_column->name;
-				if (secure_view.propagate_statistics) {
-					distinct_count = child_column->distinct_count;
-				}
+			auto name = child_column ? child_column->name : Identifier();
+			if (child_column && secure_view.propagate_statistics) {
+				stats.columns.emplace_back(binding, child_column->total_domain, child_column->current_domain,
+				                           std::move(name), child_column->semi_anti_join_domain_evidence);
+			} else {
+				DistinctCount domain(MaxValue<idx_t>(stats.cardinality, 1), DistinctCountSource::CARDINALITY);
+				stats.columns.emplace_back(binding, domain, std::move(name));
 			}
-			stats.columns.emplace_back(binding, distinct_count, std::move(name));
 		}
-		if (!datasource_filters.empty()) {
-			stats.cardinality =
-			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
-		}
-		ModifyStatsIfLimit(limit_op.get(), stats);
+		stats.CapCurrentDomainsToCardinality();
 		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {
