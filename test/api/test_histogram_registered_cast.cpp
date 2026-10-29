@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "test_helpers.hpp"
@@ -45,4 +46,27 @@ TEST_CASE("Histogram bin validation defers to registered casts", "[api][histogra
 	    "SELECT list_aggregate(map_values(histogram(l, b)), 'sum') FROM (VALUES ([1], [1]), ([2], [1])) t(l, b)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Histogram bin validation accepts registered casts nested in the bins list", "[api][histogram]") {
+	DuckDB db;
+	Connection con(db);
+	if (con.Query("SELECT histogram(1, [1])")->HasError()) {
+		return;
+	}
+
+	// structs without matching member names cannot be cast by default - the struct cast bind itself throws
+	auto rejected = con.Query("SELECT histogram(s, b) FROM (VALUES ({'b': 1}, [{'a': 1}])) t(s, b)");
+	REQUIRE(rejected->HasError());
+	REQUIRE(StringUtil::Contains(rejected->GetError(), "STRUCT to STRUCT cast must have at least one matching member"));
+
+	// a registered cast between the struct types is picked up by the forced list cast
+	auto source_type = LogicalType::STRUCT({{"a", LogicalType::INTEGER}});
+	auto target_type = LogicalType::STRUCT({{"b", LogicalType::INTEGER}});
+	auto &casts = DBConfig::GetConfig(*con.context).GetCastFunctions();
+	casts.RegisterCastFunction(source_type, target_type, BoundCastInfo(DefaultCasts::ReinterpretCast));
+	auto result = con.Query(
+	    "SELECT list_aggregate(map_values(histogram(s, b)), 'sum') FROM (VALUES ({'b': 1}, [{'a': 1}])) t(s, b)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
