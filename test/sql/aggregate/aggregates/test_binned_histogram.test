@@ -271,6 +271,30 @@ SELECT histogram(union_value(a := 1), [union_value(b := 1)])
 ----
 <REGEX>:Binder Error.*bins of type UNION\(b INTEGER\)\[\] cannot be cast to UNION\(a INTEGER\)\[\].*
 
+# struct bins in the union representation follow the union member rule as well
+query I
+SELECT list_aggregate(map_values(histogram(union_value(b := 1)::UNION(a UNION(x INTEGER), b INTEGER), [{'tag': 1::UTINYINT, 'a': NULL::VARCHAR, 'b': 1}])), 'sum')
+----
+1
+
+# struct bins outside the union representation go through member selection and are rejected
+statement error
+SELECT histogram(union_value(a := [1]), [{'tag': 0::UTINYINT, 'a': 1}])
+----
+<REGEX>:Binder Error.*bins of type STRUCT\(tag UTINYINT, a INTEGER\)\[\] cannot be cast to UNION\(a INTEGER\[\]\)\[\].*
+
+# when every member field of the union representation is unexecutable the bins are rejected
+statement error
+SELECT histogram(union_value(a := union_value(x := 1)), [{'tag': 0::UTINYINT, 'a': '1'}])
+----
+<REGEX>:Binder Error.*bins of type STRUCT\(tag UTINYINT, a VARCHAR\)\[\] cannot be cast to UNION\(a UNION\(x INTEGER\)\)\[\].*
+
+# the single member of the union representation counts as a member, not as the tag
+query I
+SELECT list_aggregate(map_values(histogram(union_value(a := 1), [{'tag': 0::UTINYINT, 'a': 1}])), 'sum')
+----
+1
+
 # struct bins whose member conversion only works for NULL members are rejected like empty bins
 statement error
 SELECT histogram({'a': NULL::INTEGER[]}, [{'a': NULL::INTEGER}])
