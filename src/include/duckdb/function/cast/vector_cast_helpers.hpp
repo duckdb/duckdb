@@ -174,7 +174,7 @@ struct VectorCastHelpers {
 		case PhysicalType::VARCHAR:
 			return DefaultCasts::ToWideDecimalCast(source, result, count, parameters);
 		default:
-			throw InternalException("Unimplemented internal type for decimal");
+			InternalException::Throw("Unimplemented internal type for decimal");
 		}
 	}
 
