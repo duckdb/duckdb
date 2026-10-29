@@ -51,7 +51,7 @@ bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col,
 		return true;
 	}
 	default:
-		throw duckdb::InternalException("Unimplemented internal type for decimal");
+		InternalException::Throw("Unimplemented internal type for decimal");
 	}
 }
 
