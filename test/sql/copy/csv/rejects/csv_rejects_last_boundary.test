@@ -1,0 +1,32 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_last_boundary.test
+# description: An invalid first row in the last scan boundary must not drop the rest of the file
+# group: [rejects]
+
+# 1000-byte rows after a 4-byte header: row 8000 is the first full row after the 8MB boundary, and it has an extra column
+statement ok
+COPY (
+	SELECT l FROM (
+		SELECT -1 AS i, 'a,b' AS l
+		UNION ALL
+		SELECT i, CASE WHEN i = 8000 THEN i || ',' || repeat('x', 996 - length(i::VARCHAR)) || ',x'
+		               ELSE i || ',' || repeat('x', 998 - length(i::VARCHAR)) END
+		FROM range(10000) t(i)
+	) ORDER BY i
+) TO '{TEMP_DIR}/bad_row_after_boundary.csv' (FORMAT csv, HEADER false, QUOTE '', DELIMITER '\t');
+
+statement error
+SELECT count(*) FROM read_csv('{TEMP_DIR}/bad_row_after_boundary.csv', header = true, auto_detect = false,
+	columns = {'a': 'BIGINT', 'b': 'VARCHAR'});
+----
+Expected Number of Columns: 2 Found: 3
+
+query II
+SELECT count(*), max(a) FROM read_csv('{TEMP_DIR}/bad_row_after_boundary.csv', header = true, auto_detect = false,
+	columns = {'a': 'BIGINT', 'b': 'VARCHAR'}, store_rejects = true);
+----
+9999	9999
+
+query II
+SELECT line, error_type FROM reject_errors;
+----
+8002	TOO MANY COLUMNS
