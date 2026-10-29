@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/bloom_filter_coalesced_reads.test
+# description: Bloom filters are stored next to each other per column
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE data AS
+	SELECT 'v' || (hash(range) % 2000)::VARCHAR AS s, 'w' || (hash(range + 1) % 50)::VARCHAR AS c, range AS x
+	FROM range(200000);
+
+statement ok
+COPY data TO '{TEST_DIR}/bloom_coalesced.parquet' (ROW_GROUP_SIZE 20000);
+
+query TIT
+SELECT path_in_schema, count(*), max(bloom_filter_offset + bloom_filter_length) - min(bloom_filter_offset) = sum(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/bloom_coalesced.parquet')
+WHERE bloom_filter_offset IS NOT NULL
+GROUP BY ALL ORDER BY ALL;
+----
+c	10	true
+s	10	true
