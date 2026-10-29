@@ -156,14 +156,22 @@ public:
 	// NOTE: planar (GEOMETRY) extents are exact vertex min/max. Geodetic (GEOGRAPHY) extents are
 	// *coverage* extents: Geometry::GetExtent additionally bounds the geodesic edges between the
 	// vertices (great-circle arcs bulge poleward beyond their endpoints) and the polygon interiors
-	// under the interior-on-the-left rule (the S2/BigQuery convention): a shell winding east around
-	// the globe encloses the north pole, one winding west the south pole, a shell that is
-	// counterclockwise on the sphere encloses its bounded side, and a clockwise one encloses the
-	// complement - covering (almost) the whole globe, so ESRI-style clockwise shells get full-globe
-	// extents. Orientation is decided on the sphere, not in planar lon/lat. This follows the
-	// precedent of other spherical engines that write coverage bounds into Parquet geospatial
-	// statistics; the bounds are wider than the Parquet spec's coordinate-based bbox definition,
-	// which is safe for any reader.
+	// under the interior-on-the-left rule (S2's convention): a shell winding east around the globe
+	// encloses the north pole, one winding west the south pole, a shell that is counterclockwise on
+	// the sphere encloses its bounded side, and a clockwise one encloses the complement - covering
+	// (almost) the whole globe, so ESRI-style clockwise shells get full-globe extents. Orientation is
+	// decided on the sphere, not in planar lon/lat. This follows the precedent of other spherical
+	// engines that write coverage bounds into Parquet geospatial statistics; the bounds are wider than
+	// the Parquet spec's coordinate-based bbox definition, which is safe for any reader.
+	//
+	// The orientation rule is a convention, not a standard. The Parquet GEOGRAPHY spec says nothing
+	// about ring orientation, OGC Simple Features only describes it for planar polygons, and
+	// GeoParquet's optional `orientation` metadata only RECOMMENDS counterclockwise shells for
+	// spherical edges, noting that readers otherwise typically take the smaller of the two regions.
+	// BigQuery also takes the smaller region by default, and applies interior-on-the-left only with
+	// `oriented => TRUE`. Under the smaller-region reading, a shell whose left side is larger than a
+	// hemisphere (e.g. a ring along 30S winding east) has the other side as its interior, which these
+	// extents do not cover. GEOGRAPHY predicates must therefore use the same rule as the extents.
 
 	// The `geodetic` flag enables antimeridian-aware longitude (X axis) math used by GEOGRAPHY:
 	// the X axis is treated as a circular [-180,180] degree axis where an arc may wrap (x_min > x_max),
@@ -198,6 +206,25 @@ public:
 		ExtendAxis(y_min, y_max, vertex.y);
 		ExtendAxis(z_min, z_max, vertex.z);
 		ExtendAxis(m_min, m_max, vertex.m);
+	}
+
+	// Extend the geodetic X (longitude) axis to cover the eastward arc from lo to hi
+	void ExtendXArc(double lo, double hi) {
+		if (!LonInRange(lo) || !LonInRange(hi)) {
+			// NaN or out-of-contract longitudes make the whole axis unknown, as in ExtendX
+			x_min = UNKNOWN_MIN;
+			x_max = UNKNOWN_MAX;
+			return;
+		}
+		if (!std::isfinite(x_min) || !std::isfinite(x_max)) {
+			if (x_min == EMPTY_MIN) {
+				x_min = lo;
+				x_max = hi;
+			}
+			// Otherwise the X axis is unknown; keep it unknown.
+			return;
+		}
+		LonArcMerge(x_min, x_max, lo, hi, x_min, x_max);
 	}
 
 	void Merge(const GeometryExtent &other, bool geodetic = false) {

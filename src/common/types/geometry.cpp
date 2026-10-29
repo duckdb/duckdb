@@ -1580,7 +1580,9 @@ void VisitGeometry(const string_t &wkb, VISITOR &visitor) {
 //          60W              0               60E
 //
 // The geodesic reaches ~63.4N at longitude 0, so a latitude range over the endpoints alone (45N) would miss it.
-// Only latitude needs edge handling, as longitude is monotone along any edge spanning less than half a circle.
+// Longitude is monotone along any edge spanning less than half a circle, so an edge covers the short arc between its
+// endpoints' longitudes. The vertices alone may not: LINESTRING(0 10, 170 10, -170 10, 0 10) has vertices within the
+// arc from 0 east to -170, but its last edge runs from -170 east to 0.
 //
 // Here's a mini-glossary to help understanding the following code:
 // - Longitude / Latitude: degrees east in [-180, 180] and degrees north in [-90, 90].
@@ -1710,7 +1712,19 @@ struct GeodesicEdge {
 			return c1.Dot(c2) > 0;
 		}
 		if (std::fabs(n.z) <= UNIT_EPSILON * nlen) {
-			// The great circle runs through the poles, so an endpoint is on a pole and there is no bulge
+			// The great circle runs (nearly) through the poles, where all of its longitude change happens, so the edge
+			// crosses a pole iff it spans about half a circle. The shorter arc crosses the pole nearer to the
+			// endpoints.
+			if (std::fabs(delta) > 90.0) {
+				const double lat_sum = p1.lat + p2.lat;
+				if (lat_sum > 0) {
+					max_lat = 90.0;
+				} else if (lat_sum < 0) {
+					min_lat = -90.0;
+				} else {
+					return false;
+				}
+			}
 			return true;
 		}
 		// Northernmost point of the great circle, atan2 stays well-conditioned near the pole, unlike asin(nxy / nlen)
@@ -1739,21 +1753,28 @@ class GeodeticRingState {
 public:
 	//! Add the next vertex, extending the extent with the edge from the previous one
 	void AddVertex(GeometryExtent &extent, const LonLat &vertex) {
-		if (vertex_count > 0) {
+		if (vertex_count == 0) {
+			first_vertex = vertex;
+		} else {
 			AddEdge(extent, last_vertex, vertex);
-		}
-		if (vertex_count == 1) {
-			second_vertex = vertex;
+			if (vertex_count == 1) {
+				second_vertex = vertex;
+			}
 		}
 		last_vertex = vertex;
 		vertex_count++;
 	}
 
-	//! Close the ring. The closing vertex repeats the first, whose successor is the second.
-	void CloseRing() {
-		if (vertex_count > 1) {
-			ResolvePending(second_vertex);
+	//! Close the ring, adding the closing edge unless the last vertex already repeats the first (+180 and -180 are the
+	//! same longitude). The closing vertex's successor is the second vertex.
+	void CloseRing(GeometryExtent &extent) {
+		if (vertex_count < 2) {
+			return;
 		}
+		if (LonLat::LonDelta(last_vertex.lon, first_vertex.lon) != 0.0 || last_vertex.lat != first_vertex.lat) {
+			AddEdge(extent, last_vertex, first_vertex);
+		}
+		ResolvePending(second_vertex);
 	}
 
 	//! Apply the ring state to the extent. A shell's interior lies on the left of the travel direction (as in S2),
@@ -1792,7 +1813,7 @@ public:
 	}
 
 private:
-	//! Add the edge prev -> cur, extending the extent with its latitude range
+	//! Add the edge prev -> cur, extending the extent with its longitude and latitude ranges
 	void AddEdge(GeometryExtent &extent, const LonLat &prev, const LonLat &cur) {
 		const GeodesicEdge edge = {prev, cur};
 		double min_lat = 0;
@@ -1804,6 +1825,11 @@ private:
 		const double delta = edge.GetLonDelta();
 		winding += delta;
 		ResolvePending(cur);
+		if (delta > 0) {
+			extent.ExtendXArc(prev.lon, cur.lon);
+		} else if (delta < 0) {
+			extent.ExtendXArc(cur.lon, prev.lon);
+		}
 		// The endpoints are already in the extent, and computed apexes beyond them are padded outward
 		if (min_lat < MinValue(prev.lat, cur.lat)) {
 			extent.y_min = MinValue(extent.y_min, MaxValue(min_lat - APEX_EPSILON, -90.0));
@@ -1826,12 +1852,39 @@ private:
 		if (!pending) {
 			return;
 		}
-		// Traversed prev -> v -> next, both edges leave v heading south, so the interior (on the left) is pole-free iff
-		// the turn at v is a left turn
 		const auto &v = pending_vertex;
-		const double cross = v.DirectionTo(next).Cross(v.DirectionTo(pending_prev));
-		SubmitTop(v.lat, cross > 0 ? InteriorSide::SOUTH : (cross < 0 ? InteriorSide::NORTH : InteriorSide::UNKNOWN));
+		const Vec2 to_next = v.DirectionTo(next);
+		const Vec2 to_prev = v.DirectionTo(pending_prev);
+		const bool next_descends = to_next.y < -UNIT_EPSILON;
+		const bool prev_descends = to_prev.y < -UNIT_EPSILON;
+		if (next_descends && prev_descends) {
+			// A corner: traversed prev -> v -> next with both edges leaving v heading south, the interior (on the left)
+			// is pole-free iff the turn at v is a left turn
+			const double cross = to_next.Cross(to_prev);
+			SubmitTop(v.lat,
+			          cross > 0 ? InteriorSide::SOUTH : (cross < 0 ? InteriorSide::NORTH : InteriorSide::UNKNOWN));
+		} else {
+			// An edge that does not descend from v peaks at or past v, possibly higher by less than the rounding of its
+			// apex. The boundary is smooth there, so as at an apex, traveling east puts the interior north of it.
+			if (!next_descends) {
+				SubmitTop(v.lat, SideOfTravel(to_next.x));
+			}
+			if (!prev_descends) {
+				SubmitTop(v.lat, SideOfTravel(-to_prev.x));
+			}
+		}
 		pending = false;
+	}
+
+	//! Interior side at a smooth boundary point, given the eastward component of the travel direction there
+	static InteriorSide SideOfTravel(double east) {
+		if (east > UNIT_EPSILON) {
+			return InteriorSide::NORTH;
+		}
+		if (east < -UNIT_EPSILON) {
+			return InteriorSide::SOUTH;
+		}
+		return InteriorSide::UNKNOWN;
 	}
 
 	//! Record the interior side at a boundary point at `lat`, if it is (one of) the highest
@@ -1854,8 +1907,9 @@ private:
 	}
 
 private:
-	//! Number of vertices added so far, and the second and last of them
+	//! Number of vertices added so far, and the first, second and last of them
 	idx_t vertex_count = 0;
+	LonLat first_vertex = {0, 0};
 	LonLat second_vertex = {0, 0};
 	LonLat last_vertex = {0, 0};
 	//! Accumulated signed longitude change in degrees, ~+-360 for a ring that winds around a pole
@@ -1992,7 +2046,7 @@ public:
 	}
 	void LeavePolygonRing(idx_t ring_idx, idx_t vert_count) override {
 		if (in_ring) {
-			ring.CloseRing();
+			ring.CloseRing(extent);
 			ring.Finish(extent, is_shell);
 			in_ring = false;
 			// The first non-empty ring is the shell, the rest are holes
