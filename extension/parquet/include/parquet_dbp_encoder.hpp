@@ -62,7 +62,7 @@ private:
 		// (Arrow C++/pyarrow) reject the page.
 		const int64_t encoded_first_value =
 		    wrap_first_value ? static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(first_value)))
-			                 : first_value;
+		                     : first_value;
 		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(encoded_first_value), writer);
 
 		// initialize
