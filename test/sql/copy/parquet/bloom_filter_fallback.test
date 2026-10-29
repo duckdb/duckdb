@@ -149,6 +149,16 @@ SELECT count(*) FROM '{TEST_DIR}/limited.parquet' WHERE k IN (md5('1'), md5('500
 ----
 2
 
+statement ok
+COPY input TO '{TEST_DIR}/limited-string.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_COLUMNS ['k'],
+ BLOOM_FILTER_FALLBACK_MAX_BYTES '8KiB')
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/limited-string.parquet') WHERE path_in_schema = 'k'
+----
+1
+
 # A zero budget suppresses only fallback filters.
 statement ok
 COPY input TO '{TEST_DIR}/zero-budget.parquet'

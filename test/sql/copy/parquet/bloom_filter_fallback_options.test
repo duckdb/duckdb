@@ -63,7 +63,12 @@ NULL is not supported
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES -1)
 ----
-expected an argument of type UBIGINT
+Unable to parse bytes
+
+statement error
+COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES 'lots')
+----
+Memory must have a number
 
 # Dots are literal parts of a top-level column name.
 statement ok

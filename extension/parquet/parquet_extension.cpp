@@ -159,7 +159,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_fallback_columns"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
-	copy_options["bloom_filter_fallback_max_bytes"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["bloom_filter_fallback_max_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
@@ -329,10 +329,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		} else if (option_name == "bloom_filter_fallback_columns") {
 			bind_data->bloom_filter_fallback_columns = ParseColumnList(option_values[0], names, option_name);
 		} else if (option_name == "bloom_filter_fallback_max_bytes") {
-			if (option_values[0].IsNull()) {
-				throw BinderException("BLOOM_FILTER_FALLBACK_MAX_BYTES cannot be NULL");
-			}
-			bind_data->bloom_filter_fallback_max_bytes = option_values[0].GetValue<idx_t>();
+			bind_data->bloom_filter_fallback_max_bytes = ParseBytesArg(option_name, option_values[0]);
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
 			auto val = option_values[0].GetValue<double>();
 			if (!(val > 0 && val <= 1)) {
