@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/block_packable.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
@@ -20,14 +21,9 @@
 
 namespace duckdb {
 
-class BaseStatistics;
 class BlockManager;
-class ColumnData;
-class ColumnSegment;
 class DatabaseInstance;
 class TableFilter;
-class Transaction;
-class UpdateSegment;
 struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
@@ -37,7 +33,7 @@ struct TableFilterState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment : public SegmentBase<ColumnSegment> {
+class ColumnSegment final : public SegmentBase<ColumnSegment>, public BlockPackable {
 public:
 	//! Construct a column segment.
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const ColumnSegmentType segment_type,
@@ -48,7 +44,7 @@ public:
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other);
-	~ColumnSegment();
+	~ColumnSegment() override;
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
@@ -97,9 +93,8 @@ public:
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t new_count);
 
-	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
-	//! Only used during checkpointing.
-	void ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager, const block_id_t block_id);
+	//! Convert a transient constant segment to a persistent segment without an on-disk block.
+	void ConvertToPersistentConstant();
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
@@ -161,6 +156,17 @@ public:
 
 	BaseStatistics &GetStatsMutable() {
 		return stats.statistics;
+	}
+
+public:
+	void Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) override {
+		if (block_handle_p->BlockId() < MAXIMUM_BLOCK) {
+			MarkAsPersistent(std::move(block_handle_p), offset);
+		} else {
+			D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+			block_id = INVALID_BLOCK;
+			SetBlock(std::move(block_handle_p), offset);
+		}
 	}
 
 private:

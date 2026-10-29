@@ -237,10 +237,17 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 	//	Otherwise set it to the input rows that pass the filter
 	auto states = FlatVector::GetDataMutable<data_ptr_t>(statep);
 	if (filter_mask.CannotHaveNull()) {
-		const auto offset = cursor->RowOffset(begin);
-		for (idx_t i = 0; i < count; ++i) {
-			states[flush_count] = state_ptr;
-			filter_sel.set_index(flush_count++, offset + i);
+		auto offset = cursor->RowOffset(begin);
+		idx_t remaining = count;
+		while (remaining > 0) {
+			const auto batch_count = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE - flush_count);
+			for (idx_t i = 0; i < batch_count; ++i) {
+				states[flush_count + i] = state_ptr;
+				filter_sel.set_index(flush_count + i, offset + i);
+			}
+			flush_count += batch_count;
+			offset += batch_count;
+			remaining -= batch_count;
 			if (flush_count >= STANDARD_VECTOR_SIZE) {
 				FlushStates(false);
 			}
