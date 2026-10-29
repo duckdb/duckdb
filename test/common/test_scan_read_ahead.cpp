@@ -78,7 +78,7 @@ private:
 	CompletionTestSignal &release;
 };
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(DUCKDB_NO_THREADS)
 bool CompletionTestThreadCPUSeconds(double &result) {
 	timespec ts;
 	if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0) {
@@ -90,8 +90,12 @@ bool CompletionTestThreadCPUSeconds(double &result) {
 
 class CompletionTestRead : public AsyncTask {
 public:
-	CompletionTestRead(CompletionTestSignal &started_p, CompletionTestSignal &release_p)
-	    : started(started_p), release(release_p) {
+	CompletionTestRead(CompletionTestSignal &started_p, CompletionTestSignal &release_p,
+	                   shared_ptr<CompletionTestSignal> destroyed_p)
+	    : started(started_p), release(release_p), destroyed(std::move(destroyed_p)) {
+	}
+	~CompletionTestRead() override {
+		destroyed->Set();
 	}
 	void Execute() override {
 		started.Set();
@@ -103,6 +107,7 @@ public:
 private:
 	CompletionTestSignal &started;
 	CompletionTestSignal &release;
+	shared_ptr<CompletionTestSignal> destroyed;
 };
 #endif
 
@@ -224,6 +229,7 @@ TEST_CASE("Read-ahead job teardown does not spin while I/O is running", "[scan_r
 	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
 	CompletionTestSignal read_started;
 	CompletionTestSignal release_read;
+	auto read_destroyed = make_shared_ptr<CompletionTestSignal>();
 	CompletionTestSignal callback_entered;
 	CompletionTestSignal release_callback;
 	release_callback.Set();
@@ -237,7 +243,7 @@ TEST_CASE("Read-ahead job teardown does not spin while I/O is running", "[scan_r
 			return nullptr;
 		}
 		produced = true;
-		io_tasks.push_back(make_uniq<CompletionTestRead>(read_started, release_read));
+		io_tasks.push_back(make_uniq<CompletionTestRead>(read_started, release_read, read_destroyed));
 		return make_uniq<ScanReadAheadJobWrapper<JobState>>();
 	};
 	TableFunctionInput input(nullptr, nullptr, nullptr);
@@ -258,9 +264,12 @@ TEST_CASE("Read-ahead job teardown does not spin while I/O is running", "[scan_r
 	const bool end_valid = CompletionTestThreadCPUSeconds(end_cpu);
 	release.join();
 	read_ahead.CancelAndDrain();
+	// Task accounting finishes before destruction; keep callback state alive until the I/O task releases it.
+	const bool destroyed = read_destroyed->WaitFor(std::chrono::seconds(5));
 	read_ahead.ThrowIfError();
 	REQUIRE(acquired == ScanReadAheadAcquire::PARKED);
 	REQUIRE(started);
+	REQUIRE(destroyed);
 	REQUIRE(start_valid);
 	REQUIRE(end_valid);
 	const auto cpu_seconds = end_cpu - start_cpu;
