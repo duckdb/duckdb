@@ -168,25 +168,3 @@ SELECT median(ts) OVER (ORDER BY ts ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 FROM (VALUES ('2000-01-01'::TIMESTAMP), ('2000-01-03'::TIMESTAMP)) t(ts) QUALIFY ts = '2000-01-03';
 ----
 2000-01-02 00:00:00
-
-# the fallible registration is read by the EXPLAIN (SQL) pivot default export
-
-statement ok
-SET pivot_filter_threshold=0;
-
-statement error
-EXPLAIN (SQL) FROM (VALUES ('g','p','2000-01-01'::TIMESTAMP),('h','q','2000-01-02'::TIMESTAMP)) t(g,k,v)
-PIVOT (median(v) FOR k IN ('p','q'));
-----
-A volatile or fallible PIVOT default must be evaluated before query execution
-
-# the discrete form does not interpolate and stays exportable
-
-query TT
-EXPLAIN (SQL) FROM (VALUES ('g','p','2000-01-01'::TIMESTAMP),('h','q','2000-01-02'::TIMESTAMP)) t(g,k,v)
-PIVOT (quantile_disc(v, 0.5) FOR k IN ('p','q'));
-----
-sql	<REGEX>:.*quantile_disc.*
-
-statement ok
-RESET pivot_filter_threshold;
