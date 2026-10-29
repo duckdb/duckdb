@@ -440,14 +440,6 @@ void Pipeline::ResetSourceForReschedule() {
 	initialized = true;
 }
 
-void Pipeline::ResetForReschedule(bool reset_sink) {
-	if (reset_sink) {
-		ResetSinkForReschedule(TaskScheduler::GetScheduler(executor.context).NumberOfThreads(), false);
-	}
-	ResetOperatorsForReschedule();
-	ResetSourceForReschedule();
-}
-
 void Pipeline::NotifyProgressReset() {
 	auto progress_verifier = executor.GetProgressVerifier();
 	if (progress_verifier) {

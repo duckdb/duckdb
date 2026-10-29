@@ -145,7 +145,6 @@ public:
 	void Reset();
 	void ResetSink();
 	void ResetSinkForReschedule(idx_t scheduled_workers, bool single_producer);
-	void ResetForReschedule(bool reset_sink);
 	//! Reset global operator state, which can be shared with other pipelines; must not run while those execute
 	void ResetOperatorsForReschedule();
 	//! Reset the pipeline-local global source state for the next reschedule
