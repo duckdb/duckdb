@@ -133,3 +133,53 @@ statement error
 SELECT histogram(n, NULL::BIGINT[]) FROM obs
 ----
 Histogram bin list cannot be NULL
+
+# bins that cannot be cast to a list of the argument type are rejected at bind time
+statement error
+SELECT histogram(l, b) FROM (VALUES ([1], [1]), ([2], [1])) t(l, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to INTEGER\[\]\[\].*
+
+# the check recurses into nested lists
+statement error
+SELECT histogram(l, b) FROM (VALUES ([[1]], [[1]])) t(l, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\]\[\] cannot be cast to INTEGER\[\]\[\]\[\].*
+
+statement error
+SELECT histogram(s, b) FROM (VALUES ({'a': 1}, [1])) t(s, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to STRUCT\(a INTEGER\)\[\].*
+
+# array bins of a mismatched size are rejected at bind time
+statement error
+SELECT histogram(a, b) FROM (VALUES ([1,2,3]::INT[3], [[1,2]::INT[2]])) t(a, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[2\]\[\] cannot be cast to INTEGER\[3\]\[\].*
+
+# the bind error also surfaces in the window form
+statement error
+SELECT histogram(l, b) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) FROM (VALUES ([1], [1])) t(l, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to INTEGER\[\]\[\].*
+
+# bins with a valid runtime cast to the argument type still work
+query I
+SELECT histogram(d, bins) FROM (VALUES (DATE '2020-01-01', ['2020-06-01'::VARCHAR])) t(d, bins)
+----
+{2020-06-01=1}
+
+# array bins of the matching size still work
+query I
+SELECT histogram(n, [10, 20, 30, 40, 50]::BIGINT[5]) FROM obs
+----
+{10=3, 20=2, 30=5, 40=3, 50=2}
+
+# prepared statement parameter as bins
+statement ok
+PREPARE binned AS SELECT histogram(n, ?) FROM obs
+
+query I
+EXECUTE binned([10, 20, 30, 40, 50])
+----
+{10=3, 20=2, 30=5, 40=3, 50=2}

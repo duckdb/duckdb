@@ -8,6 +8,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
@@ -382,6 +383,29 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	}
 }
 
+//! Nested casts bind missing child casts to a NULL-only fallback that fails for every non-NULL value
+//! mirror that structure here so unexecutable bin casts are rejected at bind time instead
+bool BinCastIsSupported(ClientContext &context, const LogicalType &source, const LogicalType &target) {
+	if (source == target || source.id() == LogicalTypeId::SQLNULL || source.id() == LogicalTypeId::UNKNOWN) {
+		return true;
+	}
+	bool source_nested = source.id() == LogicalTypeId::LIST || source.id() == LogicalTypeId::ARRAY;
+	bool target_nested = target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY;
+	if (source_nested && target_nested) {
+		if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::ARRAY &&
+		    !ArrayType::IsAnySize(target) && ArrayType::GetSize(source) != ArrayType::GetSize(target)) {
+			return false;
+		}
+		auto &source_child =
+		    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
+		auto &target_child =
+		    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
+		return BinCastIsSupported(context, source_child, target_child);
+	}
+	GetCastFunctionInput cast_input(context);
+	return !CastFunctionSet::Get(context).GetCastFunction(source, target, cast_input).IsNullCast();
+}
+
 template <class HIST>
 unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
@@ -392,7 +416,14 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 		}
 	}
 
-	function.ReplaceImplementation(GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType()));
+	auto function_impl = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
+	auto &bin_type = arguments[1]->GetReturnType();
+	auto &bin_list_type = function_impl.GetSignature().GetParameter(1).GetType();
+	if (!BinCastIsSupported(input.GetClientContext(), bin_type, bin_list_type)) {
+		throw BinderException("%s bins of type %s cannot be cast to %s - bin boundaries must match the input type",
+		                      function.GetName(), bin_type.ToString(), bin_list_type.ToString());
+	}
+	function.ReplaceImplementation(function_impl);
 	return nullptr;
 }
 
