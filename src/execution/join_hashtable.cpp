@@ -248,6 +248,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	// Probe the start slot of every row; rows that hit another salt are kept for the next round.
 	idx_t rows_to_probe_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		PrefetchHashTableEntry(row_idx, count,
+		                       [&](idx_t next_idx) { return &entries.get()[hashes_dense[next_idx] & ht.bitmask]; });
 		auto &result = probe_results[row_idx];
 		result.offset_and_salt = hashes_dense[row_idx] & offset_and_salt_mask;
 		const bool needs_further_probing = ProbeEntry<USE_SALTS>(entries.get(), ht.bitmask, result);
