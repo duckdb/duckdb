@@ -592,6 +592,9 @@ void ParquetWriter::InitializeColumnWriters() {
 		}
 		auto &column_writer = *column_writers.back();
 		if (!column_writer.SupportsBloomFilterFallback()) {
+			if (options.bloom_filter_fallback_all_columns) {
+				continue;
+			}
 			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s",
 			                      unique_names[i], types[i]);
 		}

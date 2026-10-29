@@ -79,3 +79,27 @@ query I
 SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/dot.parquet')
 ----
 1
+
+statement ok
+COPY (SELECT i AS n, i::VARCHAR AS s, i % 2 = 0 AS b, {'x': i} AS st FROM range(4096) t(i))
+TO '{TEST_DIR}/star.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS *, DICTIONARY_SIZE_LIMIT 0)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/star.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+b	0
+n	1
+s	1
+st, x	0
+
+statement ok
+COPY (SELECT i AS n, i % 2 = 0 AS b FROM range(4096) t(i))
+TO '{TEST_DIR}/star-list.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['*'], DICTIONARY_SIZE_LIMIT 0)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/star-list.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+b	0
+n	1
