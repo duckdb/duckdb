@@ -13,6 +13,7 @@ set(TEST_API_OBJECTS
     test_temporary_file_owner.cpp
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
+    test_function_binding.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
@@ -30,6 +31,7 @@ set(TEST_API_OBJECTS
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_metadata_pin_race.cpp
+    test_metadata_chain_old_readers.cpp
     test_storage_extension_alias.cpp
     test_storage_extension_remote_path.cpp
     test_static_database_callback.cpp
