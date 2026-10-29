@@ -58,6 +58,18 @@ SELECT median(dt) FROM (VALUES ('-infinity'::DATE), ('1970-01-01'::DATE)) t(dt);
 ----
 Cannot interpolate infinite TIMESTAMP values
 
+statement error
+SELECT quantile_cont(dt, [0.25, 0.75]) FROM (VALUES ('-infinity'::DATE), ('1970-01-01'::DATE)) t(dt);
+----
+Cannot interpolate infinite TIMESTAMP values
+
+# mad interpolates its median in the TIMESTAMP domain as well
+
+statement error
+SELECT mad(ts) FROM (VALUES ('-infinity'::TIMESTAMP), ('1970-01-01'::TIMESTAMP)) t(ts);
+----
+Cannot interpolate infinite TIMESTAMP values
+
 # the maximum representable interpolation still succeeds across the whole finite range
 
 query I
@@ -74,6 +86,20 @@ query I
 SELECT median(ts) FROM (VALUES ('2262-04-11 23:47:16.854775806'::TIMESTAMP_NS), ('1677-09-22'::TIMESTAMP_NS)) t(ts);
 ----
 1970-01-01 11:53:38.427387904
+
+# a tiny rank fraction next to an extreme endpoint must round to the endpoint, not past the int64 range
+
+query I
+SELECT quantile_cont(ts, -0.00000000000000000001)
+FROM (VALUES ('294247-01-10 04:00:54.775806'::TIMESTAMP), ('1969-12-31 23:59:59.999997'::TIMESTAMP)) t(ts);
+----
+294247-01-10 04:00:54.775806
+
+query I
+SELECT quantile_cont(ts, 0.00000000000000000001)
+FROM (VALUES ('290309-12-22 (BC) 00:00:00'::TIMESTAMP), ('294247-01-10 04:00:54.775806'::TIMESTAMP)) t(ts);
+----
+290309-12-22 (BC) 00:00:00
 
 # equal values interpolate to themselves, including the sentinels
 
@@ -142,3 +168,25 @@ SELECT median(ts) OVER (ORDER BY ts ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 FROM (VALUES ('2000-01-01'::TIMESTAMP), ('2000-01-03'::TIMESTAMP)) t(ts) QUALIFY ts = '2000-01-03';
 ----
 2000-01-02 00:00:00
+
+# the fallible registration is read by the EXPLAIN (SQL) pivot default export
+
+statement ok
+SET pivot_filter_threshold=0;
+
+statement error
+EXPLAIN (SQL) FROM (VALUES ('g','p','2000-01-01'::TIMESTAMP),('h','q','2000-01-02'::TIMESTAMP)) t(g,k,v)
+PIVOT (median(v) FOR k IN ('p','q'));
+----
+A volatile or fallible PIVOT default must be evaluated before query execution
+
+# the discrete form does not interpolate and stays exportable
+
+query TT
+EXPLAIN (SQL) FROM (VALUES ('g','p','2000-01-01'::TIMESTAMP),('h','q','2000-01-02'::TIMESTAMP)) t(g,k,v)
+PIVOT (quantile_disc(v, 0.5) FOR k IN ('p','q'));
+----
+sql	<REGEX>:.*quantile_disc.*
+
+statement ok
+RESET pivot_filter_threshold;
