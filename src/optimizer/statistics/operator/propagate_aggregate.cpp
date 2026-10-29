@@ -262,7 +262,7 @@ bool TryGetGroupKeyDistinctUpperBound(const Expression &group, optional_ptr<Base
 // Tighten a plain GROUP BY's estimated cardinality using an upper bound on the number of distinct
 // group-key combinations: the saturating product over the group keys of each key's distinct-value
 // upper bound (see TryGetGroupKeyDistinctUpperBound). The estimate is only ever lowered - we take the
-// min of the bound, the existing estimate and the input cardinality.
+// min of the bound, the existing estimate and the input's maximum cardinality when that is known.
 void CapGroupedAggregateCardinalityByKeyDomain(LogicalAggregate &aggr, optional_ptr<NodeStatistics> input_stats) {
 	if (aggr.groups.empty()) {
 		return; // ungrouped aggregate: handled separately (always one row)
@@ -298,9 +298,11 @@ void CapGroupedAggregateCardinalityByKeyDomain(LogicalAggregate &aggr, optional_
 	if (!Hugeint::TryCast<idx_t>(domain_bound, bound)) {
 		return;
 	}
-	// the result of an aggregate can never have more rows than its input
-	if (input_stats && input_stats->has_estimated_cardinality) {
-		bound = MinValue<idx_t>(bound, input_stats->estimated_cardinality);
+	// the result of an aggregate can never have more rows than its input: clamp with the input's maximum
+	// cardinality, not its estimate - an estimate is not an upper bound (a cross product is estimated as the
+	// larger of its inputs, not their product)
+	if (input_stats && input_stats->has_max_cardinality) {
+		bound = MinValue<idx_t>(bound, input_stats->max_cardinality);
 	}
 	// only ever tighten the estimate
 	if (!aggr.has_estimated_cardinality || bound < aggr.estimated_cardinality) {
