@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Counts the evaluations of volatile filters that only the optimizer pushes down or keeps above.",
+      "paths": [
+        "test/optimizer/pushdown/volatile_filter_aggregate_distinct.test"
+      ]
+    },
+    {
       "reason": "Checks that the optimizer removed ORDER BY operators from the plan.",
       "paths": [
         "test/optimizer/remove_redundant_order.test"
@@ -54,6 +60,7 @@
         "test/sql/copy/parquet/page_index/page_index_reference.test",
         "test/sql/copy/parquet/page_index/page_index_robustness.test",
         "test/sql/copy/parquet/page_index/page_index_cache.test",
+        "test/sql/copy/parquet/page_index/page_index_cache_disabled.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test"
       ]
@@ -137,6 +144,8 @@
         "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
         "test/sql/copy/parquet/parquet_prefetch_overlapping_ranges.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning_nulls_first.test",
+        "test/sql/copy/parquet/read_ahead/recheck_prefetch_log.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test_slow"
       ]
     },

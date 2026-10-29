@@ -81,6 +81,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	//! Whether reads through this handle go through the external file cache (enabled, file cacheable, metadata valid)
+	DUCKDB_API bool ReadsAreCached();
 	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	//! The number of small cached blocks of this file that overlap [location, location + nr_bytes); 0 without a cache
 	DUCKDB_API idx_t CountCachedBlocks(idx_t location, idx_t nr_bytes);

@@ -109,3 +109,95 @@ SELECT count(*), sum(id), sum(v) = (SELECT sum(r % 7) FROM range(3000) t(r)) FRO
 3000	4498500	true
 
 endloop
+
+# corrupt_offset_index_other_column.parquet: 3000 rows (id BIGINT, ts TIMESTAMP) with the same six pages in both columns,
+# where the OffsetIndex of ts is a byte copy of the OffsetIndex of id: it points at the pages of id with matching row
+# counts, so reading it would decode id values as timestamps. The index is rejected because its pages lie outside the
+# ts column chunk: ts is read page by page, the pruning on id still applies
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+query III
+SELECT min(ts), max(ts), count(*) FROM 'data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet' WHERE id > 2900
+----
+2020-01-01 00:48:21	2020-01-01 00:49:59	99
+
+query III
+SELECT min(ts), max(ts), count(*) FROM 'data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet' WHERE id BETWEEN 600 AND 700
+----
+2020-01-01 00:10:00	2020-01-01 00:11:40	101
+
+# a filter on ts itself cannot prune without a usable OffsetIndex
+query II
+SELECT count(*), sum(id) FROM 'data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet' WHERE ts BETWEEN '2020-01-01 00:10:00' AND '2020-01-01 00:11:40'
+----
+101	65650
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT sum(info['rows_skipped']::BIGINT) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' AND event = 'SkipPages'
+----
+5048
+
+# the same rows without the page index
+statement ok
+SET parquet_use_page_index = false;
+
+query III
+SELECT min(ts), max(ts), count(*) FROM 'data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet' WHERE id > 2900
+----
+2020-01-01 00:48:21	2020-01-01 00:49:59	99
+
+statement ok
+SET parquet_use_page_index = true;
+
+query IIII
+SELECT count(*), sum(id), min(ts), max(ts) FROM 'data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet'
+----
+3000	4498500	2020-01-01 00:00:00	2020-01-01 00:49:59
+
+# what the corrupt file claims: the first pages of ts at the offsets of the first pages of id, in front of the ts chunk
+query III
+SELECT column_id, page_id, page_offset FROM parquet_page_index('data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet') WHERE page_id <= 1 ORDER BY column_id, page_id
+----
+0	0	4
+0	1	46
+1	0	4
+1	1	46
+
+query II
+SELECT path_in_schema, data_page_offset FROM parquet_metadata('data/parquet-testing/page_index/corrupt_offset_index_other_column.parquet') ORDER BY column_id
+----
+id	4
+ts	261
+
+# corrupt_offset_index_swapped.parquet: the same base file, with the offsets of pages 1 and 2 of the ts OffsetIndex
+# swapped. Both pages have the same row count and lie inside the chunk, so only the byte order gives it away: page
+# locations have to be sorted by offset, and an index that is not is rejected rather than used to read the wrong pages
+query IIII
+SELECT page_id, first_row_index, num_rows, page_offset FROM parquet_page_index('data/parquet-testing/page_index/corrupt_offset_index_swapped.parquet') WHERE column_id = 1 AND page_id <= 3 ORDER BY page_id
+----
+0	0	512	261
+1	512	512	363
+2	1024	512	312
+3	1536	512	414
+
+query III
+SELECT min(ts), max(ts), count(*) FROM 'data/parquet-testing/page_index/corrupt_offset_index_swapped.parquet' WHERE id BETWEEN 600 AND 700
+----
+2020-01-01 00:10:00	2020-01-01 00:11:40	101
+
+query III
+SELECT min(ts), max(ts), count(*) FROM 'data/parquet-testing/page_index/corrupt_offset_index_swapped.parquet' WHERE id BETWEEN 1000 AND 1100
+----
+2020-01-01 00:16:40	2020-01-01 00:18:20	101
+
+query III
+SELECT count(*), min(ts), max(ts) FROM 'data/parquet-testing/page_index/corrupt_offset_index_swapped.parquet'
+----
+3000	2020-01-01 00:00:00	2020-01-01 00:49:59

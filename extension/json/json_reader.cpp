@@ -197,8 +197,9 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &
 }
 
 JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, OpenFileInfo file_p)
-    : file(std::move(file_p)), context(context), options(std::move(options_p)), initialized(false),
-      next_buffer_index(0), thrown(false) {
+    : file(std::move(file_p)), context(context), options(std::move(options_p)),
+      read_flag(JSONCommon::GetReadFlag(JSONCommon::READ_STOP_FLAG, JSONCommon::NumbersAsRaw(options.sql_type_list))),
+      initialized(false), next_buffer_index(0), thrown(false) {
 }
 
 void JSONReader::OpenJSONFile() {
@@ -780,10 +781,9 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 	const bool number_root = first_char < json_size &&
 	                         (StringUtil::CharacterIsDigit(json_start[first_char]) || json_start[first_char] == '-');
 	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors || number_root) {
-		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
-		                                     scan_state.allocator.GetYYAlc(), &err);
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, read_flag, scan_state.allocator.GetYYAlc(), &err);
 	} else {
-		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG,
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, read_flag | YYJSON_READ_INSITU,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	}
 	if (err.code != YYJSON_READ_SUCCESS) {
@@ -925,7 +925,9 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	// First we find the newline in the previous block
 	idx_t prev_buffer_size = previous_buffer_handle->buffer_size - previous_buffer_handle->buffer_start;
 	auto prev_buffer_ptr = char_ptr_cast(previous_buffer_handle->buffer.get()) + previous_buffer_handle->buffer_size;
-	auto prev_object_start = PreviousNewline(prev_buffer_ptr, prev_buffer_size);
+	// the first buffer of a file that is only a byte order mark holds nothing past it
+	auto prev_object_start =
+	    prev_buffer_size == 0 ? prev_buffer_ptr : PreviousNewline(prev_buffer_ptr, prev_buffer_size);
 	auto prev_object_size = NumericCast<idx_t>(prev_buffer_ptr - prev_object_start);
 
 	D_ASSERT(scan_state.buffer_offset == options.maximum_object_size);
@@ -935,13 +937,16 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	// Now copy the data to our reconstruct buffer
 	memcpy(scan_state.buffer_ptr + scan_state.buffer_offset - prev_object_size, prev_object_start, prev_object_size);
 
+	// Just a newline, or nothing. A single byte without a newline before it is a value, such as a 1 at the end of a
+	// file. This is checked before the previous buffer is released
+	const bool no_remainder = prev_object_size == 0 || (prev_object_size == 1 && *prev_object_start == '\n');
+
 	// We copied the object, so we are no longer reading the previous buffer
 	if (--previous_buffer_handle->readers == 0) {
 		RemoveBuffer(*previous_buffer_handle);
 	}
 
-	if (prev_object_size == 1) {
-		// Just a newline
+	if (no_remainder) {
 		return false;
 	}
 	scan_state.buffer_offset -= prev_object_size;
@@ -1109,7 +1114,12 @@ void JSONReader::FinalizeBuffer(JSONReaderScanState &scan_state) {
 	// skip over the array start if required
 	if (!scan_state.is_last) {
 		if (scan_state.buffer_index.GetIndex() == 0) {
-			StringUtil::SkipBOM(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.buffer_offset);
+			// the file starts at the buffer offset, which leaves room for the end of a previous buffer when the file
+			// is read in parallel
+			idx_t bom_size = 0;
+			StringUtil::SkipBOM(scan_state.buffer_ptr + scan_state.buffer_offset,
+			                    scan_state.buffer_size - scan_state.buffer_offset, bom_size);
+			scan_state.buffer_offset += bom_size;
 			if (GetFormat() == JSONFormat::ARRAY) {
 				SkipOverArrayStart(scan_state);
 			}

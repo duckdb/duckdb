@@ -63,9 +63,10 @@ struct ParquetPageIndexUtils {
 	//! Reads the OffsetIndex of a column chunk, the protocol must be positioned at the OffsetIndex
 	static void ReadOffsetIndex(duckdb_apache::thrift::protocol::TProtocol &protocol,
 	                            const duckdb_parquet::ColumnChunk &column_chunk, duckdb_parquet::OffsetIndex &result);
-	//! Whether the OffsetIndex describes consecutive pages that start at the first row and stay within the file
+	//! Whether the OffsetIndex describes consecutive pages that start at the first row and lie inside the byte
+	//! range of their own column chunk
 	static bool OffsetIndexIsValid(const duckdb_parquet::OffsetIndex &offset_index, idx_t row_group_num_rows,
-	                               idx_t file_size);
+	                               idx_t file_size, const duckdb_parquet::ColumnChunk &column_chunk);
 	//! Whether the ColumnIndex has consistent entries for the given number of pages
 	static bool ColumnIndexIsValid(const duckdb_parquet::ColumnIndex &column_index, idx_t page_count);
 	//! The number of rows of a page, from the first row index of the page and of its successor

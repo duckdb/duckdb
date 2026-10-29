@@ -72,6 +72,7 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TTransport.h"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1901,7 +1902,9 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
 
 bool ParquetReader::DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state) {
 	for (auto &scan_filter : state.scan_filters) {
-		if (!ExpressionFilter::GetOptionalDynamicFilterData(scan_filter.filter)) {
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(scan_filter.filter, "ParquetReader::DynamicFiltersExcludeRowGroup");
+		if (!ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME)) {
 			continue;
 		}
 		auto &column_reader = state.GetColumnReader(MultiFileLocalIndex(scan_filter.filter_idx));
@@ -1980,11 +1983,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
-//! Page indexes up to this size are fetched in one read (ColumnIndexes and OffsetIndexes together): a row group that
-//! fetches its own indexes pays a round trip before any of its data can be requested, so a few MB up front are cheaper
-static constexpr idx_t PAGE_INDEX_SINGLE_READ_LIMIT = 8 * 1048576;
-
-void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begin, idx_t end) const {
+bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) const {
 	CallOnce(page_index_span_computed, [&] {
 		idx_t span_begin = NumericLimits<idx_t>::Maximum();
 		idx_t span_end = 0;
@@ -2007,17 +2006,26 @@ void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begi
 			page_index_span_end = span_end;
 		}
 	});
-	// remote reads are cached by the file handle, so one read of the whole index serves every row group and thread;
-	// local reads are not, so they stay small
-	const bool fetch_whole_index = !transport.GetCachingFileHandle().OnDiskFile() &&
-	                               page_index_span_end > page_index_span_begin &&
-	                               page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT &&
-	                               begin >= page_index_span_begin && end <= page_index_span_end;
-	if (fetch_whole_index) {
-		transport.Prefetch(page_index_span_begin, page_index_span_end - page_index_span_begin);
-		return;
+	if (page_index_span_end <= page_index_span_begin) {
+		return false;
 	}
-	transport.Prefetch(begin, end - begin);
+	// the cost model decides: the whole index is worth one request when it is no larger than a coalesced read
+	const auto span_size = page_index_span_end - page_index_span_begin;
+	if (span_size > transport.GetAcceptedColumnGap()) {
+		return false;
+	}
+	{
+		lock_guard<mutex> guard(page_index_buffer_lock);
+		if (!page_index_buffer_loaded) {
+			auto buffer = allocator.Allocate(span_size);
+			auto handles = transport.GetCachingFileHandle().Read(span_size, page_index_span_begin);
+			handles.CopyTo(buffer.get(), span_size);
+			page_index_buffer = std::move(buffer);
+			page_index_buffer_loaded = true;
+		}
+	}
+	transport.AddFilledReadHead(page_index_span_begin, span_size, page_index_buffer.get());
+	return true;
 }
 
 void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanState &state) {
@@ -2028,10 +2036,14 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 		PreparePageIndexInternal(context, state);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		if (error.Type() == ExceptionType::INTERNAL) {
+		const auto type = error.Type();
+		if (type == ExceptionType::INTERNAL || type == ExceptionType::INTERRUPT ||
+		    type == ExceptionType::OUT_OF_MEMORY || Exception::InvalidatesDatabase(type)) {
 			throw;
 		}
-		// a page index that cannot be read or evaluated is ignored: the row group is read as if it had none
+		// a page index that cannot be read or evaluated is ignored: the row group is read as if it had none. Corrupt
+		// index bytes surface as Thrift protocol errors, invalid input or reads past the end of the file, so only the
+		// errors that do not come from the file itself are propagated
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.page_index.Reset();
@@ -2106,15 +2118,21 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		                            GetFileName());
 	}
 
-	// the ColumnIndex of the filter columns is fetched in one read; when the whole page index of the row group is
-	// small, the OffsetIndexes come along in that read (a remote request costs more than the few extra bytes)
+	// the page index of the whole file is read once per reader when it fits one coalesced read; otherwise this row
+	// group fetches the ColumnIndexes of its filter columns, and the OffsetIndexes of its scanned columns join that
+	// read when the bytes between the two ranges are within the accepted column gap
+	const bool whole_index_attached = TryAttachPageIndexBuffer(trans);
 	const auto index_begin = MinValue(column_index_begin, offset_index_begin);
 	const auto index_end = MaxValue(column_index_end, offset_index_end);
-	const bool fetch_indexes_together = index_end - index_begin <= PAGE_INDEX_SINGLE_READ_LIMIT;
-	if (fetch_indexes_together) {
-		PrefetchPageIndex(trans, index_begin, index_end);
-	} else {
-		PrefetchPageIndex(trans, column_index_begin, column_index_end);
+	const auto covered = (column_index_end - column_index_begin) + (offset_index_end - offset_index_begin);
+	const auto gap_between = index_end - index_begin > covered ? index_end - index_begin - covered : 0;
+	const bool fetch_indexes_together = !whole_index_attached && gap_between <= trans.GetAcceptedColumnGap();
+	if (!whole_index_attached) {
+		if (fetch_indexes_together) {
+			trans.Prefetch(index_begin, index_end - index_begin);
+		} else {
+			trans.Prefetch(column_index_begin, column_index_end - column_index_begin);
+		}
 	}
 	vector<vector<bool>> page_may_match(filter_columns.size());
 	bool any_page_pruned = false;
@@ -2143,8 +2161,8 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		return;
 	}
 
-	if (!fetch_indexes_together) {
-		PrefetchPageIndex(trans, offset_index_begin, offset_index_end);
+	if (!whole_index_attached && !fetch_indexes_together) {
+		trans.Prefetch(offset_index_begin, offset_index_end - offset_index_begin);
 	}
 	state.page_index.offset_indexes.resize(group.columns.size());
 	for (auto column_chunk_idx : scanned_column_chunks) {
@@ -2154,7 +2172,7 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		}
 		auto offset_index = make_uniq<duckdb_parquet::OffsetIndex>(state.page_index.arena);
 		ParquetPageIndexUtils::ReadOffsetIndex(*state.thrift_file_proto, column_chunk, *offset_index);
-		if (!ParquetPageIndexUtils::OffsetIndexIsValid(*offset_index, row_group_num_rows, file_size)) {
+		if (!ParquetPageIndexUtils::OffsetIndexIsValid(*offset_index, row_group_num_rows, file_size, column_chunk)) {
 			continue;
 		}
 		state.page_index.offset_indexes[column_chunk_idx] = std::move(offset_index);

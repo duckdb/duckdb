@@ -538,6 +538,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version);
+	GetMetadataManager().SetStorageVersion(options.storage_version);
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number);
@@ -854,6 +855,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	}
 
 	db.GetStorageManager().SetStorageVersion(options.storage_version);
+	GetMetadataManager().SetStorageVersion(options.storage_version);
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
 		throw InvalidInputException(
