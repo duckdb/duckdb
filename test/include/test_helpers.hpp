@@ -87,7 +87,7 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 // inherited down every level.
 //
 //   $ROOT    -- root; default "duckdb_unittest_tempdir" or --temp-dir-root <p>
-//   $RUN_ID  -- per-invocation isolation ($TS--$RANDTAG when auto, or a caller id)
+//   $RUN_ID  -- per-invocation isolation (a random UUID when auto, or a caller id)
 //   $TEST_ID -- per-test isolation (full test name, sanitized); resolved at test-run time
 //
 //! Destroy disposition: what to do about the dir at end-of-invocation / end-of-test.
@@ -119,7 +119,7 @@ string GetLocalTempDirRoot();
 //! Returns the resolved RUN_ID value ("" when RUN_ID is off).
 string GetTempDirRunId();
 //! --temp-dir-run-id {off|auto|<id>}: off => no RUN_ID level; auto => generated
-//! $TS--$RANDTAG (once per invocation); any other value is used literally as the RUN_ID.
+//! UUID (once per invocation); any other value is used literally as the RUN_ID.
 void SetRunId(const string &id);
 bool SetTempDirRunIdInPath(const string &mode);
 //! --temp-dir-test-id {on|off}. Returns false on an unrecognized value.

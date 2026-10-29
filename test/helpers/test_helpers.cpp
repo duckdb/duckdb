@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <ctime>
 #include <fstream>
 
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
@@ -328,27 +327,9 @@ bool DatabaseDestroyFires(bool success) {
 	}
 }
 
-// RUN_ID auto value: sortable UTC timestamp + mnemonic + UUID.
-// Keep the full UUID: colliding run IDs let one process reclaim another process's live files.
-static const char *const TEMP_DIR_COLORS[] = {"crimson", "scarlet", "azure",   "cobalt", "teal",    "olive",
-                                              "maroon",  "indigo",  "violet",  "coral",  "ochre",   "umber",
-                                              "jade",    "ivory",   "slate",   "sienna", "magenta", "cyan",
-                                              "khaki",   "russet",  "saffron", "mauve",  "bronze",  "copper"};
-static const char *const TEMP_DIR_SHAPES[] = {"cube",    "prism",   "sphere",  "cone",  "torus",   "helix",
-                                              "wedge",   "disc",    "ring",    "arch",  "spiral",  "prong",
-                                              "vane",    "cusp",    "node",    "facet", "obelisk", "pylon",
-                                              "lattice", "rhombus", "spindle", "dome",  "ingot",   "girder"};
-
 static string GenerateAutoRunId() {
-	std::time_t now = std::time(nullptr);
-	char ts[24] = {0};
-	std::strftime(ts, sizeof(ts), "%Y-%m-%dT%H-%M-%SZ", std::gmtime(&now));
-	auto uuid = UUID::GenerateRandomUUID();
-	auto n_colors = sizeof(TEMP_DIR_COLORS) / sizeof(TEMP_DIR_COLORS[0]);
-	auto n_shapes = sizeof(TEMP_DIR_SHAPES) / sizeof(TEMP_DIR_SHAPES[0]);
-	const char *color = TEMP_DIR_COLORS[uuid.lower % n_colors];
-	const char *shape = TEMP_DIR_SHAPES[static_cast<uint64_t>(uuid.upper) % n_shapes];
-	return string(ts) + "--" + color + "-" + shape + "-" + UUID::ToString(uuid);
+	// Keep the full UUID without timestamp or mnemonic overhead in Windows paths.
+	return UUID::ToString(UUID::GenerateRandomUUID());
 }
 
 // The caller's --run-id, or a generated one, cached for the invocation. Always resolved, even when

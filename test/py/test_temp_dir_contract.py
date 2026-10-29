@@ -630,11 +630,12 @@ SELECT '{ONE}', '{TWO}'
 #
 
 
-def test_auto_run_id_preserves_uuid_entropy(probe, tmp_path):
-    """Concurrent invocations must not share a run root through a small mnemonic namespace."""
+def test_auto_run_id_is_compact_uuid(probe, tmp_path):
+    """Keep full UUID entropy without consuming path space on a timestamp or mnemonic."""
     identifiers = [probe("--temp-dir-root", str(tmp_path / "root"))["run_id"] for _ in range(2)]
     for identifier in identifiers:
-        random_id = uuid.UUID(identifier[-36:])
+        random_id = uuid.UUID(identifier)
+        assert str(random_id) == identifier
         assert random_id.version == 4
         assert random_id.variant == uuid.RFC_4122
     assert identifiers[0] != identifiers[1]
