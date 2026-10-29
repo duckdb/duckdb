@@ -30,6 +30,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/match_recognize_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression_sources.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -980,6 +981,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	BoundSelectNode define_node;
 	define_node.from_table = define_binder->Bind(*input_table);
 	ReserveNodeIndexes(*this, define_node);
+	ExpressionSourceScope define_sources(*define_binder, define_node);
 
 	// the input's own columns pass through, because the output still reports them
 	column_binding_map_t<idx_t> input_columns;
@@ -1075,6 +1077,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	BoundStatement bound_define;
 	bound_define.types = define_node.types;
 	bound_define.names = define_node.names;
+	define_sources.Release();
 	bound_define.plan = CreatePlan(define_node);
 
 	FinishMatchData(*ref.config, std::move(define_symbols), *match_data);
@@ -1096,6 +1099,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	BoundSelectNode measures;
 	measures.from_table = measures_binder->Bind(*spans_ref);
 	ReserveNodeIndexes(*this, measures);
+	ExpressionSourceScope measure_sources(*measures_binder, measures);
 
 	// the DEFINE columns are an implementation detail, so they do not reach the output
 	const case_insensitive_set_t hidden(hidden_columns.begin(), hidden_columns.end());
@@ -1120,7 +1124,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (idx_t i = 0; i < ref.config->measures_expression_list.size(); i++) {
 		auto &expr = ref.config->measures_expression_list[i];
 		measures.bind_state.alias_map[expr->GetAlias()] = i;
-		measures.bind_state.original_expressions.push_back(expr->Copy());
+		measures.bind_state.AddProjection(*measures_binder, *expr);
 	}
 
 	MatchRecognizeMeasureNames measure_names;
@@ -1133,6 +1137,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			measure_names.aliases.push_back(expr->GetAlias());
 			measure_names.columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_names.columns.size())));
 			auto bound = measure_expression_binder.Bind(expr);
+			measures.bind_state.CompleteProjection(measures.bound_column_count);
 			// one more measure is now there to be named by the ones after it
 			measures.bound_column_count++;
 			bound->SetAlias(Identifier(measure_names.columns.back()));
@@ -1147,6 +1152,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	BoundStatement bound_measures;
 	bound_measures.types = measures.types;
 	bound_measures.names = measures.names;
+	measure_sources.Release();
 	bound_measures.plan = CreatePlan(measures);
 
 	// the level above sees the measures and not the columns they were computed from

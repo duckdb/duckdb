@@ -3,9 +3,12 @@ add_library_unity(
   OBJECT
   alter_binder.cpp
   base_select_binder.cpp
+  case_compatibility.cpp
+  expression_match.cpp
   check_binder.cpp
   column_alias_binder.cpp
   constant_binder.cpp
+  expression_sources.cpp
   group_binder.cpp
   having_binder.cpp
   lateral_binder.cpp

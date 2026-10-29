@@ -56,23 +56,8 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	// check if the expression matches one of the expressions in the original expression list
 	auto &select_list = stmt.extra_info.original_expressions;
 	for (auto &select_expr : select_list) {
-		auto &expr = select_expr.expression;
 		idx_t index = reorder_idx[select_expr.index];
-		if (select_expr.case_compatible) {
-			bind_state.case_projection_map.Add(*expr, index, true);
-		}
-		// now check if the node is already in the set of expressions
-		auto expr_entry = bind_state.projection_map.find(*expr);
-		if (expr_entry != bind_state.projection_map.end()) {
-			// the node is in there
-			// repeat the same as with the alias: if there is an ambiguity we insert "-1"
-			if (expr_entry->second != index) {
-				bind_state.projection_map[*expr] = DConstants::INVALID_INDEX;
-			}
-		} else {
-			// not in there yet, just place it in there
-			bind_state.projection_map[*expr] = index;
-		}
+		bind_state.projection_index.Add(select_expr.expression, index);
 	}
 }
 
@@ -338,7 +323,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 		}
 	}
 
-	SelectBindState bind_state;
+	SelectBindState bind_state(ExpressionMatchPolicy::AMBIGUOUS);
 	vector<unique_ptr<ResultModifier>> outer_modifiers;
 	if (!statement.modifiers.empty()) {
 		// handle the ORDER BY/DISTINCT clauses

@@ -70,21 +70,6 @@ bool ContainsCaseExpression(const ParsedExpression &expr, ExpressionClass expres
 	return false;
 }
 
-void NormalizeCaseExpression(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionClass() == ExpressionClass::CASE && expr->Cast<CaseExpression>().CaseOperand()) {
-		expr = expr->Cast<CaseExpression>().GetLegacyCaseExpression();
-	}
-	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		auto &subquery = expr->Cast<SubqueryExpression>().Subquery();
-		if (subquery) {
-			ParsedExpressionIterator::EnumerateQueryNodeChildren(*subquery->node, NormalizeCaseExpression);
-		}
-	}
-	for (auto &child : expr->ChildrenMutable()) {
-		NormalizeCaseExpression(child);
-	}
-}
-
 } // namespace
 
 bool CaseExpression::ContainsSimpleCase(const ParsedExpression &expr) {
@@ -93,12 +78,6 @@ bool CaseExpression::ContainsSimpleCase(const ParsedExpression &expr) {
 
 bool CaseExpression::ContainsLambdaReference(const ParsedExpression &expr) {
 	return ContainsCaseExpression(expr, ExpressionClass::LAMBDA_REF);
-}
-
-unique_ptr<ParsedExpression> CaseExpression::Normalize(const ParsedExpression &expr) {
-	auto result = expr.Copy();
-	NormalizeCaseExpression(result);
-	return result;
 }
 
 bool CaseExpression::UseLegacySerialization() const {

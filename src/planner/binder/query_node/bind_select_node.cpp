@@ -35,6 +35,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression_sources.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/main/settings.hpp"
@@ -529,6 +530,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	result.groupings_index = GenerateTableIndex();
 	result.window_index = GenerateTableIndex();
 	result.prune_index = GenerateTableIndex();
+	ExpressionSourceScope expression_sources(*this, result);
 
 	result.from_table = std::move(from_table);
 	// bind the sample clause
@@ -559,8 +561,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			bind_state.alias_map[expr->GetAlias()] = i;
 			result.names[i] = expr->GetAlias();
 		}
-		bind_state.projection_map[*expr] = i;
-		bind_state.original_expressions.push_back(expr->Copy());
+		bind_state.AddProjection(*this, *expr);
 	}
 	result.column_count = statement.select_list.size();
 
@@ -568,6 +569,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// bind any star expressions in the WHERE clause
 		BindWhereStarExpression(statement.where_clause);
 	}
+	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	for (idx_t i = 0; i < statement.groups.group_expressions.size(); i++) {
 		auto &grp = statement.groups.group_expressions[i];
 		ExpressionBinder::QualifyColumnNames(*this, grp);
@@ -581,6 +583,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			bind_state.has_compound_groups = true;
 		}
 		bind_state.unbound_groups.push_back(std::move(grp_copy));
+=======
+		unbound_groups.push_back(ExpressionMatchDescriptor::CreateSnapshot(*this, *grp));
+>>>>>>> 671e2b3fac8 (Refactor CASE compatibility into scoped source resolution and unified)
 	}
 
 	if (statement.qualify) {
@@ -628,9 +633,12 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		SetCanContainNulls(true);
 		vector<ProjectionIndex> group_indexes;
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-			auto &unbound_group = *bind_state.unbound_groups[i];
-			auto group_index = bind_state.TryBindCaseGroup(unbound_group);
+			auto &unbound_group = *unbound_groups[i];
+			auto group_index = bind_state.FindGroup(unbound_group);
 			if (group_index.IsValid()) {
+				bind_state.ApplyGroupBinding(unbound_group, group_index);
+				bind_state.AddGroup(make_shared_ptr<ExpressionMatchDescriptor>(std::move(unbound_groups[i])),
+				                    group_index);
 				group_indexes.push_back(group_index);
 				continue;
 			}
@@ -645,8 +653,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
-			bind_state.RegisterCaseGroup(unbound_group, group_index,
-			                             CaseExpressionMap::IsCompatible(*bound_expr, result));
+			bind_state.AddGroup(make_shared_ptr<ExpressionMatchDescriptor>(std::move(unbound_groups[i])), group_index);
 
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression
@@ -668,9 +675,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 		}
 		SetCanContainNulls(prev_can_contain_nulls);
-		for (auto &entry : bind_state.group_map) {
-			entry.second = group_indexes[entry.second];
-		}
 		for (auto &entry : bind_state.group_alias_map) {
 			entry.second = group_indexes[entry.second];
 		}
@@ -721,6 +725,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		                                    statement.aggregate_handling != AggregateHandling::FORCE_AGGREGATES);
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		select_binder.SetTransportTryErrors(false);
+=======
+		bind_state.CompleteProjection(i);
+>>>>>>> 671e2b3fac8 (Refactor CASE compatibility into scoped source resolution and unified)
 		bool is_original_column = i < result.column_count;
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
@@ -740,9 +747,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of an empty struct is not supported");
 			}
 
-			bool case_compatible = true;
 			for (auto &struct_expr : struct_expressions) {
-				case_compatible &= CaseExpressionMap::IsCompatible(*struct_expr, result);
 				if (struct_expr->IsVolatile()) {
 					bind_state.SetExpressionIsVolatile(i);
 				}
@@ -751,18 +756,12 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				internal_sql_types.push_back(struct_expr->GetReturnType());
 				result.select_list.push_back(std::move(struct_expr));
 			}
-			if (case_compatible) {
-				bind_state.SetExpressionIsCaseCompatible(i);
-			}
 			bind_state.AddExpandedColumn(struct_expressions.size());
 			continue;
 		}
 
 		if (expr->IsVolatile()) {
 			bind_state.SetExpressionIsVolatile(i);
-		}
-		if (CaseExpressionMap::IsCompatible(*expr, result)) {
-			bind_state.SetExpressionIsCaseCompatible(i);
 		}
 		if (expr->HasSubquery()) {
 			bind_state.SetExpressionHasSubquery(i);
@@ -812,7 +811,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			if (ExpressionBinder::PushCollation(context, expr, return_type)) {
 				if (contains_subquery) {
 					// bound subqueries cannot be copied, so bind the select-list expression again
-					auto parsed_copy = bind_state.original_expressions[group_by_all_index]->Copy();
+					auto parsed_copy = bind_state.ProjectionExpression(group_by_all_index).Copy();
 					auto bound_column_count = select_binder.GetBoundColumns().size();
 					uncollated_expr = select_binder.Bind(parsed_copy);
 					select_binder.TruncateBoundColumns(bound_column_count);
@@ -834,10 +833,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// map the select expressions to their groups, so HAVING binds to them
 	// this happens after all select expressions are bound, since binding them again must not resolve to a group
 	for (auto &entry : group_by_all_groups) {
-		auto group_copy = bind_state.original_expressions[entry.first]->Copy();
-		bind_state.group_map[*group_copy] = entry.second;
-		bind_state.RegisterCaseGroup(*group_copy, entry.second, bind_state.ExpressionIsCaseCompatible(entry.first));
-		bind_state.unbound_groups.push_back(std::move(group_copy));
+		bind_state.AddGroup(bind_state.ProjectionDescriptor(entry.first), entry.second);
 	}
 
 	// bind the HAVING clause, if any, after the SELECT list and its groups
@@ -904,14 +900,14 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	BoundStatement result_statement;
 	result_statement.types = result.types;
 	result_statement.names = result.names;
+	expression_sources.Release();
 	result_statement.plan = CreatePlan(result);
-	for (idx_t i = 0; i < bind_state.original_expressions.size(); i++) {
+	for (idx_t i = 0; i < bind_state.ProjectionCount(); i++) {
 		auto index = bind_state.GetFinalIndex(i);
 		if (bind_state.GetFinalIndex(i + 1) != index + 1) {
 			continue;
 		}
-		result_statement.extra_info.original_expressions.push_back(
-		    {std::move(bind_state.original_expressions[i]), index, bind_state.ExpressionIsCaseCompatible(i)});
+		result_statement.extra_info.original_expressions.push_back({bind_state.ProjectionDescriptor(i), index});
 	}
 	return result_statement;
 }

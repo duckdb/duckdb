@@ -45,7 +45,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	if (!extra_list) {
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
-	bind_state.projection_map[*expr] = extra_list->size();
+	bind_state.projection_index.AddExact(expr->Copy(), extra_list->size());
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(std::move(expr));
 	return result;
@@ -89,11 +89,11 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		}
 		// check the expression list
 		vector<idx_t> matching_columns;
-		for (idx_t i = 0; i < bind_state.original_expressions.size(); i++) {
-			if (bind_state.original_expressions[i]->GetExpressionType() != ExpressionType::COLUMN_REF) {
+		for (idx_t i = 0; i < bind_state.ProjectionCount(); i++) {
+			if (bind_state.ProjectionExpression(i).GetExpressionType() != ExpressionType::COLUMN_REF) {
 				continue;
 			}
-			auto &colref = bind_state.original_expressions[i]->Cast<ColumnRefExpression>();
+			auto &colref = bind_state.ProjectionExpression(i).Cast<ColumnRefExpression>();
 			if (colref.HasAlias()) {
 				continue;
 			}
@@ -148,18 +148,11 @@ optional_idx OrderBinder::TryGetExpressionReference(unique_ptr<ParsedExpression>
 		}
 		return optional_idx();
 	}
-	auto entry = bind_state.projection_map.find(*expr);
-	optional_ptr<const idx_t> index = entry == bind_state.projection_map.end() ? nullptr : &entry->second;
-	if (!index) {
-		index = bind_state.case_projection_map.Find(*expr);
-	}
-	if (!index) {
-		return optional_idx();
-	}
-	if (*index == DConstants::INVALID_INDEX) {
+	auto match = bind_state.projection_index.Find(*expr);
+	if (match.IsAmbiguous()) {
 		throw BinderException("Ambiguous reference to column");
 	}
-	return *index;
+	return match.IsValid() ? optional_idx(match.GetIndex()) : optional_idx();
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {

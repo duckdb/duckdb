@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/expression_binder/case_compatibility.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
@@ -250,6 +251,13 @@ void Binder::AddBoundTableMacro(CatalogEntry &table_macro) {
 
 TableIndex Binder::GenerateTableIndex() {
 	return TableIndex(global_binder_state->bound_tables++);
+}
+
+CaseCompatibilityContext &Binder::GetCaseCompatibility() {
+	if (!global_binder_state->case_compatibility) {
+		global_binder_state->case_compatibility = make_shared_ptr<CaseCompatibilityContext>();
+	}
+	return *global_binder_state->case_compatibility;
 }
 
 StatementProperties &Binder::GetStatementProperties() {

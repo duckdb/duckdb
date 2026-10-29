@@ -14,34 +14,17 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/planner/expression_binder/expression_match.hpp"
 
 namespace duckdb {
-class BoundSelectNode;
-
-//! Compatibility keys for expressions whose CASE normalization preserves evaluation.
-class CaseExpressionMap {
-public:
-	static bool IsCompatible(const Expression &expr, const BoundSelectNode &node);
-	static bool HasVolatileSource(const Expression &expr, const BoundSelectNode &node);
-	void Add(const ParsedExpression &expr, idx_t index, bool check_ambiguity = false);
-	optional_ptr<const idx_t> Find(const ParsedExpression &expr) const;
-
-private:
-	vector<unique_ptr<ParsedExpression>> expressions;
-	parsed_expression_map_t<idx_t> entries;
-};
 
 //! Bind state during a SelectNode
 struct SelectBindState {
+	explicit SelectBindState(ExpressionMatchPolicy projection_policy = ExpressionMatchPolicy::REPLACE);
+
 	// Mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	identifier_map_t<idx_t> alias_map;
-	parsed_expression_map_t<idx_t> projection_map;
-	CaseExpressionMap case_projection_map;
-	//! The original unparsed expressions. This is exported after binding, because the binding might change the
-	//! expressions (e.g. when a * clause is present)
-	vector<unique_ptr<ParsedExpression>> original_expressions;
-	vector<unique_ptr<ParsedExpression>> unbound_groups;
-	parsed_expression_map_t<ProjectionIndex> group_map;
+	ExpressionMatchIndex projection_index;
 	identifier_map_t<ProjectionIndex> group_alias_map;
 	//! Whether any group is an expression other than a plain column reference
 	bool has_compound_groups = false;
@@ -50,23 +33,33 @@ struct SelectBindState {
 
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);
-	void RegisterCaseGroup(const ParsedExpression &expr, ProjectionIndex index, bool case_compatible);
-	ProjectionIndex TryBindCaseGroup(const ParsedExpression &expr) const;
+	void AddProjection(Binder &binder, ParsedExpression &expr);
+	void CompleteProjection(idx_t index);
+	idx_t ProjectionCount() const;
+	const ParsedExpression &ProjectionExpression(idx_t index) const;
+	shared_ptr<const ExpressionMatchDescriptor> ProjectionDescriptor(idx_t index) const;
+
+	void AddGroup(shared_ptr<const ExpressionMatchDescriptor> expression, ProjectionIndex index);
+	void ApplyGroupBinding(const ParsedExpression &expr, ProjectionIndex index) const;
+	ProjectionIndex FindGroup(const ParsedExpression &expr) const;
 
 	void SetExpressionIsVolatile(idx_t index);
 	void SetExpressionHasSubquery(idx_t index);
 
 	bool AliasHasSubquery(idx_t index) const;
-	void SetExpressionIsCaseCompatible(idx_t index);
-	bool ExpressionIsCaseCompatible(idx_t index) const;
 
 	void AddExpandedColumn(idx_t expand_count);
 	void AddRegularColumn();
 	ProjectionIndex GetFinalIndex(idx_t index) const;
 
 private:
-	CaseExpressionMap case_group_map;
-	unordered_set<idx_t> case_compatible_expressions;
+	struct Projection {
+		unique_ptr<ParsedExpression> snapshot;
+		shared_ptr<const ExpressionMatchDescriptor> descriptor;
+	};
+	vector<Projection> projections;
+	ExpressionMatchIndex group_index;
+	vector<shared_ptr<const ExpressionMatchDescriptor>> groups;
 	//! The set of referenced aliases
 	unordered_set<idx_t> referenced_aliases;
 	//! The set of expressions that is volatile

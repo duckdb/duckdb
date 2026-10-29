@@ -25,11 +25,11 @@ public:
 
 	static void EnumerateTableRefChildren(TableRef &ref,
 	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
-	                                      const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback);
-	static void
-	EnumerateQueryNodeChildren(QueryNode &node,
-	                           const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
-	                           const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback);
+	                                      const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback,
+	                                      bool ordered_ctes = false);
+	static void EnumerateQueryNodeChildren(
+	    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+	    const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback, bool ordered_ctes = false);
 
 	static void
 	EnumerateQueryNodeModifiers(QueryNode &node,

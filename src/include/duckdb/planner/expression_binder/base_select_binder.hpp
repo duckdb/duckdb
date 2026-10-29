@@ -42,6 +42,7 @@ protected:
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
 
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
+	BindResult BindCaseExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	//! Binds a WINDOW expression and returns the result.
 	virtual BindResult BindWindowExpression(WindowExpression &expr, idx_t depth);

@@ -27,26 +27,8 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::CASE: {
-		auto &case_expr = expr.Cast<CaseExpression>();
-		if (!inside_aggregate && !node.bind_state.group_map.empty() && case_expr.CaseOperand()) {
-			auto legacy_case = case_expr.GetLegacyCaseExpression();
-			bool grouped_checks = true;
-			for (auto &check : legacy_case->CaseChecks()) {
-				auto index = node.bind_state.TryBindCaseGroup(*check.when_expr);
-				if (!index.IsValid() ||
-				    (case_expr.CaseChecks().size() > 1 &&
-				     CaseExpressionMap::HasVolatileSource(*node.groups.group_expressions[index], node))) {
-					grouped_checks = false;
-					break;
-				}
-			}
-			if (grouped_checks) {
-				return ExpressionBinder::BindExpression(*legacy_case, depth);
-			}
-		}
-		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
-	}
+	case ExpressionClass::CASE:
+		return BindCaseExpression(expr_ptr, depth, root_expression);
 	case ExpressionClass::COLUMN_REF:
 		if (inside_aggregate) {
 			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
@@ -112,20 +94,7 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 			}
 		}
 	}
-	// no alias reference found
-	// check the list of group columns for a match
-	auto &group_map = node.bind_state.group_map;
-	auto entry = group_map.find(expr);
-	if (entry != group_map.end()) {
-		return entry->second;
-	}
-#ifdef DEBUG
-	for (auto map_entry : group_map) {
-		D_ASSERT(!map_entry.first.get().Equals(expr));
-		D_ASSERT(!expr.Equals(map_entry.first.get()));
-	}
-#endif
-	return node.bind_state.TryBindCaseGroup(expr);
+	return node.bind_state.FindGroup(expr);
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -162,6 +131,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
+	node.bind_state.ApplyGroupBinding(expr, group_index);
 	auto &collated_groups = node.bind_state.collated_groups;
 	auto it = collated_groups.find(group_index);
 	if (it != collated_groups.end()) {

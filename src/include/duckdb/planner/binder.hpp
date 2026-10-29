@@ -46,6 +46,9 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
+class CaseCompatibilityContext;
+class ExpressionSourceScope;
+struct BoundExpressionSource;
 struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
@@ -203,6 +206,8 @@ private:
 
 //! GlobalBinderState is state shared over the ENTIRE query, including subqueries, views, etc
 struct GlobalBinderState {
+	shared_ptr<CaseCompatibilityContext> case_compatibility;
+	vector<reference<const BoundSelectNode>> expression_sources;
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
 	//! Statement properties
@@ -241,6 +246,7 @@ struct GlobalBinderState {
 class Binder : public enable_shared_from_this<Binder> {
 	friend class ColumnQualifier;
 	friend class ExpressionBinder;
+	friend class ExpressionSourceScope;
 	friend class RecursiveDependentJoinPlanner;
 
 public:
@@ -340,6 +346,8 @@ public:
 
 	//! Generates an unused index for a table
 	TableIndex GenerateTableIndex();
+	CaseCompatibilityContext &GetCaseCompatibility();
+	BoundExpressionSource GetExpressionSource(ColumnBinding binding) const;
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);

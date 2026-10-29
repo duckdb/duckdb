@@ -17,6 +17,7 @@
 #include "duckdb/common/index_vector.hpp"
 
 namespace duckdb {
+struct BoundExpressionSource;
 
 class BoundGroupByNode {
 public:
@@ -109,6 +110,8 @@ public:
 	bool need_prune = false;
 
 public:
+	BoundExpressionSource GetExpressionSource(ColumnBinding binding) const;
+
 	TableIndex GetRootIndex() override {
 		return need_prune ? prune_index : projection_index;
 	}

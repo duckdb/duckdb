@@ -21,12 +21,12 @@ struct LogicalType;
 struct BoundStatement;
 class ParsedExpression;
 class Binder;
+class ExpressionMatchDescriptor;
 
-//! A parsed projection and its final position and CASE compatibility after binding.
+//! A finalized projection match and its position in the output.
 struct SelectExpressionInfo {
-	unique_ptr<ParsedExpression> expression;
+	shared_ptr<const ExpressionMatchDescriptor> expression;
 	idx_t index;
-	bool case_compatible;
 };
 
 struct ExtraBoundInfo {

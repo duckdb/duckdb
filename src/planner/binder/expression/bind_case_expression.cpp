@@ -9,7 +9,10 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/case_operand_binding.hpp"
+#include "duckdb/planner/expression_binder/case_compatibility.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/table_binding.hpp"
@@ -139,8 +142,35 @@ static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpress
 	return std::move(result);
 }
 
+BindResult BaseSelectBinder::BindCaseExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
+                                                bool root_expression) {
+	auto &expr = expr_ptr->Cast<CaseExpression>();
+	if (!inside_aggregate && !node.groups.group_expressions.empty() && expr.CaseOperand()) {
+		auto legacy_case = expr.GetLegacyCaseExpression();
+		bool grouped_checks = true;
+		for (auto &check : legacy_case->CaseChecks()) {
+			auto index = node.bind_state.FindGroup(*check.when_expr);
+			if (!index.IsValid() ||
+			    (expr.CaseChecks().size() > 1 && !CaseCompatibilityContext::CanRepeatComparisonOperand(
+			                                         *node.groups.group_expressions[index], binder))) {
+				grouped_checks = false;
+				break;
+			}
+		}
+		if (grouped_checks) {
+			auto result = ExpressionBinder::BindExpression(*legacy_case, depth);
+			if (!result.HasError()) {
+				CaseCompatibilityContext::Record(expr, true);
+			}
+			return result;
+		}
+	}
+	return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+}
+
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	ErrorData error;
+	bool case_safe = true;
 	vector<pair<unique_ptr<Expression>, unique_ptr<Expression>>> checks;
 	unique_ptr<Expression> else_expr;
 	if (expr.CaseOperand()) {
@@ -153,6 +183,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
+		case_safe = expr.CaseChecks().size() == 1 || CaseCompatibilityContext::CanRepeatOperand(*case_operand, binder);
 
 		if (expr.CaseChecks().size() == 1 || !case_operand->IsVolatile()) {
 			vector<unique_ptr<Expression>> operands;
@@ -196,12 +227,19 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 			auto &invoke_entry = BindFunction(invoke_function).Cast<ScalarFunctionCatalogEntry>();
 			vector<unique_ptr<Expression>> bound_children(invoke_function.GetArguments().size());
 			bound_children[1] = std::move(case_operand);
-			return BindLambdaFunction(invoke_function, invoke_entry, depth, std::move(bound_children), true);
+			auto result = BindLambdaFunction(invoke_function, invoke_entry, depth, std::move(bound_children), true);
+			if (!result.HasError()) {
+				CaseCompatibilityContext::Record(expr, case_safe);
+			}
+			return result;
 		}
 	} else {
 		// first try to bind the children of the case expression
 		for (auto &check : expr.CaseChecksMutable()) {
 			auto when_expr = BindChild(check.when_expr, depth, error);
+			if (when_expr && expr.CaseChecks().size() > 1) {
+				case_safe &= CaseCompatibilityContext::CanRepeatComparisonOperand(*when_expr, binder);
+			}
 			auto then_expr = BindChild(check.then_expr, depth, error);
 			checks.emplace_back(std::move(when_expr), std::move(then_expr));
 		}
@@ -232,6 +270,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		result->CaseChecksMutable().push_back(std::move(result_check));
 	}
 	result->ElseMutable() = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
+	CaseCompatibilityContext::Record(expr, case_safe);
 	return BindResult(std::move(result));
 }
 } // namespace duckdb
