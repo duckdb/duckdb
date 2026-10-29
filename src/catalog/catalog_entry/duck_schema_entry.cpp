@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/language_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -22,7 +23,10 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/language_macro_function.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -38,6 +42,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -79,7 +84,8 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
-      sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
+      sequences(catalog), collations(catalog), languages(catalog),
+      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
       coordinate_systems(
           catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultCoordinateSystemGenerator>(catalog, *this) : nullptr) {
 }
@@ -233,9 +239,22 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 		                                                                    info.Cast<CreateTableFunctionInfo>());
 		break;
 	case CatalogType::MACRO_ENTRY:
-	case CatalogType::TABLE_MACRO_ENTRY:
-		function = MacroCatalogEntry::Create(catalog, *this, info.Cast<CreateMacroInfo>());
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto &macro_info = info.Cast<CreateMacroInfo>();
+		if (macro_info.macros.size() == 1 && macro_info.macros[0]->type == MacroType::LANGUAGE_MACRO) {
+			auto &catalog_set = GetCatalogSet(info.type);
+			auto existing_entry = catalog_set.GetEntry(transaction, info.GetFunctionName());
+			if (existing_entry && existing_entry->type == CatalogType::MACRO_ENTRY) {
+				auto &existing_macro = existing_entry->Cast<MacroCatalogEntry>();
+				if (!existing_macro.macros.empty() && existing_macro.macros[0]->type == MacroType::LANGUAGE_MACRO) {
+					// adding one member to an existing overload set follows the overload identity rules
+					return AddLanguageFunctionMember(transaction, macro_info, existing_macro);
+				}
+			}
+		}
+		function = MacroCatalogEntry::Create(catalog, *this, macro_info);
 		break;
+	}
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
@@ -253,6 +272,104 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	}
 	function->internal = info.internal;
 	return AddEntry(transaction, std::move(function), info.on_conflict);
+}
+
+//! Remove the descriptions documenting a member's signature (untyped parameters are documented as ANY)
+static void RemoveMemberDescriptions(vector<FunctionDescription> &descriptions, const MacroFunction &member) {
+	vector<LogicalType> documented;
+	for (idx_t i = 0; i < member.parameters.size(); i++) {
+		auto type = i < member.types.size() ? member.types[i] : LogicalType::UNKNOWN;
+		documented.push_back(type.id() == LogicalTypeId::UNKNOWN ? LogicalType::ANY : type);
+	}
+	vector<FunctionDescription> remaining;
+	for (auto &description : descriptions) {
+		if (description.parameter_types != documented) {
+			remaining.push_back(std::move(description));
+		}
+	}
+	descriptions = std::move(remaining);
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::AddLanguageFunctionMember(CatalogTransaction transaction,
+                                                                      CreateMacroInfo &info,
+                                                                      MacroCatalogEntry &existing) {
+	D_ASSERT(info.macros.size() == 1 && info.macros[0]->type == MacroType::LANGUAGE_MACRO);
+	auto &new_member = info.macros[0]->Cast<LanguageMacroFunction>();
+	auto &name = info.GetFunctionName();
+	if (existing.internal && !info.internal) {
+		// the member rewrite is a drop+create: an internal entry's protection applies to it too
+		throw CatalogException("function %s is an internal system entry: its overloads cannot be modified", name);
+	}
+	auto &existing_language = existing.macros[0]->Cast<LanguageMacroFunction>().language;
+	if (!StringUtil::CIEquals(existing_language, new_member.language)) {
+		throw CatalogException("Cannot create function %s in language \"%s\": the name already belongs to a "
+		                       "function in language \"%s\", overloads of one name share one language",
+		                       name, new_member.language, existing_language);
+	}
+	// members that can resolve the same call as the new signature
+	vector<idx_t> conflicts;
+	for (idx_t member_idx = 0; member_idx < existing.macros.size(); member_idx++) {
+		if (existing.macros[member_idx]->ConflictsWith(new_member)) {
+			conflicts.push_back(member_idx);
+		}
+	}
+	optional_idx replaced;
+	switch (info.on_conflict) {
+	case OnCreateConflict::IGNORE_ON_CONFLICT:
+		if (!conflicts.empty()) {
+			// IF NOT EXISTS skips at member granularity, siblings are unaffected
+			return nullptr;
+		}
+		break;
+	case OnCreateConflict::ERROR_ON_CONFLICT:
+		if (!conflicts.empty()) {
+			throw CatalogException("An overload of function %s with signature %s already exists: it conflicts with "
+			                       "the existing overload %s%s",
+			                       name, new_member.SignatureToString(), name,
+			                       existing.macros[conflicts[0]]->SignatureToString());
+		}
+		break;
+	case OnCreateConflict::REPLACE_ON_CONFLICT:
+		if (conflicts.size() > 1) {
+			string conflict_list;
+			for (auto conflict_idx : conflicts) {
+				if (!conflict_list.empty()) {
+					conflict_list += ", ";
+				}
+				conflict_list += name.GetIdentifierName() + existing.macros[conflict_idx]->SignatureToString();
+			}
+			throw CatalogException("Cannot replace: the signature %s%s conflicts with several existing overloads "
+			                       "(%s). Drop them first with DROP FUNCTION %s(TYPE, ...)",
+			                       name, new_member.SignatureToString(), conflict_list, name);
+		}
+		if (conflicts.size() == 1) {
+			// OR REPLACE replaces the single conflicting member and leaves siblings untouched
+			replaced = conflicts[0];
+		}
+		break;
+	default:
+		throw InternalException("Unsupported conflict behavior for a language function overload set");
+	}
+	// replace the whole entry with one carrying the previous members plus the new one
+	auto new_info_base = existing.GetInfo();
+	auto &new_info = new_info_base->Cast<CreateMacroInfo>();
+	if (replaced.IsValid()) {
+		// descriptions are member-owned: a replaced member's documentation leaves with it
+		RemoveMemberDescriptions(new_info.descriptions, *new_info.macros[replaced.GetIndex()]);
+		new_info.macros[replaced.GetIndex()] = std::move(info.macros[0]);
+	} else {
+		new_info.macros.push_back(std::move(info.macros[0]));
+	}
+	for (auto &description : info.descriptions) {
+		new_info.descriptions.push_back(std::move(description));
+	}
+	new_info.temporary = existing.temporary;
+	for (auto &dependency : info.dependencies.Set()) {
+		new_info.dependencies.AddDependency(dependency);
+	}
+	auto function = MacroCatalogEntry::Create(catalog, *this, new_info);
+	function->internal = existing.internal;
+	return AddEntry(transaction, std::move(function), OnCreateConflict::REPLACE_ON_CONFLICT);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -284,6 +401,11 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, table);
 	auto dependencies = index->dependencies;
 	return AddEntryInternal(transaction, std::move(index), info.on_conflict, dependencies);
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateLanguage(CatalogTransaction transaction, CreateLanguageInfo &info) {
+	auto language = make_uniq<LanguageCatalogEntry>(catalog, *this, info);
+	return AddEntry(transaction, std::move(language), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
@@ -374,10 +496,73 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		                       CatalogTypeToString(info.type));
 	}
 
+	if (info.extra_drop_info && info.extra_drop_info->info_type == ExtraDropInfoType::FUNCTION_SIGNATURE_INFO) {
+		if (existing_entry->type != CatalogType::MACRO_ENTRY &&
+		    existing_entry->type != CatalogType::TABLE_MACRO_ENTRY) {
+			throw CatalogException("Cannot drop %s with a parameter type list: dropping a single overload is only "
+			                       "supported for macros and functions",
+			                       info.GetQualifiedName().Name());
+		}
+		if (DropMacroFunctionMember(transaction, info, existing_entry->Cast<MacroCatalogEntry>())) {
+			return;
+		}
+		// the signature identified the last member, dropping it removes the whole entry
+	}
+
 	if (!DropEntryInternal(transaction, *existing_entry, info.GetQualifiedName().Name(), info.cascade,
 	                       info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
+}
+
+bool DuckSchemaEntry::DropMacroFunctionMember(CatalogTransaction transaction, DropInfo &info,
+                                              MacroCatalogEntry &existing) {
+	if (existing.internal && !info.allow_drop_internal) {
+		// the member rewrite is a drop+create: an internal entry's protection applies to it too
+		throw CatalogException("function %s is an internal system entry: its overloads cannot be dropped",
+		                       info.GetQualifiedName().Name());
+	}
+	auto &extra = info.extra_drop_info->Cast<ExtraDropFunctionSignatureInfo>();
+	auto member_idx = existing.FindMember(extra.signature);
+	if (!member_idx.IsValid()) {
+		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+			// IF EXISTS at member granularity: nothing to drop, siblings are unaffected
+			return true;
+		}
+		string signature_text;
+		for (auto &type : extra.signature) {
+			if (!signature_text.empty()) {
+				signature_text += ", ";
+			}
+			signature_text += type.ToString();
+		}
+		throw CatalogException("Function %s has no overload with signature (%s)", info.GetQualifiedName().Name(),
+		                       signature_text);
+	}
+	if (existing.macros.size() == 1) {
+		// dropping the last member drops the entry, which honors CASCADE like any entry drop
+		return false;
+	}
+	if (info.cascade) {
+		// dependencies are tracked per entry, not per member, so a cascade that leaves siblings
+		// behind has no well-defined scope: require an explicit choice
+		throw CatalogException("Cannot drop an overload of %s with CASCADE while other overloads remain: drop "
+		                       "the whole entry or its dependents first",
+		                       info.GetQualifiedName().Name());
+	}
+	// replace the entry with one that carries the remaining members
+	auto new_info_base = existing.GetInfo();
+	auto &new_info = new_info_base->Cast<CreateMacroInfo>();
+	// a dropped member takes its documentation with it
+	RemoveMemberDescriptions(new_info.descriptions, *new_info.macros[member_idx.GetIndex()]);
+	new_info.macros.erase(new_info.macros.begin() + NumericCast<int64_t>(member_idx.GetIndex()));
+	new_info.temporary = existing.temporary;
+	auto function = MacroCatalogEntry::Create(catalog, *this, new_info);
+	function->internal = existing.internal;
+	// the replacement is a fresh entry on purpose: the changed oid is what makes the existing
+	// commit-time checks abort schedules that raced this mutation, like any macro replacement
+	AddEntry(transaction, std::move(function), OnCreateConflict::REPLACE_ON_CONFLICT);
+	return true;
 }
 
 void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry) {
@@ -433,6 +618,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return sequences;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
+	case CatalogType::LANGUAGE_ENTRY:
+		return languages;
 	case CatalogType::COORDINATE_SYSTEM_ENTRY:
 		return coordinate_systems;
 	case CatalogType::TYPE_ENTRY:
@@ -454,6 +641,7 @@ void DuckSchemaEntry::Verify(Catalog &catalog) {
 	functions.Verify(catalog);
 	sequences.Verify(catalog);
 	collations.Verify(catalog);
+	languages.Verify(catalog);
 	types.Verify(catalog);
 }
 

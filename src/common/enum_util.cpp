@@ -1239,6 +1239,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::COORDINATE_SYSTEM_ENTRY), "COORDINATE_SYSTEM_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TRIGGER_ENTRY), "TRIGGER_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::LANGUAGE_ENTRY), "LANGUAGE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
@@ -1259,12 +1260,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 26, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 27, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 26, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 27, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -2640,19 +2641,20 @@ const StringUtil::EnumStringLiteral *GetExtraDropInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtraDropInfoType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(ExtraDropInfoType::SECRET_INFO), "SECRET_INFO" },
-		{ static_cast<uint32_t>(ExtraDropInfoType::TRIGGER_INFO), "TRIGGER_INFO" }
+		{ static_cast<uint32_t>(ExtraDropInfoType::TRIGGER_INFO), "TRIGGER_INFO" },
+		{ static_cast<uint32_t>(ExtraDropInfoType::FUNCTION_SIGNATURE_INFO), "FUNCTION_SIGNATURE_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value) {
-	return StringUtil::EnumToString(GetExtraDropInfoTypeValues(), 3, "ExtraDropInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtraDropInfoTypeValues(), 4, "ExtraDropInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
-	return static_cast<ExtraDropInfoType>(StringUtil::StringToEnum(GetExtraDropInfoTypeValues(), 3, "ExtraDropInfoType", value));
+	return static_cast<ExtraDropInfoType>(StringUtil::StringToEnum(GetExtraDropInfoTypeValues(), 4, "ExtraDropInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtraPersistentColumnDataTypeValues() {
@@ -4044,19 +4046,20 @@ const StringUtil::EnumStringLiteral *GetMacroTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MacroType::VOID_MACRO), "VOID_MACRO" },
 		{ static_cast<uint32_t>(MacroType::TABLE_MACRO), "TABLE_MACRO" },
-		{ static_cast<uint32_t>(MacroType::SCALAR_MACRO), "SCALAR_MACRO" }
+		{ static_cast<uint32_t>(MacroType::SCALAR_MACRO), "SCALAR_MACRO" },
+		{ static_cast<uint32_t>(MacroType::LANGUAGE_MACRO), "LANGUAGE_MACRO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MacroType>(MacroType value) {
-	return StringUtil::EnumToString(GetMacroTypeValues(), 3, "MacroType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMacroTypeValues(), 4, "MacroType", static_cast<uint32_t>(value));
 }
 
 template<>
 MacroType EnumUtil::FromString<MacroType>(const char *value) {
-	return static_cast<MacroType>(StringUtil::StringToEnum(GetMacroTypeValues(), 3, "MacroType", value));
+	return static_cast<MacroType>(StringUtil::StringToEnum(GetMacroTypeValues(), 4, "MacroType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMapInvalidReasonValues() {
@@ -6110,6 +6113,7 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_5), "V1_5_5" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_6), "V1_5_6" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V2_0_0), "V2_0_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V2_1_0), "V2_1_0" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::INVALID), "INVALID" }
 	};
@@ -6118,12 +6122,12 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 
 template<>
 const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value) {
-	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 31, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 32, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
 }
 
 template<>
 SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value) {
-	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 31, "SerializationVersionDeprecated", value));
+	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 32, "SerializationVersionDeprecated", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSetOperationTypeValues() {
@@ -6688,6 +6692,7 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 		{ static_cast<uint32_t>(StorageVersion::V1_5_5), "V1_5_5" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_6), "V1_5_6" },
 		{ static_cast<uint32_t>(StorageVersion::V2_0_0), "V2_0_0" },
+		{ static_cast<uint32_t>(StorageVersion::V2_1_0), "V2_1_0" },
 		{ static_cast<uint32_t>(StorageVersion::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(StorageVersion::DEPRECATED), "DEPRECATED" },
 		{ static_cast<uint32_t>(StorageVersion::INVALID), "INVALID" }
@@ -6697,12 +6702,12 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 
 template<>
 const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value) {
-	return StringUtil::EnumToString(GetStorageVersionValues(), 71, "StorageVersion", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStorageVersionValues(), 72, "StorageVersion", static_cast<uint32_t>(value));
 }
 
 template<>
 StorageVersion EnumUtil::FromString<StorageVersion>(const char *value) {
-	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 71, "StorageVersion", value));
+	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 72, "StorageVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {

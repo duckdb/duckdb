@@ -22,6 +22,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/enums/collation_type.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,7 @@ class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
 class WindowFunctionCatalogEntry;
 class ScalarMacroCatalogEntry;
+class MacroFunction;
 class ScalarMacroFunction;
 class CatalogEntry;
 class SimpleFunction;
@@ -314,8 +316,8 @@ protected:
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 	void FindAggregateExprs(unique_ptr<ParsedExpression> &expr, vector<reference<unique_ptr<ParsedExpression>>> &exprs);
 	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
-	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
+	MacroFunction &UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+	                                     unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();

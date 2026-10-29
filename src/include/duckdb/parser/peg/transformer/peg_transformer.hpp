@@ -1498,6 +1498,13 @@ public:
 	static void InitializeCreateMacroStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCreateMacroStmtTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer,
+	                                                           GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeReturnsTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeReturnsTypeTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
 	static void InitializeMacroOrFunctionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMacroOrFunctionTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
@@ -2109,6 +2116,10 @@ public:
 	static void InitializeDropFunctionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropFunctionTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
 	static void InitializeDropSchemaTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropSchemaTrampoline(PEGTransformer &transformer,
 	                                                                    GeneratedTransformProcess &process);
@@ -4801,10 +4812,15 @@ public:
 	                                                            const optional<bool> &if_not_exists,
 	                                                            const QualifiedName &qualified_name,
 	                                                            vector<unique_ptr<MacroFunction>> macro_definition);
+	static unique_ptr<CreateStatement> TransformCreateLanguageFunctionStmt(
+	    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+	    optional<vector<MacroParameter>> macro_parameters, const optional<LogicalType> &returns_type,
+	    const Identifier &language, const string &source);
 	static bool TransformMacroKeyword(PEGTransformer &transformer);
 	static bool TransformFunctionKeyword(PEGTransformer &transformer);
 	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer,
 	                                                          optional<vector<MacroParameter>> macro_parameters,
+	                                                          const optional<LogicalType> &returns_type,
 	                                                          unique_ptr<MacroFunction> macro_definition_body);
 	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer,
 	                                                       vector<MacroParameter> macro_parameter);
@@ -5084,9 +5100,12 @@ public:
 	                                                            const CatalogType &comment_macro_table,
 	                                                            const optional<bool> &if_exists,
 	                                                            const vector<QualifiedName> &table_function_name);
-	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
-	                                                       const optional<bool> &if_exists,
-	                                                       const vector<QualifiedName> &function_identifier);
+	static unique_ptr<DropStatement>
+	TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro, const optional<bool> &if_exists,
+	                      const vector<QualifiedName> &function_identifier,
+	                      const optional<vector<LogicalType>> &drop_function_signature);
+	static vector<LogicalType> TransformDropFunctionSignature(PEGTransformer &transformer,
+	                                                          const optional<vector<LogicalType>> &type);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                     const vector<QualifiedName> &qualified_name);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const optional<bool> &if_exists,

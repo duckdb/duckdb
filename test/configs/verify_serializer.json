@@ -21,6 +21,13 @@
       "paths": [
         "test/extension/test_extensible_filter.test"
       ]
+    },
+    {
+      "reason": "ValidateCreate-published descriptions are in-memory annotations on the plan's CreateInfo, deliberately discarded by plan serialization",
+      "paths": [
+        "test/sql/function/language_function/language_function_binding.test",
+        "test/sql/function/language_function/language_function_demo.test"
+      ]
     }
   ]
 }

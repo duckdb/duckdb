@@ -698,6 +698,12 @@ static const TransformFrameOps NONE_LITERAL_OPS = {"NoneLiteral",
 static const TransformFrameOps CREATE_MACRO_STMT_OPS = {"CreateMacroStmt",
                                                         &PEGTransformerFactory::InitializeCreateMacroStmtTrampoline,
                                                         &PEGTransformerFactory::FinalizeCreateMacroStmtTrampoline};
+static const TransformFrameOps CREATE_LANGUAGE_FUNCTION_STMT_OPS = {
+    "CreateLanguageFunctionStmt", &PEGTransformerFactory::InitializeCreateLanguageFunctionStmtTrampoline,
+    &PEGTransformerFactory::FinalizeCreateLanguageFunctionStmtTrampoline};
+static const TransformFrameOps RETURNS_TYPE_OPS = {"ReturnsType",
+                                                   &PEGTransformerFactory::InitializeReturnsTypeTrampoline,
+                                                   &PEGTransformerFactory::FinalizeReturnsTypeTrampoline};
 static const TransformFrameOps MACRO_OR_FUNCTION_OPS = {"MacroOrFunction",
                                                         &PEGTransformerFactory::InitializeMacroOrFunctionTrampoline,
                                                         &PEGTransformerFactory::FinalizeMacroOrFunctionTrampoline};
@@ -1230,6 +1236,9 @@ static const TransformFrameOps DROP_TABLE_FUNCTION_OPS = {"DropTableFunction",
 static const TransformFrameOps DROP_FUNCTION_OPS = {"DropFunction",
                                                     &PEGTransformerFactory::InitializeDropFunctionTrampoline,
                                                     &PEGTransformerFactory::FinalizeDropFunctionTrampoline};
+static const TransformFrameOps DROP_FUNCTION_SIGNATURE_OPS = {
+    "DropFunctionSignature", &PEGTransformerFactory::InitializeDropFunctionSignatureTrampoline,
+    &PEGTransformerFactory::FinalizeDropFunctionSignatureTrampoline};
 static const TransformFrameOps DROP_SCHEMA_OPS = {"DropSchema", &PEGTransformerFactory::InitializeDropSchemaTrampoline,
                                                   &PEGTransformerFactory::FinalizeDropSchemaTrampoline};
 static const TransformFrameOps DROP_INDEX_OPS = {"DropIndex", &PEGTransformerFactory::InitializeDropIndexTrampoline,
@@ -3538,6 +3547,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DefArgStringLiteral", &DEF_ARG_STRING_LITERAL_OPS},
 	    {"NoneLiteral", &NONE_LITERAL_OPS},
 	    {"CreateMacroStmt", &CREATE_MACRO_STMT_OPS},
+	    {"CreateLanguageFunctionStmt", &CREATE_LANGUAGE_FUNCTION_STMT_OPS},
+	    {"ReturnsType", &RETURNS_TYPE_OPS},
 	    {"MacroOrFunction", &MACRO_OR_FUNCTION_OPS},
 	    {"MacroKeyword", &MACRO_KEYWORD_OPS},
 	    {"FunctionKeyword", &FUNCTION_KEYWORD_OPS},
@@ -3724,6 +3735,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DropTable", &DROP_TABLE_OPS},
 	    {"DropTableFunction", &DROP_TABLE_FUNCTION_OPS},
 	    {"DropFunction", &DROP_FUNCTION_OPS},
+	    {"DropFunctionSignature", &DROP_FUNCTION_SIGNATURE_OPS},
 	    {"DropSchema", &DROP_SCHEMA_OPS},
 	    {"DropIndex", &DROP_INDEX_OPS},
 	    {"QualifiedIndexName", &QUALIFIED_INDEX_NAME_OPS},
@@ -9006,6 +9018,63 @@ PEGTransformerFactory::FinalizeCreateMacroStmtTrampoline(PEGTransformer &transfo
 	return transformer.MakeResult<unique_ptr<CreateStatement>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer,
+                                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(4);
+	auto &returns_type_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (returns_type_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::ReturnsType), returns_type_opt.GetResult()}, 3);
+	}
+	auto &macro_parameters_opt = ExtractResultFromParens(list_pr.GetChild(3)).Cast<OptionalParseResult>();
+	if (macro_parameters_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::MacroParameters), macro_parameters_opt.GetResult()}, 2);
+	}
+	process.PushChild({transformer.GetRule(PEGRuleId::QualifiedName), list_pr.GetChild(2)}, 1);
+	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (if_not_exists_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::IfNotExists), if_not_exists_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	optional<bool> if_not_exists {};
+	if (process.child_results[0]) {
+		if_not_exists = process.TakeResult<bool>(0);
+	}
+	auto qualified_name = process.TakeResult<QualifiedName>(1);
+	optional<vector<MacroParameter>> macro_parameters {};
+	if (process.child_results[2]) {
+		macro_parameters = process.TakeResult<vector<MacroParameter>>(2);
+	}
+	optional<LogicalType> returns_type {};
+	if (process.child_results[3]) {
+		returns_type = process.TakeResult<LogicalType>(3);
+	}
+	auto identifier = list_pr.GetChild(6).Cast<IdentifierParseResult>().identifier;
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(8));
+	auto result =
+	    TransformCreateLanguageFunctionStmt(transformer, if_not_exists, qualified_name, std::move(macro_parameters),
+	                                        returns_type, identifier, string_literal);
+	return transformer.MakeResult<unique_ptr<CreateStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeReturnsTypeTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule(PEGRuleId::Type), list_pr.GetChild(1)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeReturnsTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<LogicalType>(0);
+	return transformer.MakeResult<LogicalType>(result);
+}
+
 void PEGTransformerFactory::InitializeMacroOrFunctionTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -9053,8 +9122,12 @@ PEGTransformerFactory::FinalizeFunctionKeywordTrampoline(PEGTransformer &transfo
 void PEGTransformerFactory::InitializeMacroDefinitionTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule(PEGRuleId::MacroDefinitionBody), list_pr.GetChild(2)}, 1);
+	process.ReserveChildSlots(3);
+	process.PushChild({transformer.GetRule(PEGRuleId::MacroDefinitionBody), list_pr.GetChild(3)}, 2);
+	auto &returns_type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (returns_type_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::ReturnsType), returns_type_opt.GetResult()}, 1);
+	}
 	auto &macro_parameters_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (macro_parameters_opt.HasResult()) {
 		process.PushChild({transformer.GetRule(PEGRuleId::MacroParameters), macro_parameters_opt.GetResult()}, 0);
@@ -9068,8 +9141,13 @@ PEGTransformerFactory::FinalizeMacroDefinitionTrampoline(PEGTransformer &transfo
 	if (process.child_results[0]) {
 		macro_parameters = process.TakeResult<vector<MacroParameter>>(0);
 	}
-	auto macro_definition_body = process.TakeResult<unique_ptr<MacroFunction>>(1);
-	auto result = TransformMacroDefinition(transformer, std::move(macro_parameters), std::move(macro_definition_body));
+	optional<LogicalType> returns_type {};
+	if (process.child_results[1]) {
+		returns_type = process.TakeResult<LogicalType>(1);
+	}
+	auto macro_definition_body = process.TakeResult<unique_ptr<MacroFunction>>(2);
+	auto result = TransformMacroDefinition(transformer, std::move(macro_parameters), returns_type,
+	                                       std::move(macro_definition_body));
 	return transformer.MakeResult<unique_ptr<MacroFunction>>(std::move(result));
 }
 
@@ -12895,7 +12973,13 @@ void PEGTransformerFactory::InitializeDropFunctionTrampoline(PEGTransformer &tra
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
 	auto dynamic_child_count = list_items.size();
-	process.ReserveChildSlots(3 + dynamic_child_count - 1);
+	process.ReserveChildSlots(4 + dynamic_child_count - 1);
+	auto &drop_function_signature_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (drop_function_signature_opt.HasResult()) {
+		process.PushChild(
+		    {transformer.GetRule(PEGRuleId::DropFunctionSignature), drop_function_signature_opt.GetResult()},
+		    3 + dynamic_child_count - 1);
+	}
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		process.PushChild({transformer.GetRule(PEGRuleId::FunctionIdentifier), list_items[child_idx].get()},
@@ -12922,8 +13006,54 @@ PEGTransformerFactory::FinalizeDropFunctionTrampoline(PEGTransformer &transforme
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		function_identifier.push_back(process.TakeResult<QualifiedName>(i));
 	}
-	auto result = TransformDropFunction(transformer, function_type_macro, if_exists, function_identifier);
+	optional<vector<LogicalType>> drop_function_signature {};
+	if (process.child_results[3 + dynamic_child_count - 1]) {
+		drop_function_signature = process.TakeResult<vector<LogicalType>>(3 + dynamic_child_count - 1);
+	}
+	auto result = TransformDropFunction(transformer, function_type_macro, if_exists, function_identifier,
+	                                    drop_function_signature);
 	return transformer.MakeResult<unique_ptr<DropStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+                                                                      GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &list_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (list_opt.HasResult()) {
+		auto list_items = ExtractParseResultsFromList(list_opt.GetResult());
+		dynamic_child_count = list_items.size();
+		process.ReserveChildSlots(1 + dynamic_child_count - 1);
+		for (idx_t i = list_items.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule(PEGRuleId::Type), list_items[child_idx].get()}, 0 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(1 - 1);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_list_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	if (dynamic_list_opt.HasResult()) {
+		dynamic_child_count = CountParseResultsFromList(dynamic_list_opt.GetResult());
+	}
+	optional<vector<LogicalType>> type {};
+	auto &type_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	if (type_opt.HasResult()) {
+		vector<LogicalType> type_value;
+		type_value.reserve(dynamic_child_count);
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+			type_value.push_back(process.TakeResult<LogicalType>(i));
+		}
+		type = std::move(type_value);
+	}
+	auto result = TransformDropFunctionSignature(transformer, type);
+	return transformer.MakeResult<vector<LogicalType>>(result);
 }
 
 void PEGTransformerFactory::InitializeDropSchemaTrampoline(PEGTransformer &transformer,
