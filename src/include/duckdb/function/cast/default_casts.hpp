@@ -164,9 +164,13 @@ public:
 		return function;
 	}
 	bool IsNopCast() const;
-	//! Whether this is the fallback cast used when no cast exists between the types
-	//! It throws for any non-NULL value, regardless of the types involved
+	//! Whether this cast fails for every non-NULL value - the fallback used when no cast exists
+	//! between the types, or a bound cast flagged as null-only at bind time
 	bool IsNullCast() const;
+	//! Flag a bound cast whose execution fails for every non-NULL value, e.g. a static array size mismatch
+	void SetNullOnly() {
+		null_only = true;
+	}
 	bool Equals(const BoundCastInfo &other) const {
 		return function == other.function && statistics == other.statistics;
 	}
@@ -192,6 +196,7 @@ private:
 	unique_ptr<BoundCastData> cast_data;
 	cast_statistics_t statistics = nullptr;
 	FunctionStability stability = FunctionStability::CONSISTENT;
+	bool null_only = false;
 };
 
 struct BindCastInput {

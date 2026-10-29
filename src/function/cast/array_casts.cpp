@@ -212,9 +212,16 @@ BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalT
 		                                   ArrayType::GetChildType(source));
 		return BoundCastInfo(ArrayToVarcharCast, std::move(cast_data), ArrayBoundCastData::InitArrayLocalState);
 	}
-	case LogicalTypeId::ARRAY:
-		return BoundCastInfo(ArrayToArrayCast, ArrayBoundCastData::BindArrayToArrayCast(input, source, target),
-		                     ArrayBoundCastData::InitArrayLocalState);
+	case LogicalTypeId::ARRAY: {
+		BoundCastInfo cast(ArrayToArrayCast, ArrayBoundCastData::BindArrayToArrayCast(input, source, target),
+		                   ArrayBoundCastData::InitArrayLocalState);
+		if (!ArrayType::IsAnySize(source) && !ArrayType::IsAnySize(target) &&
+		    ArrayType::GetSize(source) != ArrayType::GetSize(target)) {
+			// a static size mismatch fails for every non-NULL value, but must stay bindable for TRY_CAST
+			cast.SetNullOnly();
+		}
+		return cast;
+	}
 	case LogicalTypeId::LIST:
 		return BoundCastInfo(ArrayToListCast, BindArrayToListCast(input, source, target),
 		                     ArrayBoundCastData::InitArrayLocalState);

@@ -44,6 +44,7 @@ BoundCastInfo BoundCastInfo::Copy() const {
 	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
 	result.statistics = statistics;
 	result.stability = stability;
+	result.null_only = null_only;
 	return result;
 }
 
@@ -102,7 +103,7 @@ bool BoundCastInfo::IsNopCast() const {
 }
 
 bool BoundCastInfo::IsNullCast() const {
-	return function == DefaultCasts::TryVectorNullCast;
+	return function == DefaultCasts::TryVectorNullCast || null_only;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
