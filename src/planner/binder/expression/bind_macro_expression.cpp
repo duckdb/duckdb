@@ -168,9 +168,9 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	expr = std::move(macro_copy);
 }
 
-optional_ptr<MacroFunction> ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function,
-                                                                    ScalarMacroCatalogEntry &macro_func,
-                                                                    unique_ptr<ParsedExpression> &expr, idx_t depth) {
+MacroFunction &ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function,
+                                                       ScalarMacroCatalogEntry &macro_func,
+                                                       unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
@@ -202,7 +202,7 @@ optional_ptr<MacroFunction> ExpressionBinder::UnfoldMacroExpression(FunctionExpr
 	// now replace the parameters
 	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
-	return &macro_def;
+	return macro_def;
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
@@ -212,7 +212,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	context.InterruptCheck();
 
 	// unfold the macro expression
-	auto member = UnfoldMacroExpression(function, macro_func, expr, depth);
+	auto &member = UnfoldMacroExpression(function, macro_func, expr, depth);
 
 	// bind the unfolded macro
 	auto result = BindExpression(expr, depth);
@@ -220,9 +220,9 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 		return result;
 	}
 	// enforce a declared RETURNS type by casting the member's result to it
-	if (member->return_type.id() != LogicalTypeId::UNKNOWN) {
+	if (member.return_type.id() != LogicalTypeId::UNKNOWN) {
 		result.expression =
-		    BoundCastExpression::AddCastToType(context, std::move(result.expression), member->return_type);
+		    BoundCastExpression::AddCastToType(context, std::move(result.expression), member.return_type);
 	}
 	return result;
 }
