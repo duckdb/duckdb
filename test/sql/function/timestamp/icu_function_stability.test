@@ -4,6 +4,9 @@
 
 require icu
 
+statement ok
+LOAD icu;
+
 query III
 SELECT function_name, parameter_types::VARCHAR, stability
 FROM duckdb_functions()
