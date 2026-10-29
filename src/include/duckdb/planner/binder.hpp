@@ -74,6 +74,7 @@ struct CreateSchemaInfo;
 struct CreateTriggerInfo;
 struct QualifiedName;
 struct BoundCreateTableInfo;
+struct CreateMacroInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
@@ -89,6 +90,25 @@ struct BoundCTEData;
 enum class CopyToType : uint8_t;
 template <class T, class INDEX_TYPE>
 class IndexVector;
+
+//! Table indexes of the top select node of a TRY subquery, recorded while planning that node, so that
+//! TRY can be lowered onto exactly that node's projection without crossing into other query levels
+struct TrySubqueryPlanIndexes {
+	bool recorded = false;
+	//! The select list projection
+	TableIndex projection_index;
+	//! The prune projection above the result modifiers, only set when pruning is needed
+	TableIndex prune_index;
+	//! The aggregate node of the select node
+	TableIndex aggregate_index;
+	//! The window node of the select node
+	TableIndex window_index;
+	//! The unnest nodes of the select node
+	vector<TableIndex> unnest_indexes;
+	//! Whether the select item contains a nested scalar subquery lowered with an exposed error flag;
+	//! its re-raise at the use site relies on this node's lowering to consume it
+	bool nested_transport = false;
+};
 
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,
@@ -310,6 +330,8 @@ public:
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+	//! Reject macro entries with declared RETURNS types in storage below v2.1.0
+	static void CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
@@ -403,6 +425,10 @@ public:
 	void SetAlwaysRequireRebind();
 	void SetInsideSubquery();
 	bool IsInsideSubquery() const;
+	void SetBindingTrySubquery();
+	bool IsBindingTrySubquery() const;
+	const TrySubqueryPlanIndexes &GetTrySubqueryPlanIndexes() const;
+	TrySubqueryPlanIndexes &GetTrySubqueryPlanIndexesMutable();
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -434,6 +460,10 @@ private:
 	bool legacy_can_contain_nulls = false;
 	//! Whether this binder is inside a subquery boundary
 	bool inside_subquery = false;
+	//! Whether this binder binds a TRY subquery, which lowers TRY onto the bound plan after binding
+	bool binding_try_subquery = false;
+	//! The plan indexes of the TRY subquery's top select node, recorded while planning it
+	TrySubqueryPlanIndexes try_subquery_plan_indexes;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! The table macros that are being expanded by this binder

@@ -5,6 +5,12 @@
   "skip_compiled": true,
   "skip_tests": [
     {
+      "reason": "The generated SQL changes the query pipelines whose tasks the fixture counts",
+      "paths": [
+        "test/sql/json/table/json_table_in_out_threads.test"
+      ]
+    },
+    {
       "reason": "A second binding pass adds transaction or file-operation log events",
       "paths": [
         "test/sql/logging/logging.test",
