@@ -184,7 +184,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	// dict_info is the descriptor shared by every per-thread JHT of this join; there is nothing to reconcile
 }
 
-static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &bitmask) {
+static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &bitmask, idx_t shift) {
 	const idx_t count = hashes_v.size();
 	if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &hash = *ConstantVector::GetData<hash_t>(hashes_v);
@@ -193,7 +193,7 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		*ConstantVector::GetData<hash_t>(salt_v) = ht_entry_t::ExtractSalt(hash);
 		salt_v.Flatten();
 
-		hash = hash & bitmask;
+		hash = (hash >> shift) & bitmask;
 		hashes_v.Flatten();
 	} else {
 		hashes_v.Flatten();
@@ -201,7 +201,7 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
 			salt_data.WriteValue(ht_entry_t::ExtractSalt(hashes[i]));
-			hashes[i] &= bitmask;
+			hashes[i] = (hashes[i] >> shift) & bitmask;
 		}
 	}
 }
@@ -314,17 +314,22 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    Vector &hashes_v, optional_ptr<const SelectionVector> row_sel, idx_t &count,
                                    JoinHashTable &ht, unsafe_optional_ptr<ht_entry_t> entries,
                                    Vector &pointers_result_v, SelectionVector &match_sel, bool has_row_sel) {
-	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
-	if (has_row_sel) {
+	// Densify original hashes, mapping resident buckets once. Retries below already contain offsets and salt.
+	const auto input_count = count;
+	const auto bucket_shift = ht.GetBucketShift();
+	const auto bitmask = ht.bitmask;
+	if (has_row_sel || bucket_shift) {
 		auto hashes_unified = hashes_v.Values<hash_t>();
-		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
+		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, input_count);
 
-		for (idx_t i = 0; i < count; i++) {
-			const auto row_index = row_sel->get_index(i);
-			hashes_dense.WriteValue(hashes_unified[row_index].GetValue());
+		for (idx_t i = 0; i < input_count; i++) {
+			const auto row_index = has_row_sel ? row_sel->get_index(i) : i;
+			const auto hash = hashes_unified[row_index].GetValue();
+			hashes_dense.WriteValue(bucket_shift ? (hash & ht_entry_t::SALT_MASK) | ((hash >> bucket_shift) & bitmask)
+			                                     : hash);
 		}
 	} else {
-		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
+		VectorOperations::Copy(hashes_v, state.hashes_dense_v, input_count, 0, 0);
 	}
 
 	// the number of keys that match for all iterations of the following loop
@@ -364,7 +369,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
 			const auto row_index = state.keys_no_match_sel.get_index(i);
 			auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
-			IncrementAndWrap(ht_offset_and_salt, ht.bitmask | ht_entry_t::SALT_MASK);
+			IncrementAndWrap(ht_offset_and_salt, bitmask | ht_entry_t::SALT_MASK);
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
@@ -892,7 +897,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
                              JoinHashTable::InsertState &state, const TupleDataCollection &data_collection,
                              JoinHashTable &ht) {
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
-	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, ht.bitmask);
+	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, ht.bitmask, ht.GetBucketShift());
 	const idx_t count = hashes_v.size();
 
 	const auto &layout = data_collection.GetLayout();
@@ -950,6 +955,9 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 		// iterate over each entry to find out whether it belongs to an existing list or will start a new list
 		for (idx_t i = 0; i < remaining_count; i++) {
+			PrefetchHashTableEntry(i, remaining_count, [&](idx_t next_idx) {
+				return &entries.get()[ht_offsets[remaining_sel->get_index(next_idx)]];
+			});
 			const idx_t row_index = remaining_sel->get_index(i);
 			auto &ht_offset = ht_offsets[row_index];
 			auto &salt = hash_salts[row_index];
@@ -1078,7 +1086,7 @@ void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &st
 	prefix_range_filter->MergeBuildState(state);
 }
 
-void JoinHashTable::AllocatePointerTable() {
+void JoinHashTable::AllocatePointerTable(bool use_radix_layout) {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
 
@@ -1110,6 +1118,9 @@ void JoinHashTable::AllocatePointerTable() {
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
 	bitmask = capacity - 1;
+	const auto capacity_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(capacity);
+	bucket_shift =
+	    use_radix_layout && radix_bits > 0 && capacity_bits >= radix_bits ? RadixPartitioning::Shift(capacity_bits) : 0;
 
 	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "JoinHashTable", "Build",
 	           {{"rows", to_string(data_collection->Count())},
@@ -1875,13 +1886,14 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t result_count = 0;
-	for (idx_t i = 0; i < keys.size(); i++) {
-		if (found_match[i] == MATCH) {
-			// part of the result
-			sel.set_index(result_count++, i);
-		}
+	optional<array_ptr<sel_t>> true_sel, false_sel;
+	if (MATCH) {
+		true_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
+	} else {
+		false_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
 	}
+	auto true_count = SelectionVector::SelectFromBoolean(found_match.get(), nullptr, keys.size(), true_sel, false_sel);
+	auto result_count = MATCH ? true_count : keys.size() - true_count;
 	// construct the final result
 	if (result_count > 0) {
 		// extract only OUTPUT columns from probe_data
@@ -2271,14 +2283,10 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 	D_ASSERT(this->count == 0);
 
 	// Build result_sel from found_match so we know which positions to gather RHS data from.
-	// Use a predicated increment to avoid branch mispredictions.
-	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	const idx_t probe_size = probe_data.size();
-	for (idx_t j = 0; j < probe_size; j++) {
-		result_sel.set_index(result_count, j);
-		result_count += found_match[j];
-	}
+	auto result_count = SelectionVector::SelectFromBoolean(found_match.get(), nullptr, probe_size,
+	                                                       array_ptr<sel_t>(result_sel.data(), result_sel.Capacity()));
 
 	// Reference the columns of the left side from the result (zero-copy).
 	D_ASSERT(ht.lhs_output_in_probe.size() > 0);
@@ -2331,17 +2339,18 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
-		for (idx_t i = state.offset_in_chunk; i < count; i++) {
-			auto found_match = Load<bool>(row_locations[i] + tuple_size);
-			if (found_match == match_propagation_value) {
-				key_locations[found_entries++] = row_locations[i];
-				if (found_entries == STANDARD_VECTOR_SIZE) {
-					state.offset_in_chunk = i + 1;
-					break;
-				}
+		idx_t i = state.offset_in_chunk;
+		while (i < count && found_entries < STANDARD_VECTOR_SIZE) {
+			// Leave room for a scratch write even when every scanned row matches.
+			const auto end = MinValue(count, i + STANDARD_VECTOR_SIZE - found_entries);
+			for (; i < end; i++) {
+				const auto row = row_locations[i];
+				key_locations[found_entries] = row;
+				found_entries += Load<bool>(row + tuple_size) == match_propagation_value;
 			}
 		}
 		if (found_entries == STANDARD_VECTOR_SIZE) {
+			state.offset_in_chunk = i;
 			break;
 		}
 		state.offset_in_chunk = 0;
@@ -2540,6 +2549,7 @@ void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 }
 
 void JoinHashTable::Reset() {
+	bucket_shift = 0;
 	data_collection->Reset();
 	hash_map.Reset();
 	current_partitions.SetAllInvalid(RadixPartitioning::NumberOfPartitions(radix_bits));
@@ -2591,6 +2601,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	sink_collection.reset();
 	capacity = DConstants::INVALID_INDEX;
 	bitmask = DConstants::INVALID_INDEX;
+	bucket_shift = 0;
 	finalized = false;
 	has_null = false;
 	chains_longer_than_one.store(false, std::memory_order_relaxed);
