@@ -1501,6 +1501,13 @@
         "default_value": "REMOTE_ONLY"
     },
     {
+        "name": "storage_block_prefetch_max_run_size",
+        "description": "The maximum number of bytes of adjacent blocks that storage block prefetching reads with a single read.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "33554432"
+    },
+    {
         "name": "storage_compatibility_version",
         "description": "Sets the DuckDB version for which data is serialized to the DuckDB file during checkpointing. Can differ from the version of the DuckDB instance.",
         "type": "VARCHAR",

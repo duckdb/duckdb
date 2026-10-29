@@ -2482,6 +2482,19 @@ struct StorageBlockPrefetchSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct StorageBlockPrefetchMaxRunSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "storage_block_prefetch_max_run_size";
+	static constexpr const char *Description =
+	    "The maximum number of bytes of adjacent blocks that storage block prefetching reads with a single read.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "33554432";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct StorageCompatibilityVersionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "storage_compatibility_version";

@@ -253,6 +253,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ShowBehaviorSetting),
     DUCKDB_GLOBAL(StandardVectorSizeSetting),
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
+    DUCKDB_SETTING(StorageBlockPrefetchMaxRunSizeSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_SETTING_CALLBACK(TableFunctionIdentifierConversionSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),

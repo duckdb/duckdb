@@ -1,0 +1,81 @@
+# name: test/sql/storage/prefetch/prefetch_run_size_setting.test
+# description: storage_block_prefetch_max_run_size caps the size of prefetch runs
+# group: [prefetch]
+
+require vector_size 2048
+
+require block_size 262144
+
+statement ok
+ATTACH '{TEST_DIR}/prefetch_run_size_setting.db' AS cap_db (ROW_GROUP_SIZE 8388608, STORAGE_VERSION 'v1.2.0')
+
+# a single uncompressed 8M row double column makes one row group hold 257 contiguous blocks
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE cap_db.t AS SELECT random() AS d FROM range(8388608)
+
+statement ok
+CHECKPOINT cap_db
+
+statement ok
+DETACH cap_db
+
+query I
+SELECT current_setting('storage_block_prefetch_max_run_size')
+----
+33554432
+
+# a single thread keeps the whole row group in one assignment
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=4
+
+statement ok
+SET storage_block_prefetch='debug_force_always'
+
+statement ok
+CALL enable_logging('AsyncTaskSchedule')
+
+# a cap of one block makes every block its own run
+statement ok
+SET storage_block_prefetch_max_run_size=262144
+
+statement ok
+ATTACH '{TEST_DIR}/prefetch_run_size_setting.db' AS cap_db (READ_ONLY)
+
+query I
+SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+query I
+SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
+----
+257
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+DETACH cap_db
+
+# a cap of four blocks is strict, the lone trailing block gets its own run: 64 runs of 4 blocks and 1 of 1 block
+statement ok
+SET storage_block_prefetch_max_run_size=1048576
+
+statement ok
+ATTACH '{TEST_DIR}/prefetch_run_size_setting.db' AS cap_db (READ_ONLY)
+
+query I
+SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+query I
+SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
+----
+65
