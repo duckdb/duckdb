@@ -41,6 +41,15 @@ true
 endloop
 
 query I
+SELECT bool_or(bloom_filter_excludes) FROM (
+  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 1::{type})
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 25::{type})
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 97::{type})
+)
+----
+true
+
+query I
 SELECT count(*) FROM (
   (SELECT * FROM numbers EXCEPT ALL SELECT * FROM '{TEST_DIR}/numbers.parquet')
   UNION ALL
@@ -106,6 +115,12 @@ FROM parquet_bloom_probe('{TEST_DIR}/interval.parquet', 'n', INTERVAL '101 days'
 ----
 false
 
+query I
+SELECT bool_or(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/interval.parquet', 'n', INTERVAL '42 days')
+----
+true
+
 statement ok
 CREATE TABLE typed AS SELECT i AS row_id,
  md5((i % 10)::VARCHAR) AS s,
@@ -154,6 +169,31 @@ SELECT count(*) FROM '{TEST_DIR}/typed.parquet' WHERE s=md5('3')
 ----
 410
 
+query T
+SELECT list(bloom_filter_excludes ORDER BY column_name) FROM (
+  SELECT 's' AS column_name, * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 's', md5('42'))
+  UNION ALL SELECT 'b', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'b', md5('42')::BLOB)
+  UNION ALL SELECT 'u', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'u', md5('42')::UUID)
+  UNION ALL SELECT 'd', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'd', DATE '2021-01-01')
+  UNION ALL SELECT 't', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 't', TIME '13:00:00')
+  UNION ALL SELECT 'tn', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'tn', TIME '13:00:00'::TIME_NS)
+  UNION ALL SELECT 'ts', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'ts', TIMESTAMP '2021-01-01')
+  UNION ALL SELECT 'tss', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'tss', TIMESTAMP_S '2021-01-01')
+  UNION ALL SELECT 'tsm', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'tsm', TIMESTAMP_MS '2021-01-01')
+  UNION ALL SELECT 'tsn', * FROM parquet_bloom_probe('{TEST_DIR}/typed.parquet', 'tsn', TIMESTAMP_NS '2021-01-01')
+) GROUP BY column_name ORDER BY column_name
+----
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+[true, true]
+
 query I
 SELECT count(*) FROM '{TEST_DIR}/typed.parquet' WHERE d=DATE '2020-01-04'
 ----
@@ -180,3 +220,12 @@ WHERE t='10:00:00+00'::TIMETZ AND ts='2020-01-01 10:00:00+00'::TIMESTAMPTZ
       AND ns='2020-01-01 10:00:00+00'::TIMESTAMPTZ_NS
 ----
 4096
+
+query I
+SELECT bool_and(bloom_filter_excludes) FROM (
+  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/zones.parquet', 't', '11:00:00+00'::TIMETZ)
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/zones.parquet', 'ts', '2021-01-01 10:00:00+00'::TIMESTAMPTZ)
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/zones.parquet', 'ns', '2021-01-01 10:00:00+00'::TIMESTAMPTZ_NS)
+)
+----
+true
