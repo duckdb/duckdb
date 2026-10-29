@@ -18,6 +18,7 @@ import re
 import shlex
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -627,6 +628,16 @@ SELECT '{ONE}', '{TWO}'
 # -----------------------------------------------------------------------------
 # Option surface: CLI, DUCKDB_TEST_<NAME> and --test-config must agree
 #
+
+
+def test_auto_run_id_preserves_uuid_entropy(probe, tmp_path):
+    """Concurrent invocations must not share a run root through a small mnemonic namespace."""
+    identifiers = [probe("--temp-dir-root", str(tmp_path / "root"))["run_id"] for _ in range(2)]
+    for identifier in identifiers:
+        random_id = uuid.UUID(identifier[-36:])
+        assert random_id.version == 4
+        assert random_id.variant == uuid.RFC_4122
+    assert identifiers[0] != identifiers[1]
 
 
 def test_run_id_via_cli_env_and_config_agree(probe, tmp_path):

@@ -328,9 +328,8 @@ bool DatabaseDestroyFires(bool success) {
 	}
 }
 
-// RUN_ID auto value: sortable UTC timestamp + mnemonic, e.g. 2026-07-01T14-30-22Z--crimson-torus-07.
-// Same shape as the pytest driver's, but colors+shapes here vs its adjectives+animals -- so an id's
-// vocabulary reveals which side minted it.
+// RUN_ID auto value: sortable UTC timestamp + mnemonic + UUID.
+// Keep the full UUID: colliding run IDs let one process reclaim another process's live files.
 static const char *const TEMP_DIR_COLORS[] = {"crimson", "scarlet", "azure",   "cobalt", "teal",    "olive",
                                               "maroon",  "indigo",  "violet",  "coral",  "ochre",   "umber",
                                               "jade",    "ivory",   "slate",   "sienna", "magenta", "cyan",
@@ -344,15 +343,12 @@ static string GenerateAutoRunId() {
 	std::time_t now = std::time(nullptr);
 	char ts[24] = {0};
 	std::strftime(ts, sizeof(ts), "%Y-%m-%dT%H-%M-%SZ", std::gmtime(&now));
-	// hugeint_t carries independent entropy in lower/upper; index each bank + the 2 digits.
 	auto uuid = UUID::GenerateRandomUUID();
 	auto n_colors = sizeof(TEMP_DIR_COLORS) / sizeof(TEMP_DIR_COLORS[0]);
 	auto n_shapes = sizeof(TEMP_DIR_SHAPES) / sizeof(TEMP_DIR_SHAPES[0]);
 	const char *color = TEMP_DIR_COLORS[uuid.lower % n_colors];
 	const char *shape = TEMP_DIR_SHAPES[static_cast<uint64_t>(uuid.upper) % n_shapes];
-	auto nn = static_cast<int>((uuid.lower >> 32) % 100);
-	string digits = (nn < 10 ? "0" : "") + std::to_string(nn);
-	return string(ts) + "--" + color + "-" + shape + "-" + digits;
+	return string(ts) + "--" + color + "-" + shape + "-" + UUID::ToString(uuid);
 }
 
 // The caller's --run-id, or a generated one, cached for the invocation. Always resolved, even when
