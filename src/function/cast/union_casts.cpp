@@ -50,6 +50,15 @@ public:
 		}
 		return make_uniq<UnionMemberBoundCastData>(tag_map, std::move(member_casts_copy), type, is_member_to_member);
 	}
+	bool ContainsNullCast() const override {
+		// a union value carries one member - the cast only fails for every value if every member cast does
+		for (auto &member_cast : member_casts) {
+			if (!member_cast.ContainsNullCast()) {
+				return false;
+			}
+		}
+		return !member_casts.empty();
+	}
 };
 
 //--------------------------------------------------------------------------------------------------

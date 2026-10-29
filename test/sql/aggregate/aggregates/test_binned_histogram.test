@@ -157,6 +157,18 @@ SELECT histogram(a, b) FROM (VALUES ([1,2,3]::INT[3], [[1,2]::INT[2]])) t(a, b)
 ----
 <REGEX>:Binder Error.*bins of type INTEGER\[2\]\[\] cannot be cast to INTEGER\[3\]\[\].*
 
+# map bins with a missing value conversion are rejected at bind time
+statement error
+SELECT histogram(m, b) FROM (VALUES (MAP([1], [[1]]), [MAP([1], [1])])) t(m, b)
+----
+<REGEX>:Binder Error.*bins of type MAP\(INTEGER, INTEGER\)\[\] cannot be cast to MAP\(INTEGER, INTEGER\[\]\)\[\].*
+
+# map bins with valid key and value casts keep working
+query I
+SELECT histogram(m, b) FROM (VALUES (MAP([1::BIGINT], [1::BIGINT]), [MAP([1], [1])])) t(m, b)
+----
+{{1=1}=1}
+
 # the bind error also surfaces in the window form
 statement error
 SELECT histogram(l, b) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) FROM (VALUES ([1], [1])) t(l, b)
@@ -175,17 +187,17 @@ SELECT histogram(1, []::DATE[])
 ----
 <REGEX>:Binder Error.*bins of type DATE\[\] cannot be cast to INTEGER\[\].*
 
-# member casts inside struct bins follow the corresponding explicit cast and still fail at runtime
+# missing member conversions inside struct bins are rejected at bind time as well
 statement error
 SELECT histogram(s, b) FROM (VALUES ({'a': [1]}, [{'a': 1}])) t(s, b)
 ----
-<REGEX>:Conversion Error.*Unimplemented type for cast.*
+<REGEX>:Binder Error.*bins of type STRUCT\(a INTEGER\)\[\] cannot be cast to STRUCT\(a INTEGER\[\]\)\[\].*
 
 # the same holds for unnamed structs
 statement error
 SELECT histogram(s, b) FROM (VALUES (row([1]), [row(1)])) t(s, b)
 ----
-<REGEX>:Conversion Error.*Unimplemented type for cast.*
+<REGEX>:Binder Error.*bins of type TUPLE\(INTEGER\)\[\] cannot be cast to TUPLE\(INTEGER\[\]\)\[\].*
 
 # enum bins compose an ENUM -> VARCHAR -> target cast - an unsupported target is rejected at bind time
 statement error
@@ -213,6 +225,63 @@ query I
 SELECT histogram(union_value(e := 'a'::small_enum)::UNION(e small_enum, n INTEGER), ['a'::small_enum])
 ----
 {a=1}
+
+# bins that reach no union member are rejected at bind time - PREPARE itself fails
+statement error
+PREPARE union_bins AS SELECT histogram(union_value(n := 1), [{'a': 1}])
+----
+<REGEX>:Binder Error.*bins of type STRUCT\(a INTEGER\)\[\] cannot be cast to UNION\(n INTEGER\)\[\].*
+
+# ambiguous union member casts are rejected at bind time as well
+statement error
+SELECT histogram(union_value(a := 1)::UNION(a INTEGER, b INTEGER), [1])
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to UNION\(a INTEGER, b INTEGER\)\[\].*
+
+# a union-to-union cast that falls back to wrapping the source union stays accepted,
+# even though the abandoned member mapping bound an unexecutable child cast
+query I
+WITH v AS (SELECT union_value(b := 1)::UNION(a INTEGER, b INTEGER) AS s)
+SELECT list_aggregate(map_values(histogram(union_value(wrapped := s)::UNION(a INTEGER[], wrapped UNION(a INTEGER, b INTEGER)), [s])), 'sum') FROM v
+----
+1
+
+# an unexecutable cast for one union member does not reject bins using the other members
+query I
+WITH v AS (SELECT union_value(b := 1)::UNION(a INTEGER, b INTEGER) AS s)
+SELECT list_aggregate(map_values(histogram(union_value(b := 1)::UNION(a INTEGER[], b INTEGER), [s])), 'sum') FROM v
+----
+1
+
+# when every union member cast is unexecutable the bins are rejected at bind time
+statement error
+SELECT histogram(union_value(a := [1])::UNION(a INTEGER[], b DATE), b) FROM (VALUES ([union_value(a := 1)::UNION(a INTEGER, b INTEGER)])) t(b)
+----
+<REGEX>:Binder Error.*bins of type UNION\(a INTEGER, b INTEGER\)\[\] cannot be cast to UNION\(a INTEGER\[\], b DATE\)\[\].*
+
+# struct bins whose member conversion only works for NULL members are rejected like empty bins
+statement error
+SELECT histogram({'a': NULL::INTEGER[]}, [{'a': NULL::INTEGER}])
+----
+<REGEX>:Binder Error.*bins of type STRUCT\(a INTEGER\)\[\] cannot be cast to STRUCT\(a INTEGER\[\]\)\[\].*
+
+# bins may omit struct members that the cast fills with NULL
+query I
+SELECT histogram(s, b) FROM (VALUES ({'a': 1, 'b': NULL::INTEGER[]}, [{'a': 1}])) t(s, b)
+----
+{{'a': 1, 'b': NULL}=1}
+
+# variant bins for a target the variant cast does not support are rejected at bind time
+statement error
+SELECT histogram(get_type(1), [1::VARIANT])
+----
+<REGEX>:Binder Error.*bins of type VARIANT\[\] cannot be cast to TYPE\[\].*
+
+# variant bins for a supported target keep working
+query I
+SELECT histogram(1, [1::VARIANT])
+----
+{1=1}
 
 # conversions the cast function itself rejects during execution keep failing at runtime,
 # like the corresponding explicit cast

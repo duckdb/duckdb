@@ -24,6 +24,19 @@ static bool WrapInListCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
+//! Unwrap the single struct member
+static bool StructMemberCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source.GetValue(i);
+		if (val.IsNull()) {
+			result.SetValue(i, Value(result.GetType()));
+		} else {
+			result.SetValue(i, StructValue::GetChildren(val)[0]);
+		}
+	}
+	return true;
+}
+
 //! Widen INTEGER values to BIGINT
 static bool IntegerToBigintValueCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	for (idx_t i = 0; i < count; i++) {
@@ -87,6 +100,29 @@ TEST_CASE("Histogram bin validation accepts registered casts nested in the bins 
 	casts.RegisterCastFunction(source_type, target_type, BoundCastInfo(DefaultCasts::ReinterpretCast));
 	auto result = con.Query(
 	    "SELECT list_aggregate(map_values(histogram(s, b)), 'sum') FROM (VALUES ({'b': 1}, [{'a': 1}])) t(s, b)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Histogram bin validation sees registered casts to union members", "[api][histogram]") {
+	DuckDB db;
+	Connection con(db);
+	if (con.Query("SELECT histogram(1, [1])")->HasError()) {
+		return;
+	}
+
+	// without a registered cast the struct bins reach no union member and are rejected at bind time
+	auto rejected = con.Query("SELECT histogram(u, b) FROM (VALUES (union_value(n := 1), [{'a': 1}])) t(u, b)");
+	REQUIRE(rejected->HasError());
+	REQUIRE(StringUtil::Contains(rejected->GetError(), "bin boundaries must match the input type"));
+
+	// a registered cast with an implicit cost makes the struct bins castable to the INTEGER member
+	auto &casts = DBConfig::GetConfig(*con.context).GetCastFunctions();
+	casts.RegisterCastFunction(LogicalType::STRUCT({{"a", LogicalType::INTEGER}}), LogicalType::INTEGER,
+	                           BoundCastInfo(StructMemberCast), 10);
+	auto result = con.Query(
+	    "SELECT list_aggregate(map_values(histogram(u, b)), 'sum') FROM (VALUES (union_value(n := 1), [{'a': 1}])) "
+	    "t(u, b)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }

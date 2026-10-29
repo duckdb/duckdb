@@ -43,6 +43,10 @@ struct BoundCastData {
 	DUCKDB_API virtual ~BoundCastData();
 
 	DUCKDB_API virtual unique_ptr<BoundCastData> Copy() const = 0;
+	//! Whether the child casts retained by this bind make the cast unexecutable for non-NULL values
+	virtual bool ContainsNullCast() const {
+		return false;
+	}
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -171,6 +175,8 @@ public:
 	void SetNullOnly() {
 		null_only = true;
 	}
+	//! Whether this cast is NULL-only, or the child casts it retains make it unexecutable
+	bool ContainsNullCast() const;
 	bool Equals(const BoundCastInfo &other) const {
 		return function == other.function && statistics == other.statistics;
 	}
