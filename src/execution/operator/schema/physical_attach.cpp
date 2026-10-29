@@ -29,11 +29,12 @@ static void WarnIfDuckLakeMetadata(ClientContext &context, AttachedDatabase &att
 	}
 	// scan the committed entries, a catalog lookup would open a transaction on the database
 	bool has_metadata_table = false;
-	catalog.Cast<DuckCatalog>().ScanSchemas(VisibilityBound::AllCommitted(), [&](DuckSchemaEntry &schema) {
+	catalog.Cast<DuckCatalog>().ScanSchemas([&](SchemaCatalogEntry &schema_entry) {
+		auto &schema = schema_entry.Cast<DuckSchemaEntry>();
 		if (schema.GetParentSchema() || schema.name != *default_schema) {
 			return;
 		}
-		schema.Scan(CatalogType::TABLE_ENTRY, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type == CatalogType::TABLE_ENTRY && entry.name == "ducklake_metadata") {
 				has_metadata_table = true;
 			}
