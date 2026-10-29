@@ -94,15 +94,16 @@ SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES (1e308::DOUBLE), (1e308))
 ----
 inf	inf
 
+# the sign of the NaN produced by inf + -inf differs by platform (x86-64 prints -nan), so test with isnan
 query II
-SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('inf'::DOUBLE), ('-inf')) t(v);
+SELECT isnan(fsum(v)), isnan(favg(v)) FROM (VALUES ('inf'::DOUBLE), ('-inf')) t(v);
 ----
-nan	nan
+true	true
 
 query II
-SELECT fsum(v)::VARCHAR, favg(v)::VARCHAR FROM (VALUES ('nan'::DOUBLE), (1.0)) t(v);
+SELECT isnan(fsum(v)), isnan(favg(v)) FROM (VALUES ('nan'::DOUBLE), (1.0)) t(v);
 ----
-nan	nan
+true	true
 
 # states exported by an older version: an infinite sum next to a NaN compensation, and a finite one
 query III
