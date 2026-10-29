@@ -65,7 +65,8 @@ TEST_CASE("HTTP retry backoff observes cancellation and deadlines", "[http][intr
 	HTTPParams params(http);
 	params.retries = 1;
 	params.retry_wait_ms = 0;
-	HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
+	HeadRequestInfo request("http://example.com/", HTTPHeaders(), params);
+	request.interrupt_context = con.context.get();
 	bool interrupt = true;
 	SECTION("interruption") {
 	}
@@ -75,7 +76,7 @@ TEST_CASE("HTTP retry backoff observes cancellation and deadlines", "[http][intr
 	idx_t attempts = 0;
 	std::promise<void> attempted;
 	auto result = std::async(std::launch::async, [&]() {
-		budget.Run(
+		HTTPUtil::RunRequestWithRetry(
 		    [&]() {
 			    if (++attempts == 1) {
 				    if (!interrupt) {
@@ -86,11 +87,13 @@ TEST_CASE("HTTP retry backoff observes cancellation and deadlines", "[http][intr
 					                           200);
 				    }
 				    attempted.set_value();
-				    return HTTPRetryDecision::Throttled("5");
+				    auto response = make_uniq<HTTPResponse>(HTTPStatusCode::ServiceUnavailable_503);
+				    response->headers.Insert("Retry-After", "5");
+				    return response;
 			    }
-			    return HTTPRetryDecision::Success();
+			    return make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
 		    },
-		    *con.context);
+		    request, {});
 	});
 	auto started = attempted.get_future().wait_for(std::chrono::seconds(2));
 	if (interrupt) {
@@ -103,9 +106,6 @@ TEST_CASE("HTTP retry backoff observes cancellation and deadlines", "[http][intr
 	CHECK(started == std::future_status::ready);
 	CHECK(completed == std::future_status::ready);
 	CHECK(attempts == 1);
-
-	// A later operation without a caller must not retain the cancelled context.
-	CHECK_NOTHROW(budget.Run([&]() { return HTTPRetryDecision::Success(); }));
 }
 #endif
 

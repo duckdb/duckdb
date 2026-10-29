@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/http/http_util.hpp"
@@ -250,10 +251,6 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt) {
 	Run(attempt, {}, nullptr);
 }
 
-void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt, ClientContext &context) {
-	Run(attempt, {}, context);
-}
-
 void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry,
                           optional_ptr<ClientContext> context) {
 	if (!attempt) {
@@ -374,12 +371,7 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision, optional
 		if (!context) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
 		} else {
-			auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(sleep_ms);
-			do {
-				context->BlockingInterruptCheck();
-				std::this_thread::sleep_until(
-				    MinValue(deadline, std::chrono::steady_clock::now() + std::chrono::milliseconds(50)));
-			} while (std::chrono::steady_clock::now() < deadline);
+			ThreadUtil::SleepMs(sleep_ms, context);
 		}
 	}
 #endif

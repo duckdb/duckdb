@@ -458,7 +458,6 @@ HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, Base
 }
 
 unique_ptr<HTTPResponse> HTTPTransportManager::PerformRequest(Session &session, BaseRequest &request) {
-	request.InterruptCheck();
 	if (request.params.transport_manager.get() != this || request.params.transport_state != session.state ||
 	    request.params.transport_session_id != session.session_id) {
 		throw InvalidInputException("HTTP parameters do not belong to this transport session");

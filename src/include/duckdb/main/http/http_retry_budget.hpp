@@ -144,8 +144,6 @@ public:
 	//! Run once, then consume budget and wait before each requested retry. Exhaustion returns normally.
 	//! Callbacks establish replay safety; exceptions propagate without further retries.
 	DUCKDB_API void Run(const std::function<HTTPRetryDecision()> &attempt);
-	//! Run an operation on behalf of a caller, checking interruption during retry waits as well as between attempts.
-	DUCKDB_API void Run(const std::function<HTTPRetryDecision()> &attempt, ClientContext &context);
 	//! Retries admitted for HTTP 429 or 503 responses.
 	DUCKDB_API uint64_t ThrottledRetries() const;
 	//! Retries admitted across all participating requests.

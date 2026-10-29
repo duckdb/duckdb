@@ -217,6 +217,7 @@ struct BaseRequest {
 	//! Borrowed operation-local budget; it must outlive all participating requests.
 	optional_ptr<HTTPRetryBudget> retry_budget;
 	//! Borrowed caller for this request only; it must outlive the request, including asynchronous I/O.
+	//! Callers must protect finalization and cleanup from interruption and expired deadlines.
 	optional_ptr<ClientContext> interrupt_context;
 	DUCKDB_API void InterruptCheck() const;
 
