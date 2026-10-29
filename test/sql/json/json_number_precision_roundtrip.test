@@ -29,15 +29,15 @@ SELECT json_extract('{"a": 1.50}', '$.a');
 1.50
 
 statement ok
-COPY s TO '__TEST_DIR__/s.json'
+COPY s TO '{TEST_DIR}/s.json'
 
 query I
-SELECT count(*) FROM read_text('__TEST_DIR__/s.json') WHERE content LIKE '%12345678901234.56789%' AND content LIKE '%1e-400%' AND content LIKE '%9007199254740993.5%' AND content LIKE '%3.141592653589793238462643383279%' AND content LIKE '%0.1000000000000000055511151231257827%' AND content LIKE '%12345678901234567890123%'
+SELECT count(*) FROM read_text('{TEST_DIR}/s.json') WHERE content LIKE '%12345678901234.56789%' AND content LIKE '%1e-400%' AND content LIKE '%9007199254740993.5%' AND content LIKE '%3.141592653589793238462643383279%' AND content LIKE '%0.1000000000000000055511151231257827%' AND content LIKE '%12345678901234567890123%'
 ----
 1
 
 statement ok
-ATTACH '__TEST_DIR__/exp.db' AS exp
+ATTACH '{TEST_DIR}/exp.db' AS exp
 
 statement ok
 USE exp
@@ -52,9 +52,9 @@ statement ok
 USE memory
 
 statement ok
-EXPORT DATABASE exp TO '__TEST_DIR__/expdir' (FORMAT json)
+EXPORT DATABASE exp TO '{TEST_DIR}/expdir' (FORMAT json)
 
 query I
-SELECT count(*) FROM read_text('__TEST_DIR__/expdir/t.json') WHERE content LIKE '%12345678901234.56789%'
+SELECT count(*) FROM read_text('{TEST_DIR}/expdir/t.json') WHERE content LIKE '%12345678901234.56789%'
 ----
 1

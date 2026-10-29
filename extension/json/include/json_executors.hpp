@@ -25,7 +25,8 @@ struct JSONExecutors {
 public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
 	template <class T>
-	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun, yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
+	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun,
+	                         yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -40,7 +41,8 @@ public:
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
-	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun, yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
+	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun,
+	                          yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.BindInfo()->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -121,7 +123,8 @@ public:
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
-	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun, yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
+	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun,
+	                        yyjson_read_flag read_flag = JSONCommon::READ_FLAG) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.BindInfo()->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
