@@ -387,7 +387,10 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 		auto cast_data = BindToUnionMemberCast(input, source, target);
 		return BoundCastInfo(&ToUnionCast, std::move(cast_data), InitToUnionLocalState);
 	} catch (ConversionException &ex) {
-		return BoundCastInfo(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+		BoundCastInfo result(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+		// the stored error is raised for every non-NULL value
+		result.SetNullOnly();
+		return result;
 	}
 }
 
@@ -448,7 +451,10 @@ BoundCastInfo DefaultCasts::UnionCastSwitch(BindCastInput &input, const LogicalT
 		try {
 			return BoundCastInfo(ToUnionCast, BindUnionToUnionCast(input, source, target), InitToUnionLocalState);
 		} catch (ConversionException &ex) {
-			return BoundCastInfo(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+			BoundCastInfo result(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+			// the stored error is raised for every non-NULL value
+			result.SetNullOnly();
+			return result;
 		}
 	default:
 		return TryVectorNullCast;
