@@ -150,6 +150,7 @@ def terminal_environment(shell, term='xterm-256color', no_color=None):
     ('dumb', None, ['-help']),
     ('dumb', None, ['-c', 'SELECT 42']),
     ('xterm-256color', None, ['-version']),
+    ('xterm-256color', None, ['-json', '-version']),
     ('xterm-256color', None, ['-light-mode', '-manual', 'list_contains']),
 ])
 def test_unneeded_color_probe_is_skipped(shell, term, no_color, arguments):
