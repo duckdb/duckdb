@@ -27,5 +27,14 @@ public:
 
 	Identifier alias_of;
 	vector<FunctionDescription> descriptions;
+
+	//! Watched by a binder that holds on to this entry while it binds the function's arguments: binding an argument
+	//! can autoload an extension that adds overloads to this function, which replaces the entry and destroys this one
+	weak_ptr<const bool> GetLivenessToken() const {
+		return liveness;
+	}
+
+private:
+	shared_ptr<const bool> liveness = make_shared_ptr<const bool>(true);
 };
 } // namespace duckdb

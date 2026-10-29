@@ -259,6 +259,26 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                  json_bind_result.error.RawMessage());
 }
 
+//! Binding a function's arguments can autoload an extension that adds overloads to that very function (icu adds
+//! TIMESTAMPTZ overloads to + and -, and epoch(TIMESTAMPTZ) autoloads it). That replaces the function's catalog entry
+//! and destroys the one the binder holds, so the binder checks the entry's liveness token before using it again, and
+//! looks the function up again when it expired. The bound arguments own nothing from the old entry.
+CatalogEntry &ExpressionBinder::FunctionEntryAfterArguments(FunctionExpression &function, CatalogEntry &entry,
+                                                            const weak_ptr<const bool> &liveness,
+                                                            CatalogType expected_type) {
+	if (!liveness.expired()) {
+		return entry;
+	}
+	auto &replacement = BindFunction(function);
+	if (replacement.type != expected_type) {
+		throw BinderException(function,
+		                      "Function %s was replaced by an extension that was autoloaded while its arguments were "
+		                      "bound, and is no longer a function of the same kind",
+		                      function.FunctionName());
+	}
+	return replacement;
+}
+
 CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	QueryErrorContext error_context(function.GetQueryLocation());
 
@@ -357,6 +377,7 @@ BindResult ExpressionBinder::BindAggregateInEnclosingScope(FunctionExpression &a
 }
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
+	auto func_liveness = func.GetLivenessToken();
 	// bind the children of the function expression
 	ErrorData error;
 
@@ -407,12 +428,16 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		}
 	}
 
+	auto &function_entry =
+	    FunctionEntryAfterArguments(function, func, func_liveness, CatalogType::SCALAR_FUNCTION_ENTRY)
+	        .Cast<ScalarFunctionCatalogEntry>();
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
+	auto result =
+	    function_binder.BindScalarFunction(function_entry, std::move(arguments), error, function.IsOperator(), &binder);
 	if (!result && !named_arguments.empty()) {
 		// a legacy call that does not bind positionally may use names the function declares (e.g. **kwargs)
 		ErrorData named_error;
-		result = function_binder.BindScalarFunction(func, std::move(named_arguments), named_error,
+		result = function_binder.BindScalarFunction(function_entry, std::move(named_arguments), named_error,
 		                                            function.IsOperator(), &binder);
 	}
 	if (!result) {
@@ -430,6 +455,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
+	auto func_liveness = func.GetLivenessToken();
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
@@ -442,6 +468,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// list lambda functions use the existing (list, lambda) shape; invoke is the only lambda
 	// function that accepts the lambda expression as the first argument.
 	const idx_t lambda_expr_idx = func.name == "invoke" ? 0 : 1;
+	// the aliases of list_reduce (e.g. reduce) are separate catalog entries; read before any argument is bound
+	const bool is_list_reduce = func.name == "list_reduce" || func.alias_of == "list_reduce";
 	if (args.size() <= lambda_expr_idx ||
 	    args[lambda_expr_idx].GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 		return BindResult("This scalar function requires a lambda expression!");
@@ -485,8 +513,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &lambda_expr = args[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
-	// the aliases of list_reduce (e.g. reduce) are separate catalog entries
-	const bool is_list_reduce = func.name == "list_reduce" || func.alias_of == "list_reduce";
 	if (is_list_reduce) {
 		// We have to make this copy before binding in case we have to double-bind
 		lambda_expr_copy = lambda_expr.Copy();
@@ -546,9 +572,12 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.LambdaExprMutable(), capture_bind_lambda,
 	                     override_bind_lambda_context, capture_child_types);
 
+	auto &function_entry =
+	    FunctionEntryAfterArguments(function, func, func_liveness, CatalogType::SCALAR_FUNCTION_ENTRY)
+	        .Cast<ScalarFunctionCatalogEntry>();
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(func, std::move(children), error, function.IsOperator(), &binder);
+	    function_binder.BindScalarFunction(function_entry, std::move(children), error, function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

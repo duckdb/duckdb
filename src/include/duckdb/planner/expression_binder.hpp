@@ -302,6 +302,10 @@ protected:
 	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
 	CatalogEntry &BindFunction(FunctionExpression &function);
+	//! The function's catalog entry to bind against once its arguments are bound: the one handed in, or the function
+	//! looked up again when an extension autoloaded while binding the arguments replaced it
+	CatalogEntry &FunctionEntryAfterArguments(FunctionExpression &function, CatalogEntry &entry,
+	                                          const weak_ptr<const bool> &liveness, CatalogType expected_type);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);

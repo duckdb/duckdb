@@ -106,6 +106,18 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		table_in_out = true;
 		return true;
 	}
+	// binding a parameter can autoload an extension that adds overloads to this function, which replaces its catalog
+	// entry and destroys this one: everything the loop needs from it is read before the first parameter is bound
+	const auto function_name = table_function.name.GetIdentifierName();
+	Identifier table_parameter_function_name;
+	bool accepts_subquery_parameter = false;
+	if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION) {
+		D_ASSERT(table_function.functions.Size() == 1);
+		const auto &fun = *table_function.functions.GetFunctionByOffset(0);
+		table_parameter_function_name = fun.GetName();
+		accepts_subquery_parameter =
+		    table_function.functions.Size() == 1 && fun.GetSignature().GetPositionalParameterCount() > 0;
+	}
 	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		Identifier parameter_name;
@@ -127,12 +139,10 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		}
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
-			D_ASSERT(table_function.functions.Size() == 1);
-			const auto &fun = *table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.GetSignature().GetPositionalParameterCount() == 0) {
+			if (!accepts_subquery_parameter) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
-				    fun.GetName());
+				    table_parameter_function_name);
 			}
 			if (seen_subquery) {
 				error = ErrorData("Table function can have at most one subquery parameter");
@@ -148,7 +158,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			continue;
 		}
 
-		TableFunctionBinder binder(*this, context, table_function.name.GetIdentifierName());
+		TableFunctionBinder binder(*this, context, function_name);
 		auto expr = binder.Bind(child);
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
@@ -411,6 +421,19 @@ BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> 
 	                                 std::move(input_table_types), std::move(input_table_names), nullptr);
 }
 
+//! The table function looked up again after binding its parameters replaced its catalog entry
+static TableFunctionCatalogEntry &LookupTableFunctionAgain(Binder &binder, const EntryLookupInfo &lookup,
+                                                           const FunctionExpression &fexpr) {
+	auto &entry = *binder.GetCatalogEntry(lookup, OnEntryNotFound::THROW_EXCEPTION);
+	if (entry.type != CatalogType::TABLE_FUNCTION_ENTRY) {
+		throw BinderException(fexpr,
+		                      "Table function %s was replaced by an extension that was autoloaded while its parameters "
+		                      "were bound, and is no longer a table function",
+		                      fexpr.FunctionName());
+	}
+	return entry.Cast<TableFunctionCatalogEntry>();
+}
+
 BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 
@@ -422,8 +445,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(fexpr.FunctionName()),
 	                                      error_context);
 	auto bound_name = BindTableName(fexpr.GetQualifiedName());
-	auto &func_catalog =
-	    *GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
+	EntryLookupInfo bound_function_lookup(table_function_lookup, bound_name);
+	auto &func_catalog = *GetCatalogEntry(bound_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
@@ -458,7 +481,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		return query;
 	}
 	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
-	auto &function = func_catalog.Cast<TableFunctionCatalogEntry>();
+	auto &original_function = func_catalog.Cast<TableFunctionCatalogEntry>();
+	auto function_liveness = original_function.GetLivenessToken();
 
 	// bind the input parameters to the function - they are folded to constants after the overload is chosen
 	vector<unique_ptr<Expression>> positional_arguments;
@@ -472,11 +496,16 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		children.push_back(std::move(child.GetExpressionMutable()));
 	}
 
-	if (!BindTableFunctionParameters(function, children, positional_arguments, named_arguments, subquery, table_in_out,
-	                                 error)) {
+	if (!BindTableFunctionParameters(original_function, children, positional_arguments, named_arguments, subquery,
+	                                 table_in_out, error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
+	// binding a parameter can autoload an extension that adds overloads to this function (icu adds TIMESTAMPTZ
+	// overloads to range, and epoch(TIMESTAMPTZ) autoloads it), which replaces its catalog entry and destroys the one
+	// looked up above: look the function up again. The bound parameters own nothing from the old entry.
+	auto &function =
+	    function_liveness.expired() ? LookupTableFunctionAgain(*this, bound_function_lookup, fexpr) : original_function;
 
 	// selection, named-argument checking, folding and casting all happen in the function binder
 	unique_ptr<ResolvedTableFunction> resolved;
