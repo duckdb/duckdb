@@ -39,7 +39,8 @@ struct DeclinedFilterScanState : public GlobalTableFunctionState {
 
 	//! The columns the scan emits, in order
 	vector<ColumnIndex> output_columns;
-	bool finished = false;
+	//! The first row of the next chunk
+	idx_t offset = 0;
 };
 
 unique_ptr<GlobalTableFunctionState> DeclinedFilterInit(ClientContext &, TableFunctionInitInput &input) {
@@ -95,20 +96,21 @@ private:
 
 	static void Scan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 		auto &state = data.global_state->Cast<DeclinedFilterScanState>();
-		if (state.finished) {
+		if (state.offset == ROW_COUNT) {
 			output.SetChildCardinality(0);
 			return;
 		}
-		state.finished = true;
+		auto count = MinValue<idx_t>(ROW_COUNT - state.offset, STANDARD_VECTOR_SIZE);
 		for (idx_t col_idx = 0; col_idx < state.output_columns.size(); col_idx++) {
 			auto is_rowid = state.output_columns[col_idx].IsRowIdColumn();
-			auto writer = FlatVector::Writer<int64_t>(output.data[col_idx], ROW_COUNT);
-			for (idx_t row = 0; row < ROW_COUNT; row++) {
+			auto writer = FlatVector::Writer<int64_t>(output.data[col_idx], count);
+			for (idx_t row = state.offset; row < state.offset + count; row++) {
 				auto rowid = NumericCast<int64_t>(row);
 				writer.WriteValue(is_rowid ? rowid : (rowid + 1) * 10);
 			}
 		}
-		output.SetChildCardinality(ROW_COUNT);
+		state.offset += count;
+		output.SetChildCardinality(count);
 	}
 
 private:
@@ -194,35 +196,36 @@ struct DeclinedStructScan {
 	static void Scan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 		static const char *const B_VALUES[] = {"x1", "x2", "x3"};
 		auto &state = data.global_state->Cast<DeclinedFilterScanState>();
-		if (state.finished) {
+		if (state.offset == ROW_COUNT) {
 			output.SetChildCardinality(0);
 			return;
 		}
-		state.finished = true;
+		auto count = MinValue<idx_t>(ROW_COUNT - state.offset, STANDARD_VECTOR_SIZE);
 		for (idx_t col_idx = 0; col_idx < state.output_columns.size(); col_idx++) {
 			auto &column = state.output_columns[col_idx];
 			auto &result = output.data[col_idx];
 			if (!column.IsPushdownExtract()) {
-				auto writer = FlatVector::Writer<VectorStructType<int32_t, string_t>>(result, ROW_COUNT);
-				for (idx_t row = 0; row < ROW_COUNT; row++) {
+				auto writer = FlatVector::Writer<VectorStructType<int32_t, string_t>>(result, count);
+				for (idx_t row = state.offset; row < state.offset + count; row++) {
 					writer.WriteValue([&](auto &a_writer, auto &b_writer) {
 						a_writer.WriteValue(NumericCast<int32_t>(row + 1));
 						b_writer.WriteValue(string_t(B_VALUES[row]));
 					});
 				}
 			} else if (column.GetChildIndex(0).GetPrimaryIndex() == 0) {
-				auto writer = FlatVector::Writer<int32_t>(result, ROW_COUNT);
-				for (idx_t row = 0; row < ROW_COUNT; row++) {
+				auto writer = FlatVector::Writer<int32_t>(result, count);
+				for (idx_t row = state.offset; row < state.offset + count; row++) {
 					writer.WriteValue(NumericCast<int32_t>(row + 1));
 				}
 			} else {
-				auto writer = FlatVector::Writer<string_t>(result, ROW_COUNT);
-				for (idx_t row = 0; row < ROW_COUNT; row++) {
+				auto writer = FlatVector::Writer<string_t>(result, count);
+				for (idx_t row = state.offset; row < state.offset + count; row++) {
 					writer.WriteValue(string_t(B_VALUES[row]));
 				}
 			}
 		}
-		output.SetChildCardinality(ROW_COUNT);
+		state.offset += count;
+		output.SetChildCardinality(count);
 	}
 
 	static bool SupportsPushdownExtract(const FunctionData &, const LogicalIndex &) {
