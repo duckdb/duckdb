@@ -419,7 +419,9 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 	auto function_impl = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
 	auto &bin_type = arguments[1]->GetReturnType();
 	auto &bin_list_type = function_impl.GetSignature().GetParameter(1).GetType();
-	if (!BinCastIsSupported(input.GetClientContext(), bin_type, bin_list_type)) {
+	auto &context = input.GetClientContext();
+	if (!CastFunctionSet::Get(context).CanOverrideDefaultCast(bin_type, bin_list_type) &&
+	    !BinCastIsSupported(context, bin_type, bin_list_type)) {
 		throw BinderException("%s bins of type %s cannot be cast to %s - bin boundaries must match the input type",
 		                      function.GetName(), bin_type.ToString(), bin_list_type.ToString());
 	}

@@ -163,6 +163,24 @@ SELECT histogram(l, b) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) FROM (VAL
 ----
 <REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to INTEGER\[\]\[\].*
 
+# the rejection happens at bind time - PREPARE itself fails
+statement error
+PREPARE invalid_bins AS SELECT histogram(l, b) FROM (VALUES ([1], [1])) t(l, b)
+----
+<REGEX>:Binder Error.*bins of type INTEGER\[\] cannot be cast to INTEGER\[\]\[\].*
+
+# the type check does not depend on the bins values - empty mismatched bins are rejected too
+statement error
+SELECT histogram(1, []::DATE[])
+----
+<REGEX>:Binder Error.*bins of type DATE\[\] cannot be cast to INTEGER\[\].*
+
+# member casts inside struct bins follow the corresponding explicit cast and still fail at runtime
+statement error
+SELECT histogram(s, b) FROM (VALUES ({'a': [1]}, [{'a': 1}])) t(s, b)
+----
+<REGEX>:Conversion Error.*Unimplemented type for cast.*
+
 # bins with a valid runtime cast to the argument type still work
 query I
 SELECT histogram(d, bins) FROM (VALUES (DATE '2020-01-01', ['2020-06-01'::VARCHAR])) t(d, bins)
