@@ -261,6 +261,8 @@ public:
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+		SelectionVector rows_to_probe_sel;
+		SelectionVector rows_to_probe_next_sel;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};

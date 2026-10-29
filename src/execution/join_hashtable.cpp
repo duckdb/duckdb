@@ -31,7 +31,8 @@ JoinHashTable::SharedState::SharedState()
 
 JoinHashTable::ProbeState::ProbeState()
     : SharedState(), ht_offsets_and_salts_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
-      non_empty_sel(STANDARD_VECTOR_SIZE) {
+      non_empty_sel(STANDARD_VECTOR_SIZE), rows_to_probe_sel(STANDARD_VECTOR_SIZE),
+      rows_to_probe_next_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::ProbeDictionaryState::ProbeDictionaryState()
@@ -210,69 +211,83 @@ idx_t GetOptionalIndex(optional_ptr<const SelectionVector> sel, const idx_t idx)
 	return HAS_SEL ? sel->get_index(idx) : idx;
 }
 
-static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry, Vector &pointers_result_v,
-                                idx_t row_ht_offset, idx_t &keys_to_compare_count, const idx_t &row_index) {
-	const auto row_ptr_insert_to = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
-	const auto ht_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
+struct ProbeResult {
+	data_ptr_t pointer;
+	idx_t offset_and_salt;
 
-	state.keys_to_compare_sel.set_index(keys_to_compare_count, row_index);
-	row_ptr_insert_to[row_index] = entry.GetPointer();
+	bool SaltMatches() const {
+		return pointer != nullptr;
+	}
+};
 
-	// If the key does not match, we have to continue linear probing, we need to store the ht_offset and the salt
-	// for this element based on the row_index. We can't get the offset from the hash as we already might have
-	// some linear probing steps when arriving here.
-	ht_offsets_and_salts[row_index] = row_ht_offset | entry.GetSaltWithNulls();
-	keys_to_compare_count += 1;
+// Returns whether we need to continue probing for this row
+template <bool USE_SALTS>
+static bool ProbeEntry(const ht_entry_t *entries, const idx_t offset_mask, ProbeResult &result) {
+	const ht_entry_t entry = entries[result.offset_and_salt & offset_mask];
+	const bool occupied = entry.IsOccupied();
+	const bool salt_match = !USE_SALTS || entry.GetSalt() == ht_entry_t::ExtractSalt(result.offset_and_salt);
+	const bool needs_further_probing = occupied && !salt_match;
+
+	result.pointer = occupied && salt_match ? entry.GetPointerOrNull() : nullptr;
+	return needs_further_probing;
 }
 
-template <bool USE_SALTS, bool HAS_SEL>
+// Linear probing in branch-free rounds: each round moves only the rows that hit another salt to their next entry.
+template <bool USE_SALTS, bool HAS_ROW_SEL>
 static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht,
                                       unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
-                                      optional_ptr<const SelectionVector> row_sel, idx_t &count) {
-	auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
-	const auto bitmask = ht.bitmask;
+                                      const optional_ptr<const SelectionVector> row_sel, idx_t &count) {
+	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
+	const auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v); // flattened before -> dense
+	const auto offset_and_salt_mask = ht.bitmask | ht_entry_t::SALT_MASK;
 
-	idx_t keys_to_compare_count = 0;
+	ProbeResult probe_results[STANDARD_VECTOR_SIZE];
+	auto &rows_to_probe_current = state.rows_to_probe_sel;
+	auto &rows_to_probe_next = state.rows_to_probe_next_sel;
 
-	for (idx_t i = 0; i < count; i++) {
-		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
-		auto row_ht_offset = row_hash & bitmask;
+	// Probe the start slot of every row; rows that hit another salt are kept for the next round.
+	idx_t rows_to_probe_count = 0;
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		auto &result = probe_results[row_idx];
+		result.offset_and_salt = hashes_dense[row_idx] & offset_and_salt_mask;
+		const bool needs_further_probing = ProbeEntry<USE_SALTS>(entries.get(), ht.bitmask, result);
 
-		if (USE_SALTS) {
-			// increment the ht_offset of the entry as long as the next entry is occupied and salt does not match
-			while (true) {
-				const ht_entry_t entry = entries.get()[row_ht_offset];
-				const bool occupied = entry.IsOccupied();
-
-				// the entry is empty -> no match possible
-				if (!occupied) {
-					break;
-				}
-
-				const hash_t row_salt = ht_entry_t::ExtractSalt(row_hash);
-				const bool salt_match = entry.GetSalt() == row_salt;
-				if (salt_match) {
-					// we know that the entry is occupied and the salt matches -> compare the keys
-					auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
-					                    row_index);
-					break;
-				}
-
-				// full and salt do not match -> continue probing
-				IncrementAndWrap(row_ht_offset, bitmask);
-			}
-		} else {
-			const ht_entry_t entry = entries.get()[row_ht_offset];
-			const bool occupied = entry.IsOccupied();
-			if (occupied) {
-				// the entry is occupied -> compare the keys
-				auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-				AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count, row_index);
-			}
-		}
+		// save the row idx if we need further probing
+		rows_to_probe_current.set_index(rows_to_probe_count, row_idx);
+		rows_to_probe_count += needs_further_probing;
 	}
 
+	// Move the kept rows one slot further until each finds an empty slot or a salt match.
+	while (rows_to_probe_count > 0) {
+		idx_t next_rows_to_probe_count = 0;
+
+		for (idx_t list_idx = 0; list_idx < rows_to_probe_count; list_idx++) {
+			const auto row_idx = rows_to_probe_current.get_index(list_idx);
+
+			auto &result = probe_results[row_idx];
+			IncrementAndWrap(result.offset_and_salt, offset_and_salt_mask);
+			const bool needs_further_probing = ProbeEntry<USE_SALTS>(entries.get(), ht.bitmask, result);
+
+			// save the row idx if we need further probing
+			rows_to_probe_next.set_index(next_rows_to_probe_count, row_idx);
+			next_rows_to_probe_count += needs_further_probing;
+		}
+		rows_to_probe_count = next_rows_to_probe_count;
+		std::swap(rows_to_probe_current, rows_to_probe_next);
+	}
+
+	// Store a pointer and salt | offset for all rows that have a salt match for the key comparison.
+	const auto result_pointers = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
+	const auto result_offsets_and_salts = FlatVector::GetDataMutable<idx_t>(state.ht_offsets_and_salts_v);
+	idx_t keys_to_compare_count = 0;
+	for (idx_t row = 0; row < count; row++) {
+		const auto row_index = GetOptionalIndex<HAS_ROW_SEL>(row_sel, row);
+		const auto &result = probe_results[row];
+		result_pointers[row_index] = result.pointer;
+		result_offsets_and_salts[row_index] = result.offset_and_salt;
+		state.keys_to_compare_sel.set_index(keys_to_compare_count, row_index);
+		keys_to_compare_count += result.SaltMatches();
+	}
 	return keys_to_compare_count;
 }
 
