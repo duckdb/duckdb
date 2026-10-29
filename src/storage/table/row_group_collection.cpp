@@ -954,7 +954,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 // Delete
 //===--------------------------------------------------------------------===//
 idx_t RowGroupCollection::Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
-                                 optional_ptr<DeletedRowIds> deleted_ids) {
+                                 optional_ptr<DeletedRowIds> deleted_ids, bool check_update_conflicts) {
 	idx_t delete_count = 0;
 	// delete is in the row groups
 	// we need to figure out for each id to which row group it belongs
@@ -981,8 +981,8 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DuckTableEntry &ta
 				break;
 			}
 		}
-		delete_count +=
-		    current_row_group.Delete(transaction, table_entry, ids + start, pos - start, row_start, deleted_ids, start);
+		delete_count += current_row_group.Delete(transaction, table_entry, ids + start, pos - start, row_start,
+		                                         deleted_ids, start, check_update_conflicts);
 	} while (pos < count);
 
 	return delete_count;

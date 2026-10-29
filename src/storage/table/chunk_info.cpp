@@ -424,6 +424,37 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	return deleted_tuples;
 }
 
+bool ChunkVectorInfo::HasConflictingDelete(TransactionData transaction, const row_t ids[], idx_t count,
+                                           row_t vector_start) {
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		return ConstantDeleteId() != NOT_DELETED_ID && !UseVersion(transaction, ConstantDeleteId());
+	case DeleteIdState::MASKED:
+		if (UseVersion(transaction, mask_delete_id)) {
+			return false;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - vector_start))) {
+				return true;
+			}
+		}
+		return false;
+	case DeleteIdState::ARRAY: {
+		auto delete_segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = delete_segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < count; i++) {
+			auto delete_id = deleted[ids[i] - vector_start];
+			if (delete_id != NOT_DELETED_ID && !UseVersion(transaction, delete_id)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in HasConflictingDelete");
+	}
+}
+
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
 	if (info.is_consecutive && info.count == STANDARD_VECTOR_SIZE) {
 		// the delete covers the entire vector - all rows share the same deleted id

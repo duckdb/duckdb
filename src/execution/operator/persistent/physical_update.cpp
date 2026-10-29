@@ -141,6 +141,7 @@ public:
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
 		if (!delete_state) {
 			delete_state = table.InitializeDelete(tableref, context, bound_constraints);
+			delete_state->check_update_conflicts = true;
 		}
 		return *delete_state;
 	}

@@ -1393,7 +1393,8 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 			Fetch(transaction, state.verify_chunk, state.col_ids, offset_ids, current_count, fetch_state);
 			VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
 		}
-		delete_count += row_groups->Delete(transaction, table_entry, ids + current_offset, current_count);
+		delete_count += row_groups->Delete(transaction, table_entry, ids + current_offset, current_count, nullptr,
+		                                   state.check_update_conflicts);
 	}
 	return delete_count;
 }

@@ -79,6 +79,8 @@ public:
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
+	//! Whether any of the rows (ids minus vector_start) were deleted by a transaction not visible to "transaction"
+	bool HasConflictingDelete(TransactionData transaction, const row_t ids[], idx_t count, row_t vector_start);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede

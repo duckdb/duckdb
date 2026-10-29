@@ -125,6 +125,15 @@ bool ColumnData::HasAnyChanges() const {
 	return HasChanges();
 }
 
+bool ColumnData::HasConflictingUpdates(TransactionData transaction, idx_t vector_index, const row_t rows[],
+                                       idx_t count) {
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates) {
+		return false;
+	}
+	return updates->HasConflictingUpdates(transaction, vector_index, rows, count);
+}
+
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }

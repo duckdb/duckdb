@@ -39,6 +39,9 @@ public:
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
+	//! Whether any of the rows (ids minus vector_start) were deleted by a transaction not visible to "transaction"
+	bool HasConflictingDeletes(TransactionData transaction, idx_t vector_idx, const row_t ids[], idx_t count,
+	                           row_t vector_start);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
 	//! Attempts to compress the per-row insert/delete ids of each vector into constants. Ids that precede

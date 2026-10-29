@@ -36,6 +36,8 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
+	//! Whether any of the rows (offsets within the vector) were updated by a transaction not visible to "transaction"
+	bool HasConflictingUpdates(TransactionData transaction, idx_t vector_index, const row_t rows[], idx_t count);
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);

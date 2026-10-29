@@ -136,6 +136,9 @@ public:
 
 	//! Whether or not the column has ANY changes, including in child columns
 	virtual bool HasAnyChanges() const;
+	//! Whether any of the rows (offsets within the vector) were updated by a transaction not visible to "transaction"
+	virtual bool HasConflictingUpdates(TransactionData transaction, idx_t vector_index, const row_t rows[],
+	                                   idx_t count);
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 

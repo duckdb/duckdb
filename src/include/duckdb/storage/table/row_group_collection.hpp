@@ -162,7 +162,7 @@ public:
 
 	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
-	             optional_ptr<DeletedRowIds> deleted_ids = nullptr);
+	             optional_ptr<DeletedRowIds> deleted_ids = nullptr, bool check_update_conflicts = false);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,

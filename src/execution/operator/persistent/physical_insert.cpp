@@ -108,6 +108,7 @@ TableDeleteState &InsertLocalState::GetDeleteState(DataTable &table, TableCatalo
                                                    ClientContext &context) {
 	if (!delete_state) {
 		delete_state = table.InitializeDelete(table_ref, context, bound_constraints);
+		delete_state->check_update_conflicts = true;
 	}
 	return *delete_state;
 }

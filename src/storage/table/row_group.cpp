@@ -4,6 +4,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -1380,6 +1381,19 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		}
 		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
 	}
+	if (!transaction.transaction) {
+		return;
+	}
+	// the update is applied before checking deletes, so a concurrent delete either sees it or is seen here
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return;
+	}
+	auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
+	auto vector_start = UnsafeNumericCast<row_t>(row_group_start + vector_idx * STANDARD_VECTOR_SIZE);
+	if (vinfo->HasConflictingDeletes(transaction, vector_idx, ids + offset, count, vector_start)) {
+		throw TransactionException("Conflict on update!");
+	}
 }
 
 void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates,
@@ -2118,9 +2132,10 @@ void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, TransactionData transaction, DuckTableEntry &table_entry, idx_t base_row,
-	                   optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset)
+	                   optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset, bool check_update_conflicts)
 	    : info(info), transaction(transaction), table_entry(table_entry), current_chunk(DConstants::INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0), deleted_ids(deleted_ids), input_offset(input_offset) {
+	      count(0), base_row(base_row), delete_count(0), deleted_ids(deleted_ids), input_offset(input_offset),
+	      check_update_conflicts(check_update_conflicts) {
 	}
 
 	RowGroup &info;
@@ -2135,6 +2150,8 @@ public:
 	optional_ptr<DeletedRowIds> deleted_ids;
 	//! The position of the next row to flush in the input row ids of the delete
 	idx_t input_offset;
+	//! Whether the delete is part of an UPDATE and must conflict with concurrent in-place updates
+	bool check_update_conflicts;
 
 public:
 	void Delete(row_t row_id);
@@ -2142,8 +2159,10 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
-                       idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset) {
-	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start, deleted_ids, input_offset);
+                       idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset,
+                       bool check_update_conflicts) {
+	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start, deleted_ids, input_offset,
+	                             check_update_conflicts);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
@@ -2177,6 +2196,19 @@ void RowGroup::Verify() {
 
 idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
+}
+
+bool RowGroup::HasConflictingUpdates(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count) {
+	for (idx_t c = 0; c < columns.size(); c++) {
+		// columns that are not loaded have no in-memory updates
+		if (!ColumnIsLoaded(c)) {
+			continue;
+		}
+		if (GetColumn(c).HasConflictingUpdates(transaction, vector_idx, rows, count)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
@@ -2219,6 +2251,11 @@ void VersionDeleteState::Flush() {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
 		transaction.transaction->PushDelete(table_entry, info.GetOrCreateVersionInfo(), current_chunk, rows,
 		                                    actual_delete_count, base_row + chunk_row);
+		// the delete is applied before checking updates, so a concurrent update either sees it or is seen here
+		if (check_update_conflicts &&
+		    info.HasConflictingUpdates(transaction, current_chunk, rows, actual_delete_count)) {
+			throw TransactionException("Conflict on tuple deletion!");
+		}
 	}
 	count = 0;
 }

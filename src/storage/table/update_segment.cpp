@@ -1668,6 +1668,31 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 	return false;
 }
 
+bool UpdateSegment::HasConflictingUpdates(TransactionData transaction, idx_t vector_index, const row_t rows[],
+                                          idx_t count) {
+	auto read_lock = lock.GetSharedLock();
+	auto entry = GetUpdateNode(*read_lock, vector_index);
+	if (!entry.IsSet()) {
+		return false;
+	}
+	auto root_pin = entry.Pin();
+	auto next_ptr = UpdateInfo::Get(root_pin).next;
+	while (next_ptr.IsSet()) {
+		auto pin = next_ptr.Pin();
+		auto &info = UpdateInfo::Get(pin);
+		if (!transaction.view.Sees(info.version_number.load())) {
+			auto tuples = info.GetTuples();
+			for (idx_t i = 0; i < count; i++) {
+				if (std::binary_search(tuples, tuples + info.N, UnsafeNumericCast<sel_t>(rows[i]))) {
+					return true;
+				}
+			}
+		}
+		next_ptr = info.next;
+	}
+	return false;
+}
+
 bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 	auto read_lock = lock.GetSharedLock();
 	if (!root) {
