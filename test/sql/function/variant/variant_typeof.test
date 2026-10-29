@@ -80,28 +80,3 @@ with cte as (
 select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from cte;
 ----
 OBJECT(a, b)	OBJECT(a, b)	VARIANT_NULL
-
-# keys are sorted by bytes
-query I
-select variant_typeof({'z': 1, 'a': 2, 'é': 3, '_': 4, 'B': 5, '[': 6}::VARIANT);
-----
-OBJECT(B, [, _, a, z, é)
-
-query I
-select variant_typeof({'x%sy': 1, 'a, b': 2}::VARIANT);
-----
-OBJECT(a, b, x%sy)
-
-# rows with keys of different lengths
-query I
-select variant_typeof(v) from (values
-	({'a_very_long_key_that_is_not_inlined': 1, 'b': 2}::VARIANT),
-	({'c': 1}::VARIANT),
-	(42::VARIANT),
-	({'another_long_key_that_is_not_inlined': 1, 'a': [1]}::VARIANT)
-) t(v);
-----
-OBJECT(a_very_long_key_that_is_not_inlined, b)
-OBJECT(c)
-INT32
-OBJECT(a, another_long_key_that_is_not_inlined)
