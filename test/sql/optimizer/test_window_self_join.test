@@ -429,3 +429,58 @@ ORDER BY id, ord;
 ----
 1	[b2_ord2, b1_ord1]
 1	[b2_ord2, b1_ord1]
+
+# The frame ordering is redundant when the argument ordering determines the arguments
+
+statement ok
+CREATE TABLE frame_ties AS SELECT 1 AS p, i, i % 4 AS x FROM range(8) t(i);
+
+query II
+EXPLAIN SELECT list(DISTINCT x ORDER BY x) OVER (
+	PARTITION BY p ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+SELECT i, list(DISTINCT x ORDER BY x) OVER (
+	PARTITION BY p ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties
+ORDER BY i LIMIT 2;
+----
+0	[0, 1, 2, 3]
+1	[0, 1, 2, 3]
+
+query II
+EXPLAIN SELECT list(x ORDER BY x) OVER (
+	PARTITION BY p ORDER BY i DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+SELECT i, list(x ORDER BY x) OVER (
+	PARTITION BY p ORDER BY i DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties
+ORDER BY i LIMIT 2;
+----
+0	[0, 0, 1, 1, 2, 2, 3, 3]
+1	[0, 0, 1, 1, 2, 2, 3, 3]
+
+# Distinct values tie on the argument ordering, so the frame ordering still matters
+
+query II
+EXPLAIN SELECT list(DISTINCT x ORDER BY x % 2) OVER (
+	PARTITION BY p ORDER BY i DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties;
+----
+physical_plan	<!REGEX>:.*Join Type: INNER.*
+
+query II
+SELECT i, list(DISTINCT x ORDER BY x % 2) OVER (
+	PARTITION BY p ORDER BY i DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) FROM frame_ties
+ORDER BY i LIMIT 2;
+----
+0	[2, 0, 3, 1]
+1	[2, 0, 3, 1]

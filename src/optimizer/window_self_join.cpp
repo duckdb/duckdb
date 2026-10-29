@@ -34,6 +34,25 @@ public:
 	idx_t volatiles = 0;
 };
 
+//	Rows that tie on the argument ordering have equal arguments, so the frame ordering cannot change the result
+static bool FrameOrderIsRedundant(const BoundWindowExpression &w_expr) {
+	if (w_expr.ArgOrders().empty()) {
+		return false;
+	}
+
+	vector<reference<Expression>> order_refs;
+	order_refs.reserve(w_expr.ArgOrders().size());
+	for (auto &order : w_expr.ArgOrders()) {
+		order_refs.emplace_back(*order.expression);
+	}
+	for (auto &arg : w_expr.GetChildren()) {
+		if (!BaseSelectBinder::IsFunctionallyDependent(arg, order_refs)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
 	//	If the aggregate is order-sensitive and distinct,
 	//	then the ORDER BYs need to be functional dependencies of the arguments.
@@ -51,6 +70,9 @@ static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
 	bool in_args = true;
 	for (auto &order : w_expr.ArgOrders()) {
 		in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+	}
+	if (FrameOrderIsRedundant(w_expr)) {
+		return in_args;
 	}
 	for (auto &order : w_expr.OrderBy()) {
 		in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
@@ -98,6 +120,9 @@ static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const Bo
 	auto &orders = result->GetOrderBysMutable()->orders;
 	for (auto &order : w_expr.ArgOrders()) {
 		orders.emplace_back(order.Copy());
+	}
+	if (FrameOrderIsRedundant(w_expr)) {
+		return std::move(result);
 	}
 	for (auto &order : w_expr.OrderBy()) {
 		orders.emplace_back(order.Copy());
