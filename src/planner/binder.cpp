@@ -286,6 +286,22 @@ bool Binder::IsInsideSubquery() const {
 	return inside_subquery;
 }
 
+void Binder::SetBindingTrySubquery() {
+	binding_try_subquery = true;
+}
+
+bool Binder::IsBindingTrySubquery() const {
+	return binding_try_subquery;
+}
+
+const TrySubqueryPlanIndexes &Binder::GetTrySubqueryPlanIndexes() const {
+	return try_subquery_plan_indexes;
+}
+
+TrySubqueryPlanIndexes &Binder::GetTrySubqueryPlanIndexesMutable() {
+	return try_subquery_plan_indexes;
+}
+
 void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
 	// this binder already inherited a copy of the enclosing scopes when it was created, so replace them
 	// rather than appending the parent's on top: appending would list every scope twice per level of
