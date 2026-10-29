@@ -569,18 +569,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 	InitializeColumnWriters();
 }
 
-bool ParquetWriter::BloomFilterFallbackEnabled(const vector<Identifier> &schema_path) const {
-	if (!options.enable_bloom_filters || options.encryption_config || schema_path.size() != 1) {
-		return false;
-	}
-	for (const auto &name : options.bloom_filter_fallback_columns) {
-		if (schema_path[0] == Identifier(name)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void ParquetWriter::InitializeColumnWriters() {
 	auto &unique_names = options.column_names;
 	VerifyUniqueNames(unique_names);
@@ -599,6 +587,9 @@ void ParquetWriter::InitializeColumnWriters() {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
 		    context, *this, path_in_schema, types[i], Identifier(unique_names[i]), allow_geometry, &options.field_ids,
 		    &options.shredding_types, 0, 1, can_have_nulls));
+		column_writers.back()->bloom_filter_fallback = options.enable_bloom_filters && !options.encryption_config &&
+		                                               !options.bloom_filter_fallback_columns.empty() &&
+		                                               options.bloom_filter_fallback_columns[i];
 	}
 }
 

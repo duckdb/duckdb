@@ -26,6 +26,7 @@
 #include <vector>
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -112,7 +113,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool enable_bloom_filters = true;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
-	vector<string> bloom_filter_fallback_columns;
+	vector<bool> bloom_filter_fallback_columns;
 	idx_t bloom_filter_fallback_max_bytes = ParquetBloomFilterMemory::DEFAULT_LIMIT;
 
 	//! After how many row groups to rotate to a new file
@@ -214,27 +215,15 @@ static bool SupportsBloomFilterFallback(const LogicalType &type, bool timestamp_
 	}
 }
 
-static void BindBloomFilterFallback(ParquetWriteBindData &bind_data, const vector<Identifier> &names,
-                                    const vector<LogicalType> &types) {
-	identifier_set_t selected;
-	for (auto &name : bind_data.bloom_filter_fallback_columns) {
-		const Identifier identifier(name);
-		if (!selected.insert(identifier).second) {
-			throw BinderException("Duplicate column \"%s\" in BLOOM_FILTER_FALLBACK_COLUMNS", name);
+static void VerifyBloomFilterFallback(const ParquetWriteBindData &bind_data, const vector<Identifier> &names,
+                                      const vector<LogicalType> &types) {
+	for (idx_t i = 0; i < bind_data.bloom_filter_fallback_columns.size(); i++) {
+		if (bind_data.bloom_filter_fallback_columns[i] &&
+		    !SupportsBloomFilterFallback(types[i], bind_data.write_timestamp_as_int96)) {
+			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s%s",
+			                      names[i].GetIdentifierName(), types[i],
+			                      bind_data.write_timestamp_as_int96 ? " (INT96 enabled)" : "");
 		}
-		idx_t column_idx = 0;
-		while (column_idx < names.size() && names[column_idx] != identifier) {
-			column_idx++;
-		}
-		if (column_idx == names.size()) {
-			throw BinderException("Column \"%s\" in BLOOM_FILTER_FALLBACK_COLUMNS is not a top-level output column",
-			                      name);
-		}
-		if (!SupportsBloomFilterFallback(types[column_idx], bind_data.write_timestamp_as_int96)) {
-			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s%s", name,
-			                      types[column_idx], bind_data.write_timestamp_as_int96 ? " (INT96 enabled)" : "");
-		}
-		name = names[column_idx].GetIdentifierName();
 	}
 }
 
@@ -386,16 +375,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		} else if (option_name == "write_bloom_filter") {
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (option_name == "bloom_filter_fallback_columns") {
-			const auto &value = option_values[0];
-			if (value.IsNull() || value.type().id() != LogicalTypeId::LIST) {
-				throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS requires a list of column names");
-			}
-			for (const auto &column : ListValue::GetChildren(value)) {
-				if (column.IsNull() || column.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS requires non-NULL string column names");
-				}
-				bind_data->bloom_filter_fallback_columns.push_back(StringValue::Get(column));
-			}
+			bind_data->bloom_filter_fallback_columns = ParseColumnList(option_values[0], names, option_name);
 		} else if (option_name == "bloom_filter_fallback_max_bytes") {
 			if (option_values[0].IsNull()) {
 				throw BinderException("BLOOM_FILTER_FALLBACK_MAX_BYTES cannot be NULL");
@@ -455,7 +435,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
-	BindBloomFilterFallback(*bind_data, names, sql_types);
+	VerifyBloomFilterFallback(*bind_data, names, sql_types);
 
 	return std::move(bind_data);
 }
@@ -898,8 +878,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.data_page_size_limit);
 	serializer.WritePropertyWithDefault(122, "enable_bloom_filters", bind_data.enable_bloom_filters,
 	                                    default_value.enable_bloom_filters);
-	serializer.WritePropertyWithDefault(123, "bloom_filter_fallback_columns", bind_data.bloom_filter_fallback_columns,
-	                                    default_value.bloom_filter_fallback_columns);
+	serializer.WritePropertyWithDefault<vector<bool>>(123, "bloom_filter_fallback_columns",
+	                                                  bind_data.bloom_filter_fallback_columns,
+	                                                  default_value.bloom_filter_fallback_columns);
 	serializer.WritePropertyWithDefault(124, "bloom_filter_fallback_max_bytes",
 	                                    bind_data.bloom_filter_fallback_max_bytes,
 	                                    default_value.bloom_filter_fallback_max_bytes);
@@ -947,8 +928,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault(121, "data_page_size_limit", default_value.data_page_size_limit);
 	data->enable_bloom_filters =
 	    deserializer.ReadPropertyWithExplicitDefault(122, "enable_bloom_filters", default_value.enable_bloom_filters);
-	data->bloom_filter_fallback_columns = deserializer.ReadPropertyWithExplicitDefault(
-	    123, "bloom_filter_fallback_columns", default_value.bloom_filter_fallback_columns);
+	data->bloom_filter_fallback_columns = deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(
+	    123, "bloom_filter_fallback_columns", vector<bool>());
 	data->bloom_filter_fallback_max_bytes = deserializer.ReadPropertyWithExplicitDefault(
 	    124, "bloom_filter_fallback_max_bytes", default_value.bloom_filter_fallback_max_bytes);
 

@@ -241,6 +241,7 @@ public:
 	ParquetColumnSchema column_schema;
 	vector<Identifier> schema_path;
 	bool can_have_nulls;
+	bool bloom_filter_fallback = false;
 
 protected:
 	vector<unique_ptr<ColumnWriter>> child_writers;

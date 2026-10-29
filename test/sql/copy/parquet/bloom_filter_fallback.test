@@ -83,15 +83,11 @@ SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/disabled.par
 ----
 0
 
-statement ok
+statement error
 COPY input TO '{TEST_DIR}/empty-selection.parquet'
 (FORMAT PARQUET, BLOOM_FILTER_FALLBACK_COLUMNS [])
-
-query I
-SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/empty-selection.parquet')
-WHERE path_in_schema='k'
 ----
-0
+expects a column list or * as parameter
 
 # Folding releases reservation bytes, so later chunks can also get filters.
 statement ok

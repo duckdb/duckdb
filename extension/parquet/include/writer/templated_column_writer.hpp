@@ -270,7 +270,7 @@ public:
 
 	void BeginWrite(ColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (writer.BloomFilterFallbackEnabled(schema_path) && !HasDictionary(state)) {
+		if (bloom_filter_fallback && !HasDictionary(state)) {
 			idx_t value_count = 0;
 			for (const auto &page : state.page_info) {
 				value_count += page.row_count - page.empty_count - page.null_count;

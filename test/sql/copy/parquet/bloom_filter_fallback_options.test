@@ -11,34 +11,32 @@ CREATE TABLE options_test(k VARCHAR, n INTEGER, nested STRUCT(k VARCHAR), items 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS 'k')
 ----
-requires a list of column names
+expects a column list or * as parameter
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS NULL)
 ----
-requires a list of column names
+expects a column list or * as parameter
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [NULL])
 ----
-requires non-NULL string column names
+expected to find NULL
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [1])
 ----
-requires non-NULL string column names
+expected to find 1
 
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['k', 'K'])
-----
-Duplicate column
+statement ok
+COPY options_test TO '{TEST_DIR}/duplicate.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['k', 'K'])
 
 foreach name missing nested.k
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
 ----
-is not a top-level output column
+but it was not found in the table
 
 endloop
 
