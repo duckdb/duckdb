@@ -48,7 +48,7 @@ query IIII
 WITH RECURSIVE t(k, s, mn, iter) USING KEY (k, sum(s), min(mn), max(iter)) AS (
 	SELECT i % 4, 1, i, 0 FROM range(16384) r(i)
 	UNION ALL
-	SELECT n.k, 1, r.mn, 1 FROM t n JOIN recurring.t r USING (k) WHERE n.iter = 0
+	SELECT n.k, 1, r.mn, 1 FROM (SELECT * FROM t WHERE iter = 0) n JOIN recurring.t r USING (k)
 )
 SELECT count(*), sum(s)::BIGINT, sum(mn)::BIGINT, max(iter) FROM t;
 ----
