@@ -17,11 +17,23 @@
 
 namespace duckdb {
 
+//! Compatibility keys for already-bound nonvolatile expressions.
+class CaseExpressionMap {
+public:
+	void Add(const ParsedExpression &expr, idx_t index, bool check_ambiguity = false);
+	optional_ptr<const idx_t> Find(const ParsedExpression &expr) const;
+
+private:
+	vector<unique_ptr<ParsedExpression>> expressions;
+	parsed_expression_map_t<idx_t> entries;
+};
+
 //! Bind state during a SelectNode
 struct SelectBindState {
 	// Mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	identifier_map_t<idx_t> alias_map;
 	parsed_expression_map_t<idx_t> projection_map;
+	CaseExpressionMap case_projection_map;
 	//! The original unparsed expressions. This is exported after binding, because the binding might change the
 	//! expressions (e.g. when a * clause is present)
 	vector<unique_ptr<ParsedExpression>> original_expressions;
@@ -43,14 +55,14 @@ public:
 	void SetExpressionHasSubquery(idx_t index);
 
 	bool AliasHasSubquery(idx_t index) const;
+	bool ExpressionIsVolatile(idx_t index) const;
 
 	void AddExpandedColumn(idx_t expand_count);
 	void AddRegularColumn();
 	ProjectionIndex GetFinalIndex(idx_t index) const;
 
 private:
-	vector<unique_ptr<ParsedExpression>> case_group_expressions;
-	parsed_expression_map_t<ProjectionIndex> case_group_map;
+	CaseExpressionMap case_group_map;
 	//! The set of referenced aliases
 	unordered_set<idx_t> referenced_aliases;
 	//! The set of expressions that is volatile

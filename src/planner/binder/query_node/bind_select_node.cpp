@@ -719,6 +719,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 
 			for (auto &struct_expr : struct_expressions) {
+				if (struct_expr->IsVolatile()) {
+					bind_state.SetExpressionIsVolatile(i);
+				}
 				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
 				internal_sql_types.push_back(struct_expr->GetReturnType());
@@ -871,7 +874,14 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	result_statement.types = result.types;
 	result_statement.names = result.names;
 	result_statement.plan = CreatePlan(result);
-	result_statement.extra_info.original_expressions = std::move(result.bind_state.original_expressions);
+	for (idx_t i = 0; i < bind_state.original_expressions.size(); i++) {
+		auto index = bind_state.GetFinalIndex(i);
+		if (bind_state.GetFinalIndex(i + 1) != index + 1) {
+			continue;
+		}
+		result_statement.extra_info.original_expressions.push_back(
+		    {std::move(bind_state.original_expressions[i]), index, bind_state.ExpressionIsVolatile(i)});
+	}
 	return result_statement;
 }
 

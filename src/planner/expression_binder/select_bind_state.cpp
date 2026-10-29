@@ -4,68 +4,46 @@
 
 namespace duckdb {
 
-static void NormalizeCaseGroups(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionClass() == ExpressionClass::CASE) {
-		auto &case_expr = expr->Cast<CaseExpression>();
-		if (case_expr.CaseOperand()) {
-			expr = case_expr.GetLegacyCaseExpression();
-		}
+void CaseExpressionMap::Add(const ParsedExpression &expr, idx_t index, bool check_ambiguity) {
+	if (CaseExpression::ContainsLambdaReference(expr)) {
+		return;
 	}
-	for (auto &child : expr->ChildrenMutable()) {
-		NormalizeCaseGroups(child);
+	auto normalized = CaseExpression::ContainsSimpleCase(expr) ? CaseExpression::Normalize(expr) : nullptr;
+	auto entry = entries.emplace(normalized ? *normalized : expr, index);
+	if (entry.second && normalized) {
+		expressions.push_back(std::move(normalized));
+	} else if (check_ambiguity && entry.first->second != index) {
+		entry.first->second = DConstants::INVALID_INDEX;
 	}
 }
 
-static bool ContainsLambdaReference(const ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::LAMBDA_REF) {
-		return true;
+optional_ptr<const idx_t> CaseExpressionMap::Find(const ParsedExpression &expr) const {
+	if (entries.empty() || CaseExpression::ContainsLambdaReference(expr)) {
+		return nullptr;
 	}
-	for (auto &child : expr.Children()) {
-		if (ContainsLambdaReference(child)) {
-			return true;
-		}
+	auto entry = entries.find(expr);
+	if (entry != entries.end()) {
+		return &entry->second;
 	}
-	return false;
-}
-
-static bool ContainsSimpleCase(const ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::CASE && expr.Cast<CaseExpression>().CaseOperand()) {
-		return true;
+	if (!CaseExpression::ContainsSimpleCase(expr)) {
+		return nullptr;
 	}
-	for (auto &child : expr.Children()) {
-		if (ContainsSimpleCase(child)) {
-			return true;
-		}
-	}
-	return false;
+	auto normalized = CaseExpression::Normalize(expr);
+	entry = entries.find(*normalized);
+	return entry == entries.end() ? nullptr : &entry->second;
 }
 
 void SelectBindState::AddCaseGroup(const ParsedExpression &expr, ProjectionIndex index) {
-	if (!ContainsSimpleCase(expr)) {
-		case_group_map.emplace(expr, index);
-		return;
-	}
-	auto normalized = expr.Copy();
-	NormalizeCaseGroups(normalized);
-	case_group_map.emplace(*normalized, index);
-	case_group_expressions.push_back(std::move(normalized));
+	case_group_map.Add(expr, index);
 }
 
 ProjectionIndex SelectBindState::TryBindCaseGroup(const ParsedExpression &expr) const {
-	if (case_group_map.empty() || ContainsLambdaReference(expr)) {
-		return ProjectionIndex();
-	}
-	auto entry = case_group_map.find(expr);
-	if (entry != case_group_map.end()) {
-		return entry->second;
-	}
-	if (!ContainsSimpleCase(expr)) {
-		return ProjectionIndex();
-	}
-	auto normalized = expr.Copy();
-	NormalizeCaseGroups(normalized);
-	entry = case_group_map.find(*normalized);
-	return entry == case_group_map.end() ? ProjectionIndex() : entry->second;
+	auto index = case_group_map.Find(expr);
+	return index ? ProjectionIndex(*index) : ProjectionIndex();
+}
+
+bool SelectBindState::ExpressionIsVolatile(idx_t index) const {
+	return volatile_expressions.find(index) != volatile_expressions.end();
 }
 
 unique_ptr<ParsedExpression> SelectBindState::BindAlias(idx_t index) {

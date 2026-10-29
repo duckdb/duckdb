@@ -1,0 +1,140 @@
+# name: test/sql/projection/test_simple_case_order.test
+# description: CASE compatibility in set-operation projection matching
+# group: [projection]
+
+query I
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+0
+0
+1
+1
+
+query I
+SELECT CASE WHEN i=1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY CASE i WHEN 1 THEN 1 ELSE 0 END
+----
+0
+0
+1
+1
+
+query T
+SELECT CASE i WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END FROM range(3) t(i) UNION SELECT 'a'
+ORDER BY CASE WHEN i=1 THEN 'a' WHEN i=2 THEN 'b' ELSE 'c' END LIMIT 2 OFFSET 1
+----
+b
+c
+
+query T
+SELECT (SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END) FROM range(3) t(i) UNION SELECT 'a'
+ORDER BY (SELECT CASE WHEN i=1 THEN 'a' ELSE 'b' END)
+----
+a
+b
+
+# Reordering by name and expansion before a CASE preserve its output position.
+query II
+SELECT 7 AS extra, CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i)
+UNION ALL BY NAME SELECT 1 AS k, 8 AS extra
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END, extra
+----
+7	0
+7	0
+7	1
+8	1
+
+query III
+SELECT unnest({'a': 5, 'b': 6}), CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i)
+UNION ALL SELECT 5, 6, 1
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+5	6	0
+5	6	0
+5	6	1
+5	6	1
+
+statement error
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END, 2 FROM range(3) t(i)
+UNION ALL SELECT 2, CASE i WHEN 1 THEN 1 ELSE 0 END FROM range(3) t(i)
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+Ambiguous reference to column
+
+# Exact volatile matches still refer to the existing projection.
+statement ok
+CREATE SEQUENCE order_case_seq
+
+query I
+SELECT CASE nextval('order_case_seq') WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END FROM range(2)
+UNION ALL SELECT 4
+ORDER BY CASE nextval('order_case_seq') WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END
+----
+1
+2
+4
+
+query I
+SELECT currval('order_case_seq')
+----
+2
+
+# A searched volatile expression is evaluated over the result, not matched to simple CASE.
+statement ok
+CREATE SEQUENCE order_fallback_seq
+
+query I
+SELECT CASE nextval('order_fallback_seq') WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END
+UNION ALL SELECT 4
+ORDER BY CASE WHEN nextval('order_fallback_seq')=-1 THEN 1 WHEN nextval('order_fallback_seq')=-2 THEN 2 ELSE 3 END, 1
+LIMIT 1 OFFSET 1
+----
+4
+
+query I
+SELECT currval('order_fallback_seq')
+----
+5
+
+# Macros must use bound volatility, rather than a syntactic function-name check.
+statement ok
+CREATE MACRO order_volatile() AS nextval('order_fallback_seq')
+
+query I
+SELECT CASE order_volatile() WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END
+UNION SELECT 3
+ORDER BY CASE WHEN order_volatile()=-1 THEN 1 WHEN order_volatile()=-2 THEN 2 ELSE 3 END
+----
+3
+
+query I
+SELECT currval('order_fallback_seq')
+----
+8
+
+statement error
+SELECT CASE i + nextval('order_case_seq') WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END FROM range(2) t(i)
+UNION ALL SELECT 4
+ORDER BY CASE WHEN i + nextval('order_case_seq')=1 THEN 1 WHEN i + nextval('order_case_seq')=2 THEN 2 ELSE 3 END
+----
+Referenced column "i" not found
+
+statement ok
+CREATE MACRO order_deterministic(x) AS x + 1
+
+query I
+SELECT CASE order_deterministic(i) WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 30 END FROM range(3) t(i)
+UNION ALL SELECT 40
+ORDER BY CASE WHEN order_deterministic(i)=1 THEN 10 WHEN order_deterministic(i)=2 THEN 20 ELSE 30 END DESC
+----
+40
+30
+20
+10
+
+# The outer-query fallback retains output names, including duplicate-name disambiguation.
+query II
+SELECT 2 AS k, 20 AS k UNION ALL SELECT 1, 10 ORDER BY k + 0, k_1 LIMIT 1
+----
+1	10

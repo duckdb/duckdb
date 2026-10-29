@@ -28,6 +28,8 @@ public:
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
 
+	optional_idx TryGetExpressionReference(unique_ptr<ParsedExpression> &expr) const;
+
 	bool HasExtraList() const {
 		return extra_list;
 	}

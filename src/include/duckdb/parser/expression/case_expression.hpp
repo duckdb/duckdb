@@ -50,7 +50,10 @@ public:
 	}
 
 	unique_ptr<CaseExpression> GetLegacyCaseExpression() const;
-	unique_ptr<CaseExpression> GetLegacyCaseExpression(vector<unique_ptr<ParsedExpression>> case_operands) const;
+	static bool ContainsSimpleCase(const ParsedExpression &expr);
+	static bool ContainsLambdaReference(const ParsedExpression &expr);
+	//! Normalize a copy for compatibility matching; callers must establish volatility safety.
+	static unique_ptr<ParsedExpression> Normalize(const ParsedExpression &expr);
 	bool UseLegacySerialization() const;
 	void LegacySerialize(Serializer &serializer) const;
 

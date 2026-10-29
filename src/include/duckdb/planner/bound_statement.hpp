@@ -22,11 +22,18 @@ struct BoundStatement;
 class ParsedExpression;
 class Binder;
 
+//! A parsed projection and its final position and volatility after binding.
+struct SelectExpressionInfo {
+	unique_ptr<ParsedExpression> expression;
+	idx_t index;
+	bool is_volatile;
+};
+
 struct ExtraBoundInfo {
 	SetOperationType setop_type = SetOperationType::NONE;
 	vector<shared_ptr<Binder>> child_binders;
 	vector<BoundStatement> bound_children;
-	vector<unique_ptr<ParsedExpression>> original_expressions;
+	vector<SelectExpressionInfo> original_expressions;
 };
 
 struct BoundStatement {

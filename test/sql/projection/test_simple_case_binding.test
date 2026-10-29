@@ -91,3 +91,20 @@ SELECT list_transform([42], lambda "random()", "random()_1":
     CASE random() WHEN -1 THEN 1 WHEN 2 THEN 2 ELSE "random()" + "random()_1" END)
 ----
 [43]
+
+# Internal CASE parameters cannot hide a CHECK column with the same name.
+statement ok
+CREATE TABLE case_check_name("random()" INT, CHECK(CASE random() WHEN -1 THEN false WHEN -2 THEN false ELSE "random()" > 0 END))
+
+statement ok
+INSERT INTO case_check_name VALUES (1)
+
+statement error
+INSERT INTO case_check_name VALUES (-1)
+----
+CHECK constraint failed
+
+query I
+SELECT * FROM case_check_name
+----
+1

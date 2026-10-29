@@ -137,6 +137,24 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	return std::move(result);
 }
 
+optional_idx OrderBinder::TryGetExpressionReference(unique_ptr<ParsedExpression> &expr) const {
+	for (auto &binder : binders) {
+		ExpressionBinder::QualifyColumnNames(binder.get(), expr);
+	}
+	auto entry = bind_state.projection_map.find(*expr);
+	optional_ptr<const idx_t> index = entry == bind_state.projection_map.end() ? nullptr : &entry->second;
+	if (!index) {
+		index = bind_state.case_projection_map.Find(*expr);
+	}
+	if (!index) {
+		return optional_idx();
+	}
+	if (*index == DConstants::INVALID_INDEX) {
+		throw BinderException("Ambiguous reference to column");
+	}
+	return *index;
+}
+
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
@@ -176,20 +194,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	default:
 		break;
 	}
-	// general case
-	// first bind the table names of this entry
-	for (auto &binder : binders) {
-		ExpressionBinder::QualifyColumnNames(binder.get(), expr);
-	}
-	// first check if the ORDER BY clause already points to an entry in the projection list
-	auto entry = bind_state.projection_map.find(*expr);
-	if (entry != bind_state.projection_map.end()) {
-		if (entry->second == DConstants::INVALID_INDEX) {
-			throw BinderException("Ambiguous reference to column");
-		}
-		// there is a matching entry in the projection list
-		// just point to that entry
-		return CreateProjectionReference(*expr, entry->second);
+	auto index = TryGetExpressionReference(expr);
+	if (index.IsValid()) {
+		return CreateProjectionReference(*expr, index.GetIndex());
 	}
 	if (!extra_list) {
 		// no extra list specified: we cannot push an extra ORDER BY clause

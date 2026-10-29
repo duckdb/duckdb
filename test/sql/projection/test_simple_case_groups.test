@@ -86,3 +86,33 @@ query I
 SELECT currval('grouped_case_seq')
 ----
 3
+
+# Compatibility matching traverses the scalar subquery's query node.
+query T rowsort
+SELECT (SELECT CASE x WHEN 1 THEN 'a' ELSE 'b' END) FROM range(3) t(x)
+GROUP BY (SELECT CASE WHEN x=1 THEN 'a' ELSE 'b' END)
+----
+a
+b
+
+query T rowsort
+SELECT (SELECT CASE WHEN x=1 THEN 'a' ELSE 'b' END) FROM range(3) t(x)
+GROUP BY (SELECT CASE x WHEN 1 THEN 'a' ELSE 'b' END)
+----
+a
+b
+
+query T rowsort
+SELECT (SELECT (WITH c AS (SELECT CASE x WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END AS k) SELECT k FROM c))
+FROM range(3) t(x)
+GROUP BY (SELECT (WITH c AS (SELECT CASE WHEN x=1 THEN 'a' WHEN x=2 THEN 'b' ELSE 'c' END AS k) SELECT k FROM c))
+----
+a
+b
+c
+
+statement error
+SELECT (SELECT CASE x + random() WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END) FROM range(3) t(x)
+GROUP BY (SELECT CASE WHEN x + random()=1 THEN 'a' WHEN x + random()=2 THEN 'b' ELSE 'c' END)
+----
+must appear in the GROUP BY clause
