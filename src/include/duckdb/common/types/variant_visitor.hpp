@@ -278,11 +278,9 @@ public:
 	}
 
 private:
-	static constexpr idx_t MAX_RECURSION_DEPTH = 128;
-
 	static void CheckDepth(idx_t depth) {
-		if (depth >= MAX_RECURSION_DEPTH) {
-			throw InvalidInputException("VARIANT exceeds maximum recursion depth of %d", MAX_RECURSION_DEPTH);
+		if (depth >= Variant::MAX_RECURSION_DEPTH) {
+			throw InvalidInputException("VARIANT exceeds maximum recursion depth of %d", Variant::MAX_RECURSION_DEPTH);
 		}
 	}
 
