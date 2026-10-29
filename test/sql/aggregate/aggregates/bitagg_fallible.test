@@ -19,51 +19,8 @@ SELECT bit_xor(v) FROM (VALUES ('1'::BIT), ('10'::BIT)) t(v);
 ----
 Cannot XOR bit strings of different sizes
 
-# the fallible registration is read by the EXPLAIN (SQL) pivot default export
-
-statement ok
-SET pivot_filter_threshold=0;
-
-statement error
-EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
-PIVOT (bit_and(v) FOR k IN ('p','q'));
-----
-A volatile or fallible PIVOT default must be evaluated before query execution
-
-statement error
-EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
-PIVOT (bit_or(v) FOR k IN ('p','q'));
-----
-A volatile or fallible PIVOT default must be evaluated before query execution
-
-statement error
-EXPLAIN (SQL) FROM (VALUES ('g','p','1'::BIT),('h','q','0'::BIT)) t(g,k,v)
-PIVOT (bit_xor(v) FOR k IN ('p','q'));
-----
-A volatile or fallible PIVOT default must be evaluated before query execution
-
-# the integral overloads cannot throw and stay exportable
-
-query TT
-EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
-PIVOT (bit_and(v) FOR k IN ('p','q'));
-----
-sql	<REGEX>:.*bit_and.*
-
-query TT
-EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
-PIVOT (bit_or(v) FOR k IN ('p','q'));
-----
-sql	<REGEX>:.*bit_or.*
-
-query TT
-EXPLAIN (SQL) FROM (VALUES ('g','p',1),('h','q',2)) t(g,k,v)
-PIVOT (bit_xor(v) FOR k IN ('p','q'));
-----
-sql	<REGEX>:.*bit_xor.*
-
-statement ok
-RESET pivot_filter_threshold;
+# the EXPLAIN (SQL) pivot default export fixtures live in fallible_pivot_default_export.test,
+# which is excluded from the aggregate state export verification config
 
 # the scalarized window form keeps working under dictionary vector verification
 

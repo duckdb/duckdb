@@ -9,19 +9,8 @@ SELECT skewness(x) FROM (VALUES (0.0), (1e150), (2e150)) t(x);
 ----
 SKEW is out of range!
 
-# the fallible registration is read by the EXPLAIN (SQL) pivot default export
-
-statement ok
-SET pivot_filter_threshold=0;
-
-statement error
-EXPLAIN (SQL) FROM (VALUES ('g','p',1.0),('h','q',2.0)) t(g,k,v)
-PIVOT (skewness(v) FOR k IN ('p','q'));
-----
-A volatile or fallible PIVOT default must be evaluated before query execution
-
-statement ok
-RESET pivot_filter_threshold;
+# the EXPLAIN (SQL) pivot default export fixtures live in fallible_pivot_default_export.test,
+# which is excluded from the aggregate state export verification config
 
 # the scalarized window form keeps working under dictionary vector verification
 
