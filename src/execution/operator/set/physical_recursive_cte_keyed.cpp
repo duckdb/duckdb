@@ -12,6 +12,10 @@ namespace duckdb {
 RecursiveCTEKeyedProperties RecursiveCTEKeyedProperties::Derive(const PhysicalRecursiveCTE &op) {
 	D_ASSERT(op.UsingKey());
 	RecursiveCTEKeyedProperties result;
+	for (auto &payload_aggregate : op.payload_aggregates) {
+		auto &function = payload_aggregate->Cast<BoundAggregateExpression>().Function();
+		result.finalize_requires_lock = result.finalize_requires_lock || !function.FinalizeIsReadOnly();
+	}
 	for (auto &comparison : op.payload_comparisons) {
 		if (comparison) {
 			result.has_payload_comparisons = true;
@@ -254,10 +258,13 @@ void RecursiveCTEKeyedState::FinalizeAggregateRows(RowOperationsState &row_state
                                                    DataChunk &aggregates, idx_t count) {
 	aggregates.Reset();
 	aggregates.SetChildCardinality(count);
-	{
-		lock_guard<mutex> guard(ht_finalize_lock);
+	if (!op.keyed.finalize_requires_lock) {
+		// Read-only finalizes use caller-local scratch, so concurrent readers need no exclusion
 		RowOperations::FinalizeStates(row_state, *GetHashTable().GetLayoutPtr(), addresses, aggregates, 0);
+		return;
 	}
+	lock_guard<mutex> guard(ht_finalize_lock);
+	RowOperations::FinalizeStates(row_state, *GetHashTable().GetLayoutPtr(), addresses, aggregates, 0);
 }
 
 void RecursiveCTEKeyedState::InitializeIntermediateAppend() {

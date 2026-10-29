@@ -74,7 +74,7 @@ struct DecimalAvgOperation {
 	}
 
 	template <class RESULT, class STATE>
-	static void Finalize(STATE &state, RESULT &target, AggregateFinalizeData &fd) {
+	static void FinalizeReadOnly(const STATE &state, RESULT &target, AggregateFinalizeData &fd) {
 		if (state.count == 0) {
 			fd.ReturnNull();
 			return;
@@ -111,8 +111,10 @@ struct DecimalAvgOperation {
 
 template <class INPUT_TYPE>
 static AggregateFunction MakeDecimalAvgFunction(const LogicalType &input_type, const LogicalType &return_type) {
-	return AggregateFunction::UnaryAggregate<DecimalAvgState, INPUT_TYPE, INPUT_TYPE, DecimalAvgOperation<INPUT_TYPE>>(
-	    input_type, return_type);
+	auto fun =
+	    AggregateFunction::UnaryAggregate<DecimalAvgState, INPUT_TYPE, INPUT_TYPE, DecimalAvgOperation<INPUT_TYPE>>(
+	        input_type, return_type);
+	return fun;
 }
 
 static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &input) {

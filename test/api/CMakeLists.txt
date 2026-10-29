@@ -16,6 +16,7 @@ set(TEST_API_OBJECTS
     test_function_binding.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
+    test_aggregate_finalize_read_only.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
     test_connect_prepare.cpp

@@ -1052,30 +1052,54 @@ public:
 		}
 	}
 
-	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
-	                     idx_t offset) {
+	//! Finalize every state into the result; READ_ONLY selects OP::FinalizeReadOnly over a const state
+	template <class STATE_TYPE, class RESULT_TYPE, class OP, bool READ_ONLY>
+	static void FinalizeInternal(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                             idx_t count, idx_t offset) {
+		using STATE_PTR = typename std::conditional<READ_ONLY, const STATE_TYPE *, STATE_TYPE *>::type;
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			FlatVector::SetSize(result, count);
 
-			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			auto sdata = ConstantVector::GetData<STATE_PTR>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
+			FinalizeState<STATE_TYPE, RESULT_TYPE, OP, READ_ONLY>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto sdata = FlatVector::GetData<STATE_PTR>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
-				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
-				                                               finalize_data);
+				FinalizeState<STATE_TYPE, RESULT_TYPE, OP, READ_ONLY>(*sdata[i], rdata[finalize_data.result_idx],
+				                                                      finalize_data);
 			}
 		}
+	}
+
+	template <class STATE_TYPE, class RESULT_TYPE, class OP, bool READ_ONLY, class STATE>
+	static inline void FinalizeState(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if constexpr (READ_ONLY) {
+			OP::template FinalizeReadOnly<RESULT_TYPE, STATE_TYPE>(state, target, finalize_data);
+		} else {
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(state, target, finalize_data);
+		}
+	}
+
+	template <class STATE_TYPE, class RESULT_TYPE, class OP>
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
+		FinalizeInternal<STATE_TYPE, RESULT_TYPE, OP, false>(states, finalize_input_data, result, count, offset);
+	}
+
+	//! Finalize for operations whose finalizer only reads the state, see AggregateFunction::StateFinalizeReadOnly
+	template <class STATE_TYPE, class RESULT_TYPE, class OP>
+	static void FinalizeReadOnly(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                             idx_t count, idx_t offset) {
+		FinalizeInternal<STATE_TYPE, RESULT_TYPE, OP, true>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE_TYPE, class OP>

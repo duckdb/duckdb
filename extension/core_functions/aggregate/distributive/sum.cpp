@@ -83,7 +83,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
@@ -186,7 +186,7 @@ struct IntegerSumOperation
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
@@ -234,8 +234,8 @@ struct HugeintSumOperation
 template <class OP>
 struct DecimalSumOperation : public OP {
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		OP::template Finalize<T, STATE>(state, target, finalize_data);
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		OP::template FinalizeReadOnly<T, STATE>(state, target, finalize_data);
 		if (!state.is_set) {
 			return;
 		}

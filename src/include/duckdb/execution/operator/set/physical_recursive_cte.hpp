@@ -57,6 +57,9 @@ enum class RecursiveCTEMode : uint8_t {
 
 //! Properties of a USING KEY payload that follow from the plan; derived once when the operator is built
 struct RecursiveCTEKeyedProperties {
+	//! A payload aggregate has not declared a read-only finalize, so concurrent finalizes of the frozen state
+	//! take the lock
+	bool finalize_requires_lock = false;
 	//! Every payload aggregate combines and is order-independent, so workers may pre-aggregate fan-in locally
 	bool can_preaggregate = false;
 	//! A candidate row of a new key equals its finalized state row, so candidates can serve as the next frontier

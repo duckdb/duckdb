@@ -119,7 +119,7 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
@@ -191,7 +191,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+	static void FinalizeReadOnly(const STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
@@ -521,14 +521,13 @@ void SpecializeMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = MinMaxNState<VAL_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.GetCallbacks().SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
-	function.GetCallbacks().SetStateInitCallback(
-	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
-	function.GetCallbacks().SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
-	function.GetCallbacks().SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
-	function.GetCallbacks().SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
-	function.GetCallbacks().SetStateUpdateCallback(MinMaxNUpdate<STATE>);
+	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(MinMaxNUpdate<STATE>);
 }
 
 template <class COMPARATOR>
