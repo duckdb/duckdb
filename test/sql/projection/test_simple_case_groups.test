@@ -153,15 +153,159 @@ GROUP BY ALL HAVING CASE WHEN i=1 THEN 'a' ELSE 'b' END COLLATE nocase <> 'z' OR
 a	1
 b	2
 
-# Volatile inferred groups do not supply compatibility keys for HAVING.
+# Multi-arm volatile operands do not supply compatibility keys for HAVING.
 statement ok
 CREATE SEQUENCE all_case_volatile_seq
 
+query TI
+SELECT CASE i + nextval('all_case_volatile_seq') * 0 WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'b' END AS k, count(*)
+FROM range(3) t(i) GROUP BY ALL
+HAVING CASE WHEN i + nextval('all_case_volatile_seq') * 0=1 THEN 'a'
+            WHEN i + nextval('all_case_volatile_seq') * 0=2 THEN 'b' ELSE 'b' END <> 'z' ORDER BY k
+----
+a	1
+b	1
+b	1
+
+# A single arm does not duplicate the operand.
 query TI
 SELECT CASE i + nextval('all_case_volatile_seq') * 0 WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*)
 FROM range(3) t(i) GROUP BY ALL
 HAVING CASE WHEN i + nextval('all_case_volatile_seq') * 0=1 THEN 'a' ELSE 'b' END <> 'z' ORDER BY k
 ----
 a	1
-b	1
-b	1
+b	2
+
+# Result arms retain their evaluation behavior in either spelling.
+statement ok
+CREATE SEQUENCE case_result_seq
+
+query I
+SELECT CASE i WHEN 1 THEN nextval('case_result_seq') ELSE 0 END AS k FROM range(3) t(i)
+GROUP BY CASE WHEN i=1 THEN nextval('case_result_seq') ELSE 0 END ORDER BY k
+----
+0
+1
+
+query I
+SELECT CASE WHEN i=0 THEN 0 WHEN i=1 THEN 0 ELSE nextval('case_result_seq') END AS k FROM range(3) t(i)
+GROUP BY CASE i WHEN 0 THEN 0 WHEN 1 THEN 0 ELSE nextval('case_result_seq') END ORDER BY k
+----
+0
+2
+
+query I
+SELECT currval('case_result_seq')
+----
+2
+
+# Volatile WHEN values are unchanged too; only the left operand is duplicated.
+statement ok
+CREATE SEQUENCE case_when_seq
+
+query I
+SELECT CASE i WHEN nextval('case_when_seq') THEN 1 WHEN 99 THEN 2 ELSE 0 END AS k FROM range(3) t(i)
+GROUP BY CASE WHEN i=nextval('case_when_seq') THEN 1 WHEN i=99 THEN 2 ELSE 0 END ORDER BY k
+----
+0
+
+query I
+SELECT currval('case_when_seq')
+----
+3
+
+# Nested CASE normalization must still check its own operand.
+statement error
+SELECT CASE i WHEN 1 THEN CASE nextval('case_result_seq') WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END ELSE 0 END
+FROM range(3) t(i)
+GROUP BY CASE WHEN i=1 THEN CASE WHEN nextval('case_result_seq')=1 THEN 1
+                               WHEN nextval('case_result_seq')=2 THEN 2 ELSE 0 END ELSE 0 END
+----
+must appear in the GROUP BY clause
+
+# Equivalent keys share an index, while repeated grouping sets retain their multiplicity.
+query TI
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(i)
+GROUP BY GROUPING SETS ((CASE i WHEN 1 THEN 'a' ELSE 'b' END),
+                       (CASE WHEN i=1 THEN 'a' ELSE 'b' END)) ORDER BY k
+----
+a	1
+a	1
+b	2
+b	2
+
+# Ordinals and GROUPING resolve to the canonical index in either spelling.
+query TIII
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*),
+       grouping(CASE i WHEN 1 THEN 'a' ELSE 'b' END),
+       grouping(CASE WHEN i=1 THEN 'a' ELSE 'b' END)
+FROM range(3) t(i)
+GROUP BY GROUPING SETS ((CASE WHEN i=1 THEN 'a' ELSE 'b' END), (1), ()) ORDER BY k
+----
+a	1	0	0
+a	1	0	0
+b	2	0	0
+b	2	0	0
+NULL	3	1	1
+
+# Collated keys, aliases and subsequent groups all use the remapped indices.
+query TII rowsort
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END COLLATE nocase AS k, i, count(*) FROM range(3) t(i)
+GROUP BY GROUPING SETS ((k), (CASE WHEN i=1 THEN 'a' ELSE 'b' END COLLATE nocase), (i))
+----
+NULL	0	1
+NULL	1	1
+NULL	2	1
+a	NULL	1
+a	NULL	1
+b	NULL	2
+b	NULL	2
+
+query TI
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(i)
+GROUP BY ROLLUP (CASE i WHEN 1 THEN 'a' ELSE 'b' END, CASE WHEN i=1 THEN 'a' ELSE 'b' END) ORDER BY k
+----
+a	1
+a	1
+b	2
+b	2
+NULL	3
+
+query TI
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(i)
+GROUP BY CUBE (CASE i WHEN 1 THEN 'a' ELSE 'b' END, CASE WHEN i=1 THEN 'a' ELSE 'b' END) ORDER BY k
+----
+a	1
+a	1
+a	1
+b	2
+b	2
+b	2
+NULL	3
+
+# Canonicalization also preserves a single evaluation of volatile result arms.
+query II
+SELECT CASE i WHEN 1 THEN nextval('case_result_seq') ELSE 0 END AS k, count(*) FROM range(3) t(i)
+GROUP BY GROUPING SETS ((CASE i WHEN 1 THEN nextval('case_result_seq') ELSE 0 END),
+                       (CASE WHEN i=1 THEN nextval('case_result_seq') ELSE 0 END)) ORDER BY k
+----
+0	2
+0	2
+3	1
+3	1
+
+query I
+SELECT currval('case_result_seq')
+----
+3
+
+# Genuinely different volatile operands retain separate grouping-set indices.
+query TI
+SELECT CASE nextval('case_result_seq') * 0 WHEN 0 THEN 'a' WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*)
+FROM range(2)
+GROUP BY GROUPING SETS ((CASE nextval('case_result_seq') * 0 WHEN 0 THEN 'a' WHEN 1 THEN 'a' ELSE 'b' END),
+                       (CASE WHEN nextval('case_result_seq') * 0=0 THEN 'a'
+                             WHEN nextval('case_result_seq') * 0=1 THEN 'a' ELSE 'b' END)) ORDER BY k
+----
+a	2
+NULL	2

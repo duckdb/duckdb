@@ -16,10 +16,13 @@
 #include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
+class BoundSelectNode;
 
-//! Compatibility keys for already-bound nonvolatile expressions.
+//! Compatibility keys for expressions whose CASE normalization preserves evaluation.
 class CaseExpressionMap {
 public:
+	static bool IsCompatible(const Expression &expr, const BoundSelectNode &node);
+	static bool HasVolatileSource(const Expression &expr, const BoundSelectNode &node);
 	void Add(const ParsedExpression &expr, idx_t index, bool check_ambiguity = false);
 	optional_ptr<const idx_t> Find(const ParsedExpression &expr) const;
 
@@ -47,9 +50,7 @@ struct SelectBindState {
 
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);
-	//! Record source safety before replacing a group expression with a reference.
 	void RegisterCaseGroup(const ParsedExpression &expr, ProjectionIndex index, bool case_compatible);
-	bool GroupIsCaseCompatible(ProjectionIndex index) const;
 	ProjectionIndex TryBindCaseGroup(const ParsedExpression &expr) const;
 
 	void SetExpressionIsVolatile(idx_t index);
@@ -65,7 +66,6 @@ public:
 
 private:
 	CaseExpressionMap case_group_map;
-	unordered_set<ProjectionIndex> case_compatible_groups;
 	unordered_set<idx_t> case_compatible_expressions;
 	//! The set of referenced aliases
 	unordered_set<idx_t> referenced_aliases;

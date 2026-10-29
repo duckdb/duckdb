@@ -33,7 +33,10 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 			auto legacy_case = case_expr.GetLegacyCaseExpression();
 			bool grouped_checks = true;
 			for (auto &check : legacy_case->CaseChecks()) {
-				if (!node.bind_state.TryBindCaseGroup(*check.when_expr).IsValid()) {
+				auto index = node.bind_state.TryBindCaseGroup(*check.when_expr);
+				if (!index.IsValid() ||
+				    (case_expr.CaseChecks().size() > 1 &&
+				     CaseExpressionMap::HasVolatileSource(*node.groups.group_expressions[index], node))) {
 					grouped_checks = false;
 					break;
 				}
@@ -159,7 +162,6 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
-	bound_unsafe_group |= !node.bind_state.GroupIsCaseCompatible(group_index);
 	auto &collated_groups = node.bind_state.collated_groups;
 	auto it = collated_groups.find(group_index);
 	if (it != collated_groups.end()) {

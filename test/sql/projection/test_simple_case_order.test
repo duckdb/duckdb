@@ -291,3 +291,126 @@ query I
 SELECT currval('exact_grouped_order_seq')
 ----
 2
+
+# Window references retain the CASE safety of their source expressions.
+statement ok
+CREATE SEQUENCE window_case_seq
+
+query I
+SELECT sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
+                WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END) OVER () AS k
+UNION ALL SELECT 1
+ORDER BY sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END) OVER (), k DESC
+----
+1
+0
+
+query I
+SELECT currval('window_case_seq')
+----
+4
+
+query I
+SELECT sum(CASE nextval('window_case_seq') WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END) OVER () AS k
+UNION ALL SELECT 4
+ORDER BY sum(CASE WHEN nextval('window_case_seq')=-1 THEN 1
+                  WHEN nextval('window_case_seq')=-2 THEN 2 ELSE 3 END) OVER (), k DESC
+----
+4
+3
+
+query I
+SELECT currval('window_case_seq')
+----
+9
+
+# Aggregate references cannot turn unsafe compatibility into an exact output match.
+statement error
+SELECT sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
+                WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END) AS k
+UNION ALL SELECT 1
+ORDER BY sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END), k DESC
+----
+must appear in the GROUP BY clause
+
+# A window over an aggregate must follow both registered expressions.
+statement error
+SELECT sum(sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
+                    WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END)) OVER () AS k
+UNION ALL SELECT 1
+ORDER BY sum(sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END)) OVER (), k DESC
+----
+must appear in the GROUP BY clause
+
+statement ok
+CREATE SEQUENCE unnest_case_seq
+
+query I
+SELECT unnest([CASE WHEN nextval('unnest_case_seq')*0=0 THEN 1
+                    WHEN nextval('unnest_case_seq')*0=1 THEN 1 ELSE 0 END]) AS k
+UNION ALL SELECT 2
+ORDER BY unnest([CASE nextval('unnest_case_seq')*0 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END]), k DESC
+----
+2
+1
+
+query I
+SELECT currval('unnest_case_seq')
+----
+3
+
+# Volatile result arms remain compatible inside registered expressions.
+statement ok
+CREATE SEQUENCE registered_result_seq
+
+query I
+SELECT sum(CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END) OVER () AS k
+FROM range(3) t(i) UNION ALL SELECT 2
+ORDER BY sum(CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END) OVER ()
+----
+2
+6
+6
+6
+
+query I
+SELECT sum(CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END) AS k
+FROM range(3) t(i) UNION ALL SELECT 2
+ORDER BY sum(CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END)
+----
+2
+7
+
+query I
+SELECT unnest([CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END]) AS k
+FROM range(3) t(i) UNION ALL SELECT 2
+ORDER BY unnest([CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END])
+----
+0
+2
+3
+5
+
+query I
+SELECT currval('registered_result_seq')
+----
+3
+
+# Window filters are part of the source too.
+statement ok
+CREATE SEQUENCE window_filter_case_seq
+
+query I
+SELECT sum(1) FILTER (WHERE CASE WHEN nextval('window_filter_case_seq')*0=0 THEN true
+                                WHEN nextval('window_filter_case_seq')*0=1 THEN true ELSE false END) OVER () AS k
+UNION ALL SELECT 2
+ORDER BY sum(1) FILTER (WHERE CASE nextval('window_filter_case_seq')*0
+                             WHEN 0 THEN true WHEN 1 THEN true ELSE false END) OVER (), k DESC
+----
+2
+1
+
+query I
+SELECT currval('window_filter_case_seq')
+----
+3

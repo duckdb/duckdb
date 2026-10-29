@@ -1,8 +1,84 @@
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
+
+static optional_ptr<const Expression> GetRegisteredExpression(const Expression &expr, const BoundSelectNode &node) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return nullptr;
+	}
+	auto &binding = expr.Cast<BoundColumnRefExpression>().Binding();
+	if (binding.table_index == node.group_index) {
+		return node.groups.group_expressions[binding.column_index].get();
+	}
+	if (binding.table_index == node.aggregate_index) {
+		return node.aggregates[binding.column_index].get();
+	}
+	if (binding.table_index == node.window_index) {
+		return node.windows[binding.column_index].get();
+	}
+	for (auto &unnests : {reference<const BoundUnnestMap>(node.unnests.SelectList()),
+	                      reference<const BoundUnnestMap>(node.unnests.GroupBy())}) {
+		for (auto &entry : unnests.get()) {
+			if (binding.table_index == entry.second.index) {
+				return entry.second.expressions[binding.column_index].get();
+			}
+		}
+	}
+	return nullptr;
+}
+
+bool CaseExpressionMap::HasVolatileSource(const Expression &expr, const BoundSelectNode &node) {
+	if (expr.IsVolatile()) {
+		return true;
+	}
+	auto source = GetRegisteredExpression(expr, node);
+	if (source) {
+		return HasVolatileSource(*source, node);
+	}
+	bool is_volatile = false;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { is_volatile |= HasVolatileSource(child, node); });
+	return is_volatile;
+}
+
+bool CaseExpressionMap::IsCompatible(const Expression &expr, const BoundSelectNode &node) {
+	auto source = GetRegisteredExpression(expr, node);
+	if (source) {
+		return IsCompatible(*source, node);
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CASE) {
+		auto &checks = expr.Cast<BoundCaseExpression>().CaseChecks();
+		// Normalization repeats the comparison operands, but preserves result-arm evaluation.
+		if (checks.size() > 1) {
+			for (auto &check : checks) {
+				if (check.when_expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+					auto &comparison = check.when_expr->Cast<BoundFunctionExpression>();
+					if (HasVolatileSource(BoundComparisonExpression::Left(comparison), node)) {
+						return false;
+					}
+				}
+			}
+		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY ||
+	           (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+	            expr.Cast<BoundFunctionExpression>().Function().HasBindLambdaCallback())) {
+		// Keep opaque query/lambda bodies conservative, including volatile CASE lowered to invoke.
+		if (HasVolatileSource(expr, node)) {
+			return false;
+		}
+	}
+	bool compatible = true;
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](const Expression &child) { compatible &= IsCompatible(child, node); });
+	return compatible;
+}
 
 void CaseExpressionMap::Add(const ParsedExpression &expr, idx_t index, bool check_ambiguity) {
 	if (CaseExpression::ContainsLambdaReference(expr)) {
@@ -35,13 +111,8 @@ optional_ptr<const idx_t> CaseExpressionMap::Find(const ParsedExpression &expr) 
 
 void SelectBindState::RegisterCaseGroup(const ParsedExpression &expr, ProjectionIndex index, bool case_compatible) {
 	if (case_compatible) {
-		case_compatible_groups.insert(index);
 		case_group_map.Add(expr, index);
 	}
-}
-
-bool SelectBindState::GroupIsCaseCompatible(ProjectionIndex index) const {
-	return case_compatible_groups.find(index) != case_compatible_groups.end();
 }
 
 ProjectionIndex SelectBindState::TryBindCaseGroup(const ParsedExpression &expr) const {

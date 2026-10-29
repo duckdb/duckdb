@@ -626,7 +626,16 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
 		auto prev_can_contain_nulls = CanContainNulls();
 		SetCanContainNulls(true);
+		vector<ProjectionIndex> group_indexes;
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
+			auto &unbound_group = *bind_state.unbound_groups[i];
+			auto group_index = bind_state.TryBindCaseGroup(unbound_group);
+			if (group_index.IsValid()) {
+				group_indexes.push_back(group_index);
+				continue;
+			}
+			group_index = ProjectionIndex(result.groups.group_expressions.size());
+			group_indexes.push_back(group_index);
 			// bind the groups
 			LogicalType group_type;
 			// bound subqueries cannot be copied, so keep the parsed expression in case we need to bind it again
@@ -636,7 +645,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
-			bind_state.RegisterCaseGroup(*bind_state.unbound_groups[i], ProjectionIndex(i), !bound_expr->IsVolatile());
+			bind_state.RegisterCaseGroup(unbound_group, group_index,
+			                             CaseExpressionMap::IsCompatible(*bound_expr, result));
 
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression
@@ -653,11 +663,25 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				auto uncollated_first = BindUncollatedFirst(*this, std::move(uncollated_expr));
 				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(uncollated_first));
-				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;
+				bind_state.collated_groups[group_index] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 		}
 		SetCanContainNulls(prev_can_contain_nulls);
+		for (auto &entry : bind_state.group_map) {
+			entry.second = group_indexes[entry.second];
+		}
+		for (auto &entry : bind_state.group_alias_map) {
+			entry.second = group_indexes[entry.second];
+		}
+		// Remap keys without eliminating repeated grouping sets.
+		for (auto &grouping_set : statement.groups.grouping_sets) {
+			GroupingSet remapped_set;
+			for (auto index : grouping_set) {
+				remapped_set.insert(group_indexes[index]);
+			}
+			grouping_set = std::move(remapped_set);
+		}
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 
@@ -695,7 +719,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// where the flag would have no consumer, so such items bind as plain subqueries
 		select_binder.SetTransportTryErrors(i == 0 && IsBindingTrySubquery() &&
 		                                    statement.aggregate_handling != AggregateHandling::FORCE_AGGREGATES);
-		select_binder.ResetGroupReferences();
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		select_binder.SetTransportTryErrors(false);
 		bool is_original_column = i < result.column_count;
@@ -717,11 +740,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of an empty struct is not supported");
 			}
 
-			bool case_compatible = !select_binder.HasUnsafeGroupReference();
+			bool case_compatible = true;
 			for (auto &struct_expr : struct_expressions) {
+				case_compatible &= CaseExpressionMap::IsCompatible(*struct_expr, result);
 				if (struct_expr->IsVolatile()) {
 					bind_state.SetExpressionIsVolatile(i);
-					case_compatible = false;
 				}
 				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
@@ -737,7 +760,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 		if (expr->IsVolatile()) {
 			bind_state.SetExpressionIsVolatile(i);
-		} else if (!select_binder.HasUnsafeGroupReference()) {
+		}
+		if (CaseExpressionMap::IsCompatible(*expr, result)) {
 			bind_state.SetExpressionIsCaseCompatible(i);
 		}
 		if (expr->HasSubquery()) {
