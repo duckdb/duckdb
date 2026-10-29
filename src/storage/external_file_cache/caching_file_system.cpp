@@ -425,8 +425,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		fetch_end = AlignValue(fetch_end, min_block_size);
 	}
 	fetch_end = MinValue(fetch_end, file_size);
+	const idx_t split_block_size = GetSplitBlockSize(fetch_end - fetch_location, max_block_size);
 	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,
-	                                                max_block_size);
+	                                                split_block_size);
 	const idx_t num_blocks = blocks.size();
 
 	// Schedule block fetch tasks for all blocks.
@@ -469,22 +470,44 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 }
 
 void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
-	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(path.path);
+	const idx_t block_size = GetSplitBlockSize(nr_bytes, external_file_cache.GetCacheMaxBlockSize(path.path));
 	auto &scheduler = TaskScheduler::GetScheduler(db);
 	// idle worker threads also run async tasks, so the pieces are only sure to run serially without any other thread
 	const bool single_threaded = scheduler.NumberOfThreads() <= 1 && scheduler.NumberOfAsyncThreads() == 0;
-	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() ||
-	    single_threaded) {
+	if (nr_bytes <= block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() || single_threaded) {
 		ReadAndRecord(context, buffer, nr_bytes, location);
 		return;
 	}
 	// split like cached reads, so the requests are the same whether or not the cache is enabled
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
-	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
+	for (idx_t offset = 0; offset < nr_bytes; offset += block_size) {
 		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,
-		                                               MinValue(max_block_size, nr_bytes - offset), location + offset));
+		                                               MinValue(block_size, nr_bytes - offset), location + offset));
 	}
 	executor.WorkOnTasks();
+}
+
+idx_t CachingFileHandle::GetSplitBlockSize(idx_t nr_bytes, idx_t max_block_size) {
+	if (!IsRemoteFile() || !Settings::Get<ExternalFileCacheRemoteAdaptiveBlockSizeSetting>(db)) {
+		return max_block_size;
+	}
+	shared_ptr<FileHandle> handle;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		handle = file_handle;
+	}
+	// only ask a handle that is open, so that reads served from the cache do not open the file
+	NetworkThroughputEstimate estimate;
+	if (handle && handle->TryGetNetworkThroughput(estimate)) {
+		external_file_cache.SetHostNetworkThroughput(path.path, estimate);
+	} else if (!external_file_cache.TryGetHostNetworkThroughput(path.path, estimate)) {
+		// the first reads of a host are split at the configured block size
+		return max_block_size;
+	}
+	// readers that size their own reads (Parquet) fetch them in parallel, others rely on the split for parallelism
+	const idx_t min_blocks_per_read =
+	    flags.GetRequestSizing() == RequestSizing::BY_READER ? 1 : ExternalFileCache::ADAPTIVE_MIN_BLOCKS_PER_READ;
+	return ExternalFileCache::GetAdaptiveBlockSize(nr_bytes, max_block_size, estimate, min_blocks_per_read);
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {

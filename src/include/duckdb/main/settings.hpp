@@ -1539,12 +1539,29 @@ struct ExternalFileCacheLocalMaxBlockSizeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ExternalFileCacheRemoteAdaptiveBlockSizeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "external_file_cache_remote_adaptive_block_size";
+	static constexpr const char *Description =
+	    "Whether large reads of remote files are split into blocks sized from the measured latency and bandwidth of "
+	    "their requests, as multiples of external_file_cache_remote_max_block_size of up to 32 MiB, instead of always "
+	    "into blocks of external_file_cache_remote_max_block_size. Reads of readers that do not size their own reads "
+	    "still make at least 8 requests each.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ExternalFileCacheRemoteMaxBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_file_cache_remote_max_block_size";
 	static constexpr const char *Description =
-	    "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split "
-	    "into blocks of this size, which are fetched in parallel.";
+	    "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3), unless "
+	    "external_file_cache_remote_adaptive_block_size picks a multiple of it for a large read over a slow "
+	    "connection. Larger reads are split into blocks of this size, which are fetched in parallel.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

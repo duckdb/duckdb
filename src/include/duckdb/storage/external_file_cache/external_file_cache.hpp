@@ -34,6 +34,7 @@ class ClientContext;
 class DatabaseInstance;
 class BufferManager;
 class BufferPool;
+struct NetworkThroughputEstimate;
 
 //! File metadata used to determine whether cached file data is still valid.
 struct CacheValidationInfo {
@@ -57,12 +58,32 @@ struct CacheValidationInfo {
 
 class ExternalFileCache {
 public:
+	//! Blocks sized from the network are at most this large
+	static constexpr idx_t ADAPTIVE_MAX_BLOCK_SIZE = 32ULL << 20;
+	//! Blocks sized from the network take at least this many times the request latency to transfer
+	static constexpr idx_t ADAPTIVE_LATENCY_FACTOR = 4;
+	//! Reads of readers that rely on the split for parallelism keep at least this many requests per read
+	static constexpr idx_t ADAPTIVE_MIN_BLOCKS_PER_READ = 8;
+
+public:
 	//! Get the maximum cache block size for a given file path.
 	DUCKDB_API idx_t GetCacheMaxBlockSize(const string &path) const;
 	//! Get the block size that reads of a given file path are rounded out to.
 	DUCKDB_API idx_t GetCacheMinBlockSize(const string &path) const;
 	//! Whether reads of the given file should go through the cache (remote files only, unless forced).
 	DUCKDB_API bool ShouldCacheFile(const string &path) const;
+
+	//! The size of the blocks a read of [nr_bytes] of a remote file is split into, given the measured latency and
+	//! bandwidth of its requests. The smallest multiple of [block_size] that keeps the request latency a small part
+	//! of each request, but no larger than leaves [min_blocks_per_read] requests for the read. [block_size] without
+	//! a usable estimate.
+	DUCKDB_API static idx_t GetAdaptiveBlockSize(idx_t nr_bytes, idx_t block_size,
+	                                             const NetworkThroughputEstimate &estimate,
+	                                             idx_t min_blocks_per_read = 1);
+	//! Remember the latest throughput estimate of the host of a remote file.
+	void SetHostNetworkThroughput(const string &path, const NetworkThroughputEstimate &estimate);
+	//! The latest throughput estimate of the host of a remote file, for handles that have not measured their own yet.
+	bool TryGetHostNetworkThroughput(const string &path, NetworkThroughputEstimate &result) const;
 
 	//! Cached files
 	struct CachedFile {
@@ -153,6 +174,16 @@ private:
 	unordered_map<string, idx_t> cached_file_keys DUCKDB_GUARDED_BY(lock);
 	//! Lock for accessing cached_file_keys.
 	mutable annotated_mutex lock;
+
+	//! A measured request latency and bandwidth
+	struct HostThroughput {
+		double latency_seconds;
+		double bandwidth_bytes_per_s;
+	};
+	//! Latest throughput estimate per remote host (scheme and authority of the path)
+	unordered_map<string, HostThroughput> host_throughput DUCKDB_GUARDED_BY(throughput_lock);
+	//! Lock for accessing host_throughput.
+	mutable annotated_mutex throughput_lock;
 };
 
 } // namespace duckdb

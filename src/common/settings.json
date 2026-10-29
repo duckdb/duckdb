@@ -924,8 +924,15 @@
         ]
     },
     {
+        "name": "external_file_cache_remote_adaptive_block_size",
+        "description": "Whether large reads of remote files are split into blocks sized from the measured latency and bandwidth of their requests, as multiples of external_file_cache_remote_max_block_size of up to 32 MiB, instead of always into blocks of external_file_cache_remote_max_block_size. Reads of readers that do not size their own reads still make at least 8 requests each.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "external_file_cache_remote_max_block_size",
-        "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split into blocks of this size, which are fetched in parallel.",
+        "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3), unless external_file_cache_remote_adaptive_block_size picks a multiple of it for a large read over a slow connection. Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
         "scope": "global",
         "default_value": "2097152",

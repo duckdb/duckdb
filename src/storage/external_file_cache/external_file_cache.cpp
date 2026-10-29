@@ -4,6 +4,7 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -11,6 +12,8 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/object_cache.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
@@ -37,6 +40,12 @@ idx_t GapBlockCount(idx_t nr_bytes, idx_t max_block_size) {
 //! Whether the last modified timestamp is usable as a cache validator
 bool HasUsableLastModified(timestamp_t last_modified) {
 	return last_modified.IsFinite() && last_modified != timestamp_t(0);
+}
+
+//! The scheme and authority of a remote path, which key the throughput estimates per host
+string GetHostKey(const string &path) {
+	const auto parsed = Path::FromString(path);
+	return parsed.GetScheme() + parsed.GetAuthority();
 }
 
 } // namespace
@@ -98,6 +107,44 @@ idx_t ExternalFileCache::GetCacheMinBlockSize(const string &path) const {
 	}
 	auto &db = buffer_manager.GetDatabase();
 	return Settings::Get<ExternalFileCacheRemoteMinBlockSizeSetting>(db);
+}
+
+idx_t ExternalFileCache::GetAdaptiveBlockSize(idx_t nr_bytes, idx_t block_size,
+                                              const NetworkThroughputEstimate &estimate, idx_t min_blocks_per_read) {
+	D_ASSERT(block_size > 0);
+	// the bytes a request could have received while it waited for its first byte
+	const double bandwidth_delay = estimate.latency_seconds * estimate.bandwidth_bytes_per_s;
+	if (!(bandwidth_delay > 0)) { // also catches NaN
+		return block_size;
+	}
+	// the smallest multiple of the block size that spends most of its request transferring
+	const double efficient_size = MinValue<double>(static_cast<double>(ADAPTIVE_LATENCY_FACTOR) * bandwidth_delay,
+	                                               static_cast<double>(ADAPTIVE_MAX_BLOCK_SIZE));
+	idx_t result = static_cast<idx_t>(std::ceil(efficient_size / static_cast<double>(block_size))) * block_size;
+	result = MinValue(result, MaxValue<idx_t>(ADAPTIVE_MAX_BLOCK_SIZE / block_size, 1) * block_size);
+	if (min_blocks_per_read > 1) {
+		// the read still makes enough requests to be fetched in parallel
+		result = MinValue(result, MaxValue<idx_t>(nr_bytes / min_blocks_per_read / block_size, 1) * block_size);
+	}
+	return MaxValue(result, block_size);
+}
+
+void ExternalFileCache::SetHostNetworkThroughput(const string &path, const NetworkThroughputEstimate &estimate) {
+	auto host = GetHostKey(path);
+	const annotated_lock_guard<annotated_mutex> guard(throughput_lock);
+	host_throughput[std::move(host)] = HostThroughput {estimate.latency_seconds, estimate.bandwidth_bytes_per_s};
+}
+
+bool ExternalFileCache::TryGetHostNetworkThroughput(const string &path, NetworkThroughputEstimate &result) const {
+	const auto host = GetHostKey(path);
+	const annotated_lock_guard<annotated_mutex> guard(throughput_lock);
+	auto entry = host_throughput.find(host);
+	if (entry == host_throughput.end()) {
+		return false;
+	}
+	result.latency_seconds = entry->second.latency_seconds;
+	result.bandwidth_bytes_per_s = entry->second.bandwidth_bytes_per_s;
+	return true;
 }
 
 bool ExternalFileCache::ShouldCacheFile(const string &path) const {

@@ -94,6 +94,9 @@ private:
 	bool CanUseCache();
 	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
 	void ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! The size of the blocks a read of [nr_bytes] is split into, [max_block_size], or for remote files a multiple of
+	//! it sized from the measured latency and bandwidth of their requests.
+	idx_t GetSplitBlockSize(idx_t nr_bytes, idx_t max_block_size);
 	//! Reconcile cached blocks with validation metadata observed while reading them.
 	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
