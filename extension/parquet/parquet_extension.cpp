@@ -179,54 +179,6 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 }
 
-static bool SupportsBloomFilterFallback(const LogicalType &type, bool timestamp_as_int96) {
-	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_NS:
-	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::SQLNULL:
-		return true;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return !timestamp_as_int96;
-	case LogicalTypeId::DECIMAL:
-		return DecimalType::GetWidth(type) <= 18;
-	default:
-		return false;
-	}
-}
-
-static void VerifyBloomFilterFallback(const ParquetWriteBindData &bind_data, const vector<Identifier> &names,
-                                      const vector<LogicalType> &types) {
-	for (idx_t i = 0; i < bind_data.bloom_filter_fallback_columns.size(); i++) {
-		if (bind_data.bloom_filter_fallback_columns[i] &&
-		    !SupportsBloomFilterFallback(types[i], bind_data.write_timestamp_as_int96)) {
-			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s%s",
-			                      names[i].GetIdentifierName(), types[i],
-			                      bind_data.write_timestamp_as_int96 ? " (INT96 enabled)" : "");
-		}
-	}
-}
-
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                                  const vector<Identifier> &names,
                                                  const vector<LogicalType> &sql_types) {
@@ -435,7 +387,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
-	VerifyBloomFilterFallback(*bind_data, names, sql_types);
 
 	return std::move(bind_data);
 }

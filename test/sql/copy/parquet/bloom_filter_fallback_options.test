@@ -40,7 +40,7 @@ but it was not found in the table
 
 endloop
 
-foreach name nested items b big d
+foreach name nested items b d
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
@@ -53,7 +53,7 @@ statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet'
 (BLOOM_FILTER_FALLBACK_COLUMNS ['ts'], WRITE_TIMESTAMP_AS_INT96 TRUE)
 ----
-INT96 enabled
+does not support column
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES NULL)

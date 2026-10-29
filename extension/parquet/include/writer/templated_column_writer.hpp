@@ -268,6 +268,10 @@ public:
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
+	bool SupportsBloomFilterFallback() const override {
+		return !std::is_same<TGT, Int96>::value && !std::is_same<OP, ParquetGeometryOperator>::value;
+	}
+
 	void BeginWrite(ColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		if (bloom_filter_fallback && !HasDictionary(state)) {

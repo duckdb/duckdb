@@ -587,9 +587,15 @@ void ParquetWriter::InitializeColumnWriters() {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
 		    context, *this, path_in_schema, types[i], Identifier(unique_names[i]), allow_geometry, &options.field_ids,
 		    &options.shredding_types, 0, 1, can_have_nulls));
-		column_writers.back()->bloom_filter_fallback = options.enable_bloom_filters && !options.encryption_config &&
-		                                               !options.bloom_filter_fallback_columns.empty() &&
-		                                               options.bloom_filter_fallback_columns[i];
+		if (options.bloom_filter_fallback_columns.empty() || !options.bloom_filter_fallback_columns[i]) {
+			continue;
+		}
+		auto &column_writer = *column_writers.back();
+		if (!column_writer.SupportsBloomFilterFallback()) {
+			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS does not support column \"%s\" with type %s",
+			                      unique_names[i], types[i]);
+		}
+		column_writer.bloom_filter_fallback = options.enable_bloom_filters && !options.encryption_config;
 	}
 }
 

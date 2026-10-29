@@ -177,6 +177,10 @@ public:
 
 	virtual bool TryExportPreparedShreddingType(ShreddingType &result) const;
 
+	virtual bool SupportsBloomFilterFallback() const {
+		return false;
+	}
+
 	virtual idx_t FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) = 0;
 
 	//! Create the column writer for a specific type recursively
