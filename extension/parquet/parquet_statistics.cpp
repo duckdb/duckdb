@@ -1329,9 +1329,7 @@ double ParquetBloomFilter::OneRatio() {
 }
 
 void ParquetBloomFilter::Shrink(Allocator &allocator, idx_t new_block_count) {
-	if (!new_block_count || new_block_count > block_count || block_count % new_block_count != 0) {
-		throw InvalidInputException("Bloom filter folding requires a nonzero divisor of the block count");
-	}
+	D_ASSERT(new_block_count > 0 && block_count % new_block_count == 0);
 	auto folded = AllocateBloomFilter(allocator, new_block_count * sizeof(ParquetBloomBlock));
 	array_ptr<ParquetBloomBlock> source(reinterpret_cast<ParquetBloomBlock *>(data->ptr), block_count);
 	array_ptr<ParquetBloomBlock> target(reinterpret_cast<ParquetBloomBlock *>(folded->ptr), new_block_count);
