@@ -7,6 +7,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -1812,13 +1813,16 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
-//! Interpolates between two integers without going through a double for the values themselves
+//! Interpolates between two integers without going through a double for the values themselves.
+//! The result lies between the two values, but the double rounding can land past them, so clamp it to the range.
 static int64_t InterpolateInt64(const int64_t lo, const double d, const int64_t hi) {
 	int64_t delta;
 	if (!TrySubtractOperator::Operation(hi, lo, delta)) {
-		return std::llround(static_cast<double>(lo) * (1.0 - d) + static_cast<double>(hi) * d);
+		const auto mixed = std::llround(static_cast<double>(lo) * (1.0 - d) + static_cast<double>(hi) * d);
+		return ClampValue<int64_t>(mixed, MinValue(lo, hi), MaxValue(lo, hi));
 	}
-	return lo + std::llround(static_cast<double>(delta) * d);
+	return lo + ClampValue<int64_t>(std::llround(static_cast<double>(delta) * d), MinValue<int64_t>(delta, 0),
+	                                MaxValue<int64_t>(delta, 0));
 }
 
 template <>
@@ -1846,6 +1850,13 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	if (lo == hi) {
+		return lo;
+	}
+	// the infinities are sentinel values, and interpolating with their raw encodings produces nonsense
+	if (!Value::IsFinite(lo) || !Value::IsFinite(hi)) {
+		throw ConversionException("Cannot interpolate infinite TIMESTAMP values");
+	}
 	return timestamp_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
