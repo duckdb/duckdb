@@ -55,6 +55,36 @@ FROM parquet_metadata('{TEST_DIR}/geography_am.parquet') t;
 ----
 170.0	-170.0	0.0	0.0
 
+# With a page index, every page keeps its own statistics, which are merged into the column chunk. That merge is
+# geodetic too: pages east and west of the antimeridian combine into the wrapped arc [170, -170], not [-179, 179].
+statement ok
+CREATE TABLE g_pages AS
+SELECT ('POINT(' || CASE WHEN i < 3000 THEN 170 + i % 10 ELSE -179 + i % 10 END || ' 0)')::GEOGRAPHY g
+FROM range(6000) t(i);
+
+statement ok
+COPY g_pages TO '{TEST_DIR}/geography_pages.parquet' (FORMAT 'parquet', DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
+
+query I
+SELECT count(*) > 1 FROM parquet_page_index('{TEST_DIR}/geography_pages.parquet');
+----
+true
+
+query II
+SELECT t.geo_bbox.xmin, t.geo_bbox.xmax FROM parquet_metadata('{TEST_DIR}/geography_pages.parquet') t;
+----
+170.0	-170.0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_pages.parquet' WHERE g && 'POINT(180 0)'::GEOGRAPHY;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_pages.parquet' WHERE g && 'POINT(-179 0)'::GEOGRAPHY;
+----
+300
+
 # Row-group pruning through the Parquet geospatial statistics stays sound: every stored coordinate
 # matches itself when probed through a fresh scan of the file.
 statement ok

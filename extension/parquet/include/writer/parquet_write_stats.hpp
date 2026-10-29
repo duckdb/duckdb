@@ -378,7 +378,8 @@ public:
 		if (!other.has_stats) {
 			return;
 		}
-		geo_stats.Merge(other.geo_stats);
+		D_ASSERT(geodetic == other.geodetic);
+		geo_stats.Merge(other.geo_stats, geodetic);
 		has_stats = true;
 	}
 	void WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats) override {
