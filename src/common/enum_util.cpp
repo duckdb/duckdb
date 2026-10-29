@@ -106,6 +106,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -1368,6 +1369,25 @@ ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char
 	return static_cast<ColumnDataAllocatorType>(StringUtil::StringToEnum(GetColumnDataAllocatorTypeValues(), 3, "ColumnDataAllocatorType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetColumnDataRepresentationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ColumnDataRepresentation::FLAT), "FLAT" },
+		{ static_cast<uint32_t>(ColumnDataRepresentation::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(ColumnDataRepresentation::DICTIONARY), "DICTIONARY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ColumnDataRepresentation>(ColumnDataRepresentation value) {
+	return StringUtil::EnumToString(GetColumnDataRepresentationValues(), 3, "ColumnDataRepresentation", static_cast<uint32_t>(value));
+}
+
+template<>
+ColumnDataRepresentation EnumUtil::FromString<ColumnDataRepresentation>(const char *value) {
+	return static_cast<ColumnDataRepresentation>(StringUtil::StringToEnum(GetColumnDataRepresentationValues(), 3, "ColumnDataRepresentation", value));
+}
+
 const StringUtil::EnumStringLiteral *GetColumnDataScanPropertiesValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ColumnDataScanProperties::INVALID), "INVALID" },
@@ -2419,6 +2439,7 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 		{ static_cast<uint32_t>(ExpressionType::ARRAY_CONSTRUCTOR), "ARRAY_CONSTRUCTOR" },
 		{ static_cast<uint32_t>(ExpressionType::ARROW), "ARROW" },
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_TRY), "OPERATOR_TRY" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_HAS_ERROR), "OPERATOR_HAS_ERROR" },
 		{ static_cast<uint32_t>(ExpressionType::SUBQUERY), "SUBQUERY" },
 		{ static_cast<uint32_t>(ExpressionType::STAR), "STAR" },
 		{ static_cast<uint32_t>(ExpressionType::QUANTIFIER), "QUANTIFIER" },
@@ -2447,12 +2468,12 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
-	return StringUtil::EnumToString(GetExpressionTypeValues(), 78, "ExpressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionTypeValues(), 79, "ExpressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
-	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 78, "ExpressionType", value));
+	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 79, "ExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
@@ -2884,6 +2905,28 @@ const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value) {
 template<>
 FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value) {
 	return static_cast<FunctionErrors>(StringUtil::StringToEnum(GetFunctionErrorsValues(), 2, "FunctionErrors", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFunctionKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionKind::SCALAR), "SCALAR" },
+		{ static_cast<uint32_t>(FunctionKind::AGGREGATE), "AGGREGATE" },
+		{ static_cast<uint32_t>(FunctionKind::WINDOW), "WINDOW" },
+		{ static_cast<uint32_t>(FunctionKind::TABLE), "TABLE" },
+		{ static_cast<uint32_t>(FunctionKind::PRAGMA), "PRAGMA" },
+		{ static_cast<uint32_t>(FunctionKind::TYPE), "TYPE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FunctionKind>(FunctionKind value) {
+	return StringUtil::EnumToString(GetFunctionKindValues(), 6, "FunctionKind", static_cast<uint32_t>(value));
+}
+
+template<>
+FunctionKind EnumUtil::FromString<FunctionKind>(const char *value) {
+	return static_cast<FunctionKind>(StringUtil::StringToEnum(GetFunctionKindValues(), 6, "FunctionKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {
