@@ -88,6 +88,16 @@ TEST_CASE("Sorted aggregate rebind preserves the inner function properties", "[a
 		REQUIRE(aggr.GetOrderBys());
 		REQUIRE(aggr.Function().GetErrorMode() == expected[i].errors);
 		REQUIRE(aggr.Function().GetStability() == expected[i].stability);
+		// the exported-state reconstruction builds the same wrapper - cover its property forwarding as well
+		LogicalType buffer_struct;
+		vector<SortedAggregateStateOrder> orders;
+		idx_t argument_count;
+		FunctionBinder::GetSortedAggregateStateLayout(aggr, buffer_struct, orders, argument_count);
+		auto reconstructed = FunctionBinder::BindSortedAggregateState(
+		    *con.context, aggr.Function(), aggr.BindInfo() ? aggr.BindInfo()->Copy() : nullptr, buffer_struct, orders,
+		    argument_count);
+		REQUIRE(reconstructed.first.GetErrorMode() == expected[i].errors);
+		REQUIRE(reconstructed.first.GetStability() == expected[i].stability);
 		// the physical-planning rebind that replaces the function with the buffering wrapper
 		FunctionBinder::BindSortedAggregate(*con.context, aggr, aggregate_op.groups, &aggregate_op.grouping_sets);
 		REQUIRE(!aggr.GetOrderBys());
@@ -101,11 +111,14 @@ TEST_CASE("Sorted window aggregate rebind preserves the inner function propertie
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(g INTEGER, s VARCHAR, j INTEGER)"));
+	RegisterVolatileStringAgg(con);
 
-	// string_agg is fallible, list is infallible
-	vector<pair<string, FunctionErrors>> cases {
-	    {"string_agg(s, ',' ORDER BY j)", FunctionErrors::CAN_THROW_RUNTIME_ERROR},
-	    {"list(s ORDER BY j)", FunctionErrors::CANNOT_ERROR}};
+	// string_agg is fallible, list is infallible, and the registered copy is fallible and volatile
+	vector<pair<string, ExpectedProperties>> cases {
+	    {"string_agg(s, ',' ORDER BY j)", {FunctionErrors::CAN_THROW_RUNTIME_ERROR, FunctionStability::CONSISTENT}},
+	    {"list(s ORDER BY j)", {FunctionErrors::CANNOT_ERROR, FunctionStability::CONSISTENT}},
+	    {"test_volatile_string_agg(s, ',' ORDER BY j)",
+	     {FunctionErrors::CAN_THROW_RUNTIME_ERROR, FunctionStability::VOLATILE}}};
 
 	con.BeginTransaction();
 	for (auto &test_case : cases) {
@@ -116,12 +129,13 @@ TEST_CASE("Sorted window aggregate rebind preserves the inner function propertie
 		auto &wexpr = window_op->expressions[0]->Cast<BoundWindowExpression>();
 		REQUIRE(wexpr.AggregateFunction());
 		REQUIRE(!wexpr.ArgOrders().empty());
-		REQUIRE(wexpr.AggregateFunction()->GetErrorMode() == test_case.second);
+		REQUIRE(wexpr.AggregateFunction()->GetErrorMode() == test_case.second.errors);
+		REQUIRE(wexpr.AggregateFunction()->GetStability() == test_case.second.stability);
 		// the runtime rebind performed by the window constant aggregator
 		FunctionBinder::BindSortedAggregate(*con.context, wexpr);
 		REQUIRE(wexpr.ArgOrders().empty());
-		REQUIRE(wexpr.AggregateFunction()->GetErrorMode() == test_case.second);
-		REQUIRE(wexpr.AggregateFunction()->GetStability() == FunctionStability::CONSISTENT);
+		REQUIRE(wexpr.AggregateFunction()->GetErrorMode() == test_case.second.errors);
+		REQUIRE(wexpr.AggregateFunction()->GetStability() == test_case.second.stability);
 	}
 	con.Rollback();
 }
