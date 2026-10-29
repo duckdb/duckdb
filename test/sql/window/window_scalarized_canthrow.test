@@ -22,12 +22,13 @@ SELECT sum(s::INT) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) FROM (VALUES 
 2
 
 # histogram's bound bin cast throws at runtime and must stay a regular error in the wrapper
+# the bins cast binds (VARCHAR -> DATE is valid) and only fails for the given values
 
 statement error
-SELECT histogram(l, b) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
-FROM (VALUES ([1], [1]), ([2], [1])) t(l, b);
+SELECT histogram(d, b) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM (VALUES (DATE '2020-01-01', ['abc']), (DATE '2020-06-01', ['abc'])) t(d, b);
 ----
-Unimplemented type for cast
+invalid date field format
 
 # infallible aggregates without throwing children stay eligible for dictionary execution
 
