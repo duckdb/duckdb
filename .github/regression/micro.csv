@@ -53,3 +53,4 @@ benchmark/micro/string/lpad.benchmark
 benchmark/micro/insert/bulk_insert_commit_batch.benchmark
 benchmark/micro/insert/bulk_insert_commit_parallel.benchmark
 benchmark/micro/insert/bulk_insert_commit_in_memory.benchmark
+benchmark/micro/json/lateral_json_each.benchmark
