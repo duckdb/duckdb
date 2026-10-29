@@ -71,6 +71,8 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! The scan consumed a projection whose source expression is no longer retained.
 	bool has_pushed_projection = false;
+	//! The scan consumed some of the complex filters.
+	bool has_pushed_some_complex_filters = false;
 	//! The effective AT clause the table was looked up with, retained for SQL reconstruction
 	unique_ptr<BoundAtClause> at_clause;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)

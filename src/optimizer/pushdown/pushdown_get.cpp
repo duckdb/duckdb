@@ -130,8 +130,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			expressions.push_back(std::move(filter->filter));
 		}
 		filters.clear();
+		const idx_t expressions_size = expressions.size();
 
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
+		get.has_pushed_some_complex_filters |= expressions.size() != expressions_size;
 
 		if (expressions.empty()) {
 			restore_barrier_filters();
