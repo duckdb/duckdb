@@ -106,3 +106,18 @@ query I
 SELECT nextval('lambda_seq')
 ----
 8
+
+# nor a list from a lower projection, whose producer the folded statistics would let the optimizer remove
+statement ok
+CREATE SEQUENCE review_seq;
+
+query I
+SELECT coalesce(list_position(list_transform(l, lambda x: x), 3), 99)
+FROM (SELECT CASE WHEN nextval('review_seq') > 0 THEN [1] ELSE [2] END AS l) q;
+----
+99
+
+query I
+SELECT nextval('review_seq');
+----
+2

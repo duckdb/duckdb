@@ -66,6 +66,11 @@ static unique_ptr<BaseStatistics> ListTransformStats(ClientContext &context, Fun
 	}
 	// statistics can let the optimizer skip the call, which must not hide errors or side effects of the list or lambda
 	auto &list_expr = *input.expr.GetChildren()[0];
+	// only the list of a scan column in a table filter: the statistics of any other list can stem from a producer
+	// with side effects that the optimizer removes once the statistics fold its use
+	if (list_expr.GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return nullptr;
+	}
 	if (list_expr.IsVolatile() || list_expr.CanThrow() || bind_data.lambda_expr->IsVolatile() ||
 	    bind_data.lambda_expr->CanThrow()) {
 		return nullptr;

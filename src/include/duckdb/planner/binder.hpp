@@ -403,6 +403,9 @@ public:
 	void SetAlwaysRequireRebind();
 	void SetInsideSubquery();
 	bool IsInsideSubquery() const;
+	//! Set while binding the key expressions of an index
+	void SetBindingIndexKey(bool binding_index_key);
+	bool IsBindingIndexKey() const;
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -434,6 +437,8 @@ private:
 	bool legacy_can_contain_nulls = false;
 	//! Whether this binder is inside a subquery boundary
 	bool inside_subquery = false;
+	//! Whether the key expressions of an index are being bound
+	bool binding_index_key = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! The table macros that are being expanded by this binder
