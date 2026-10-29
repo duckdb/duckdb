@@ -859,14 +859,11 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 		pipeline.get().ResetSource(true);
 	}
 
-	// Operator state can be shared across pipelines (e.g. operators above a UNION), so it is reset
-	// up-front once per iteration, exactly like the parallel schedule; stages then only reset their
-	// pipeline-local source state.
-	for (auto &stage : plan.stages) {
-		if (stage.type == PipelineScheduleStageType::EXECUTE) {
-			stage.pipeline.get().ResetOperatorsForReschedule();
-		}
-	}
+	// Operator state can be shared across pipelines (e.g. operators above a UNION) and must be reset once
+	// per iteration. Constructing operator state may read dependency-produced sink state, matching the
+	// standard scheduler, which resets a pipeline only after its dependencies have finished. Each operator
+	// is therefore reset at the first ready stage containing it instead of up-front for the whole plan.
+	reference_set_t<PhysicalOperator> reset_operators;
 
 	state.GetScheduler().InitializeInlinePlan(plan);
 
@@ -876,6 +873,7 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 		auto &pipeline = stage.pipeline.get();
 		switch (stage.type) {
 		case PipelineScheduleStageType::EXECUTE: {
+			pipeline.ResetOperatorsForReschedule(reset_operators);
 			pipeline.ResetSourceForReschedule();
 			// Invariant builds have independent source work even when the recursive frontier is tiny.
 			const auto worker_limit =

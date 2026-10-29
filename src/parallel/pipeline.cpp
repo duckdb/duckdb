@@ -407,11 +407,14 @@ void Pipeline::Reset() {
 	initialized = true;
 }
 
-void Pipeline::ResetOperatorsForReschedule() {
+void Pipeline::ResetOperatorsForReschedule(optional_ptr<reference_set_t<PhysicalOperator>> reset_operators) {
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
+		if (reset_operators && !reset_operators->insert(op).second) {
+			continue;
+		}
 		lock_guard<mutex> guard(op.lock);
 		if (allow_reuse && op.op_state && op.ResetGlobalOperatorState(client, *op.op_state)) {
 			continue;
