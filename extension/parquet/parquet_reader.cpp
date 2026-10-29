@@ -1962,11 +1962,14 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				                                  : nullopt;
 				if (check_bloom_filter && bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
-				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy &&
-				    ParquetStatisticsUtils::BloomFilterExcludes(
-				        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data, *state.thrift_file_proto,
-				        allocator, bloom_reader->Schema(), *hash_strategy)) {
-					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy) {
+					auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+					TryAttachBloomFilterBuffer(bloom_reader->ColumnIndex(), trans);
+					if (ParquetStatisticsUtils::BloomFilterExcludes(
+					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
+					        *state.thrift_file_proto, allocator, bloom_reader->Schema(), *hash_strategy)) {
+						prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+					}
 				}
 			}
 
@@ -2025,6 +2028,58 @@ bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) con
 		}
 	}
 	transport.AddFilledReadHead(page_index_span_begin, span_size, page_index_buffer.get());
+	return true;
+}
+
+bool ParquetReader::TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFileTransport &transport) const {
+	if (parquet_options.encryption_config) {
+		return false;
+	}
+	lock_guard<mutex> guard(bloom_filter_buffer_lock);
+	auto entry = bloom_filter_spans.find(column_chunk_idx);
+	if (entry == bloom_filter_spans.end()) {
+		BloomFilterSpan span;
+		idx_t span_begin = NumericLimits<idx_t>::Maximum();
+		idx_t span_end = 0;
+		idx_t filter_count = 0;
+		for (auto &row_group : GetFileMetadata()->row_groups) {
+			if (column_chunk_idx >= row_group.columns.size()) {
+				continue;
+			}
+			auto &meta_data = row_group.columns[column_chunk_idx].meta_data;
+			if (!meta_data.__isset.bloom_filter_offset || !meta_data.__isset.bloom_filter_length ||
+			    meta_data.bloom_filter_offset <= 0 || meta_data.bloom_filter_length <= 0) {
+				continue;
+			}
+			const auto filter_begin = NumericCast<idx_t>(meta_data.bloom_filter_offset);
+			span_begin = MinValue(span_begin, filter_begin);
+			span_end = MaxValue(span_end, filter_begin + NumericCast<idx_t>(meta_data.bloom_filter_length));
+			filter_count++;
+		}
+		if (span_end > span_begin && span_end <= transport.GetSize()) {
+			span.begin = span_begin;
+			span.end = span_end;
+			span.filter_count = filter_count;
+		}
+		entry = bloom_filter_spans.emplace(column_chunk_idx, std::move(span)).first;
+	}
+	auto &span = entry->second;
+	span.probe_count++;
+	if (span.end <= span.begin) {
+		return false;
+	}
+	const auto span_size = span.end - span.begin;
+	if (!span.buffer.IsSet()) {
+		if (span.probe_count < 2 || span_size > PrefetchCostModel::GAP_MAX ||
+		    span_size > span.filter_count * transport.GetAcceptedColumnGap()) {
+			return false;
+		}
+		auto buffer = allocator.Allocate(span_size);
+		auto handles = transport.GetCachingFileHandle().Read(span_size, span.begin);
+		handles.CopyTo(buffer.get(), span_size);
+		span.buffer = std::move(buffer);
+	}
+	transport.AddFilledReadHead(span.begin, span_size, span.buffer.get());
 	return true;
 }
 

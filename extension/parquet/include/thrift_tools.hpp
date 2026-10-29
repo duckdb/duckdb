@@ -271,8 +271,8 @@ public:
 		return location;
 	}
 
-	optional_ptr<ReadHead> GetReadHead(idx_t pos) {
-		return ra_buffer.GetReadHead(pos);
+	optional_ptr<ReadHead> GetReadHead(idx_t pos, idx_t len = 1) {
+		return ra_buffer.GetReadHead(pos, len);
 	}
 
 	vector<shared_ptr<ReadHead>> &GetReadHeads() {

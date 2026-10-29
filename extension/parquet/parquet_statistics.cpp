@@ -1185,7 +1185,10 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 
 	transport.SetLocation(bloom_filter_start);
 	if (bloom_filter_length > 0) {
-		transport.Prefetch(bloom_filter_start, bloom_filter_length);
+		auto read_head = transport.GetReadHead(bloom_filter_start, bloom_filter_length);
+		if (!read_head || !read_head->data_isset) {
+			transport.Prefetch(bloom_filter_start, bloom_filter_length);
+		}
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;

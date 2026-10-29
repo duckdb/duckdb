@@ -504,6 +504,7 @@ private:
 	//! Serves the page index of the whole file from one buffer that is read once per reader and shared by every row
 	//! group and thread, when the index fits the transport's accepted column gap; returns false when it does not
 	bool TryAttachPageIndexBuffer(ThriftFileTransport &transport) const;
+	bool TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFileTransport &transport) const;
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);
@@ -560,6 +561,15 @@ private:
 	mutable mutex page_index_buffer_lock;
 	mutable AllocatedData page_index_buffer;
 	mutable bool page_index_buffer_loaded = false;
+	struct BloomFilterSpan {
+		idx_t begin = 0;
+		idx_t end = 0;
+		idx_t filter_count = 0;
+		idx_t probe_count = 0;
+		AllocatedData buffer;
+	};
+	mutable mutex bloom_filter_buffer_lock;
+	mutable unordered_map<idx_t, BloomFilterSpan> bloom_filter_spans;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;
