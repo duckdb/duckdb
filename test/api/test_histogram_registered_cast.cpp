@@ -126,3 +126,23 @@ TEST_CASE("Histogram bin validation sees registered casts to union members", "[a
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("Histogram bin validation sees casts wrapped for VARCHAR quoting", "[api][histogram]") {
+	DuckDB db;
+	Connection con(db);
+	if (con.Query("SELECT histogram(1, [1])")->HasError()) {
+		return;
+	}
+
+	// casting the union bins elements to VARCHAR wraps the member casts for quoting
+	auto accepted = con.Query("SELECT histogram('[1]', [[union_value(n := 1)]])");
+	REQUIRE_NO_FAIL(*accepted);
+
+	// a NULL-only cast registered for the wrapped conversion is rejected at bind time
+	auto union_type = LogicalType::UNION({{"n", LogicalType::INTEGER}});
+	auto &casts = DBConfig::GetConfig(*con.context).GetCastFunctions();
+	casts.RegisterCastFunction(union_type, LogicalType::VARCHAR, BoundCastInfo(DefaultCasts::TryVectorNullCast));
+	auto rejected = con.Query("SELECT histogram('[1]', [[union_value(n := 1)]])");
+	REQUIRE(rejected->HasError());
+	REQUIRE(StringUtil::Contains(rejected->GetError(), "bin boundaries must match the input type"));
+}

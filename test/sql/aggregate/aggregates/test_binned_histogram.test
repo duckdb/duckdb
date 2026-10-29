@@ -265,6 +265,12 @@ SELECT list_aggregate(map_values(histogram(union_value(b := 1)::UNION(a INTEGER[
 ----
 1
 
+# union bins with a member the argument union does not have are rejected at bind time
+statement error
+SELECT histogram(union_value(a := 1), [union_value(b := 1)])
+----
+<REGEX>:Binder Error.*bins of type UNION\(b INTEGER\)\[\] cannot be cast to UNION\(a INTEGER\)\[\].*
+
 # struct bins whose member conversion only works for NULL members are rejected like empty bins
 statement error
 SELECT histogram({'a': NULL::INTEGER[]}, [{'a': NULL::INTEGER}])
