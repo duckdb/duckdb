@@ -62,7 +62,7 @@ public:
 	static constexpr idx_t ADAPTIVE_MAX_BLOCK_SIZE = 32ULL << 20;
 	//! Blocks sized from the network take at least this many times the request latency to transfer
 	static constexpr idx_t ADAPTIVE_LATENCY_FACTOR = 4;
-	//! Reads of readers that rely on the split for parallelism keep at least this many requests per read
+	//! Large reads of readers that rely on the split for parallelism keep at least this many requests
 	static constexpr idx_t ADAPTIVE_MIN_BLOCKS_PER_READ = 8;
 
 public:
@@ -74,7 +74,7 @@ public:
 	DUCKDB_API bool ShouldCacheFile(const string &path) const;
 
 	//! The smallest multiple of [block_size] that keeps the request latency a small part of each request,
-	//! leaving a read of [nr_bytes] at least [min_blocks_per_read] requests
+	//! leaving a large enough read of [nr_bytes] at least [min_blocks_per_read] requests
 	DUCKDB_API static idx_t GetAdaptiveBlockSize(idx_t nr_bytes, idx_t block_size,
 	                                             const NetworkThroughputEstimate &estimate,
 	                                             idx_t min_blocks_per_read = 1);

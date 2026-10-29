@@ -683,7 +683,6 @@ void CachingFileHandle::PublishHostNetworkThroughput(FileHandle &handle) {
 	if (!IsRemoteFile() || !Settings::Get<ExternalFileCacheRemoteAdaptiveBlockSizeSetting>(db)) {
 		return;
 	}
-	// for handles of this host that have not measured their own requests yet
 	NetworkThroughputEstimate estimate;
 	if (handle.TryGetNetworkThroughput(estimate)) {
 		external_file_cache.SetHostNetworkThroughput(path.path, estimate);

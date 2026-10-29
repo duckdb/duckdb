@@ -570,6 +570,15 @@ TEST_CASE("An estimate measured during a file's only read sizes the reads of the
 		remote_fs->TakeReads();
 		remote_fs->seekable = true;
 	}
+	SECTION("a positional read with the cache disabled") {
+		auto &cache = db_instance.GetExternalFileCache();
+		cache.SetEnabled(false);
+		auto first = cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()),
+		                          FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadSequential(*first, FILE_SIZE) == content);
+		REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+		cache.SetEnabled(true);
+	}
 
 	// The estimate measured during that read sizes the reads of the next file
 	auto second =
