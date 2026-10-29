@@ -11,11 +11,11 @@ Identifier GenerateInternalName(const char *prefix) {
 	return Identifier(prefix + UUID::ToString(UUID::GenerateRandomUUID()));
 }
 
-bool Identifier::StartsWith(std::string_view prefix) const {
+bool Identifier::StartsWith(const string &prefix) const {
 	return StringUtil::CIStartsWith(value, prefix);
 }
 
-bool Identifier::EndsWith(std::string_view suffix) const {
+bool Identifier::EndsWith(const string &suffix) const {
 	return StringUtil::CIEndsWith(value, suffix);
 }
 

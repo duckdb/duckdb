@@ -1801,7 +1801,7 @@ string_t CastFromUUIDToBlob::Operation(hugeint_t input, StringHeap &heap) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
-	return UUID::FromString(std::string_view(input.GetData(), input.GetSize()), result, parameters.strict);
+	return UUID::FromString(input, result, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//
