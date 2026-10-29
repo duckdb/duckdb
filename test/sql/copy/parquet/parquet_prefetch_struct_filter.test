@@ -1,0 +1,155 @@
+# name: test/sql/copy/parquet/parquet_prefetch_struct_filter.test
+# description: A filter on a struct field only counts the fields it reads towards the initial filter cost
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=1
+
+statement ok
+SET read_ahead_depth=1
+
+# s.login is cheap to read, s.url makes the whole struct expensive
+# the only match is in the second row group, and the min/max of s.login does not prune the first one
+statement ok
+COPY (
+    SELECT {'login': CASE WHEN i = 3000 THEN 'gharlan' WHEN i % 2 = 0 THEN 'aaa' ELSE 'zzz' END,
+            'url': md5(i::VARCHAR) || md5((i + 1)::VARCHAR)} AS s,
+        {'body': md5((i + 2)::VARCHAR) || md5((i + 3)::VARCHAR)} AS p,
+        md5((i + 4)::VARCHAR) || md5((i + 5)::VARCHAR) || md5((i + 6)::VARCHAR) || md5((i + 7)::VARCHAR) AS payload
+    FROM range(4096) t(i)
+) TO '{TEST_DIR}/struct_filter.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE)
+
+# the same data with login as a top-level column
+statement ok
+COPY (
+    SELECT s.login AS login, {'url': s.url} AS s, p, payload FROM read_parquet('{TEST_DIR}/struct_filter.parquet')
+) TO '{TEST_DIR}/flat_filter.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE)
+
+query III
+SELECT s.login, s.url = md5('3000') || md5('3001'), length(payload)
+FROM read_parquet('{TEST_DIR}/struct_filter.parquet') WHERE s.login = 'gharlan'
+----
+gharlan	true	128
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+statement ok
+SELECT bit_xor(hash(login, s, p, payload)) FROM read_parquet('{TEST_DIR}/flat_filter.parquet') WHERE login = 'gharlan'
+
+query ITT
+SELECT row_group_id, fully_filtered, strategy FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%flat_filter.parquet' ORDER BY row_group_id
+----
+0	true	prefetch_filters
+1	false	prefetch_filters
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# only s.login counts towards the filter cost, so the first row group is read filter first, like the flat column
+# struct columns are fetched with the other columns after the filter, including p
+statement ok
+SELECT bit_xor(hash(s, p, payload)) FROM read_parquet('{TEST_DIR}/struct_filter.parquet') WHERE s.login = 'gharlan'
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%struct_filter.parquet' ORDER BY row_group_id
+----
+0	true	prefetch_filters	[[s.login, s.url], [p.body, payload]]
+1	false	prefetch_filters	[[s.login, s.url], [p.body, payload]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# s.url is expensive, so the first row group is still read whole
+statement ok
+SELECT bit_xor(hash(s, p, payload)) FROM read_parquet('{TEST_DIR}/struct_filter.parquet')
+WHERE s.url NOT LIKE '%not-in-hex%'
+
+query ITT
+SELECT row_group_id, fully_filtered, strategy FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%struct_filter.parquet' ORDER BY row_group_id
+----
+0	false	whole_group
+1	false	whole_group
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# when columns are fetched before the filter, struct columns are still read only when needed
+# nothing matches, so p is never fetched in the first row group
+statement ok
+SELECT bit_xor(hash(p)) FROM read_parquet('{TEST_DIR}/struct_filter.parquet') WHERE s.login = 'mmm'
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%struct_filter.parquet' ORDER BY row_group_id
+----
+0	true	column_wise_eager	[[s.login]]
+1	true	prefetch_filters	[[s.login], [p.body]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# list and map columns are fetched with the other columns after the filter
+statement ok
+COPY (
+    SELECT CASE WHEN i = 3000 THEN 'hit' WHEN i % 2 = 0 THEN 'aaa' ELSE 'zzz' END AS k,
+        [md5(i::VARCHAR), md5((i + 1)::VARCHAR)] AS l,
+        MAP {'x': md5((i + 2)::VARCHAR) || md5((i + 3)::VARCHAR)} AS m,
+        md5((i + 4)::VARCHAR) || md5((i + 5)::VARCHAR) AS payload
+    FROM range(4096) t(i)
+) TO '{TEST_DIR}/nested_payload.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE)
+
+query T
+SELECT l[1] = md5('3000') AND m['x'] = md5('3002') || md5('3003')
+FROM read_parquet('{TEST_DIR}/nested_payload.parquet') WHERE k = 'hit'
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT bit_xor(hash(k, l, m, payload)) FROM read_parquet('{TEST_DIR}/nested_payload.parquet') WHERE k = 'hit'
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%nested_payload.parquet' ORDER BY row_group_id
+----
+0	true	prefetch_filters	[[k], [l.list.element, m.key_value.key, m.key_value.value, payload]]
+1	false	prefetch_filters	[[k], [l.list.element, m.key_value.key, m.key_value.value, payload]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# two fields of one unshredded variant read the same column chunks
+# the filter step already fetched them, so they are not fetched again after the filter
+statement ok
+COPY (
+    SELECT {'a': i % 100, 'b': (i % 10)::VARCHAR}::VARIANT AS v,
+        md5(i::VARCHAR) || md5((i + 1)::VARCHAR) || md5((i + 2)::VARCHAR) || md5((i + 3)::VARCHAR) AS payload
+    FROM range(4096) t(i)
+) TO '{TEST_DIR}/variant_filter.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE, SHREDDING {v: 'INTEGER'})
+
+query II
+SELECT count(*), count(*) FILTER (WHERE v.b::VARCHAR = '1' AND length(payload) = 128)
+FROM read_parquet('{TEST_DIR}/variant_filter.parquet') WHERE v.a::INT = 1
+----
+41	41
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%variant_filter.parquet' ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[v.metadata, v.value, v.typed_value], [payload]]
+1	false	whole_group	[[v.metadata, v.value, v.typed_value, payload]]
