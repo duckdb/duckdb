@@ -685,16 +685,6 @@ static void Skip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_coun
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch
-//===--------------------------------------------------------------------===//
-static void FetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	auto &compressed = GetCompressedState(segment);
-	Vector mantissa(LogicalType::BIGINT, 1);
-	compressed.inner.fetch_row(segment, state, row_id, mantissa, 0);
-	FormatMantissas(compressed.layout, mantissa, 1, result, result_idx);
-}
-
-//===--------------------------------------------------------------------===//
 // Segment info
 //===--------------------------------------------------------------------===//
 static InsertionOrderPreservingMap<string> GetSegmentInfo(QueryContext context, ColumnSegment &segment) {
@@ -727,7 +717,7 @@ CompressionFunction NumericStringCompressionFun::GetFunction(PhysicalType data_t
 	    CompressionType::COMPRESSION_NUMERIC_STRING, data_type, numeric_string::InitAnalyze, numeric_string::Analyze,
 	    numeric_string::FinalAnalyze, numeric_string::InitCompression, numeric_string::Compress,
 	    numeric_string::FinalizeCompress, numeric_string::InitScan, numeric_string::Scan, numeric_string::ScanPartial,
-	    numeric_string::FetchRow, numeric_string::Skip, numeric_string::InitSegment, nullptr, nullptr, nullptr, nullptr,
+	    numeric_string::Skip, numeric_string::InitSegment, nullptr, nullptr, nullptr, nullptr,
 	    numeric_string::SerializeState, numeric_string::DeserializeState);
 	function.get_segment_info = numeric_string::GetSegmentInfo;
 	return function;
