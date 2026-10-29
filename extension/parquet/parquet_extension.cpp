@@ -384,6 +384,15 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
+	auto &fallback_columns = bind_data->bloom_filter_fallback_columns;
+	if (std::find(fallback_columns.begin(), fallback_columns.end(), true) != fallback_columns.end()) {
+		if (!bind_data->enable_bloom_filters) {
+			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS cannot be combined with WRITE_BLOOM_FILTER false");
+		}
+		if (bind_data->encryption_config) {
+			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS is not supported for encrypted Parquet files");
+		}
+	}
 
 	return std::move(bind_data);
 }
