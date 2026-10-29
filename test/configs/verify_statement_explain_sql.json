@@ -114,6 +114,18 @@
       ]
     },
     {
+      "reason": "FIXME: the exact DECIMAL quantile parameter lives in the bind data while the bound child is a DOUBLE cast, so the rendered SQL rebinds a non-throwing DOUBLE-rank quantile",
+      "paths": [
+        "test/sql/aggregate/aggregates/quantile_fallible_decimal_param.test"
+      ]
+    },
+    {
+      "reason": "FIXME: name-bound sum_no_overflow delegates its binding to sum, so the rendered SQL rebinds the checked HUGEINT sum and no longer raises",
+      "paths": [
+        "test/sql/aggregate/aggregates/sum_no_overflow_fallible.test"
+      ]
+    },
+    {
       "reason": "FIXME: the rendered SQL keeps the input casts of a decimal multiplication, so the rebind multiplies DECIMAL(19,2) by DECIMAL(21,0) and gets a wide intermediate that carries no numeric statistics",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test"
