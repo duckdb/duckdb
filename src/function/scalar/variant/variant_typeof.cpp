@@ -62,7 +62,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
 			type_str = StringUtil::Format("ARRAY(%d)", nested_data.child_count);
 		}
-		result_data.WriteValue(string_t(type_str.data(), UnsafeNumericCast<uint32_t>(type_str.size())));
+		result_data.WriteValue(string_t(type_str.c_str()));
 	}
 }
 
