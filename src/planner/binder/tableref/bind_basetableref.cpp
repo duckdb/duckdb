@@ -236,6 +236,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// if we found a CTE that cannot be referenced that means that there is a circular reference
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
+			if (IsInRecursiveCTEAnchor(binding_alias)) {
+				throw BinderException(error_context,
+				                      "Recursive reference to CTE %s must not appear in its non-recursive term",
+				                      ref.Table());
+			}
 			throw BinderException(error_context,
 			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
