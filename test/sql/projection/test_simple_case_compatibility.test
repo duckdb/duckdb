@@ -1,0 +1,291 @@
+# name: test/sql/projection/test_simple_case_compatibility.test
+# description: CASE compatibility follows binding origins and only validates changed CASE sites
+# group: [projection]
+
+statement ok
+CREATE SEQUENCE correlated_case_seq
+
+# The CASE is bound in the aggregate's owning scope, outside the scalar subquery.
+statement error
+SELECT (SELECT sum(CASE WHEN i+nextval('correlated_case_seq')%2=0 THEN 1
+                       WHEN i+nextval('correlated_case_seq')%2=1 THEN 1 ELSE 0 END)) AS k
+FROM range(1) t(i) UNION ALL SELECT 1
+ORDER BY (SELECT sum(CASE i+nextval('correlated_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END)), k DESC
+----
+Referenced column "i" not found
+
+# A correlated aggregate with a scalar-subquery argument cannot be deduplicated.
+statement error
+SELECT CASE (SELECT sum(i + (SELECT nextval('correlated_case_seq')%2)))
+       WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END AS k
+FROM range(1) t(i) UNION ALL SELECT 1
+ORDER BY CASE WHEN (SELECT sum(i + (SELECT nextval('correlated_case_seq')%2)))=0 THEN 1
+              WHEN (SELECT sum(i + (SELECT nextval('correlated_case_seq')%2)))=1 THEN 1 ELSE 0 END
+----
+Referenced column "i" not found
+
+statement error
+SELECT (SELECT (SELECT sum(CASE WHEN i+nextval('correlated_case_seq')%2=0 THEN 1
+                               WHEN i+nextval('correlated_case_seq')%2=1 THEN 1 ELSE 0 END))) AS k
+FROM range(1) t(i) UNION ALL SELECT 1
+ORDER BY (SELECT (SELECT sum(CASE i+nextval('correlated_case_seq')%2
+                            WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END))), k DESC
+----
+Referenced column "i" not found
+
+statement ok
+CREATE SEQUENCE body_case_seq
+
+query I
+SELECT (SELECT CASE i WHEN 1 THEN nextval('body_case_seq') ELSE 0 END) AS k FROM range(3) t(i)
+GROUP BY (SELECT CASE WHEN i=1 THEN nextval('body_case_seq') ELSE 0 END) ORDER BY k
+----
+0
+1
+
+query I
+SELECT (SELECT CASE WHEN i=0 THEN 0 WHEN i=1 THEN 0 ELSE nextval('body_case_seq') END) AS k
+FROM range(3) t(i)
+GROUP BY (SELECT CASE i WHEN 0 THEN 0 WHEN 1 THEN 0 ELSE nextval('body_case_seq') END) ORDER BY k
+----
+0
+2
+
+query T
+SELECT list_transform([i], lambda x: CASE x WHEN 1 THEN nextval('body_case_seq') ELSE 0 END) AS k
+FROM range(3) t(i)
+GROUP BY list_transform([i], lambda x: CASE WHEN x=1 THEN nextval('body_case_seq') ELSE 0 END) ORDER BY k
+----
+[0]
+[3]
+
+query I
+SELECT currval('body_case_seq')
+----
+3
+
+statement ok
+CREATE SEQUENCE when_case_seq
+
+query T
+SELECT CASE x WHEN nextval('when_case_seq') THEN 'a' WHEN 99 THEN 'b' ELSE 'c' END AS k
+FROM range(3) t(x) GROUP BY x=nextval('when_case_seq'), x=99 ORDER BY k
+----
+c
+
+query I
+SELECT currval('when_case_seq')
+----
+3
+
+# Grouped comparison references retain their left-operand facts when exported.
+query T
+SELECT CASE WHEN x=nextval('when_case_seq') THEN 'a' WHEN x=99 THEN 'b' ELSE 'c' END AS k
+FROM range(3) t(x) GROUP BY x=nextval('when_case_seq'), x=99
+UNION ALL SELECT 'd'
+ORDER BY CASE x WHEN nextval('when_case_seq') THEN 'a' WHEN 99 THEN 'b' ELSE 'c' END
+----
+c
+d
+
+query I
+SELECT currval('when_case_seq')
+----
+6
+
+# Only the outer CASE changes spelling; the volatile inner CASE stays identical.
+statement ok
+CREATE SEQUENCE unchanged_case_seq
+
+query I
+SELECT CASE i WHEN 1 THEN CASE nextval('unchanged_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END ELSE 0 END AS k
+FROM range(3) t(i)
+GROUP BY CASE WHEN i=1 THEN CASE nextval('unchanged_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END ELSE 0 END
+ORDER BY k
+----
+0
+4
+
+query I
+SELECT currval('unchanged_case_seq')
+----
+1
+
+# Changing the inner CASE as well is unsafe.
+statement error
+SELECT CASE i WHEN 1 THEN CASE nextval('unchanged_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END ELSE 0 END AS k
+FROM range(3) t(i)
+GROUP BY CASE WHEN i=1 THEN CASE WHEN nextval('unchanged_case_seq')=-1 THEN 2
+                               WHEN nextval('unchanged_case_seq')=-2 THEN 3 ELSE 4 END ELSE 0 END
+----
+must appear in the GROUP BY clause
+
+# Replacement maps also compare by name, independently of traversal order.
+statement ok
+CREATE SEQUENCE star_arm_seq
+
+statement ok
+CREATE SEQUENCE star_operand_seq
+
+query I
+SELECT (SELECT a+b FROM (SELECT * REPLACE
+        (CASE i WHEN 1 THEN nextval('star_arm_seq') ELSE 0 END AS a,
+         CASE nextval('star_operand_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END AS b)
+        FROM (VALUES (0, 0)) q(a, b))) AS k
+FROM range(3) t(i)
+GROUP BY (SELECT a+b FROM (SELECT * REPLACE
+          (CASE nextval('star_operand_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END AS b,
+           CASE WHEN i=1 THEN nextval('star_arm_seq') ELSE 0 END AS a)
+          FROM (VALUES (0, 0)) q(a, b))) ORDER BY k
+----
+4
+5
+
+# The same rule applies when the unchanged inner CASE is searched.
+query I
+SELECT CASE WHEN i=1 THEN CASE WHEN nextval('unchanged_case_seq')=-1 THEN 2
+                              WHEN nextval('unchanged_case_seq')=-2 THEN 3 ELSE 4 END ELSE 0 END AS k
+FROM range(3) t(i)
+GROUP BY CASE i WHEN 1 THEN CASE WHEN nextval('unchanged_case_seq')=-1 THEN 2
+                               WHEN nextval('unchanged_case_seq')=-2 THEN 3 ELSE 4 END ELSE 0 END
+ORDER BY k
+----
+0
+4
+
+query I
+SELECT currval('unchanged_case_seq')
+----
+3
+
+# A user lambda reads its parameter repeatedly without re-evaluating its argument.
+statement ok
+CREATE SEQUENCE parameter_case_seq
+
+query T
+SELECT invoke(lambda x: CASE x%2 WHEN 0 THEN 'even' WHEN 1 THEN 'odd' ELSE 'other' END,
+              nextval('parameter_case_seq') + i*0) AS k
+FROM range(3) t(i)
+GROUP BY invoke(lambda x: CASE WHEN x%2=0 THEN 'even' WHEN x%2=1 THEN 'odd' ELSE 'other' END,
+                nextval('parameter_case_seq') + i*0) ORDER BY k
+----
+even
+odd
+
+query I
+SELECT currval('parameter_case_seq')
+----
+3
+
+# Internal invoke lowering must retain the volatility of the original operand.
+statement error
+SELECT list_transform([i], lambda x: CASE x+nextval('parameter_case_seq') WHEN 0 THEN 1 WHEN 1 THEN 2 ELSE 3 END)
+FROM range(3) t(i)
+GROUP BY list_transform([i], lambda x: CASE WHEN x+nextval('parameter_case_seq')=0 THEN 1
+                                          WHEN x+nextval('parameter_case_seq')=1 THEN 2 ELSE 3 END)
+----
+must appear in the GROUP BY clause
+
+# Several projections can have the same normalized key, but only one safe match.
+statement ok
+CREATE SEQUENCE candidate_case_seq
+
+query II
+SELECT CASE i WHEN 1 THEN CASE nextval('candidate_case_seq')*0 WHEN 0 THEN 4 WHEN 1 THEN 5 ELSE 6 END ELSE 0 END AS a,
+       CASE i WHEN 1 THEN CASE WHEN nextval('candidate_case_seq')*0=0 THEN 4
+                              WHEN nextval('candidate_case_seq')*0=1 THEN 5 ELSE 6 END ELSE 0 END AS b
+FROM range(2) t(i) UNION ALL SELECT 7, 8
+ORDER BY CASE WHEN i=1 THEN CASE nextval('candidate_case_seq')*0 WHEN 0 THEN 4 WHEN 1 THEN 5 ELSE 6 END ELSE 0 END
+----
+0	0
+4	4
+7	8
+
+query I
+SELECT currval('candidate_case_seq')
+----
+2
+
+# A compatible group reference must transfer facts to the exported projection key.
+query I
+SELECT (SELECT CASE i WHEN 1 THEN nextval('body_case_seq') ELSE 0 END) AS k FROM range(3) t(i)
+GROUP BY (SELECT CASE WHEN i=1 THEN nextval('body_case_seq') ELSE 0 END)
+UNION ALL SELECT 5
+ORDER BY (SELECT CASE WHEN i=1 THEN nextval('body_case_seq') ELSE 0 END)
+----
+0
+4
+5
+
+query I
+SELECT currval('body_case_seq')
+----
+4
+
+# Inferred groups publish the same facts before HAVING.
+query TI
+SELECT list_transform([i], lambda x: CASE x WHEN 1 THEN nextval('body_case_seq') ELSE 0 END) AS k, count(*)
+FROM range(3) t(i) GROUP BY ALL
+HAVING list_transform([i], lambda x: CASE WHEN x=1 THEN nextval('body_case_seq') ELSE 0 END) <> [-1] ORDER BY k
+----
+[0]	2
+[5]	1
+
+query I
+SELECT currval('body_case_seq')
+----
+5
+
+# Rebinding prepares fresh facts instead of retaining a previous binding's state.
+statement ok
+PREPARE prepared_case AS
+SELECT (SELECT CASE i WHEN $1::BIGINT THEN nextval('body_case_seq') ELSE 0 END) AS k FROM range(3) t(i)
+GROUP BY (SELECT CASE WHEN i=$1::BIGINT THEN nextval('body_case_seq') ELSE 0 END) ORDER BY k
+
+query I
+EXECUTE prepared_case(1)
+----
+0
+6
+
+query I
+EXECUTE prepared_case(2)
+----
+0
+7
+
+query I
+SELECT currval('body_case_seq')
+----
+7
+
+# CTE equality ignores declaration order; CASE sites must still align by name.
+statement ok
+CREATE SEQUENCE cte_case_seq
+
+statement ok
+CREATE SEQUENCE cte_arm_seq
+
+query I
+SELECT (WITH a AS (SELECT CASE i WHEN 1 THEN nextval('cte_arm_seq') ELSE 0 END AS k),
+             b AS (SELECT CASE nextval('cte_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END AS k)
+        SELECT a.k + b.k FROM a, b) AS k
+FROM range(3) t(i)
+GROUP BY (WITH b AS (SELECT CASE nextval('cte_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END AS k),
+               a AS (SELECT CASE WHEN i=1 THEN nextval('cte_arm_seq') ELSE 0 END AS k)
+          SELECT a.k + b.k FROM a, b) ORDER BY k
+----
+4
+5
+
+statement error
+SELECT (WITH a AS (SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS k),
+             b AS (SELECT CASE nextval('cte_case_seq') WHEN -1 THEN 2 WHEN -2 THEN 3 ELSE 4 END AS k)
+        SELECT a.k + b.k FROM a, b) AS k
+FROM range(3) t(i)
+GROUP BY (WITH b AS (SELECT CASE WHEN nextval('cte_case_seq')=-1 THEN 2
+                               WHEN nextval('cte_case_seq')=-2 THEN 3 ELSE 4 END AS k),
+               a AS (SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS k)
+          SELECT a.k + b.k FROM a, b)
+----
+must appear in the GROUP BY clause
