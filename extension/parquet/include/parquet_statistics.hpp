@@ -116,7 +116,7 @@ public:
 	                                                shared_ptr<ParquetBloomFilterMemory> memory);
 	void FilterInsert(uint64_t x);
 	bool FilterCheck(uint64_t x);
-	void Shrink(idx_t new_block_count);
+	void Shrink(Allocator &allocator, idx_t new_block_count);
 	void FoldToTarget(Allocator &allocator, double target);
 	double OneRatio();
 	ResizeableBuffer *Get();

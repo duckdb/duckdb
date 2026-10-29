@@ -1268,7 +1268,7 @@ unique_ptr<ParquetBloomFilter> ParquetBloomFilter::TryCreate(Allocator &allocato
 		return nullptr;
 	}
 	// Reserve scratch space as well, so concurrent compaction stays within the budget.
-	const auto reservation = size.GetIndex() * 2;
+	const auto reservation = size.GetIndex() + size.GetIndex() / 2;
 	if (!memory->TryReserve(reservation)) {
 		return nullptr;
 	}
@@ -1328,23 +1328,24 @@ double ParquetBloomFilter::OneRatio() {
 	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
 }
 
-void ParquetBloomFilter::Shrink(idx_t new_block_count) {
+void ParquetBloomFilter::Shrink(Allocator &allocator, idx_t new_block_count) {
 	if (!new_block_count || new_block_count > block_count || block_count % new_block_count != 0) {
 		throw InvalidInputException("Bloom filter folding requires a nonzero divisor of the block count");
 	}
-	array_ptr<ParquetBloomBlock> blocks(reinterpret_cast<ParquetBloomBlock *>(data->ptr), block_count);
+	auto folded = AllocateBloomFilter(allocator, new_block_count * sizeof(ParquetBloomBlock));
+	array_ptr<ParquetBloomBlock> source(reinterpret_cast<ParquetBloomBlock *>(data->ptr), block_count);
+	array_ptr<ParquetBloomBlock> target(reinterpret_cast<ParquetBloomBlock *>(folded->ptr), new_block_count);
 	const auto factor = block_count / new_block_count;
 	for (idx_t i = 0; i < new_block_count; i++) {
-		auto merged = blocks[i * factor];
-		for (idx_t j = 1; j < factor; j++) {
+		auto &merged = target[i];
+		for (idx_t j = i * factor; j < (i + 1) * factor; j++) {
 			for (idx_t word = 0; word < 8; word++) {
-				merged.block[word] |= blocks[i * factor + j].block[word];
+				merged.block[word] |= source[j].block[word];
 			}
 		}
-		blocks[i] = merged;
 	}
+	data = std::move(folded);
 	block_count = new_block_count;
-	data->len = block_count * sizeof(ParquetBloomBlock);
 }
 
 void ParquetBloomFilter::FoldToTarget(Allocator &allocator, double target) {
@@ -1359,10 +1360,7 @@ void ParquetBloomFilter::FoldToTarget(Allocator &allocator, double target) {
 		new_block_count /= 2;
 	}
 	if (new_block_count < block_count) {
-		Shrink(new_block_count);
-		auto compact = make_uniq<ResizeableBuffer>(allocator, data->len);
-		memcpy(compact->ptr, data->ptr, data->len);
-		data = std::move(compact);
+		Shrink(allocator, new_block_count);
 	}
 	if (memory) {
 		memory->Release(reserved_bytes - data->len);
