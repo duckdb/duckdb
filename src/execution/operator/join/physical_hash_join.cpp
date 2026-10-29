@@ -1765,14 +1765,26 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 		float selectivity_threshold;
 		idx_t n_vectors_to_check;
 		GetThresholdAndVectorsToCheck(filter_type, selectivity_threshold, n_vectors_to_check);
+		// below a secure view that may hide rows the filter is checked on every row: whether it stays active is
+		// measured over the rows the view hides too
+		const auto always_active = deferred.column.crossed_secure_view;
+		if (always_active) {
+			n_vectors_to_check = 0;
+		}
 		auto filter_expr =
 		    CreateRuntimeFilterExpression(context, ht, deferred, selectivity_threshold, n_vectors_to_check);
 		if (!filter_expr) {
 			continue;
 		}
-		deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
-		                                     CreateSelectivityOptionalExpressionFilter(
-		                                         std::move(filter_expr), deferred.column.storage_type, filter_type));
+		if (always_active) {
+			deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
+			                                     make_uniq<ExpressionFilter>(std::move(filter_expr)));
+		} else {
+			deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
+			                                     CreateSelectivityOptionalExpressionFilter(std::move(filter_expr),
+			                                                                               deferred.column.storage_type,
+			                                                                               filter_type));
+		}
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *deferred.op, "PhysicalHashJoin", "PublishRuntimeFilter",
 		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
 		            {"storage_type", deferred.column.storage_type.ToString()},
@@ -1999,9 +2011,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto condition_type = min_val.type();
 			auto runtime_filter_input_type =
 			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
-			// bloom and prefix-range filters are selectivity-optional, so they are not used below a secure view
-			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-			                                !pushdown_column.crossed_secure_view;
+			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
 			}
@@ -2032,7 +2042,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
-				// an IN filter is only cheap as an optional filter, so it is not used below a secure view
+				// an IN filter is only cheap as an optional filter, so it is not used below a secure view that may hide
+				// rows; the prefix-range and bloom filters, which are checked on every row there, take its place
 				if (!pushdown_column.crossed_secure_view && CanUseInFilter(context, ht, cmp)) {
 					pushed_in_filter =
 					    PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
