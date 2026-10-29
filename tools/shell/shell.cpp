@@ -3766,6 +3766,11 @@ void ShellState::DetectDarkLightMode() {
 		// highlight mode is specified by the user - avoid setting manually
 		return;
 	}
+	auto no_color = getenv("NO_COLOR");
+	if (no_color && no_color[0]) {
+		// colors are not wanted - don't query the terminal
+		return;
+	}
 	if (!stdout_is_console) {
 		// not printing to console - don't auto-detect
 		return;
@@ -3959,7 +3964,17 @@ int RunShell(int argc, const char **argv) {
 		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
-	data.DetectDarkLightMode();
+	// Version output does not use highlighting and exits before subsequent options run.
+	bool version_only = false;
+	for (auto &call : command_line_calls) {
+		if (call.option.post_init_callback) {
+			version_only = StringUtil::Equals(call.option.option, "version");
+			break;
+		}
+	}
+	if (!version_only) {
+		data.DetectDarkLightMode();
+	}
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization

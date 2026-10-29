@@ -74,19 +74,16 @@ def test_deprecated_highlight_constant(shell):
     result.check_stderr(".constant has been split into numeric_constant and string_constant")
     result.check_stderr(".highlight_colors numeric_constant brightred and .highlight_colors string_constant brightred")
 
-@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
-@pytest.mark.parametrize("arguments", [
-    ['-version'],
-    ['-help'],
-    ['-json', '-c', 'SELECT 42'],
-    ['-dark-mode', '-manual', 'list_contains'],
-])
-def test_unanswered_color_probe_does_not_stall(shell, arguments):
+def run_terminal(shell, arguments, environment, response=None):
+    import fcntl
     import pty
+    import select
+    import struct
+    import termios
     import time
 
-    # nothing answers the background color query on this pseudo-terminal
     master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
     start = time.monotonic()
     try:
         process = subprocess.Popen(
@@ -94,72 +91,102 @@ def test_unanswered_color_probe_does_not_stall(shell, arguments):
             stdin=slave,
             stdout=slave,
             stderr=slave,
-            env=ShellTest(shell).get_environment(),
+            env=environment,
         )
     finally:
         os.close(slave)
     output = bytearray()
-    while True:
-        try:
-            chunk = os.read(master, 4096)
-        except OSError:
-            break
-        if not chunk:
-            break
-        output.extend(chunk)
-    os.close(master)
-    assert process.wait(timeout=30) == 0, output.decode('utf8', 'replace')
-    assert b'Timeout trying to read terminal background color' not in output
-    assert time.monotonic() - start < 4
-
-@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
-@pytest.mark.parametrize("events", [
-    # the terminal answers the color query after the probe gave up
-    [(1.0, b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c')],
-    # ALT+] starts like an OSC reply, but the keys typed after it must be kept
-    [(0.0, b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'), (0.5, b'\x1b]')],
-])
-def test_terminal_reply_is_not_typed(shell, tmp_path, events):
-    import pty
-    import re
-    import select
-    import time
-
-    query = (events[-1][0] + 0.5, b"SELECT 'typed_ok' AS r;\r")
-    events = events + [query, (query[0] + 1.5, b'.exit\r')]
-    env = ShellTest(shell).get_environment()
-    env['DUCKDB_HISTORY'] = str(tmp_path / 'history')
-    master, slave = pty.openpty()
+    reply_at = None
     try:
-        process = subprocess.Popen([shell, '-no-init'], stdin=slave, stdout=slave, stderr=slave, env=env)
-    finally:
-        os.close(slave)
-    output = bytearray()
-    probe_time = None
-    deadline = time.monotonic() + 30
-    try:
-        while process.poll() is None and time.monotonic() < deadline:
+        while time.monotonic() - start < 15:
             if select.select([master], [], [], 0.05)[0]:
                 try:
-                    chunk = os.read(master, 65536)
+                    chunk = os.read(master, 4096)
                 except OSError:
                     break
+                if not chunk:
+                    break
                 output.extend(chunk)
-                # answer cursor position queries like a terminal emulator
-                for _ in range(chunk.count(b'\x1b[6n')):
-                    os.write(master, b'\x1b[1;1R')
-            if probe_time is None and b'\x1b]11;?' in output:
-                probe_time = time.monotonic()
-            while probe_time is not None and events and time.monotonic() - probe_time >= events[0][0]:
-                os.write(master, events.pop(0)[1])
+            if response and reply_at is None and b'\x1b]11;?' in output:
+                reply_at = time.monotonic() + 0.8
+            if reply_at and time.monotonic() >= reply_at:
+                os.write(master, response)
+                response = None
+                reply_at = None
+            if process.poll() is not None and not select.select([master], [], [], 0)[0]:
+                break
+        try:
+            status = process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            pytest.fail('shell did not exit')
+        return status, bytes(output), time.monotonic() - start
     finally:
         if process.poll() is None:
             process.kill()
         process.wait()
         os.close(master)
-    text = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07', '', output.decode('utf8', 'replace'))
-    assert process.returncode == 0, text
-    assert '│ typed_ok │' in text, text
-    assert 'Error' not in text, text
+
+def terminal_environment(shell, term='xterm-256color', no_color=None):
+    env = ShellTest(shell).get_environment()
+    env.pop('NO_COLOR', None)
+    env.pop('TERM', None)
+    if term is not None:
+        env['TERM'] = term
+    if no_color is not None:
+        env['NO_COLOR'] = no_color
+    return env
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+@pytest.mark.parametrize("term, no_color, arguments", [
+    (None, '1', ['-version']),
+    (None, '1', ['-json', '-c', 'SELECT 42']),
+    (None, '1', ['-agent', '-c', 'SELECT 42']),
+    (None, '1', ['-dark-mode', '-manual', 'list_contains']),
+    (None, '1', ['-dark-mode', '-version']),
+    (None, None, ['-c', 'SELECT 42']),
+    (None, None, ['-help']),
+    ('', None, ['-c', 'SELECT 42']),
+    ('xterm-256color', '1', ['-c', 'SELECT 42']),
+    ('dumb', None, ['-help']),
+    ('dumb', None, ['-c', 'SELECT 42']),
+    ('xterm-256color', None, ['-version']),
+    ('xterm-256color', None, ['-light-mode', '-manual', 'list_contains']),
+])
+def test_unneeded_color_probe_is_skipped(shell, term, no_color, arguments):
+    env = terminal_environment(shell, term, no_color)
+    status, output, elapsed = run_terminal(shell, arguments, env)
+    assert status == 0, output
+    assert b'\x1b]11;?' not in output
+    assert b'Timeout trying to read terminal background color' not in output
+    assert elapsed < 4
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+def test_command_color_probe_waits_for_terminal(shell):
+    env = terminal_environment(shell)
+    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
+    status, output, elapsed = run_terminal(shell, ['-c', 'SELECT missing_column'], env, response)
+    assert status != 0, output
+    assert b'\x1b]11;?' in output
+    assert elapsed >= 0.8
+    assert b'Timeout trying to read terminal background color' not in output
+    assert b'\x1b[38;5;124m' in output  # light-mode error color
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+def test_help_detects_terminal_colors(shell):
+    env = terminal_environment(shell)
+    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
+    status, output, _ = run_terminal(shell, ['-help'], env, response)
+    assert status == 0, output
+    assert b'\x1b]11;?' in output
+    assert b'\x1b[38;5;27m' in output  # light-mode keyword color
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+def test_empty_no_color_keeps_detection(shell):
+    env = terminal_environment(shell, no_color='')
+    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
+    status, output, _ = run_terminal(shell, ['-c', 'SELECT missing_column'], env, response)
+    assert status != 0, output
+    assert b'\x1b]11;?' in output
+    assert b'\x1b[38;5;124m' in output
 
 # fmt: on

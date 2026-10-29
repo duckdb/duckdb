@@ -456,6 +456,11 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	color.b = 0;
 	return true;
 #else
+	auto term = getenv("TERM");
+	if (!term || !term[0] || IsUnsupportedTerm()) {
+		// no terminal emulator that can answer the query
+		return false;
+	}
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
 	if (!isatty(ifd)) {
@@ -487,14 +492,9 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		bool found_da1 = false;
 		idx_t da1_start = 0;
 		while (true) {
-			// a terminal emulator answers DA1 quickly - if nothing arrives there is no emulator (e.g. a bare PTY)
-			idx_t timeout_micros = buf.empty() ? 500000 : 5000000;
-			if (!HasMoreData(ifd, timeout_micros)) {
-				if (buf.empty()) {
-					// no response at all - fall back to the default colors without a warning
-					break;
-				}
-				// the terminal started answering but did not finish within 5s
+			// wait up until 5s
+			if (!HasMoreData(ifd, 5000000)) {
+				// we didn't get data for 5s...
 				fprintf(stderr, "Timeout trying to read terminal background color (> 5s elapsed).\n");
 				fprintf(
 				    stderr,
@@ -754,29 +754,11 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd, KeyPress &key_press) {
 	return EscapeSequence::UNKNOWN;
 }
 
-//! Consume the rest of a terminal reply (e.g. a late answer to the background color query) so it is not typed
-//! A reply arrives in one burst - stopping at the first pause means key presses (e.g. after ALT+]) are kept
-static void ConsumeTerminalReply(int ifd, bool osc) {
-	for (idx_t i = 0; i < 256 && Terminal::HasMoreData(ifd, 10000); i++) {
-		char c;
-		if (read(ifd, &c, 1) != 1) {
-			return;
-		}
-		if (osc ? (c == '\a' || c == '\\') : (c >= 0x40 && c <= 0x7E)) {
-			return;
-		}
-	}
-}
-
 idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
 	if (read(ifd, seq, 1) == -1) {
 		return 0;
 	}
 	switch (seq[0]) {
-	case ']':
-		// OSC reply - terminated by BEL or ST (ESC \)
-		ConsumeTerminalReply(ifd, true);
-		return 1;
 	case 'O':
 	case '[':
 		// these characters have multiple bytes following them
@@ -789,11 +771,6 @@ idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
 	}
 
 	if (seq[0] != '[') {
-		return 2;
-	}
-	if (seq[1] == '?') {
-		// private CSI reply (e.g. DA1 "ESC [ ? 62 c") - terminated by a final byte
-		ConsumeTerminalReply(ifd, false);
 		return 2;
 	}
 	if (seq[1] == 'M') {
