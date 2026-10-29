@@ -58,7 +58,7 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	for (auto &select_expr : select_list) {
 		auto &expr = select_expr.expression;
 		idx_t index = reorder_idx[select_expr.index];
-		if (!select_expr.is_volatile) {
+		if (select_expr.case_compatible) {
 			bind_state.case_projection_map.Add(*expr, index, true);
 		}
 		// now check if the node is already in the set of expressions
@@ -268,7 +268,7 @@ static bool SetOpNeedsOrderWrap(const SetOperationNode &statement, OrderBinder &
 				continue;
 			}
 			auto expression = order.expression->Copy();
-			if (!binder.TryGetExpressionReference(expression).IsValid()) {
+			if (!binder.TryGetExpressionReference(expression, OrderBinder::LookupMode::SPECULATIVE).IsValid()) {
 				return true;
 			}
 		}

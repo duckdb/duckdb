@@ -116,3 +116,52 @@ SELECT (SELECT CASE x + random() WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END) F
 GROUP BY (SELECT CASE WHEN x + random()=1 THEN 'a' WHEN x + random()=2 THEN 'b' ELSE 'c' END)
 ----
 must appear in the GROUP BY clause
+
+# Inferred group keys must be available to HAVING in either CASE spelling.
+query TI
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(i)
+GROUP BY ALL HAVING CASE WHEN i=1 THEN 'a' ELSE 'b' END <> 'z' ORDER BY k
+----
+a	1
+b	2
+
+query TI
+SELECT CASE WHEN i=1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(i)
+GROUP BY ALL HAVING CASE i WHEN 1 THEN 'a' ELSE 'b' END <> 'z' ORDER BY k
+----
+a	1
+b	2
+
+query II
+SELECT 10 + CASE i WHEN 1 THEN 1 ELSE 0 END AS k, count(*) FROM range(3) t(i)
+GROUP BY ALL HAVING 10 + CASE WHEN i=1 THEN 1 ELSE 0 END > 0 ORDER BY k
+----
+10	2
+11	1
+
+query TI
+SELECT (SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END) AS k, count(*) FROM range(3) t(i)
+GROUP BY ALL HAVING (SELECT CASE WHEN i=1 THEN 'a' ELSE 'b' END) <> 'z' ORDER BY k
+----
+a	1
+b	2
+
+query TI
+SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END COLLATE nocase AS k, count(*) FROM range(3) t(i)
+GROUP BY ALL HAVING CASE WHEN i=1 THEN 'a' ELSE 'b' END COLLATE nocase <> 'z' ORDER BY k
+----
+a	1
+b	2
+
+# Volatile inferred groups do not supply compatibility keys for HAVING.
+statement ok
+CREATE SEQUENCE all_case_volatile_seq
+
+query TI
+SELECT CASE i + nextval('all_case_volatile_seq') * 0 WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*)
+FROM range(3) t(i) GROUP BY ALL
+HAVING CASE WHEN i + nextval('all_case_volatile_seq') * 0=1 THEN 'a' ELSE 'b' END <> 'z' ORDER BY k
+----
+a	1
+b	1
+b	1

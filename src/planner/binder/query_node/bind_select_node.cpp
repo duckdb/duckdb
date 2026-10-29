@@ -636,9 +636,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
-			if (!bound_expr->IsVolatile()) {
-				bind_state.AddCaseGroup(*bind_state.unbound_groups[i], ProjectionIndex(i));
-			}
+			bind_state.RegisterCaseGroup(*bind_state.unbound_groups[i], ProjectionIndex(i), !bound_expr->IsVolatile());
 
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression
@@ -697,6 +695,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// where the flag would have no consumer, so such items bind as plain subqueries
 		select_binder.SetTransportTryErrors(i == 0 && IsBindingTrySubquery() &&
 		                                    statement.aggregate_handling != AggregateHandling::FORCE_AGGREGATES);
+		select_binder.ResetGroupReferences();
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		select_binder.SetTransportTryErrors(false);
 		bool is_original_column = i < result.column_count;
@@ -718,14 +717,19 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of an empty struct is not supported");
 			}
 
+			bool case_compatible = !select_binder.HasUnsafeGroupReference();
 			for (auto &struct_expr : struct_expressions) {
 				if (struct_expr->IsVolatile()) {
 					bind_state.SetExpressionIsVolatile(i);
+					case_compatible = false;
 				}
 				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
 				internal_sql_types.push_back(struct_expr->GetReturnType());
 				result.select_list.push_back(std::move(struct_expr));
+			}
+			if (case_compatible) {
+				bind_state.SetExpressionIsCaseCompatible(i);
 			}
 			bind_state.AddExpandedColumn(struct_expressions.size());
 			continue;
@@ -733,6 +737,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 		if (expr->IsVolatile()) {
 			bind_state.SetExpressionIsVolatile(i);
+		} else if (!select_binder.HasUnsafeGroupReference()) {
+			bind_state.SetExpressionIsCaseCompatible(i);
 		}
 		if (expr->HasSubquery()) {
 			bind_state.SetExpressionHasSubquery(i);
@@ -806,6 +812,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	for (auto &entry : group_by_all_groups) {
 		auto group_copy = bind_state.original_expressions[entry.first]->Copy();
 		bind_state.group_map[*group_copy] = entry.second;
+		bind_state.RegisterCaseGroup(*group_copy, entry.second, bind_state.ExpressionIsCaseCompatible(entry.first));
 		bind_state.unbound_groups.push_back(std::move(group_copy));
 	}
 
@@ -880,7 +887,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			continue;
 		}
 		result_statement.extra_info.original_expressions.push_back(
-		    {std::move(bind_state.original_expressions[i]), index, bind_state.ExpressionIsVolatile(i)});
+		    {std::move(bind_state.original_expressions[i]), index, bind_state.ExpressionIsCaseCompatible(i)});
 	}
 	return result_statement;
 }

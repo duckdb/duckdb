@@ -137,9 +137,16 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	return std::move(result);
 }
 
-optional_idx OrderBinder::TryGetExpressionReference(unique_ptr<ParsedExpression> &expr) const {
-	for (auto &binder : binders) {
-		ExpressionBinder::QualifyColumnNames(binder.get(), expr);
+optional_idx OrderBinder::TryGetExpressionReference(unique_ptr<ParsedExpression> &expr, LookupMode mode) const {
+	try {
+		for (auto &binder : binders) {
+			ExpressionBinder::QualifyColumnNames(binder.get(), expr);
+		}
+	} catch (const std::exception &ex) {
+		if (mode != LookupMode::SPECULATIVE || ErrorData(ex).Type() != ExceptionType::BINDER) {
+			throw;
+		}
+		return optional_idx();
 	}
 	auto entry = bind_state.projection_map.find(*expr);
 	optional_ptr<const idx_t> index = entry == bind_state.projection_map.end() ? nullptr : &entry->second;

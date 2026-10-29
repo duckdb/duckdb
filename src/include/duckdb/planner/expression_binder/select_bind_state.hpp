@@ -47,15 +47,17 @@ struct SelectBindState {
 
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);
-	//! Match simple and searched CASE spellings only for already-bound nonvolatile groups.
-	void AddCaseGroup(const ParsedExpression &expr, ProjectionIndex index);
+	//! Record source safety before replacing a group expression with a reference.
+	void RegisterCaseGroup(const ParsedExpression &expr, ProjectionIndex index, bool case_compatible);
+	bool GroupIsCaseCompatible(ProjectionIndex index) const;
 	ProjectionIndex TryBindCaseGroup(const ParsedExpression &expr) const;
 
 	void SetExpressionIsVolatile(idx_t index);
 	void SetExpressionHasSubquery(idx_t index);
 
 	bool AliasHasSubquery(idx_t index) const;
-	bool ExpressionIsVolatile(idx_t index) const;
+	void SetExpressionIsCaseCompatible(idx_t index);
+	bool ExpressionIsCaseCompatible(idx_t index) const;
 
 	void AddExpandedColumn(idx_t expand_count);
 	void AddRegularColumn();
@@ -63,6 +65,8 @@ public:
 
 private:
 	CaseExpressionMap case_group_map;
+	unordered_set<ProjectionIndex> case_compatible_groups;
+	unordered_set<idx_t> case_compatible_expressions;
 	//! The set of referenced aliases
 	unordered_set<idx_t> referenced_aliases;
 	//! The set of expressions that is volatile

@@ -22,11 +22,11 @@ struct BoundStatement;
 class ParsedExpression;
 class Binder;
 
-//! A parsed projection and its final position and volatility after binding.
+//! A parsed projection and its final position and CASE compatibility after binding.
 struct SelectExpressionInfo {
 	unique_ptr<ParsedExpression> expression;
 	idx_t index;
-	bool is_volatile;
+	bool case_compatible;
 };
 
 struct ExtraBoundInfo {

@@ -32,6 +32,12 @@ public:
 		this->bound_aggregate = false;
 		this->bound_columns.clear();
 	}
+	void ResetGroupReferences() {
+		bound_unsafe_group = false;
+	}
+	bool HasUnsafeGroupReference() const {
+		return bound_unsafe_group;
+	}
 
 	static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps);
 
@@ -60,6 +66,7 @@ protected:
 	bool inside_aggregate = false;
 	bool bound_aggregate = false;
 	bool inside_aggregate_filter = false;
+	bool bound_unsafe_group = false;
 
 	BoundSelectNode &node;
 };

@@ -33,8 +33,15 @@ optional_ptr<const idx_t> CaseExpressionMap::Find(const ParsedExpression &expr) 
 	return entry == entries.end() ? nullptr : &entry->second;
 }
 
-void SelectBindState::AddCaseGroup(const ParsedExpression &expr, ProjectionIndex index) {
-	case_group_map.Add(expr, index);
+void SelectBindState::RegisterCaseGroup(const ParsedExpression &expr, ProjectionIndex index, bool case_compatible) {
+	if (case_compatible) {
+		case_compatible_groups.insert(index);
+		case_group_map.Add(expr, index);
+	}
+}
+
+bool SelectBindState::GroupIsCaseCompatible(ProjectionIndex index) const {
+	return case_compatible_groups.find(index) != case_compatible_groups.end();
 }
 
 ProjectionIndex SelectBindState::TryBindCaseGroup(const ParsedExpression &expr) const {
@@ -42,8 +49,12 @@ ProjectionIndex SelectBindState::TryBindCaseGroup(const ParsedExpression &expr) 
 	return index ? ProjectionIndex(*index) : ProjectionIndex();
 }
 
-bool SelectBindState::ExpressionIsVolatile(idx_t index) const {
-	return volatile_expressions.find(index) != volatile_expressions.end();
+void SelectBindState::SetExpressionIsCaseCompatible(idx_t index) {
+	case_compatible_expressions.insert(index);
+}
+
+bool SelectBindState::ExpressionIsCaseCompatible(idx_t index) const {
+	return case_compatible_expressions.find(index) != case_compatible_expressions.end();
 }
 
 unique_ptr<ParsedExpression> SelectBindState::BindAlias(idx_t index) {

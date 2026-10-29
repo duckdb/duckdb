@@ -138,3 +138,156 @@ query II
 SELECT 2 AS k, 20 AS k UNION ALL SELECT 1, 10 ORDER BY k + 0, k_1 LIMIT 1
 ----
 1	10
+
+# An ambiguous input name may still name an unambiguous set-operation output.
+query I
+SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY x + 0
+----
+2
+3
+
+query I
+SELECT a.x + 0 FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY a.x + 0
+----
+2
+3
+
+statement error
+SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY missing + 0
+----
+Referenced column "missing" not found
+
+# Strict binding still reports input ambiguity.
+statement error
+SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) ORDER BY x + 0
+----
+Ambiguous reference to column name "x"
+
+# Projection-map ambiguity is not a failed qualification probe.
+statement error
+SELECT i + 0 AS a, 9 AS b FROM range(3) t(i)
+UNION ALL SELECT 9, i + 0 FROM range(3) t(i) ORDER BY i + 0
+----
+Ambiguous reference to column
+
+# Grouping a volatile source does not make its CASE spelling interchangeable.
+# UNION branches can interleave sequence calls, but k must be ordered descending.
+statement ok
+CREATE SEQUENCE grouped_order_seq
+
+query I
+SELECT list(k) IN ([1, 0], [1, 1]) FROM (
+SELECT CASE WHEN nextval('grouped_order_seq')%2=0 THEN 1 WHEN nextval('grouped_order_seq')%2=1 THEN 1 ELSE 0 END AS k
+GROUP BY k UNION ALL SELECT 1
+ORDER BY CASE nextval('grouped_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END, k DESC
+) ordered
+----
+true
+
+query I
+SELECT currval('grouped_order_seq') BETWEEN 3 AND 4
+----
+true
+
+statement ok
+CREATE SEQUENCE ordinal_order_seq
+
+query I
+SELECT list(k) IN ([1, 0], [1, 1]) FROM (
+SELECT CASE WHEN nextval('ordinal_order_seq')%2=0 THEN 1 WHEN nextval('ordinal_order_seq')%2=1 THEN 1 ELSE 0 END AS k
+GROUP BY 1 UNION ALL SELECT 1
+ORDER BY CASE nextval('ordinal_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END, k DESC
+) ordered
+----
+true
+
+query I
+SELECT currval('ordinal_order_seq') BETWEEN 3 AND 4
+----
+true
+
+# A group substitution inside a larger expression also carries its source safety.
+statement ok
+CREATE SEQUENCE nested_order_seq
+
+query I
+SELECT list(k) IN ([11, 10], [11, 11]) FROM (
+SELECT 10 + CASE WHEN nextval('nested_order_seq')%2=0 THEN 1 WHEN nextval('nested_order_seq')%2=1 THEN 1 ELSE 0 END AS k
+GROUP BY CASE WHEN nextval('nested_order_seq')%2=0 THEN 1 WHEN nextval('nested_order_seq')%2=1 THEN 1 ELSE 0 END
+UNION ALL SELECT 11
+ORDER BY 10 + CASE nextval('nested_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END, k DESC
+) ordered
+----
+true
+
+query I
+SELECT currval('nested_order_seq') BETWEEN 3 AND 4
+----
+true
+
+# Collated groups may be returned through an aggregate reference.
+statement ok
+CREATE SEQUENCE collated_order_seq
+
+query T
+SELECT CASE WHEN nextval('collated_order_seq')*0=0 THEN 'b' WHEN nextval('collated_order_seq')*0=1 THEN 'b' ELSE 'a' END COLLATE nocase AS k
+GROUP BY k UNION ALL SELECT 'a'
+ORDER BY CASE nextval('collated_order_seq')*0 WHEN 0 THEN 'b' WHEN 1 THEN 'b' ELSE 'a' END COLLATE nocase, k DESC
+----
+b
+a
+
+query I
+SELECT currval('collated_order_seq')
+----
+4
+
+# Unsafe group references do not contaminate the next projection's compatibility.
+statement ok
+CREATE SEQUENCE separate_order_seq
+
+query II
+SELECT nextval('separate_order_seq') AS v, CASE i WHEN 1 THEN 10 ELSE 20 END AS k FROM range(2) t(i)
+GROUP BY v, k UNION ALL SELECT 3, 30
+ORDER BY CASE WHEN i=1 THEN 10 ELSE 20 END
+----
+2	10
+1	20
+3	30
+
+query I
+SELECT currval('separate_order_seq')
+----
+2
+
+# Reading a volatile group through an alias remains valid and does not re-evaluate it.
+statement ok
+CREATE SEQUENCE alias_order_seq
+
+query II
+SELECT nextval('alias_order_seq') AS k, k + 1 FROM range(2) GROUP BY k ORDER BY k
+----
+1	2
+2	3
+
+query I
+SELECT currval('alias_order_seq')
+----
+2
+
+# Exact volatile CASE matches still reuse the grouped projection.
+statement ok
+CREATE SEQUENCE exact_grouped_order_seq
+
+query I
+SELECT CASE WHEN nextval('exact_grouped_order_seq')%2=0 THEN 1 WHEN nextval('exact_grouped_order_seq')%2=1 THEN 1 ELSE 0 END AS k
+GROUP BY k UNION ALL SELECT 1
+ORDER BY CASE WHEN nextval('exact_grouped_order_seq')%2=0 THEN 1 WHEN nextval('exact_grouped_order_seq')%2=1 THEN 1 ELSE 0 END
+----
+0
+1
+
+query I
+SELECT currval('exact_grouped_order_seq')
+----
+2
