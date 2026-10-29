@@ -13040,8 +13040,7 @@ PEGTransformerFactory::FinalizeDropFunctionSignatureTrampoline(PEGTransformer &t
 	idx_t dynamic_child_count = 0;
 	auto &dynamic_list_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (dynamic_list_opt.HasResult()) {
-		auto dynamic_list_items = ExtractParseResultsFromList(dynamic_list_opt.GetResult());
-		dynamic_child_count = dynamic_list_items.size();
+		dynamic_child_count = CountParseResultsFromList(dynamic_list_opt.GetResult());
 	}
 	optional<vector<LogicalType>> type {};
 	auto &type_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
