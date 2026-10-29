@@ -26,11 +26,17 @@ EXPLAIN ANALYZE SELECT count(*) FROM big_secure b JOIN dim d ON b.id = d.k WHERE
 ----
 analyzed_plan	<!REGEX>:[\s\S]*SECURE_VIEW[^╰]*1,000,000 rows[\s\S]*
 
-# the filter is checked on every row below the view: exactly the matching rows leave it
+# big_secure hides no rows, so it gets the optional filter, which only skips whole vectors by their zone maps
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM big_secure b JOIN dim d ON b.id = d.k WHERE d.yr = 42
 ----
-analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*10,000 rows[\s\S]*
+analyzed_plan	<!REGEX>:[\s\S]*SECURE_VIEW[^╰]*10,000 rows[\s\S]*
+
+# a view that hides rows gets a filter checked on every row: exactly the matching rows leave it
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big_secure_filtered b JOIN dim d ON b.id = d.k WHERE d.yr = 42
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*5,000 rows[\s\S]*
 
 query I
 SELECT count(*) FROM big_secure b JOIN dim d ON b.id = d.k WHERE d.yr = 42
@@ -64,7 +70,31 @@ SELECT count(*) FROM big_secure_filtered b JOIN small s ON b.id = s.id
 statement ok
 RESET disabled_optimizers
 
-# the view's cast can throw, so the join filter stops at the view
+# a view that only projects columns hides no rows: like the plain table, it gets the IN and prefix-range filters, which
+# remove every row but the two matching ones
+statement ok
+CREATE TABLE sparse_keys AS SELECT * FROM (VALUES (10), (900000)) t(k);
+
+statement ok
+CREATE SECURE VIEW big_projected AS SELECT id FROM big;
+
+query I
+SELECT count(*) FROM big_projected b JOIN sparse_keys s ON b.id = s.k
+----
+2
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big_projected b JOIN sparse_keys s ON b.id = s.k
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*2 rows[\s\S]*
+
+# a view that hides rows only gets the exact range filter [10, 900000]
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big_secure_filtered b JOIN sparse_keys s ON b.id = s.k
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*449,991 rows[\s\S]*
+
+# the view's cast can fail: the join filter crosses it as a TRY_CAST, so the hidden 9999999999 row never fails
 statement ok
 CREATE TABLE wide AS SELECT i::BIGINT AS id FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT;
 
@@ -99,7 +129,7 @@ SELECT count(*) FROM big b JOIN (SELECT * FROM big_secure_filtered WHERE id BETW
 ----
 5
 
-# a TRY_CAST in the view cannot throw: the join filter crosses the view on the raw scan values
+# a TRY_CAST in the view cannot fail: the join filter crosses the view
 statement ok
 CREATE SECURE VIEW try_secure AS SELECT TRY_CAST(id AS INTEGER) AS id FROM big WHERE g < 50;
 
@@ -237,24 +267,34 @@ SELECT count(*) FROM wide_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
 # the same through a view whose join is not a comparison join (an ANY_JOIN), which removes rows as well
 statement ok
 CREATE SECURE VIEW wide_any_joined_secure AS
-SELECT wide_hidden.id FROM wide_hidden JOIN even_groups ON (wide_hidden.g = even_groups.g OR wide_hidden.id < 0);
+SELECT wide_hidden.id FROM wide_hidden JOIN even_groups ON (wide_hidden.g + even_groups.g) % 2 = 0;
 
 query I
 SELECT count(*) FROM wide_any_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 10
 
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM wide_any_joined_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*10 rows[\s\S]*
+
 # ... nor through a view that unnests a list or takes a cross product, which remove rows when empty
 statement ok
-CREATE TABLE str_lists AS SELECT (i % 100)::VARCHAR AS s, [i] AS l FROM range(100) t(i) UNION ALL SELECT 'x', []::BIGINT[];
+CREATE TABLE id_lists AS SELECT i::BIGINT AS id, [i] AS l FROM range(100) t(i) UNION ALL SELECT 9999999999::BIGINT, []::BIGINT[];
 
 statement ok
-CREATE SECURE VIEW unnest_secure AS SELECT s, unnest(l) AS u FROM str_lists;
+CREATE SECURE VIEW unnest_secure AS SELECT id, unnest(l) AS u FROM id_lists;
 
 query I
-SELECT count(*) FROM unnest_secure w JOIN ik ON w.s::INTEGER = ik.k
+SELECT count(*) FROM unnest_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 20
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM unnest_secure w JOIN ik ON w.id::INTEGER = ik.k
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[^╰]*20 rows[\s\S]*
 
 statement ok
 CREATE TABLE no_rows AS SELECT 1 AS o;
@@ -263,10 +303,10 @@ statement ok
 DELETE FROM no_rows;
 
 statement ok
-CREATE SECURE VIEW cross_secure AS SELECT str_lists.s FROM str_lists, no_rows;
+CREATE SECURE VIEW cross_secure AS SELECT id_lists.id FROM id_lists, no_rows;
 
 query I
-SELECT count(*) FROM cross_secure w JOIN ik ON w.s::INTEGER = ik.k
+SELECT count(*) FROM cross_secure w JOIN ik ON w.id::INTEGER = ik.k
 ----
 0
 
@@ -286,30 +326,37 @@ EXPLAIN ANALYZE SELECT x FROM (SELECT x FROM topn_plain UNION ALL SELECT x FROM 
 analyzed_plan	<REGEX>:[\s\S]*Dynamic Filter \(x\)[\s\S]*
 
 # the plan outside a view does not depend on the rows it hides: two datasets with the same visible rows and the same
-# row count, whose hidden rows differ, get the same plan (the build side choice included)
+# row count, whose hidden rows differ, get the same plan. Choosing d as the build side for its join filter needs a scan
+# estimate of at least 1,000,000 rows and 64 times d's inside the view, which only the first dataset's hidden rows give
 statement ok
-CREATE TABLE d AS SELECT i AS k, i % 10 AS f FROM range(1000) t(i);
+CREATE TABLE d AS SELECT i AS k, i % 5 AS f FROM range(100000) t(i);
+
+foreach x x1 x2 x3 x4
 
 statement ok
-CREATE TABLE x1 AS SELECT i * 2 AS id FROM range(50000) t(i);
+CREATE TABLE ${x} AS SELECT i * 2 AS id FROM range(1000) t(i);
+
+endloop
 
 statement ok
-CREATE TABLE g AS SELECT i AS id, i % 1000 AS k, CASE WHEN i % 2 = 0 THEN i % 10 ELSE 1 END AS c, i % 2 = 0 AS visible
-FROM range(2000000) t(i);
+CREATE TABLE g AS SELECT i AS id, i % 250000 AS k, CASE WHEN i % 2 = 0 THEN 0 ELSE 1 END AS c, i % 2 = 0 AS visible
+FROM range(7000000) t(i);
 
 statement ok
 CREATE SECURE VIEW gv AS SELECT id, k, c FROM g WHERE visible;
 
 query II nosort hidden_rows_plan
 EXPLAIN SELECT count(*) FROM gv JOIN d ON gv.k = d.k WHERE gv.c = 1 AND d.f = 1 AND gv.id IN (SELECT id FROM x1)
+AND gv.id IN (SELECT id FROM x2) AND gv.id IN (SELECT id FROM x3) AND gv.id IN (SELECT id FROM x4)
 ----
 
 statement ok
-CREATE OR REPLACE TABLE g AS SELECT i AS id, i % 1000 AS k, CASE WHEN i % 2 = 0 THEN i % 10 ELSE i END AS c,
-i % 2 = 0 AS visible FROM range(2000000) t(i);
+CREATE OR REPLACE TABLE g AS SELECT i AS id, i % 250000 AS k, CASE WHEN i % 2 = 0 THEN 0 ELSE 100 + i END AS c,
+i % 2 = 0 AS visible FROM range(7000000) t(i);
 
 query II nosort hidden_rows_plan
 EXPLAIN SELECT count(*) FROM gv JOIN d ON gv.k = d.k WHERE gv.c = 1 AND d.f = 1 AND gv.id IN (SELECT id FROM x1)
+AND gv.id IN (SELECT id FROM x2) AND gv.id IN (SELECT id FROM x3) AND gv.id IN (SELECT id FROM x4)
 ----
 
 # a secure view over a secure view: the join filter crosses both and exactly the matching rows leave the outer view

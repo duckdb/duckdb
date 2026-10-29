@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 
@@ -297,9 +298,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		}
 		// a join filter enters the view as a pushed WHERE filter would, and needs no barrier: it cannot fail, as a cast
 		// that can fail is a TRY_CAST that keeps the rows it cannot convert for the join
-		// (PreserveRuntimeFilterCastErrors)
-		for (auto &filter : columns) {
-			filter.crossed_secure_view = true;
+		// (PreserveRuntimeFilterCastErrors). A view that emits every row it reads hides none, so any filter may be used
+		// below it; a nested view that hides rows marks the columns when they reach it
+		if (!probe_child.Cast<LogicalSecureView>().propagate_statistics) {
+			for (auto &filter : columns) {
+				filter.crossed_secure_view = true;
+			}
 		}
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, cross_secure_views);
 		break;
