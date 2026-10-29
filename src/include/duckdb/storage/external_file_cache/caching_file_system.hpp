@@ -101,6 +101,8 @@ private:
 	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
+	//! Keep the throughput estimate of the host of a remote file current after a read
+	void PublishHostNetworkThroughput(FileHandle &handle);
 
 private:
 	QueryContext context;

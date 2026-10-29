@@ -4,9 +4,9 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -133,13 +133,25 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		open_count++;
-		return SimpleTrackingFileSystem::OpenFile(path, flags, opener);
+		auto handle = SimpleTrackingFileSystem::OpenFile(path, flags, opener);
+		const annotated_lock_guard<annotated_mutex> guard(measured_lock);
+		measured_handles.erase(*handle);
+		return handle;
+	}
+
+	bool CanSeek() override {
+		return seekable;
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
-		const annotated_lock_guard<annotated_mutex> guard(measured_lock);
-		measured_handles.insert(&handle);
+		MarkMeasured(handle);
+	}
+
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		auto bytes_read = LocalFileSystem::Read(handle, buffer, nr_bytes);
+		MarkMeasured(handle);
+		return bytes_read;
 	}
 
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override {
@@ -148,7 +160,7 @@ public:
 		}
 		if (report_only_after_read) {
 			const annotated_lock_guard<annotated_mutex> guard(measured_lock);
-			if (measured_handles.find(&handle) == measured_handles.end()) {
+			if (measured_handles.find(handle) == measured_handles.end()) {
 				return false;
 			}
 		}
@@ -160,11 +172,17 @@ public:
 	bool report_throughput = true;
 	//! Report only for handles that have read, like the estimates measured from real requests
 	bool report_only_after_read = false;
+	bool seekable = true;
 	NetworkThroughputEstimate estimate;
 
 private:
+	void MarkMeasured(FileHandle &handle) {
+		const annotated_lock_guard<annotated_mutex> guard(measured_lock);
+		measured_handles.insert(handle);
+	}
+
 	annotated_mutex measured_lock;
-	unordered_set<FileHandle *> measured_handles DUCKDB_GUARDED_BY(measured_lock);
+	reference_set_t<FileHandle> measured_handles DUCKDB_GUARDED_BY(measured_lock);
 };
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
@@ -537,11 +555,21 @@ TEST_CASE("An estimate measured during a file's only read sizes the reads of the
 
 	CachingFileSystem cfs(*remote_fs, db_instance);
 
-	// There is no estimate yet when the only read of the first file is split
-	auto first =
-	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()), ReaderSizedFlags());
-	REQUIRE(ReadFull(*first, FILE_SIZE) == content);
-	REQUIRE(remote_fs->TakeReads() == SplitReads(0, FILE_SIZE, BLOCK_SIZE));
+	SECTION("a split read") {
+		// There is no estimate yet when the only read of the first file is split
+		auto first =
+		    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()), ReaderSizedFlags());
+		REQUIRE(ReadFull(*first, FILE_SIZE) == content);
+		REQUIRE(remote_fs->TakeReads() == SplitReads(0, FILE_SIZE, BLOCK_SIZE));
+	}
+	SECTION("a sequential read of a file that cannot seek") {
+		remote_fs->seekable = false;
+		auto first = cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()),
+		                          FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadSequential(*first, FILE_SIZE) == content);
+		remote_fs->TakeReads();
+		remote_fs->seekable = true;
+	}
 
 	// The estimate measured during that read sizes the reads of the next file
 	auto second =

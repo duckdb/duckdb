@@ -1545,8 +1545,8 @@ struct ExternalFileCacheRemoteAdaptiveBlockSizeSetting {
 	static constexpr const char *Description =
 	    "Whether large reads of remote files are split into blocks sized from the measured latency and bandwidth of "
 	    "their requests, as multiples of external_file_cache_remote_max_block_size of up to 32 MiB, instead of always "
-	    "into blocks of external_file_cache_remote_max_block_size. Reads of readers that do not size their own reads "
-	    "still make at least 8 requests each.";
+	    "into blocks of external_file_cache_remote_max_block_size. Large reads of readers that do not size their own "
+	    "reads still make at least 8 requests.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

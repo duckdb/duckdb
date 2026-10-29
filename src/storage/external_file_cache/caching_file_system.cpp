@@ -500,7 +500,6 @@ idx_t CachingFileHandle::GetSplitBlockSize(idx_t nr_bytes, idx_t max_block_size)
 	NetworkThroughputEstimate estimate;
 	if (!(handle && handle->TryGetNetworkThroughput(estimate)) &&
 	    !external_file_cache.TryGetHostNetworkThroughput(path.path, estimate)) {
-		// the first reads of a host are split at the configured block size
 		return max_block_size;
 	}
 	// readers that size their own reads (Parquet) fetch them in parallel, others rely on the split for parallelism
@@ -519,9 +518,10 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 		if (file_handle->CanSeek()) {
 			const auto file_size = file_handle->GetFileSize();
 			nr_bytes = position >= file_size ? 0 : MinValue(nr_bytes, file_size - position);
-			file_handle->Read(context, buf.GetDataMutable(), nr_bytes, position);
+			ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, position);
 		} else {
 			nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));
+			PublishHostNetworkThroughput(*file_handle);
 		}
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
@@ -676,12 +676,17 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 		}
 	}
 	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
-	if (IsRemoteFile() && Settings::Get<ExternalFileCacheRemoteAdaptiveBlockSizeSetting>(db)) {
-		// publish what this read taught us, for handles of this host that have not measured their own requests yet
-		NetworkThroughputEstimate estimate;
-		if (handle->TryGetNetworkThroughput(estimate)) {
-			external_file_cache.SetHostNetworkThroughput(path.path, estimate);
-		}
+	PublishHostNetworkThroughput(*handle);
+}
+
+void CachingFileHandle::PublishHostNetworkThroughput(FileHandle &handle) {
+	if (!IsRemoteFile() || !Settings::Get<ExternalFileCacheRemoteAdaptiveBlockSizeSetting>(db)) {
+		return;
+	}
+	// for handles of this host that have not measured their own requests yet
+	NetworkThroughputEstimate estimate;
+	if (handle.TryGetNetworkThroughput(estimate)) {
+		external_file_cache.SetHostNetworkThroughput(path.path, estimate);
 	}
 }
 
