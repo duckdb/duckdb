@@ -24,6 +24,7 @@ public:
 
 public:
 	void VisitOperator(LogicalOperator &op) override;
+	//! Find scan targets independently for each column, allowing both NULL-retaining and NULL-rejecting filters.
 	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
 	                                     vector<PushdownFilterTarget> &targets);
 

@@ -72,6 +72,7 @@
         "test/sql/aggregate/aggregates/first_last_alloc_reuse.test",
         "test/sql/aggregate/aggregates/histogram_exact.test",
         "test/sql/aggregate/aggregates/histogram_table_function.test",
+        "test/sql/catalog/function/default_table_macro_shadowing.test",
         "test/sql/aggregate/aggregates/max_n_all_types_grouped.test",
         "test/sql/aggregate/aggregates/mode_rewrite.test",
         "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
