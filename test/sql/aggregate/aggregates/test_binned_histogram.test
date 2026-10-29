@@ -259,6 +259,12 @@ SELECT histogram(union_value(a := [1])::UNION(a INTEGER[], b DATE), b) FROM (VAL
 ----
 <REGEX>:Binder Error.*bins of type UNION\(a INTEGER, b INTEGER\)\[\] cannot be cast to UNION\(a INTEGER\[\], b DATE\)\[\].*
 
+# an inactive union member with mismatched array sizes does not block bins using other members
+query I
+SELECT list_aggregate(map_values(histogram(union_value(b := 1)::UNION(a INTEGER[3], b INTEGER), b)), 'sum') FROM (VALUES ([union_value(b := 1)::UNION(a INTEGER[2], b INTEGER)])) t(b)
+----
+1
+
 # struct bins whose member conversion only works for NULL members are rejected like empty bins
 statement error
 SELECT histogram({'a': NULL::INTEGER[]}, [{'a': NULL::INTEGER}])
