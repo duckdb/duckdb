@@ -15,6 +15,7 @@ add_library_unity(
   relation_statistics.cpp
   remove_unused_columns.cpp
   runtime_filter_schedule.cpp
+  sorted_aggregate_rebind.cpp
   unchecked_cast.cpp
   union_alls.cpp)
 
