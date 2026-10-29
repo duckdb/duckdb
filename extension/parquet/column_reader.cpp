@@ -173,10 +173,11 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 		return;
 	}
 	// a chunk the cache already holds several small pieces of is being probed repeatedly: fetch it whole, so this and
-	// every later read of it is served from the cache, as it would be without the page index
+	// every later read of it is served from the cache, as it would be without the page index. The read re-fetches
+	// the cached pieces with the gaps around them, so it sends about as many requests as on a cold cache
 	if (transport.GetCachingFileHandle().CountCachedBlocks(FileOffset(), chunk->meta_data.total_compressed_size) >=
 	    PAGE_INDEX_WHOLE_CHUNK_AFTER_CACHED_BLOCKS) {
-		transport.RegisterPrefetch(FileOffset(), chunk->meta_data.total_compressed_size, allow_merge);
+		transport.RegisterPrefetch(FileOffset(), chunk->meta_data.total_compressed_size, allow_merge, true);
 		return;
 	}
 	// the page index tells which pages hold rows that may match: fetch the dictionary page (and anything else in

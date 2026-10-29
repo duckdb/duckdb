@@ -384,6 +384,11 @@ bool CachingFileHandle::ReadsAreCached() {
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
+	return Read(nr_bytes, location, false);
+}
+
+FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location,
+                                              const bool absorb_cached_blocks) {
 	if (nr_bytes == 0) {
 		return FileBufferHandleGroup();
 	}
@@ -430,7 +435,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 	fetch_end = MinValue(fetch_end, file_size);
 	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,
-	                                                max_block_size);
+	                                                max_block_size, absorb_cached_blocks);
 	const idx_t num_blocks = blocks.size();
 
 	// Schedule block fetch tasks for all blocks.

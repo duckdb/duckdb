@@ -107,8 +107,10 @@ public:
 	idx_t GetCachedFileCount() const;
 
 	//! Get the blocks covering [location, location + nr_bytes), creating empty blocks for the missing bytes.
+	//! With absorb_cached_blocks, every smaller cached block within the range is re-fetched with the gaps around it
+	//! when that saves a request; otherwise only blocks below an eighth of max_block_size are
 	vector<shared_ptr<CacheBlock>> AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
-	                                             idx_t max_block_size);
+	                                             idx_t max_block_size, bool absorb_cached_blocks = false);
 	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
 	void DropBlocks(CachedFile &cached_file);
 	idx_t GetContentGeneration(CachedFile &cached_file);

@@ -31,6 +31,8 @@ struct ReadHead {
 	AllocatedData local_buffer;
 	const_data_ptr_t buffer_ptr = nullptr;
 	bool data_isset = false;
+	// Re-fetch the smaller cached blocks this range spans with the gaps around them (see CachingFileHandle::Read)
+	bool absorb_cached_blocks = false;
 
 	idx_t GetEnd() const {
 		return size + location;
@@ -52,7 +54,7 @@ struct ReadHead {
 		if (GetEnd() > file_handle.GetFileSize()) {
 			throw std::runtime_error("Prefetch registered requested for bytes outside file");
 		}
-		handle_group = file_handle.Read(size, location);
+		handle_group = file_handle.Read(size, location, absorb_cached_blocks);
 		Materialize(file_handle.GetBufferAllocator());
 		data_isset = true;
 	}
@@ -104,7 +106,7 @@ struct ReadAheadBuffer {
 	}
 
 	// Add a read head to the prefetching list
-	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true) {
+	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true, bool absorb_cached_blocks = false) {
 		// Attempt to merge with existing
 		if (merge_buffers) {
 			ReadHead new_read_head {pos, len};
@@ -115,6 +117,7 @@ struct ReadAheadBuffer {
 				auto new_length = MaxValue<idx_t>(existing_head->GetEnd(), new_read_head.GetEnd()) - new_start;
 				existing_head->location = new_start;
 				existing_head->size = new_length;
+				existing_head->absorb_cached_blocks = existing_head->absorb_cached_blocks || absorb_cached_blocks;
 				return;
 			}
 		}
@@ -122,6 +125,7 @@ struct ReadAheadBuffer {
 		read_heads.insert(read_heads.begin(), make_shared_ptr<ReadHead>(pos, len));
 		total_size += len;
 		auto &read_head = *read_heads.front();
+		read_head.absorb_cached_blocks = absorb_cached_blocks;
 
 		if (merge_buffers) {
 			merge_set.insert(&read_head);
@@ -235,9 +239,9 @@ public:
 		PrefetchRegistered();
 	}
 
-	// Register a buffer for prefixing
-	void RegisterPrefetch(idx_t pos, uint64_t len, bool can_merge = true) {
-		ra_buffer.AddReadHead(pos, len, can_merge);
+	// Register a buffer for prefixing; absorb_cached_blocks re-fetches the smaller cached blocks the range spans
+	void RegisterPrefetch(idx_t pos, uint64_t len, bool can_merge = true, bool absorb_cached_blocks = false) {
+		ra_buffer.AddReadHead(pos, len, can_merge, absorb_cached_blocks);
 	}
 
 	// Prevents any further merges, should be called before PrefetchRegistered

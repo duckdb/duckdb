@@ -66,6 +66,9 @@ public:
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
+	//! Read [nr_bytes] bytes at [location]; with absorb_cached_blocks, smaller cached blocks within the range are
+	//! re-fetched with the gaps around them when that saves a request (see ExternalFileCache::AcquireBlocks)
+	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location, bool absorb_cached_blocks);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
