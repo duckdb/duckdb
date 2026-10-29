@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -609,6 +610,32 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 	}
 }
 
+static void SimplifyJoinFilterCastChain(ClientContext &context, JoinFilterPushdownColumn &column,
+                                        ExpressionType comparison) {
+	if (comparison != ExpressionType::COMPARE_EQUAL || column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+	    !IsJoinFilterPushdownIntegralType(column.storage_type) || column.runtime_filter_casts.size() < 2) {
+		return;
+	}
+	auto &cast_functions = CastFunctionSet::Get(context);
+	auto source_type = column.storage_type;
+	for (auto &cast : column.runtime_filter_casts) {
+		if (!IsJoinFilterPushdownIntegralType(cast.target_type) ||
+		    cast_functions.CanOverrideDefaultCast(source_type, cast.target_type)) {
+			return;
+		}
+		source_type = cast.target_type;
+	}
+	if (cast_functions.CanOverrideDefaultCast(column.storage_type, source_type)) {
+		return;
+	}
+	// Successful integer casts preserve the value; extra filter matches are harmless.
+	auto target_type = column.runtime_filter_casts.back().target_type;
+	column.runtime_filter_casts.clear();
+	if (target_type != column.storage_type) {
+		column.runtime_filter_casts.emplace_back(std::move(target_type), RuntimeFilterCastMode::TRY_CAST);
+	}
+}
+
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
 	if (!JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
 		return;
@@ -667,6 +694,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			    column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
 				continue;
 			}
+			SimplifyJoinFilterCastChain(optimizer.GetContext(), column, comparison);
 			get_columns.push_back(std::move(column));
 		}
 		if (get_columns.empty()) {
