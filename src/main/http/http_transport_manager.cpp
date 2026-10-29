@@ -390,13 +390,12 @@ void HTTPTransportManager::ValidateStateLocked(const HTTPTransportManagerState &
 	}
 }
 
-HTTPTransportManager::Reservation
-HTTPTransportManager::ReserveClientLocked(HTTPTransportManagerState &state, ClientKey key, const string &origin,
-                                          const HTTPTransportConfig &transport_config,
-                                          annotated_unique_lock<annotated_mutex> &guard) {
+HTTPTransportManager::Reservation HTTPTransportManager::ReserveClientLocked(
+    HTTPTransportManagerState &state, ClientKey key, const string &origin, const HTTPTransportConfig &transport_config,
+    annotated_unique_lock<annotated_mutex> &guard, optional_ptr<ClientContext> context) {
 	D_ASSERT(state.reuse_policy != HTTPTransportReusePolicy::CLIENT_FREE);
 	ValidateStateLocked(state);
-	clients.WaitForAdmission(guard, HTTPTransportCapacityGuard::CurrentThreadOwnsCapacity(*this));
+	clients.WaitForAdmission(guard, HTTPTransportCapacityGuard::CurrentThreadOwnsCapacity(*this), context);
 	ValidateStateLocked(state);
 
 	key.connection_epoch = state.connection_epoch;
@@ -426,7 +425,9 @@ void HTTPTransportManager::PrepareClient(Reservation &reservation, HTTPTransport
 	}
 }
 
-HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, HTTPParams &params, const string &origin) {
+HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, BaseRequest &request) {
+	auto &params = request.params;
+	auto &origin = request.proto_host_port;
 	auto &state = *session.state;
 	D_ASSERT(state.reuse_policy != HTTPTransportReusePolicy::CLIENT_FREE);
 	const HTTPTransportConfig transport_config(params);
@@ -441,7 +442,7 @@ HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, HTTP
 	Reservation reservation;
 	{
 		annotated_unique_lock<annotated_mutex> guard(lock);
-		reservation = ReserveClientLocked(state, key, origin, transport_config, guard);
+		reservation = ReserveClientLocked(state, key, origin, transport_config, guard, request.interrupt_context);
 	}
 	try {
 		if (reservation.PrepareBucket(origin, transport_config)) {
@@ -457,6 +458,7 @@ HTTPTransportManager::Lease HTTPTransportManager::Acquire(Session &session, HTTP
 }
 
 unique_ptr<HTTPResponse> HTTPTransportManager::PerformRequest(Session &session, BaseRequest &request) {
+	request.InterruptCheck();
 	if (request.params.transport_manager.get() != this || request.params.transport_state != session.state ||
 	    request.params.transport_session_id != session.session_id) {
 		throw InvalidInputException("HTTP parameters do not belong to this transport session");
@@ -473,7 +475,7 @@ unique_ptr<HTTPResponse> HTTPTransportManager::PerformRequest(Session &session, 
 	}
 
 	HTTPTransportCapacityGuard capacity_guard(*this);
-	auto lease = Acquire(session, request.params, request.proto_host_port);
+	auto lease = Acquire(session, request);
 	unique_ptr<HTTPResponse> response;
 	try {
 		response = state.http_util->Request(request, lease.Client());

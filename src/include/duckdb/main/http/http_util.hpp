@@ -21,6 +21,7 @@
 
 namespace duckdb {
 class DatabaseInstance;
+class ClientContext;
 class Logger;
 class HTTPUtil;
 class HTTPRetryBudget;
@@ -215,6 +216,9 @@ struct BaseRequest {
 	bool try_request = false;
 	//! Borrowed operation-local budget; it must outlive all participating requests.
 	optional_ptr<HTTPRetryBudget> retry_budget;
+	//! Borrowed caller for this request only; it must outlive the request, including asynchronous I/O.
+	optional_ptr<ClientContext> interrupt_context;
+	DUCKDB_API void InterruptCheck() const;
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;

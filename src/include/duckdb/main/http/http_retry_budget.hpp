@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/time_point.hpp"
 #include <functional>
@@ -17,6 +18,7 @@
 namespace duckdb {
 
 struct HTTPParams;
+class ClientContext;
 
 //! An attempt's decision; constructing one does not consume retry budget.
 //!
@@ -142,6 +144,8 @@ public:
 	//! Run once, then consume budget and wait before each requested retry. Exhaustion returns normally.
 	//! Callbacks establish replay safety; exceptions propagate without further retries.
 	DUCKDB_API void Run(const std::function<HTTPRetryDecision()> &attempt);
+	//! Run an operation on behalf of a caller, checking interruption during retry waits as well as between attempts.
+	DUCKDB_API void Run(const std::function<HTTPRetryDecision()> &attempt, ClientContext &context);
 	//! Retries admitted for HTTP 429 or 503 responses.
 	DUCKDB_API uint64_t ThrottledRetries() const;
 	//! Retries admitted across all participating requests.
@@ -186,8 +190,9 @@ public:
 
 private:
 	//! Core's hook runs after admission/backoff, outside the attempt's transport-error handling.
-	void Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry);
-	bool ConsumeAndWait(const HTTPRetryDecision &decision);
+	void Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry,
+	         optional_ptr<ClientContext> context);
+	bool ConsumeAndWait(const HTTPRetryDecision &decision, optional_ptr<ClientContext> context);
 	//! Admit a corrected re-send within MAX_CORRECTIONS.
 	bool AdmitCorrection();
 	uint64_t ThrottleExtraRetries() const;
