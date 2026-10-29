@@ -1423,7 +1423,7 @@ FunctionBinder::ResolveScalarFunctionTypes(const FunctionBinding &binding, vecto
 		bound_function.GetResolveTypesCallback()(input);
 		VerifyArgumentCount(bound_function, arguments.size());
 	}
-	const bool is_index_key = binder && binder->IsBindingIndexKey();
+	const bool is_index_key = arguments_collated || (binder && binder->IsBindingIndexKey());
 	result.pushed_collation =
 	    PushArgumentCollations(context, bound_function, bound_function.GetProperties(), arguments, is_index_key);
 	CastToFunctionArguments(bound_function.GetName(), bound_function.GetArguments(), arguments);
