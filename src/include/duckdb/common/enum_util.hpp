@@ -376,6 +376,8 @@ enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
 
+enum class MatchKind : uint8_t;
+
 enum class MatchMode : uint8_t;
 
 enum class MatchRecognizeAfterMatch : uint8_t;
@@ -1212,6 +1214,9 @@ const char* EnumUtil::ToChars<MacroType>(MacroType value);
 
 template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
+
+template<>
+const char* EnumUtil::ToChars<MatchKind>(MatchKind value);
 
 template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
@@ -2209,6 +2214,9 @@ MacroType EnumUtil::FromString<MacroType>(const char *value);
 
 template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
+
+template<>
+MatchKind EnumUtil::FromString<MatchKind>(const char *value);
 
 template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
