@@ -34,37 +34,8 @@ SELECT median(i) FROM (VALUES (INTERVAL '2147483647 months'), (INTERVAL '2147483
 ----
 Could not convert Month to Microseconds
 
-# a high-scale DECIMAL quantile parameter makes the exact discrete rank arithmetic fallible
-
-statement error
-SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) FROM (VALUES (1), (2)) t(v);
-----
-Overflow in multiplication of DECIMAL
-
-statement error
-SELECT quantile_disc(v, [0.5::DECIMAL(38,38)]) FROM (VALUES (1), (2)) t(v);
-----
-Overflow in multiplication of DECIMAL
-
-statement error
-SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
-FROM (VALUES (1), (2)) t(v);
-----
-Overflow in multiplication of DECIMAL
-
-# the marking survives plan serialization, which rebuilds the implementation in deserialize
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement error
-SELECT quantile_disc(v, 0.5::DECIMAL(38,38)) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
-FROM (VALUES (1), (2)) t(v);
-----
-Overflow in multiplication of DECIMAL
-
-statement ok
-SET debug_verify_serializer=false;
+# the raising high-scale DECIMAL quantile parameter fixtures live in
+# quantile_fallible_decimal_param.test, which is excluded from the explain_sql verification config
 
 query I
 SELECT quantile_disc(v, 0.5::DECIMAL(2,1)) FROM (VALUES (1), (2)) t(v);
