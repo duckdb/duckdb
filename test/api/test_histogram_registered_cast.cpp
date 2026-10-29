@@ -24,6 +24,19 @@ static bool WrapInListCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
+//! Widen INTEGER values to BIGINT
+static bool IntegerToBigintValueCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source.GetValue(i);
+		if (val.IsNull()) {
+			result.SetValue(i, Value(result.GetType()));
+		} else {
+			result.SetValue(i, Value::BIGINT(val.GetValue<int64_t>()));
+		}
+	}
+	return true;
+}
+
 TEST_CASE("Histogram bin validation defers to registered casts", "[api][histogram]") {
 	DuckDB db;
 	Connection con(db);
@@ -46,6 +59,13 @@ TEST_CASE("Histogram bin validation defers to registered casts", "[api][histogra
 	    "SELECT list_aggregate(map_values(histogram(l, b)), 'sum') FROM (VALUES ([1], [1]), ([2], [1])) t(l, b)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// a registered cast on a child pair does not suppress independent constraints in enclosing casts
+	casts.RegisterCastFunction(LogicalType::INTEGER, LogicalType::BIGINT, BoundCastInfo(IntegerToBigintValueCast));
+	auto mismatch =
+	    con.Query("SELECT histogram(a, b) FROM (VALUES ([1, 2, 3]::BIGINT[3], [[1, 2]::INTEGER[2]])) t(a, b)");
+	REQUIRE(mismatch->HasError());
+	REQUIRE(StringUtil::Contains(mismatch->GetError(), "bin boundaries must match the input type"));
 }
 
 TEST_CASE("Histogram bin validation accepts registered casts nested in the bins list", "[api][histogram]") {

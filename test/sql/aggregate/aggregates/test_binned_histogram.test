@@ -181,6 +181,46 @@ SELECT histogram(s, b) FROM (VALUES ({'a': [1]}, [{'a': 1}])) t(s, b)
 ----
 <REGEX>:Conversion Error.*Unimplemented type for cast.*
 
+# the same holds for unnamed structs
+statement error
+SELECT histogram(s, b) FROM (VALUES (row([1]), [row(1)])) t(s, b)
+----
+<REGEX>:Conversion Error.*Unimplemented type for cast.*
+
+# enum bins compose an ENUM -> VARCHAR -> target cast - an unsupported target is rejected at bind time
+statement error
+SELECT histogram(get_type(1), ['INTEGER'::ENUM('INTEGER')])
+----
+<REGEX>:Binder Error.*bins of type ENUM.*cannot be cast to TYPE\[\].*
+
+# enum bins for castable targets keep working
+statement ok
+CREATE TYPE small_enum AS ENUM ('a', 'b')
+
+query I
+SELECT histogram(v, ['a'::small_enum, 'b'::small_enum]) FROM (VALUES ('a'), ('b')) t(v)
+----
+{a=1, b=1}
+
+# the composed ENUM -> VARCHAR -> INTEGER conversion is accepted and parses at runtime
+query I
+SELECT histogram(1, ['1'::ENUM('1')])
+----
+{1=1}
+
+# enum bins for a union argument go through the member cast instead of the composition
+query I
+SELECT histogram(union_value(e := 'a'::small_enum)::UNION(e small_enum, n INTEGER), ['a'::small_enum])
+----
+{a=1}
+
+# conversions the cast function itself rejects during execution keep failing at runtime,
+# like the corresponding explicit cast
+statement error
+SELECT histogram(v, b) FROM (VALUES (1::VARIANT, [get_type(1)])) t(v, b)
+----
+<REGEX>:.*Cannot convert TYPE to VARIANT.*
+
 # bins with a valid runtime cast to the argument type still work
 query I
 SELECT histogram(d, bins) FROM (VALUES (DATE '2020-01-01', ['2020-06-01'::VARCHAR])) t(d, bins)

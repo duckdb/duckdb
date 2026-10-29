@@ -393,6 +393,12 @@ bool BinCastIsSupported(ClientContext &context, const LogicalType &source, const
 		// a registered cast replaces the default conversion for this pair
 		return true;
 	}
+	if (source.id() == LogicalTypeId::ENUM && target.id() != LogicalTypeId::VARCHAR &&
+	    target.id() != LogicalTypeId::UNION && target.id() != LogicalTypeId::VARIANT) {
+		// enum casts compose an ENUM -> VARCHAR -> target conversion, except for the
+		// UNION and VARIANT targets that are dispatched before the enum cast switch
+		return BinCastIsSupported(context, LogicalType::VARCHAR, target);
+	}
 	bool source_nested = source.id() == LogicalTypeId::LIST || source.id() == LogicalTypeId::ARRAY;
 	bool target_nested = target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY;
 	if (source_nested && target_nested) {
