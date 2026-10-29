@@ -1568,8 +1568,32 @@ void VisitGeometry(const string_t &wkb, VISITOR &visitor) {
 // Geodetic (GEOGRAPHY) coverage extents
 //----------------------------------------------------------------------------------------------------------------------
 // GEOGRAPHY edges are geodesics (great-circle arcs), which can bulge poleward past their endpoints, and polygon rings
-// can enclose a pole. The geodetic extent therefore bounds what the geometry covers, not just its coordinates. Only
-// latitude needs edge handling, as longitude is monotone along any edge spanning less than half a circle.
+// can enclose a pole. The geodetic extent therefore bounds what the geometry covers, not just its coordinates.
+// (i.e., we cant just accumulate the min/max of all the coordinates individually)
+//
+// For example, the edge from A (60W, 45N) to B (60E, 45N), drawn in lon/lat:
+//
+//     63N             _.--''''''--._
+//               _.-''                ''-._         geodesic: great-circle arc, bulges poleward
+//           _.-'                          '-._
+//     45N  A*--------------------------------*B    planar: straight line in lon/lat
+//          60W              0               60E
+//
+// The geodesic reaches ~63.4N at longitude 0, so a latitude range over the endpoints alone (45N) would miss it.
+// Only latitude needs edge handling, as longitude is monotone along any edge spanning less than half a circle.
+//
+// Here's a mini-glossary to help understanding the following code:
+// - Longitude / Latitude: degrees east in [-180, 180] and degrees north in [-90, 90].
+// - Great circle: a circle on the sphere whose center is the sphere's center, e.g. the equator.
+// - Geodesic: the shortest path between two points on the sphere, an arc of the great circle through both.
+// - Meridian: a line of constant longitude, running from pole to pole.
+// - Antipodal: diametrically opposite, e.g. the two poles. Every great circle through one point also passes through
+//   its antipode, so the geodesic between them is ambiguous.
+// - Apex: the northernmost or southernmost point of a great circle.
+// - Bulge: the part of an edge that reaches beyond the latitudes of its endpoints, towards a pole.
+// - Winding: the total signed longitude change around a ring, about +-360 degrees if the ring encircles a pole.
+// - Shell / hole: the first ring of a polygon and the remaining ones. The interior lies to the left of the direction
+//   of travel along the ring.
 
 namespace {
 
@@ -1655,13 +1679,14 @@ struct GeodesicEdge {
 		return delta > 0 ? (offset >= 0 && offset <= delta) : (offset <= 0 && offset >= delta);
 	}
 
-	//! Latitude range reached by the edge, including any poleward bulge past its endpoints. Returns false if the edge
-	//! is ambiguous (endpoints nearly antipodal).
+	//! Latitude range reached by the edge, including any poleward bulge past its endpoints.
+	//! Returns false if the edge is ambiguous (endpoints nearly antipodal).
 	bool TryGetLatRange(double &min_lat, double &max_lat) const {
 		min_lat = MinValue(p1.lat, p2.lat);
 		max_lat = MaxValue(p1.lat, p2.lat);
 
-		// Unfortunately, its not this easy, we have all the wrapping/antipodal cases to deal with too :)
+		// The endpoints only bound a planar edge.
+		// On the sphere it can bulge poleward, which is what the rest of this function computes.
 
 		const double delta = GetLonDelta();
 
@@ -1706,6 +1731,9 @@ struct GeodesicEdge {
 	}
 };
 
+//! Side of the boundary that a ring's interior lies on at its highest point. SOUTH is the bounded, pole-free side.
+enum class InteriorSide : int8_t { UNKNOWN, SOUTH, NORTH };
+
 //! Coverage state of a linestring or polygon ring, accumulated vertex by vertex
 class GeodeticRingState {
 public:
@@ -1733,34 +1761,32 @@ public:
 	//! Holes never extend the interior, so only their edges contribute.
 	void Finish(GeometryExtent &extent, bool is_shell) const {
 		if (ambiguous) {
-			ExtendFullGlobeXY(extent);
+			ExtendFullGlobe(extent);
 			return;
 		}
 		if (!is_shell) {
 			return;
 		}
+		// The winding thresholds lie halfway between whole turns
 		if (std::fabs(winding) >= 540.0) {
 			// Wound around the globe more than once: not a simple ring
-			ExtendFullGlobeXY(extent);
+			ExtendFullGlobe(extent);
 			return;
 		}
-		if (winding >= 180.0) {
-			// Wound east: the interior contains the north pole
+		if (std::fabs(winding) >= 180.0) {
+			// Wound around the globe once: east encloses the north pole, west the south pole
 			extent.x_min = -180.0;
 			extent.x_max = 180.0;
-			extent.y_max = MaxValue(extent.y_max, 90.0);
+			if (winding > 0) {
+				extent.y_max = MaxValue(extent.y_max, 90.0);
+			} else {
+				extent.y_min = MinValue(extent.y_min, -90.0);
+			}
 			return;
 		}
-		if (winding <= -180.0) {
-			// Wound west: the interior contains the south pole
-			extent.x_min = -180.0;
-			extent.x_max = 180.0;
-			extent.y_min = MinValue(extent.y_min, -90.0);
-			return;
-		}
-		if (top_conflict || top_verdict != 1 || top_lat >= 90.0) {
+		if (top_conflict || top_side != InteriorSide::SOUTH || top_lat >= 90.0) {
 			// Clockwise (the interior is the complement), or the orientation is undefined (cusp, degenerate, on a pole)
-			ExtendFullGlobeXY(extent);
+			ExtendFullGlobe(extent);
 		}
 		// Otherwise counterclockwise: the interior lies within the boundary's extent
 	}
@@ -1769,27 +1795,33 @@ private:
 	//! Add the edge prev -> cur, extending the extent with its latitude range
 	void AddEdge(GeometryExtent &extent, const LonLat &prev, const LonLat &cur) {
 		const GeodesicEdge edge = {prev, cur};
-		double edge_max_lat = 0;
-		if (!TryExtendGeodesicEdge(extent, edge, edge_max_lat)) {
+		double min_lat = 0;
+		double max_lat = 0;
+		if (!edge.TryGetLatRange(min_lat, max_lat)) {
 			ambiguous = true;
 			return;
 		}
 		const double delta = edge.GetLonDelta();
 		winding += delta;
 		ResolvePending(cur);
-		if (edge_max_lat > MaxValue(prev.lat, cur.lat)) {
+		// The endpoints are already in the extent, and computed apexes beyond them are padded outward
+		if (min_lat < MinValue(prev.lat, cur.lat)) {
+			extent.y_min = MinValue(extent.y_min, MaxValue(min_lat - APEX_EPSILON, -90.0));
+		}
+		if (max_lat > MaxValue(prev.lat, cur.lat)) {
+			extent.y_max = MaxValue(extent.y_max, MinValue(max_lat + APEX_EPSILON, 90.0));
 			// A smooth highest point: traveling east puts the interior (on the left) north of it
-			SubmitTop(edge_max_lat, delta > 0 ? -1 : 1);
+			SubmitTop(max_lat, delta > 0 ? InteriorSide::NORTH : InteriorSide::SOUTH);
 		}
 		if (cur.lat >= top_lat) {
-			// A vertex's verdict needs the next vertex, so it is kept pending until the following edge
+			// A vertex's interior side needs the next vertex, so it is kept pending until the following edge
 			pending = true;
 			pending_vertex = cur;
 			pending_prev = prev;
 		}
 	}
 
-	//! Submit the pending vertex's verdict, now that its successor is known
+	//! Submit the pending vertex's interior side, now that its successor is known
 	void ResolvePending(const LonLat &next) {
 		if (!pending) {
 			return;
@@ -1798,44 +1830,27 @@ private:
 		// the turn at v is a left turn
 		const auto &v = pending_vertex;
 		const double cross = v.DirectionTo(next).Cross(v.DirectionTo(pending_prev));
-		SubmitTop(v.lat, cross > 0 ? 1 : (cross < 0 ? -1 : 0));
+		SubmitTop(v.lat, cross > 0 ? InteriorSide::SOUTH : (cross < 0 ? InteriorSide::NORTH : InteriorSide::UNKNOWN));
 		pending = false;
 	}
 
-	//! Record a verdict for a boundary point at `lat`, if it is (one of) the highest
-	void SubmitTop(double lat, int verdict) {
+	//! Record the interior side at a boundary point at `lat`, if it is (one of) the highest
+	void SubmitTop(double lat, InteriorSide side) {
 		if (lat > top_lat) {
 			top_lat = lat;
-			top_verdict = verdict;
-			top_conflict = verdict == 0;
-		} else if (lat == top_lat && verdict != top_verdict) {
+			top_side = side;
+			top_conflict = side == InteriorSide::UNKNOWN;
+		} else if (lat == top_lat && side != top_side) {
 			top_conflict = true;
 		}
 	}
 
 	//! Extend the extent to cover the entire globe
-	static void ExtendFullGlobeXY(GeometryExtent &extent) {
+	static void ExtendFullGlobe(GeometryExtent &extent) {
 		extent.x_min = -180.0;
 		extent.x_max = 180.0;
 		extent.y_min = MinValue(extent.y_min, -90.0);
 		extent.y_max = MaxValue(extent.y_max, 90.0);
-	}
-
-	//! Extend the extent with the latitude range of the edge, whose endpoints are already added, and output its
-	//! highest latitude. Returns false if the edge is ambiguous.
-	static bool TryExtendGeodesicEdge(GeometryExtent &extent, const GeodesicEdge &edge, double &max_lat) {
-		double min_lat = 0;
-		if (!edge.TryGetLatRange(min_lat, max_lat)) {
-			return false;
-		}
-		// Computed apex latitudes are padded outward
-		if (max_lat > MaxValue(edge.p1.lat, edge.p2.lat)) {
-			extent.y_max = MaxValue(extent.y_max, MinValue(max_lat + APEX_EPSILON, 90.0));
-		}
-		if (min_lat < MinValue(edge.p1.lat, edge.p2.lat)) {
-			extent.y_min = MinValue(extent.y_min, MaxValue(min_lat - APEX_EPSILON, -90.0));
-		}
-		return true;
 	}
 
 private:
@@ -1847,11 +1862,11 @@ private:
 	double winding = 0;
 	//! Highest latitude reached by the boundary (vertices and edge apexes)
 	double top_lat = -std::numeric_limits<double>::infinity();
-	//! Side of the boundary the interior lies on at top_lat: +1 south (pole-free), -1 north, 0 undetermined
-	int top_verdict = 0;
-	//! The boundary reaches top_lat with conflicting verdicts (a cusp or degenerate ring)
+	//! Side of the boundary the interior lies on at top_lat
+	InteriorSide top_side = InteriorSide::UNKNOWN;
+	//! The boundary reaches top_lat with conflicting interior sides (a cusp or degenerate ring)
 	bool top_conflict = false;
-	//! A highest vertex whose verdict awaits the next vertex
+	//! A highest vertex whose interior side awaits the next vertex
 	bool pending = false;
 	LonLat pending_vertex = {0, 0};
 	LonLat pending_prev = {0, 0};
