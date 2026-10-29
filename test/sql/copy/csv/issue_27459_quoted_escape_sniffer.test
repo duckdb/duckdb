@@ -17,13 +17,13 @@ SELECT i::INT AS id,
 FROM range(200) r(i);
 
 statement ok
-COPY src TO '__TEST_DIR__/issue_27459.csv'
+COPY src TO '{TEST_DIR}/issue_27459.csv'
 
 statement ok
 CREATE TABLE t(id INT, vc VARCHAR)
 
 statement ok
-COPY t FROM '__TEST_DIR__/issue_27459.csv' (FORMAT CSV, ALLOW_QUOTED_NULLS false)
+COPY t FROM '{TEST_DIR}/issue_27459.csv' (FORMAT CSV, ALLOW_QUOTED_NULLS false)
 
 query I
 SELECT count(*) FROM src s JOIN t ON s.id = t.id WHERE coalesce(s.vc, '~N') <> coalesce(t.vc, '~N')
