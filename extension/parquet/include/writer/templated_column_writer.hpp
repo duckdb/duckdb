@@ -350,7 +350,8 @@ public:
 			auto bloom_filter_entries =
 			    state.dictionary.GetSize() * OP::template BloomFilterEntriesPerValue<SRC, TGT>();
 			state.bloom_filter =
-			    make_uniq<ParquetBloomFilter>(bloom_filter_entries, writer.BloomFilterFalsePositiveRatio());
+			    ParquetBloomFilter::Create(BufferAllocator::Get(writer.GetContext()), bloom_filter_entries,
+			                               writer.BloomFilterFalsePositiveRatio());
 		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
