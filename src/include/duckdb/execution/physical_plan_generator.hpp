@@ -49,7 +49,7 @@ public:
 
 public:
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
 		auto ptr = arena.Make<T>(*this, std::forward<ARGS>(args)...);
 		ops.push_back(*ptr);
@@ -91,6 +91,8 @@ public:
 	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
+	//! Placeholder collections for trampoline frontier scans, rebound per round
+	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> trampoline_frontier_tables;
 	//! Physical planning information for recursive CTE state references.
 	unordered_map<TableIndex, RecursiveCTEPlanningInfo> recursive_cte_planning;
 	//! Materialized CTE ids must be collected.
@@ -118,7 +120,7 @@ public:
 	                                     PhysicalOperator &child, vector<column_t> &partition_columns);
 	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
