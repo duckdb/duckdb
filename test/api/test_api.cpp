@@ -669,6 +669,13 @@ TEST_CASE("Test parser tokenize of words the grammar matches literally", "[api]"
 		REQUIRE(tokens[i].type == expected[i].first);
 		REQUIRE(tokens[i].start == expected[i].second);
 	}
+
+	// the grammar also matches the quotes of quoted identifiers literally: an unfinished one stays an identifier
+	for (auto &unfinished : {"\"", "`", "SELECT \""}) {
+		auto unfinished_tokens = Parser::Tokenize(unfinished);
+		REQUIRE(!unfinished_tokens.empty());
+		REQUIRE(unfinished_tokens.back().type == T::SIMPLIFIED_TOKEN_IDENTIFIER);
+	}
 }
 
 TEST_CASE("Test opening an invalid database file", "[api]") {
