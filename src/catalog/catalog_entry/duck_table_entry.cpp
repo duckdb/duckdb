@@ -128,7 +128,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto required = GetStorageVersionName(Geometry::GEOGRAPHY_VERSION_ADDED, false);
 				auto current = GetStorageVersionName(storage_version, false);
 				throw NotImplementedException("GEOGRAPHY columns are not supported in storage versions prior to %s "
-				                              "(database \"%s\" is using storage version %s)",
+				                              "(database %s is using storage version %s)",
 				                              required, db.GetName(), current);
 			}
 		} break;
