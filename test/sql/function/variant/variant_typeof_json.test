@@ -1,0 +1,21 @@
+# name: test/sql/function/variant/variant_typeof_json.test
+# description: Test variant_typeof on VARIANT values created from JSON
+# group: [variant]
+
+require json
+
+query I
+select variant_typeof('{}'::JSON::VARIANT);
+----
+OBJECT()
+
+query I
+select variant_typeof('{"": 1, "b": 2}'::JSON::VARIANT);
+----
+OBJECT(, b)
+
+# keys containing a NUL byte are not truncated
+query II
+select replace(t, chr(0), '?'), length(t) from (select variant_typeof('{"a\u0000b": 1, "c": 2}'::JSON::VARIANT) t);
+----
+OBJECT(a?b, c)	14
