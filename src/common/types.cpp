@@ -1428,10 +1428,10 @@ void LogicalType::Serialize(Serializer &serializer) const {
 		return;
 	}
 
-	// GEOGRAPHY was added in v2.0.0 and has no legacy representation, so it cannot be downgraded to
-	// older storage versions.
+	// GEOGRAPHY has no legacy representation, so it cannot be downgraded to older storage versions.
 	if (id() == LogicalTypeId::GEOGRAPHY && !serializer.ShouldSerialize(Geometry::GEOGRAPHY_VERSION_ADDED)) {
-		throw SerializationException("The GEOGRAPHY type cannot be written to a storage version older than v2.0.0");
+		throw SerializationException("The GEOGRAPHY type cannot be written to a storage version older than %s",
+		                             GetStorageVersionName(Geometry::GEOGRAPHY_VERSION_ADDED, false));
 	}
 
 	// This is a UNBOUND type and we are writing to older storage.

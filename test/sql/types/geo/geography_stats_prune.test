@@ -5,7 +5,7 @@
 require noforcestorage
 
 statement ok
-ATTACH '{TEST_DIR}/geography_prune.db' AS geodb (ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/geography_prune.db' AS geodb (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v2.1.0');
 
 statement ok
 USE geodb;

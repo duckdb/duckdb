@@ -2,7 +2,7 @@
 # description: GEOGRAPHY only shreds single points; other layouts keep WKB so coverage extents survive checkpoints
 # group: [geo]
 
-load {TEST_DIR}/test_geography_shred.db readwrite
+load {TEST_DIR}/test_geography_shred.db readwrite v2.1.0
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';

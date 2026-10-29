@@ -464,8 +464,8 @@ class Geometry {
 public:
 	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
 	static constexpr StorageVersion VERSION_ADDED = StorageVersion::V1_5_0; // Added to core in DuckDB v1.5.0
-	//! GEOGRAPHY shares the WKB representation, but was only added to core in DuckDB v2.0.0
-	static constexpr StorageVersion GEOGRAPHY_VERSION_ADDED = StorageVersion::V2_0_0;
+	//! GEOGRAPHY shares the WKB representation, but was only added to core in DuckDB v2.1.0
+	static constexpr StorageVersion GEOGRAPHY_VERSION_ADDED = StorageVersion::V2_1_0;
 
 	//! Check for legayc geometry type (pre v1.5)
 	static bool IsSpatialGeometryType(const LogicalType &type);
