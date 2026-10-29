@@ -241,7 +241,7 @@ static void CollectJoinFilterEqualities(const LogicalComparisonJoin &join, filte
 
 static void FindScanFilterTargets(LogicalGet &get, vector<JoinFilterPushdownColumn> columns,
                                   vector<PushdownFilterTarget> &targets) {
-	if (!get.function.filter_pushdown || get.ordinality_idx.IsValid()) {
+	if (!get.function.filter_pushdown || get.ordinality_idx.IsValid() || get.extra_info.sample_options) {
 		return;
 	}
 	get.ResolveOperatorTypes();
