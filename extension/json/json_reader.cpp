@@ -931,7 +931,9 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	// First we find the newline in the previous block
 	idx_t prev_buffer_size = previous_buffer_handle->buffer_size - previous_buffer_handle->buffer_start;
 	auto prev_buffer_ptr = char_ptr_cast(previous_buffer_handle->buffer.get()) + previous_buffer_handle->buffer_size;
-	auto prev_object_start = PreviousNewline(prev_buffer_ptr, prev_buffer_size);
+	// the first buffer of a file that is only a byte order mark holds nothing past it
+	auto prev_object_start =
+	    prev_buffer_size == 0 ? prev_buffer_ptr : PreviousNewline(prev_buffer_ptr, prev_buffer_size);
 	auto prev_object_size = NumericCast<idx_t>(prev_buffer_ptr - prev_object_start);
 
 	D_ASSERT(scan_state.buffer_offset == options.maximum_object_size);
@@ -941,13 +943,16 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	// Now copy the data to our reconstruct buffer
 	memcpy(scan_state.buffer_ptr + scan_state.buffer_offset - prev_object_size, prev_object_start, prev_object_size);
 
+	// Just a newline, or nothing. A single byte without a newline before it is a value, such as a 1 at the end of a
+	// file. This is checked before the previous buffer is released
+	const bool no_remainder = prev_object_size == 0 || (prev_object_size == 1 && *prev_object_start == '\n');
+
 	// We copied the object, so we are no longer reading the previous buffer
 	if (--previous_buffer_handle->readers == 0) {
 		RemoveBuffer(*previous_buffer_handle);
 	}
 
-	if (prev_object_size == 1) {
-		// Just a newline
+	if (no_remainder) {
 		return false;
 	}
 	scan_state.buffer_offset -= prev_object_size;
@@ -1115,7 +1120,12 @@ void JSONReader::FinalizeBuffer(JSONReaderScanState &scan_state) {
 	// skip over the array start if required
 	if (!scan_state.is_last) {
 		if (scan_state.buffer_index.GetIndex() == 0) {
-			StringUtil::SkipBOM(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.buffer_offset);
+			// the file starts at the buffer offset, which leaves room for the end of a previous buffer when the file
+			// is read in parallel
+			idx_t bom_size = 0;
+			StringUtil::SkipBOM(scan_state.buffer_ptr + scan_state.buffer_offset,
+			                    scan_state.buffer_size - scan_state.buffer_offset, bom_size);
+			scan_state.buffer_offset += bom_size;
 			if (GetFormat() == JSONFormat::ARRAY) {
 				SkipOverArrayStart(scan_state);
 			}
