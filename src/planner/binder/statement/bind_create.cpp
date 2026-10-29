@@ -399,6 +399,31 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	         base.aliases, base.types, base.names);
 }
 
+void Binder::CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info) {
+	bool uses_returns = false;
+	for (auto &member : info.macros) {
+		if (member->return_type.id() != LogicalTypeId::UNKNOWN) {
+			uses_returns = true;
+			break;
+		}
+	}
+	if (!uses_returns) {
+		return;
+	}
+	auto &attached = catalog.GetAttached();
+	if (!attached.HasStorageManager()) {
+		return;
+	}
+	auto &storage_manager = attached.GetStorageManager();
+	const auto since = StorageCompatibility::FromString("v2.1.0").storage_version;
+	if (!info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+	    storage_manager.GetStorageVersion() < since) {
+		string msg = "Macros with a declared RETURNS type are only supported for storage versions v2.1.0 and higher.\n";
+		msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP macro";
+		throw BinderException(msg);
+	}
+}
+
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	//! Set to identify exact matches in macro overloads
 	struct VectorOfLogicalTypeHash {
@@ -445,6 +470,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
+	CheckMacroStorageVersion(catalog, base);
 	for (auto &function : base.macros) {
 		if (!store_types) {
 			for (const auto &type : function->types) {
@@ -504,6 +530,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
 			default_values[param_name] = std::move(default_val);
+		}
+
+		// Resolve a user type in the declared return type
+		if (function->return_type.id() == LogicalTypeId::UNBOUND) {
+			BindLogicalType(function->return_type);
 		}
 
 		// Resolve any user type arguments
