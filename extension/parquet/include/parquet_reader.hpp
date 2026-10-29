@@ -495,6 +495,8 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, ParquetReaderScanState &state,
 	                                                    ColumnReader &column_reader, const TableFilter &filter);
+	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, idx_t group_index,
+	                                                    ColumnReader &column_reader, const TableFilter &filter);
 	bool DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Reads the page index of the row group and works out which rows may match the filters; a page index that
@@ -504,7 +506,8 @@ private:
 	//! Serves the page index of the whole file from one buffer that is read once per reader and shared by every row
 	//! group and thread, when the index fits the transport's accepted column gap; returns false when it does not
 	bool TryAttachPageIndexBuffer(ThriftFileTransport &transport) const;
-	bool TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFileTransport &transport) const;
+	bool TryAttachBloomFilterBuffer(ClientContext &context, ColumnReader &column_reader, const TableFilter &filter,
+	                                bool nested_filter, idx_t column_chunk_idx, ThriftFileTransport &transport);
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);
@@ -565,7 +568,6 @@ private:
 		idx_t begin = 0;
 		idx_t end = 0;
 		idx_t filter_count = 0;
-		idx_t probe_count = 0;
 		AllocatedData buffer;
 	};
 	mutable mutex bloom_filter_buffer_lock;

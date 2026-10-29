@@ -1156,6 +1156,11 @@ ParquetStatisticsUtils::GetBloomFilterHashStrategy(const ParquetColumnSchema &sc
 	}
 }
 
+bool ParquetStatisticsUtils::HasBloomFilterConstants(const TableFilter &filter,
+                                                     ParquetBloomFilterHashStrategy hash_strategy) {
+	return HasFilterConstants(filter, hash_strategy);
+}
+
 bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filter,
                                                  const duckdb_parquet::ColumnMetaData &column_meta_data,
                                                  TProtocol &file_proto, Allocator &allocator,

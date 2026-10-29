@@ -1870,12 +1870,18 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
                                                                    ParquetReaderScanState &state,
                                                                    ColumnReader &column_reader,
                                                                    const TableFilter &filter) {
-	auto &group = GetGroup(state);
+	return CheckRowGroupFilterStatistics(context, state.group_index, column_reader, filter);
+}
+
+FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext &context, idx_t group_index,
+                                                                   ColumnReader &column_reader,
+                                                                   const TableFilter &filter) {
+	auto &group = GetFileMetadata()->row_groups[group_index];
 	auto schema_column_index = column_reader.ColumnIndex();
 	auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	bool is_generated_column = schema_column_index >= group.columns.size();
 	bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
-	auto stats = column_reader.Stats(state.group_index, group.columns);
+	auto stats = column_reader.Stats(group_index, group.columns);
 	if (stats) {
 		bool has_min_max = false;
 		if (!is_generated_column) {
@@ -1963,8 +1969,13 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				if (check_bloom_filter && bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
 				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy) {
-					auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
-					TryAttachBloomFilterBuffer(bloom_reader->ColumnIndex(), trans);
+					auto &bloom_meta_data = group.columns[bloom_reader->ColumnIndex()].meta_data;
+					if (bloom_meta_data.__isset.bloom_filter_offset && bloom_meta_data.bloom_filter_offset > 0 &&
+					    ParquetStatisticsUtils::HasBloomFilterConstants(*bloom_filter, *hash_strategy)) {
+						auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+						TryAttachBloomFilterBuffer(context, column_reader, filter, bloom_source->Type().IsNested(),
+						                           bloom_reader->ColumnIndex(), trans);
+					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
 					        *state.thrift_file_proto, allocator, bloom_reader->Schema(), *hash_strategy)) {
@@ -2031,7 +2042,9 @@ bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) con
 	return true;
 }
 
-bool ParquetReader::TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFileTransport &transport) const {
+bool ParquetReader::TryAttachBloomFilterBuffer(ClientContext &context, ColumnReader &column_reader,
+                                               const TableFilter &filter, bool nested_filter, idx_t column_chunk_idx,
+                                               ThriftFileTransport &transport) {
 	if (parquet_options.encryption_config) {
 		return false;
 	}
@@ -2042,13 +2055,20 @@ bool ParquetReader::TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFil
 		idx_t span_begin = NumericLimits<idx_t>::Maximum();
 		idx_t span_end = 0;
 		idx_t filter_count = 0;
-		for (auto &row_group : GetFileMetadata()->row_groups) {
+		auto &row_groups = GetFileMetadata()->row_groups;
+		for (idx_t group_index = 0; group_index < row_groups.size(); group_index++) {
+			auto &row_group = row_groups[group_index];
 			if (column_chunk_idx >= row_group.columns.size()) {
 				continue;
 			}
 			auto &meta_data = row_group.columns[column_chunk_idx].meta_data;
 			if (!meta_data.__isset.bloom_filter_offset || !meta_data.__isset.bloom_filter_length ||
 			    meta_data.bloom_filter_offset <= 0 || meta_data.bloom_filter_length <= 0) {
+				continue;
+			}
+			auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
+			if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
+			                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 				continue;
 			}
 			const auto filter_begin = NumericCast<idx_t>(meta_data.bloom_filter_offset);
@@ -2064,14 +2084,13 @@ bool ParquetReader::TryAttachBloomFilterBuffer(idx_t column_chunk_idx, ThriftFil
 		entry = bloom_filter_spans.emplace(column_chunk_idx, std::move(span)).first;
 	}
 	auto &span = entry->second;
-	span.probe_count++;
-	if (span.end <= span.begin) {
+	if (span.end <= span.begin || span.filter_count < 2) {
 		return false;
 	}
 	const auto span_size = span.end - span.begin;
 	if (!span.buffer.IsSet()) {
-		if (span.probe_count < 2 || span_size > PrefetchCostModel::GAP_MAX ||
-		    span_size > span.filter_count * transport.GetAcceptedColumnGap()) {
+		if (span_size > PrefetchCostModel::GAP_MAX ||
+		    span_size > (span.filter_count - 1) * transport.GetAcceptedColumnGap()) {
 			return false;
 		}
 		auto buffer = allocator.Allocate(span_size);
