@@ -122,6 +122,7 @@ BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function
 }
 
 BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
+    // NOLINTNEXTLINE(cppcoreguidelines-slicing): binds only the base part, definition keeps the complete function
     : BaseAggregateFunction(*function_p), definition(std::move(function_p)) {
 	auto &function = *definition;
 	qualified_name = function.GetQualifiedName();
