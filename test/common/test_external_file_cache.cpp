@@ -6,6 +6,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -135,9 +136,21 @@ public:
 		return SimpleTrackingFileSystem::OpenFile(path, flags, opener);
 	}
 
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
+		const annotated_lock_guard<annotated_mutex> guard(measured_lock);
+		measured_handles.insert(&handle);
+	}
+
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override {
 		if (!report_throughput) {
 			return false;
+		}
+		if (report_only_after_read) {
+			const annotated_lock_guard<annotated_mutex> guard(measured_lock);
+			if (measured_handles.find(&handle) == measured_handles.end()) {
+				return false;
+			}
 		}
 		result = estimate;
 		return true;
@@ -145,7 +158,13 @@ public:
 
 	atomic<idx_t> open_count {0};
 	bool report_throughput = true;
+	//! Report only for handles that have read, like the estimates measured from real requests
+	bool report_only_after_read = false;
 	NetworkThroughputEstimate estimate;
+
+private:
+	annotated_mutex measured_lock;
+	unordered_set<FileHandle *> measured_handles DUCKDB_GUARDED_BY(measured_lock);
 };
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
@@ -496,6 +515,39 @@ TEST_CASE("The first reads of a remote file are sized from other files of its ho
 	REQUIRE(estimate.latency_seconds == 0.01);
 	REQUIRE(!cache.TryGetHostNetworkThroughput("s3://other-bucket/file.bin", estimate));
 	REQUIRE(!cache.TryGetHostNetworkThroughput("https://efc-test/file.bin", estimate));
+}
+
+TEST_CASE("An estimate measured during a file's only read sizes the reads of the next file", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto remote_fs = make_uniq<ThroughputReportingFileSystem>();
+	Connection con(db);
+
+	const idx_t BLOCK_SIZE = 4096;
+	REQUIRE(
+	    !con.Query(StringUtil::Format("SET external_file_cache_remote_max_block_size=%llu", BLOCK_SIZE))->HasError());
+	remote_fs->estimate.latency_seconds = 0.01;
+	remote_fs->estimate.bandwidth_bytes_per_s = 1e6;
+	remote_fs->report_only_after_read = true;
+	const idx_t SPLIT_SIZE = 10 * BLOCK_SIZE;
+	const idx_t FILE_SIZE = 80 * BLOCK_SIZE + 100;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard first_file("test_efc_adaptive_publish_first.bin", content);
+	EFCTestFileGuard second_file("test_efc_adaptive_publish_second.bin", content);
+
+	CachingFileSystem cfs(*remote_fs, db_instance);
+
+	// There is no estimate yet when the only read of the first file is split
+	auto first =
+	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + first_file.GetPath()), ReaderSizedFlags());
+	REQUIRE(ReadFull(*first, FILE_SIZE) == content);
+	REQUIRE(remote_fs->TakeReads() == SplitReads(0, FILE_SIZE, BLOCK_SIZE));
+
+	// The estimate measured during that read sizes the reads of the next file
+	auto second =
+	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + second_file.GetPath()), ReaderSizedFlags());
+	REQUIRE(ReadFull(*second, FILE_SIZE) == content);
+	REQUIRE(remote_fs->TakeReads() == SplitReads(0, FILE_SIZE, SPLIT_SIZE));
 }
 
 TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {

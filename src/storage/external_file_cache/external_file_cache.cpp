@@ -132,7 +132,7 @@ idx_t ExternalFileCache::GetAdaptiveBlockSize(idx_t nr_bytes, idx_t block_size,
 void ExternalFileCache::SetHostNetworkThroughput(const string &path, const NetworkThroughputEstimate &estimate) {
 	auto host = GetHostKey(path);
 	const annotated_lock_guard<annotated_mutex> guard(throughput_lock);
-	host_throughput[std::move(host)] = HostThroughput {estimate.latency_seconds, estimate.bandwidth_bytes_per_s};
+	host_throughput[std::move(host)] = estimate;
 }
 
 bool ExternalFileCache::TryGetHostNetworkThroughput(const string &path, NetworkThroughputEstimate &result) const {
@@ -142,8 +142,7 @@ bool ExternalFileCache::TryGetHostNetworkThroughput(const string &path, NetworkT
 	if (entry == host_throughput.end()) {
 		return false;
 	}
-	result.latency_seconds = entry->second.latency_seconds;
-	result.bandwidth_bytes_per_s = entry->second.bandwidth_bytes_per_s;
+	result = entry->second;
 	return true;
 }
 

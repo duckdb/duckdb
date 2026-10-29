@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional.hpp"
@@ -34,7 +35,6 @@ class ClientContext;
 class DatabaseInstance;
 class BufferManager;
 class BufferPool;
-struct NetworkThroughputEstimate;
 
 //! File metadata used to determine whether cached file data is still valid.
 struct CacheValidationInfo {
@@ -73,10 +73,8 @@ public:
 	//! Whether reads of the given file should go through the cache (remote files only, unless forced).
 	DUCKDB_API bool ShouldCacheFile(const string &path) const;
 
-	//! The size of the blocks a read of [nr_bytes] of a remote file is split into, given the measured latency and
-	//! bandwidth of its requests. The smallest multiple of [block_size] that keeps the request latency a small part
-	//! of each request, but no larger than leaves [min_blocks_per_read] requests for the read. [block_size] without
-	//! a usable estimate.
+	//! The smallest multiple of [block_size] that keeps the request latency a small part of each request,
+	//! leaving a read of [nr_bytes] at least [min_blocks_per_read] requests
 	DUCKDB_API static idx_t GetAdaptiveBlockSize(idx_t nr_bytes, idx_t block_size,
 	                                             const NetworkThroughputEstimate &estimate,
 	                                             idx_t min_blocks_per_read = 1);
@@ -175,13 +173,8 @@ private:
 	//! Lock for accessing cached_file_keys.
 	mutable annotated_mutex lock;
 
-	//! A measured request latency and bandwidth
-	struct HostThroughput {
-		double latency_seconds;
-		double bandwidth_bytes_per_s;
-	};
 	//! Latest throughput estimate per remote host (scheme and authority of the path)
-	unordered_map<string, HostThroughput> host_throughput DUCKDB_GUARDED_BY(throughput_lock);
+	unordered_map<string, NetworkThroughputEstimate> host_throughput DUCKDB_GUARDED_BY(throughput_lock);
 	//! Lock for accessing host_throughput.
 	mutable annotated_mutex throughput_lock;
 };

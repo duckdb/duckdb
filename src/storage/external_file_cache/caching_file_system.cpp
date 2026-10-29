@@ -498,9 +498,8 @@ idx_t CachingFileHandle::GetSplitBlockSize(idx_t nr_bytes, idx_t max_block_size)
 	}
 	// only ask a handle that is open, so that reads served from the cache do not open the file
 	NetworkThroughputEstimate estimate;
-	if (handle && handle->TryGetNetworkThroughput(estimate)) {
-		external_file_cache.SetHostNetworkThroughput(path.path, estimate);
-	} else if (!external_file_cache.TryGetHostNetworkThroughput(path.path, estimate)) {
+	if (!(handle && handle->TryGetNetworkThroughput(estimate)) &&
+	    !external_file_cache.TryGetHostNetworkThroughput(path.path, estimate)) {
 		// the first reads of a host are split at the configured block size
 		return max_block_size;
 	}
@@ -677,6 +676,13 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 		}
 	}
 	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
+	if (IsRemoteFile() && Settings::Get<ExternalFileCacheRemoteAdaptiveBlockSizeSetting>(db)) {
+		// publish what this read taught us, for handles of this host that have not measured their own requests yet
+		NetworkThroughputEstimate estimate;
+		if (handle->TryGetNetworkThroughput(estimate)) {
+			external_file_cache.SetHostNetworkThroughput(path.path, estimate);
+		}
+	}
 }
 
 bool CachingFileHandle::IsCacheReuseProhibited() {
