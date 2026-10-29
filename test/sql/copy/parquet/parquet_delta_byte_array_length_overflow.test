@@ -11,7 +11,7 @@ require parquet
 statement error
 SELECT * FROM read_parquet('data/parquet-testing/broken/delta_byte_array_length_overflow.parquet');
 ----
-DELTA_BYTE_ARRAY
+DELTA_BYTE_ARRAY - value length is out of range
 
 # the database is still usable afterwards
 query I

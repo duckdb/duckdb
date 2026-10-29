@@ -77,7 +77,7 @@ void DeltaByteArrayDecoder::InitializePage() {
 	for (idx_t i = 0; i < prefix_count; i++) {
 		// the lengths are read from the file - add them as idx_t so the sum cannot wrap around
 		idx_t len = idx_t(prefix_data[i]) + idx_t(suffix_data[i]);
-		if (len > NumericLimits<uint32_t>::Maximum()) {
+		if (len >= NumericLimits<uint32_t>::Maximum()) {
 			throw InvalidInputException("DELTA_BYTE_ARRAY - value length is out of range - corrupt file?");
 		}
 		if (is_fixed_len && len != fixed_len) {
