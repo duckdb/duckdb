@@ -44,8 +44,10 @@ statement ok
 CALL disable_logging();
 
 # The runtime filter probes the stored BIGINT directly.
+# Serializer verification discards runtime filters.
 query II
-SELECT count(*) = CASE WHEN current_setting('debug_disable_optimizer') THEN 0 ELSE 1 END,
+SELECT count(*) = CASE WHEN current_setting('debug_disable_optimizer') OR current_setting('debug_verify_serializer')
+                      THEN 0 ELSE 1 END,
        NOT coalesce(bool_or(info.uses_try_cast::BOOLEAN), false)
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class='PhysicalHashJoin' AND event='PublishRuntimeFilter' AND info.kind='PREFIX_RANGE';
