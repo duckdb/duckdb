@@ -110,3 +110,32 @@ TEST_CASE("Scoped timers can end on several threads at once", "[api][intraquery]
 		REQUIRE(seconds.GetValue<double>() > 0);
 	}
 }
+
+// Adds one millisecond to a timing metric for every chunk, from every thread that runs the scan.
+static atomic<idx_t> add_timing_calls {0};
+static void AddTimingExec(DataChunk &args, ExpressionState &state, Vector &result) {
+	QueryProfiler::Get(state.GetContext()).AddToMetricTiming("test.time_added", 1000000);
+	add_timing_calls++;
+	result.Reference(args.data[0]);
+}
+
+TEST_CASE("Time measured elsewhere can be added to a timing metric", "[api][intraquery]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// hundreds of thousands of chunks would take too long
+		return;
+	}
+	DuckDB db(nullptr);
+	Connection con(db);
+	ScalarFunction fn("add_timing", {LogicalType::BIGINT}, LogicalType::BIGINT, AddTimingExec);
+	fn.SetStability(FunctionStability::VOLATILE);
+	RegisterFunction(con, std::move(fn));
+	SetUpParallelScan(con, "test_metric_timing_output.txt");
+
+	add_timing_calls = 0;
+	REQUIRE_NO_FAIL(con.Query("SELECT max(add_timing(i)) FROM numbers"));
+	// one millisecond for each call, reported in seconds
+	REQUIRE(add_timing_calls > 1);
+	auto seconds = GetProfiledMetric(con, "test.time_added");
+	REQUIRE(!seconds.IsNull());
+	REQUIRE(seconds.GetValue<double>() == Approx(static_cast<double>(add_timing_calls.load()) / 1000.0));
+}

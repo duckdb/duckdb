@@ -315,6 +315,12 @@ void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
 	}
 }
 
+void QueryProfiler::AddToMetricTiming(const string &key, const idx_t elapsed_ns) {
+	if (IsEnabled() && running) {
+		query_metrics.UpdateMetric(key, elapsed_ns);
+	}
+}
+
 void QueryProfiler::SetMetric(const string &key, Value new_value) {
 	if (!IsEnabled()) {
 		return;
