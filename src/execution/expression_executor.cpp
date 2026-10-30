@@ -8,6 +8,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -45,6 +46,9 @@ ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exp
 	}
 }
 
+ExpressionExecutor::ExpressionExecutor(DatabaseInstance &db) : context(nullptr), database(&db) {
+}
+
 ExpressionExecutor::ExpressionExecutor() : context(nullptr) {
 }
 
@@ -61,6 +65,13 @@ ClientContext &ExpressionExecutor::GetContext() {
 
 optional_ptr<ClientContext> ExpressionExecutor::GetContextPtr() {
 	return context;
+}
+
+optional_ptr<DatabaseInstance> ExpressionExecutor::GetDatabasePtr() {
+	if (context) {
+		return &DatabaseInstance::GetDatabase(*context);
+	}
+	return database;
 }
 
 Allocator &ExpressionExecutor::GetAllocator() {

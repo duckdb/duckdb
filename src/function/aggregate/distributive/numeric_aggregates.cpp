@@ -152,8 +152,8 @@ struct NumericInput {
 		D_ASSERT(input.GetType().id() == LogicalTypeId::NUMERIC);
 		ShreddedNumericRange range;
 		if (NumericVector::TryGetRange(input, count, range)) {
-			// STANDARD_VECTOR_SIZE values below 2^52 in magnitude sum within 64 bits
-			static const hugeint_t SMALL_LIMIT = hugeint_t(int64_t(1) << 52);
+			// STANDARD_VECTOR_SIZE values below this magnitude sum within 64 bits (2^52 for 2048-row vectors)
+			static const hugeint_t SMALL_LIMIT = hugeint_t(int64_t(1) << SUM_OVERFLOW_MAX_BITS);
 			small_values = range.min > -SMALL_LIMIT && range.max < SMALL_LIMIT;
 		}
 		if (NumericVector::TryGetTyped(input, typed)) {

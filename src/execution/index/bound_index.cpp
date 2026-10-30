@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/bound_index.hpp"
 
+#include "duckdb/main/attached_database.hpp"
+
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -22,7 +24,7 @@ BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexCo
                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
-      index_constraint_type(index_constraint_type) {
+      index_constraint_type(index_constraint_type), executor(db.GetDatabase()) {
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->GetReturnType().InternalType());
 		logical_types.push_back(expr->GetReturnType());

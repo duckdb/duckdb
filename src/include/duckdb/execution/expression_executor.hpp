@@ -17,6 +17,7 @@
 namespace duckdb {
 class Allocator;
 class ClientContext;
+class DatabaseInstance;
 class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
@@ -28,6 +29,8 @@ public:
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions);
+	//! An executor without a client context that still knows its database (index expressions)
+	DUCKDB_API explicit ExpressionExecutor(DatabaseInstance &db);
 	ExpressionExecutor(ExpressionExecutor &&) = delete;
 
 	//! The expressions of the executor
@@ -40,6 +43,8 @@ public:
 	bool HasContext();
 	ClientContext &GetContext();
 	optional_ptr<ClientContext> GetContextPtr();
+	//! The database of the context, or the database an executor without a context was created for
+	optional_ptr<DatabaseInstance> GetDatabasePtr();
 	Allocator &GetAllocator();
 
 	//! Add an expression to the set of to-be-executed expressions of the executor
@@ -160,6 +165,8 @@ protected:
 private:
 	//! Client context
 	optional_ptr<ClientContext> context;
+	//! The database of an executor created without a client context
+	optional_ptr<DatabaseInstance> database;
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
 	//! The vector verification (debug setting)

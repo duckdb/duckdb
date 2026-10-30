@@ -315,7 +315,20 @@ void NumericColumnData::Widen(ColumnAppendState &state, const LogicalType &new_t
 		inner = new_inner;
 	}
 	// continue the append in the new column - the typed append state is re-initialized from scratch, the exact range
-	// of the rows appended so far lives in the append state
+	// of the rows appended so far lives in the append state, and so does their validity from here on
+	auto carry_validity = [&](optional_ptr<BaseStatistics> stats) {
+		if (!stats) {
+			return;
+		}
+		if (stats->CanHaveNull()) {
+			state.numeric_widened_has_null = true;
+		}
+		if (stats->CanHaveNoNull()) {
+			state.numeric_widened_has_no_null = true;
+		}
+	};
+	carry_validity(state.append_stats.get());
+	carry_validity(state.full_append_stats.get());
 	state.current = nullptr;
 	state.child_appends.clear();
 	state.append_state.reset();
@@ -430,6 +443,13 @@ void NumericColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_s
 	}
 	auto canonical = appended.ToCanonical();
 	canonical.CopyValidity(inner_stats);
+	// the rows appended before the representation was widened are not in the inner column's statistics
+	if (state.numeric_widened_has_null) {
+		canonical.SetHasNull();
+	}
+	if (state.numeric_widened_has_no_null) {
+		canonical.SetHasNoNull();
+	}
 	for (auto &stats_ref : finalize_state.global_stats) {
 		stats_ref.get().Merge(canonical);
 	}

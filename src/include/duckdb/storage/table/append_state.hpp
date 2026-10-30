@@ -57,6 +57,10 @@ struct ColumnAppendState {
 	unique_ptr<BaseStatistics> full_append_stats;
 	//! The exact range of the values a NUMERIC column appended, covering every representation it went through
 	unique_ptr<NumericRange> numeric_range;
+	//! Whether a NUMERIC column appended NULL and non-NULL rows before its representation was widened: the widened
+	//! column starts from fresh append statistics, so the validity of those rows is carried here
+	bool numeric_widened_has_null = false;
+	bool numeric_widened_has_no_null = false;
 	//! The optional block to use for transient allocations
 	optional_ptr<SuballocationBlock> transient;
 

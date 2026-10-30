@@ -39,6 +39,8 @@ public:
 	Allocator &GetAllocator();
 	bool HasContext();
 	DUCKDB_API ClientContext &GetContext();
+	//! The database of the context, or of an executor without a context (index expressions)
+	DUCKDB_API optional_ptr<DatabaseInstance> GetDatabase();
 
 	void Verify(ExpressionExecutorState &root);
 

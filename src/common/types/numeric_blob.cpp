@@ -448,7 +448,11 @@ bool TryGetMagnitude(const BlobView &view, uint8_t scale, uhugeint_t &magnitude)
 	}
 	magnitude = uhugeint_t(0, low);
 	for (; i < view.digit_count; i++) {
-		magnitude = magnitude * uhugeint_t(0, 10) + uhugeint_t(0, view.Digit(i));
+		// 39 digits can exceed 128 bits: the arithmetic has to report the overflow instead of wrapping
+		if (!Uhugeint::TryMultiply(magnitude, uhugeint_t(0, 10), magnitude) ||
+		    !Uhugeint::TryAddInPlace(magnitude, uhugeint_t(0, view.Digit(i)))) {
+			return false;
+		}
 		if (magnitude.upper > uint64_t(INT64_MAX)) {
 			return false;
 		}
