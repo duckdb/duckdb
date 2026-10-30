@@ -14,11 +14,6 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	for (auto &entry : GetLiveMetrics()) {
 		info.SetMetric(entry.first, std::move(entry.second));
 	}
-	info.SetMetric<MetricIOTotalReadOperations>(GetReadOperations());
-	info.SetMetric<MetricIOTotalReadTime>(GetReadTime());
-	info.SetMetric<MetricIOTotalWriteOperations>(GetWriteOperations());
-	info.SetMetric<MetricIOTotalWriteTime>(GetWriteTime());
-	info.SetMetric<MetricSystemTotalBytesSpilled>(GetBytesSpilled());
 	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
 	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
 	info.SetMetric<MetricSystemPeakStreamingBufferSize>(system_peak_streaming_buffer_size);
@@ -45,6 +40,31 @@ uint64_t ReadLiveMetric<MetricIOTotalBytesWritten>(const QueryMetrics &metrics) 
 template <>
 uint64_t ReadLiveMetric<MetricSystemTotalMemoryAllocated>(const QueryMetrics &metrics) {
 	return metrics.GetTotalMemoryAllocated();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalReadOperations>(const QueryMetrics &metrics) {
+	return metrics.GetReadOperations();
+}
+
+template <>
+double ReadLiveMetric<MetricIOTotalReadTime>(const QueryMetrics &metrics) {
+	return metrics.GetReadTime();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalWriteOperations>(const QueryMetrics &metrics) {
+	return metrics.GetWriteOperations();
+}
+
+template <>
+double ReadLiveMetric<MetricIOTotalWriteTime>(const QueryMetrics &metrics) {
+	return metrics.GetWriteTime();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricSystemTotalBytesSpilled>(const QueryMetrics &metrics) {
+	return metrics.GetBytesSpilled();
 }
 
 template <class... METRICS>

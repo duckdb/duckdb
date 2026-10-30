@@ -369,8 +369,8 @@ struct SortedAggregateFunction {
 		state.linked_list = LinkedList();
 	}
 
-	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
-	                     const idx_t offset) {
+	static void FinalizeGroups(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                           idx_t count, const idx_t offset) {
 		auto &order_bind = finalize_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &client = order_bind.context;
 
@@ -541,6 +541,16 @@ struct SortedAggregateFunction {
 		}
 
 		result.Verify();
+	}
+
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
+	                     const idx_t offset) {
+		//	Internally we can only handle 2^16 rows, so chunk them up
+		const idx_t group_limit = NumericLimits<uint16_t>::Maximum();
+		for (auto group_offset = offset; group_offset < count; group_offset += group_limit) {
+			const auto group_count = MinValue<idx_t>(group_limit, count - group_offset);
+			FinalizeGroups(states, finalize_input_data, result, group_count, group_offset);
+		}
 	}
 };
 
