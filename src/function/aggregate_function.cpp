@@ -144,7 +144,9 @@ BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunctio
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
-	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
+	// implementations sharing generic callbacks (e.g. the C API) are told apart by their name and function info
+	return callbacks == rhs.callbacks && properties == rhs.properties && GetName() == rhs.GetName() &&
+	       function_info == rhs.function_info && arguments == rhs.arguments &&
 	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments &&
 	       return_type == rhs.return_type;
 }

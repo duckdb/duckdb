@@ -1,5 +1,7 @@
 #include "test_capi_v2.hpp"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 
 // ---------------------------------------------------------------------------
@@ -167,6 +169,78 @@ void RegisterMySum(EnvFixture &fx) {
 	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(function == nullptr);
+	duckdb_v2_logical_type_destroy(&integer);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+// ---------------------------------------------------------------------------
+// my_max(INTEGER) -> BIGINT: same signature as my_sum, but keeps the maximum.
+// ---------------------------------------------------------------------------
+
+void MaxInit(duckdb_v2_aggregate_function_init_info_handle info, duckdb_v2_error_info_handle *err) {
+	void **states = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_aggregate_function_init_get_states(info, &states, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_init_get_state_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		*static_cast<int64_t *>(states[i]) = INT64_MIN;
+	}
+}
+
+void MaxUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle arg = nullptr;
+	void **states = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_aggregate_function_update_get_arg(info, 0, &arg, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_update_get_states(info, &states, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_update_get_row_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_vector_view view {};
+	if (duckdb_v2_vector_get_view(arg, &view, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	const auto *data = static_cast<const int32_t *>(view.data);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *static_cast<int64_t *>(states[i]);
+		state = std::max<int64_t>(state, data[SelAt(view.sel, i)]);
+	}
+}
+
+void MaxCombine(duckdb_v2_aggregate_function_combine_info_handle info, duckdb_v2_error_info_handle *err) {
+	void **sources = nullptr;
+	void **targets = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_aggregate_function_combine_get_sources(info, &sources, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_combine_get_targets(info, &targets, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_combine_get_state_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		auto &target = *static_cast<int64_t *>(targets[i]);
+		target = std::max(target, *static_cast<const int64_t *>(sources[i]));
+	}
+}
+
+// Registers my_max on the connection and destroys the builder handle.
+void RegisterMyMax(EnvFixture &fx) {
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+
+	auto function = MakeAggregate(fx.conn, "my_max");
+	auto sig = AggSigOf(function);
+	AggSigParam(sig, "x", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, bigint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_size_callback(function, SumSize, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_init_callback(function, MaxInit, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_update_callback(function, MaxUpdate, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, MaxCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
@@ -439,6 +513,25 @@ TEST_CASE("V2 aggregate: register on connection and execute", "[capi_v2][aggrega
 	        5000LL * 4999 / 2);
 	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER ORDER BY r DESC) FROM range(5000) t(r)") ==
 	        5000LL * 4999 / 2);
+}
+
+// ===========================================================================
+// Aggregates with the same signature are not deduplicated into one another.
+// ===========================================================================
+
+TEST_CASE("V2 aggregate: same-signature aggregates in one query stay distinct", "[capi_v2][aggregate_function]") {
+	EnvFixture fx;
+	RegisterMySum(fx);
+	RegisterMyMax(fx);
+
+	// sum(0..9) = 45, max = 9
+	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER) - my_max(r::INTEGER) FROM range(10) t(r)") == 36);
+	REQUIRE(AggQueryI64(fx.conn, "SELECT my_max(r::INTEGER) - my_sum(r::INTEGER) FROM range(10) t(r)") == -36);
+	// even: 20 - 8, odd: 25 - 9
+	REQUIRE(AggQueryI64(fx.conn, "SELECT sum(s - m)::BIGINT FROM (SELECT my_sum(r::INTEGER) AS s, "
+	                             "my_max(r::INTEGER) AS m FROM range(10) t(r) GROUP BY r % 2)") == 28);
+	// identical calls are still shared
+	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER) - my_sum(r::INTEGER) FROM range(10) t(r)") == 0);
 }
 
 // ===========================================================================
