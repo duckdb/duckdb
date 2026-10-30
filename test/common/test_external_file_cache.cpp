@@ -588,6 +588,51 @@ TEST_CASE("An estimate measured during a file's only read sizes the reads of the
 	REQUIRE(remote_fs->TakeReads() == SplitReads(0, FILE_SIZE, SPLIT_SIZE));
 }
 
+TEST_CASE("A read split into larger blocks keeps the full blocks cached by earlier reads", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+	auto &cache = db_instance.GetExternalFileCache();
+	Connection con(db);
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t MIN_BLOCK_SIZE = 256;
+	REQUIRE(
+	    !con.Query(StringUtil::Format("SET external_file_cache_remote_max_block_size=%llu", BLOCK_SIZE))->HasError());
+	REQUIRE(!con.Query(StringUtil::Format("SET external_file_cache_remote_min_block_size=%llu", MIN_BLOCK_SIZE))
+	             ->HasError());
+	const idx_t FILE_SIZE = 39 * BLOCK_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_adaptive_partially_cached.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle =
+	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
+
+	// reads split at the configured block size cache two full blocks and a small range
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE, 5 * BLOCK_SIZE) == content.substr(5 * BLOCK_SIZE, BLOCK_SIZE));
+	REQUIRE(ReadFull(*handle, MIN_BLOCK_SIZE, 14 * BLOCK_SIZE) == content.substr(14 * BLOCK_SIZE, MIN_BLOCK_SIZE));
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE, 22 * BLOCK_SIZE) == content.substr(22 * BLOCK_SIZE, BLOCK_SIZE));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{5 * BLOCK_SIZE, BLOCK_SIZE},
+	                                                                 {14 * BLOCK_SIZE, MIN_BLOCK_SIZE},
+	                                                                 {22 * BLOCK_SIZE, BLOCK_SIZE}});
+	REQUIRE(CountCachedBlocks(cache) == 3);
+
+	// 10 ms at 1.6 MB/s splits the next read into blocks of 16 times the configured size, which keep the full blocks
+	// although fetching the first one with its gaps would save a request and fetch the small range with its gaps
+	const idx_t SPLIT_SIZE = 16 * BLOCK_SIZE;
+	REQUIRE(!con.Query("SET debug_network_throughput_estimate='0.01,1600000'")->HasError());
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, 5 * BLOCK_SIZE},
+	                                                                 {6 * BLOCK_SIZE, SPLIT_SIZE},
+	                                                                 {23 * BLOCK_SIZE, SPLIT_SIZE}});
+	REQUIRE(CountCachedBlocks(cache) == 5);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads().empty());
+}
+
 TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
 	DuckDB db(nullptr);
 	auto &db_instance = *db.instance;
