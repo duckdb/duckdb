@@ -1,0 +1,37 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_blob.test
+# description: NUMERIC_STRING only applies to VARCHAR; BLOB shares the physical type but its bytes are not text
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_blob.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE blobs AS
+SELECT i, lpad(i::VARCHAR, 4, '0')::BLOB AS b, [lpad(i::VARCHAR, 4, '0')::BLOB] AS l, lpad(i::VARCHAR, 4, '0') AS s
+FROM range(6144) t(i);
+
+statement ok
+CHECKPOINT;
+
+# the VARCHAR column takes the codec, the BLOB column and the BLOB list child do not
+query II
+SELECT column_name, bool_or(compression = 'NUMERIC_STRING')
+FROM pragma_storage_info('blobs')
+WHERE segment_type IN ('VARCHAR', 'BLOB')
+GROUP BY column_name ORDER BY column_name;
+----
+b	false
+l	false
+s	true
+
+query I
+SELECT count(*) FROM blobs WHERE b <> s::BLOB OR l[1] <> b OR s <> lpad(i::VARCHAR, 4, '0');
+----
+0
+
+query I
+SELECT count(*) FROM blobs WHERE list_contains(l, '3000'::BLOB);
+----
+1

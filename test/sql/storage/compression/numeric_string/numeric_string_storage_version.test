@@ -1,0 +1,58 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_storage_version.test
+# description: NUMERIC_STRING requires storage version v2.1.0
+# group: [numeric_string]
+
+# the default storage version (v2.0.0) can neither force nor select the codec
+load {TEST_DIR}/numeric_string_v200.db readwrite v2.0.0
+
+statement error
+CREATE TABLE t (v VARCHAR USING COMPRESSION numeric_string);
+----
+Binder Error: Can't compress using user-provided compression type 'NUMERIC_STRING', that type is not available yet
+
+# forcing is accepted (the setting does not know the database) but the codec is never used
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE t AS SELECT i::VARCHAR AS v FROM range(300000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pragma_storage_info('t') WHERE compression = 'NUMERIC_STRING';
+----
+0
+
+# an attached database with the new storage version can use it
+statement ok
+ATTACH '{TEST_DIR}/numeric_string_v210.db' AS new (STORAGE_VERSION 'v2.1.0');
+
+statement ok
+CREATE TABLE new.t AS SELECT i::VARCHAR AS v FROM range(300000) t(i);
+
+statement ok
+CHECKPOINT new;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('new.t') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+query I
+SELECT count(*) FROM new.t WHERE v::BIGINT <> rowid;
+----
+0
+
+statement ok
+DETACH new;
+
+# a file written with v2.1.0 opens again
+statement ok
+ATTACH '{TEST_DIR}/numeric_string_v210.db' AS new;
+
+query I
+SELECT count(*) FROM new.t WHERE v::BIGINT <> rowid;
+----
+0

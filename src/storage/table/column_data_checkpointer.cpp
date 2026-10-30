@@ -18,9 +18,8 @@ namespace duckdb {
 
 const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
 	auto &db = col_data->GetDatabase();
-	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
-	return config.GetCompressionFunction(compression_type, column_type.InternalType());
+	return config.GetCompressionFunction(compression_type, type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
@@ -28,7 +27,7 @@ DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
 }
 
 const LogicalType &ColumnDataCheckpointData::GetType() const {
-	return col_data->type;
+	return type;
 }
 
 ColumnData &ColumnDataCheckpointData::GetColumnData() {

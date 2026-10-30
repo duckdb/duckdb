@@ -1,0 +1,126 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_updates.test
+# description: Updates, deletes and appends on top of NUMERIC_STRING segments
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_updates.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+CREATE TABLE reference AS SELECT i, (i * 3)::VARCHAR AS v FROM range(20000) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE t AS SELECT * FROM reference;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+# updates are stored on the side and merged on read
+statement ok
+UPDATE t SET v = (i * 5)::VARCHAR WHERE i % 10 = 0;
+
+statement ok
+UPDATE reference SET v = (i * 5)::VARCHAR WHERE i % 10 = 0;
+
+query I
+SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v;
+----
+0
+
+# an update that introduces a value the codec can not store forces the row group to fall back on the next checkpoint
+statement ok
+UPDATE t SET v = 'not a number' WHERE i = 12345;
+
+statement ok
+UPDATE reference SET v = 'not a number' WHERE i = 12345;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v;
+----
+0
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR' AND compression <> 'NUMERIC_STRING';
+----
+true
+
+statement ok
+UPDATE t SET v = (i * 5)::VARCHAR WHERE i = 12345;
+
+statement ok
+UPDATE reference SET v = (i * 5)::VARCHAR WHERE i = 12345;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+# deletes
+statement ok
+DELETE FROM t WHERE i % 3 = 1;
+
+statement ok
+DELETE FROM reference WHERE i % 3 = 1;
+
+query II
+SELECT count(*), sum(v::BIGINT) = (SELECT sum(v::BIGINT) FROM reference) FROM t;
+----
+13333	true
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v;
+----
+0
+
+# appends after the checkpoint
+statement ok
+INSERT INTO t SELECT i, (-i)::VARCHAR FROM range(20000, 25000) t(i);
+
+statement ok
+INSERT INTO reference SELECT i, (-i)::VARCHAR FROM range(20000, 25000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query III
+SELECT count(*), min(v::BIGINT), max(v::BIGINT) FROM t;
+----
+18333	-24999	99900
+
+query I
+SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v;
+----
+0
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+restart
+
+query I
+SELECT count(*) FROM t JOIN reference r USING (i) WHERE t.v IS DISTINCT FROM r.v;
+----
+0

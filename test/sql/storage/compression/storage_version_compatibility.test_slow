@@ -349,3 +349,43 @@ endloop
 
 endloop
 
+###############################
+# NUMERIC_STRING compression
+# Available from version v2.1.0, for varchar
+###############################
+
+statement ok
+ATTACH '{TEST_DIR}/storage_version_compatibility_test_8.db' AS v8 (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+ATTACH '{TEST_DIR}/storage_version_compatibility_test_9.db' AS v9 (STORAGE_VERSION 'v2.1.0');
+
+foreach version v1 v2 v3 v4 v5 v6 v7 v8
+
+statement ok
+USE {version}
+
+statement error
+CREATE OR REPLACE TABLE t(
+	x VARCHAR USING COMPRESSION NUMERIC_STRING
+);
+----
+Binder Error: Can't compress using user-provided compression type 'NUMERIC_STRING', that type is not available yet
+
+endloop
+
+statement ok
+USE v9
+
+statement ok
+CREATE OR REPLACE TABLE t(
+	x VARCHAR USING COMPRESSION NUMERIC_STRING
+);
+
+statement error
+CREATE OR REPLACE TABLE t(
+	x INTEGER USING COMPRESSION NUMERIC_STRING
+);
+----
+Binder Error: Can't compress column "x" with type 'INTEGER' (physical: INT32) using compression type 'NUMERIC_STRING'
+

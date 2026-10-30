@@ -1,0 +1,122 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_roundtrip.test
+# description: Round trip integer and decimal strings through NUMERIC_STRING compression
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_roundtrip.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+# integers, negatives, decimals, trailing zeros in the fraction, NULLs, and a column mixing scales
+statement ok
+CREATE TABLE reference AS
+SELECT i,
+       i::VARCHAR AS ints,
+       (i - 5000)::VARCHAR AS negatives,
+       CASE WHEN i % 7 = 0 THEN NULL ELSE (i * 1000003)::VARCHAR END AS with_nulls,
+       (i / 100.0)::DECIMAL(18,2)::VARCHAR AS prices,
+       CASE i % 4 WHEN 0 THEN i::VARCHAR WHEN 1 THEN (i / 10.0)::DECIMAL(18,1)::VARCHAR
+                  WHEN 2 THEN (i / 100.0)::DECIMAL(18,2)::VARCHAR ELSE (i / 1000.0)::DECIMAL(18,3)::VARCHAR END AS mixed_scale,
+       '0.' || lpad(i::VARCHAR, 5, '0') || '0' AS trailing_zeros,
+       (123456789012345678 - i)::VARCHAR AS eighteen_digits,
+       (i % 3)::VARCHAR AS low_cardinality,
+       (i // 300)::VARCHAR AS runs
+FROM range(10000) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE compressed AS SELECT * FROM reference;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name <> 'mixed_scale';
+----
+NUMERIC_STRING
+
+# a column whose values do not share one scale is left to the string methods even when forced
+query I
+SELECT count(*) FROM pragma_storage_info('compressed') WHERE column_name = 'mixed_scale' AND compression = 'NUMERIC_STRING';
+----
+0
+
+# every segment names the integer method that stores its mantissas
+query I
+SELECT DISTINCT segment_info LIKE 'inner_compression: BitPacking, mode: %' OR segment_info LIKE 'inner_compression: RLE, mode: %'
+FROM pragma_storage_info('compressed', include_segment_info=true) WHERE compression = 'NUMERIC_STRING';
+----
+true
+
+query I
+SELECT count(*) FROM compressed c JOIN reference r USING (i)
+WHERE c.ints IS DISTINCT FROM r.ints
+   OR c.negatives IS DISTINCT FROM r.negatives
+   OR c.with_nulls IS DISTINCT FROM r.with_nulls
+   OR c.prices IS DISTINCT FROM r.prices
+   OR c.mixed_scale IS DISTINCT FROM r.mixed_scale
+   OR c.trailing_zeros IS DISTINCT FROM r.trailing_zeros
+   OR c.eighteen_digits IS DISTINCT FROM r.eighteen_digits
+   OR c.low_cardinality IS DISTINCT FROM r.low_cardinality
+   OR c.runs IS DISTINCT FROM r.runs;
+----
+0
+
+# long runs are stored through RLE rather than bitpacking
+query I
+SELECT DISTINCT segment_info LIKE 'inner_compression: RLE, mode: canonical, scale: 0%'
+FROM pragma_storage_info('compressed', include_segment_info=true) WHERE column_name = 'runs' AND segment_type = 'VARCHAR';
+----
+true
+
+query I
+SELECT runs FROM compressed WHERE i IN (0, 299, 300, 601, 9999) ORDER BY i;
+----
+0
+0
+1
+2
+33
+
+query IIII
+SELECT count(*), count(with_nulls), min(negatives), max(trailing_zeros) FROM compressed;
+----
+10000	8571	-1	0.099990
+
+# the strings are real strings again: string functions and comparisons behave normally
+query III
+SELECT length(prices), prices || 'x', prices < '2' FROM compressed WHERE i = 150;
+----
+4	1.50x	true
+
+query II
+SELECT mixed_scale, with_nulls FROM compressed WHERE i IN (4, 5, 6, 7) ORDER BY i;
+----
+4	4000012
+0.5	5000015
+0.06	6000018
+0.007	NULL
+
+# equality filters on the compressed column
+query I
+SELECT i FROM compressed WHERE ints = '4242';
+----
+4242
+
+query I
+SELECT count(*) FROM compressed WHERE prices BETWEEN '10.00' AND '10.99';
+----
+100
+
+restart
+
+query I
+SELECT count(*) FROM compressed c JOIN reference r USING (i)
+WHERE c.ints IS DISTINCT FROM r.ints OR c.prices IS DISTINCT FROM r.prices OR c.mixed_scale IS DISTINCT FROM r.mixed_scale;
+----
+0

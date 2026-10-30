@@ -99,7 +99,8 @@
     {
       "reason": "disabled_compression_methods doesn't survive database restarts",
       "paths": [
-        "test/sql/settings/setting_validation_and_reset.test"
+        "test/sql/settings/setting_validation_and_reset.test",
+        "test/sql/storage/compression/numeric_string/numeric_string_selection.test"
       ]
     },
     {

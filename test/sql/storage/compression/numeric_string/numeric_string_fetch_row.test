@@ -1,0 +1,68 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_fetch_row.test
+# description: Index lookups fetch single rows out of NUMERIC_STRING segments
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_fetch_row.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b VARCHAR, c VARCHAR);
+
+statement ok
+INSERT INTO test
+SELECT x, CASE WHEN x % 5 = 4 THEN NULL ELSE ((x * 48271) % 2147483647)::VARCHAR END, ((x - 1500) / 100.0)::DECIMAL(10,2)::VARCHAR
+FROM range(3000) t(x);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('test') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+# point lookups through the primary key index use fetch_row
+query II
+SELECT b, c FROM test WHERE a = 0;
+----
+0	-15.00
+
+query II
+SELECT b, c FROM test WHERE a = 1;
+----
+48271	-14.99
+
+query II
+SELECT b, c FROM test WHERE a = 4;
+----
+NULL	-14.96
+
+query II
+SELECT b, c FROM test WHERE a = 2998;
+----
+144716458	14.98
+
+query II
+SELECT b, c FROM test WHERE a = 2999;
+----
+NULL	14.99
+
+# rows at both ends of every bitpacking block and group
+query I
+SELECT count(*) FROM test WHERE a IN (31, 32, 33, 1023, 1024, 1025, 2047, 2048, 2049)
+  AND c = ((a - 1500) / 100.0)::DECIMAL(10,2)::VARCHAR
+  AND (b IS NULL) = (a % 5 = 4)
+  AND (b IS NULL OR b = ((a * 48271) % 2147483647)::VARCHAR);
+----
+9
+
+# fetches via a join against the index
+query I
+SELECT count(*) FROM (SELECT range AS k FROM range(0, 3000, 37)) keys JOIN test ON test.a = keys.k
+WHERE test.c = ((keys.k - 1500) / 100.0)::DECIMAL(10,2)::VARCHAR;
+----
+82

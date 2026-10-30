@@ -1,6 +1,7 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 
 #include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
 
@@ -64,6 +65,8 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		auto &str = entry.GetValue();
 		auto str_len = str.GetSize();
 		total_string_length += str_len;
+		non_null_count++;
+		distinct_strings.InsertElement(Hash(str));
 		if (str_len > max_string_length) {
 			max_string_length = str_len;
 		}
@@ -82,7 +85,30 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 }
 
 idx_t DictFSSTAnalyzeState::FinalAnalyze() {
-	return LossyNumericCast<idx_t>((double)total_string_length / 2.0);
+	// FSST is assumed to halve the strings it encodes
+	const double fsst_factor = disable_fsst ? 1.0 : 0.5;
+	const auto length_width = BitpackingPrimitives::MinimumBitWidth<idx_t>(max_string_length);
+
+	// Dictionary: every distinct string once (FSST-encoded unless disabled), a bitpacked length per dictionary entry
+	// and a bitpacked dictionary index per row (index 0 is reserved for NULL)
+	idx_t distinct_count = 0;
+	double distinct_string_length = 0;
+	if (non_null_count > 0) {
+		distinct_count = MinValue<idx_t>(MaxValue<idx_t>(distinct_strings.Count(), 1), non_null_count);
+		distinct_string_length = double(total_string_length) * double(distinct_count) / double(non_null_count);
+	}
+	const auto index_width = BitpackingPrimitives::MinimumBitWidth<idx_t>(distinct_count + 1);
+	double size = distinct_string_length * fsst_factor +
+	              double(BitpackingPrimitives::GetRequiredSize(distinct_count, length_width)) +
+	              double(BitpackingPrimitives::GetRequiredSize(total_count, index_width));
+
+	// FSST only: when there are no duplicates and no NULLs the strings are stored in row order without indices
+	if (!disable_fsst && !contains_nulls) {
+		double fsst_only_size = double(total_string_length) * fsst_factor +
+		                        double(BitpackingPrimitives::GetRequiredSize(non_null_count, length_width));
+		size = MinValue(size, fsst_only_size);
+	}
+	return LossyNumericCast<idx_t>(size);
 }
 
 } // namespace dict_fsst

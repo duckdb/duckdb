@@ -1,0 +1,92 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_large.test_slow
+# description: NUMERIC_STRING across many segments, with NULLs, decimals and partial scans
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_large.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+CREATE TABLE reference AS
+SELECT i,
+       CASE WHEN i % 11 = 0 THEN NULL ELSE ((i * 2654435761) % 9000000000000000000)::VARCHAR END AS wide,
+       (i % 1000 - 500)::VARCHAR AS narrow,
+       (i / 1000.0)::DECIMAL(18,3)::VARCHAR AS scales,
+       lpad((i % 100000)::VARCHAR, 9, '0') AS padded
+FROM range(1500000) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE compressed AS SELECT * FROM reference;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+# more than one segment per column
+query I
+SELECT count(*) > 1 FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name = 'wide';
+----
+true
+
+query I
+SELECT count(*) FROM compressed c JOIN reference r USING (i)
+WHERE c.wide IS DISTINCT FROM r.wide OR c.narrow IS DISTINCT FROM r.narrow OR c.scales IS DISTINCT FROM r.scales OR c.padded IS DISTINCT FROM r.padded;
+----
+0
+
+query IIII
+SELECT count(*), count(wide), sum(narrow::INTEGER), sum(scales::DECIMAL(18,3)) = (SELECT sum(scales::DECIMAL(18,3)) FROM reference) FROM compressed;
+----
+1500000	1363636	-750000	true
+
+# partial scans with offsets that are not aligned to vectors or groups
+query II
+SELECT narrow, padded FROM compressed ORDER BY i LIMIT 2 OFFSET 1234567;
+----
+67	000034567
+68	000034568
+
+query I
+SELECT sum(wide::HUGEINT) = (SELECT sum(wide::HUGEINT) FROM reference) FROM compressed;
+----
+true
+
+# filters and aggregates on the string values
+query I
+SELECT count(*) FROM compressed WHERE narrow = '-500';
+----
+1500
+
+query I
+SELECT count(DISTINCT padded) FROM compressed;
+----
+100000
+
+query I
+SELECT count(*) FROM compressed WHERE scales LIKE '%.%';
+----
+1500000
+
+# parallel scan with a predicate that touches every segment
+query I
+SELECT count(*) FILTER (WHERE wide IS NOT NULL AND length(wide) < 16) = (SELECT count(*) FROM reference WHERE wide IS NOT NULL AND length(wide) < 16) FROM compressed;
+----
+true
+
+restart
+
+query I
+SELECT count(*) FROM compressed c JOIN reference r USING (i) WHERE c.wide IS DISTINCT FROM r.wide OR c.scales IS DISTINCT FROM r.scales;
+----
+0

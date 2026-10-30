@@ -45,6 +45,11 @@ struct DictFSSTCompressionFun {
 	static bool TypeIsSupported(const PhysicalType physical_type);
 };
 
+struct NumericStringCompressionFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(const PhysicalType physical_type);
+};
+
 struct ChimpCompressionFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(const PhysicalType physical_type);

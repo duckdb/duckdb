@@ -32,6 +32,8 @@ static const DefaultCompressionMethod internal_compression_methods[] = {
      EmptyValidityCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_DICT_FSST, DictFSSTCompressionFun::GetFunction,
      DictFSSTCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_NUMERIC_STRING, NumericStringCompressionFun::GetFunction,
+     NumericStringCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 idx_t CompressionFunctionSet::GetCompressionIndex(PhysicalType physical_type) {
@@ -125,6 +127,7 @@ bool EmitCompressionFunction(CompressionType type) {
 	case CompressionType::COMPRESSION_ZSTD:
 	case CompressionType::COMPRESSION_ROARING:
 	case CompressionType::COMPRESSION_DICT_FSST:
+	case CompressionType::COMPRESSION_NUMERIC_STRING:
 		return true;
 	default:
 		return false;

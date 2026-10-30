@@ -164,6 +164,7 @@ overrides = {
         "COMPRESSION_ROARING": "ROARING",
         "COMPRESSION_EMPTY": "EMPTY",
         "COMPRESSION_DICT_FSST": "DICT_FSST",
+        "COMPRESSION_NUMERIC_STRING": "NUMERIC_STRING",
     },
     "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
     "TriggerTiming": {"BEFORE": "BEFORE", "AFTER": "AFTER", "INSTEAD_OF": "INSTEAD OF"},

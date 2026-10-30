@@ -1,0 +1,98 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_fixed_width.test
+# description: Zero-padded numeric strings use the fixed-width mode of NUMERIC_STRING compression
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_fixed_width.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE zips AS
+SELECT i,
+       lpad(((i * 7919) % 100000)::VARCHAR, 5, '0') AS zip,
+       lpad(((i * 31) % 10000)::VARCHAR, 4, '0') || '.' || lpad((i % 100)::VARCHAR, 2, '0') AS padded_decimal,
+       CASE WHEN i % 5 = 0 THEN NULL ELSE lpad((i % 1000)::VARCHAR, 8, '0') END AS padded_nulls,
+       '0000' AS all_zeros
+FROM range(5000) t(i);
+
+statement ok
+CHECKPOINT;
+
+# the constant all_zeros column is low-cardinality and left to the other methods
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('zips') WHERE segment_type = 'VARCHAR' AND column_name <> 'all_zeros';
+----
+NUMERIC_STRING
+
+query IIII
+SELECT zip, padded_decimal, padded_nulls, all_zeros FROM zips WHERE i IN (0, 1, 5, 4999) ORDER BY i;
+----
+00000	0000.00	NULL	0000
+07919	0031.01	00000001	0000
+39595	0155.05	NULL	0000
+87081	4969.99	00000999	0000
+
+query I
+SELECT count(*) FROM zips WHERE length(zip) <> 5 OR length(padded_decimal) <> 7 OR length(padded_nulls) <> 8;
+----
+0
+
+query I
+SELECT count(*) FROM zips WHERE zip = lpad(((i * 7919) % 100000)::VARCHAR, 5, '0');
+----
+5000
+
+query I
+SELECT count(*) FILTER (WHERE zip LIKE '0%') = count(*) FILTER (WHERE (i * 7919) % 100000 < 10000) FROM zips;
+----
+true
+
+# a column that mixes padded and unpadded values can not use the codec and falls back
+statement ok
+CREATE TABLE mixed AS SELECT i, CASE WHEN i % 2 = 0 THEN lpad(i::VARCHAR, 5, '0') ELSE i::VARCHAR END AS v FROM range(5000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pragma_storage_info('mixed') WHERE segment_type = 'VARCHAR' AND compression = 'NUMERIC_STRING';
+----
+0
+
+query I
+SELECT count(*) FROM mixed WHERE v = CASE WHEN i % 2 = 0 THEN lpad(i::VARCHAR, 5, '0') ELSE i::VARCHAR END;
+----
+5000
+
+# fixed widths at and beyond 24 characters, up to the longest accepted string, and a padded decimal with 28 integer digits
+statement ok
+CREATE TABLE wide AS
+SELECT i,
+       lpad(i::VARCHAR, 24, '0') AS w24,
+       lpad(i::VARCHAR, 25, '0') AS w25,
+       lpad(i::VARCHAR, 48, '0') AS w48,
+       lpad(i::VARCHAR, 28, '0') || '.50' AS padded_decimal
+FROM range(1, 5001) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('wide') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+query I
+SELECT count(*) FROM wide
+WHERE w24 IS DISTINCT FROM lpad(i::VARCHAR, 24, '0')
+   OR w25 IS DISTINCT FROM lpad(i::VARCHAR, 25, '0')
+   OR w48 IS DISTINCT FROM lpad(i::VARCHAR, 48, '0')
+   OR padded_decimal IS DISTINCT FROM lpad(i::VARCHAR, 28, '0') || '.50';
+----
+0
+
+query III
+SELECT w24, w48, padded_decimal FROM wide WHERE i = 123;
+----
+000000000000000000000123	000000000000000000000000000000000000000000000123	0000000000000000000000000123.50

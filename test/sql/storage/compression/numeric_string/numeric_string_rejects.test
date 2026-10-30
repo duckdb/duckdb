@@ -1,0 +1,83 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_rejects.test
+# description: Values that do not round-trip through a mantissa and scale keep NUMERIC_STRING out of the row group
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_rejects.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+# every table has one offending value among valid integers; the whole row group must fall back. The last three parse
+# as numbers but do not fit the layout of the other values: a different scale, or a leading zero in a column whose
+# values do not all have the same width.
+foreach offender '+1' chr(32)||'1' '1'||chr(32) '1e5' '-0' '-0.0' '.5' '5.' '1.2.3' '0x10' '1,5' '' '1234567890123456789' '--1' 'NaN' '1_000' '1'||chr(0) '0.'||repeat('0',60)||'1' repeat('0',60) '1.5' '777.0' '00777'
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT i, CASE WHEN i = 777 THEN {offender} ELSE i::VARCHAR END AS v FROM range(2000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR' AND compression = 'NUMERIC_STRING';
+----
+0
+
+query I
+SELECT v = {offender} FROM t WHERE i = 777;
+----
+true
+
+endloop
+
+# values that do round-trip are fine even when they look unusual: mixed into a high-cardinality column, a single
+# rejected value would make the whole row group fall back. Every column has one scale.
+statement ok
+CREATE OR REPLACE TABLE ok AS SELECT i,
+	CASE i WHEN 0 THEN '0' WHEN 1 THEN '100' WHEN 2 THEN '-999999999999999999' WHEN 3 THEN '999999999999999999'
+	       WHEN 4 THEN NULL ELSE (i * 123456789012345)::VARCHAR END AS integers,
+	CASE i WHEN 0 THEN '0.00' WHEN 1 THEN '100.00' WHEN 2 THEN '-0.50' WHEN 3 THEN '-9999999999999999.99'
+	       WHEN 4 THEN NULL ELSE ((i * 1234567) / 100.0)::DECIMAL(18,2)::VARCHAR END AS two_decimals,
+	CASE i WHEN 0 THEN '0.000000000000000000' WHEN 1 THEN '0.123456789012345678' WHEN 2 THEN '-0.000000000000000001'
+	       WHEN 4 THEN NULL ELSE '0.' || lpad((i * 7919)::VARCHAR, 18, '0') END AS eighteen_decimals,
+	CASE i WHEN 0 THEN '0.00000000000000000000000000000001' WHEN 4 THEN NULL
+	       ELSE '0.' || lpad((i * 7919)::VARCHAR, 32, '0') END AS long_fractions
+	FROM range(6000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('ok') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+query IIII
+SELECT integers, two_decimals, eighteen_decimals, long_fractions FROM ok WHERE i < 6 ORDER BY i;
+----
+0	0.00	0.000000000000000000	0.00000000000000000000000000000001
+100	100.00	0.123456789012345678	0.00000000000000000000000000007919
+-999999999999999999	-0.50	-0.000000000000000001	0.00000000000000000000000000015838
+999999999999999999	-9999999999999999.99	0.000000000000023757	0.00000000000000000000000000023757
+NULL	NULL	NULL	NULL
+617283945061725	61728.35	0.000000000000039595	0.00000000000000000000000000039595
+
+query I
+SELECT count(*) FROM ok WHERE i > 5 AND (integers <> (i * 123456789012345)::VARCHAR
+	OR two_decimals <> ((i * 1234567) / 100.0)::DECIMAL(18,2)::VARCHAR
+	OR eighteen_decimals <> '0.' || lpad((i * 7919)::VARCHAR, 18, '0')
+	OR long_fractions <> '0.' || lpad((i * 7919)::VARCHAR, 32, '0'));
+----
+0
+
+# all-NULL columns are left to the constant/validity codecs
+statement ok
+CREATE OR REPLACE TABLE nulls AS SELECT NULL::VARCHAR AS v FROM range(1000);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), count(v) FROM nulls;
+----
+1000	0

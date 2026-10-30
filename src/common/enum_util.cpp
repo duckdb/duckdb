@@ -1500,6 +1500,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "ROARING" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "EMPTY" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "DICT_FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_NUMERIC_STRING), "NUMERIC_STRING" },
 		{ static_cast<uint32_t>(CompressionType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;

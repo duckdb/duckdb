@@ -1,0 +1,51 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_list_child.test
+# description: NUMERIC_STRING on the child column of a LIST, which is scanned in runs longer than a vector
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_list_child.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+statement ok
+CREATE TABLE t AS
+SELECT p, list(lpad((p * 521 + j)::VARCHAR, 20, '0') ORDER BY j) AS padded, list((p * 521 + j)::VARCHAR ORDER BY j) AS plain
+FROM range(257) parts(p), range(521) rows(j)
+GROUP BY p;
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT column_path, string_agg(DISTINCT compression, ',')
+FROM pragma_storage_info('t')
+WHERE segment_type = 'VARCHAR'
+GROUP BY column_path ORDER BY column_path;
+----
+[1, 1]	NUMERIC_STRING
+[2, 1]	NUMERIC_STRING
+
+query III
+SELECT count(*),
+       count(*) FILTER (WHERE padded <> list_transform(range(521), lambda j: lpad((p * 521 + j)::VARCHAR, 20, '0'))),
+       count(*) FILTER (WHERE plain <> list_transform(range(521), lambda j: (p * 521 + j)::VARCHAR))
+FROM t;
+----
+257	0	0
+
+query II
+SELECT padded[1], plain[521] FROM t WHERE p = 256;
+----
+00000000000000133376	133896
+
+query II
+SELECT sum(len(padded)), sum(len(plain)) FROM t;
+----
+133897	133897
+
+# unnesting reads the child column through the list offsets
+query II
+SELECT count(*), count(*) FILTER (WHERE u.s <> lpad((t.p * 521 + u.ord - 1)::VARCHAR, 20, '0'))
+FROM t, unnest(t.padded) WITH ORDINALITY AS u(s, ord);
+----
+133897	0

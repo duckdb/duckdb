@@ -1,6 +1,9 @@
 #pragma once
 
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/dict_fsst/common.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -28,6 +31,9 @@ public:
 	bool disable_fsst = false;
 	idx_t total_string_length = 0;
 	idx_t total_count = 0;
+	idx_t non_null_count = 0;
+	//! Approximate number of distinct strings: sizes the dictionary and the width of the dictionary indices
+	HyperLogLogP<10> distinct_strings;
 };
 
 } // namespace dict_fsst

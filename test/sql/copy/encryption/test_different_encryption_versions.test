@@ -25,25 +25,30 @@ SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encr
 ----
 v1.4.0+
 
-# new encrypted databases get the default storage version
+# new encrypted databases get the same default storage version as a plain database
 statement ok
 RESET storage_compatibility_version
+
+statement ok
+ATTACH '{TEST_DIR}/plain_default.duckdb' AS plain_default;
 
 statement ok
 ATTACH '{TEST_DIR}/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
 query I
-SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v0'
+SELECT tags['storage_version'] = (SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='plain_default')
+FROM duckdb_databases() WHERE database_name='encrypted_v0'
 ----
-v2.0.0+
+true
 
 statement ok
 ATTACH '{TEST_DIR}/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 
 query I
-SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v1'
+SELECT tags['storage_version'] = (SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='plain_default')
+FROM duckdb_databases() WHERE database_name='encrypted_v1'
 ----
-v2.0.0+
+true
 
 statement error
 ATTACH '{TEST_DIR}/encrypted_error.duckdb' AS encrypted_error (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v2');
