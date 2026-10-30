@@ -1,5 +1,9 @@
 #include "duckdb/function/scalar/numeric_dispatch.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
@@ -424,24 +428,6 @@ void DisableOverflowChecks(ClientContext &context, BoundFunctionExpression &expr
 
 struct NumericDispatchState : public FunctionLocalState {
 	vector<unique_ptr<NumericKernel>> kernels;
-	//! The context the kernels are bound in when the executor has none (index expressions)
-	shared_ptr<ClientContext> own_context;
-
-	//! The context to bind and run the kernels in
-	ClientContext &Context(ExpressionState &state, const Identifier &function_name) {
-		if (state.HasContext()) {
-			return state.GetContext();
-		}
-		if (!own_context) {
-			auto db = state.GetDatabase();
-			if (!db) {
-				throw BinderException("Cannot use %s in this context", function_name.GetIdentifierName());
-			}
-			own_context = make_shared_ptr<ClientContext>(db->shared_from_this());
-		}
-		return *own_context;
-	}
-
 	NumericKernel &Get(ClientContext &context, const Identifier &name, const vector<LogicalType> &types,
 	                   const vector<Value> &constants, bool is_operator, bool exact_result) {
 		for (auto &kernel : kernels) {
@@ -452,42 +438,44 @@ struct NumericDispatchState : public FunctionLocalState {
 		auto kernel = make_uniq<NumericKernel>();
 		kernel->types = types;
 		kernel->constants = constants;
-		auto bind_kernel = [&]() {
-			vector<unique_ptr<Expression>> children;
+		vector<unique_ptr<Expression>> children;
+		for (idx_t i = 0; i < types.size(); i++) {
+			if (constants[i].type().id() != LogicalTypeId::INVALID) {
+				children.push_back(make_uniq<BoundConstantExpression>(constants[i]));
+			} else {
+				children.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+			}
+		}
+		// the kernels are built-in functions, which every transaction sees: look them up through the system
+		// transaction, so an executor whose context has no transaction (index expressions) can bind them too
+		auto &db = DatabaseInstance::GetDatabase(context);
+		auto system_transaction = CatalogTransaction::GetSystemTransaction(db);
+		auto entry = Catalog::GetSystemCatalog(db)
+		                 .GetSchema(system_transaction, Identifier(DEFAULT_SCHEMA))
+		                 .GetEntry(system_transaction, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+		if (!entry) {
+			throw InternalException("NUMERIC kernel %s is not a built-in function", name.GetIdentifierName());
+		}
+		FunctionBinder binder(context);
+		ErrorData error;
+		kernel->expression = binder.BindScalarFunction(entry->Cast<ScalarFunctionCatalogEntry>(), std::move(children),
+		                                               error, is_operator);
+		if (!kernel->expression) {
+			error.Throw();
+		}
+		if (exact_result && !NumericType::IsExact(kernel->expression->GetReturnType())) {
+			// an inexact kernel (e.g. a DOUBLE overload) cannot produce the exact NUMERIC result
+			string representations;
 			for (idx_t i = 0; i < types.size(); i++) {
-				if (constants[i].type().id() != LogicalTypeId::INVALID) {
-					children.push_back(make_uniq<BoundConstantExpression>(constants[i]));
-				} else {
-					children.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
-				}
+				representations += (i > 0 ? ", " : "") + types[i].ToString();
 			}
-			FunctionBinder binder(context);
-			ErrorData error;
-			kernel->expression =
-			    binder.BindScalarFunction(Identifier(DEFAULT_SCHEMA), name, std::move(children), error, is_operator);
-			if (!kernel->expression) {
-				error.Throw();
-			}
-			if (exact_result && !NumericType::IsExact(kernel->expression->GetReturnType())) {
-				// an inexact kernel (e.g. a DOUBLE overload) cannot produce the exact NUMERIC result
-				string representations;
-				for (idx_t i = 0; i < types.size(); i++) {
-					representations += (i > 0 ? ", " : "") + types[i].ToString();
-				}
-				throw NotImplementedException(
-				    "%s(%s) has no exact kernel for NUMERIC values in this representation (the %s overload returns %s)",
-				    name.GetIdentifierName(), representations, name.GetIdentifierName(),
-				    kernel->expression->GetReturnType().ToString());
-			}
-			if (is_operator) {
-				DisableOverflowChecks(context, kernel->expression->Cast<BoundFunctionExpression>());
-			}
-		};
-		if (own_context && &context == own_context.get()) {
-			// the catalog lookups of the binder need a transaction, which our own context does not have yet
-			context.RunFunctionInTransaction(bind_kernel);
-		} else {
-			bind_kernel();
+			throw NotImplementedException(
+			    "%s(%s) has no exact kernel for NUMERIC values in this representation (the %s overload returns %s)",
+			    name.GetIdentifierName(), representations, name.GetIdentifierName(),
+			    kernel->expression->GetReturnType().ToString());
+		}
+		if (is_operator) {
+			DisableOverflowChecks(context, kernel->expression->Cast<BoundFunctionExpression>());
 		}
 		kernel->argument_types = types;
 		if (kernel->expression->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
@@ -742,7 +730,7 @@ template <NumericDispatchKind KIND>
 void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<NumericDispatchState>();
-	auto &context = lstate.Context(state, func_expr.Function().GetName());
+	auto &context = state.GetContext();
 	idx_t count = args.size();
 
 	vector<unique_ptr<Vector>> typed;

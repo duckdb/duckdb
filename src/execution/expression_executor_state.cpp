@@ -43,10 +43,6 @@ ClientContext &ExpressionState::GetContext() {
 	return root.executor->GetContext();
 }
 
-optional_ptr<DatabaseInstance> ExpressionState::GetDatabase() {
-	return root.executor->GetDatabasePtr();
-}
-
 ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
 }
 

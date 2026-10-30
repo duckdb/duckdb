@@ -45,9 +45,6 @@ ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exp
 	}
 }
 
-ExpressionExecutor::ExpressionExecutor(DatabaseInstance &db) : context(nullptr), database(&db) {
-}
-
 ExpressionExecutor::ExpressionExecutor() : context(nullptr) {
 }
 
@@ -64,11 +61,6 @@ ClientContext &ExpressionExecutor::GetContext() {
 
 optional_ptr<ClientContext> ExpressionExecutor::GetContextPtr() {
 	return context;
-}
-
-optional_ptr<DatabaseInstance> ExpressionExecutor::GetDatabasePtr() {
-	// deliberately not derived from the context: that would make every executor depend on the database instance
-	return database;
 }
 
 Allocator &ExpressionExecutor::GetAllocator() {
