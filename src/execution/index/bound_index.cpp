@@ -49,8 +49,10 @@ BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexCo
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
 	if (NeedsContext(unbound_expressions_p)) {
-		// binding the NUMERIC kernels needs a client context, which the index owns
-		expression_context = make_shared_ptr<ClientContext>(db.GetDatabase().shared_from_this());
+		// binding the NUMERIC kernels needs a client context, which the index owns. The index is part of the database,
+		// so its context must not keep the database alive: it refers to the instance without owning it
+		shared_ptr<DatabaseInstance> instance(shared_ptr<DatabaseInstance>(), &db.GetDatabase());
+		expression_context = make_shared_ptr<ClientContext>(std::move(instance));
 		executor = make_uniq<ExpressionExecutor>(*expression_context);
 	} else {
 		executor = unique_ptr<ExpressionExecutor>(new ExpressionExecutor());
