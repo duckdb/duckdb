@@ -747,7 +747,7 @@ using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanS
 //===--------------------------------------------------------------------===//
 class CommonSubplanFinder {
 public:
-	explicit CommonSubplanFinder(ClientContext &context) : state(context) {
+	explicit CommonSubplanFinder(ClientContext &context) : context(context), state(context) {
 	}
 
 private:
@@ -862,7 +862,7 @@ public:
 		for (auto &entry : subplans) {
 			auto &signature = entry.first.get();
 			auto &subplan_info = entry.second;
-			if (signature.OperatorCount() == 1) {
+			if (signature.OperatorCount() == 1 && !GetExpandableScan(*subplan_info.subplans[0].op.get())) {
 				to_remove.push_back(signature); // Just one operator in this subplan
 				continue;
 			}
@@ -960,7 +960,8 @@ public:
 				}
 			}
 
-			if (required_canonical_bindings.size() != primary_subplan.canonical_bindings.size()) {
+			auto scan = GetExpandableScan(*primary_subplan.op.get());
+			if (!scan && required_canonical_bindings.size() != primary_subplan.canonical_bindings.size()) {
 				// The signature ignores projection maps. If duplicate subplans expose different
 				// subsets of the same work, widen the materialized producer just enough to make
 				// every referenced output available, then project each reader back to its original
@@ -983,12 +984,27 @@ public:
 			column_binding_map_t<idx_t> cte_binding_index;
 			for (idx_t i = 0; i < required_canonical_bindings.size(); i++) {
 				auto &cb = required_canonical_bindings[i];
+				cte_binding_index.emplace(cb, i);
+				if (scan) {
+					// Appending columns preserves existing filter and expression bindings.
+					auto column_index = scan->TryGetProjectionIndex(cb.column_index.GetIndex());
+					if (!column_index.IsValid()) {
+						column_index = scan->AddColumnId(cb.column_index.GetIndex());
+					}
+					types.push_back(scan->GetColumnType(scan->GetColumnIndex(column_index)));
+					materialized_output_bindings.emplace_back(scan->table_index, column_index);
+					continue;
+				}
 				const auto entry = materialized_binding_index.find(cb);
 				D_ASSERT(entry != materialized_binding_index.end()); // guaranteed by FilterSubplans
 				const auto materialized_col_idx = entry->second;
-				cte_binding_index.emplace(cb, i);
 				types.push_back(primary_subplan.op.get()->types[materialized_col_idx]);
 				materialized_output_bindings.push_back(materialized_bindings[materialized_col_idx]);
+			}
+			if (scan) {
+				scan->projection_ids.clear();
+				ClearProjectionMaps(*primary_subplan.op.get());
+				primary_subplan.op.get()->ResolveOperatorTypes();
 			}
 
 			// Get names
@@ -1187,6 +1203,10 @@ private:
 
 	//! Moves a subplan that can expose every binding required by the duplicate occurrences to the front
 	bool SelectPrimarySubplan(SubplanInfo &subplan_info) {
+		if (GetExpandableScan(*subplan_info.subplans[0].op.get())) {
+			// Identical scans can read the union of the columns requested by their consumers.
+			return true;
+		}
 		column_binding_set_t required_bindings;
 		for (auto &subplan : subplan_info.subplans) {
 			required_bindings.insert(subplan.canonical_bindings.begin(), subplan.canonical_bindings.end());
@@ -1245,9 +1265,30 @@ private:
 
 	bool ShouldMaterialize(const SubplanInfo &subplan_info) const {
 		auto &subplan = subplan_info.subplans[0].op.get();
+		if (auto scan = GetExpandableScan(*subplan)) {
+			// Sharing an unfiltered scan adds fan-out without saving any filtering work.
+			return (subplan->type == LogicalOperatorType::LOGICAL_FILTER || scan->table_filters.HasFilters()) &&
+			       subplan->has_estimated_cardinality &&
+			       subplan->estimated_cardinality < scan->EstimateSourceCardinality(context) / 2;
+		}
 		return CTEInlining::EndsInAggregateOrDistinct(*subplan) ||
 		       (subplan->has_estimated_cardinality &&
 		        IsSelectiveMultiTablePlan(*subplan, subplan->estimated_cardinality));
+	}
+
+	static optional_ptr<LogicalGet> GetExpandableScan(LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			return GetExpandableScan(*op.children[0]);
+		}
+		if (op.type != LogicalOperatorType::LOGICAL_GET) {
+			return nullptr;
+		}
+		auto &get = op.Cast<LogicalGet>();
+		if (!get.children.empty() || get.has_pushed_projection || get.extra_info.sample_options ||
+		    get.dynamic_filters) {
+			return nullptr;
+		}
+		return get;
 	}
 
 	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
@@ -1299,6 +1340,7 @@ private:
 	}
 
 private:
+	ClientContext &context;
 	//! State for creating PlanSignature with reusable data structures
 	PlanSignatureCreateState state;
 	//! Mapping from operator to info

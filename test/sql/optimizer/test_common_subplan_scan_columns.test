@@ -1,0 +1,127 @@
+# name: test/sql/optimizer/test_common_subplan_scan_columns.test
+# description: Share identical filtered scans with different requested columns
+# group: [optimizer]
+
+statement ok
+CREATE TABLE scan_columns AS
+SELECT i::INTEGER AS k,
+       CASE WHEN i % 3 <> 0 THEN i::INTEGER END AS a,
+       (i * 10)::DECIMAL(12,2) AS b,
+       'v' || i AS s
+FROM range(20) t(i);
+
+# No individual scan reads both aggregate payloads.
+query IRR
+SELECT (SELECT count(*) FROM scan_columns WHERE k < 5),
+       (SELECT avg(a) FROM scan_columns WHERE k < 5),
+       (SELECT avg(b) FROM scan_columns WHERE k < 5);
+----
+5	2.3333333333333335	20
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+query II
+EXPLAIN SELECT (SELECT count(*) FROM scan_columns WHERE k < 5),
+               (SELECT avg(a) FROM scan_columns WHERE k < 5),
+               (SELECT avg(b) FROM scan_columns WHERE k < 5);
+----
+logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*CTE Scan.*
+
+# Reordering consumers and renaming their columns preserves the output schema.
+query RRI
+SELECT (SELECT avg(paid) FROM (SELECT b AS paid, k FROM scan_columns) x WHERE k < 5),
+       (SELECT avg(discount) FROM (SELECT a AS discount, k FROM scan_columns) y WHERE k < 5),
+       (SELECT count(*) FROM scan_columns z WHERE z.k < 5);
+----
+20	2.3333333333333335	5
+
+# Grouped and DISTINCT aggregates retain their independent states.
+query III rowsort
+SELECT k % 2, count(DISTINCT a), sum(a) FROM scan_columns WHERE k < 5 GROUP BY k % 2
+UNION ALL
+SELECT k % 2, count(*), sum(b)::BIGINT FROM scan_columns WHERE k < 5 GROUP BY k % 2;
+----
+0	2	6
+0	3	60
+1	1	1
+1	2	40
+
+# String and numeric columns must not be confused when restoring each reader.
+query TT rowsort
+SELECT s, a::VARCHAR FROM scan_columns WHERE k < 3
+UNION ALL
+SELECT s, b::VARCHAR FROM scan_columns WHERE k < 3;
+----
+v0	0.00
+v0	NULL
+v1	1
+v1	10.00
+v2	2
+v2	20.00
+
+# A filter that remains above the scan can share the same widened input.
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query II
+SELECT (SELECT sum(a) FROM scan_columns WHERE k % 5 = 1),
+       (SELECT sum(b)::BIGINT FROM scan_columns WHERE k % 5 = 1);
+----
+28	340
+
+query II
+EXPLAIN SELECT (SELECT sum(a) FROM scan_columns WHERE k % 5 = 1),
+               (SELECT sum(b) FROM scan_columns WHERE k % 5 = 1);
+----
+logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*
+
+statement ok
+SET disabled_optimizers='';
+
+# Predicates on different base columns remain different scans.
+query II
+SELECT (SELECT sum(a) FROM scan_columns WHERE k < 5),
+       (SELECT sum(b)::BIGINT FROM scan_columns WHERE a < 5);
+----
+7	70
+
+query II
+EXPLAIN SELECT (SELECT sum(a) FROM scan_columns WHERE k < 5),
+               (SELECT sum(b) FROM scan_columns WHERE a < 5);
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+# An unfiltered scan does not justify adding a shared producer.
+query II
+EXPLAIN SELECT (SELECT sum(a) FROM scan_columns),
+               (SELECT sum(b) FROM scan_columns);
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+# Bind each execution's predicate independently, including an empty result.
+statement ok
+PREPARE scan_columns_p AS
+SELECT (SELECT count(*) FROM scan_columns WHERE k < $1),
+       (SELECT sum(a) FROM scan_columns WHERE k < $2),
+       (SELECT sum(b)::BIGINT FROM scan_columns WHERE k < $3);
+
+query III
+EXECUTE scan_columns_p(5, 5, 5);
+----
+5	7	100
+
+query III
+EXECUTE scan_columns_p(5, 3, 2);
+----
+5	3	10
+
+query III
+EXECUTE scan_columns_p(0, 0, 0);
+----
+0	NULL	NULL
+
+query III
+EXECUTE scan_columns_p(5, 5, 5);
+----
+5	7	100
