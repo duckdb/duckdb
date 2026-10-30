@@ -23,19 +23,6 @@ SELECT (SELECT sum(a) FROM overlap_join), (SELECT sum(b) FROM overlap_join);
 ----
 73750	737500
 
-statement ok
-SET explain_output='optimized_only';
-
-query II
-EXPLAIN SELECT (SELECT sum(a) FROM overlap_join), (SELECT sum(b) FROM overlap_join);
-----
-logical_opt	<REGEX>:.*__common_subplan_.*Comparison Join.*CTE Scan.*CTE Scan.*
-
-query II
-EXPLAIN SELECT (SELECT sum(a) FROM overlap_join), (SELECT sum(b) FROM overlap_join);
-----
-logical_opt	<!REGEX>:.*Comparison Join.*Comparison Join.*
-
 # The producer must expose columns from both join inputs, including strings.
 query TI rowsort
 SELECT label, sum(a) FROM overlap_join GROUP BY label

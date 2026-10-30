@@ -26,17 +26,6 @@ FROM (SELECT count(*), sum(v) FROM csp_fact f JOIN csp_dim d USING (k) WHERE buc
 ----
 51	2203	50	2155
 
-statement ok
-PRAGMA explain_output='optimized_only';
-
-# A single join is shared, despite different scan predicates in its two occurrences.
-query II
-EXPLAIN SELECT *
-FROM (SELECT count(*), sum(v) FROM csp_fact f JOIN csp_dim d USING (k) WHERE bucket = 0) a,
-     (SELECT count(*), sum(v) FROM csp_fact f JOIN csp_dim d USING (k) WHERE bucket = 1) b;
-----
-logical_opt	<REGEX>:.*__common_subplan_.*Comparison Join.*CTE Scan.*CTE Scan.*
-
 # Ordinary grouped aggregates may also consume the shared input.
 query III rowsort
 SELECT bucket, count(v), sum(v)

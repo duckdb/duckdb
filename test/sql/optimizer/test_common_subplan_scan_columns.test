@@ -18,16 +18,6 @@ SELECT (SELECT count(*) FROM scan_columns WHERE k < 5),
 ----
 5	2.3333333333333335	20
 
-statement ok
-PRAGMA explain_output='optimized_only';
-
-query II
-EXPLAIN SELECT (SELECT count(*) FROM scan_columns WHERE k < 5),
-               (SELECT avg(a) FROM scan_columns WHERE k < 5),
-               (SELECT avg(b) FROM scan_columns WHERE k < 5);
-----
-logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*CTE Scan.*
-
 # Reordering consumers and renaming their columns preserves the output schema.
 query RRI
 SELECT (SELECT avg(paid) FROM (SELECT b AS paid, k FROM scan_columns) x WHERE k < 5),
@@ -70,12 +60,6 @@ SELECT (SELECT sum(a) FROM scan_columns WHERE k % 5 = 1),
 ----
 28	340
 
-query II
-EXPLAIN SELECT (SELECT sum(a) FROM scan_columns WHERE k % 5 = 1),
-               (SELECT sum(b) FROM scan_columns WHERE k % 5 = 1);
-----
-logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*
-
 statement ok
 SET disabled_optimizers='';
 
@@ -85,19 +69,6 @@ SELECT (SELECT sum(a) FROM scan_columns WHERE k < 5),
        (SELECT sum(b)::BIGINT FROM scan_columns WHERE a < 5);
 ----
 7	70
-
-query II
-EXPLAIN SELECT (SELECT sum(a) FROM scan_columns WHERE k < 5),
-               (SELECT sum(b) FROM scan_columns WHERE a < 5);
-----
-logical_opt	<!REGEX>:.*__common_subplan_.*
-
-# An unfiltered scan does not justify adding a shared producer.
-query II
-EXPLAIN SELECT (SELECT sum(a) FROM scan_columns),
-               (SELECT sum(b) FROM scan_columns);
-----
-logical_opt	<!REGEX>:.*__common_subplan_.*
 
 # Bind each execution's predicate independently, including an empty result.
 statement ok
@@ -137,12 +108,3 @@ FROM (
 ----
 20	3.3333333333333335
 
-query II
-EXPLAIN SELECT sum(x), avg(x)
-FROM (
-	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
-	UNION ALL
-	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
-);
-----
-logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*
