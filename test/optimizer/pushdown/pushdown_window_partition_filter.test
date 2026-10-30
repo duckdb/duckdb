@@ -223,12 +223,14 @@ WHERE l_linenumber <> 20;
 ----
 logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* != '1970-01-21'::DATE.*
 
+# IS NOT DISTINCT FROM a non-NULL constant folds to an equality in the filter combiner,
+# so the auxiliary partition filter is an equality as well
 query II
 explain
 FROM avg_price
 WHERE l_linenumber IS NOT DISTINCT FROM 20;
 ----
-logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* IS NOT DISTINCT FROM make_date.20.*
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* = '1970-01-21'::DATE.*
 
 query II
 explain
