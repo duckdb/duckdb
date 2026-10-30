@@ -293,12 +293,6 @@ struct Vec3 {
 	double x, y, z;
 };
 
-static Vec3 ToVec3(double lon_deg, double lat_deg) {
-	const double lam = lon_deg * TEST_PI / 180.0;
-	const double phi = lat_deg * TEST_PI / 180.0;
-	return {cos(phi) * cos(lam), cos(phi) * sin(lam), sin(phi)};
-}
-
 static std::pair<double, double> ToLonLat(const Vec3 &v) {
 	const double norm = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 	return {atan2(v.y, v.x) * 180.0 / TEST_PI, asin(v.z / norm) * 180.0 / TEST_PI};

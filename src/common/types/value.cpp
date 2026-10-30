@@ -1771,6 +1771,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {

@@ -117,7 +117,8 @@ static void FromWKBGeographyFunction(DataChunk &input, ExpressionState &state, V
 }
 
 ScalarFunction StGeogfromwkbFun::GetFunction() {
-	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOGRAPHY(), FromWKBGeographyFunction);
+	ScalarFunction function({}, LogicalType::GEOGRAPHY(), FromWKBGeographyFunction);
+	function.GetSignature().AddParameter("wkb", LogicalType::BLOB);
 	function.SetStatisticsCallback(FromWKBStats);
 	// throws when the input is not valid WKB, or is outside the canonical GEOGRAPHY ranges
 	function.SetFallible();

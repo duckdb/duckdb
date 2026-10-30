@@ -49,13 +49,6 @@
       ]
     },
     {
-      "reason": "GEOGRAPHY requires v2.0.0 storage.",
-      "paths": [
-        "test/sql/types/geo/geography.test",
-        "test/sql/types/geo/geography_parquet.test"
-      ]
-    },
-    {
       "reason": "TODO",
       "paths": [
         "test/sql/json/test_json_serialize_sql.test",
