@@ -112,7 +112,7 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 		// join. If pulled up, expressions (e.g COALESCE) evaluate after the join and return non-null for
 		// unmatched rows instead of null.
 		if (parent_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-		    parent_op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		    parent_op.type == LogicalOperatorType::LOGICAL_ANY_JOIN || parent_op.type == LogicalOperatorType::LOGICAL_WITHIN_JOIN) {
 			auto &join = parent_op.Cast<LogicalComparisonJoin>();
 			if (join.join_type == JoinType::LEFT || join.join_type == JoinType::RIGHT ||
 			    join.join_type == JoinType::OUTER) {
@@ -273,6 +273,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SINGLE) {

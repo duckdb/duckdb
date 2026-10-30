@@ -3983,6 +3983,36 @@ public:
 	static void InitializeNearestSimilarityTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeNearestSimilarityTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithinJoinClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinJoinClauseTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeWithinJoinAliasedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinJoinAliasedTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithinJoinBareTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinJoinBareTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeWithinBareTableRefTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinBareTableRefTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeWithinValuesRefTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinValuesRefTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeWithinTableFunctionTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinTableFunctionTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static void InitializeWithinTableSubqueryTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinTableSubqueryTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static void InitializeWithinBaseTableRefTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinBaseTableRefTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeWithinParensTableRefTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeWithinParensTableRefTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeRegularJoinClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeRegularJoinClauseTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -6078,6 +6108,31 @@ public:
 	static bool TransformNearestExact(PEGTransformer &transformer);
 	static OrderType TransformNearestDistance(PEGTransformer &transformer);
 	static OrderType TransformNearestSimilarity(PEGTransformer &transformer);
+	static unique_ptr<TableRef> TransformWithinJoinAliased(PEGTransformer &transformer,
+	                                                       const optional<JoinType> &join_type,
+	                                                       unique_ptr<TableRef> table_ref,
+	                                                       unique_ptr<ParsedExpression> expression,
+	                                                       unique_ptr<ParsedExpression> expression_1);
+	static unique_ptr<TableRef> TransformWithinJoinBare(PEGTransformer &transformer,
+	                                                    const optional<JoinType> &join_type,
+	                                                    unique_ptr<TableRef> within_bare_table_ref,
+	                                                    unique_ptr<ParsedExpression> expression,
+	                                                    unique_ptr<ParsedExpression> expression_1);
+	static unique_ptr<TableRef> TransformWithinValuesRef(PEGTransformer &transformer,
+	                                                     unique_ptr<SelectStatement> values_clause);
+	static unique_ptr<TableRef> TransformWithinTableFunction(PEGTransformer &transformer, const optional<bool> &lateral,
+	                                                         const QualifiedName &qualified_table_function,
+	                                                         vector<FunctionArgument> table_function_arguments,
+	                                                         const optional<bool> &with_ordinality);
+	static unique_ptr<TableRef> TransformWithinTableSubquery(PEGTransformer &transformer, const optional<bool> &lateral,
+	                                                         unique_ptr<TableRef> subquery_reference);
+	static unique_ptr<TableRef> TransformWithinBaseTableRef(PEGTransformer &transformer,
+	                                                        unique_ptr<BaseTableRef> base_table_name,
+	                                                        optional<unique_ptr<AtClause>> at_clause,
+	                                                        optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TableRef> TransformWithinParensTableRef(PEGTransformer &transformer,
+	                                                          unique_ptr<TableRef> table_ref,
+	                                                          optional<unique_ptr<SampleOptions>> sample_clause);
 	static unique_ptr<TableRef> TransformRegularJoinClause(PEGTransformer &transformer, const optional<bool> &asof,
 	                                                       const optional<JoinType> &join_type,
 	                                                       unique_ptr<TableRef> table_ref,

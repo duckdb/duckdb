@@ -618,6 +618,7 @@ static bool HasJoinConditionExpressions(LogicalOperatorType type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		return true;
 	default:
 		return false;
@@ -659,7 +660,8 @@ void RecursiveDependentJoinPlanner::PlanJoinExpressions(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		PlanJoinSubqueries(join, join.condition, JoinSide::LEFT);
 		break;
@@ -689,7 +691,7 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 
 BindingReplacementGraph RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	PlanJoinChildFilters(*op_ptr);
-	if (op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN &&
+	if ((op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op_ptr->type == LogicalOperatorType::LOGICAL_WITHIN_JOIN) &&
 	    op_ptr->Cast<LogicalAnyJoin>().condition->HasSubquery()) {
 		return PlanAnyJoinCondition(op_ptr);
 	}

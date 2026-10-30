@@ -2901,6 +2901,33 @@ static const TransformFrameOps NEAREST_DISTANCE_OPS = {"NearestDistance",
 static const TransformFrameOps NEAREST_SIMILARITY_OPS = {"NearestSimilarity",
                                                          &PEGTransformerFactory::InitializeNearestSimilarityTrampoline,
                                                          &PEGTransformerFactory::FinalizeNearestSimilarityTrampoline};
+static const TransformFrameOps WITHIN_JOIN_CLAUSE_OPS = {"WithinJoinClause",
+                                                         &PEGTransformerFactory::InitializeWithinJoinClauseTrampoline,
+                                                         &PEGTransformerFactory::FinalizeWithinJoinClauseTrampoline};
+static const TransformFrameOps WITHIN_JOIN_ALIASED_OPS = {"WithinJoinAliased",
+                                                          &PEGTransformerFactory::InitializeWithinJoinAliasedTrampoline,
+                                                          &PEGTransformerFactory::FinalizeWithinJoinAliasedTrampoline};
+static const TransformFrameOps WITHIN_JOIN_BARE_OPS = {"WithinJoinBare",
+                                                       &PEGTransformerFactory::InitializeWithinJoinBareTrampoline,
+                                                       &PEGTransformerFactory::FinalizeWithinJoinBareTrampoline};
+static const TransformFrameOps WITHIN_BARE_TABLE_REF_OPS = {
+    "WithinBareTableRef", &PEGTransformerFactory::InitializeWithinBareTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeWithinBareTableRefTrampoline};
+static const TransformFrameOps WITHIN_VALUES_REF_OPS = {"WithinValuesRef",
+                                                        &PEGTransformerFactory::InitializeWithinValuesRefTrampoline,
+                                                        &PEGTransformerFactory::FinalizeWithinValuesRefTrampoline};
+static const TransformFrameOps WITHIN_TABLE_FUNCTION_OPS = {
+    "WithinTableFunction", &PEGTransformerFactory::InitializeWithinTableFunctionTrampoline,
+    &PEGTransformerFactory::FinalizeWithinTableFunctionTrampoline};
+static const TransformFrameOps WITHIN_TABLE_SUBQUERY_OPS = {
+    "WithinTableSubquery", &PEGTransformerFactory::InitializeWithinTableSubqueryTrampoline,
+    &PEGTransformerFactory::FinalizeWithinTableSubqueryTrampoline};
+static const TransformFrameOps WITHIN_BASE_TABLE_REF_OPS = {
+    "WithinBaseTableRef", &PEGTransformerFactory::InitializeWithinBaseTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeWithinBaseTableRefTrampoline};
+static const TransformFrameOps WITHIN_PARENS_TABLE_REF_OPS = {
+    "WithinParensTableRef", &PEGTransformerFactory::InitializeWithinParensTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeWithinParensTableRefTrampoline};
 static const TransformFrameOps REGULAR_JOIN_CLAUSE_OPS = {"RegularJoinClause",
                                                           &PEGTransformerFactory::InitializeRegularJoinClauseTrampoline,
                                                           &PEGTransformerFactory::FinalizeRegularJoinClauseTrampoline};
@@ -4307,6 +4334,15 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DistanceOrSimilarity", &DISTANCE_OR_SIMILARITY_OPS},
 	    {"NearestDistance", &NEAREST_DISTANCE_OPS},
 	    {"NearestSimilarity", &NEAREST_SIMILARITY_OPS},
+	    {"WithinJoinClause", &WITHIN_JOIN_CLAUSE_OPS},
+	    {"WithinJoinAliased", &WITHIN_JOIN_ALIASED_OPS},
+	    {"WithinJoinBare", &WITHIN_JOIN_BARE_OPS},
+	    {"WithinBareTableRef", &WITHIN_BARE_TABLE_REF_OPS},
+	    {"WithinValuesRef", &WITHIN_VALUES_REF_OPS},
+	    {"WithinTableFunction", &WITHIN_TABLE_FUNCTION_OPS},
+	    {"WithinTableSubquery", &WITHIN_TABLE_SUBQUERY_OPS},
+	    {"WithinBaseTableRef", &WITHIN_BASE_TABLE_REF_OPS},
+	    {"WithinParensTableRef", &WITHIN_PARENS_TABLE_REF_OPS},
 	    {"RegularJoinClause", &REGULAR_JOIN_CLAUSE_OPS},
 	    {"JoinByClause", &JOIN_BY_CLAUSE_OPS},
 	    {"Asof", &ASOF_OPS},
@@ -24817,6 +24853,231 @@ PEGTransformerFactory::FinalizeNearestSimilarityTrampoline(PEGTransformer &trans
                                                            GeneratedTransformProcess &process) {
 	auto result = TransformNearestSimilarity(transformer);
 	return transformer.MakeResult<OrderType>(result);
+}
+
+void PEGTransformerFactory::InitializeWithinJoinClauseTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinJoinClauseTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<TableRef>>(0);
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinJoinAliasedTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(4);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(6)}, 3);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(5)}, 2);
+	process.PushChild({transformer.GetRule(PEGRuleId::TableRef), list_pr.GetChild(2)}, 1);
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::JoinType), join_type_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinJoinAliasedTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	optional<JoinType> join_type {};
+	if (process.child_results[0]) {
+		join_type = process.TakeResult<JoinType>(0);
+	}
+	auto table_ref = process.TakeResult<unique_ptr<TableRef>>(1);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(2);
+	auto expression_1 = process.TakeResult<unique_ptr<ParsedExpression>>(3);
+	auto result = TransformWithinJoinAliased(transformer, join_type, std::move(table_ref), std::move(expression),
+	                                         std::move(expression_1));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinJoinBareTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(4);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(6)}, 3);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(5)}, 2);
+	process.PushChild({transformer.GetRule(PEGRuleId::WithinBareTableRef), list_pr.GetChild(2)}, 1);
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::JoinType), join_type_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinJoinBareTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	optional<JoinType> join_type {};
+	if (process.child_results[0]) {
+		join_type = process.TakeResult<JoinType>(0);
+	}
+	auto within_bare_table_ref = process.TakeResult<unique_ptr<TableRef>>(1);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(2);
+	auto expression_1 = process.TakeResult<unique_ptr<ParsedExpression>>(3);
+	auto result = TransformWithinJoinBare(transformer, join_type, std::move(within_bare_table_ref),
+	                                      std::move(expression), std::move(expression_1));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinBareTableRefTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinBareTableRefTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<TableRef>>(0);
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinValuesRefTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule(PEGRuleId::ValuesClause), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinValuesRefTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto values_clause = process.TakeResult<unique_ptr<SelectStatement>>(0);
+	auto result = TransformWithinValuesRef(transformer, std::move(values_clause));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinTableFunctionTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(4);
+	auto &with_ordinality_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_ordinality_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::WithOrdinality), with_ordinality_opt.GetResult()}, 3);
+	}
+	process.PushChild({transformer.GetRule(PEGRuleId::TableFunctionArguments), list_pr.GetChild(2)}, 2);
+	process.PushChild({transformer.GetRule(PEGRuleId::QualifiedTableFunction), list_pr.GetChild(1)}, 1);
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::Lateral), lateral_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinTableFunctionTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	optional<bool> lateral {};
+	if (process.child_results[0]) {
+		lateral = process.TakeResult<bool>(0);
+	}
+	auto qualified_table_function = process.TakeResult<QualifiedName>(1);
+	auto table_function_arguments = process.TakeResult<vector<FunctionArgument>>(2);
+	optional<bool> with_ordinality {};
+	if (process.child_results[3]) {
+		with_ordinality = process.TakeResult<bool>(3);
+	}
+	auto result = TransformWithinTableFunction(transformer, lateral, qualified_table_function,
+	                                           std::move(table_function_arguments), with_ordinality);
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinTableSubqueryTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule(PEGRuleId::SubqueryReference), list_pr.GetChild(1)}, 1);
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::Lateral), lateral_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinTableSubqueryTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	optional<bool> lateral {};
+	if (process.child_results[0]) {
+		lateral = process.TakeResult<bool>(0);
+	}
+	auto subquery_reference = process.TakeResult<unique_ptr<TableRef>>(1);
+	auto result = TransformWithinTableSubquery(transformer, lateral, std::move(subquery_reference));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinBaseTableRefTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(3);
+	auto &sample_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::SampleClause), sample_clause_opt.GetResult()}, 2);
+	}
+	auto &at_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (at_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::AtClause), at_clause_opt.GetResult()}, 1);
+	}
+	process.PushChild({transformer.GetRule(PEGRuleId::BaseTableName), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinBaseTableRefTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(0);
+	optional<unique_ptr<AtClause>> at_clause {};
+	if (process.child_results[1]) {
+		at_clause = process.TakeResult<unique_ptr<AtClause>>(1);
+	}
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (process.child_results[2]) {
+		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(2);
+	}
+	auto result = TransformWithinBaseTableRef(transformer, std::move(base_table_name), std::move(at_clause),
+	                                          std::move(sample_clause));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithinParensTableRefTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	auto &sample_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::SampleClause), sample_clause_opt.GetResult()}, 1);
+	}
+	process.PushChild({transformer.GetRule(PEGRuleId::TableRef), ExtractResultFromParens(list_pr.GetChild(0))}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithinParensTableRefTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (process.child_results[1]) {
+		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(1);
+	}
+	auto result = TransformWithinParensTableRef(transformer, std::move(table_ref), std::move(sample_clause));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeRegularJoinClauseTrampoline(PEGTransformer &transformer,

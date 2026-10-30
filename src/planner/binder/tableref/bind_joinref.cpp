@@ -301,6 +301,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	}
 	case JoinRefType::REGULAR:
 	case JoinRefType::ASOF:
+	case JoinRefType::WITHIN:
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);

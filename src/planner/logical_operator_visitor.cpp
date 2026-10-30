@@ -39,6 +39,7 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 optional_ptr<vector<ProjectionIndex>> LogicalOperatorVisitor::GetProjectionMap(LogicalOperator &op, idx_t child_index) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -167,7 +168,8 @@ static void EnumerateOperatorExpressions(OPERATOR &op, const FUNC &callback) {
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN: {
 		auto &join = op.template Cast<LogicalAnyJoin>();
 		callback(&join.condition);
 		break;

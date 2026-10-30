@@ -225,7 +225,7 @@ static bool RewriteThroughProjection(unique_ptr<Expression> &expression, Logical
 }
 
 static bool IsEligibleJoin(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN && op.type != LogicalOperatorType::LOGICAL_WITHIN_JOIN) {
 		return false;
 	}
 	return op.Cast<LogicalJoin>().join_type == JoinType::INNER;

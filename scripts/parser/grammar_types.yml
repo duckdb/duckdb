@@ -605,6 +605,15 @@ TableRef:
     - NearestTableSubquery
     - NearestBaseTableRef
     - NearestParensTableRef
+    - WithinJoinClause
+    - WithinJoinAliased
+    - WithinJoinBare
+    - WithinBareTableRef
+    - WithinValuesRef
+    - WithinTableFunction
+    - WithinTableSubquery
+    - WithinBaseTableRef
+    - WithinParensTableRef
     - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause

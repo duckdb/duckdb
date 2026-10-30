@@ -3469,7 +3469,8 @@ const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {
 		{ static_cast<uint32_t>(JoinRefType::POSITIONAL), "POSITIONAL" },
 		{ static_cast<uint32_t>(JoinRefType::ASOF), "ASOF" },
 		{ static_cast<uint32_t>(JoinRefType::DEPENDENT), "DEPENDENT" },
-		{ static_cast<uint32_t>(JoinRefType::NEAREST), "NEAREST" }
+		{ static_cast<uint32_t>(JoinRefType::NEAREST), "NEAREST" },
+		{ static_cast<uint32_t>(JoinRefType::WITHIN), "WITHIN" }
 	};
 	return values;
 }
@@ -3805,6 +3806,7 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CROSS_PRODUCT), "LOGICAL_CROSS_PRODUCT" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN), "LOGICAL_POSITIONAL_JOIN" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ASOF_JOIN), "LOGICAL_ASOF_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_WITHIN_JOIN), "LOGICAL_WITHIN_JOIN" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DEPENDENT_JOIN), "LOGICAL_DEPENDENT_JOIN" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UNION), "LOGICAL_UNION" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXCEPT), "LOGICAL_EXCEPT" },

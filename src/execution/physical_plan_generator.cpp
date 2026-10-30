@@ -110,6 +110,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		return CreatePlan(op.Cast<LogicalDummyScan>());
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		return CreatePlan(op.Cast<LogicalAnyJoin>());
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:

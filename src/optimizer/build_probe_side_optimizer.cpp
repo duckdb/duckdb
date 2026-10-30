@@ -83,7 +83,8 @@ static void FlipChildren(LogicalOperator &op) {
 		std::swap(join.left_projection_map, join.right_projection_map);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		std::swap(join.left_projection_map, join.right_projection_map);
@@ -175,6 +176,7 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, cons
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		ret.left_side = GetBuildSize(op.children[0]->types, lhs_cardinality);
 		ret.right_side = GetBuildSize(op.children[1]->types, rhs_cardinality);
@@ -480,7 +482,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
 			bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
-			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN || op.type == LogicalOperatorType::LOGICAL_WITHIN_JOIN ||
 			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
 				TryFlipJoinChildren(join);
 			}
@@ -493,7 +495,8 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		// We do not yet support the RIGHT_SEMI or RIGHT_ANTI join types for these, so don't try to flip
 		switch (join.join_type) {

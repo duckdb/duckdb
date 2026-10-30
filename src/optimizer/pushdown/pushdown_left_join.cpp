@@ -201,7 +201,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				}
 			}
 		}
-	} else if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	} else if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_WITHIN_JOIN) {
 		auto &any_join = join.Cast<LogicalAnyJoin>();
 		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
 			has_unsatisfiable_condition = true;

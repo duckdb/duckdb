@@ -47,7 +47,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	if (constant_value.IsNull()) {
 		// FALSE and NULL have the same effect in filters and joins
 		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_OR || !is_root ||
-		    (op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN)) {
+		    (op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN && op.type != LogicalOperatorType::LOGICAL_WITHIN_JOIN)) {
 			return nullptr;
 		}
 		// Continue until every NULL is removed

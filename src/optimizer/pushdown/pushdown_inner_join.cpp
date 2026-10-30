@@ -18,7 +18,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		return FinishPushdown(std::move(op));
 	}
 	// inner join: gather all the conditions of the inner join and add to the filter list
-	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_WITHIN_JOIN) {
 		auto &any_join = join.Cast<LogicalAnyJoin>();
 		// any join: only one filter to add
 		if (AddFilter(std::move(any_join.condition)) == FilterResult::UNSATISFIABLE) {

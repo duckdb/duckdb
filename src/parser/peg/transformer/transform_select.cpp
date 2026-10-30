@@ -1,5 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -717,6 +718,84 @@ OrderType PEGTransformerFactory::TransformNearestDistance(PEGTransformer &transf
 
 OrderType PEGTransformerFactory::TransformNearestSimilarity(PEGTransformer &transformer) {
 	return OrderType::DESCENDING;
+}
+
+//! Build a WITHIN BY join: <left> JOIN <target> WITHIN BY <distance_expr> <threshold>.
+//! The distance expression and threshold are folded into a single `distance <= threshold` condition so the
+//! binder plans it exactly like a distance filter, but the node is tagged WITHIN_JOIN so that index
+//! extensions can recognize and intercept it.
+static unique_ptr<TableRef> BuildWithinJoin(const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+                                            unique_ptr<ParsedExpression> distance_expr,
+                                            unique_ptr<ParsedExpression> threshold_expr) {
+	auto result = make_uniq<JoinRef>(JoinRefType::WITHIN);
+	result->type = join_type.value_or(JoinType::INNER);
+	if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
+		throw ParserException("WITHIN BY only supports INNER and LEFT OUTER joins, not %s",
+		                      EnumUtil::ToString(result->type));
+	}
+	result->condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                                   std::move(distance_expr), std::move(threshold_expr));
+	result->right = std::move(table_ref);
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinJoinAliased(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+    unique_ptr<ParsedExpression> expression, unique_ptr<ParsedExpression> expression_1) {
+	return BuildWithinJoin(join_type, std::move(table_ref), std::move(expression), std::move(expression_1));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinJoinBare(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> within_bare_table_ref,
+    unique_ptr<ParsedExpression> expression, unique_ptr<ParsedExpression> expression_1) {
+	return BuildWithinJoin(join_type, std::move(within_bare_table_ref), std::move(expression), std::move(expression_1));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinValuesRef(PEGTransformer &transformer,
+                                                                    unique_ptr<SelectStatement> values_clause) {
+	return make_uniq<SubqueryRef>(std::move(values_clause));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinTableFunction(
+    PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
+    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality) {
+	auto result = make_uniq<TableFunctionRef>();
+	result->with_ordinality =
+	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinTableSubquery(
+    PEGTransformer &transformer, const optional<bool> &lateral, unique_ptr<TableRef> subquery_reference) {
+	return subquery_reference;
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinBaseTableRef(
+    PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name, optional<unique_ptr<AtClause>> at_clause,
+    optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (at_clause) {
+		base_table_name->at_clause = std::move(*at_clause);
+	}
+	if (sample_clause) {
+		base_table_name->sample = std::move(*sample_clause);
+	}
+	return std::move(base_table_name);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformWithinParensTableRef(
+    PEGTransformer &transformer, unique_ptr<TableRef> table_ref, optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (!sample_clause) {
+		return table_ref;
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+	select_statement->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
+	subquery->sample = std::move(*sample_clause);
+	return std::move(subquery);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer &transformer, const string &col_label,

@@ -323,6 +323,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		PropagateStatistics(join.Cast<LogicalComparisonJoin>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		PropagateStatistics(join.Cast<LogicalAnyJoin>(), node_ptr);
 		break;
 	default:

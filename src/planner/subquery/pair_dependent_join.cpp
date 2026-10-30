@@ -57,7 +57,7 @@ static bool SupportsPairDependentRewrite(JoinType join_type) {
 }
 
 bool RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_ANY_JOIN || op.children.size() != 2) {
+	if (op.type != LogicalOperatorType::LOGICAL_ANY_JOIN && op.type != LogicalOperatorType::LOGICAL_WITHIN_JOIN || op.children.size() != 2) {
 		return false;
 	}
 	auto &join = op.Cast<LogicalAnyJoin>();
