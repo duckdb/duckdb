@@ -73,15 +73,22 @@ bool GeometryTypeSet::TryAdd(const string &type_name) {
 BaseStatistics GeometryStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	GetDataUnsafe(result).SetUnknown();
+	auto &data = GetDataUnsafe(result);
+	data.SetUnknown();
 	return result;
 }
 
 BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	GetDataUnsafe(result).SetEmpty();
+	auto &data = GetDataUnsafe(result);
+	data.SetEmpty();
 	return result;
+}
+
+//! Whether the antimeridian-aware (geodetic) extent math applies to statistics of this type
+static bool StatsAreGeodetic(const BaseStatistics &stats) {
+	return stats.GetType().id() == LogicalTypeId::GEOGRAPHY;
 }
 
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -187,7 +194,7 @@ child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 
 void GeometryStats::Update(BaseStatistics &stats, const string_t &value) {
 	auto &data = GetDataUnsafe(stats);
-	data.Update(value);
+	data.Update(value, StatsAreGeodetic(stats));
 }
 
 void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -200,7 +207,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 
 	auto &target = GetDataUnsafe(stats);
 	auto &source = GetDataUnsafe(other);
-	target.Merge(source);
+	target.Merge(source, StatsAreGeodetic(stats));
 }
 
 void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {

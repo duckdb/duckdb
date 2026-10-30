@@ -194,7 +194,15 @@ struct ParquetBaseGeoOperator : public BaseParquetOperator {
 struct ParquetGeometryOperator : public ParquetBaseGeoOperator {
 	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<GeoStatisticsState>();
+		return make_uniq<GeoStatisticsState>(false);
+	}
+};
+
+struct ParquetGeographyOperator : public ParquetBaseGeoOperator {
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		// GEOGRAPHY uses antimeridian-aware (geodetic) bounding-box statistics.
+		return make_uniq<GeoStatisticsState>(true);
 	}
 };
 

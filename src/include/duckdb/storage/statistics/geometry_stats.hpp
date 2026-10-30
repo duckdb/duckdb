@@ -280,6 +280,10 @@ private:
 	static constexpr auto HAS_NON_EMPTY_PART = 0x8;
 };
 
+//! Geometry statistics. The struct itself does not know whether it belongs to a GEOMETRY or a
+//! GEOGRAPHY column: the `geodetic` argument of Merge/Update (which enables the antimeridian-aware,
+//! circular longitude extent math used by GEOGRAPHY) must be derived from the column type by the
+//! caller, i.e. `type.id() == LogicalTypeId::GEOGRAPHY`.
 struct GeometryStatsData {
 	GeometryTypeSet types;
 	GeometryExtent extent;
@@ -297,20 +301,25 @@ struct GeometryStatsData {
 		flags = GeometryStatsFlags::Unknown();
 	}
 
-	void Merge(const GeometryStatsData &other) {
+	void Merge(const GeometryStatsData &other, bool geodetic) {
 		types.Merge(other.types);
-		extent.Merge(other.extent);
+		extent.Merge(other.extent, geodetic);
 		flags.Merge(other.flags);
 	}
 
-	void Update(const string_t &geom_blob) {
+	void Update(const string_t &geom_blob, bool geodetic) {
 		// Parse type
 		const auto type_info = Geometry::GetType(geom_blob);
 		types.Add(type_info.first, type_info.second);
 
-		// Update extent
+		// Compute this row's own extent first, then merge it as a whole. Extending the accumulated
+		// extent vertex-by-vertex would only cover the vertices: the (possibly antimeridian-wrapped)
+		// arc the row's own bounding box spans between them could stick out of the accumulated extent,
+		// and the row-level && operator compares against that per-row bounding box.
+		auto row_extent = GeometryExtent::Empty();
 		bool has_any_empty = false;
-		const auto vert_count = Geometry::GetExtent(geom_blob, extent, has_any_empty);
+		const auto vert_count = Geometry::GetExtent(geom_blob, row_extent, has_any_empty, geodetic);
+		extent.Merge(row_extent, geodetic);
 
 		// Update flags
 		if (has_any_empty) {
