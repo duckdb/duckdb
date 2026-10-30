@@ -4,8 +4,8 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/path.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -140,18 +140,18 @@ bool ExternalFileCache::TryParseDebugThroughput(const string &value, NetworkThro
 	if (value.empty()) {
 		return false;
 	}
-	const auto parts = StringUtil::Split(value, ',');
-	double numbers[2];
-	for (idx_t i = 0; i < 2; i++) {
-		char *end = nullptr;
-		numbers[i] = i < parts.size() ? std::strtod(parts[i].c_str(), &end) : 0;
-		if (parts.size() != 2 || end != parts[i].c_str() + parts[i].size() || !(numbers[i] > 0)) {
-			throw InvalidInputException("debug_network_throughput_estimate must be two positive numbers, the latency "
-			                            "in seconds and the bandwidth in bytes per second, separated by a comma");
-		}
+	const auto comma = value.find(',');
+	double latency = 0;
+	double bandwidth = 0;
+	if (comma == string::npos || value.find(',', comma + 1) != string::npos ||
+	    !TryDoubleCast<double>(value.c_str(), comma, latency, true) ||
+	    !TryDoubleCast<double>(value.c_str() + comma + 1, value.size() - comma - 1, bandwidth, true) ||
+	    !(latency > 0) || !(bandwidth > 0)) {
+		throw InvalidInputException("debug_network_throughput_estimate must be two positive numbers, the latency "
+		                            "in seconds and the bandwidth in bytes per second, separated by a comma");
 	}
-	result.latency_seconds = numbers[0];
-	result.bandwidth_bytes_per_s = numbers[1];
+	result.latency_seconds = latency;
+	result.bandwidth_bytes_per_s = bandwidth;
 	return true;
 }
 
