@@ -27,7 +27,7 @@ SET enable_external_file_cache = false;
 statement ok
 SET parquet_prefetch_column_gap = 16384;
 
-# One ~4 MiB shared buffer fits; a second copy of the span would exceed the limit.
+# Retaining ~4 MiB of shared buffers fits; a second copy would exceed the limit.
 statement ok
 SET memory_limit = '8MB';
 
@@ -45,6 +45,40 @@ endloop
 
 statement ok
 RESET memory_limit;
+
+# Bound local read groups while still coalescing small adjacent filters.
+foreach threads 1 8
+
+statement ok
+SET threads = {threads};
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_coalesced_memory.parquet' WHERE x = 1;
+----
+0
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT count(*) > 1 AND count(*) < 512, max(bytes) <= 1048576, sum(bytes) = 512 * 8209
+FROM duckdb_logs_parsed('FileSystem')
+WHERE op = 'READ' AND parse_filename(path) = 'bloom_coalesced_memory.parquet'
+  AND pos >= (SELECT min(bloom_filter_offset) FROM parquet_metadata('{TEST_DIR}/bloom_coalesced_memory.parquet'))
+  AND pos + bytes <= (SELECT max(bloom_filter_offset + bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/bloom_coalesced_memory.parquet'));
+----
+true	true	true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+endloop
+
+statement ok
+SET threads = 1;
 
 statement ok
 COPY (SELECT (range % 4000) * 2 AS x, (range % 4000) * 2 AS y FROM range(8388608))

@@ -2084,8 +2084,19 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 				ranges.emplace_back(offset, length);
 			}
 			std::sort(ranges.begin(), ranges.end());
-			ReadAheadBuffer plan(transport.GetCachingFileHandle(), transport.GetAcceptedColumnGap());
+			auto &file_handle = transport.GetCachingFileHandle();
+			const auto local_file = file_handle.OnDiskFile();
+			static constexpr idx_t MAX_LOCAL_BLOOM_FILTER_READ_SIZE = 1 << 20;
+			ReadAheadBuffer plan(file_handle, transport.GetAcceptedColumnGap());
 			for (auto &range : ranges) {
+				if (local_file && !plan.read_heads.empty()) {
+					auto &last_head = *plan.read_heads.front();
+					const auto merged_end = MaxValue(last_head.GetEnd(), range.first + range.second);
+					if (merged_end - last_head.location > MAX_LOCAL_BLOOM_FILTER_READ_SIZE) {
+						// Bound local groups so scan threads can fetch different groups in parallel.
+						plan.merge_set.clear();
+					}
+				}
 				plan.AddReadHead(range.first, range.second);
 			}
 			plan.merge_set.clear();
