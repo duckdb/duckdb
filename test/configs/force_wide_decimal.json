@@ -49,7 +49,15 @@
 			"reason": "Wide decimals are averaged as DOUBLE and a wide quantile parameter is handled as DOUBLE, neither can overflow like the HUGEINT arithmetic of the fixed-size decimals",
 			"paths": [
 				"test/sql/aggregate/aggregates/fallible_pivot_default_export.test",
-				"test/sql/aggregate/aggregates/quantile_fallible_decimal_param.test"
+				"test/sql/aggregate/aggregates/quantile_fallible_decimal_param.test",
+				"test/sql/types/numeric/numeric_aggregates.test"
+			]
+		},
+		{
+			"reason": "NUMERIC narrows the result of an arithmetic kernel to the smallest fixed-size decimal that holds it; with every decimal stored wide the representation keeps the full width",
+			"paths": [
+				"test/sql/types/numeric/numeric_kernel_sizing.test",
+				"test/sql/types/numeric/numeric_variant_arithmetic.test"
 			]
 		},
 		{
