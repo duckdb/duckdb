@@ -1615,7 +1615,7 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 	}
 
 	// Can we validate?
-	if (!input.HasOrders() || !input.HasArgumentOrders()) {
+	if (!input.HasOrders() && !input.HasArgumentOrders()) {
 		return nullptr;
 	}
 
@@ -1635,6 +1635,10 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 	}
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
+	}
+	if (order_type.id() == LogicalTypeId::DECIMAL && order_type.InternalType() == PhysicalType::VARCHAR) {
+		throw NotImplementedException("FILL is not supported for DECIMAL types wider than %d digits",
+		                              Decimal::MAX_WIDTH_INT128);
 	}
 
 	return nullptr;

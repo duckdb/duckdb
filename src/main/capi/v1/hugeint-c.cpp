@@ -1,5 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+
+#include <cmath>
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/bignum_decimal.hpp"
@@ -88,6 +90,10 @@ double duckdb_decimal_to_double(duckdb_decimal val) {
 	hugeint_t value;
 	value.lower = val.value.lower;
 	value.upper = val.value.upper;
+	if (value == duckdb::NumericLimits<hugeint_t>::Minimum()) {
+		// a wide decimal can hold -2^127, which the signed conversion cannot negate
+		return -std::ldexp(1.0, 127) / std::pow(10.0, val.scale);
+	}
 	duckdb::CastParameters parameters;
 	duckdb::TryCastFromDecimal::Operation<hugeint_t, double>(value, result, parameters, val.width, val.scale);
 	return result;

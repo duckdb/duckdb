@@ -332,18 +332,19 @@ bool BignumDecimal::TryRescale(const string_t &value, uint8_t source_scale, uint
 	BorrowedBignum divisor(string_t(PowerOfTen(source_scale - target_scale)));
 	string_t quotient;
 	string_t remainder;
-	if (!BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, false, quotient) ||
-	    !BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, true, remainder)) {
+	if (!BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, quotient, remainder)) {
 		throw InternalException("BignumDecimal::TryRescale: division by a power of ten failed");
 	}
-	// the blobs of the small constants must outlive the intermediates that point into them
-	OwnedBignum two(Bignum::VarcharToBignum(string_t("2")));
+	// the small constants are built once; their blobs outlive the intermediates that point into them
+	static const OwnedBignum TWO(Bignum::VarcharToBignum(string_t("2")));
+	static const OwnedBignum ONE(Bignum::VarcharToBignum(string_t("1")));
+	static const OwnedBignum MINUS_ONE(Bignum::VarcharToBignum(string_t("-1")));
 	BorrowedBignum remainder_value(remainder);
-	auto twice_remainder = BignumIntermediate::Multiply(heap, state, remainder_value.intermediate, two.intermediate);
+	auto twice_remainder = BignumIntermediate::Multiply(heap, state, remainder_value.intermediate, TWO.intermediate);
 	BorrowedBignum twice_remainder_value(twice_remainder);
 	if (twice_remainder_value.intermediate.IsAbsoluteBigger(divisor.intermediate) != SMALLER) {
 		// |remainder| >= divisor / 2 rounds away from zero
-		OwnedBignum one(Bignum::VarcharToBignum(string_t(source.intermediate.is_negative ? "-1" : "1")));
+		auto &one = source.intermediate.is_negative ? MINUS_ONE : ONE;
 		BorrowedBignum quotient_value(quotient);
 		quotient = BignumIntermediate::Add(heap, quotient_value.intermediate, one.intermediate);
 	}

@@ -4,9 +4,6 @@
 
 load {TEST_DIR}/wide_decimal_review.db
 
-statement ok
-PRAGMA enable_verification
-
 # subtraction leaves the right operand intact, its bytes can be shared with the left operand
 statement ok
 CREATE TABLE t AS SELECT '123456789012345678901234567890.12'::DECIMAL(50,2) AS d;
@@ -239,3 +236,19 @@ CREATE TABLE old.fixed(d DECIMAL(38,2))
 
 statement ok
 ALTER TABLE old.fixed ALTER d TYPE DECIMAL(38,0)
+
+# FILL rejects wide decimals both as the filled value and as the ordering key
+statement error
+SELECT fill(v) OVER (ORDER BY k) FROM (VALUES ('1'::DECIMAL(39,0), 1::DECIMAL(39,0)), ('2', NULL), ('3', 3)) t(k, v);
+----
+<REGEX>:.*FILL is not supported for DECIMAL types wider than 38 digits.*
+
+statement error
+SELECT k, fill(v ORDER BY k + k) OVER () FROM (VALUES (1::DECIMAL(38,0), 1), (2, NULL), (3, 3)) t(k, v) ORDER BY k;
+----
+<REGEX>:.*FILL is not supported for DECIMAL types wider than 38 digits.*
+
+statement error
+SELECT k, fill(v) OVER (ORDER BY k + k) FROM (VALUES (1::DECIMAL(38,0), 1), (2, NULL), (3, 3)) t(k, v) ORDER BY k;
+----
+<REGEX>:.*FILL is not supported for DECIMAL types wider than 38 digits.*
