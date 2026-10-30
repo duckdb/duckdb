@@ -3,6 +3,13 @@
 
 namespace duckdb {
 
+void QueryMetrics::FinalizeMetricValues(GatheredMetrics &info) {
+	annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
+	for (const auto &[key, value] : string_values) {
+		info.SetMetric(key, value);
+	}
+}
+
 void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricQuerySQL>(query_sql);
 	{

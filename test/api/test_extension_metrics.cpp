@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
@@ -138,4 +139,62 @@ TEST_CASE("Time measured elsewhere can be added to a timing metric", "[api][intr
 	auto seconds = GetProfiledMetric(con, "test.time_added");
 	REQUIRE(!seconds.IsNull());
 	REQUIRE(seconds.GetValue<double>() == Approx(static_cast<double>(add_timing_calls.load()) / 1000.0));
+}
+
+// While the query binds, before its plan is built: sets one metric if it is tracked, one whether or not it is, one that
+// was not registered, and two of the profiler's own, one of which it may leave out.
+static bool tracked_while_binding = false;
+static unique_ptr<FunctionData> SetMetricBind(BindScalarFunctionInput &input) {
+	auto &profiler = QueryProfiler::Get(input.GetClientContext());
+	tracked_while_binding = profiler.MetricIsTracked("test.set_if_tracked");
+	if (tracked_while_binding) {
+		profiler.SetMetric("test.set_if_tracked", Value::UBIGINT(42));
+	}
+	profiler.SetMetric("test.set_always", Value::UBIGINT(7));
+	profiler.SetMetric("test.not_registered", Value::UBIGINT(1));
+	profiler.SetMetric("query.total_rows_scanned", Value::UBIGINT(123456789));
+	profiler.SetMetric("query.total_bytes_scanned", Value::UBIGINT(123456789));
+	return nullptr;
+}
+
+static void PassThroughExec(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.Reference(args.data[0]);
+}
+
+TEST_CASE("A metric can be set while the query binds", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	ScalarFunction fn("set_metric_while_binding", {LogicalType::BIGINT}, LogicalType::BIGINT, PassThroughExec);
+	fn.SetBindCallback(SetMetricBind);
+	RegisterFunction(con, std::move(fn));
+	auto &metrics_manager = MetricsManager::Get(*con.context);
+	metrics_manager.RegisterMetric({"test.set_if_tracked", "uint64", "Set while binding if tracked", "values"});
+	metrics_manager.RegisterMetric({"test.set_always", "uint64", "Set while binding", "values"});
+	// the profiler's own metrics cannot be registered
+	metrics_manager.RegisterMetric({"query.total_bytes_scanned", "uint64", "Not an extension's", "bytes"});
+	REQUIRE(!metrics_manager.IsRegisteredMetric("query.total_bytes_scanned"));
+	metrics_manager.RegisterMetric({"optimizer.window_join_pushdown", "double", "Not an extension's", "seconds"});
+	REQUIRE(!metrics_manager.IsRegisteredMetric("optimizer.window_join_pushdown"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers AS SELECT range AS i FROM range(10)"));
+	con.EnableProfiling();
+	con.context->config.profiler_save_location = TestCreatePath("test_set_metric_output.txt");
+
+	REQUIRE_NO_FAIL(con.Query("SELECT max(set_metric_while_binding(i)) FROM numbers"));
+	REQUIRE(tracked_while_binding);
+	REQUIRE(GetProfiledMetric(con, "test.set_if_tracked") == Value::UBIGINT(42));
+	REQUIRE(GetProfiledMetric(con, "test.set_always") == Value::UBIGINT(7));
+	REQUIRE(GetProfiledMetric(con, "test.not_registered").IsNull());
+	// the profiler's own metrics keep its values, and stay out when it leaves them out
+	auto rows_scanned = GetProfiledMetric(con, "query.total_rows_scanned");
+	REQUIRE(!rows_scanned.IsNull());
+	REQUIRE(rows_scanned.GetValue<idx_t>() == 10);
+	// a scan of a table does not count the bytes it scans, so the profiler leaves this out
+	REQUIRE(GetProfiledMetric(con, "query.total_bytes_scanned").IsNull());
+
+	// neither is reported when it is not tracked
+	REQUIRE_NO_FAIL(con.Query("SET tracked_metrics = ['query.*']"));
+	REQUIRE_NO_FAIL(con.Query("SELECT max(set_metric_while_binding(i)) FROM numbers"));
+	REQUIRE(!tracked_while_binding);
+	REQUIRE(GetProfiledMetric(con, "test.set_if_tracked").IsNull());
+	REQUIRE(GetProfiledMetric(con, "test.set_always").IsNull());
 }

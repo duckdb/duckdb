@@ -69,6 +69,11 @@ public:
 		string_counters[key] += addition;
 	}
 
+	void SetMetricValue(const string &key, Value value) {
+		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
+		string_values[key] = std::move(value);
+	}
+
 	void UpdateBytesRead(idx_t n, idx_t elapsed_us) {
 		bytes_read += n;
 		read_operations++;
@@ -176,6 +181,7 @@ public:
 			annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
 			string_timings.clear();
 			string_counters.clear();
+			string_values.clear();
 		}
 
 		query_sql = "";
@@ -185,6 +191,9 @@ public:
 		blocked_thread_time = 0;
 	}
 
+	//! Write the values set with QueryProfiler::SetMetric into the given GatheredMetrics, before the metrics the
+	//! profiler computes itself, which take precedence.
+	void FinalizeMetricValues(GatheredMetrics &info);
 	//! Write all query-level metrics into the given GatheredMetrics.
 	void FinalizeMetrics(GatheredMetrics &info);
 	//! The metrics backed by atomic counters, which can be read from any thread while the query runs
@@ -220,6 +229,8 @@ private:
 	unordered_map<string, MetricTiming> string_timings DUCKDB_GUARDED_BY(string_metrics_lock);
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters DUCKDB_GUARDED_BY(string_metrics_lock);
+	// Values set by QueryProfiler::SetMetric, kept until the query's metrics are gathered
+	profiler_metrics_t string_values DUCKDB_GUARDED_BY(string_metrics_lock);
 
 public:
 	// Declared after string_timings and string_metrics_lock so it is destroyed first; its destructor writes to
