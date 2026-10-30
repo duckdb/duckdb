@@ -1408,8 +1408,13 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		return;
 	}
 
-	// Rolls back any physical index creation for index-based constraints.
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
+	if (storage.get() != &prev_table.GetStorage()) {
+		// release the column this table version wrote to disk, if any
+		storage->RollbackWrittenColumn();
+	}
+
+	// Rolls back any physical index creation for index-based constraints.
 	auto &prev_indexes = prev_table.GetStorage().GetDataTableInfo()->GetIndexes();
 	for (auto oid : GetAddedUniqueIndexOids(prev_table)) {
 		prev_indexes.RemoveIndex(oid);
