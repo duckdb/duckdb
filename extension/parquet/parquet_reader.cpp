@@ -6,6 +6,8 @@
 
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parallel/callback_async_task.hpp"
+#include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
@@ -2041,6 +2043,24 @@ bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) con
 	return true;
 }
 
+namespace {
+class BloomFilterFetchTask : public BaseExecutorTask {
+public:
+	BloomFilterFetchTask(TaskExecutor &executor, shared_ptr<ReadHead> head_p, CachingFileHandle &handle_p)
+	    : BaseExecutorTask(executor), head(std::move(head_p)), handle(handle_p) {
+	}
+
+public:
+	void ExecuteTask() override {
+		head->Fetch(handle);
+	}
+
+private:
+	shared_ptr<ReadHead> head;
+	CachingFileHandle &handle;
+};
+} // namespace
+
 bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
                                                  ColumnReader &column_reader, const TableFilter &filter,
                                                  bool nested_filter, idx_t column_chunk_idx) {
@@ -2054,12 +2074,21 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 	const auto current_offset = NumericCast<idx_t>(current_meta_data.bloom_filter_offset);
 	const auto current_length = NumericCast<idx_t>(current_meta_data.bloom_filter_length);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	auto &file_handle = transport.GetCachingFileHandle();
 	shared_ptr<ReadHead> read_head;
+	vector<shared_ptr<ReadHead>> fetch_heads;
 	{
 		lock_guard<mutex> guard(bloom_filter_read_heads_lock);
 		auto entry = bloom_filter_read_heads.find(column_chunk_idx);
 		if (entry == bloom_filter_read_heads.end()) {
-			vector<pair<idx_t, idx_t>> ranges;
+			struct BloomFilterRange {
+				idx_t offset;
+				idx_t length;
+				idx_t row_group;
+			};
+			vector<BloomFilterRange> ranges;
+			idx_t filter_bytes = 0;
+			idx_t largest_filter = 0;
 			auto &row_groups = GetFileMetadata()->row_groups;
 			for (idx_t group_index = 0; group_index < row_groups.size(); group_index++) {
 				auto &row_group = row_groups[group_index];
@@ -2081,51 +2110,90 @@ bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, Parquet
 				if (offset >= transport.GetSize() || length > transport.GetSize() - offset) {
 					continue;
 				}
-				ranges.emplace_back(offset, length);
+				if (length > PrefetchCostModel::GAP_MAX - filter_bytes) {
+					ranges.clear();
+					break;
+				}
+				filter_bytes += length;
+				largest_filter = MaxValue(largest_filter, length);
+				ranges.push_back({offset, length, group_index});
 			}
-			std::sort(ranges.begin(), ranges.end());
-			auto &file_handle = transport.GetCachingFileHandle();
-			const auto local_file = file_handle.OnDiskFile();
-			static constexpr idx_t MAX_LOCAL_BLOOM_FILTER_READ_SIZE = 1 << 20;
+			std::sort(ranges.begin(), ranges.end(),
+			          [](const BloomFilterRange &a, const BloomFilterRange &b) { return a.offset < b.offset; });
+			const auto concurrency = MaxValue<idx_t>(
+			    1, MinValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(), ranges.size()));
+			const auto group_size = MaxValue(largest_filter, (filter_bytes + concurrency - 1) / concurrency);
 			ReadAheadBuffer plan(file_handle, transport.GetAcceptedColumnGap());
 			for (auto &range : ranges) {
-				if (local_file && !plan.read_heads.empty()) {
+				if (!plan.read_heads.empty()) {
 					auto &last_head = *plan.read_heads.front();
-					const auto merged_end = MaxValue(last_head.GetEnd(), range.first + range.second);
-					if (merged_end - last_head.location > MAX_LOCAL_BLOOM_FILTER_READ_SIZE) {
-						// Bound local groups so scan threads can fetch different groups in parallel.
+					const auto merged_end = MaxValue(last_head.GetEnd(), range.offset + range.length);
+					if (merged_end - last_head.location > group_size) {
 						plan.merge_set.clear();
 					}
 				}
-				plan.AddReadHead(range.first, range.second);
+				plan.AddReadHead(range.offset, range.length);
 			}
 			plan.merge_set.clear();
+			auto &buffer_manager = BufferManager::GetBufferManager(context);
+			const auto memory_limit = buffer_manager.GetMaxMemory();
+			const auto used_memory = buffer_manager.GetUsedMemory();
+			const auto available_memory = memory_limit - MinValue(memory_limit, used_memory);
+			const auto budget = MinValue<idx_t>(PrefetchCostModel::GAP_MAX, available_memory / 8);
 			idx_t retained_bytes = 0;
 			for (auto &head : plan.read_heads) {
-				if (head->size > PrefetchCostModel::GAP_MAX - retained_bytes) {
+				if (head->size > budget - retained_bytes) {
 					plan.read_heads.clear();
 					break;
 				}
 				retained_bytes += head->size;
 			}
-			// AddReadHead prepends heads; keep the published plan in file order for lookup.
+			// AddReadHead prepends heads; match them to the ranges in file order.
 			std::reverse(plan.read_heads.begin(), plan.read_heads.end());
-			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(plan.read_heads)).first;
+			unordered_map<idx_t, shared_ptr<ReadHead>> row_group_heads;
+			idx_t head_idx = 0;
+			for (auto &range : ranges) {
+				while (head_idx < plan.read_heads.size() &&
+				       range.offset + range.length > plan.read_heads[head_idx]->GetEnd()) {
+					head_idx++;
+				}
+				if (head_idx == plan.read_heads.size()) {
+					break;
+				}
+				auto &head = plan.read_heads[head_idx];
+				D_ASSERT(range.offset >= head->location && range.offset + range.length <= head->GetEnd());
+				row_group_heads.emplace(range.row_group, head);
+			}
+			if (plan.read_heads.size() > 1) {
+				fetch_heads = std::move(plan.read_heads);
+			}
+			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(row_group_heads)).first;
 		}
 		auto &heads = entry->second;
-		auto head = std::upper_bound(
-		    heads.begin(), heads.end(), current_offset,
-		    [](idx_t pos, const shared_ptr<ReadHead> &candidate) { return pos < candidate->location; });
-		if (head == heads.begin()) {
+		auto head = heads.find(state.group_index);
+		if (head == heads.end()) {
 			return false;
 		}
-		read_head = *--head;
-		if (current_offset >= read_head->GetEnd() || current_length > read_head->GetEnd() - current_offset) {
+		read_head = std::move(head->second);
+		// In-flight scans keep their own references; the reader only retains unclaimed groups.
+		heads.erase(head);
+		if (current_offset < read_head->location || current_offset >= read_head->GetEnd() ||
+		    current_length > read_head->GetEnd() - current_offset) {
 			return false;
 		}
 	}
-	// Fetch once per head, outside the map lock so independent groups can read concurrently.
-	read_head->Fetch(transport.GetCachingFileHandle());
+	if (!fetch_heads.empty()) {
+		TaskExecutor executor(context, TaskSchedulerType::ASYNC);
+		vector<unique_ptr<BaseExecutorTask>> tasks;
+		tasks.reserve(fetch_heads.size());
+		for (auto &head : fetch_heads) {
+			tasks.push_back(make_uniq<BloomFilterFetchTask>(executor, std::move(head), file_handle));
+		}
+		fetch_heads.clear();
+		executor.ScheduleTasks(std::move(tasks));
+		executor.WorkOnTasks();
+	}
+	read_head->Fetch(file_handle);
 	transport.AddFetchedReadHead(std::move(read_head));
 	return true;
 }

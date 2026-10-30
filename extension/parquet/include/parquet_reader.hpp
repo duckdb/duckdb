@@ -567,8 +567,8 @@ private:
 	mutable AllocatedData page_index_buffer;
 	mutable bool page_index_buffer_loaded = false;
 	mutex bloom_filter_read_heads_lock;
-	//! Plans use the first gap estimate; published heads are never merged again.
-	unordered_map<idx_t, vector<shared_ptr<ReadHead>>> bloom_filter_read_heads;
+	//! Per column, unclaimed row groups hold their shared read heads. Plans use the first gap estimate.
+	unordered_map<idx_t, unordered_map<idx_t, shared_ptr<ReadHead>>> bloom_filter_read_heads;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;
