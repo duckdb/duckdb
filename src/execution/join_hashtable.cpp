@@ -241,6 +241,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	const auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v); // flattened before -> dense
 	const auto bitmask = ht.bitmask;
 
+	// dense loop to have many inflight independent requests
 	const auto loaded = state.loaded_entries.get();
 	for (idx_t i = 0; i < count; i++) {
 		PrefetchHashTableEntry(i, count,
@@ -262,6 +263,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 		outcomes[i] = ProbeOutcome<USE_SALTS>(entry, offset_and_salt);
 	}
 
+	// based on the outcome, append rows to keys_to_compare_sel or rows_to_probe_sel
 	auto &keys_to_compare_sel = state.keys_to_compare_sel;
 	auto &rows_to_probe_sel = state.rows_to_probe_sel;
 	idx_t keys_to_compare_n = 0;
@@ -271,15 +273,16 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 		AppendRow(outcomes[i], row_index, keys_to_compare_sel, keys_to_compare_n, rows_to_probe_sel, rows_to_probe_n);
 	}
 
-	// Same passes for the kept rows, one slot further each round. The list is compacted in place: the write position
-	// never passes the read position.
+	// Same passes for the kept rows, one slot further each round.
 	while (rows_to_probe_n > 0) {
+
+		// again load the next slot of every row independently, so many cache misses overlap
 		for (idx_t i = 0; i < rows_to_probe_n; i++) {
 			const auto row_index = rows_to_probe_sel.get_index(i);
 			IncrementAndWrap(result_offsets_and_salts[row_index], offset_and_salt_mask);
 			loaded[i] = entries.get()[result_offsets_and_salts[row_index] & bitmask];
 		}
-		// check and compact in one loop: with the rows of a selection this loop does not vectorize anyway
+
 		idx_t next_rows_to_probe_n = 0;
 		for (idx_t i = 0; i < rows_to_probe_n; i++) {
 			const auto row_index = UnsafeNumericCast<sel_t>(rows_to_probe_sel.get_index(i));
