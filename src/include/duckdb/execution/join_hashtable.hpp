@@ -263,7 +263,9 @@ public:
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
 		SelectionVector rows_to_probe_sel;
-		SelectionVector rows_to_probe_next_sel;
+		//! Loaded ht entry and probe outcome per dense row
+		unsafe_unique_array<ht_entry_t> loaded_entries;
+		unsafe_unique_array<uint8_t> probe_outcomes;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
