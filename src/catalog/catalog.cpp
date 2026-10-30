@@ -40,6 +40,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/catalog/schema_scan_filters.hpp"
@@ -1562,11 +1563,14 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	vector<reference<SchemaCatalogEntry>> result;
 
 	auto &db_manager = DatabaseManager::Get(context);
+	auto &meta_transaction = MetaTransaction::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto &database : databases) {
 		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
 			continue;
 		}
+		// keep the database alive until the end of the transaction, the returned schemas reference it
+		meta_transaction.UseDatabase(database);
 		auto &catalog = database->GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
@@ -1678,19 +1682,23 @@ optional<Identifier> Catalog::GetDefaultSchema() const {
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
 bool Catalog::HasDefaultTable() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return !default_table.empty();
 }
 
 void Catalog::SetDefaultTable(const Identifier &schema, const Identifier &name) {
+	lock_guard<mutex> guard(default_table_lock);
 	default_table = name;
 	default_table_schema = schema;
 }
 
 Identifier Catalog::GetDefaultTable() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return default_table;
 }
 
 Identifier Catalog::GetDefaultTableSchema() const {
+	lock_guard<mutex> guard(default_table_lock);
 	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 
