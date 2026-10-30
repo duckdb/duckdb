@@ -385,7 +385,10 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 			}
 			auto &current_row_group = state.current_row_group->GetNode();
 			if (current_row_group.count == 0) {
-				break;
+				// An empty row group is not the end of the table. A CREATE TABLE AS ... LIMIT 0
+				// can leave one in front of row groups merged later in the same transaction.
+				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get());
+				continue;
 			}
 			auto row_start = state.current_row_group->GetRowStart();
 			collection = state.collection;
@@ -737,6 +740,24 @@ optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &stat
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	// A zero-row append still creates a row group to write into. Keeping that row group
+	// makes the next merge in this transaction append after it, and the parallel scan then
+	// stops on the empty row group.
+	if (state.total_append_count == 0) {
+		auto row_group = state.row_group_append_state.row_group;
+		if (row_group && row_group->GetNode().count == 0) {
+			row_group->GetNode().FinalizeAppend(state.row_group_append_state);
+			auto l = state.row_groups->Lock();
+			auto last_segment = state.row_groups->GetLastSegment(l);
+			if (last_segment && last_segment->GetIndex() == row_group->GetIndex()) {
+				state.row_groups->EraseSegments(l, last_segment->GetIndex());
+			}
+			state.row_group_append_state.row_group = nullptr;
+			state.start_row_group = nullptr;
+			return;
+		}
+	}
+
 	// first finalize the append of the final row group we appended to
 	auto &last_row_group = state.row_group_append_state.row_group->GetNode();
 	last_row_group.FinalizeAppend(state.row_group_append_state);
