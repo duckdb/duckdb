@@ -16,6 +16,8 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/double_na_equal.hpp"
 
 namespace duckdb {
 
@@ -65,10 +67,37 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 	// Else we already wrote to stream
 }
 
-template <class T, bool TRACK = std::is_integral<T>::value>
+template <class T>
+struct SortednessKey {
+	static constexpr bool TRACKED = std::is_integral<T>::value || std::is_same<T, hugeint_t>::value ||
+	                                std::is_same<T, uhugeint_t>::value || std::is_same<T, string_t>::value;
+	static const T &Get(const T &value) {
+		return value;
+	}
+};
+
+template <>
+struct SortednessKey<float_na_equal> {
+	static constexpr bool TRACKED = true;
+	static const float &Get(const float_na_equal &value) {
+		return value.val;
+	}
+};
+
+template <>
+struct SortednessKey<double_na_equal> {
+	static constexpr bool TRACKED = true;
+	static const double &Get(const double_na_equal &value) {
+		return value.val;
+	}
+};
+
+template <class T, bool TRACK = SortednessKey<T>::TRACKED>
 class SortednessTracker {
 public:
 	void Update(const T &) {
+	}
+	void Persist() {
 	}
 	bool IsSorted() const {
 		return false;
@@ -83,11 +112,17 @@ class SortednessTracker<T, true> {
 public:
 	void Update(const T &value) {
 		if (count > 0) {
-			ascending = ascending && previous <= value;
-			descending = descending && value <= previous;
+			const auto &left = SortednessKey<T>::Get(previous);
+			const auto &right = SortednessKey<T>::Get(value);
+			ascending = ascending && !GreaterThan::Operation(left, right);
+			descending = descending && !GreaterThan::Operation(right, left);
 		}
 		previous = value;
 		count++;
+	}
+	//! Copies the last value out of the vector it points into, which may be freed before the next one
+	void Persist() {
+		PersistValue(previous, owned_previous);
 	}
 	bool IsSorted() const {
 		return ascending || descending;
@@ -97,7 +132,20 @@ public:
 	}
 
 private:
+	template <class V>
+	static void PersistValue(V &, string &) {
+	}
+	static void PersistValue(string_t &value, string &owned) {
+		if (value.IsInlined() || value.GetData() == owned.data()) {
+			return;
+		}
+		owned.assign(value.GetData(), value.GetSize());
+		value = string_t(owned.data(), UnsafeNumericCast<uint32_t>(owned.size()));
+	}
+
+private:
 	T previous;
+	string owned_previous;
 	idx_t count = 0;
 	bool ascending = true;
 	bool descending = true;
@@ -273,6 +321,9 @@ public:
 				}
 				vector_index++;
 			}
+		}
+		if (track_sortedness) {
+			state.sortedness.Persist();
 		}
 	}
 

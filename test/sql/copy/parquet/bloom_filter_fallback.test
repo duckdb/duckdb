@@ -119,7 +119,10 @@ endloop
 statement ok
 COPY (
  SELECT i AS ascending, -i AS descending, (i * 7919) % 300000 AS shuffled,
-        CASE WHEN i < 100000 THEN i ELSE (i * 7919) % 300000 END AS sorted_prefix
+        CASE WHEN i < 100000 THEN i ELSE (i * 7919) % 300000 END AS sorted_prefix,
+        i::DOUBLE AS ascending_double, (-i)::FLOAT AS descending_float, ((i * 7919) % 300000)::DOUBLE AS shuffled_double,
+        lpad(i::VARCHAR, 8, '0') AS ascending_string, lpad(((i * 7919) % 300000)::VARCHAR, 8, '0') AS shuffled_string,
+        i::HUGEINT AS ascending_hugeint
  FROM range(300000) t(i)
 ) TO '{TEST_DIR}/sorted.parquet' (FORMAT PARQUET)
 
@@ -129,9 +132,34 @@ FROM parquet_metadata('{TEST_DIR}/sorted.parquet')
 GROUP BY ALL ORDER BY ALL
 ----
 ascending	0
+ascending_double	0
+ascending_hugeint	0
+ascending_string	0
 descending	0
+descending_float	0
 shuffled	3
+shuffled_double	3
+shuffled_string	3
 sorted_prefix	2
+
+# Sortedness of strings carries over between vectors, whose memory may be released in between.
+statement ok
+COPY (SELECT lpad(i::VARCHAR, 20, '0') AS s FROM range(10000) t(i)) TO '{TEST_DIR}/sorted-strings.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 10000, DICTIONARY_SIZE_LIMIT 10)
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/sorted-strings.parquet')
+----
+0
+
+statement ok
+COPY (SELECT lpad(((i * 7919) % 10000)::VARCHAR, 20, '0') AS s FROM range(10000) t(i))
+TO '{TEST_DIR}/shuffled-strings.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 10000, DICTIONARY_SIZE_LIMIT 10)
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/shuffled-strings.parquet')
+----
+1
 
 # Folding releases reservation bytes, so later chunks can also get filters.
 statement ok

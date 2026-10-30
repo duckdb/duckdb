@@ -828,10 +828,20 @@ bloom_filter_false_positive_ratio must be greater than 0
 
 # some tests for string_dictionary_page_size_limit
 
-# limit too low: the bloom filter falls back to hashing the values
+# no bloom filter: limit too low, and the sorted values get no fallback filter
 statement ok
 copy (select (r1.range*10)::VARCHAR r,
 from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 10);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('{TEST_DIR}/bloom9.parquet') order by row_group_id;
+----
+0	false	false
+
+# unsorted values fall back to hashing them
+statement ok
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by hash(r)) to '{TEST_DIR}/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 10);
 
 query III
 select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('{TEST_DIR}/bloom9.parquet') order by row_group_id;
