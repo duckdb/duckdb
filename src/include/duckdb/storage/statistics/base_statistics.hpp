@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
+#include "duckdb/storage/statistics/extra_stats_data.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
@@ -46,24 +47,10 @@ enum class StatisticsType : uint8_t {
 	VARIANT_STATS
 };
 
-struct ExtraStatsData {
-	virtual ~ExtraStatsData() = default;
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
+	friend struct NumericRangeStats;
 	friend struct StructStats;
 	friend struct ListStats;
 	friend struct ArrayStats;

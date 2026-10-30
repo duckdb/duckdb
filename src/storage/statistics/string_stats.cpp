@@ -179,6 +179,10 @@ void StringStats::ResetMaxStringLength(BaseStatistics &stats) {
 	GetDataUnsafe(stats).has_max_string_length = false;
 }
 
+void StringStats::ResetMinStringLength(BaseStatistics &stats) {
+	GetDataUnsafe(stats).has_min_string_length = false;
+}
+
 void StringStats::SetMaxStringLength(BaseStatistics &stats, uint32_t length) {
 	auto &data = GetDataUnsafe(stats);
 	data.has_max_string_length = true;
@@ -538,24 +542,15 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	MergeInConstant(stats, value);
 }
 
-struct StringData {
-	unique_ptr<data_t[]> data;
-	idx_t capacity = 0;
-
-	string_t AssignString(const string_t &value) {
-		if (value.GetSize() > capacity) {
-			auto next_capacity = NextPowerOfTwo(value.GetSize());
-			data = make_uniq_array<data_t>(next_capacity);
-			capacity = next_capacity;
-		}
-		memcpy(data.get(), value.GetData(), value.GetSize());
-		return string_t(const_char_ptr_cast(data.get()), static_cast<uint32_t>(value.GetSize()));
+string_t StringStatsData::StringData::AssignString(const string_t &value) {
+	if (value.GetSize() > capacity) {
+		auto next_capacity = NextPowerOfTwo(value.GetSize());
+		data = make_uniq_array<data_t>(next_capacity);
+		capacity = next_capacity;
 	}
-};
-
-struct StringStatsExtraData : public ExtraStatsData {
-	StringData string_data[2];
-};
+	memcpy(data.get(), value.GetData(), value.GetSize());
+	return string_t(const_char_ptr_cast(data.get()), static_cast<uint32_t>(value.GetSize()));
+}
 
 string_t StringStats::AssignString(BaseStatistics &stats, const string_t &input, bool is_min) {
 	if (input.IsInlined()) {

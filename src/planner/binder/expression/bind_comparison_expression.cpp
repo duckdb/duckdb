@@ -100,12 +100,12 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 			max_scale = MaxValue<uint8_t>(scale, max_scale);
 			max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 		}
-		max_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
-		if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
+		idx_t required_width = MaxValue<idx_t>(idx_t(max_scale) + max_width_over_scale, max_width);
+		if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
-			max_width = Decimal::MAX_WIDTH_DECIMAL;
+			required_width = Decimal::MAX_WIDTH_DECIMAL;
 		}
-		res = LogicalType::DECIMAL(max_width, max_scale);
+		res = LogicalType::DECIMAL(NumericCast<uint8_t>(required_width), max_scale);
 		break;
 	}
 	case LogicalTypeId::VARCHAR:

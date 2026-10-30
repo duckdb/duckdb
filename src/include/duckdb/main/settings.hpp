@@ -623,6 +623,19 @@ struct DebugCheckpointSleepMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugDecimalAsNumericSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_decimal_as_numeric";
+	static constexpr const char *Description =
+	    "Declare the DECIMAL columns of new tables as NUMERIC (used to run the test suite over NUMERIC columns).";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugDeltaOnlyVariantEncodingEnabledSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_delta_only_variant_encoding_enabled";
@@ -809,6 +822,20 @@ struct DebugForceWalFsyncFailureSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugForceWideDecimalSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_wide_decimal";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: store DECIMAL values of every width as BIGNUM blobs, so the wide-decimal code paths run for "
+	    "all decimals (process-wide, set it before creating any decimal)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugLocalFileSystemDelayMsSetting {

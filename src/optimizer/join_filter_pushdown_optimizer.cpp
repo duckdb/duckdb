@@ -37,6 +37,11 @@ static bool IsJoinFilterPushdownIntegralCast(const LogicalType &src, const Logic
 	return IsJoinFilterPushdownIntegralType(src) && IsJoinFilterPushdownIntegralType(tgt);
 }
 
+//! A NUMERIC column compared in an integral representation: the filter is rebuilt on top of the cast
+static bool IsJoinFilterPushdownNumericIntegralCast(const LogicalType &src, const LogicalType &tgt) {
+	return src.id() == LogicalTypeId::NUMERIC && IsJoinFilterPushdownIntegralType(tgt);
+}
+
 static bool IsJoinFilterPushdownVariantIntegralCast(const LogicalType &src, const LogicalType &tgt) {
 	if (src.id() == LogicalTypeId::VARIANT) {
 		return IsJoinFilterPushdownIntegralType(tgt);
@@ -82,7 +87,8 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		const auto &bound_cast = expr.Cast<BoundFunctionExpression>();
 		const auto &src = BoundCastExpression::Child(bound_cast).GetReturnType();
 		const auto &tgt = bound_cast.GetReturnType();
-		const bool integral_cast = IsJoinFilterPushdownIntegralCast(src, tgt);
+		const bool integral_cast =
+		    IsJoinFilterPushdownIntegralCast(src, tgt) || IsJoinFilterPushdownNumericIntegralCast(src, tgt);
 		const bool variant_integral_cast = IsJoinFilterPushdownVariantIntegralCast(src, tgt);
 		if (!integral_cast && !variant_integral_cast) {
 			return false;

@@ -16,6 +16,7 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
@@ -38,6 +39,12 @@ ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(
 
 DatabaseInstance &ExtensionLoader::GetDatabaseInstance() const {
 	return db;
+}
+
+void ExtensionLoader::TakeOverProcessWideSettings() const {
+	if (DBConfig::GetConfig(db).options.debug_force_wide_decimal) {
+		Decimal::SetForceWide(true);
+	}
 }
 
 void ExtensionLoader::SetDescription(const string &description) {
