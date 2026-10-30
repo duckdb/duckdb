@@ -48,7 +48,8 @@ public:
 	//! Returns the DatabaseInstance associated with this extension loader
 	DUCKDB_API DatabaseInstance &GetDatabaseInstance() const;
 	//! Takes the process-wide debug switches over from the database. A loadable extension is linked with its own copy
-	//! of the library, so it runs this with its own copy of the switches; the entry point macro calls it first
+	//! of the library, so it runs this with its own copy of the switches: an extension that builds types whose physical
+	//! representation depends on such a switch (DECIMAL under debug_force_wide_decimal) calls this when it loads
 	DUCKDB_API void TakeOverProcessWideSettings() const;
 
 public:
@@ -166,9 +167,4 @@ private:
 //!		}
 //!
 #define DUCKDB_CPP_EXTENSION_ENTRY(EXTENSION_NAME, LOADER_NAME)                                                        \
-	static void EXTENSION_NAME##_duckdb_cpp_init_internal(duckdb::ExtensionLoader &LOADER_NAME);                       \
-	DUCKDB_EXTENSION_API void EXTENSION_NAME##_duckdb_cpp_init(duckdb::ExtensionLoader &LOADER_NAME) {                 \
-		LOADER_NAME.TakeOverProcessWideSettings();                                                                     \
-		EXTENSION_NAME##_duckdb_cpp_init_internal(LOADER_NAME);                                                        \
-	}                                                                                                                  \
-	static void EXTENSION_NAME##_duckdb_cpp_init_internal(duckdb::ExtensionLoader &LOADER_NAME)
+	DUCKDB_EXTENSION_API void EXTENSION_NAME##_duckdb_cpp_init(duckdb::ExtensionLoader &LOADER_NAME)
