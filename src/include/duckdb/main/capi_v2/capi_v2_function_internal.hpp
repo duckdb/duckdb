@@ -164,6 +164,17 @@ inline auto Convert(CV2Stats *stats) -> duckdb_v2_stats_handle {
 	return reinterpret_cast<duckdb_v2_stats_handle>(stats);
 }
 
+//! A statistics handle owns the BaseStatistics it points at: it is heap-allocated by duckdb_v2_statistics_create (and
+//! the variant_shredded variant), handed to the engine by copy, and freed by duckdb_v2_statistics_destroy.
+using CV2Statistics = duckdb::BaseStatistics;
+
+inline auto Convert(duckdb_v2_statistics_handle statistics) -> CV2Statistics * {
+	return reinterpret_cast<CV2Statistics *>(statistics);
+}
+inline auto Convert(CV2Statistics *statistics) -> duckdb_v2_statistics_handle {
+	return reinterpret_cast<duckdb_v2_statistics_handle>(statistics);
+}
+
 inline auto Convert(duckdb_v2_function_bind_info_handle info) -> CV2FunctionBindInfo * {
 	return reinterpret_cast<CV2FunctionBindInfo *>(info);
 }

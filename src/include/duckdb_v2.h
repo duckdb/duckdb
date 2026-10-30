@@ -4767,6 +4767,19 @@ typedef struct _duckdb_v2_stats {
 	void *internal_ptr;
 } * duckdb_v2_stats_handle;
 
+/*!
+ * An owned opaque handle to the statistics of a column: what is known about the values the column holds without reading
+ * them - whether it can hold NULLs and non-NULL values, a minimum and a maximum for numeric and string columns, the
+ * statistics of the children of a LIST / ARRAY / STRUCT column, the shredding of a VARIANT column and the extent of a
+ * GEOMETRY column. The statistics start out "unknown" (claiming nothing) when created with
+ * `duckdb_v2_statistics_create()`, are narrowed with the `statistics_set_*` functions, combined with
+ * `duckdb_v2_statistics_merge()`, and destroyed with `duckdb_v2_statistics_destroy()`. A table function hands them to
+ * the engine from its "statistics" callback through `duckdb_v2_table_function_statistics_set_result()`.
+ */
+typedef struct _duckdb_v2_statistics {
+	void *internal_ptr;
+} * duckdb_v2_statistics_handle;
+
 /* --- Constants for stats --- */
 
 /* --- Function pointer typedefs for stats --- */
@@ -4851,6 +4864,378 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_null(duckdb_v2_stats_h
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_valid(duckdb_v2_stats_handle stats, bool value,
                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates the statistics of a column of the given type through a factory.
+ *
+ * The statistics start out unknown: they claim nothing about the values (NULLs and non-NULL values may occur, no
+ * bounds, and the statistics of the children of a nested type are unknown too). Narrow them with the `statistics_set_*`
+ * functions. The caller owns the returned handle and must destroy it with `duckdb_v2_statistics_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the statistics through.
+ * @param type The type of the column the statistics describe. Borrowed and copied.
+ * @param statistics On success, receives the newly created statistics. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_create(duckdb_v2_factory_handle factory,
+                                                         duckdb_v2_logical_type_handle type,
+                                                         duckdb_v2_statistics_handle *statistics,
+                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates the statistics of a VARIANT column that is shredded: its values are stored in a structured ("typed") layout
+ * next to the generic one, and `shredded_statistics` describe that layout.
+ *
+ * The structured layout is a tree of `STRUCT(typed_value <T>, untyped_value_index UINTEGER)` nodes - one per field of
+ * an OBJECT, per element of an ARRAY and per primitive leaf - whose type
+ * `duckdb_v2_statistics_variant_shredding_type()` derives from the structured type the values are shredded on;
+ * `shredded_statistics` must be statistics of that type. Within a node, the statistics of `typed_value` describe the
+ * values stored in the typed layout and those of `untyped_value_index` whether any value fell back to the generic
+ * layout: a node whose `untyped_value_index` is known to hold no index (its minimum and maximum are 0, and it holds no
+ * NULL) is fully shredded, so that a filter on the field can be answered from the typed statistics. The resulting
+ * VARIANT statistics claim nothing about NULLs; narrow them with `duckdb_v2_statistics_set_has_null()` and
+ * `duckdb_v2_statistics_set_has_no_null()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_statistics_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the statistics through.
+ * @param shredded_statistics The statistics of the shredded layout. Borrowed and copied.
+ * @param statistics On success, receives the newly created VARIANT statistics. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_create_variant_shredded(
+    duckdb_v2_factory_handle factory, duckdb_v2_statistics_handle shredded_statistics,
+    duckdb_v2_statistics_handle *statistics, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Derives the type of the shredded layout of a VARIANT column from the structured type its values are shredded on:
+ * every level of the structured type - a STRUCT (an OBJECT), a LIST (an ARRAY) or a primitive type - is wrapped in a
+ * `STRUCT(typed_value <level>, untyped_value_index UINTEGER)`. Statistics of this type describe the shredded layout for
+ * `duckdb_v2_statistics_create_variant_shredded()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the type through.
+ * @param structured_type The structured type the values are shredded on. Borrowed.
+ * @param type On success, receives the type of the shredded layout. Owned by the caller, destroy via
+ * `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_variant_shredding_type(duckdb_v2_factory_handle factory,
+                                                                         duckdb_v2_logical_type_handle structured_type,
+                                                                         duckdb_v2_logical_type_handle *type,
+                                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the column can hold NULL values. Unknown statistics say it can; claim it cannot only when no value of
+ * the column is NULL.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param has_null Whether NULL values can occur.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_has_null(duckdb_v2_statistics_handle statistics, bool has_null,
+                                                               duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets whether the column can hold non-NULL values. Unknown statistics say it can; claim it cannot only when every
+ * value of the column is NULL.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param has_no_null Whether non-NULL values can occur.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_has_no_null(duckdb_v2_statistics_handle statistics,
+                                                                  bool has_no_null, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the minimum value of a numeric column (an integer, a floating point number, a DECIMAL, a date / time /
+ * timestamp, an INTERVAL, a UUID or a BOOLEAN): no value of the column is smaller. The value is cast to the column's
+ * type; a NULL value removes the bound. Fails with `ERROR_INPUT_INVALID` for statistics of a type without a numeric
+ * minimum (use `duckdb_v2_statistics_set_string_min()` for VARCHAR and BLOB) or a value that does not cast to the type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The minimum value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_min(duckdb_v2_statistics_handle statistics,
+                                                          duckdb_v2_value_handle value,
+                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the maximum value of a numeric column: no value of the column is larger. The value is cast to the column's type;
+ * a NULL value removes the bound. A FLOAT / DOUBLE column that can hold NaN values, which compare larger than any
+ * number, must report NaN as its maximum. Fails with `ERROR_INPUT_INVALID` for statistics of a type without a numeric
+ * maximum or a value that does not cast to the type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The maximum value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_max(duckdb_v2_statistics_handle statistics,
+                                                          duckdb_v2_value_handle value,
+                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the minimum of a VARCHAR or BLOB column: no value of the column sorts before `value` (in binary order). An exact
+ * minimum is a value of the column; a truncated one is a prefix of the minimum (as a file format stores it), which may
+ * then be shorter than the values and need not be valid UTF-8. The bytes are borrowed and copied. Fails with
+ * `ERROR_INPUT_INVALID` for statistics of another type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The minimum, or a prefix of it. Borrowed and copied.
+ * @param is_exact Whether `value` is the minimum itself rather than a truncated prefix of it.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_string_min(duckdb_v2_statistics_handle statistics,
+                                                                 duckdb_v2_str *value, bool is_exact,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the maximum of a VARCHAR or BLOB column: no value of the column sorts after `value` (in binary order). An exact
+ * maximum is a value of the column; a truncated one is a prefix that sorts after every value (as a file format stores
+ * it), which may then be shorter than the values and need not be valid UTF-8. The bytes are borrowed and copied. Fails
+ * with `ERROR_INPUT_INVALID` for statistics of another type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param value The maximum, or a truncated bound of it. Borrowed and copied.
+ * @param is_exact Whether `value` is the maximum itself rather than a truncated bound.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_string_max(duckdb_v2_statistics_handle statistics,
+                                                                 duckdb_v2_str *value, bool is_exact,
+                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Makes the statistics those of a column whose every value is `value`: its minimum and maximum are the value (for a
+ * VARCHAR / BLOB column its exact bounds, together with its length), and it holds no other value. A NULL value
+ * describes a column of NULLs. The value is cast to the column's type and is borrowed and copied. Replaces what the
+ * statistics claimed before. Fails with `ERROR_INPUT_INVALID` when the value does not cast to the type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to set.
+ * @param value The only value of the column. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_constant(duckdb_v2_statistics_handle statistics,
+                                                               duckdb_v2_value_handle value,
+                                                               duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the estimated number of distinct values of the column (0: unknown).
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param count The estimated number of distinct values.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_distinct_count(duckdb_v2_statistics_handle statistics,
+                                                                     idx_t count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the statistics of a child of a nested column: the elements of a LIST or ARRAY column (child 0), or the field at
+ * `child_index` of a STRUCT column (a MAP column is a LIST of `STRUCT(key, value)` entries: its entries are child 0,
+ * whose children 0 and 1 are the keys and the values). The child statistics must be of the child's type; they are
+ * borrowed and copied. A null child resets the child's statistics to unknown. Fails with `ERROR_INPUT_INVALID` for
+ * statistics of a type without children, an index out of range or child statistics of another type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param child_index The index of the child.
+ * @param child The statistics of the child, or null for unknown statistics. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_child(duckdb_v2_statistics_handle statistics, idx_t child_index,
+                                                            duckdb_v2_statistics_handle child,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Merges the statistics of another part of the column into these: afterwards the statistics hold for the values of both
+ * parts together (the bounds widen, NULLs can occur when they can in either, the children are merged, a VARIANT
+ * shredded differently in the two parts becomes inconsistently shredded). This is how the statistics of the row groups
+ * of a file are combined into those of the file. Both must be of the same type; `other` is borrowed and left unchanged.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to widen.
+ * @param other The statistics of the other part of the column. Borrowed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_merge(duckdb_v2_statistics_handle statistics,
+                                                        duckdb_v2_statistics_handle other,
+                                                        duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the bounding box of a GEOMETRY column: every vertex of every geometry lies within it. The Z and M bounds are
+ * only set when the geometries have those coordinates (`has_z` / `has_m`); otherwise they are unknown, also when an
+ * earlier call set them. Replaces the bounding box set before. Fails with `ERROR_INPUT_INVALID` for statistics of
+ * another type or a minimum larger than its maximum.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param x_min The smallest X coordinate.
+ * @param x_max The largest X coordinate.
+ * @param y_min The smallest Y coordinate.
+ * @param y_max The largest Y coordinate.
+ * @param has_z Whether the Z bounds are given.
+ * @param z_min The smallest Z coordinate (when `has_z`).
+ * @param z_max The largest Z coordinate (when `has_z`).
+ * @param has_m Whether the M bounds are given.
+ * @param m_min The smallest M coordinate (when `has_m`).
+ * @param m_max The largest M coordinate (when `has_m`).
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_geometry_extent(duckdb_v2_statistics_handle statistics,
+                                                                      double x_min, double x_max, double y_min,
+                                                                      double y_max, bool has_z, double z_min,
+                                                                      double z_max, bool has_m, double m_min,
+                                                                      double m_max, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the geometry types a GEOMETRY column holds, as ISO WKB type codes (e.g. 1 for a Point, 1001 for a Point with a Z
+ * coordinate, 2003 for a Polygon with an M coordinate): the column holds no geometry of another type. Replaces the
+ * types set before; an empty list makes the types unknown again. Fails with `ERROR_INPUT_INVALID` for statistics of
+ * another type or an unknown type code.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to narrow.
+ * @param wkb_types The ISO WKB type codes of the geometries the column holds. Borrowed and copied.
+ * @param count The number of type codes.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_geometry_types(duckdb_v2_statistics_handle statistics,
+                                                                     const int32_t *wkb_types, idx_t count,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the type of the column the statistics describe.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics.
+ * @param type Receives the type. Owned by the caller, destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_get_type(duckdb_v2_statistics_handle statistics,
+                                                           duckdb_v2_logical_type_handle *type,
+                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the statistics, releasing their resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Statistics that were reported with `duckdb_v2_table_function_statistics_set_result()` or set as a
+ * child were copied, so destroying them afterwards does not affect what was reported.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param statistics The statistics to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_destroy(duckdb_v2_statistics_handle *statistics);
 #endif
 
 /* --- Struct definitions for stats --- */
@@ -8656,6 +9041,28 @@ typedef enum DUCKDB_V2_EXPRESSION_TYPE {
 	DUCKDB_V2_EXPRESSION_TYPE_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_EXPRESSION_TYPE;
 
+/*!
+ * What checking a predicate against the statistics of its column found out (`FilterPropagateResult`): whether every row
+ * the statistics describe passes the predicate, none does, or the statistics do not tell.
+ */
+typedef enum DUCKDB_V2_FILTER_PROPAGATE_RESULT {
+	//! The statistics do not decide the predicate.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_NO_PRUNING_POSSIBLE = 0,
+
+	//! Every row passes the predicate.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_TRUE = 1,
+
+	//! No row passes the predicate.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_FALSE = 2,
+
+	//! Every row passes the predicate or evaluates it to NULL.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_TRUE_OR_NULL = 3,
+
+	//! No row passes the predicate: each evaluates it to false or to NULL.
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_FALSE_OR_NULL = 4,
+	DUCKDB_V2_FILTER_PROPAGATE_RESULT_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_FILTER_PROPAGATE_RESULT;
+
 /* --- Struct forward declarations for expression --- */
 
 /* --- Types for expression --- */
@@ -8866,6 +9273,33 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_expression_function_get_qname(duckdb_v2_e
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_expression_cast_get_mode(duckdb_v2_expression_handle expression,
                                                                 DUCKDB_V2_CAST_MODE *mode,
                                                                 duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Checks a predicate over one column against the statistics of that column (`ExpressionFilter::CheckStatistics`): the
+ * statistics of the column are propagated through the expression - comparisons, conjunctions, IS NULL, IN, casts and
+ * the functions the engine knows the statistics of - to find out whether every row the statistics describe passes the
+ * predicate, none does, or nothing can be told. A table function uses it to skip a row group (or a file) whose
+ * statistics make a pushed-down filter it did not take over false for every row. Every column reference of the
+ * predicate stands for the column described by `statistics`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context of the query; the statistics of function calls in the predicate are derived through it.
+ * @param expression The predicate: a boolean expression over one column, referenced by its column references.
+ * @param statistics The statistics of that column over the rows in question.
+ * @param result Receives what the statistics decide about the predicate.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_expression_check_statistics(duckdb_v2_context_handle context,
+                                                                   duckdb_v2_expression_handle expression,
+                                                                   duckdb_v2_statistics_handle statistics,
+                                                                   DUCKDB_V2_FILTER_PROPAGATE_RESULT *result,
+                                                                   duckdb_v2_error_info_handle *err);
 #endif
 
 /* --- Struct definitions for expression --- */
@@ -12924,6 +13358,16 @@ typedef struct _duckdb_v2_table_function_get_bind_info_info {
 } * duckdb_v2_table_function_get_bind_info_info_handle;
 
 /*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the optimizer asks it for the statistics
+ * of a column of a bound call. The "statistics" callback receives this handle, and can use it to find out which column
+ * is asked about and to hand back what it knows about the column's values (its minimum and maximum, whether it holds
+ * NULLs, ...) as a `duckdb_v2_statistics_handle` handle.
+ */
+typedef struct _duckdb_v2_table_function_statistics_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_statistics_info_handle;
+
+/*!
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
@@ -12984,6 +13428,10 @@ typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
 typedef void (*duckdb_v2_table_function_stats_callback_fn)(duckdb_v2_table_function_stats_info_handle info,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_statistics_callback_fn)(duckdb_v2_table_function_statistics_info_handle info,
+                                                                duckdb_v2_context_handle context,
+                                                                duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -13317,7 +13765,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
  *
  * The stats callback is invoked during query optimization once for each declared column the query reads. Through its
  * `duckdb_v2_table_function_stats_info_handle` it narrows the statistics of that column, which the engine then uses to
- * simplify the query. A function without a stats callback gives the engine no statistics for its columns.
+ * simplify the query. A function without a stats callback gives the engine no statistics for its columns. When the
+ * function also has a statistics callback (`duckdb_v2_table_function_set_statistics_callback()`), the statistics start
+ * out as what that callback reported instead of unknown, and the stats callback narrows them further.
  *
  * history:
  * - unstable: v2.0.0
@@ -13330,6 +13780,131 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_stats_callback(
     duckdb_v2_table_function_handle function, duckdb_v2_table_function_stats_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional "statistics" callback of the table function.
+ *
+ * The optimizer invokes the callback for a column of a bound call when it wants to know about the column's values
+ * without reading them - e.g. to prune a scan whose filter no value can satisfy, to answer `min()` / `max()` from the
+ * statistics, or to estimate the selectivity of a filter. The callback finds out which column is asked about with
+ * `duckdb_v2_table_function_statistics_get_column_index()`, builds what it knows into a `duckdb_v2_statistics_handle`
+ * handle (see `duckdb_v2_statistics_create()`) and hands it back with
+ * `duckdb_v2_table_function_statistics_set_result()`; reporting nothing leaves the statistics unknown. The statistics
+ * must hold for every row the call produces: a bound that excludes a value the scan then produces leads to wrong
+ * results. A multi-file function registered with `duckdb_v2_connection_register_multi_file_function()` or
+ * `duckdb_v2_extension_register_multi_file_function()` asks the function it wraps for the statistics of its files and
+ * combines them (for a single file, or for every file of a `union_by_name` scan). When the function also has a stats
+ * callback (`duckdb_v2_table_function_set_stats_callback()`), that callback receives the reported statistics to narrow
+ * further.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the statistics callback of.
+ * @param callback The statistics callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_statistics_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_statistics_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set on the table function via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_user_data(
+    duckdb_v2_table_function_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data the function's bind callback set for the bound call whose column is asked about.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_bind_data(
+    duckdb_v2_table_function_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the index of the column whose statistics are asked for.
+ *
+ * The index is that of a column declared with `duckdb_v2_table_function_bind_add_result_column()`, in declaration
+ * order. The callback is not asked about virtual columns or about fields extracted from a column.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param column_index Receives the index of the declared column.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_column_index(
+    duckdb_v2_table_function_statistics_info_handle info, idx_t *column_index, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the type of the column whose statistics are asked for, as the bind callback declared it (or as the virtual
+ * column was declared). The statistics the callback reports must be of this type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param type Receives the type of the column. Owned by the caller, destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_column_type(
+    duckdb_v2_table_function_statistics_info_handle info, duckdb_v2_logical_type_handle *type,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports the statistics of the column asked about. The statistics must be of the column's type (see
+ * `duckdb_v2_table_function_statistics_get_column_type()`); they are borrowed and copied, the caller still owns the
+ * handle. Calling this again replaces what was reported before. Not reporting anything leaves the statistics of the
+ * column unknown.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The statistics info handle.
+ * @param statistics The statistics of the column. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_set_result(
+    duckdb_v2_table_function_statistics_info_handle info, duckdb_v2_statistics_handle statistics,
     duckdb_v2_error_info_handle *err);
 #endif
 
