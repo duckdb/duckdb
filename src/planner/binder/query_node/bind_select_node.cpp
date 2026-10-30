@@ -74,7 +74,8 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 		}
 	}
 	const bool freezes_observation =
-	    Settings::Get<PortablePlanSetting>(context) && (!expr->IsConsistent() || expr->ObservesBindingContext());
+	    Settings::Get<PortablePlanSetting>(context) &&
+	    (!expr->IsConsistent() || expr->RequiresRebind() || expr->ObservesBindingContext());
 	if (expr->IsFoldable() && !freezes_observation) {
 		//! this is a constant
 		auto val = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, target_type);
