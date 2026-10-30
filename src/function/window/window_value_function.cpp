@@ -1,3 +1,4 @@
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -1606,9 +1607,15 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 	if (!IsFillType(arguments[0]->GetReturnType())) {
 		throw BinderException("FILL argument must support subtraction");
 	}
+	const auto &fill_argument_type = arguments[0]->GetReturnType();
+	if (fill_argument_type.id() == LogicalTypeId::DECIMAL &&
+	    fill_argument_type.InternalType() == PhysicalType::VARCHAR) {
+		throw NotImplementedException("FILL is not supported for DECIMAL types wider than %d digits",
+		                              Decimal::MAX_WIDTH_INT128);
+	}
 
 	// Can we validate?
-	if (!input.HasOrders() || !input.HasArgumentOrders()) {
+	if (!input.HasOrders() && !input.HasArgumentOrders()) {
 		return nullptr;
 	}
 
@@ -1628,6 +1635,10 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 	}
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
+	}
+	if (order_type.id() == LogicalTypeId::DECIMAL && order_type.InternalType() == PhysicalType::VARCHAR) {
+		throw NotImplementedException("FILL is not supported for DECIMAL types wider than %d digits",
+		                              Decimal::MAX_WIDTH_INT128);
 	}
 
 	return nullptr;

@@ -1,5 +1,6 @@
 #include "duckdb/function/combine_types_rule.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
@@ -144,13 +145,13 @@ static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, cons
 	auto extra_width =
 	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-	auto width = NumericCast<uint8_t>(extra_width + scale);
-	if (width > DecimalType::MaxWidth()) {
+	idx_t width = idx_t(extra_width) + scale;
+	if (width > Decimal::MAX_WIDTH_DECIMAL) {
 		// if the resulting decimal does not fit, we truncate the scale
-		width = DecimalType::MaxWidth();
+		width = Decimal::MAX_WIDTH_DECIMAL;
 		scale = NumericCast<uint8_t>(width - extra_width);
 	}
-	result = LogicalType::DECIMAL(width, scale);
+	result = LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);
 	return true;
 }
 static bool CombineEqualList(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,

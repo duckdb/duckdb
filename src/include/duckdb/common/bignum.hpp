@@ -103,6 +103,9 @@ struct BignumIntermediate {
 	//! Returns false without writing a result when the divisor is zero
 	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                      const BignumIntermediate &rhs, bool want_remainder, string_t &result);
+	//! Truncating division and remainder in one go, see TryDivMod
+	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+	                      const BignumIntermediate &rhs, string_t &quotient, string_t &remainder);
 	//! Negates a value, e.g., -x
 	string_t Negate(StringHeap &heap) const;
 	void NegateInPlace();

@@ -666,4 +666,22 @@ bool BignumIntermediate::TryDivMod(StringHeap &heap, BignumArithmeticState &stat
 	return true;
 }
 
+bool BignumIntermediate::TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+                                   const BignumIntermediate &rhs, string_t &quotient_result,
+                                   string_t &remainder_result) {
+	auto &lhs_digits = state.lhs_digits;
+	auto &rhs_digits = state.rhs_digits;
+	auto &quotient = state.result_digits;
+	auto &remainder = state.remainder_digits;
+	GetMagnitude(lhs, lhs_digits);
+	GetMagnitude(rhs, rhs_digits);
+	if (rhs_digits.empty()) {
+		return false;
+	}
+	DivModMagnitudes(state, lhs_digits, rhs_digits, quotient, remainder, true);
+	quotient_result = WriteMagnitude(heap, quotient, lhs.is_negative != rhs.is_negative);
+	remainder_result = WriteMagnitude(heap, remainder, lhs.is_negative);
+	return true;
+}
+
 } // namespace duckdb

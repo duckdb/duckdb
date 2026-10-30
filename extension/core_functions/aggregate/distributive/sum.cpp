@@ -2,6 +2,7 @@
 #include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -240,10 +241,10 @@ struct DecimalSumOperation : public OP {
 		if (!state.is_set) {
 			return;
 		}
-		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128];
 		if (target >= max_value || target <= -max_value) {
 			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",
-			                          Decimal::MAX_WIDTH_DECIMAL);
+			                          Decimal::MAX_WIDTH_INT128);
 		}
 	}
 };
@@ -465,6 +466,8 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
+AggregateFunction GetWideDecimalSumAggregate();
+
 template <class INPUT_TYPE, class OP>
 AggregateFunction GetDecimalSumAggregate(const LogicalType &input_type) {
 	auto function =
@@ -499,10 +502,22 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
+	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimals sum their BIGNUM blobs into the widest decimal of the same scale; a decimal that is only
+		// stored as a BIGNUM blob because of debug_force_wide_decimal keeps the DECIMAL(38,s) result of its width
+		auto result_width = DecimalType::GetWidth(decimal_type) > Decimal::MAX_WIDTH_INT128 ? Decimal::MAX_WIDTH_DECIMAL
+		                                                                                    : Decimal::MAX_WIDTH_INT128;
+		function.ReplaceImplementation(GetWideDecimalSumAggregate());
+		function.SetName("sum");
+		function.GetArguments()[0] = decimal_type;
+		function.SetReturnType(LogicalType::DECIMAL(result_width, DecimalType::GetScale(decimal_type)));
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return nullptr;
+	}
 	function.ReplaceImplementation(GetDecimalSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
-	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
+	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }
@@ -556,6 +571,31 @@ struct BignumOperation {
 		return true;
 	}
 };
+
+//! Sums wide decimals as BIGNUMs, the result must still fit the width of the result decimal
+struct WideDecimalSumOperation : public BignumOperation {
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto width = DecimalType::GetWidth(finalize_data.result.GetType());
+		if (!BignumDecimal::FitsWidth(state.value, width)) {
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in %s",
+			                          finalize_data.result.GetType().ToString());
+		}
+		target = state.value.ToBignum(finalize_data.input.allocator);
+	}
+};
+
+AggregateFunction GetWideDecimalSumAggregate() {
+	auto function = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, WideDecimalSumOperation>(
+	    LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetFallible(); // the finalize throws when the sum does not fit the width of the result
+	return function;
+}
 
 } // namespace
 
