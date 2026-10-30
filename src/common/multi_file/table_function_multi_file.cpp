@@ -715,12 +715,48 @@ shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientCon
 	return std::move(result);
 }
 
+//! The fewest bytes a row is assumed to take when a scan's row count is estimated from the sizes of its files alone,
+//! so that the estimate errs towards more rows rather than fewer
+static constexpr idx_t MIN_ESTIMATED_BYTES_PER_ROW = 10;
+
+//! An estimate from the file sizes the file list carries (e.g. a list of {filename, file_size} structs), for a scan
+//! that opened no file at bind; nullptr unless the size of every file is known
+static unique_ptr<NodeStatistics> EstimateCardinalityFromFileSizes(const MultiFileBindData &bind_data) {
+	MultiFileListScanData scan_data;
+	scan_data.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	bind_data.file_list->InitializeScan(scan_data);
+	OpenFileInfo file;
+	idx_t file_count = 0;
+	idx_t total_size = 0;
+	while (bind_data.file_list->Scan(scan_data, file)) {
+		idx_t file_size;
+		if (!file.extended_info || !file.extended_info->TryGetOption("file_size", file_size)) {
+			return nullptr;
+		}
+		total_size += file_size;
+		file_count++;
+	}
+	if (file_count == 0) {
+		return nullptr;
+	}
+	return make_uniq<NodeStatistics>(MaxValue<idx_t>(total_size / MIN_ESTIMATED_BYTES_PER_ROW, file_count));
+}
+
 unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientContext &context,
                                                                          const MultiFileBindData &bind_data,
                                                                          idx_t file_count) {
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	// a row count the caller knows for the whole scan (e.g. read_parquet's explicit_cardinality) is the estimate
+	auto explicit_cardinality = data.options.named_parameters.find(Identifier("explicit_cardinality"));
+	if (explicit_cardinality != data.options.named_parameters.end() && !explicit_cardinality->second.IsNull()) {
+		auto cardinality = explicit_cardinality->second.DefaultCastAs(LogicalType::UBIGINT).GetValue<uint64_t>();
+		if (cardinality > 0) {
+			return make_uniq<NodeStatistics>(cardinality);
+		}
+	}
 	if (!data.cardinality.IsValid()) {
-		return nullptr;
+		// no file was opened at bind - e.g. because the schema was given
+		return EstimateCardinalityFromFileSizes(bind_data);
 	}
 	return make_uniq<NodeStatistics>(data.cardinality.GetIndex() * file_count);
 }
