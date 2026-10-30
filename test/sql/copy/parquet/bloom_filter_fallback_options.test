@@ -1,59 +1,11 @@
 # name: test/sql/copy/parquet/bloom_filter_fallback_options.test
-# description: Validate Bloom fallback column selection and budget options
+# description: Validate the Bloom fallback budget and which columns get fallback filters
 # group: [parquet]
 
 require parquet
 
 statement ok
-CREATE TABLE options_test(k VARCHAR, n INTEGER, nested STRUCT(k VARCHAR), items INTEGER[],
-                         b BOOLEAN, big HUGEINT, d DECIMAL(38,2), ts TIMESTAMP)
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS 'k')
-----
-expects a column list or * as parameter
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS NULL)
-----
-expects a column list or * as parameter
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [NULL])
-----
-expected to find NULL
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS [1])
-----
-expected to find 1
-
-statement ok
-COPY options_test TO '{TEST_DIR}/duplicate.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['k', 'K'])
-
-foreach name missing nested.k
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
-----
-but it was not found in the table
-
-endloop
-
-foreach name nested items b d
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['{name}'])
-----
-does not support column
-
-endloop
-
-statement error
-COPY options_test TO '{TEST_DIR}/bad.parquet'
-(BLOOM_FILTER_FALLBACK_COLUMNS ['ts'], WRITE_TIMESTAMP_AS_INT96 TRUE)
-----
-does not support column
+CREATE TABLE options_test(k VARCHAR)
 
 statement error
 COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES NULL)
@@ -70,36 +22,32 @@ COPY options_test TO '{TEST_DIR}/bad.parquet' (BLOOM_FILTER_FALLBACK_MAX_BYTES '
 ----
 Memory must have a number
 
-# Dots are literal parts of a top-level column name.
+# Only top-level columns with a fallback-capable writer get fallback filters.
 statement ok
-COPY (SELECT i AS "nested.k" FROM range(4096) t(i)) TO '{TEST_DIR}/dot.parquet'
-(BLOOM_FILTER_FALLBACK_COLUMNS ['nested.k'], DICTIONARY_SIZE_LIMIT 0)
-
-query I
-SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/dot.parquet')
-----
-1
-
-statement ok
-COPY (SELECT i AS n, i::VARCHAR AS s, i % 2 = 0 AS b, {'x': i} AS st FROM range(4096) t(i))
-TO '{TEST_DIR}/star.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS *, DICTIONARY_SIZE_LIMIT 0)
+COPY (
+ SELECT i AS n, i::VARCHAR AS s, i % 2 = 0 AS b, {'x': i} AS st, [i] AS l, i::HUGEINT AS h,
+        i::DECIMAL(38,2) AS d, TIMESTAMP '2020-01-01' + i * INTERVAL '1 second' AS ts
+ FROM range(4096) t(i)
+) TO '{TEST_DIR}/types.parquet' (DICTIONARY_SIZE_LIMIT 0)
 
 query TI
-SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/star.parquet')
+SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/types.parquet')
 GROUP BY ALL ORDER BY ALL
 ----
 b	0
+d	0
+h	1
+l, list, element	0
 n	1
 s	1
 st, x	0
+ts	1
 
 statement ok
-COPY (SELECT i AS n, i % 2 = 0 AS b FROM range(4096) t(i))
-TO '{TEST_DIR}/star-list.parquet' (BLOOM_FILTER_FALLBACK_COLUMNS ['*'], DICTIONARY_SIZE_LIMIT 0)
+COPY (SELECT TIMESTAMP '2020-01-01' + i * INTERVAL '1 second' AS ts FROM range(4096) t(i))
+TO '{TEST_DIR}/int96.parquet' (DICTIONARY_SIZE_LIMIT 0, WRITE_TIMESTAMP_AS_INT96 TRUE)
 
-query TI
-SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/star-list.parquet')
-GROUP BY ALL ORDER BY ALL
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/int96.parquet')
 ----
-b	0
-n	1
+0

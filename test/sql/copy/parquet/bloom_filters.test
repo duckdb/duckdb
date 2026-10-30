@@ -698,7 +698,7 @@ JOIN '{TEST_DIR}/bloom_blob.parquet' rhs ON lhs.b = rhs.b;
 
 # some tests for dictionary_size_limit
 
-# no bloom filter, dict limit too low
+# dict limit too low: the bloom filter falls back to hashing the values
 statement ok
 copy (select (r1.range*10)::BIGINT r,
 from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom2.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 10);
@@ -706,7 +706,7 @@ from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom2.parquet' (forma
 query III
 select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('{TEST_DIR}/bloom2.parquet') order by row_group_id;
 ----
-0	false	false
+0	true	true
 
 # no bloom filter - disabled explicitly
 statement ok
@@ -718,7 +718,7 @@ select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT
 ----
 0	false	false
 
-# still no bloom filter, limit off-by-one
+# dict limit off-by-one: also a fallback filter
 statement ok
 copy (select (r1.range*10)::BIGINT r,
 from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom3.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 99);
@@ -726,7 +726,7 @@ from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom3.parquet' (forma
 query III
 select row_group_id, bloom_filter_offset  IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('{TEST_DIR}/bloom3.parquet') order by row_group_id;
 ----
-0	false	false
+0	true	true
 
 
 # should have a filter here!
@@ -818,7 +818,7 @@ bloom_filter_false_positive_ratio must be greater than 0
 
 # some tests for string_dictionary_page_size_limit
 
-# no bloom filter, limit too low
+# limit too low: the bloom filter falls back to hashing the values
 statement ok
 copy (select (r1.range*10)::VARCHAR r,
 from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 10);
@@ -826,7 +826,7 @@ from range(100) r1, range(100) order by r) to '{TEST_DIR}/bloom9.parquet' (forma
 query III
 select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('{TEST_DIR}/bloom9.parquet') order by row_group_id;
 ----
-0	false	false
+0	true	true
 
 # big enough
 statement ok

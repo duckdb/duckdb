@@ -199,9 +199,6 @@ struct ParquetWriterOptions {
 	bool write_page_index;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
 	double bloom_filter_false_positive_ratio;
-	//! Top-level columns eligible for non-dictionary Bloom filters
-	vector<bool> bloom_filter_fallback_columns;
-	bool bloom_filter_fallback_all_columns = false;
 	//! Per-file budget for fallback filters, including concurrent construction and scratch space
 	idx_t bloom_filter_fallback_max_bytes = ParquetBloomFilterMemory::DEFAULT_LIMIT;
 	//! For the given 'codec', the compression level to use

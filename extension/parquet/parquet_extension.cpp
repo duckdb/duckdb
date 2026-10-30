@@ -115,8 +115,6 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool write_page_index = false;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
-	vector<bool> bloom_filter_fallback_columns;
-	bool bloom_filter_fallback_all_columns = false;
 	idx_t bloom_filter_fallback_max_bytes = ParquetBloomFilterMemory::DEFAULT_LIMIT;
 
 	//! After how many row groups to rotate to a new file
@@ -161,7 +159,6 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
 	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
-	copy_options["bloom_filter_fallback_columns"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_fallback_max_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_page_index"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
@@ -330,15 +327,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			bind_data->data_page_size_limit = val;
 		} else if (option_name == "write_bloom_filter") {
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
-		} else if (option_name == "bloom_filter_fallback_columns") {
-			const auto &value = option_values[0];
-			bind_data->bloom_filter_fallback_columns = ParseColumnList(value, names, option_name);
-			const auto &selection =
-			    value.type().id() == LogicalTypeId::LIST && ListValue::GetChildren(value).size() == 1
-			        ? ListValue::GetChildren(value)[0]
-			        : value;
-			bind_data->bloom_filter_fallback_all_columns =
-			    selection.type().id() == LogicalTypeId::VARCHAR && StringValue::Get(selection) == "*";
 		} else if (option_name == "bloom_filter_fallback_max_bytes") {
 			bind_data->bloom_filter_fallback_max_bytes = ParseBytesArg(option_name, option_values[0]);
 		} else if (option_name == "write_page_index") {
@@ -397,15 +385,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
-	auto &fallback_columns = bind_data->bloom_filter_fallback_columns;
-	if (std::find(fallback_columns.begin(), fallback_columns.end(), true) != fallback_columns.end()) {
-		if (!bind_data->enable_bloom_filters) {
-			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS cannot be combined with WRITE_BLOOM_FILTER false");
-		}
-		if (bind_data->encryption_config) {
-			throw BinderException("BLOOM_FILTER_FALLBACK_COLUMNS is not supported for encrypted Parquet files");
-		}
-	}
 
 	return std::move(bind_data);
 }
@@ -450,8 +429,6 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
 	options.write_page_index = parquet_bind.write_page_index;
 	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
-	options.bloom_filter_fallback_columns = parquet_bind.bloom_filter_fallback_columns;
-	options.bloom_filter_fallback_all_columns = parquet_bind.bloom_filter_fallback_all_columns;
 	options.bloom_filter_fallback_max_bytes = parquet_bind.bloom_filter_fallback_max_bytes;
 	options.compression_level = parquet_bind.compression_level;
 	options.parquet_version = parquet_bind.parquet_version,
@@ -859,15 +836,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.write_page_index);
 	serializer.WritePropertyWithDefault(123, "enable_bloom_filters", bind_data.enable_bloom_filters,
 	                                    default_value.enable_bloom_filters);
-	serializer.WritePropertyWithDefault<vector<bool>>(124, "bloom_filter_fallback_columns",
-	                                                  bind_data.bloom_filter_fallback_columns,
-	                                                  default_value.bloom_filter_fallback_columns);
-	serializer.WritePropertyWithDefault(125, "bloom_filter_fallback_max_bytes",
+	serializer.WritePropertyWithDefault(124, "bloom_filter_fallback_max_bytes",
 	                                    bind_data.bloom_filter_fallback_max_bytes,
 	                                    default_value.bloom_filter_fallback_max_bytes);
-	serializer.WritePropertyWithDefault(126, "bloom_filter_fallback_all_columns",
-	                                    bind_data.bloom_filter_fallback_all_columns,
-	                                    default_value.bloom_filter_fallback_all_columns);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -914,12 +885,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault(122, "write_page_index", default_value.write_page_index);
 	data->enable_bloom_filters =
 	    deserializer.ReadPropertyWithExplicitDefault(123, "enable_bloom_filters", default_value.enable_bloom_filters);
-	data->bloom_filter_fallback_columns = deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(
-	    124, "bloom_filter_fallback_columns", vector<bool>());
 	data->bloom_filter_fallback_max_bytes = deserializer.ReadPropertyWithExplicitDefault(
-	    125, "bloom_filter_fallback_max_bytes", default_value.bloom_filter_fallback_max_bytes);
-	data->bloom_filter_fallback_all_columns = deserializer.ReadPropertyWithExplicitDefault(
-	    126, "bloom_filter_fallback_all_columns", default_value.bloom_filter_fallback_all_columns);
+	    124, "bloom_filter_fallback_max_bytes", default_value.bloom_filter_fallback_max_bytes);
 
 	return std::move(data);
 }

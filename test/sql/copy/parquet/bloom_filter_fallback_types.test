@@ -16,7 +16,7 @@ FROM range(4096) t(i)
 statement ok
 COPY numbers TO '{TEST_DIR}/numbers.parquet'
 (FORMAT PARQUET, PARQUET_VERSION '{version}', ROW_GROUP_SIZE 2048,
- DICTIONARY_SIZE_LIMIT 0, BLOOM_FILTER_FALLBACK_COLUMNS ['n'])
+ DICTIONARY_SIZE_LIMIT 0)
 
 query II
 SELECT count(bloom_filter_length), bool_and(bloom_filter_length < 512)
@@ -71,7 +71,7 @@ COPY (
                   WHEN 2 THEN 'nan'::{type} ELSE 'inf'::{type} END AS n
  FROM range(4096) t(i)
 ) TO '{TEST_DIR}/float.parquet'
-(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0, BLOOM_FILTER_FALLBACK_COLUMNS ['n'])
+(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0)
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/float.parquet' WHERE n='-0.0'::{type}
@@ -97,7 +97,7 @@ COPY (
                   WHEN 2 THEN INTERVAL '1 day' ELSE INTERVAL '24 hours' END AS n
  FROM range(4096) t(i)
 ) TO '{TEST_DIR}/interval.parquet'
-(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0, BLOOM_FILTER_FALLBACK_COLUMNS ['n'])
+(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0)
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/interval.parquet' WHERE n=INTERVAL '101 days'
@@ -137,13 +137,12 @@ FROM range(4096) t(i)
 
 statement ok
 COPY typed TO '{TEST_DIR}/typed.parquet'
-(FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 0,
- BLOOM_FILTER_FALLBACK_COLUMNS ['s', 'b', 'u', 'd', 't', 'tn', 'ts', 'tss', 'tsm', 'tsn'])
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 0)
 
 query II
 SELECT count(bloom_filter_length), count(*) FROM parquet_metadata('{TEST_DIR}/typed.parquet')
 ----
-20	22
+22	22
 
 foreach column s b u d t tn ts tss tsm tsn
 
@@ -212,7 +211,7 @@ COPY (
         '2020-01-01 12:00:00+02'::TIMESTAMPTZ_NS AS ns
  FROM range(4096)
 ) TO '{TEST_DIR}/zones.parquet'
-(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0, BLOOM_FILTER_FALLBACK_COLUMNS ['t', 'ts', 'ns'])
+(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0)
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/zones.parquet'
