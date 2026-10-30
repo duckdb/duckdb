@@ -11,6 +11,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 namespace {
@@ -217,8 +219,11 @@ struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAd
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
-		} else {
+		} else if (!std::isfinite(state.value)) {
+			// a state exported by an older version carries a NaN compensation next to an infinite sum
 			target = state.value;
+		} else {
+			target = state.value - state.err;
 		}
 	}
 };

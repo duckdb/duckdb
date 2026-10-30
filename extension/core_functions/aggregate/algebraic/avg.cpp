@@ -7,6 +7,8 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 namespace {
@@ -49,7 +51,10 @@ struct KahanAvgState {
 	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
 		KahanAddInternal(other.value, this->value, this->err);
-		KahanAddInternal(-other.err, this->value, this->err);
+		if (std::isfinite(other.value)) {
+			// a non-finite sum has no compensation (a state exported by an older version carries NaN there)
+			KahanAddInternal(-other.err, this->value, this->err);
+		}
 	}
 };
 
@@ -309,8 +314,18 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
+		} else if (!std::isfinite(state.value)) {
+			// a state exported by an older version carries a NaN compensation next to an infinite sum
+			target = state.value;
 		} else {
-			target = (state.value / state.count) - (state.err / state.count);
+			// (value - err) / count, without rounding the compensated sum to a double first: the compensation is
+			// divided together with the remainder of the division, which the fma computes exactly
+			auto count = static_cast<double>(state.count);
+			auto quotient = state.value / count;
+			auto remainder = std::fma(-quotient, count, state.value);
+			auto correction = remainder - state.err;
+			// a zero correction keeps the sign of a zero quotient
+			target = correction == 0 ? quotient : quotient + correction / count;
 		}
 	}
 };
