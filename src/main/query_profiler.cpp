@@ -365,14 +365,14 @@ static string StripExplainPrefix(const string &sql) {
 		start++;
 	}
 	string rest = sql.substr(start);
-	if (!StringUtil::StartsWith(StringUtil::Upper(rest), "EXPLAIN")) {
+	if (!StringUtil::CIStartsWith(rest, "EXPLAIN")) {
 		return sql;
 	}
 	idx_t pos = 7; // past "EXPLAIN"
 	while (pos < rest.size() && is_space(rest[pos])) {
 		pos++;
 	}
-	if (StringUtil::StartsWith(StringUtil::Upper(rest.substr(pos)), "ANALYZE")) {
+	if (StringUtil::CIStartsWith(std::string_view(rest).substr(pos), "ANALYZE")) {
 		pos += 7;
 		while (pos < rest.size() && is_space(rest[pos])) {
 			pos++;
