@@ -1,4 +1,5 @@
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/catalog/default/default_macro_qualifier.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -147,10 +148,9 @@ static const DefaultMacro internal_macros[] = {
 
     {DEFAULT_SCHEMA, "generate_subscripts", "(arr, dim := 1) AS unnest(generate_series(1, array_length(arr, dim)))"},
     {DEFAULT_SCHEMA, "fdiv", "(x, y) AS floor(x/y)"},
-    {DEFAULT_SCHEMA, "fmod", "(x, y) AS (x-y*floor(x/y))"},
     {DEFAULT_SCHEMA, "split_part",
      "(string, delimiter, \"position\") AS if(string IS NOT NULL AND delimiter IS NOT NULL AND position IS NOT NULL, "
-     "coalesce(string_split(string, delimiter)[position],''), NULL)"},
+     "coalesce(array_extract(string_split(string, delimiter), position),''), NULL)"},
     {DEFAULT_SCHEMA, "geomean", "(x) AS exp(avg(ln(x)))"},
     {DEFAULT_SCHEMA, "geometric_mean", "(x) AS geomean(x)"},
 
@@ -259,12 +259,27 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 	return macro.schema == schema && macro.name == name;
 }
 
+bool DefaultFunctionGenerator::IsDefaultMacro(const Identifier &schema, const Identifier &name) {
+	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
+		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
+			auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
+			// the built-in bodies only reference system functions, so they can be qualified here.
+			// Extension macros built through CreateInternalMacroInfo keep their spelling
+			for (auto &macro : info->macros) {
+				DefaultMacroQualifier::Qualify(*macro, schema);
+			}
+			return std::move(info);
 		}
 	}
 	return nullptr;

@@ -736,12 +736,14 @@ class PEGTransformerFactory {
 public:
 	static void RegisterDefaultTransforms(ParsedGrammar &grammar);
 
-	//! Match a single TopLevelStatement from `tokens` starting at `token_cursor` and transform it
-	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).
-	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
-	//! starts, and on return holds the token index immediately past the last consumed token.
+	//! Match a single TopLevelStatement from `token_iterator` and transform it into a SQLStatement.
+	//! Returns nullptr if the matched TLS was separator-only (no statement). On success the iterator
+	//! is advanced past the consumed tokens. A syntax error sets `failure_index` to the furthest token
+	//! reached and returns nullptr; the caller builds the error with PEGSyntaxError if it still needs
+	//! one, since composing the message re-parses the statement several times.
 	static unique_ptr<SQLStatement> TransformTopLevelStatement(TokenIterator &token_iterator, ParserOptions &options,
-	                                                           const CompiledGrammar &grammar);
+	                                                           const CompiledGrammar &grammar,
+	                                                           optional_idx &failure_index);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
@@ -3064,6 +3066,7 @@ public:
 	static bool TransformFunctionKeyword(PEGTransformer &transformer);
 	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer,
 	                                                          optional<vector<MacroParameter>> macro_parameters,
+	                                                          const optional<LogicalType> &returns_type,
 	                                                          unique_ptr<MacroFunction> macro_definition_body);
 	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer,
 	                                                       vector<MacroParameter> macro_parameter);
@@ -4550,6 +4553,7 @@ public:
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 
 private:
+	static idx_t CountParseResultsFromList(ParseResult &parse_result);
 	explicit PEGTransformerFactory(ParsedGrammar &grammar_p);
 	ParsedGrammar &grammar;
 };
