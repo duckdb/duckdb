@@ -5,6 +5,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
+#include "mbedtls_wrapper.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -287,4 +288,40 @@ TEST_CASE("Test that a user repository does not block an unsigned load", "[api]"
 	REQUIRE(bare->HasError());
 	// it fails on the stub binary, not on a user-provided-origin rule: the dev flow is not blocked
 	REQUIRE(!StringUtil::Contains(bare->GetError(), "installed from a user-provided repository"));
+}
+
+namespace {
+
+// Counts the hash states the signature check asks for
+class CountingHashFactory : public duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory {
+public:
+	unique_ptr<CryptoHashState> CreateHashState(CryptoHashFunction function) const override {
+		hash_states++;
+		return AESStateMBEDTLSFactory::CreateHashState(function);
+	}
+
+	mutable atomic<idx_t> hash_states {0};
+};
+
+} // namespace
+
+TEST_CASE("Test that the signature check hashes with the configured EncryptionUtil", "[api]") {
+	DuckDB db(nullptr);
+	auto &instance = *db.instance;
+	auto &config = DBConfig::GetConfig(instance);
+	// three chunks of 1 MiB and a (wrong) signature
+	string extension(3 * 1024 * 1024 + ParsedExtensionMetaData::SIGNATURE_SIZE, 'x');
+
+	auto factory = make_shared_ptr<CountingHashFactory>();
+	config.encryption_util = factory;
+	REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(instance, extension.data(), extension.size(),
+	                                                        ExtensionRepositoryType::CORE, ""));
+	REQUIRE(factory->hash_states == 3);
+
+	// force_mbedtls keeps the check on mbedtls
+	factory->hash_states = 0;
+	config.options.force_mbedtls = true;
+	REQUIRE(!ExtensionHelper::CheckExtensionBufferSignature(instance, extension.data(), extension.size(),
+	                                                        ExtensionRepositoryType::CORE, ""));
+	REQUIRE(factory->hash_states == 0);
 }
