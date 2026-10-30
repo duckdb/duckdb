@@ -1,6 +1,6 @@
 # name: test/parquet/corrupt/list_short_output.test
 # description: Reject short list columns before consuming unread list entries
-# group: [parquet]
+# group: [corrupt]
 
 require parquet
 

@@ -1,6 +1,6 @@
 # name: test/parquet/corrupt/footer_len_overflow.test
 # description: Reject footer lengths that overflow 32-bit framing arithmetic
-# group: [parquet]
+# group: [corrupt]
 
 require parquet
 
