@@ -144,9 +144,9 @@ BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunctio
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
-	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
-	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments &&
-	       return_type == rhs.return_type;
+	return GetName() == rhs.GetName() && callbacks == rhs.callbacks && properties == rhs.properties &&
+	       arguments == rhs.arguments && positional_arguments == rhs.positional_arguments &&
+	       named_arguments == rhs.named_arguments && return_type == rhs.return_type;
 }
 bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
 	return !(*this == rhs);
