@@ -1278,7 +1278,9 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 			stats_unifier->max_is_exact = stats_unifier->max_is_exact &&
 			                              column.meta_data.statistics.__isset.is_max_value_exact &&
 			                              column.meta_data.statistics.is_max_value_exact;
-		} else {
+		} else if (!column.meta_data.statistics.__isset.null_count ||
+		           column.meta_data.statistics.null_count != column.meta_data.num_values) {
+			// an all-NULL row group has no min/max to contribute, so it must not discard the file-level min/max
 			stats_unifier->all_min_max_set = false;
 		}
 		if (column.meta_data.statistics.__isset.null_count) {
