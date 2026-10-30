@@ -355,6 +355,9 @@ def test_tab_completion_preserves_text_after_cursor(shell, tmp_path, autocomplet
     history = tmp_path / "history"
     env = ShellTest(shell).get_environment()
     env["TERM"] = "xterm-256color"
+    # `shell` may be a relative path; spawn() below changes the working directory,
+    # so resolve it against the repository root before starting the process.
+    binary = os.path.abspath(shell)
     env["DUCKDB_HISTORY"] = str(history)
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
@@ -380,7 +383,7 @@ def test_tab_completion_preserves_text_after_cursor(shell, tmp_path, autocomplet
 
     try:
         process = subprocess.Popen(
-            [shell, "-no-init", "-interactive"],
+            [binary, "-no-init", "-interactive"],
             cwd=tmp_path,
             stdin=slave,
             stdout=slave,
