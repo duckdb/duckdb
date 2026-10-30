@@ -279,13 +279,49 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
-	node_stats = PropagateStatistics(join.children[0]);
+	auto join_stats = PropagateStatistics(join.children[0]);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
 		auto child_stats = PropagateStatistics(join.children[child_idx]);
 		if (!child_stats) {
-			node_stats = nullptr;
-		} else if (node_stats) {
-			MultiplyCardinalities(node_stats, *child_stats);
+			join_stats = nullptr;
+		} else if (join_stats) {
+			// calculate max_cardinality based on join type
+			switch (join.join_type) {
+			case JoinType::INNER:
+				MultiplyCardinalities(join_stats, *child_stats);
+				break;
+			case JoinType::LEFT:
+				child_stats->max_cardinality = MaxValue<idx_t>(child_stats->max_cardinality, 1);
+				MultiplyCardinalities(join_stats, *child_stats);
+				break;
+			case JoinType::RIGHT:
+				join_stats->max_cardinality = MaxValue<idx_t>(join_stats->max_cardinality, 1);
+				MultiplyCardinalities(join_stats, *child_stats);
+				break;
+			case JoinType::OUTER: {
+				const auto join_max = join_stats->max_cardinality;
+				const auto child_max = child_stats->max_cardinality;
+				MultiplyCardinalities(join_stats, *child_stats);
+				if (join_stats) {
+					const auto sum = join_max + child_max;
+					join_stats->max_cardinality = MaxValue<idx_t>(join_stats->max_cardinality, sum);
+				}
+				break;
+			}
+			case JoinType::SEMI:
+			case JoinType::ANTI:
+			case JoinType::MARK:
+			case JoinType::SINGLE:
+				// keep l
+				break;
+			case JoinType::RIGHT_ANTI:
+			case JoinType::RIGHT_SEMI:
+				// r
+				join_stats = std::move(child_stats);
+				break;
+			default:
+				join_stats = nullptr;
+			}
 		}
 	}
 
@@ -347,7 +383,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	return std::move(node_stats);
+	return join_stats;
 }
 
 static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
@@ -365,17 +401,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	D_ASSERT(join.type == LogicalOperatorType::LOGICAL_POSITIONAL_JOIN);
 
 	// first propagate through the children of the join
-	node_stats = PropagateStatistics(join.children[0]);
+	auto join_stats = PropagateStatistics(join.children[0]);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
 		auto child_stats = PropagateStatistics(join.children[child_idx]);
 		if (!child_stats) {
-			node_stats = nullptr;
-		} else if (node_stats) {
-			if (!node_stats->has_estimated_cardinality || !child_stats->has_estimated_cardinality ||
-			    !node_stats->has_max_cardinality || !child_stats->has_max_cardinality) {
-				node_stats = nullptr;
+			join_stats = nullptr;
+		} else if (join_stats) {
+			if (!join_stats->has_estimated_cardinality || !child_stats->has_estimated_cardinality ||
+			    !join_stats->has_max_cardinality || !child_stats->has_max_cardinality) {
+				join_stats = nullptr;
 			} else {
-				MaxCardinalities(node_stats, *child_stats);
+				MaxCardinalities(join_stats, *child_stats);
 			}
 		}
 	}
@@ -402,7 +438,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 		}
 	}
 
-	return std::move(node_stats);
+	return join_stats;
 }
 
 void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> &expr,
