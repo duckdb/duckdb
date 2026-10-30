@@ -81,17 +81,13 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
 	SetStart();
 }
 
-void CSVFileScan::CountBytesScanned() {
-	auto manager = buffer_manager;
-	if (!manager) {
-		return;
-	}
-	auto bytes = manager->file_handle->TakeStoredBytesRead();
+void CSVFileScan::CountBytesScanned(CSVBufferManager &manager) {
+	auto bytes = manager.file_handle->TakeStoredBytesRead();
 	if (bytes == 0) {
 		return;
 	}
 	bytes_scanned_unreported += bytes;
-	QueryProfiler::Get(manager->context).TrackBytesScanned(bytes);
+	QueryProfiler::Get(manager.context).TrackBytesScanned(bytes);
 }
 
 void CSVFileScan::SetStart() {
@@ -169,7 +165,9 @@ void CSVFileScan::InitializeProjection() {
 }
 
 void CSVFileScan::Finish() {
-	CountBytesScanned();
+	if (buffer_manager) {
+		CountBytesScanned(*buffer_manager);
+	}
 	buffer_manager.reset();
 }
 

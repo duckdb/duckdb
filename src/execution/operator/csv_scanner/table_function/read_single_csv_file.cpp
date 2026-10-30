@@ -412,7 +412,7 @@ static void ReadSingleCSVFileFinishBatch(ClientContext &context, TableFunctionIn
 	gstate.state.FinishScan(std::move(lstate.state.csv_reader));
 }
 
-static void ReadSingleCSVFileChunk(TableFunctionInput &input, DataChunk &output) {
+static void ReadSingleCSVFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
 
@@ -433,6 +433,8 @@ static void ReadSingleCSVFileChunk(TableFunctionInput &input, DataChunk &output)
 		auto &csv_reader = *lstate.state.csv_reader;
 		if (csv_reader.IsSuspended() || !csv_reader.FinishedIterator()) {
 			csv_reader.Flush(output);
+			// through the scanner's own reference to the buffer manager, which the file scan drops once it finishes
+			gstate.file_scan->CountBytesScanned(*csv_reader.buffer_manager);
 			if (csv_reader.IsSuspended()) {
 				// the scanner needs a buffer that is not in memory - load it and resume
 				csv_reader.buffer_manager->GetBuffer(csv_reader.PendingBufferIdx());
@@ -446,14 +448,6 @@ static void ReadSingleCSVFileChunk(TableFunctionInput &input, DataChunk &output)
 		lock_guard<mutex> guard(gstate.lock);
 		gstate.state.FinishScan(std::move(lstate.state.csv_reader));
 		lstate.state.claim_state = CSVLocalState::ClaimState::IDLE;
-	}
-}
-
-static void ReadSingleCSVFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-	ReadSingleCSVFileChunk(input, output);
-	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
-	if (gstate.file_scan) {
-		gstate.file_scan->CountBytesScanned();
 	}
 }
 
@@ -479,7 +473,6 @@ static void ReadSingleCSVFileGetMetrics(TableFunctionGetMetricsInput &input) {
 	}
 	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
 	if (gstate.file_scan) {
-		gstate.file_scan->CountBytesScanned();
 		input.operator_metrics.bytes_scanned += gstate.file_scan->bytes_scanned_unreported.exchange(0);
 	}
 }
