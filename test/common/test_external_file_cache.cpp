@@ -400,10 +400,10 @@ TEST_CASE("Adaptive block sizes follow the measured latency and bandwidth", "[ex
 	REQUIRE(block_size(BLOCK_SIZE / 2, 0.43, 50e6, MIN_BLOCKS) == BLOCK_SIZE);
 
 	// The configured block size is the smallest block, even when it is larger than the largest adaptive block
-	NetworkThroughputEstimate far;
-	far.latency_seconds = 0.43;
-	far.bandwidth_bytes_per_s = 50e6;
-	REQUIRE(ExternalFileCache::GetAdaptiveBlockSize(400 * MiB, 64 * MiB, far) == 64 * MiB);
+	NetworkThroughputEstimate high_latency;
+	high_latency.latency_seconds = 0.43;
+	high_latency.bandwidth_bytes_per_s = 50e6;
+	REQUIRE(ExternalFileCache::GetAdaptiveBlockSize(400 * MiB, 64 * MiB, high_latency) == 64 * MiB);
 }
 
 TEST_CASE("Large reads of remote files are split into blocks sized from the network", "[external_file_cache]") {
