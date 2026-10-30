@@ -37,24 +37,9 @@ SELECT count(*) FROM read_text('{TEST_DIR}/s.json') WHERE content LIKE '%1234567
 1
 
 statement ok
-ATTACH '{TEST_DIR}/exp.db' AS exp
-
-statement ok
-USE exp
-
-statement ok
-CREATE TABLE t(j JSON)
-
-statement ok
-INSERT INTO t VALUES ('{"amount": 12345678901234.56789}')
-
-statement ok
-USE memory
-
-statement ok
-EXPORT DATABASE exp TO '{TEST_DIR}/expdir' (FORMAT json)
+EXPORT DATABASE '{TEST_DIR}/expdir' (FORMAT json)
 
 query I
-SELECT count(*) FROM read_text('{TEST_DIR}/expdir/t.json') WHERE content LIKE '%12345678901234.56789%'
+SELECT count(*) FROM read_text('{TEST_DIR}/expdir/s.json') WHERE content LIKE '%12345678901234.56789%'
 ----
 1
