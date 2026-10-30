@@ -5,10 +5,10 @@
 require parquet
 
 statement ok
-CREATE TABLE wide AS SELECT CASE i % 2 WHEN 0 THEN -2147483648 ELSE 1881417620 END AS i FROM range(16384) t(i);
+CREATE TABLE wide AS SELECT CAST(CASE i % 2 WHEN 0 THEN -2147483648 ELSE 1881417620 END AS INTEGER) AS i FROM range(16384) t(i);
 
 statement ok
-CREATE TABLE narrow AS SELECT CASE i % 2 WHEN 0 THEN 0 ELSE 1 END AS i FROM range(16384) t(i);
+CREATE TABLE narrow AS SELECT CAST(CASE i % 2 WHEN 0 THEN 0 ELSE 1 END AS INTEGER) AS i FROM range(16384) t(i);
 
 statement ok
 COPY wide TO '{TEST_DIR}/dbp_int32_wide.parquet' (FORMAT PARQUET, PARQUET_VERSION V2, DICTIONARY_SIZE_LIMIT 1, COMPRESSION UNCOMPRESSED, WRITE_BLOOM_FILTER FALSE);
@@ -16,9 +16,12 @@ COPY wide TO '{TEST_DIR}/dbp_int32_wide.parquet' (FORMAT PARQUET, PARQUET_VERSIO
 statement ok
 COPY narrow TO '{TEST_DIR}/dbp_int32_narrow.parquet' (FORMAT PARQUET, PARQUET_VERSION V2, DICTIONARY_SIZE_LIMIT 1, COMPRESSION UNCOMPRESSED, WRITE_BLOOM_FILTER FALSE);
 
-# both files must use DELTA_BINARY_PACKED for the data pages
+# both columns must be physically stored as INT32 and use DELTA_BINARY_PACKED
 query I
-SELECT encodings LIKE '%DELTA_BINARY_PACKED%' FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet');
+SELECT (SELECT type FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet') LIMIT 1) = 'INT32'
+  AND (SELECT encodings FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet') LIMIT 1) LIKE '%DELTA_BINARY_PACKED%'
+  AND (SELECT type FROM parquet_metadata('{TEST_DIR}/dbp_int32_narrow.parquet') LIMIT 1) = 'INT32'
+  AND (SELECT encodings FROM parquet_metadata('{TEST_DIR}/dbp_int32_narrow.parquet') LIMIT 1) LIKE '%DELTA_BINARY_PACKED%';
 ----
 1
 
@@ -34,10 +37,9 @@ SELECT (SELECT count(*) FROM wide) = (SELECT count(*) FROM '{TEST_DIR}/dbp_int32
 # may therefore differ by at most (32 - 2) * 16384 / 8 = 61440 bytes (plus a few bytes of header/stats
 # differences). Computing the deltas in 64 bits (the bug) yields a 33-bit miniblock width, which adds
 # (33 - 2) * 16384 / 8 = 63488 bytes and also makes the file unreadable by Arrow C++/pyarrow.
-query T
-SELECT (SELECT sum(total_compressed_size) FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet'))::VARCHAR || ' ' ||
-       (SELECT sum(total_compressed_size) FROM parquet_metadata('{TEST_DIR}/dbp_int32_narrow.parquet'))::VARCHAR || ' ' ||
-       (SELECT encodings FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet')) || ' | ' ||
-       (SELECT encodings FROM parquet_metadata('{TEST_DIR}/dbp_int32_narrow.parquet'));
+query I
+SELECT CASE WHEN w.sz - n.sz < 61500 THEN 1 ELSE 0 END
+FROM (SELECT sum(total_compressed_size) AS sz FROM parquet_metadata('{TEST_DIR}/dbp_int32_wide.parquet')) w,
+     (SELECT sum(total_compressed_size) AS sz FROM parquet_metadata('{TEST_DIR}/dbp_int32_narrow.parquet')) n;
 ----
-diag
+1
