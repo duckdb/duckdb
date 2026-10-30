@@ -91,7 +91,8 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.5.5", StorageVersion::V1_5_5},
 	{"v1.5.6", StorageVersion::V1_5_6},
 	{"v2.0.0", StorageVersion::V2_0_0},
-	{"latest", StorageVersion::V2_0_0},
+	{"v2.0.1", StorageVersion::V2_0_1},
+	{"latest", StorageVersion::V2_0_1},
 	{nullptr, StorageVersion::INVALID}
 };
 // END OF STORAGE_ARRAY VERSION INFO
@@ -131,7 +132,8 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.5.5", SerializationVersionDeprecated::V1_5_5},
 	{"v1.5.6", SerializationVersionDeprecated::V1_5_6},
 	{"v2.0.0", SerializationVersionDeprecated::V2_0_0},
-	{"latest", SerializationVersionDeprecated::V2_0_0},
+	{"v2.0.1", SerializationVersionDeprecated::V2_0_1},
+	{"latest", SerializationVersionDeprecated::V2_0_1},
 	{nullptr, SerializationVersionDeprecated::INVALID}
 };
 // END OF SER_ARRAY VERSION INFO

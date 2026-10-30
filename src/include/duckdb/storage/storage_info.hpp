@@ -145,6 +145,7 @@ enum class StorageVersion : uint64_t {
     V1_5_5 = 68,
     V1_5_6 = 68,
     V2_0_0 = 69,
+    V2_0_1 = 69,
     LATEST = 69,
     DEPRECATED = 999,
     INVALID = 0
@@ -182,6 +183,7 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_5_5 = 7,
     V1_5_6 = 7,
     V2_0_0 = 8,
+    V2_0_1 = 8,
     LATEST = 8,
     INVALID = UINT64_MAX
 };
