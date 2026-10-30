@@ -1439,7 +1439,11 @@ void ParquetWriter::Finalize() {
 	InitializeSchemaElements();
 
 	// dump the bloom filters right before footer, not if stuff is encrypted
-
+	std::sort(bloom_filters.begin(), bloom_filters.end(),
+	          [](const ParquetBloomFilterEntry &a, const ParquetBloomFilterEntry &b) {
+		          return a.column_idx < b.column_idx ||
+		                 (a.column_idx == b.column_idx && a.row_group_idx < b.row_group_idx);
+	          });
 	for (auto &bloom_filter_entry : bloom_filters) {
 		D_ASSERT(!options.encryption_config);
 		// write nonsense bloom filter header
