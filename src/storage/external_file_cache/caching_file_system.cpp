@@ -498,7 +498,9 @@ idx_t CachingFileHandle::GetSplitBlockSize(idx_t nr_bytes, idx_t max_block_size)
 	}
 	// only ask a handle that is open, so that reads served from the cache do not open the file
 	NetworkThroughputEstimate estimate;
-	if (!(handle && handle->TryGetNetworkThroughput(estimate)) &&
+	if (!ExternalFileCache::TryParseDebugThroughput(Settings::Get<DebugNetworkThroughputEstimateSetting>(db),
+	                                                estimate) &&
+	    !(handle && handle->TryGetNetworkThroughput(estimate)) &&
 	    !external_file_cache.TryGetHostNetworkThroughput(path.path, estimate)) {
 		return max_block_size;
 	}

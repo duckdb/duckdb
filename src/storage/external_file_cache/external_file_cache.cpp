@@ -5,6 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/path.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -133,6 +134,25 @@ void ExternalFileCache::SetHostNetworkThroughput(const string &path, const Netwo
 	auto host = GetHostKey(path);
 	const annotated_lock_guard<annotated_mutex> guard(throughput_lock);
 	host_throughput[std::move(host)] = estimate;
+}
+
+bool ExternalFileCache::TryParseDebugThroughput(const string &value, NetworkThroughputEstimate &result) {
+	if (value.empty()) {
+		return false;
+	}
+	const auto parts = StringUtil::Split(value, ',');
+	double numbers[2];
+	for (idx_t i = 0; i < 2; i++) {
+		char *end = nullptr;
+		numbers[i] = i < parts.size() ? std::strtod(parts[i].c_str(), &end) : 0;
+		if (parts.size() != 2 || end != parts[i].c_str() + parts[i].size() || !(numbers[i] > 0)) {
+			throw InvalidInputException("debug_network_throughput_estimate must be two positive numbers, the latency "
+			                            "in seconds and the bandwidth in bytes per second, separated by a comma");
+		}
+	}
+	result.latency_seconds = numbers[0];
+	result.bandwidth_bytes_per_s = numbers[1];
+	return true;
 }
 
 bool ExternalFileCache::TryGetHostNetworkThroughput(const string &path, NetworkThroughputEstimate &result) const {

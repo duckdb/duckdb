@@ -82,6 +82,8 @@ public:
 	void SetHostNetworkThroughput(const string &path, const NetworkThroughputEstimate &estimate);
 	//! The latest throughput estimate of the host of a remote file, for handles that have not measured their own yet.
 	bool TryGetHostNetworkThroughput(const string &path, NetworkThroughputEstimate &result) const;
+	//! Parse a debug_network_throughput_estimate value, false for the empty string
+	DUCKDB_API static bool TryParseDebugThroughput(const string &value, NetworkThroughputEstimate &result);
 
 	//! Cached files
 	struct CachedFile {

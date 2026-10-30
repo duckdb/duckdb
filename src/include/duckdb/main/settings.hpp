@@ -823,6 +823,21 @@ struct DebugLocalFileSystemDelayMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugNetworkThroughputEstimateSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "debug_network_throughput_estimate";
+	static constexpr const char *Description =
+	    "For testing, pins the measured network latency and bandwidth that size the reads of remote files, as 'latency "
+	    "in seconds,bandwidth in bytes per second'. The empty string uses the measured values.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";

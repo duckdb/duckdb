@@ -473,6 +473,17 @@
         "is_debug": true
     },
     {
+        "name": "debug_network_throughput_estimate",
+        "description": "For testing, pins the measured network latency and bandwidth that size the reads of remote files, as 'latency in seconds,bandwidth in bytes per second'. The empty string uses the measured values.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "",
+        "is_debug": true,
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "debug_order_verification",
         "description": "Verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT).",
         "type": "ENUM<DebugOrderVerification>",
