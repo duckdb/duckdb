@@ -7,6 +7,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
