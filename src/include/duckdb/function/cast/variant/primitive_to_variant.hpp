@@ -412,8 +412,6 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResul
 	case LogicalTypeId::BIT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BITSTRING, string_t>(
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
-	case LogicalTypeId::TYPE:
-		NotImplementedException::Throw("Cannot convert TYPE to VARIANT");
 	case LogicalTypeId::NUMERIC: {
 		// NUMERIC values enter the VARIANT as the typed values of their representation: canonical values are decoded
 		// into the narrowest representation that holds them first
