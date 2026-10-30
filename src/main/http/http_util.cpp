@@ -215,6 +215,9 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 BaseRequest::~BaseRequest() = default;
 
 void BaseRequest::InterruptCheck() const {
+	if (deadline.IsValid() && NumericCast<idx_t>(TimePoint::GetTickMs()) >= deadline.GetIndex()) {
+		throw InterruptException("HTTP request deadline exceeded");
+	}
 	if (interrupt_context) {
 		interrupt_context->BlockingInterruptCheck();
 	}
@@ -517,7 +520,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		    }
 		    return HTTPRetryDecision::Retry();
 	    },
-	    retry_cb, request.interrupt_context);
+	    retry_cb, request);
 
 	// With a coordinator-owned budget the outcome is settled by the coordinator once it has validated the response:
 	// an error document behind HTTP 200 is a failure or a retry there and must not refund the retry it consumed.

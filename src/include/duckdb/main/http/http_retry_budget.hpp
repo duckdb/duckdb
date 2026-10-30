@@ -18,6 +18,7 @@
 namespace duckdb {
 
 struct HTTPParams;
+struct BaseRequest;
 class ClientContext;
 
 //! An attempt's decision; constructing one does not consume retry budget.
@@ -189,8 +190,8 @@ public:
 private:
 	//! Core's hook runs after admission/backoff, outside the attempt's transport-error handling.
 	void Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry,
-	         optional_ptr<ClientContext> context);
-	bool ConsumeAndWait(const HTTPRetryDecision &decision, optional_ptr<ClientContext> context);
+	         optional_ptr<const BaseRequest> request);
+	bool ConsumeAndWait(const HTTPRetryDecision &decision, optional_ptr<const BaseRequest> request);
 	//! Admit a corrected re-send within MAX_CORRECTIONS.
 	bool AdmitCorrection();
 	uint64_t ThrottleExtraRetries() const;

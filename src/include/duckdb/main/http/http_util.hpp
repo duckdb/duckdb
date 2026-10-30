@@ -219,6 +219,8 @@ struct BaseRequest {
 	//! Borrowed caller for this request only; it must outlive the request, including asynchronous I/O.
 	//! Callers must protect finalization and cleanup from interruption and expired deadlines.
 	optional_ptr<ClientContext> interrupt_context;
+	//! Request-local deadline in monotonic milliseconds (TimePoint::GetTickMs), independent of a query.
+	optional_idx deadline;
 	DUCKDB_API void InterruptCheck() const;
 
 	//! Requests will optionally contain their timings

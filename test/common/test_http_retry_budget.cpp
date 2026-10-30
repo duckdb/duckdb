@@ -12,6 +12,42 @@
 
 using namespace duckdb;
 
+TEST_CASE("HTTP request deadlines do not need a client context", "[http][intraquery]") {
+	HTTPUtil http;
+	HTTPParams params(http);
+	params.retries = 1;
+	HeadRequestInfo request("http://example.com/", HTTPHeaders(), params);
+	idx_t attempts = 0;
+	SECTION("expired before sending") {
+		request.deadline = 0;
+		CHECK_THROWS_AS(HTTPUtil::RunRequestWithRetry(
+		                    [&]() {
+			                    attempts++;
+			                    return make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+		                    },
+		                    request, {}),
+		                InterruptException);
+		CHECK(attempts == 0);
+	}
+#ifndef DUCKDB_NO_THREADS
+	SECTION("retry backoff") {
+		const auto start = TimePoint::GetTickMs();
+		request.deadline = NumericCast<idx_t>(start + 200);
+		CHECK_THROWS_AS(HTTPUtil::RunRequestWithRetry(
+		                    [&]() {
+			                    attempts++;
+			                    auto response = make_uniq<HTTPResponse>(HTTPStatusCode::ServiceUnavailable_503);
+			                    response->headers.Insert("Retry-After", "5");
+			                    return response;
+		                    },
+		                    request, {}),
+		                InterruptException);
+		CHECK(attempts == 1);
+		CHECK(TimePoint::GetTickMs() - start < 1500);
+	}
+#endif
+}
+
 TEST_CASE("HTTP requests check their caller before sending", "[http]") {
 	DuckDB db(nullptr);
 	Connection con(db);

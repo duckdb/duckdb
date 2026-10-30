@@ -252,7 +252,7 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt) {
 }
 
 void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry,
-                          optional_ptr<ClientContext> context) {
+                          optional_ptr<const BaseRequest> request) {
 	if (!attempt) {
 		throw InternalException("HTTP retry loop requires an attempt callback");
 	}
@@ -275,8 +275,8 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt, con
 		uint64_t &depth;
 	} depth_guard(run_depth);
 	for (;;) {
-		if (context) {
-			context->BlockingInterruptCheck();
+		if (request) {
+			request->InterruptCheck();
 		}
 		auto decision = attempt();
 		switch (decision.type) {
@@ -303,7 +303,7 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt, con
 			}
 			continue;
 		default:
-			if (!ConsumeAndWait(decision, context)) {
+			if (!ConsumeAndWait(decision, request)) {
 				return;
 			}
 			if (before_retry) {
@@ -326,10 +326,10 @@ bool HTTPRetryBudget::AdmitCorrection() {
 	return true;
 }
 
-bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision, optional_ptr<ClientContext> context) {
+bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision, optional_ptr<const BaseRequest> request) {
 	D_ASSERT(decision.type != HTTPRetryDecision::Type::FINISH);
-	if (context) {
-		context->BlockingInterruptCheck();
+	if (request) {
+		request->InterruptCheck();
 	}
 	const bool throttled = decision.type == HTTPRetryDecision::Type::THROTTLED;
 	const auto extra_retries = throttled ? ThrottleExtraRetries() : 0;
@@ -365,14 +365,23 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision, optional
 		TryParseRetryAfterMs(decision.retry_after, floor_ms);
 	}
 	RandomEngine random;
-	const auto sleep_ms =
+	auto sleep_ms =
 	    BackoffMs(retry_wait_ms, retry_backoff, retries_used, floor_ms, random.NextRandomInteger64(), throttled);
+	if (request && request->deadline.IsValid()) {
+		const auto now = NumericCast<idx_t>(TimePoint::GetTickMs());
+		const auto deadline = request->deadline.GetIndex();
+		sleep_ms = MinValue<uint64_t>(sleep_ms, deadline > now ? deadline - now : 0);
+	}
 	if (sleep_ms > 0) {
+		auto context = request ? request->interrupt_context : nullptr;
 		if (!context) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
 		} else {
 			ThreadUtil::SleepMs(sleep_ms, context);
 		}
+	}
+	if (request) {
+		request->InterruptCheck();
 	}
 #endif
 	return true;
