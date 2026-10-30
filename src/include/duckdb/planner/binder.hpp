@@ -74,6 +74,7 @@ struct CreateSchemaInfo;
 struct CreateTriggerInfo;
 struct QualifiedName;
 struct BoundCreateTableInfo;
+struct CreateMacroInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
@@ -304,7 +305,7 @@ public:
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
-	                     const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+	                     const vector<Identifier> &schema_path, optional_ptr<LogicalDependencyList> dependencies,
 	                     const vector<Identifier> &aliases, vector<LogicalType> &result_types,
 	                     vector<Identifier> &result_names);
 
@@ -329,6 +330,8 @@ public:
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+	//! Reject macro entries with declared RETURNS types in storage below v2.1.0
+	static void CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
@@ -435,10 +438,11 @@ public:
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count = 1,
 	                                           TableIndex table_index = TableIndex());
 
+	void SetSearchPath(Catalog &catalog, const vector<Identifier> &schema_path);
 	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
-	                      const string &catalog = "", const string &schema = "");
+	                      const string &catalog = "", const vector<Identifier> &schema_path = {});
 	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 	Identifier GetExpressionName(const ParsedExpression &expr);
 
@@ -481,7 +485,7 @@ private:
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
-	                       const string &catalog = "", const string &schema = "");
+	                       const string &catalog = "", const vector<Identifier> &schema_path = {});
 	//! Bind a limit value (LIMIT or OFFSET)
 	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
 	                              LimitValueType value_type, bool is_offset);
@@ -695,7 +699,7 @@ private:
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const vector<Identifier> &schema_path,
 	                                         bool default_schema_precedence = false);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
@@ -739,7 +743,8 @@ private:
 	BoundCTEData PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
-	shared_ptr<Binder> CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name);
+	shared_ptr<Binder> CreateBinderWithSearchPath(const Identifier &catalog_name,
+	                                              const vector<Identifier> &schema_path);
 
 	bool DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root);
 
