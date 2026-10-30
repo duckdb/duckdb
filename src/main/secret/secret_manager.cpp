@@ -773,7 +773,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 
 	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path =
-	    fs.JoinPath(base_secret_path, LocalFileSecretStorage::SecretFileName(entry_name.GetIdentifierName()));
+	    LocalFileSecretStorage::SecretFilePath(fs, base_secret_path, entry_name.GetIdentifierName());
 
 	// Note each file should contain 1 secret
 	try {

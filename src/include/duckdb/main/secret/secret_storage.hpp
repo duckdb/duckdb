@@ -179,6 +179,9 @@ public:
 	static string SecretFileName(const string &secret_name);
 	//! The secret name for a persistent secret file name (reverses SecretFileName)
 	static string SecretNameFromFileName(const string &file_name);
+	//! The path of the file of a persistent secret: the escaped file name, or the legacy unescaped file name if only
+	//! that one exists
+	static string SecretFilePath(FileSystem &fs, const string &secret_path, const string &secret_name);
 
 protected:
 	//! Implements the writes to disk

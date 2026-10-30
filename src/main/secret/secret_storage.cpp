@@ -328,6 +328,19 @@ string LocalFileSecretStorage::SecretNameFromFileName(const string &file_name) {
 	return result;
 }
 
+string LocalFileSecretStorage::SecretFilePath(FileSystem &fs, const string &secret_path, const string &secret_name) {
+	auto path = fs.JoinPath(secret_path, SecretFileName(secret_name));
+	// files written before names were escaped use the plain secret name, which is only safe for names without separators
+	if (secret_name.find_first_of(string("/\\:\0", 4)) != string::npos) {
+		return path;
+	}
+	auto legacy_path = fs.JoinPath(secret_path, secret_name + ".duckdb_secret");
+	if (legacy_path != path && !fs.FileExists(path) && fs.FileExists(legacy_path)) {
+		return legacy_path;
+	}
+	return path;
+}
+
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
 	auto &fs = FileSystem::GetLocal(db);
 
@@ -347,9 +360,11 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	}
 
 	string file_path = fs.JoinPath(secret_path, SecretFileName(secret.GetName().GetIdentifierName()));
+	string existing_path = SecretFilePath(fs, secret_path, secret.GetName().GetIdentifierName());
 	string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
-	// If persistent file already exists remove
+	// If persistent file already exists remove (this includes a legacy unescaped file)
+	fs.TryRemoveFile(existing_path);
 	fs.TryRemoveFile(file_path);
 	// If temporary file already exists remove
 	fs.TryRemoveFile(temp_path);
@@ -361,7 +376,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
 	auto &fs = FileSystem::GetLocal(db);
-	string file = fs.JoinPath(secret_path, SecretFileName(secret));
+	string file = SecretFilePath(fs, secret_path, secret);
 	persistent_secrets.erase(Identifier(secret));
 	try {
 		fs.RemoveFile(file);
