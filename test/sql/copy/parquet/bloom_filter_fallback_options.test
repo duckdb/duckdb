@@ -27,7 +27,7 @@ statement ok
 COPY (
  SELECT i AS n, i::VARCHAR AS s, i % 2 = 0 AS b, {'x': i} AS st, [i] AS l, i::HUGEINT AS h,
         i::DECIMAL(38,2) AS d, TIMESTAMP '2020-01-01' + i * INTERVAL '1 second' AS ts
- FROM range(4096) t(i)
+ FROM (SELECT (i * 7919) % 4096 AS i FROM range(4096) t(i))
 ) TO '{TEST_DIR}/types.parquet' (DICTIONARY_SIZE_LIMIT 0)
 
 query TI
@@ -44,7 +44,7 @@ st, x	0
 ts	1
 
 statement ok
-COPY (SELECT TIMESTAMP '2020-01-01' + i * INTERVAL '1 second' AS ts FROM range(4096) t(i))
+COPY (SELECT TIMESTAMP '2020-01-01' + ((i * 7919) % 4096) * INTERVAL '1 second' AS ts FROM range(4096) t(i))
 TO '{TEST_DIR}/int96.parquet' (DICTIONARY_SIZE_LIMIT 0, WRITE_TIMESTAMP_AS_INT96 TRUE)
 
 query I

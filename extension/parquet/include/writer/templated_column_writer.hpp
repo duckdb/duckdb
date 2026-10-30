@@ -65,6 +65,44 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 	// Else we already wrote to stream
 }
 
+template <class T, bool TRACK = std::is_integral<T>::value>
+class SortednessTracker {
+public:
+	void Update(const T &) {
+	}
+	bool IsSorted() const {
+		return false;
+	}
+	idx_t Count() const {
+		return 0;
+	}
+};
+
+template <class T>
+class SortednessTracker<T, true> {
+public:
+	void Update(const T &value) {
+		if (count > 0) {
+			ascending = ascending && previous <= value;
+			descending = descending && value <= previous;
+		}
+		previous = value;
+		count++;
+	}
+	bool IsSorted() const {
+		return ascending || descending;
+	}
+	idx_t Count() const {
+		return count;
+	}
+
+private:
+	T previous;
+	idx_t count = 0;
+	bool ascending = true;
+	bool descending = true;
+};
+
 template <class SRC, class TGT, class OP>
 class StandardColumnWriterState : public PrimitiveColumnWriterState {
 public:
@@ -82,6 +120,7 @@ public:
 
 	PrimitiveDictionary<SRC, TGT, OP> dictionary;
 	duckdb_parquet::Encoding::type encoding;
+	SortednessTracker<SRC> sortedness;
 };
 
 template <class SRC, class TGT, class OP>
@@ -124,6 +163,8 @@ public:
 	//! Dictionary encoding normally updates the statistics once per distinct dictionary value.
 	//! Floating point statistics include nan_count, which counts every NaN value written, so they are updated per row.
 	static constexpr bool STATS_PER_OCCURRENCE = std::is_same<OP, FloatingPointOperator>::value;
+	//! Min/max statistics already prune sorted row groups, so these get no fallback filter
+	static constexpr idx_t MIN_SORTED_VALUES = 1024;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
@@ -209,9 +250,13 @@ public:
 		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
 
 		const auto &validity = FlatVector::Validity(vector);
+		const bool track_sortedness = TracksSortedness(state);
 
 		if (!check_parent_empty && validity.CannotHaveNull()) {
 			// Fast path
+			for (idx_t i = 0; track_sortedness && i < vcount && state.sortedness.IsSorted(); i++) {
+				state.sortedness.Update(data_ptr[i]);
+			}
 			for (; vector_index < vcount; vector_index++) {
 				AnalyzeValue(state, data_ptr[vector_index]);
 			}
@@ -221,6 +266,9 @@ public:
 					continue;
 				}
 				if (validity.RowIsValid(vector_index)) {
+					if (track_sortedness) {
+						state.sortedness.Update(data_ptr[vector_index]);
+					}
 					AnalyzeValue(state, data_ptr[vector_index]);
 				}
 				vector_index++;
@@ -257,6 +305,9 @@ public:
 			}
 		} else {
 			state.key_bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(state.dictionary.GetSize());
+		}
+		if (state.bloom_filter && state.sortedness.IsSorted()) {
+			state.bloom_filter.reset();
 		}
 		if (state.bloom_filter) {
 			state.bloom_filter->FoldToTarget(BufferAllocator::Get(writer.GetContext()),
@@ -345,6 +396,11 @@ private:
 		}
 	}
 
+	bool TracksSortedness(StandardColumnWriterState<SRC, TGT, OP> &state) const {
+		return bloom_filter_fallback && state.sortedness.IsSorted() &&
+		       (!state.dictionary.IsFull() || state.bloom_filter);
+	}
+
 	void AnalyzeValue(StandardColumnWriterState<SRC, TGT, OP> &state, const SRC &src_value) {
 		if (!state.dictionary.IsFull()) {
 			state.dictionary.template Insert<true>(src_value);
@@ -359,7 +415,7 @@ private:
 	}
 
 	void StartBloomFilterFallback(StandardColumnWriterState<SRC, TGT, OP> &state) {
-		if (!bloom_filter_fallback) {
+		if (!bloom_filter_fallback || (state.sortedness.IsSorted() && state.sortedness.Count() >= MIN_SORTED_VALUES)) {
 			return;
 		}
 		auto bloom_filter = ParquetBloomFilter::TryCreate(

@@ -21,7 +21,7 @@ foreach version V1 V2
 statement ok
 COPY input TO '{TEST_DIR}/default-{version}.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, PARQUET_VERSION '{version}')
 
-# Top-level columns whose dictionary overflows get a fallback filter.
+# Unsorted top-level columns whose dictionary overflows get a fallback filter.
 query TI
 SELECT path_in_schema, count(bloom_filter_length)
 FROM parquet_metadata('{TEST_DIR}/default-{version}.parquet')
@@ -30,7 +30,7 @@ GROUP BY path_in_schema ORDER BY path_in_schema
 k	4
 label	4
 nested, k	0
-sorted_id	4
+sorted_id	0
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/default-{version}.parquet' WHERE k = md5('5000')
@@ -91,7 +91,7 @@ SELECT count(*) FROM (
 
 # Values the dictionary held before it overflowed seed the filter.
 statement ok
-COPY (SELECT i AS n, i::VARCHAR AS s FROM range(2048) t(i)) TO '{TEST_DIR}/seeded.parquet'
+COPY (SELECT (i * 7919) % 2048 AS n, n::VARCHAR AS s FROM range(2048) t(i)) TO '{TEST_DIR}/seeded.parquet'
 (FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 100)
 
 query TI
@@ -107,13 +107,31 @@ foreach value 0 99 100 2047
 
 query I
 SELECT bool_or(bloom_filter_excludes) FROM (
-  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 'n', {value})
-  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 's', '{value}')
+  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 'n', ({value} * 7919) % 2048)
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 's', (({value} * 7919) % 2048)::VARCHAR)
 )
 ----
 false
 
 endloop
+
+# Min/max statistics already prune sorted row groups, so these get no fallback filter.
+statement ok
+COPY (
+ SELECT i AS ascending, -i AS descending, (i * 7919) % 300000 AS shuffled,
+        CASE WHEN i < 100000 THEN i ELSE (i * 7919) % 300000 END AS sorted_prefix
+ FROM range(300000) t(i)
+) TO '{TEST_DIR}/sorted.parquet' (FORMAT PARQUET)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/sorted.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+ascending	0
+descending	0
+shuffled	3
+sorted_prefix	2
 
 # Folding releases reservation bytes, so later chunks can also get filters.
 statement ok

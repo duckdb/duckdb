@@ -166,7 +166,7 @@ COPY typed TO '{TEST_DIR}/typed.parquet'
 query II
 SELECT count(bloom_filter_length), count(*) FROM parquet_metadata('{TEST_DIR}/typed.parquet')
 ----
-22	22
+20	22
 
 foreach column s b u d t tn ts tss tsm tsn
 
@@ -230,10 +230,10 @@ SELECT count(*) FROM '{TEST_DIR}/typed.parquet' WHERE tss=TIMESTAMP '2020-01-01 
 # Time zone values are hashed in the normalized representation written to Parquet.
 statement ok
 COPY (
- SELECT '12:00:00+02:00'::TIMETZ AS t,
-        '2020-01-01 12:00:00+02'::TIMESTAMPTZ AS ts,
-        '2020-01-01 12:00:00+02'::TIMESTAMPTZ_NS AS ns
- FROM range(4096)
+ SELECT CASE WHEN i % 2 = 0 THEN '12:00:00+02:00' ELSE '14:00:00+02:00' END::TIMETZ AS t,
+        CASE WHEN i % 2 = 0 THEN '2020-01-01 12:00:00+02' ELSE '2020-01-01 14:00:00+02' END::TIMESTAMPTZ AS ts,
+        CASE WHEN i % 2 = 0 THEN '2020-01-01 12:00:00+02' ELSE '2020-01-01 14:00:00+02' END::TIMESTAMPTZ_NS AS ns
+ FROM range(4096) t(i)
 ) TO '{TEST_DIR}/zones.parquet'
 (FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 0)
 
@@ -242,7 +242,7 @@ SELECT count(*) FROM '{TEST_DIR}/zones.parquet'
 WHERE t='10:00:00+00'::TIMETZ AND ts='2020-01-01 10:00:00+00'::TIMESTAMPTZ
       AND ns='2020-01-01 10:00:00+00'::TIMESTAMPTZ_NS
 ----
-4096
+2048
 
 query I
 SELECT bool_and(bloom_filter_excludes) FROM (
