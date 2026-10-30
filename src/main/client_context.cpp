@@ -1185,7 +1185,16 @@ bool ClientContext::HasQueryDeadline() const {
 	return query_deadline.IsValid() || (base_context && base_context->HasQueryDeadline());
 }
 
+static bool InterruptsSuppressed(const ClientContext &context) {
+	// Internal queries can have their own deadline while their caller is finalizing.
+	return context.interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTS_SUPPRESSED ||
+	       (context.base_context && InterruptsSuppressed(*context.base_context));
+}
+
 bool ClientContext::QueryDeadlinePassed() const {
+	if (InterruptsSuppressed(*this)) {
+		return false;
+	}
 	if (query_deadline.IsValid()) {
 		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 		if (now >= query_deadline.GetIndex()) {
