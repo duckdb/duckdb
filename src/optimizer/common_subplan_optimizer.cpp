@@ -11,6 +11,8 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 
 #include <algorithm>
 
@@ -743,7 +745,8 @@ using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanS
 //===--------------------------------------------------------------------===//
 class CommonSubplanFinder {
 public:
-	explicit CommonSubplanFinder(ClientContext &context) : state(context) {
+	explicit CommonSubplanFinder(ClientContext &context, bool before_filter_pushdown_p)
+	    : state(context), before_filter_pushdown(before_filter_pushdown_p) {
 	}
 
 private:
@@ -1239,7 +1242,106 @@ private:
 		}
 	}
 
-	bool ShouldMaterialize(const SubplanInfo &subplan_info) const {
+	static bool ContainsOnlyCrossProductsAndScans(const LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			return op.children.empty();
+		}
+		if (op.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			return false;
+		}
+		for (auto &child : op.children) {
+			if (!ContainsOnlyCrossProductsAndScans(*child)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	using join_bindings_t = vector<pair<ColumnBinding, ColumnBinding>>;
+
+	join_bindings_t GetJoinBindings(const LogicalFilter &filter) {
+		join_bindings_t result;
+		for (auto &expr : filter.expressions) {
+			if (expr->IsVolatile() || expr->CanThrow() || ExpressionBarrier::Contains(*expr)) {
+				return {};
+			}
+			bool correlated = false;
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    *expr, [&](const BoundColumnRefExpression &ref) { correlated |= ref.Depth() != 0; });
+			if (correlated) {
+				return {};
+			}
+			if (expr->GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+				continue;
+			}
+			auto &comparison = expr->Cast<BoundFunctionExpression>();
+			auto &left = BoundComparisonExpression::Left(comparison);
+			auto &right = BoundComparisonExpression::Right(comparison);
+			if (left.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+			    right.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &left_ref = left.Cast<BoundColumnRefExpression>();
+			auto &right_ref = right.Cast<BoundColumnRefExpression>();
+			auto bindings = GetCanonicalBindings({left_ref.Binding(), right_ref.Binding()});
+			if (bindings[0].table_index == bindings[1].table_index) {
+				continue;
+			}
+			result.emplace_back(bindings[0], bindings[1]);
+		}
+		return result;
+	}
+
+	bool CanShareFilteredJoin(const SubplanInfo &subplan_info) {
+		auto &primary = *subplan_info.subplans[0].op.get();
+		if (primary.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT || !ContainsOnlyCrossProductsAndScans(primary)) {
+			return false;
+		}
+
+		join_bindings_t common_joins;
+		for (idx_t i = 0; i < subplan_info.subplans.size(); i++) {
+			auto &subplan = subplan_info.subplans[i];
+			auto &parent = *operator_infos.at(subplan.op).parent;
+			if (parent.type != LogicalOperatorType::LOGICAL_FILTER) {
+				return false;
+			}
+			auto joins = GetJoinBindings(parent.Cast<LogicalFilter>());
+			if (i == 0) {
+				common_joins = std::move(joins);
+			} else {
+				join_bindings_t intersection;
+				for (auto &join : common_joins) {
+					if (std::find(joins.begin(), joins.end(), join) != joins.end()) {
+						intersection.push_back(join);
+					}
+				}
+				common_joins = std::move(intersection);
+			}
+			if (common_joins.empty()) {
+				return false;
+			}
+		}
+
+		// Every scan must be connected by join predicates shared by all consumers.
+		unordered_set<TableIndex> connected;
+		connected.insert(common_joins[0].first.table_index);
+		idx_t previous_size;
+		do {
+			previous_size = connected.size();
+			for (auto &join : common_joins) {
+				if (connected.count(join.first.table_index) || connected.count(join.second.table_index)) {
+					connected.insert(join.first.table_index);
+					connected.insert(join.second.table_index);
+				}
+			}
+		} while (connected.size() != previous_size);
+		return connected.size() == GetSubplanStats(primary).base_table_count;
+	}
+
+	bool ShouldMaterialize(const SubplanInfo &subplan_info) {
+		if (before_filter_pushdown) {
+			return CanShareFilteredJoin(subplan_info);
+		}
 		auto &subplan = subplan_info.subplans[0].op.get();
 		return CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan);
 	}
@@ -1298,6 +1400,7 @@ private:
 private:
 	//! State for creating PlanSignature with reusable data structures
 	PlanSignatureCreateState state;
+	const bool before_filter_pushdown;
 	//! Mapping from operator to info
 	reference_map_t<unique_ptr<LogicalOperator>, OperatorInfo> operator_infos;
 	//! Mapping from subplan signature to subplan information
@@ -1316,9 +1419,10 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op,
+                                                             bool before_filter_pushdown) {
 	// Bottom-up identification of identical subplans
-	CommonSubplanFinder finder(optimizer.context);
+	CommonSubplanFinder finder(optimizer.context, before_filter_pushdown);
 	finder.FindCommonSubplans(op);
 	finder.FilterSubplans();
 	finder.ConvertSubplansToCTEs(optimizer, op);
