@@ -1493,6 +1493,21 @@ static const TransformFrameOps SUBQUERY_EXISTS_OPS = {"SubqueryExists",
 static const TransformFrameOps CASE_EXPRESSION_OPS = {"CaseExpression",
                                                       &PEGTransformerFactory::InitializeCaseExpressionTrampoline,
                                                       &PEGTransformerFactory::FinalizeCaseExpressionTrampoline};
+static const TransformFrameOps SIMPLE_CASE_EXPRESSION_OPS = {
+    "SimpleCaseExpression", &PEGTransformerFactory::InitializeSimpleCaseExpressionTrampoline,
+    &PEGTransformerFactory::FinalizeSimpleCaseExpressionTrampoline};
+static const TransformFrameOps SEARCHED_CASE_EXPRESSION_OPS = {
+    "SearchedCaseExpression", &PEGTransformerFactory::InitializeSearchedCaseExpressionTrampoline,
+    &PEGTransformerFactory::FinalizeSearchedCaseExpressionTrampoline};
+static const TransformFrameOps SIMPLE_CASE_WHEN_THEN_OPS = {
+    "SimpleCaseWhenThen", &PEGTransformerFactory::InitializeSimpleCaseWhenThenTrampoline,
+    &PEGTransformerFactory::FinalizeSimpleCaseWhenThenTrampoline};
+static const TransformFrameOps SIMPLE_CASE_WHEN_OPERAND_OPS = {
+    "SimpleCaseWhenOperand", &PEGTransformerFactory::InitializeSimpleCaseWhenOperandTrampoline,
+    &PEGTransformerFactory::FinalizeSimpleCaseWhenOperandTrampoline};
+static const TransformFrameOps SIMPLE_CASE_WHEN_EQUALS_OPS = {
+    "SimpleCaseWhenEquals", &PEGTransformerFactory::InitializeSimpleCaseWhenEqualsTrampoline,
+    &PEGTransformerFactory::FinalizeSimpleCaseWhenEqualsTrampoline};
 static const TransformFrameOps CASE_WHEN_THEN_OPS = {"CaseWhenThen",
                                                      &PEGTransformerFactory::InitializeCaseWhenThenTrampoline,
                                                      &PEGTransformerFactory::FinalizeCaseWhenThenTrampoline};
@@ -3817,6 +3832,11 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SubqueryNot", &SUBQUERY_NOT_OPS},
 	    {"SubqueryExists", &SUBQUERY_EXISTS_OPS},
 	    {"CaseExpression", &CASE_EXPRESSION_OPS},
+	    {"SimpleCaseExpression", &SIMPLE_CASE_EXPRESSION_OPS},
+	    {"SearchedCaseExpression", &SEARCHED_CASE_EXPRESSION_OPS},
+	    {"SimpleCaseWhenThen", &SIMPLE_CASE_WHEN_THEN_OPS},
+	    {"SimpleCaseWhenOperand", &SIMPLE_CASE_WHEN_OPERAND_OPS},
+	    {"SimpleCaseWhenEquals", &SIMPLE_CASE_WHEN_EQUALS_OPS},
 	    {"CaseWhenThen", &CASE_WHEN_THEN_OPS},
 	    {"CaseElse", &CASE_ELSE_OPS},
 	    {"TypeLiteral", &TYPE_LITERAL_OPS},
@@ -14777,6 +14797,27 @@ PEGTransformerFactory::FinalizeSubqueryExistsTrampoline(PEGTransformer &transfor
 void PEGTransformerFactory::InitializeCaseExpressionTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCaseExpressionTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSimpleCaseExpressionTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &repeat_pr = list_pr.GetChild(2).Cast<RepeatParseResult>();
 	auto repeat_children = repeat_pr.GetChildren();
 	auto dynamic_child_count = repeat_children.size();
@@ -14788,38 +14829,124 @@ void PEGTransformerFactory::InitializeCaseExpressionTrampoline(PEGTransformer &t
 	}
 	for (idx_t i = repeat_children.size(); i > 0; i--) {
 		auto child_idx = i - 1;
-		process.PushChild({transformer.GetRule(PEGRuleId::CaseWhenThen), repeat_children[child_idx].get()},
+		process.PushChild({transformer.GetRule(PEGRuleId::SimpleCaseWhenThen), repeat_children[child_idx].get()},
 		                  1 + child_idx);
 	}
-	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (expression_opt.HasResult()) {
-		process.PushChild({transformer.GetRule(PEGRuleId::Expression), expression_opt.GetResult()}, 0);
-	}
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(1)}, 0);
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeCaseExpressionTrampoline(PEGTransformer &transformer,
-                                                        GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeSimpleCaseExpressionTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &dynamic_repeat_pr = list_pr.GetChild(2).Cast<RepeatParseResult>();
 	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 	auto dynamic_child_count = dynamic_repeat_children.size();
-	optional<unique_ptr<ParsedExpression>> expression {};
-	if (process.child_results[0]) {
-		expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	}
-	vector<CaseCheck> case_when_then;
-	case_when_then.reserve(dynamic_child_count);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	vector<SimpleCaseCheck> simple_case_when_then;
+	simple_case_when_then.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
-		case_when_then.push_back(process.TakeResult<CaseCheck>(i));
+		simple_case_when_then.push_back(process.TakeResult<SimpleCaseCheck>(i));
 	}
 	optional<unique_ptr<ParsedExpression>> case_else {};
 	if (process.child_results[2 + dynamic_child_count - 1]) {
 		case_else = process.TakeResult<unique_ptr<ParsedExpression>>(2 + dynamic_child_count - 1);
 	}
-	auto result =
-	    TransformCaseExpression(transformer, std::move(expression), std::move(case_when_then), std::move(case_else));
+	auto result = TransformSimpleCaseExpression(transformer, std::move(expression), std::move(simple_case_when_then),
+	                                            std::move(case_else));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSearchedCaseExpressionTrampoline(PEGTransformer &transformer,
+                                                                       GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto repeat_children = repeat_pr.GetChildren();
+	auto dynamic_child_count = repeat_children.size();
+	process.ReserveChildSlots(2 + dynamic_child_count - 1);
+	auto &case_else_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (case_else_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::CaseElse), case_else_opt.GetResult()},
+		                  1 + dynamic_child_count - 1);
+	}
+	for (idx_t i = repeat_children.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule(PEGRuleId::CaseWhenThen), repeat_children[child_idx].get()},
+		                  0 + child_idx);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSearchedCaseExpressionTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &dynamic_repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+	auto dynamic_child_count = dynamic_repeat_children.size();
+	vector<CaseCheck> case_when_then;
+	case_when_then.reserve(dynamic_child_count);
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		case_when_then.push_back(process.TakeResult<CaseCheck>(i));
+	}
+	optional<unique_ptr<ParsedExpression>> case_else {};
+	if (process.child_results[1 + dynamic_child_count - 1]) {
+		case_else = process.TakeResult<unique_ptr<ParsedExpression>>(1 + dynamic_child_count - 1);
+	}
+	auto result = TransformSearchedCaseExpression(transformer, std::move(case_when_then), std::move(case_else));
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSimpleCaseWhenThenTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(3)}, 1);
+	process.PushChild({transformer.GetRule(PEGRuleId::SimpleCaseWhenOperand), list_pr.GetChild(1)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSimpleCaseWhenThenTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto simple_case_when_operand = process.TakeResult<ComparisonExpressionTail>(0);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformSimpleCaseWhenThen(transformer, std::move(simple_case_when_operand), std::move(expression));
+	return transformer.MakeResult<SimpleCaseCheck>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSimpleCaseWhenOperandTrampoline(PEGTransformer &transformer,
+                                                                      GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSimpleCaseWhenOperandTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<ComparisonExpressionTail>(0);
+	return transformer.MakeResult<ComparisonExpressionTail>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSimpleCaseWhenEqualsTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule(PEGRuleId::Expression), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSimpleCaseWhenEqualsTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformSimpleCaseWhenEquals(transformer, std::move(expression));
+	return transformer.MakeResult<ComparisonExpressionTail>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeCaseWhenThenTrampoline(PEGTransformer &transformer,
