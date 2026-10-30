@@ -1266,6 +1266,10 @@ static unique_ptr<ResizeableBuffer> AllocateBloomFilter(Allocator &allocator, id
 	return buffer;
 }
 
+optional_idx ParquetBloomFilter::EstimateSize(idx_t num_entries, double target) {
+	return BloomFilterSize(num_entries, target);
+}
+
 unique_ptr<ParquetBloomFilter> ParquetBloomFilter::Create(Allocator &allocator, idx_t num_entries, double target) {
 	const auto size = BloomFilterSize(num_entries, target);
 	if (!size.IsValid()) {

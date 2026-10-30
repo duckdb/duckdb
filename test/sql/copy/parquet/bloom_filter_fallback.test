@@ -118,11 +118,11 @@ endloop
 # Min/max statistics already prune sorted row groups, so these get no fallback filter.
 statement ok
 COPY (
- SELECT i AS ascending, -i AS descending, (i * 7919) % 300000 AS shuffled,
-        CASE WHEN i < 100000 THEN i ELSE (i * 7919) % 300000 END AS sorted_prefix,
-        i::DOUBLE AS ascending_double, (-i)::FLOAT AS descending_float, ((i * 7919) % 300000)::DOUBLE AS shuffled_double,
-        lpad(i::VARCHAR, 8, '0') AS ascending_string, lpad(((i * 7919) % 300000)::VARCHAR, 8, '0') AS shuffled_string,
-        i::HUGEINT AS ascending_hugeint
+ SELECT i AS ascending, -i AS descending, i::DOUBLE AS ascending_double, (-i)::FLOAT AS descending_float,
+        i::HUGEINT AS ascending_hugeint, lpad(i::VARCHAR, 8, '0') AS ascending_string,
+        lpad(((i * 7919) % 300000)::VARCHAR, 8, '0') AS shuffled_string,
+        CASE WHEN i < 100000 THEN lpad(i::VARCHAR, 8, '0') ELSE lpad(((i * 7919) % 300000)::VARCHAR, 8, '0') END
+            AS sorted_prefix
  FROM range(300000) t(i)
 ) TO '{TEST_DIR}/sorted.parquet' (FORMAT PARQUET)
 
@@ -137,10 +137,47 @@ ascending_hugeint	0
 ascending_string	0
 descending	0
 descending_float	0
-shuffled	3
-shuffled_double	3
 shuffled_string	3
 sorted_prefix	2
+
+# Fallback filters estimated to exceed a quarter of the column are skipped before hashing.
+statement ok
+COPY (
+ SELECT (hash(i) >> 1)::BIGINT AS unique_bigint, (hash(i) >> 33)::INTEGER AS unique_int,
+        md5(i::VARCHAR)::UUID AS unique_uuid, md5(i::VARCHAR) AS unique_string,
+        ((hash(i) >> 1) % 50000)::INTEGER AS repeated_int
+ FROM range(245760) t(i)
+) TO '{TEST_DIR}/sizes.parquet' (FORMAT PARQUET)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/sizes.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+repeated_int	2
+unique_bigint	0
+unique_int	0
+unique_string	2
+unique_uuid	2
+
+# A higher false positive ratio makes smaller filters, which can fit.
+statement ok
+COPY (
+ SELECT (hash(i) >> 1)::BIGINT AS unique_bigint, (hash(i) >> 33)::INTEGER AS unique_int FROM range(245760) t(i)
+) TO '{TEST_DIR}/sizes-fpp.parquet' (FORMAT PARQUET, BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.02)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/sizes-fpp.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+unique_bigint	2
+unique_int	0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/sizes-fpp.parquet' WHERE unique_bigint = (hash(12345) >> 1)::BIGINT
+----
+1
 
 # Sortedness of strings carries over between vectors, whose memory may be released in between.
 statement ok

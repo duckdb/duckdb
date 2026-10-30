@@ -102,9 +102,6 @@ public:
 	bool IsSorted() const {
 		return false;
 	}
-	idx_t Count() const {
-		return 0;
-	}
 };
 
 template <class T>
@@ -128,9 +125,6 @@ public:
 	}
 	bool IsSorted() const {
 		return ascending || descending;
-	}
-	idx_t Count() const {
-		return count;
 	}
 
 private:
@@ -167,6 +161,7 @@ public:
 	~StandardColumnWriterState() override = default;
 
 	uint32_t key_bit_width = 0;
+	idx_t dictionary_values = 0;
 
 	PrimitiveDictionary<SRC, TGT, OP> dictionary;
 	duckdb_parquet::Encoding::type encoding;
@@ -213,8 +208,10 @@ public:
 	//! Dictionary encoding normally updates the statistics once per distinct dictionary value.
 	//! Floating point statistics include nan_count, which counts every NaN value written, so they are updated per row.
 	static constexpr bool STATS_PER_OCCURRENCE = std::is_same<OP, FloatingPointOperator>::value;
-	//! Min/max statistics already prune sorted row groups, so these get no fallback filter
-	static constexpr idx_t MIN_SORTED_VALUES = 1024;
+	//! Values the dictionary must have seen before they are used to skip a fallback filter
+	static constexpr idx_t MIN_PREFIX_VALUES = 1024;
+	//! Fallback filters are skipped unless the column chunk is estimated to be this many times larger
+	static constexpr idx_t MIN_COLUMN_TO_FILTER_RATIO = 4;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
@@ -456,6 +453,7 @@ private:
 
 	void AnalyzeValue(StandardColumnWriterState<SRC, TGT, OP> &state, const SRC &src_value) {
 		if (!state.dictionary.IsFull()) {
+			state.dictionary_values++;
 			state.dictionary.template Insert<true>(src_value);
 			if (!state.dictionary.IsFull()) {
 				return;
@@ -467,8 +465,54 @@ private:
 		}
 	}
 
+	//! Extrapolates the distinct count, assuming the values seen so far are drawn uniformly from a fixed set
+	static idx_t EstimateDistinctValues(idx_t seen_distinct, idx_t seen_values, idx_t total_values) {
+		if (seen_distinct >= seen_values) {
+			return total_values;
+		}
+		const auto distinct = static_cast<double>(seen_distinct);
+		const auto values = static_cast<double>(seen_values);
+		auto expected_distinct = [](double population, double draws) {
+			return -population * std::expm1(-draws / population);
+		};
+		double low = distinct;
+		double high = distinct;
+		while (expected_distinct(high, values) < distinct) {
+			high *= 2;
+		}
+		for (idx_t i = 0; i < 64; i++) {
+			const auto mid = (low + high) / 2;
+			if (expected_distinct(mid, values) < distinct) {
+				low = mid;
+			} else {
+				high = mid;
+			}
+		}
+		const auto estimate = expected_distinct(high, static_cast<double>(total_values));
+		return MinValue<idx_t>(total_values, LossyNumericCast<idx_t>(std::ceil(estimate)));
+	}
+
+	bool SkipBloomFilterFallback(StandardColumnWriterState<SRC, TGT, OP> &state) const {
+		if (state.dictionary_values < MIN_PREFIX_VALUES) {
+			return false;
+		}
+		if (state.sortedness.IsSorted()) {
+			return true;
+		}
+		const auto rows = NumericCast<idx_t>(state.row_group.num_rows);
+		const auto distinct = EstimateDistinctValues(state.dictionary.GetSize() + 1, state.dictionary_values, rows);
+		const auto filter_size = ParquetBloomFilter::EstimateSize(
+		    distinct * OP::template BloomFilterEntriesPerValue<SRC, TGT>(), writer.BloomFilterFalsePositiveRatio());
+		if (!filter_size.IsValid()) {
+			return true;
+		}
+		const auto value_size =
+		    state.dictionary.GetTargetMemoryStream()->GetPosition() / MaxValue<idx_t>(state.dictionary.GetSize(), 1);
+		return filter_size.GetIndex() * MIN_COLUMN_TO_FILTER_RATIO > value_size * rows;
+	}
+
 	void StartBloomFilterFallback(StandardColumnWriterState<SRC, TGT, OP> &state) {
-		if (!bloom_filter_fallback || (state.sortedness.IsSorted() && state.sortedness.Count() >= MIN_SORTED_VALUES)) {
+		if (!bloom_filter_fallback || SkipBloomFilterFallback(state)) {
 			return;
 		}
 		auto bloom_filter = ParquetBloomFilter::TryCreate(
