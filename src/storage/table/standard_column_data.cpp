@@ -340,6 +340,41 @@ PersistentColumnData StandardColumnData::Serialize() {
 void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	ColumnData::InitializeColumn(column_data, target_stats);
 	validity->InitializeColumn(column_data.child_columns[0], target_stats);
+	if (!target_stats.CanHaveNull()) {
+		return;
+	}
+	// pre-2.0 storage only records NULLs in the validity stats: propagate them to the data segments
+	// segments written by 2.0 carry a byte size and record NULLs in their own stats
+	bool has_legacy_segments = false;
+	for (auto &pointer : column_data.pointers) {
+		if (!pointer.byte_size) {
+			has_legacy_segments = true;
+			break;
+		}
+	}
+	if (!has_legacy_segments) {
+		return;
+	}
+
+	auto &validity_tree = validity->GetSegmentTree();
+	auto validity_node = validity_tree.GetRootSegment();
+	for (auto &node : data.SegmentNodes()) {
+		auto &segment_stats = node.GetNode().GetStatsMutable();
+		if (segment_stats.CanHaveNull()) {
+			continue;
+		}
+		// Retain an overlapping validity segment: it may cover several data segments.
+		while (validity_node && (validity_node->GetRowEnd() <= node.GetRowStart() ||
+		                         !validity_node->GetNode().GetStats().CanHaveNull())) {
+			validity_node = validity_tree.GetNextSegment(*validity_node);
+		}
+		if (!validity_node) {
+			return;
+		}
+		if (validity_node->GetRowStart() < node.GetRowEnd()) {
+			segment_stats.SetHasNull();
+		}
+	}
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
