@@ -26,8 +26,11 @@ SELECT count(*) > 1 FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR'
 ----
 true
 
+# the segment totals add up to the string lengths of the table (the table-level total depends on the plan that
+# appended the rows, not on the compression method)
 query II
-SELECT s.total_string_length, (SELECT sum(length(v)) FROM t) FROM (SELECT stats(v) s FROM t LIMIT 1);
+SELECT sum(stats.total_string_length::BIGINT), (SELECT sum(length(v)) FROM t)
+FROM pragma_storage_info('t') WHERE column_name = 'v' AND segment_type = 'VARCHAR';
 ----
 108000	108000
 
