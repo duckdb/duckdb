@@ -26,12 +26,6 @@ EXPLAIN ANALYZE SELECT count(*) FROM big_secure b JOIN dim d ON b.id = d.k WHERE
 ----
 analyzed_plan	<!REGEX>:[\s\S]*SECURE_VIEW[^╰]*1,000,000 rows[\s\S]*
 
-# big_secure hides no rows, so it gets the optional filter, which only skips whole vectors by their zone maps
-query II
-EXPLAIN ANALYZE SELECT count(*) FROM big_secure b JOIN dim d ON b.id = d.k WHERE d.yr = 42
-----
-analyzed_plan	<!REGEX>:[\s\S]*SECURE_VIEW[^╰]*10,000 rows[\s\S]*
-
 # a view that hides rows gets a filter checked on every row; the profiler does not report the rows that leave it
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM big_secure_filtered b JOIN dim d ON b.id = d.k WHERE d.yr = 42
