@@ -412,7 +412,7 @@ static void ReadSingleCSVFileFinishBatch(ClientContext &context, TableFunctionIn
 	gstate.state.FinishScan(std::move(lstate.state.csv_reader));
 }
 
-static void ReadSingleCSVFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+static void ReadSingleCSVFileChunk(TableFunctionInput &input, DataChunk &output) {
 	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
 
@@ -449,6 +449,14 @@ static void ReadSingleCSVFileFunction(ClientContext &context, TableFunctionInput
 	}
 }
 
+static void ReadSingleCSVFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+	ReadSingleCSVFileChunk(input, output);
+	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
+	if (gstate.file_scan) {
+		gstate.file_scan->CountBytesScanned();
+	}
+}
+
 static double ReadSingleCSVFileProgress(ClientContext &context, const FunctionData *bind_data,
                                         const GlobalTableFunctionState *global_state) {
 	if (!global_state) {
@@ -462,6 +470,18 @@ static double ReadSingleCSVFileProgress(ClientContext &context, const FunctionDa
 		return 0;
 	}
 	return gstate.file_scan->GetProgressInFile(context);
+}
+
+//! The bytes scanned are drained, so each is reported once - the profiler sums what every thread reports
+static void ReadSingleCSVFileGetMetrics(TableFunctionGetMetricsInput &input) {
+	if (!input.global_state) {
+		return;
+	}
+	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
+	if (gstate.file_scan) {
+		gstate.file_scan->CountBytesScanned();
+		input.operator_metrics.bytes_scanned += gstate.file_scan->bytes_scanned_unreported.exchange(0);
+	}
 }
 
 static unique_ptr<NodeStatistics> ReadSingleCSVFileCardinality(ClientContext &context, const FunctionData *bind_data) {
@@ -487,6 +507,7 @@ TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
 	                       ReadSingleCSVFileInitLocal);
 	read_csv.table_scan_progress = ReadSingleCSVFileProgress;
 	read_csv.cardinality = ReadSingleCSVFileCardinality;
+	read_csv.get_metrics = ReadSingleCSVFileGetMetrics;
 	read_csv.projection_pushdown = true;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
@@ -509,6 +530,7 @@ TableFunction ReadCSVTableFunction::GetMultiFileFunction(Identifier name) {
 	settings.schedule_io = ReadSingleCSVFileScheduleIO;
 	// the scanner converts to the types the scan asks for while parsing, rather than casting its output
 	settings.supports_cast_map = true;
+	settings.reports_bytes_scanned = true;
 	return TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name), std::move(settings));
 }
 
