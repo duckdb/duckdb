@@ -310,7 +310,7 @@ void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
 }
 
 void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
-	if (IsEnabled()) {
+	if (IsEnabled() && running) {
 		query_metrics.UpdateMetricCounter(key, amount);
 	}
 }

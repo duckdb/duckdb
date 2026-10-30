@@ -121,7 +121,7 @@ public:
 	void ResetBytesScanned();
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
-	//! Add to a metric counter (profiling-only).
+	//! Add to a metric counter (profiling-only, thread-safe).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
 	//! Add parser time measured before the per-statement profiler was started.
 	void AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time);
