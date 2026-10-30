@@ -39,6 +39,19 @@ SELECT * FROM t WHERE x = 1 ORDR
 ----
 Did you mean "ORDER"?
 
+# keywords that start an expression are summarised as "an expression" but still get corrected
+statement error
+SELECT CAES WHEN x = 1 THEN 1 ELSE 0 END FROM t
+----
+syntax error at or near "CAES"
+Did you mean "CASE"?
+
+statement error
+SELECT * FROM t WHERE NTO x = 1
+----
+syntax error at or near "NTO"
+Did you mean "NOT"?
+
 # misspelled keyword that was swallowed as an alias - the error is reported on the misspelling
 statement error
 SELECT a FORM t
@@ -154,11 +167,12 @@ SELECT * FROM t WHERE
 syntax error at end of input
 Expected an expression
 
+# dropping either operator repairs this; the one before the failure is reported
 statement error
 SELECT * FROM t WHERE a = 1 AND OR x = 2
 ----
-syntax error at or near "OR"
-Expected an expression
+syntax error at or near "AND"
+Unexpected "AND"
 
 statement error
 SELECT 1 +
@@ -175,16 +189,88 @@ SELECT * FROM
 ----
 <REGEX>:.*Expected one of:.*a table name.*
 
-# no hint when the alternatives are too many to be useful
+# a comma repairs the statement even where an alias would be accepted
 statement error
 SELECT 1 2
 ----
-<!REGEX>:.*Expected.*
+Missing ","
+
+# an operator keyword would also parse here (AND, LIKE), but the comma is what is reported
+statement error
+INSERT INTO t VALUES ('Bob' 6, 3)
+----
+syntax error at or near "6"
+Missing ","
 
 statement error
-SELECT 1 2
+CREATE TABLE t2(i INTEGER j INTEGER)
+----
+Missing ","
+
+# the comma is missing before the word that was taken as an alias
+statement error
+SELECT a x::INTEGER FROM t
+----
+syntax error at or near "x"
+Missing ","
+
+# a stray keyword or punctuation whose removal makes the statement parse
+statement error
+SELECT * FROM t WHERE WHERE x = 1
+----
+syntax error at or near "WHERE"
+Unexpected "WHERE"
+
+statement error
+SELECT a,, x FROM t
+----
+Unexpected ","
+
+statement error
+SELECT * FROM t ORDER BY BY x
+----
+Unexpected "BY"
+
+statement error
+INSERT INTO t VALUES (1, 2))
+----
+syntax error at or near ")"
+Unexpected ")"
+
+statement error
+SELECT * FROM t WHERE x = 1 AND GROUP BY x
+----
+Unexpected "AND"
+
+statement error
+SELECT * FROM t WHERE x = 1, GROUP BY x
+----
+syntax error at or near ","
+Unexpected ","
+
+# the input simply ended after the keyword, so it is not reported as stray
+statement error
+SELECT * FROM t JOIN;
+----
+<!REGEX>:.*Unexpected.*
+
+# a stray word that is not a keyword is content, not something to drop
+statement error
+SELECT * FROM t WHERE x = 1 foo GROUP BY x
+----
+<!REGEX>:.*Unexpected.*
+
+# two keywords repair this (AND, OR), so nothing is guessed
+statement error
+SELECT * FROM t WHERE a = 1 x = 2
 ----
 <!REGEX>:.*Missing.*
+
+# no hint when the alternatives are too many to be useful
+statement error
+SELECT 1 FROM t WHERE a = 1 2
+----
+<!REGEX>:.*Expected.*
 
 # errors in later statements of a multi-statement query
 statement error
