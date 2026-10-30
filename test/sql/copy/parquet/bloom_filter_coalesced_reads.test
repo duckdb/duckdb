@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/bloom_filter_coalesced_reads.test
-# description: Bloom filters are stored per column and read once per column when they fit one coalesced read
+# description: Bloom filters are stored per column and coalesced across surviving row groups
 # group: [parquet]
 
 require parquet
@@ -71,6 +71,7 @@ CALL truncate_duckdb_logs();
 statement ok
 SET parquet_prefetch_column_gap = 4096;
 
+# Filter bytes do not count as gaps: these ten adjacent filters still merge into one read.
 query I
 SELECT span_end - span_begin > 9 * 4096 FROM bloom_span('{TEST_DIR}/bloom_coalesced.parquet', 's');
 ----
@@ -90,7 +91,7 @@ CALL disable_logging();
 query I
 SELECT reads FROM bloom_reads('{TEST_DIR}/bloom_coalesced.parquet', 's');
 ----
-10
+1
 
 statement ok
 CALL truncate_duckdb_logs();
@@ -225,3 +226,89 @@ FROM duckdb_logs_parsed('FileSystem'), bloom_span('{TEST_DIR}/bloom_survivors.pa
 WHERE op = 'READ' AND parse_filename(path) = 'bloom_survivors.parquet' AND pos >= span_begin AND pos + bytes <= span_end;
 ----
 1	true
+
+
+# Separated runs coalesce independently, and scan threads share the fetched heads.
+statement ok
+SET parquet_prefetch_column_gap = 4096;
+
+foreach threads 1 8
+
+statement ok
+SET threads = {threads};
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) = (SELECT count(*) FROM banded WHERE h IN ('r003-5', 'r004-5', 'r015-5', 'r016-5'))
+FROM '{TEST_DIR}/bloom_survivors.parquet'
+WHERE h IN ('r003-5', 'r004-5', 'r015-5', 'r016-5');
+----
+true
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT reads, bytes = (
+    SELECT sum(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/bloom_survivors.parquet')
+    WHERE path_in_schema = 'h' AND row_group_id IN (3, 4, 15, 16)
+) FROM bloom_reads('{TEST_DIR}/bloom_survivors.parquet', 'h');
+----
+2	true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_coalesced.parquet' WHERE s = 'v1000x';
+----
+0
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT reads, bytes = (SELECT span_end - span_begin FROM bloom_span('{TEST_DIR}/bloom_coalesced.parquet', 's'))
+FROM bloom_reads('{TEST_DIR}/bloom_coalesced.parquet', 's');
+----
+1	true
+
+endloop
+
+# Disabling prefetching preserves individual-filter reads, regardless of the gap.
+statement ok
+SET threads = 1;
+
+statement ok
+SET disable_parquet_prefetching = true;
+
+statement ok
+SET parquet_prefetch_column_gap = 1048576;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_coalesced.parquet' WHERE s = 'v1000x';
+----
+0
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT reads, bytes = (SELECT span_end - span_begin FROM bloom_span('{TEST_DIR}/bloom_coalesced.parquet', 's'))
+FROM bloom_reads('{TEST_DIR}/bloom_coalesced.parquet', 's');
+----
+10	true

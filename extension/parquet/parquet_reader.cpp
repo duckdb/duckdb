@@ -1972,9 +1972,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					auto &bloom_meta_data = group.columns[bloom_reader->ColumnIndex()].meta_data;
 					if (bloom_meta_data.__isset.bloom_filter_offset && bloom_meta_data.bloom_filter_offset > 0 &&
 					    ParquetStatisticsUtils::HasBloomFilterConstants(*bloom_filter, *hash_strategy)) {
-						auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
-						TryAttachBloomFilterBuffer(context, column_reader, filter, bloom_source->Type().IsNested(),
-						                           bloom_reader->ColumnIndex(), trans);
+						TryAttachBloomFilterReadHead(context, state, column_reader, filter,
+						                             bloom_source->Type().IsNested(), bloom_reader->ColumnIndex());
 					}
 					if (ParquetStatisticsUtils::BloomFilterExcludes(
 					        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data,
@@ -2042,63 +2041,81 @@ bool ParquetReader::TryAttachPageIndexBuffer(ThriftFileTransport &transport) con
 	return true;
 }
 
-bool ParquetReader::TryAttachBloomFilterBuffer(ClientContext &context, ColumnReader &column_reader,
-                                               const TableFilter &filter, bool nested_filter, idx_t column_chunk_idx,
-                                               ThriftFileTransport &transport) {
-	if (parquet_options.encryption_config) {
+bool ParquetReader::TryAttachBloomFilterReadHead(ClientContext &context, ParquetReaderScanState &state,
+                                                 ColumnReader &column_reader, const TableFilter &filter,
+                                                 bool nested_filter, idx_t column_chunk_idx) {
+	if (!state.prefetch_mode || parquet_options.encryption_config) {
 		return false;
 	}
-	lock_guard<mutex> guard(bloom_filter_buffer_lock);
-	auto entry = bloom_filter_spans.find(column_chunk_idx);
-	if (entry == bloom_filter_spans.end()) {
-		BloomFilterSpan span;
-		idx_t span_begin = NumericLimits<idx_t>::Maximum();
-		idx_t span_end = 0;
-		idx_t filter_count = 0;
-		auto &row_groups = GetFileMetadata()->row_groups;
-		for (idx_t group_index = 0; group_index < row_groups.size(); group_index++) {
-			auto &row_group = row_groups[group_index];
-			if (column_chunk_idx >= row_group.columns.size()) {
-				continue;
-			}
-			auto &meta_data = row_group.columns[column_chunk_idx].meta_data;
-			if (!meta_data.__isset.bloom_filter_offset || !meta_data.__isset.bloom_filter_length ||
-			    meta_data.bloom_filter_offset <= 0 || meta_data.bloom_filter_length <= 0) {
-				continue;
-			}
-			auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
-			if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
-			                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-				continue;
-			}
-			const auto filter_begin = NumericCast<idx_t>(meta_data.bloom_filter_offset);
-			span_begin = MinValue(span_begin, filter_begin);
-			span_end = MaxValue(span_end, filter_begin + NumericCast<idx_t>(meta_data.bloom_filter_length));
-			filter_count++;
-		}
-		if (span_end > span_begin && span_end <= transport.GetSize()) {
-			span.begin = span_begin;
-			span.end = span_end;
-			span.filter_count = filter_count;
-		}
-		entry = bloom_filter_spans.emplace(column_chunk_idx, std::move(span)).first;
-	}
-	auto &span = entry->second;
-	if (span.end <= span.begin || span.filter_count < 2) {
+	auto &current_meta_data = GetGroup(state).columns[column_chunk_idx].meta_data;
+	if (!current_meta_data.__isset.bloom_filter_length || current_meta_data.bloom_filter_length <= 0) {
 		return false;
 	}
-	const auto span_size = span.end - span.begin;
-	if (!span.buffer.IsSet()) {
-		if (span_size > PrefetchCostModel::GAP_MAX ||
-		    span_size > (span.filter_count - 1) * transport.GetAcceptedColumnGap()) {
+	const auto current_offset = NumericCast<idx_t>(current_meta_data.bloom_filter_offset);
+	const auto current_length = NumericCast<idx_t>(current_meta_data.bloom_filter_length);
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	shared_ptr<ReadHead> read_head;
+	{
+		lock_guard<mutex> guard(bloom_filter_read_heads_lock);
+		auto entry = bloom_filter_read_heads.find(column_chunk_idx);
+		if (entry == bloom_filter_read_heads.end()) {
+			vector<pair<idx_t, idx_t>> ranges;
+			auto &row_groups = GetFileMetadata()->row_groups;
+			for (idx_t group_index = 0; group_index < row_groups.size(); group_index++) {
+				auto &row_group = row_groups[group_index];
+				if (column_chunk_idx >= row_group.columns.size()) {
+					continue;
+				}
+				auto &meta_data = row_group.columns[column_chunk_idx].meta_data;
+				if (!meta_data.__isset.bloom_filter_offset || !meta_data.__isset.bloom_filter_length ||
+				    meta_data.bloom_filter_offset <= 0 || meta_data.bloom_filter_length <= 0) {
+					continue;
+				}
+				auto prune_result = CheckRowGroupFilterStatistics(context, group_index, column_reader, filter);
+				if (nested_filter ? prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE
+				                  : prune_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+					continue;
+				}
+				const auto offset = NumericCast<idx_t>(meta_data.bloom_filter_offset);
+				const auto length = NumericCast<idx_t>(meta_data.bloom_filter_length);
+				if (offset >= transport.GetSize() || length > transport.GetSize() - offset) {
+					continue;
+				}
+				ranges.emplace_back(offset, length);
+			}
+			std::sort(ranges.begin(), ranges.end());
+			ReadAheadBuffer plan(transport.GetCachingFileHandle(), transport.GetAcceptedColumnGap());
+			for (auto &range : ranges) {
+				plan.AddReadHead(range.first, range.second);
+			}
+			plan.merge_set.clear();
+			idx_t retained_bytes = 0;
+			for (auto &head : plan.read_heads) {
+				if (head->size > PrefetchCostModel::GAP_MAX - retained_bytes) {
+					plan.read_heads.clear();
+					break;
+				}
+				retained_bytes += head->size;
+			}
+			// AddReadHead prepends heads; keep the published plan in file order for lookup.
+			std::reverse(plan.read_heads.begin(), plan.read_heads.end());
+			entry = bloom_filter_read_heads.emplace(column_chunk_idx, std::move(plan.read_heads)).first;
+		}
+		auto &heads = entry->second;
+		auto head = std::upper_bound(
+		    heads.begin(), heads.end(), current_offset,
+		    [](idx_t pos, const shared_ptr<ReadHead> &candidate) { return pos < candidate->location; });
+		if (head == heads.begin()) {
 			return false;
 		}
-		auto buffer = allocator.Allocate(span_size);
-		auto handles = transport.GetCachingFileHandle().Read(span_size, span.begin);
-		handles.CopyTo(buffer.get(), span_size);
-		span.buffer = std::move(buffer);
+		read_head = *--head;
+		if (current_offset >= read_head->GetEnd() || current_length > read_head->GetEnd() - current_offset) {
+			return false;
+		}
 	}
-	transport.AddFilledReadHead(span.begin, span_size, span.buffer.get());
+	// Fetch once per head, outside the map lock so independent groups can read concurrently.
+	read_head->Fetch(transport.GetCachingFileHandle());
+	transport.AddFetchedReadHead(std::move(read_head));
 	return true;
 }
 
