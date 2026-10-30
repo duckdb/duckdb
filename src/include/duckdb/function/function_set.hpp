@@ -42,6 +42,9 @@ public:
 	void SetUnaryArgProperties(ArgProperties props) {
 		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetUnaryArgProperties(props); });
 	}
+	void SetStatisticsCallback(function_statistics_t callback) {
+		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetStatisticsCallback(callback); });
+	}
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {

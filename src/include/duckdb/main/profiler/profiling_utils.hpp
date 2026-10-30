@@ -46,6 +46,9 @@ public:
 	atomic<idx_t> write_time_us;
 	// Cumulative bytes written to the temporary (spill) directory
 	atomic<idx_t> bytes_spilled;
+	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
+	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
+	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
 
@@ -76,6 +79,9 @@ public:
 
 	void UpdateBytesSpilled(idx_t n) {
 		bytes_spilled += n;
+	}
+	void UpdateBytesScanned(idx_t n) {
+		bytes_scanned += n;
 	}
 
 	void UpdateTotalMemoryAllocated(idx_t n) {
@@ -113,6 +119,9 @@ public:
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
 	}
+	idx_t GetBytesScanned() const {
+		return bytes_scanned.load();
+	}
 
 	idx_t GetWriteOperations() const {
 		return write_operations.load();
@@ -138,10 +147,8 @@ public:
 		return string_counters;
 	}
 
-	void Reset() {
-		latency_timer.reset();
-		string_timings.clear();
-		string_counters.clear();
+	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
+	void ResetLiveMetrics() {
 		bytes_read = 0;
 		read_operations = 0;
 		read_time_us = 0;
@@ -149,7 +156,14 @@ public:
 		write_operations = 0;
 		write_time_us = 0;
 		bytes_spilled = 0;
+		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
 		total_memory_allocated = 0;
+	}
+
+	void Reset() {
+		latency_timer.reset();
+		string_timings.clear();
+		string_counters.clear();
 
 		query_sql = "";
 		system_peak_buffer_memory = 0;
@@ -160,6 +174,8 @@ public:
 
 	//! Write all query-level metrics into the given GatheredMetrics.
 	void FinalizeMetrics(GatheredMetrics &info);
+	//! The metrics backed by atomic counters, which can be read from any thread while the query runs
+	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
 		for (const auto &entry : other.string_timings) {
@@ -175,6 +191,7 @@ public:
 		write_operations += other.write_operations.load();
 		write_time_us += other.write_time_us.load();
 		bytes_spilled += other.bytes_spilled.load();
+		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
 

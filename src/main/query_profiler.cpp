@@ -4,7 +4,6 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
@@ -74,8 +73,8 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 }
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
-      metrics_finalized(false) {
+    : context(context_p), running(false), query_started(false), query_requires_profiling(false),
+      is_explain_analyze(false), metrics_finalized(false) {
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -138,9 +137,13 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
-	// Always reset byte counters at the start of each query so the progress bar shows per-query values
-	query_metrics.bytes_read = 0;
-	query_metrics.bytes_written = 0;
+	// the counters tracked without profiling hold per-query values: reset them once, as StartQuery is called
+	// several times for one query
+	if (!query_started) {
+		query_started = true;
+		query_metrics.ResetLiveMetrics();
+		query_metrics.bytes_scanned = 0;
+	}
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -218,12 +221,18 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	}
 }
 
+void QueryProfiler::ResetQueryStart() {
+	lock_guard<std::mutex> guard(lock);
+	query_started = false;
+}
+
 void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
+	query_started = false;
 	if (!running) {
 		return;
 	}
@@ -243,6 +252,8 @@ void QueryProfiler::EndQuery() {
 	}
 
 	is_explain_analyze = false;
+	// a query that failed before it was planned has no tree to print; its profile still replaces the saved one
+	const bool has_plan = root != nullptr;
 
 	// To log is inexpensive, whether to log or not depends on whether logging is active
 	ToLogInternal();
@@ -251,14 +262,14 @@ void QueryProfiler::EndQuery() {
 
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
-			// print directly through the renderer's print sink
-			auto renderer = GetRenderer();
-			PrintProfilerOutput(renderer.get());
-			Printer::Print("\n");
-		} else {
+		if (!save_location.empty()) {
 			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
+		} else if (has_plan) {
+			// print directly through the renderer's print sink, the blank line that separates consecutive profiles
+			// included: a pluggable renderer (ProfilerExtension) whose sink keeps the output elsewhere prints nothing
+			auto renderer = GetRenderer();
+			PrintProfilerOutput(renderer.get(), "\n\n");
 		}
 	}
 }
@@ -266,6 +277,12 @@ void QueryProfiler::EndQuery() {
 void QueryProfiler::FinalizeMetrics() {
 	lock_guard<std::mutex> guard(lock);
 	FinalizeMetricsInternal();
+}
+
+profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
+	// StartQuery resets the counters under the lock, so a snapshot never mixes two queries
+	lock_guard<std::mutex> guard(lock);
+	return query_metrics.GetLiveMetrics();
 }
 
 void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
@@ -278,6 +295,14 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us
 
 void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
 	query_metrics.UpdateBytesSpilled(amount);
+}
+
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
+void QueryProfiler::ResetBytesScanned() {
+	query_metrics.bytes_scanned = 0;
 }
 
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
@@ -310,6 +335,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
@@ -396,7 +425,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	return ss.str();
 }
 
-void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer) const {
 	if (!renderer) {
 		// "no_output" format: nothing is rendered, enabled or not
 		return;
@@ -409,6 +438,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 	}
 	renderer->RenderProfiler(*this, *sink);
 	renderer->Finish();
+	*sink << trailer;
 }
 
 void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {
@@ -467,6 +497,8 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	bytes_scanned += other.bytes_scanned;
+	bytes_scanned_reported = bytes_scanned_reported || other.bytes_scanned_reported;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -765,6 +797,10 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	}
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN &&
+	    bytes_scanned_reported) {
+		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
 	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
@@ -1116,6 +1152,19 @@ void QueryProfiler::Print() {
 	PrintProfilerOutput(renderer.get());
 }
 
+static bool HasScanWithoutBytesScanned(ProfilingNode &node) {
+	auto &metrics = node.GetOperatorMetrics();
+	if (metrics.operator_type == PhysicalOperatorType::TABLE_SCAN && !metrics.bytes_scanned_reported) {
+		return true;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		if (HasScanWithoutBytesScanned(*node.GetChild(i))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
 	result.Accumulate(root.GetOperatorMetrics());
@@ -1171,6 +1220,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		// left out if a scan doesn't count the bytes it scans, as the total would leave that scan out
+		if (!HasScanWithoutBytesScanned(*root)) {
+			metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
+		}
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

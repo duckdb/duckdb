@@ -19,7 +19,7 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-static Identifier GetSQLValueFunctionName(const Identifier &column_name) {
+Identifier ColumnQualifier::SQLValueFunctionName(const Identifier &column_name) {
 	if (column_name == "current_catalog") {
 		return "current_catalog";
 	}
@@ -68,7 +68,7 @@ unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const Identifier &colum
 		}
 	}
 
-	auto value_function = GetSQLValueFunctionName(column_name);
+	auto value_function = ColumnQualifier::SQLValueFunctionName(column_name);
 	if (value_function.empty()) {
 		return nullptr;
 	}
@@ -200,7 +200,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
 			return;
 		}
 
