@@ -341,8 +341,11 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	}
 
 	Configure(*config_ptr, database_path);
-	// the physical type of a DECIMAL is computed without a database, so this debug setting is process-wide
-	Decimal::SetForceWide(config.options.debug_force_wide_decimal);
+	// the physical type of a DECIMAL is computed without a database, so this debug setting is process-wide: an
+	// instance that enables it turns it on, an instance without it (e.g. a helper database) leaves it alone
+	if (config.options.debug_force_wide_decimal) {
+		Decimal::SetForceWide(true);
+	}
 	// publish what this binary links, unless the config already carries a set handed to us
 	ExtensionHelper::RegisterLinkedExtensions(config);
 	for (auto &linked : config.linked_extensions) {

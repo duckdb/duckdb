@@ -29,7 +29,8 @@ public:
 	//! Formats an unscaled value with the given scale, e.g. 12345 with scale 2 -> "123.45"
 	DUCKDB_API static string ToString(const string_t &value, uint8_t scale);
 	//! Parses a decimal string into the unscaled value of a DECIMAL(width, scale), rounding half away from zero
-	DUCKDB_API static bool TryParse(const char *data, idx_t size, uint8_t width, uint8_t scale, string &result);
+	DUCKDB_API static bool TryParse(const char *data, idx_t size, uint8_t width, uint8_t scale, string &result,
+	                                char decimal_separator = '.');
 
 	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width
 	DUCKDB_API static bool TryRescale(const string_t &value, uint8_t source_scale, uint8_t target_width,

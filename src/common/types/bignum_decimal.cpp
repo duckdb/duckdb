@@ -202,7 +202,8 @@ string BignumDecimal::ToString(const string_t &value, uint8_t scale) {
 	return digits;
 }
 
-bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_t scale, string &result) {
+bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_t scale, string &result,
+                             char decimal_separator) {
 	idx_t pos = 0;
 	// skip surrounding whitespace
 	while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
@@ -224,7 +225,7 @@ bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_
 		return false;
 	}
 	const idx_t integer_digits = digits.size();
-	if (pos < size && data[pos] == '.') {
+	if (pos < size && data[pos] == decimal_separator) {
 		pos++;
 		if (!ReadDigits(data, size, pos, digits)) {
 			return false;
