@@ -109,6 +109,8 @@ struct JoinFilterPushdownInfo {
 	bool build_side_has_filter;
 
 public:
+	//! Whether a filter crossed a secure view that may hide rows
+	bool CrossesSecureView() const;
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
 
