@@ -16,15 +16,19 @@ namespace duckdb {
 namespace {
 
 struct WideDecimalCastInput {
-	WideDecimalCastInput(Vector &result_p, CastParameters &parameters, uint8_t source_scale_p, uint8_t width_p,
+	WideDecimalCastInput(Vector &result_p, CastParameters &parameters, const LogicalType &source_type, uint8_t width_p,
 	                     uint8_t scale_p)
-	    : result(result_p), vector_cast_data(result_p, parameters), source_scale(source_scale_p), width(width_p),
-	      scale(scale_p) {
+	    : result(result_p), vector_cast_data(result_p, parameters),
+	      source_is_decimal(source_type.id() == LogicalTypeId::DECIMAL),
+	      source_width(source_is_decimal ? DecimalType::GetWidth(source_type) : 0),
+	      source_scale(source_is_decimal ? DecimalType::GetScale(source_type) : 0), width(width_p), scale(scale_p) {
 	}
 
 	Vector &result;
 	VectorTryCastData vector_cast_data;
-	//! The scale of a decimal/bignum source
+	//! Whether the source is a decimal, and its width and scale (a BIGNUM source has scale 0)
+	bool source_is_decimal;
+	uint8_t source_width;
 	uint8_t source_scale;
 	//! The width and scale of a decimal target
 	uint8_t width;
@@ -45,10 +49,6 @@ struct WideDecimalCastInput {
 	}
 };
 
-uint8_t SourceScale(const LogicalType &type) {
-	return type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
-}
-
 //===--------------------------------------------------------------------===//
 // Unscaled integer blobs
 //===--------------------------------------------------------------------===//
@@ -67,6 +67,16 @@ string UnscaledBlob(bool value) {
 template <class T>
 string UnscaledBlob(T value) {
 	return BignumDecimal::FromInteger(Hugeint::Convert(value));
+}
+
+//! The text of an integer source for an error message
+template <class T>
+string IntegerText(T value) {
+	return BignumDecimal::ToString(string_t(UnscaledBlob(value)), 0);
+}
+
+string IntegerText(bool value) {
+	return value ? "true" : "false";
 }
 
 //===--------------------------------------------------------------------===//
@@ -105,8 +115,14 @@ struct IntegerToWideDecimal {
 		auto unscaled = UnscaledBlob(input);
 		string blob;
 		if (!BignumDecimal::TryRescale(string_t(unscaled), data.source_scale, data.width, data.scale, blob)) {
-			return data.Fail<RESULT_TYPE>(
-			    data.OutOfRange(BignumDecimal::ToString(string_t(unscaled), data.source_scale)), mask, idx);
+			if (data.source_is_decimal) {
+				return data.Fail<RESULT_TYPE>(
+				    data.OutOfRange(BignumDecimal::ToString(string_t(unscaled), data.source_scale)), mask, idx);
+			}
+			// the message of the integer -> fixed-size decimal cast
+			return data.Fail<RESULT_TYPE>(StringUtil::Format("Could not cast value %s to %s", IntegerText(input),
+			                                                 data.result.GetType().ToString()),
+			                              mask, idx);
 		}
 		return data.StoreBlob(blob);
 	}
@@ -129,7 +145,7 @@ struct DoubleToWideDecimal {
 template <class SRC, class OP>
 bool ExecuteToWideDecimal(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &result_type = result.GetType();
-	WideDecimalCastInput data(result, parameters, SourceScale(source.GetType()), DecimalType::GetWidth(result_type),
+	WideDecimalCastInput data(result, parameters, source.GetType(), DecimalType::GetWidth(result_type),
 	                          DecimalType::GetScale(result_type));
 	UnaryExecutor::GenericExecute<SRC, string_t, OP>(source, result, count, data, parameters.error_message);
 	return data.vector_cast_data.all_converted;
@@ -147,7 +163,7 @@ bool BlobToInteger(const string_t &blob, T &result) {
 struct WideDecimalToString {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
-		return StringVector::AddString(data.result, BignumDecimal::ToString(input, data.source_scale));
+		return StringVector::AddString(data.result, Decimal::ToString(input, data.source_width, data.source_scale));
 	}
 };
 
@@ -176,8 +192,11 @@ struct WideDecimalToInteger {
 		RESULT_TYPE result;
 		if (!BignumDecimal::TryRescale(input, data.source_scale, Decimal::MAX_WIDTH_DECIMAL, 0, blob) ||
 		    !BlobToInteger<RESULT_TYPE>(string_t(blob), result)) {
-			return data.Fail<RESULT_TYPE>(data.OutOfRange(BignumDecimal::ToString(input, data.source_scale)), mask,
-			                              idx);
+			// the message of the fixed-size decimal -> integer cast
+			return data.Fail<RESULT_TYPE>(StringUtil::Format("Failed to cast decimal value %s to type %s",
+			                                                 BignumDecimal::ToString(input, data.source_scale),
+			                                                 data.result.GetType().ToString()),
+			                              mask, idx);
 		}
 		return result;
 	}
@@ -224,7 +243,7 @@ bool ExecuteFromWideDecimal(Vector &source, Vector &result, idx_t count, CastPar
 		width = DecimalType::GetWidth(result_type);
 		scale = DecimalType::GetScale(result_type);
 	}
-	WideDecimalCastInput data(result, parameters, SourceScale(source.GetType()), width, scale);
+	WideDecimalCastInput data(result, parameters, source.GetType(), width, scale);
 	UnaryExecutor::GenericExecute<string_t, RESULT, OP>(source, result, count, data, parameters.error_message);
 	return data.vector_cast_data.all_converted;
 }
@@ -340,7 +359,7 @@ bool DefaultCasts::ToWideDecimalCast(Vector &source, Vector &result, idx_t count
 
 bool DefaultCasts::DecimalToBignumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::DECIMAL && result.GetType().id() == LogicalTypeId::BIGNUM);
-	WideDecimalCastInput data(result, parameters, SourceScale(source.GetType()), 0, 0);
+	WideDecimalCastInput data(result, parameters, source.GetType(), 0, 0);
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::GenericExecute<int16_t, string_t, FixedDecimalToBignum>(source, result, count, data);

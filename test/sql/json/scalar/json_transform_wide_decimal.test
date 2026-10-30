@@ -28,7 +28,7 @@ SELECT json_transform('{"d": "abc"}', '{"d": "DECIMAL(50,3)"}')
 statement error
 SELECT json_transform_strict('{"d": "abc"}', '{"d": "DECIMAL(50,3)"}')
 ----
-<REGEX>:.*Could not convert.*
+Failed to cast value to decimal: "abc"
 
 # round trip through JSON
 query I

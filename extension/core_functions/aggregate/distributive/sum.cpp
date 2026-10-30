@@ -506,11 +506,14 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
 	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
-		// wide decimals sum their BIGNUM blobs into the widest decimal of the same scale
+		// wide decimals sum their BIGNUM blobs into the widest decimal of the same scale; a decimal that is only
+		// stored as a BIGNUM blob because of debug_force_wide_decimal keeps the DECIMAL(38,s) result of its width
+		auto result_width = DecimalType::GetWidth(decimal_type) > Decimal::MAX_WIDTH_INT128 ? Decimal::MAX_WIDTH_DECIMAL
+		                                                                                    : Decimal::MAX_WIDTH_INT128;
 		function.ReplaceImplementation(GetWideDecimalSumAggregate());
 		function.SetName("sum");
 		function.GetArguments()[0] = decimal_type;
-		function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
+		function.SetReturnType(LogicalType::DECIMAL(result_width, DecimalType::GetScale(decimal_type)));
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return nullptr;
 	}
@@ -582,7 +585,7 @@ struct WideDecimalSumOperation : public BignumOperation {
 		}
 		auto width = DecimalType::GetWidth(finalize_data.result.GetType());
 		if (!BignumDecimal::FitsWidth(state.value, width)) {
-			throw OutOfRangeException("Overflow in SUM: the result does not fit %s",
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in %s",
 			                          finalize_data.result.GetType().ToString());
 		}
 		target = state.value.ToBignum(finalize_data.input.allocator);
@@ -593,6 +596,7 @@ AggregateFunction GetWideDecimalSumAggregate() {
 	auto function = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, WideDecimalSumOperation>(
 	    LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL);
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetFallible(); // the finalize throws when the sum does not fit the width of the result
 	return function;
 }
 

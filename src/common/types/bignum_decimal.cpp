@@ -1,3 +1,4 @@
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/bignum_decimal.hpp"
 
 #include "duckdb/common/bignum.hpp"
@@ -245,8 +246,10 @@ bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_
 			return false;
 		}
 		for (auto c : exponent_digits) {
-			if (exponent < 100000) {
-				exponent = exponent * 10 + (c - '0');
+			exponent = exponent * 10 + (c - '0');
+			if (exponent > NumericLimits<int32_t>::Maximum()) {
+				// the fixed-size decimals parse the exponent as a 32-bit integer
+				return false;
 			}
 		}
 		if (exponent_negative) {
