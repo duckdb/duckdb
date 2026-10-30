@@ -236,16 +236,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
-	// Share filtered joins before their different predicates obscure the common input.
-	if (!CTEContainsDML(*plan) && !OptimizerDisabled(OptimizerType::FILTER_PUSHDOWN) &&
-	    !OptimizerDisabled(OptimizerType::CTE_FILTER_PUSHER) && !OptimizerDisabled(OptimizerType::JOIN_ORDER) &&
-	    !OptimizerDisabled(OptimizerType::EXPRESSION_REWRITER)) {
-		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-			CommonSubplanOptimizer common_subplan_optimizer(*this);
-			plan = common_subplan_optimizer.Optimize(std::move(plan), true);
-		});
-	}
-
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);

@@ -15,14 +15,13 @@ namespace duckdb {
 class Optimizer;
 class LogicalOperator;
 
-//! Detects common subplans and converts them to references of a shared CTE
+//! The CommonSubplanOptimizer optimizer detects common subplans, and converts them to refs of a materialized CTE
 class CommonSubplanOptimizer {
 public:
 	explicit CommonSubplanOptimizer(Optimizer &optimizer);
 
 public:
-	//! Before filter pushdown, only consider filtered inputs with common connecting join predicates
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op, bool before_filter_pushdown = false);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
 	//! The optimizer

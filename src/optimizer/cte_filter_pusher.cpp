@@ -119,7 +119,7 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	}
 
 	// Create an OR expression with all the filters on all references of the CTE
-	vector<unique_ptr<Expression>> consumer_filters;
+	unique_ptr<Expression> outer_expr;
 	for (auto &filter : info.filters) {
 		D_ASSERT(filter.get().type == LogicalOperatorType::LOGICAL_FILTER);
 
@@ -139,7 +139,7 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 		}
 
 		// We copy the filters and replace the CTE reference bindings with the bindings in the CTE definition
-		vector<unique_ptr<Expression>> conjuncts;
+		unique_ptr<Expression> inner_expr;
 		for (auto &filter_expr : filter.get().expressions) {
 			// Dropping a conjunct must not expose errors it previously short-circuited.
 			if (filter_expr->IsVolatile() || ExpressionBarrier::Contains(*filter_expr) ||
@@ -148,19 +148,28 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 			}
 			auto filter_expr_copy = filter_expr->Copy();
 			replacer.VisitExpression(&filter_expr_copy);
-			conjuncts.push_back(std::move(filter_expr_copy));
+			if (inner_expr) {
+				inner_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                   std::move(inner_expr), std::move(filter_expr_copy));
+			} else {
+				inner_expr = std::move(filter_expr_copy);
+			}
 		}
 
 		// An unrestricted consumer makes the disjunction true.
-		if (conjuncts.empty()) {
+		if (!inner_expr) {
 			return;
 		}
-		consumer_filters.push_back(
-		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(conjuncts)));
+
+		if (outer_expr) {
+			outer_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(outer_expr),
+			                                                   std::move(inner_expr));
+		} else {
+			outer_expr = std::move(inner_expr);
+		}
 	}
 
 	// Add the filter on top of the CTE definition and split the predicates
-	auto outer_expr = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(consumer_filters));
 	auto new_cte = make_uniq_base<LogicalOperator, LogicalFilter>(std::move(outer_expr));
 	LogicalFilter::SplitPredicates(new_cte->Cast<LogicalFilter>().expressions);
 
