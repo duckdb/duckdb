@@ -275,7 +275,6 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 
 	// Same passes for the kept rows, one slot further each round.
 	while (rows_to_probe_n > 0) {
-
 		// again load the next slot of every row independently, so many cache misses overlap
 		for (idx_t i = 0; i < rows_to_probe_n; i++) {
 			const auto row_index = rows_to_probe_sel.get_index(i);
