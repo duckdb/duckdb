@@ -14914,8 +14914,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSimpleCaseWhenThenTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
-	auto dynamic_child_count = dynamic_list_items.size();
+	auto dynamic_child_count = CountParseResultsFromList(list_pr.GetChild(1));
 	vector<ComparisonExpressionTail> simple_case_when_operand;
 	simple_case_when_operand.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
