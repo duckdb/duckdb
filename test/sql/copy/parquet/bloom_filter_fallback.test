@@ -161,6 +161,28 @@ SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/shuffled-str
 ----
 1
 
+# Vectors without any values leave no string to carry over.
+statement ok
+COPY (
+ SELECT NULL::VARCHAR AS s, NULL::BLOB AS b,
+        CASE WHEN i < 4096 THEN NULL ELSE md5(((i * 7919) % 8192)::VARCHAR) END AS late
+ FROM range(8192) t(i)
+) TO '{TEST_DIR}/null-strings.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 8192)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/null-strings.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+b	0
+late	1
+s	0
+
+query IIII
+SELECT count(s), count(b), count(late), count(*) FILTER (late = md5(((5000 * 7919) % 8192)::VARCHAR))
+FROM '{TEST_DIR}/null-strings.parquet'
+----
+0	0	4096	1
+
 # Folding releases reservation bytes, so later chunks can also get filters.
 statement ok
 CREATE TABLE repeated AS

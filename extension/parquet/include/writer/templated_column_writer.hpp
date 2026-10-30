@@ -122,7 +122,9 @@ public:
 	}
 	//! Copies the last value out of the vector it points into, which may be freed before the next one
 	void Persist() {
-		PersistValue(previous, owned_previous);
+		if (count > 0) {
+			PersistValue(previous, owned_previous);
+		}
 	}
 	bool IsSorted() const {
 		return ascending || descending;
