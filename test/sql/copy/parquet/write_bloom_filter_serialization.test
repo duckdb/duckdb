@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/write_bloom_filter_serialization.test
+# description: WRITE_BLOOM_FILTER is kept when the COPY plan is serialized
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET debug_verify_serializer=true
+
+statement ok
+COPY (SELECT (range % 10)::VARCHAR AS r FROM range(1000)) TO '{TEST_DIR}/bloom_filter_serialization.parquet' (WRITE_BLOOM_FILTER FALSE)
+
+query I
+SELECT bool_or(bloom_filter_offset IS NOT NULL) FROM parquet_metadata('{TEST_DIR}/bloom_filter_serialization.parquet')
+----
+false

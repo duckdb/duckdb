@@ -828,6 +828,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.data_page_size_limit);
 	serializer.WritePropertyWithDefault(122, "write_page_index", bind_data.write_page_index,
 	                                    default_value.write_page_index);
+	serializer.WritePropertyWithDefault(123, "enable_bloom_filters", bind_data.enable_bloom_filters,
+	                                    default_value.enable_bloom_filters);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -872,6 +874,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault(121, "data_page_size_limit", default_value.data_page_size_limit);
 	data->write_page_index =
 	    deserializer.ReadPropertyWithExplicitDefault(122, "write_page_index", default_value.write_page_index);
+	data->enable_bloom_filters =
+	    deserializer.ReadPropertyWithExplicitDefault(123, "enable_bloom_filters", default_value.enable_bloom_filters);
 
 	return std::move(data);
 }
