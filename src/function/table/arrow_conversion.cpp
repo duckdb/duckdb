@@ -887,11 +887,11 @@ static void ConvertDecimal256(const_data_ptr_t src_ptr, Vector &vector, idx_t si
 	case PhysicalType::VARCHAR: {
 		auto tgt_ptr = FlatVector::GetDataMutable<string_t>(vector);
 		for (idx_t row = 0; row < size; row++) {
-			if (val_mask.RowIsValid(row)) {
-				auto blob =
-				    BignumDecimal::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
-				tgt_ptr[row] = StringVector::AddStringOrBlob(vector, blob.data(), blob.size());
+			if (!val_mask.RowIsValid(row)) {
+				continue;
 			}
+			auto blob = BignumDecimal::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
+			tgt_ptr[row] = StringVector::AddStringOrBlob(vector, blob.data(), blob.size());
 		}
 		break;
 	}

@@ -21,7 +21,8 @@
 			"paths": [
 				"test/sql/storage_version/storage_version.test_slow",
 				"test/sql/index/art/storage/test_art_duckdb_versions.test",
-				"test/sql/attach/attach_huggingface_index.test"
+				"test/sql/attach/attach_huggingface_index.test",
+				"test/sql/attach/remote_file_concurrently.test"
 			]
 		},
 		{
@@ -39,6 +40,7 @@
 				"test/sql/aggregate/aggregates/test_median.test",
 				"test/sql/aggregate/aggregates/test_quantile_cont_list.test",
 				"test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
+				"test/sql/aggregate/quantile_fun.test",
 				"test/sql/function/generic/test_resolve_types.test",
 				"test/sql/function/numeric/test_round_even.test",
 				"test/sql/sql_export/call_values.test",
@@ -65,7 +67,32 @@
 			"paths": [
 				"test/sql/optimizer/modulo_zonemap_pruning.test",
 				"test/sql/types/decimal/wide_decimal_statistics.test",
-				"test/sql/copy/parquet/writer/parquet_write_decimals.test"
+				"test/sql/copy/parquet/writer/parquet_write_decimals.test",
+				"test/optimizer/statistics/statistics_numeric.test",
+				"test/sql/tpch/q01_propagate.test_slow"
+			]
+		},
+		{
+			"reason": "The optimizer rewrites of decimal aggregates (avg, partial aggregate pushdown, aggregate function rewrite) and the plans they produce apply to fixed-size decimals",
+			"paths": [
+				"test/optimizer/avg_rewrite_profitability.test",
+				"test/optimizer/partial_aggregate_pushdown.test",
+				"test/optimizer/test_aggregate_function_rewrite.test"
+			]
+		},
+		{
+			"reason": "VARIANT shreds DECIMAL values into fixed-size typed vectors, which cannot hold a decimal stored as BIGNUM blobs",
+			"paths": [
+				"test/parquet/variant/variant_basic.test",
+				"test/parquet/variant/variant_partially_shredded.test",
+				"test/parquet/variant/variant_shredded.test",
+				"test/parquet/variant/variant_snowflake_test.test"
+			]
+		},
+		{
+			"reason": "A wide decimal Value renders as a string literal cast in SQL text",
+			"paths": [
+				"test/extension/test_function_args_kwargs.test"
 			]
 		},
 		{

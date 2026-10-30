@@ -15,8 +15,6 @@
 #include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
-#include <algorithm>
-
 namespace duckdb {
 struct CastParameters;
 class CSVCast {
@@ -132,16 +130,8 @@ public:
 	//! Parses a wide (BIGNUM-backed) decimal from text written with the given decimal separator
 	static bool TryParseWideDecimal(const char *value_ptr, idx_t size, char decimal_separator, uint8_t width,
 	                                uint8_t scale, string &result) {
-		if (decimal_separator == ',') {
-			if (memchr(value_ptr, '.', size)) {
-				// like the fixed-size decimals: a period is not a valid character when the comma separates
-				return false;
-			}
-			string value(value_ptr, size);
-			std::replace(value.begin(), value.end(), ',', '.');
-			return BignumDecimal::TryParse(value.c_str(), value.size(), width, scale, result);
-		}
-		return BignumDecimal::TryParse(value_ptr, size, width, scale, result);
+		// like the fixed-size decimals: a period is not a valid character when the comma separates
+		return BignumDecimal::TryParse(value_ptr, size, width, scale, result, decimal_separator);
 	}
 
 	static bool TryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
