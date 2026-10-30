@@ -27,6 +27,7 @@
 				"test/sql/types/numeric/numeric_variant_storage_smoke.test",
 				"test/sql/types/numeric/postgres_numeric_big.test",
 				"test/sql/types/numeric/numeric_limits_review.test",
+				"test/sql/types/numeric/numeric_magnitude_overflow.test",
 				"test/sql/storage/types/numeric/numeric_storage_version.test",
 				"test/optimizer/compressed_materialization_numeric.test"
 			]

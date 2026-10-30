@@ -77,7 +77,8 @@
 			"paths": [
 				"test/optimizer/avg_rewrite_profitability.test",
 				"test/optimizer/partial_aggregate_pushdown.test",
-				"test/optimizer/test_aggregate_function_rewrite.test"
+				"test/optimizer/test_aggregate_function_rewrite.test",
+				"test/optimizer/compressed_materialization_numeric.test"
 			]
 		},
 		{
