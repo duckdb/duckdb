@@ -16,7 +16,6 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
-#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -214,8 +213,7 @@ public:
 		if (!check_parent_empty && validity.CannotHaveNull()) {
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
-				const auto &src_value = data_ptr[vector_index];
-				state.dictionary.template Insert<true>(src_value);
+				AnalyzeValue(state, data_ptr[vector_index]);
 			}
 		} else {
 			for (idx_t i = 0; i < vcount; i++) {
@@ -223,8 +221,7 @@ public:
 					continue;
 				}
 				if (validity.RowIsValid(vector_index)) {
-					const auto &src_value = data_ptr[vector_index];
-					state.dictionary.template Insert<true>(src_value);
+					AnalyzeValue(state, data_ptr[vector_index]);
 				}
 				vector_index++;
 			}
@@ -261,6 +258,10 @@ public:
 		} else {
 			state.key_bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(state.dictionary.GetSize());
 		}
+		if (state.bloom_filter) {
+			state.bloom_filter->FoldToTarget(BufferAllocator::Get(writer.GetContext()),
+			                                 writer.BloomFilterFalsePositiveRatio());
+		}
 	}
 
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
@@ -269,46 +270,6 @@ public:
 
 	bool SupportsBloomFilterFallback() const override {
 		return !std::is_same<TGT, Int96>::value && !std::is_same<OP, ParquetGeometryOperator>::value;
-	}
-
-	void BeginWrite(ColumnWriterState &state_p) override {
-		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (bloom_filter_fallback && !HasDictionary(state)) {
-			idx_t value_count = 0;
-			for (const auto &page : state.page_info) {
-				value_count += page.row_count - page.empty_count - page.null_count;
-			}
-			state.bloom_filter = ParquetBloomFilter::TryCreate(
-			    BufferAllocator::Get(writer.GetContext()),
-			    value_count * OP::template BloomFilterEntriesPerValue<SRC, TGT>(),
-			    writer.BloomFilterFalsePositiveRatio(), writer.BloomFilterFallbackMemory());
-		}
-		PrimitiveColumnWriter::BeginWrite(state_p);
-	}
-
-	void Write(ColumnWriterState &state_p, Vector &input, idx_t count) override {
-		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (state.bloom_filter) {
-			for (const auto &entry : input.ValidValues<SRC>()) {
-				const auto &source_value = entry.GetValue();
-				const auto target_value = OP::template Operation<SRC, TGT>(source_value);
-				state.bloom_filter->FilterInsert(OP::template XXHash64<SRC, TGT>(target_value));
-				auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(source_value, target_value);
-				if (extra_hash) {
-					state.bloom_filter->FilterInsert(*extra_hash);
-				}
-			}
-		}
-		PrimitiveColumnWriter::Write(state_p, input, count);
-	}
-
-	void PrepareWrite(ColumnWriterState &state_p) override {
-		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (state.bloom_filter) {
-			state.bloom_filter->FoldToTarget(BufferAllocator::Get(writer.GetContext()),
-			                                 writer.BloomFilterFalsePositiveRatio());
-		}
-		PrimitiveColumnWriter::PrepareWrite(state_p);
 	}
 
 	bool HasDictionary(PrimitiveColumnWriterState &state_p) override {
@@ -354,12 +315,7 @@ public:
 			}
 			if (state.bloom_filter) {
 				// update the bloom filter
-				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
-				state.bloom_filter->FilterInsert(hash);
-				auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(src_value, tgt_value);
-				if (extra_hash) {
-					state.bloom_filter->FilterInsert(*extra_hash);
-				}
+				InsertBloomFilterValue(*state.bloom_filter, src_value, tgt_value);
 			}
 		});
 
@@ -381,6 +337,49 @@ public:
 	}
 
 private:
+	static void InsertBloomFilterValue(ParquetBloomFilter &bloom_filter, const SRC &src_value, const TGT &tgt_value) {
+		bloom_filter.FilterInsert(OP::template XXHash64<SRC, TGT>(tgt_value));
+		auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(src_value, tgt_value);
+		if (extra_hash) {
+			bloom_filter.FilterInsert(*extra_hash);
+		}
+	}
+
+	void AnalyzeValue(StandardColumnWriterState<SRC, TGT, OP> &state, const SRC &src_value) {
+		if (!state.dictionary.IsFull()) {
+			state.dictionary.template Insert<true>(src_value);
+			if (!state.dictionary.IsFull()) {
+				return;
+			}
+			StartBloomFilterFallback(state);
+		}
+		if (state.bloom_filter) {
+			InsertBloomFilterValue(*state.bloom_filter, src_value, OP::template Operation<SRC, TGT>(src_value));
+		}
+	}
+
+	void StartBloomFilterFallback(StandardColumnWriterState<SRC, TGT, OP> &state) {
+		if (!bloom_filter_fallback) {
+			return;
+		}
+		auto bloom_filter = ParquetBloomFilter::TryCreate(
+		    BufferAllocator::Get(writer.GetContext()),
+		    NumericCast<idx_t>(state.row_group.num_rows) * OP::template BloomFilterEntriesPerValue<SRC, TGT>(),
+		    writer.BloomFilterFalsePositiveRatio(), writer.BloomFilterFallbackMemory());
+		if (!bloom_filter) {
+			return;
+		}
+		bool seedable = true;
+		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
+			seedable = seedable && OP::template CanSeedBloomFilter<SRC, TGT>(tgt_value);
+			InsertBloomFilterValue(*bloom_filter, src_value, tgt_value);
+		});
+		state.dictionary.Reset();
+		if (seedable) {
+			state.bloom_filter = std::move(bloom_filter);
+		}
+	}
+
 	template <bool ALL_VALID>
 	void WriteVectorInternal(WriteStream &temp_writer, ColumnWriterStatistics *stats,
 	                         ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,

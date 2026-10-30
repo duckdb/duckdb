@@ -90,6 +90,30 @@ SELECT count(*) FROM '{TEST_DIR}/float.parquet' WHERE n='inf'::{type}
 
 endloop
 
+# The dictionary merges NaN payloads, so a dictionary holding a NaN cannot seed a filter.
+foreach position 0 2000
+
+statement ok
+COPY (SELECT CASE WHEN i = {position} THEN 'nan'::DOUBLE ELSE i::DOUBLE END AS n FROM range(2048) t(i))
+TO '{TEST_DIR}/nan-{position}.parquet' (FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 100)
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/nan-{position}.parquet' WHERE isnan(n)
+----
+1
+
+endloop
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/nan-0.parquet')
+----
+0
+
+query I
+SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/nan-2000.parquet')
+----
+1
+
 # Interval equality must use the normalized hash as well as the physical encoding.
 statement ok
 COPY (

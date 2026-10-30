@@ -98,6 +98,11 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
+	static bool CanSeedBloomFilter(const TGT &) {
+		return true;
+	}
+
+	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return nullptr;
 	}
@@ -138,6 +143,12 @@ struct FloatingPointOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return TGT(input);
+	}
+
+	//! The dictionary merges NaNs with different payloads, which hash differently
+	template <class SRC, class TGT>
+	static bool CanSeedBloomFilter(const TGT &target_value) {
+		return !Value::IsNan(target_value);
 	}
 
 	template <class SRC, class TGT>

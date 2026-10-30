@@ -89,6 +89,32 @@ SELECT count(*) FROM (
 ----
 0
 
+# Values the dictionary held before it overflowed seed the filter.
+statement ok
+COPY (SELECT i AS n, i::VARCHAR AS s FROM range(2048) t(i)) TO '{TEST_DIR}/seeded.parquet'
+(FORMAT PARQUET, DICTIONARY_SIZE_LIMIT 100)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/seeded.parquet')
+WHERE encodings NOT LIKE '%DICTIONARY%'
+GROUP BY ALL ORDER BY ALL
+----
+n	1
+s	1
+
+foreach value 0 99 100 2047
+
+query I
+SELECT bool_or(bloom_filter_excludes) FROM (
+  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 'n', {value})
+  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/seeded.parquet', 's', '{value}')
+)
+----
+false
+
+endloop
+
 # Folding releases reservation bytes, so later chunks can also get filters.
 statement ok
 CREATE TABLE repeated AS
