@@ -90,6 +90,7 @@
       {
         "id": 200,
         "name": "case_checks",
+        "serialize_property": "GetCaseChecksForSerialization(serializer)",
         "type": "vector<CaseCheck>",
         "accessor_mut": "CaseChecksMutable()",
         "accessor": "CaseChecks()"
@@ -109,16 +110,8 @@
         "accessor_mut": "CaseOperandMutable()",
         "accessor": "CaseOperand()",
         "nullable": true
-      },
-      {
-        "name": "binding_info",
-        "type": "shared_ptr<CaseBindingInfo>",
-        "serialize_skip": true,
-        "equals_skip": true,
-        "hash_skip": true
       }
-    ],
-    "use_legacy_serialization": "v2.1.0"
+    ]
   },
   {
     "class": "CastExpression",

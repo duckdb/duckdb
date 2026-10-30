@@ -10,19 +10,8 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
-class CaseCompatibilityContext;
-
-enum class CaseBindingSafety : uint8_t { UNKNOWN, SAFE, UNSAFE };
-
-//! Transient binding facts shared with original-expression snapshots, never serialized.
-struct CaseBindingInfo {
-	weak_ptr<CaseCompatibilityContext> context;
-	CaseBindingSafety safety = CaseBindingSafety::UNKNOWN;
-};
-
 struct CaseCheck {
 	unique_ptr<ParsedExpression> when_expr;
 	unique_ptr<ParsedExpression> then_expr;
@@ -58,18 +47,8 @@ public:
 	unique_ptr<ParsedExpression> &CaseOperandMutable() {
 		return case_operand;
 	}
-	const shared_ptr<CaseBindingInfo> &BindingInfo() const {
-		return binding_info;
-	}
-	shared_ptr<CaseBindingInfo> &BindingInfoMutable() {
-		return binding_info;
-	}
 
-	unique_ptr<CaseExpression> GetLegacyCaseExpression() const;
-	static bool ContainsSimpleCase(const ParsedExpression &expr);
-	static bool ContainsLambdaReference(const ParsedExpression &expr);
-	bool UseLegacySerialization() const;
-	void LegacySerialize(Serializer &serializer) const;
+	const vector<CaseCheck> &GetCaseChecksForSerialization(Serializer &serializer) const;
 
 public:
 	string ToString() const override;
@@ -98,6 +77,5 @@ private:
 	vector<CaseCheck> case_checks;
 	unique_ptr<ParsedExpression> else_expr;
 	unique_ptr<ParsedExpression> case_operand;
-	shared_ptr<CaseBindingInfo> binding_info;
 };
 } // namespace duckdb

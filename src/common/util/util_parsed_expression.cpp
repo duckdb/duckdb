@@ -432,7 +432,6 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	}
 	copy->else_expr = else_expr ? else_expr->Copy() : nullptr;
 	copy->case_operand = case_operand ? case_operand->Copy() : nullptr;
-	copy->binding_info = binding_info;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

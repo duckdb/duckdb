@@ -22,16 +22,11 @@ struct SelectBindState;
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {
 public:
-	enum class LookupMode : uint8_t { STRICT, SPECULATIVE };
-
 	OrderBinder(vector<reference<Binder>> binders, SelectBindState &bind_state);
 	OrderBinder(vector<reference<Binder>> binders, SelectNode &node, SelectBindState &bind_state);
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
-
-	optional_idx TryGetExpressionReference(unique_ptr<ParsedExpression> &expr,
-	                                       LookupMode mode = LookupMode::STRICT) const;
 
 	bool HasExtraList() const {
 		return extra_list;

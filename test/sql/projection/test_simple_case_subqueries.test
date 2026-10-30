@@ -147,3 +147,24 @@ query I
 SELECT CASE (SELECT nextval('volatile_subquery_case_seq')) WHEN 1 THEN 10 WHEN 2 THEN 20 END
 ----
 10
+
+# Operand copies retain TRY error transport from scalar subqueries.
+query I
+SELECT TRY(CASE (SELECT CAST('x' AS INTEGER)) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END)
+----
+NULL
+
+query I
+SELECT CASE TRY((SELECT CAST('x' AS INTEGER))) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END
+----
+3
+
+query I
+SELECT TRY(CASE (SELECT CAST('2' AS INTEGER)) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END)
+----
+2
+
+query I
+SELECT TRY(CASE (SELECT (SELECT CAST('x' AS INTEGER))) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END)
+----
+NULL

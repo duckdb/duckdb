@@ -61,7 +61,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BoundStatement ExpressionBinder::BindSubqueryNode(QueryNode &node, shared_ptr<Binder> &subquery_binder,
-                                                 bool try_subquery) {
+                                                  bool try_subquery) {
 	// bind the subquery in its own binder
 	subquery_binder = Binder::CreateBinder(context, binder);
 	subquery_binder->SetCanContainNulls(true);
@@ -110,7 +110,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		rethrow_try_errors = true;
 		tolerant_lowering = true;
 	}
-	auto original_query = case_operand_binding ? expr.Subquery()->node->Copy() : nullptr;
+	auto original_expression = case_operand_binding ? expr.Copy() : nullptr;
 	shared_ptr<Binder> subquery_binder;
 	auto bound_node = BindSubqueryNode(*expr.Subquery()->node, subquery_binder, try_subquery || rethrow_try_errors);
 	// bind the child expression the subquery is compared against, if any; the child ends up in the
@@ -237,8 +237,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 	}
 
-	if (original_query) {
-		case_operand_binding->Remember(*result, *original_query);
+	if (original_expression) {
+		case_operand_binding->Remember(*result, original_expression->Cast<SubqueryExpression>(), try_subquery);
 	}
 
 	return BindResult(std::move(result));

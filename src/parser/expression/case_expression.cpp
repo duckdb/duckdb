@@ -1,9 +1,6 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -24,69 +21,12 @@ string CaseExpression::ToString() const {
 	return case_str;
 }
 
-unique_ptr<CaseExpression> CaseExpression::GetLegacyCaseExpression() const {
-	D_ASSERT(case_operand);
-	auto result = make_uniq<CaseExpression>();
-	for (auto &check : case_checks) {
-		CaseCheck legacy_check;
-		auto operand_location = case_operand->GetQueryLocation();
-		legacy_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, case_operand->Copy(),
-		                                                         check.when_expr->Copy());
-		legacy_check.when_expr->SetQueryLocation(operand_location);
-		legacy_check.then_expr = check.then_expr->Copy();
-		result->CaseChecksMutable().push_back(std::move(legacy_check));
+const vector<CaseCheck> &CaseExpression::GetCaseChecksForSerialization(Serializer &serializer) const {
+	if (case_operand && !serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		throw SerializationException("Simple CASE expressions require storage version v2.1.0 or higher and cannot be "
+		                             "serialized to older storage formats");
 	}
-	result->ElseMutable() = else_expr->Copy();
-	result->SetAlias(GetAlias());
-	result->SetQueryLocation(GetQueryLocation());
-	return result;
-}
-
-namespace {
-
-bool ContainsCaseExpression(const ParsedExpression &expr, ExpressionClass expression_class) {
-	if (expr.GetExpressionClass() == expression_class &&
-	    (expression_class != ExpressionClass::CASE || expr.Cast<CaseExpression>().CaseOperand())) {
-		return true;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		auto &subquery = expr.Cast<SubqueryExpression>().Subquery();
-		bool found = false;
-		if (subquery) {
-			ParsedExpressionIterator::EnumerateQueryNodeChildren(
-			    *subquery->node, [&](unique_ptr<ParsedExpression> &child) {
-				    found |= ContainsCaseExpression(*child, expression_class);
-			    });
-		}
-		if (found) {
-			return true;
-		}
-	}
-	for (auto &child : expr.Children()) {
-		if (ContainsCaseExpression(child, expression_class)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-} // namespace
-
-bool CaseExpression::ContainsSimpleCase(const ParsedExpression &expr) {
-	return ContainsCaseExpression(expr, ExpressionClass::CASE);
-}
-
-bool CaseExpression::ContainsLambdaReference(const ParsedExpression &expr) {
-	return ContainsCaseExpression(expr, ExpressionClass::LAMBDA_REF);
-}
-
-bool CaseExpression::UseLegacySerialization() const {
-	return case_operand != nullptr;
-}
-
-void CaseExpression::LegacySerialize(Serializer &serializer) const {
-	auto legacy_case = GetLegacyCaseExpression();
-	legacy_case->Serialize(serializer);
+	return case_checks;
 }
 
 } // namespace duckdb

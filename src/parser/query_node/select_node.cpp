@@ -1,38 +1,11 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
 SelectNode::SelectNode()
     : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
-}
-
-static bool IsDynamicProjection(const ParsedExpression &expression) {
-	if (expression.GetExpressionClass() == ExpressionClass::STAR) {
-		return true;
-	}
-	for (auto &child : expression.Children()) {
-		if (IsDynamicProjection(child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-vector<unique_ptr<ParsedExpression>> SelectNode::GetSelectListForSerialization(Serializer &serializer) const {
-	vector<unique_ptr<ParsedExpression>> result;
-	result.reserve(select_list.size());
-	for (auto &expression : select_list) {
-		auto copy = expression->Copy();
-		if (!serializer.ShouldSerialize(StorageVersion::V2_1_0) && !expression->HasAlias() &&
-		    !IsDynamicProjection(*expression) && CaseExpression::ContainsSimpleCase(*expression)) {
-			copy->SetAlias(expression->GetName());
-		}
-		result.push_back(std::move(copy));
-	}
-	return result;
 }
 
 string SelectNode::ToString() const {

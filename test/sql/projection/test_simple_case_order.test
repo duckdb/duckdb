@@ -1,10 +1,10 @@
 # name: test/sql/projection/test_simple_case_order.test
-# description: CASE compatibility in set-operation projection matching
+# description: Set-operation ordering matches CASE expressions by structure
 # group: [projection]
 
 query I
 SELECT CASE i WHEN 1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
-ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+ORDER BY CASE i WHEN 1 THEN 1 ELSE 0 END
 ----
 0
 0
@@ -13,56 +13,74 @@ ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
 
 query I
 SELECT CASE WHEN i=1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+0
+0
+1
+1
+
+# A different spelling cannot reference a UNION branch's input columns.
+statement error
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+Referenced column "i" not found
+
+statement error
+SELECT CASE WHEN i=1 THEN 1 ELSE 0 END FROM range(3) t(i) UNION ALL SELECT 1
 ORDER BY CASE i WHEN 1 THEN 1 ELSE 0 END
 ----
+Referenced column "i" not found
+
+# Each spelling selects its own output when both are present.
+query II
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS a, CASE WHEN i=1 THEN 1 ELSE 0 END AS b
+FROM range(2) t(i) UNION ALL SELECT -1, 9
+ORDER BY CASE i WHEN 1 THEN 1 ELSE 0 END
+----
+-1	9
+0	0
+1	1
+
+query II
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS a, CASE WHEN i=1 THEN 1 ELSE 0 END AS b
+FROM range(2) t(i) UNION ALL SELECT -1, 9
+ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
+----
+0	0
+1	1
+-1	9
+
+# Aliases and result expressions remain valid alternatives.
+query I
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i) UNION ALL SELECT 1 ORDER BY k
+----
 0
 0
 1
 1
 
-query T
-SELECT CASE i WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END FROM range(3) t(i) UNION SELECT 'a'
-ORDER BY CASE WHEN i=1 THEN 'a' WHEN i=2 THEN 'b' ELSE 'c' END LIMIT 2 OFFSET 1
+query I
+SELECT CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY CASE k WHEN 0 THEN 1 ELSE 0 END
 ----
-b
-c
+1
+1
+0
+0
 
-query T
-SELECT (SELECT CASE i WHEN 1 THEN 'a' ELSE 'b' END) FROM range(3) t(i) UNION SELECT 'a'
-ORDER BY (SELECT CASE WHEN i=1 THEN 'a' ELSE 'b' END)
-----
-a
-b
-
-# Reordering by name and expansion before a CASE preserve its output position.
 query II
 SELECT 7 AS extra, CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i)
 UNION ALL BY NAME SELECT 1 AS k, 8 AS extra
-ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END, extra
+ORDER BY CASE i WHEN 1 THEN 1 ELSE 0 END, extra
 ----
 7	0
 7	0
 7	1
 8	1
 
-query III
-SELECT unnest({'a': 5, 'b': 6}), CASE i WHEN 1 THEN 1 ELSE 0 END AS k FROM range(3) t(i)
-UNION ALL SELECT 5, 6, 1
-ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
-----
-5	6	0
-5	6	0
-5	6	1
-5	6	1
-
-statement error
-SELECT CASE i WHEN 1 THEN 1 ELSE 0 END, 2 FROM range(3) t(i)
-UNION ALL SELECT 2, CASE i WHEN 1 THEN 1 ELSE 0 END FROM range(3) t(i)
-ORDER BY CASE WHEN i=1 THEN 1 ELSE 0 END
-----
-Ambiguous reference to column
-
-# Exact volatile matches still refer to the existing projection.
+# Exact volatile matches reuse the projection.
 statement ok
 CREATE SEQUENCE order_case_seq
 
@@ -80,98 +98,24 @@ SELECT currval('order_case_seq')
 ----
 2
 
-# A searched volatile expression is evaluated over the result, not matched to simple CASE.
+# A distinct expression that needs no input columns is evaluated over the result.
 statement ok
 CREATE SEQUENCE order_fallback_seq
 
 query I
-SELECT CASE nextval('order_fallback_seq') WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END
+SELECT CASE nextval('order_fallback_seq') WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END AS k
 UNION ALL SELECT 4
-ORDER BY CASE WHEN nextval('order_fallback_seq')=-1 THEN 1 WHEN nextval('order_fallback_seq')=-2 THEN 2 ELSE 3 END, 1
-LIMIT 1 OFFSET 1
+ORDER BY CASE WHEN nextval('order_fallback_seq')=-1 THEN 1 WHEN nextval('order_fallback_seq')=-2 THEN 2 ELSE 3 END, k DESC
 ----
 4
+3
 
 query I
 SELECT currval('order_fallback_seq')
 ----
 5
 
-# Macros must use bound volatility, rather than a syntactic function-name check.
-statement ok
-CREATE MACRO order_volatile() AS nextval('order_fallback_seq')
-
-query I
-SELECT CASE order_volatile() WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END
-UNION SELECT 3
-ORDER BY CASE WHEN order_volatile()=-1 THEN 1 WHEN order_volatile()=-2 THEN 2 ELSE 3 END
-----
-3
-
-query I
-SELECT currval('order_fallback_seq')
-----
-8
-
-statement error
-SELECT CASE i + nextval('order_case_seq') WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 3 END FROM range(2) t(i)
-UNION ALL SELECT 4
-ORDER BY CASE WHEN i + nextval('order_case_seq')=1 THEN 1 WHEN i + nextval('order_case_seq')=2 THEN 2 ELSE 3 END
-----
-Referenced column "i" not found
-
-statement ok
-CREATE MACRO order_deterministic(x) AS x + 1
-
-query I
-SELECT CASE order_deterministic(i) WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 30 END FROM range(3) t(i)
-UNION ALL SELECT 40
-ORDER BY CASE WHEN order_deterministic(i)=1 THEN 10 WHEN order_deterministic(i)=2 THEN 20 ELSE 30 END DESC
-----
-40
-30
-20
-10
-
-# The outer-query fallback retains output names, including duplicate-name disambiguation.
-query II
-SELECT 2 AS k, 20 AS k UNION ALL SELECT 1, 10 ORDER BY k + 0, k_1 LIMIT 1
-----
-1	10
-
-# An ambiguous input name may still name an unambiguous set-operation output.
-query I
-SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY x + 0
-----
-2
-3
-
-query I
-SELECT a.x + 0 FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY a.x + 0
-----
-2
-3
-
-statement error
-SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) UNION ALL SELECT 3 ORDER BY missing + 0
-----
-Referenced column "missing" not found
-
-# Strict binding still reports input ambiguity.
-statement error
-SELECT a.x FROM (VALUES (2)) a(x), (VALUES (1)) b(x) ORDER BY x + 0
-----
-Ambiguous reference to column name "x"
-
-# Projection-map ambiguity is not a failed qualification probe.
-statement error
-SELECT i + 0 AS a, 9 AS b FROM range(3) t(i)
-UNION ALL SELECT 9, i + 0 FROM range(3) t(i) ORDER BY i + 0
-----
-Ambiguous reference to column
-
-# Grouping a volatile source does not make its CASE spelling interchangeable.
-# UNION branches can interleave sequence calls, but k must be ordered descending.
+# Group and window references do not make different CASE spellings match.
 statement ok
 CREATE SEQUENCE grouped_order_seq
 
@@ -184,233 +128,63 @@ ORDER BY CASE nextval('grouped_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 
 ----
 true
 
-query I
-SELECT currval('grouped_order_seq') BETWEEN 3 AND 4
-----
-true
-
 statement ok
-CREATE SEQUENCE ordinal_order_seq
+CREATE SEQUENCE window_order_seq
 
 query I
-SELECT list(k) IN ([1, 0], [1, 1]) FROM (
-SELECT CASE WHEN nextval('ordinal_order_seq')%2=0 THEN 1 WHEN nextval('ordinal_order_seq')%2=1 THEN 1 ELSE 0 END AS k
-GROUP BY 1 UNION ALL SELECT 1
-ORDER BY CASE nextval('ordinal_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END, k DESC
-) ordered
-----
-true
-
-query I
-SELECT currval('ordinal_order_seq') BETWEEN 3 AND 4
-----
-true
-
-# A group substitution inside a larger expression also carries its source safety.
-statement ok
-CREATE SEQUENCE nested_order_seq
-
-query I
-SELECT list(k) IN ([11, 10], [11, 11]) FROM (
-SELECT 10 + CASE WHEN nextval('nested_order_seq')%2=0 THEN 1 WHEN nextval('nested_order_seq')%2=1 THEN 1 ELSE 0 END AS k
-GROUP BY CASE WHEN nextval('nested_order_seq')%2=0 THEN 1 WHEN nextval('nested_order_seq')%2=1 THEN 1 ELSE 0 END
-UNION ALL SELECT 11
-ORDER BY 10 + CASE nextval('nested_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END, k DESC
-) ordered
-----
-true
-
-query I
-SELECT currval('nested_order_seq') BETWEEN 3 AND 4
-----
-true
-
-# Collated groups may be returned through an aggregate reference.
-statement ok
-CREATE SEQUENCE collated_order_seq
-
-query T
-SELECT CASE WHEN nextval('collated_order_seq')*0=0 THEN 'b' WHEN nextval('collated_order_seq')*0=1 THEN 'b' ELSE 'a' END COLLATE nocase AS k
-GROUP BY k UNION ALL SELECT 'a'
-ORDER BY CASE nextval('collated_order_seq')*0 WHEN 0 THEN 'b' WHEN 1 THEN 'b' ELSE 'a' END COLLATE nocase, k DESC
-----
-b
-a
-
-query I
-SELECT currval('collated_order_seq')
-----
-4
-
-# Unsafe group references do not contaminate the next projection's compatibility.
-statement ok
-CREATE SEQUENCE separate_order_seq
-
-query II
-SELECT nextval('separate_order_seq') AS v, CASE i WHEN 1 THEN 10 ELSE 20 END AS k FROM range(2) t(i)
-GROUP BY v, k UNION ALL SELECT 3, 30
-ORDER BY CASE WHEN i=1 THEN 10 ELSE 20 END
-----
-2	10
-1	20
-3	30
-
-query I
-SELECT currval('separate_order_seq')
-----
-2
-
-# Reading a volatile group through an alias remains valid and does not re-evaluate it.
-statement ok
-CREATE SEQUENCE alias_order_seq
-
-query II
-SELECT nextval('alias_order_seq') AS k, k + 1 FROM range(2) GROUP BY k ORDER BY k
-----
-1	2
-2	3
-
-query I
-SELECT currval('alias_order_seq')
-----
-2
-
-# Exact volatile CASE matches still reuse the grouped projection.
-statement ok
-CREATE SEQUENCE exact_grouped_order_seq
-
-query I
-SELECT CASE WHEN nextval('exact_grouped_order_seq')%2=0 THEN 1 WHEN nextval('exact_grouped_order_seq')%2=1 THEN 1 ELSE 0 END AS k
-GROUP BY k UNION ALL SELECT 1
-ORDER BY CASE WHEN nextval('exact_grouped_order_seq')%2=0 THEN 1 WHEN nextval('exact_grouped_order_seq')%2=1 THEN 1 ELSE 0 END
-----
-0
-1
-
-query I
-SELECT currval('exact_grouped_order_seq')
-----
-2
-
-# Window references retain the CASE safety of their source expressions.
-statement ok
-CREATE SEQUENCE window_case_seq
-
-query I
-SELECT sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
-                WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END) OVER () AS k
+SELECT sum(CASE WHEN nextval('window_order_seq')%2=0 THEN 1
+                WHEN nextval('window_order_seq')%2=1 THEN 1 ELSE 0 END) OVER () AS k
 UNION ALL SELECT 1
-ORDER BY sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END) OVER (), k DESC
+ORDER BY sum(CASE nextval('window_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END) OVER (), k DESC
 ----
 1
 0
 
-query I
-SELECT currval('window_case_seq')
-----
-4
+# A correlated aggregate cannot expose its input through a different CASE spelling.
+statement ok
+CREATE SEQUENCE correlated_order_seq
 
-query I
-SELECT sum(CASE nextval('window_case_seq') WHEN -1 THEN 1 WHEN -2 THEN 2 ELSE 3 END) OVER () AS k
-UNION ALL SELECT 4
-ORDER BY sum(CASE WHEN nextval('window_case_seq')=-1 THEN 1
-                  WHEN nextval('window_case_seq')=-2 THEN 2 ELSE 3 END) OVER (), k DESC
-----
-4
-3
-
-query I
-SELECT currval('window_case_seq')
-----
-9
-
-# Aggregate references cannot turn unsafe compatibility into an exact output match.
 statement error
-SELECT sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
-                WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END) AS k
-UNION ALL SELECT 1
-ORDER BY sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END), k DESC
+SELECT (SELECT sum(CASE WHEN i+nextval('correlated_order_seq')%2=0 THEN 1
+                       WHEN i+nextval('correlated_order_seq')%2=1 THEN 1 ELSE 0 END)) AS k
+FROM range(1) t(i) UNION ALL SELECT 1
+ORDER BY (SELECT sum(CASE i+nextval('correlated_order_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END)), k DESC
 ----
-must appear in the GROUP BY clause
+Referenced column "i" not found
 
-# A window over an aggregate must follow both registered expressions.
-statement error
-SELECT sum(sum(CASE WHEN nextval('window_case_seq')%2=0 THEN 1
-                    WHEN nextval('window_case_seq')%2=1 THEN 1 ELSE 0 END)) OVER () AS k
-UNION ALL SELECT 1
-ORDER BY sum(sum(CASE nextval('window_case_seq')%2 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END)) OVER (), k DESC
-----
-must appear in the GROUP BY clause
-
+# Identical expressions with volatile result arms still match through registered expressions.
 statement ok
-CREATE SEQUENCE unnest_case_seq
+CREATE SEQUENCE result_order_seq
 
 query I
-SELECT unnest([CASE WHEN nextval('unnest_case_seq')*0=0 THEN 1
-                    WHEN nextval('unnest_case_seq')*0=1 THEN 1 ELSE 0 END]) AS k
-UNION ALL SELECT 2
-ORDER BY unnest([CASE nextval('unnest_case_seq')*0 WHEN 0 THEN 1 WHEN 1 THEN 1 ELSE 0 END]), k DESC
+SELECT sum(CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END) OVER () AS k
+FROM range(3) t(i) UNION ALL SELECT 2
+ORDER BY sum(CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END) OVER ()
 ----
-2
 1
-
-query I
-SELECT currval('unnest_case_seq')
-----
-3
-
-# Volatile result arms remain compatible inside registered expressions.
-statement ok
-CREATE SEQUENCE registered_result_seq
-
-query I
-SELECT sum(CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END) OVER () AS k
-FROM range(3) t(i) UNION ALL SELECT 2
-ORDER BY sum(CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END) OVER ()
-----
+1
+1
 2
-6
-6
-6
 
 query I
-SELECT sum(CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END) AS k
-FROM range(3) t(i) UNION ALL SELECT 2
-ORDER BY sum(CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END)
+SELECT sum(CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END) AS k
+FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY sum(CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END)
 ----
+1
 2
-7
 
 query I
-SELECT unnest([CASE WHEN i=1 THEN nextval('registered_result_seq') WHEN i=2 THEN 5 ELSE 0 END]) AS k
-FROM range(3) t(i) UNION ALL SELECT 2
-ORDER BY unnest([CASE i WHEN 1 THEN nextval('registered_result_seq') WHEN 2 THEN 5 ELSE 0 END])
+SELECT unnest([CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END]) AS k
+FROM range(3) t(i) UNION ALL SELECT 1
+ORDER BY unnest([CASE i WHEN 1 THEN nextval('result_order_seq') ELSE 0 END])
 ----
 0
-2
-3
-5
-
-query I
-SELECT currval('registered_result_seq')
-----
-3
-
-# Window filters are part of the source too.
-statement ok
-CREATE SEQUENCE window_filter_case_seq
-
-query I
-SELECT sum(1) FILTER (WHERE CASE WHEN nextval('window_filter_case_seq')*0=0 THEN true
-                                WHEN nextval('window_filter_case_seq')*0=1 THEN true ELSE false END) OVER () AS k
-UNION ALL SELECT 2
-ORDER BY sum(1) FILTER (WHERE CASE nextval('window_filter_case_seq')*0
-                             WHEN 0 THEN true WHEN 1 THEN true ELSE false END) OVER (), k DESC
-----
-2
+0
 1
+3
 
 query I
-SELECT currval('window_filter_case_seq')
+SELECT currval('result_order_seq')
 ----
 3

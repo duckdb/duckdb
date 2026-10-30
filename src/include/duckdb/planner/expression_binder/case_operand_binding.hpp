@@ -8,7 +8,7 @@
 #pragma once
 
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -21,7 +21,7 @@ public:
 	explicit CaseOperandBinding(ExpressionBinder &binder);
 	~CaseOperandBinding();
 
-	void Remember(const BoundSubqueryExpression &expr, const QueryNode &query);
+	void Remember(const BoundSubqueryExpression &expr, const SubqueryExpression &source, bool direct_try);
 	unique_ptr<Expression> Copy(unique_ptr<Expression> &expr);
 
 private:
@@ -30,7 +30,11 @@ private:
 private:
 	ExpressionBinder &binder;
 	optional_ptr<CaseOperandBinding> previous;
-	reference_map_t<const BoundSubqueryExpression, unique_ptr<QueryNode>> subqueries;
+	struct SubquerySource {
+		unique_ptr<ParsedExpression> expression;
+		bool direct_try;
+	};
+	reference_map_t<const BoundSubqueryExpression, SubquerySource> subqueries;
 };
 
 } // namespace duckdb

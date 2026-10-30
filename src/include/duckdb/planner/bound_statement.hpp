@@ -21,19 +21,12 @@ struct LogicalType;
 struct BoundStatement;
 class ParsedExpression;
 class Binder;
-class ExpressionMatchDescriptor;
-
-//! A finalized projection match and its position in the output.
-struct SelectExpressionInfo {
-	shared_ptr<const ExpressionMatchDescriptor> expression;
-	idx_t index;
-};
 
 struct ExtraBoundInfo {
 	SetOperationType setop_type = SetOperationType::NONE;
 	vector<shared_ptr<Binder>> child_binders;
 	vector<BoundStatement> bound_children;
-	vector<SelectExpressionInfo> original_expressions;
+	vector<unique_ptr<ParsedExpression>> original_expressions;
 };
 
 struct BoundStatement {

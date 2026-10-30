@@ -5,7 +5,8 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -55,9 +56,21 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	}
 	// check if the expression matches one of the expressions in the original expression list
 	auto &select_list = stmt.extra_info.original_expressions;
-	for (auto &select_expr : select_list) {
-		idx_t index = reorder_idx[select_expr.index];
-		bind_state.projection_index.Add(select_expr.expression, index);
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		auto &expr = select_list[i];
+		idx_t index = reorder_idx[i];
+		// now check if the node is already in the set of expressions
+		auto expr_entry = bind_state.projection_map.find(*expr);
+		if (expr_entry != bind_state.projection_map.end()) {
+			// the node is in there
+			// repeat the same as with the alias: if there is an ambiguity we insert "-1"
+			if (expr_entry->second != index) {
+				bind_state.projection_map[*expr] = DConstants::INVALID_INDEX;
+			}
+		} else {
+			// not in there yet, just place it in there
+			bind_state.projection_map[*expr] = index;
+		}
 	}
 }
 
@@ -226,6 +239,27 @@ static void GatherSetOpBinders(vector<BoundStatement> &children, vector<shared_p
 	}
 }
 
+// whether an ORDER BY expression of a set operation can be resolved against the select lists of its leaves
+static bool SetOpProvidesOrderExpression(const ParsedExpression &expr, const QueryNode &node) {
+	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
+		for (auto &child : node.Cast<SetOperationNode>().children) {
+			if (SetOpProvidesOrderExpression(expr, *child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	if (node.type != QueryNodeType::SELECT_NODE) {
+		return true;
+	}
+	for (auto &select_expr : node.Cast<SelectNode>().select_list) {
+		if (select_expr->Equals(expr)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool OrderExpressionIsSimple(const ParsedExpression &expr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
@@ -243,17 +277,14 @@ static bool OrderExpressionIsSimple(const ParsedExpression &expr) {
 
 // ORDER BY expressions over the columns of a set operation (e.g. "ORDER BY col IS NULL, col") cannot be pushed into
 // every child; they are evaluated over the result instead by binding SELECT * FROM (set operation) ORDER BY ...
-static bool SetOpNeedsOrderWrap(const SetOperationNode &statement, OrderBinder &binder) {
+static bool SetOpNeedsOrderWrap(const SetOperationNode &statement) {
 	for (auto &modifier : statement.modifiers) {
 		if (modifier->type != ResultModifierType::ORDER_MODIFIER) {
 			continue;
 		}
 		for (auto &order : modifier->Cast<OrderModifier>().orders) {
-			if (OrderExpressionIsSimple(*order.expression)) {
-				continue;
-			}
-			auto expression = order.expression->Copy();
-			if (!binder.TryGetExpressionReference(expression, OrderBinder::LookupMode::SPECULATIVE).IsValid()) {
+			if (!OrderExpressionIsSimple(*order.expression) &&
+			    !SetOpProvidesOrderExpression(*order.expression, statement)) {
 				return true;
 			}
 		}
@@ -261,7 +292,31 @@ static bool SetOpNeedsOrderWrap(const SetOperationNode &statement, OrderBinder &
 	return false;
 }
 
+static unique_ptr<SelectNode> WrapSetOpForOrdering(const SetOperationNode &statement) {
+	auto inner = statement.Copy();
+	auto &inner_setop = inner->Cast<SetOperationNode>();
+	auto outer = make_uniq<SelectNode>();
+	vector<unique_ptr<ResultModifier>> inner_modifiers;
+	for (auto &modifier : inner_setop.modifiers) {
+		if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
+			inner_modifiers.push_back(std::move(modifier));
+		} else {
+			outer->modifiers.push_back(std::move(modifier));
+		}
+	}
+	inner_setop.modifiers = std::move(inner_modifiers);
+	auto subquery = make_uniq<SelectStatement>();
+	subquery->node = std::move(inner);
+	outer->select_list.push_back(make_uniq<StarExpression>());
+	outer->from_table = make_uniq<SubqueryRef>(std::move(subquery));
+	return outer;
+}
+
 BoundStatement Binder::BindNode(SetOperationNode &statement) {
+	if (SetOpNeedsOrderWrap(statement)) {
+		auto wrapped = WrapSetOpForOrdering(statement);
+		return BindNode(*wrapped);
+	}
 	BoundSetOperationNode result;
 	result.setop_type = statement.setop_type;
 	result.setop_all = statement.setop_all;
@@ -323,8 +378,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 		}
 	}
 
-	SelectBindState bind_state(ExpressionMatchPolicy::AMBIGUOUS);
-	vector<unique_ptr<ResultModifier>> outer_modifiers;
+	SelectBindState bind_state;
 	if (!statement.modifiers.empty()) {
 		// handle the ORDER BY/DISTINCT clauses
 		vector<reference<Binder>> binders;
@@ -333,17 +387,6 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
 		OrderBinder order_binder(binders, bind_state);
-		if (SetOpNeedsOrderWrap(statement, order_binder)) {
-			vector<unique_ptr<ResultModifier>> inner_modifiers;
-			for (auto &modifier : statement.modifiers) {
-				if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
-					inner_modifiers.push_back(std::move(modifier));
-				} else {
-					outer_modifiers.push_back(std::move(modifier));
-				}
-			}
-			statement.modifiers = std::move(inner_modifiers);
-		}
 		PrepareModifiers(order_binder, statement, result);
 	}
 
@@ -357,17 +400,6 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 	result_statement.extra_info.setop_type = statement.setop_type;
 	result_statement.extra_info.bound_children = std::move(result.bound_children);
 	result_statement.extra_info.child_binders = std::move(result.child_binders);
-	if (!outer_modifiers.empty()) {
-		auto outer = make_uniq<SelectNode>();
-		outer->select_list.push_back(make_uniq<StarExpression>());
-		outer->modifiers = std::move(outer_modifiers);
-		auto input_binder = Binder::CreateBinder(context, this);
-		auto names = BindContext::AliasColumnNames("unnamed_subquery", result_statement.names, {});
-		input_binder->bind_context.AddGenericBinding(result_statement.plan->GetRootIndex(), "unnamed_subquery", names,
-		                                             result_statement.types);
-		outer->from_table = make_uniq<BoundRefWrapper>(std::move(result_statement), std::move(input_binder));
-		return BindNode(*outer);
-	}
 	return result_statement;
 }
 
