@@ -437,7 +437,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	fetch_end = MinValue(fetch_end, file_size);
 	const idx_t split_block_size = GetSplitBlockSize(fetch_end - fetch_location, max_block_size);
 	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,
-	                                                split_block_size, absorb_ranges.empty() ? nullptr : &absorb_ranges);
+	                                                max_block_size, split_block_size,
+	                                                absorb_ranges.empty() ? nullptr : &absorb_ranges);
 	const idx_t num_blocks = blocks.size();
 
 	// Schedule block fetch tasks for all blocks.

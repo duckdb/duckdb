@@ -133,8 +133,9 @@ public:
 	//! Get the blocks covering [location, location + nr_bytes), creating empty blocks for the missing bytes.
 	//! Within absorb_ranges ([begin, end) pairs), every smaller cached block is re-fetched with the gaps around it
 	//! when that saves a request; elsewhere only blocks below an eighth of max_block_size are
+	//! The missing bytes are fetched in blocks of up to split_block_size, a multiple of max_block_size.
 	vector<shared_ptr<CacheBlock>>
-	AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes, idx_t max_block_size,
+	AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes, idx_t max_block_size, idx_t split_block_size,
 	              optional_ptr<const vector<pair<idx_t, idx_t>>> absorb_ranges = nullptr);
 	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
 	void DropBlocks(CachedFile &cached_file);

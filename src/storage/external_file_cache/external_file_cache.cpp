@@ -243,9 +243,10 @@ static bool WithinRanges(optional_ptr<const vector<pair<idx_t, idx_t>>> ranges, 
 
 vector<shared_ptr<CacheBlock>>
 ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes, idx_t max_block_size,
-                                 optional_ptr<const vector<pair<idx_t, idx_t>>> absorb_ranges) {
+                                 idx_t split_block_size, optional_ptr<const vector<pair<idx_t, idx_t>>> absorb_ranges) {
 	D_ASSERT(nr_bytes > 0);
 	D_ASSERT(max_block_size > 0);
+	D_ASSERT(split_block_size >= max_block_size);
 	const idx_t end = location + nr_bytes;
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
@@ -293,15 +294,15 @@ ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t 
 			}
 			const idx_t gap_before = gap_end - pos;
 			const idx_t gap_after = next_gap_end - block_end;
-			if (GapBlockCount(gap_before + it->second->size + gap_after, max_block_size) >=
-			    GapBlockCount(gap_before, max_block_size) + GapBlockCount(gap_after, max_block_size)) {
+			if (GapBlockCount(gap_before + it->second->size + gap_after, split_block_size) >=
+			    GapBlockCount(gap_before, split_block_size) + GapBlockCount(gap_after, split_block_size)) {
 				break;
 			}
 			it = blocks.erase(it);
 			gap_end = next_gap_end;
 		}
 		while (pos < gap_end) {
-			const idx_t size = MinValue(gap_end - pos, max_block_size);
+			const idx_t size = MinValue(gap_end - pos, split_block_size);
 			auto block = make_shared_ptr<CacheBlock>(pos, size);
 			blocks.emplace_hint(it, pos, block);
 			result.push_back(std::move(block));

@@ -1638,7 +1638,7 @@ TEST_CASE("Dropping cache blocks preserves existing readers and starts a new gen
 
 	constexpr idx_t BLOCK_SIZE = 4096;
 	constexpr idx_t LOCATION = 7 * BLOCK_SIZE;
-	auto acquired = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE);
+	auto acquired = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 	REQUIRE(acquired.size() == 2);
 	{
 		const annotated_lock_guard<annotated_mutex> guard(acquired[0]->mtx);
@@ -1657,7 +1657,7 @@ TEST_CASE("Dropping cache blocks preserves existing readers and starts a new gen
 		REQUIRE(acquired[0]->nr_bytes == BLOCK_SIZE);
 	}
 	// Future readers receive fresh blocks
-	auto replacements = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE);
+	auto replacements = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 	REQUIRE(replacements.size() == 2);
 	REQUIRE(replacements[0] != acquired[0]);
 	REQUIRE(replacements[1] != acquired[1]);
@@ -1682,7 +1682,7 @@ TEST_CASE("Metadata eviction stops when enough memory is reclaimed", "[external_
 	idx_t file_memory = 0;
 	for (idx_t i = 0; i < FILE_COUNT; i++) {
 		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("metadata-eviction-%02llu", i));
-		cache.AcquireBlocks(*file, 0, block_count * BLOCK_SIZE, BLOCK_SIZE);
+		cache.AcquireBlocks(*file, 0, block_count * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 		if (i == 0) {
 			file_memory = buffer_pool.GetUsedMemory() - initial_memory;
 		}
@@ -1717,7 +1717,7 @@ TEST_CASE("Metadata eviction accounts for files retained by readers", "[external
 	shared_ptr<ExternalFileCache::CachedFile> retained_file;
 	for (idx_t i = 0; i < FILE_COUNT; i++) {
 		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("retained-metadata-%llu", i));
-		cache.AcquireBlocks(*file, 0, BLOCK_COUNT * BLOCK_SIZE, BLOCK_SIZE);
+		cache.AcquireBlocks(*file, 0, BLOCK_COUNT * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 		if (i == 0) {
 			retained_file = file;
 		}
