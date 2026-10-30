@@ -155,17 +155,18 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 			break;
 		}
 		auto width = info.Cast<DecimalTypeInfo>().width;
-		if (width <= Decimal::MAX_WIDTH_INT16) {
+		if (Decimal::IsWide(width)) {
+			// wide decimals hold their unscaled value as a BIGNUM blob
+			result = PhysicalType::VARCHAR;
+		} else if (width <= Decimal::MAX_WIDTH_INT16) {
 			result = PhysicalType::INT16;
 		} else if (width <= Decimal::MAX_WIDTH_INT32) {
 			result = PhysicalType::INT32;
 		} else if (width <= Decimal::MAX_WIDTH_INT64) {
 			result = PhysicalType::INT64;
-		} else if (width <= Decimal::MAX_WIDTH_INT128) {
-			result = PhysicalType::INT128;
 		} else {
-			// wide decimals hold their unscaled value as a BIGNUM blob
-			result = PhysicalType::VARCHAR;
+			D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
+			result = PhysicalType::INT128;
 		}
 		return true;
 	}

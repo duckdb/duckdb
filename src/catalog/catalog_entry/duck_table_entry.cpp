@@ -99,7 +99,9 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			// decimals wider than 38 digits are stored as BIGNUM blobs, which older engines cannot read
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-			if (storage_version < StorageVersion::V2_0_0 && Decimal::IsWide(DecimalType::GetWidth(type))) {
+			// (the width decides, not Decimal::IsWide: a database written with debug_force_wide_decimal is only
+			// meant to be read by the process that wrote it)
+			if (storage_version < StorageVersion::V2_0_0 && DecimalType::GetWidth(type) > Decimal::MAX_WIDTH_INT128) {
 				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
 				auto current = GetStorageVersionName(storage_version, false);
 

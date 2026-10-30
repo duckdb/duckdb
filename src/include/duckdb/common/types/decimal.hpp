@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -52,15 +53,23 @@ public:
 	static bool IsValidWidthScale(uint8_t width, uint8_t scale) {
 		return width >= 1 && width <= MAX_WIDTH_DECIMAL && scale <= width;
 	}
-	//! Whether a decimal of this width is stored as a BIGNUM blob instead of a fixed-size integer
+	//! Whether a decimal of this width is stored as a BIGNUM blob instead of a fixed-size integer. While the debug
+	//! setting debug_force_wide_decimal is on, every width is, which runs the wide-decimal code on all decimals.
 	static bool IsWide(uint8_t width) {
-		return width > MAX_WIDTH_INT128;
+		return width > MAX_WIDTH_INT128 || force_wide.load(std::memory_order_relaxed);
 	}
+	//! DEBUG SETTING: store decimals of every width as BIGNUM blobs. The physical type of a DECIMAL is computed
+	//! without a database, so the switch is process-wide: the database instance created last sets it.
+	static void SetForceWide(bool force);
+	static bool ForceWide();
 	static string ToString(int16_t value, uint8_t width, uint8_t scale);
 	static string ToString(int32_t value, uint8_t width, uint8_t scale);
 	static string ToString(int64_t value, uint8_t width, uint8_t scale);
 	static string ToString(hugeint_t value, uint8_t width, uint8_t scale);
 	//! Formats the unscaled value of a wide decimal (a BIGNUM blob)
 	static string ToString(string_t value, uint8_t width, uint8_t scale);
+
+private:
+	static atomic<bool> force_wide;
 };
 } // namespace duckdb

@@ -5,6 +5,15 @@
 
 namespace duckdb {
 constexpr uint8_t Decimal::MAX_WIDTH_DECIMAL;
+atomic<bool> Decimal::force_wide {false};
+
+void Decimal::SetForceWide(bool force) {
+	force_wide.store(force, std::memory_order_relaxed);
+}
+
+bool Decimal::ForceWide() {
+	return force_wide.load(std::memory_order_relaxed);
+}
 
 template <class SIGNED>
 string TemplatedDecimalToString(SIGNED value, uint8_t width, uint8_t scale) {
@@ -34,7 +43,14 @@ string Decimal::ToString(hugeint_t value, uint8_t width, uint8_t scale) {
 }
 
 string Decimal::ToString(string_t value, uint8_t width, uint8_t scale) {
-	return BignumDecimal::ToString(value, scale);
+	auto result = BignumDecimal::ToString(value, scale);
+	if (width == scale && scale > 0) {
+		// like the fixed-size decimals, a decimal without integer digits prints no leading zero: .100, -.100
+		auto point = result.find('.');
+		D_ASSERT(point != string::npos && point > 0 && result[point - 1] == '0');
+		result.erase(point - 1, 1);
+	}
+	return result;
 }
 
 } // namespace duckdb

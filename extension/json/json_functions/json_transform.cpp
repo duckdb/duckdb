@@ -1,3 +1,4 @@
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -323,33 +324,41 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	return success;
 }
 
-//! Casts the text of every value to the result type, numbers (read as raw text) and strings alike
-static bool TransformFromValueString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                     JSONTransformOptions &options) {
+//! Wide decimals (BIGNUM blobs) are parsed from the text of the value
+static bool TransformWideDecimal(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, uint8_t width,
+                                 uint8_t scale, JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
-	auto data = FlatVector::GetDataMutable<string_t>(string_vector);
-	auto &validity = FlatVector::ValidityMutable(string_vector);
+	auto data = FlatVector::GetDataMutable<string_t>(result);
+	auto &validity = FlatVector::ValidityMutable(result);
+	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 			continue;
 		}
+		string_t text;
 		if (unsafe_yyjson_is_raw(val)) {
 			// a number kept as text (NumbersAsRaw) is cast from its exact text
-			data[i] = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+			text = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+		} else if (unsafe_yyjson_is_bool(val)) {
+			// booleans read as 1 and 0, like they do for the fixed-size decimals
+			text = string_t(unsafe_yyjson_get_bool(val) ? "1" : "0", 1);
 		} else {
-			GetValueString(val, alc, data[i], string_vector, nullptr);
+			GetValueString(val, alc, text, string_vector, nullptr);
 		}
-	}
-
-	bool success = true;
-	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
-	    options.strict_cast) {
-		options.object_index = 0; // Can't get line number information here
-		options.error_message +=
-		    "\n If this error occurred during read_json, line/object number information is approximate";
-		success = false;
+		string blob;
+		if (BignumDecimal::TryParse(text.GetData(), text.GetSize(), width, scale, blob)) {
+			data[i] = StringVector::AddStringOrBlob(result, blob.data(), blob.size());
+			continue;
+		}
+		validity.SetInvalid(i);
+		if (success && options.strict_cast) {
+			options.error_message =
+			    StringUtil::Format("Failed to cast value to decimal: %s", JSONCommon::ValToString(val, 50));
+			options.object_index = i;
+			success = false;
+		}
 	}
 	return success;
 }
@@ -1179,7 +1188,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, options);
 		case PhysicalType::VARCHAR:
 			// wide decimals are parsed from the text of the value
-			return TransformFromValueString(vals, alc, result, count, options);
+			return TransformWideDecimal(vals, alc, result, count, width, scale, options);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include <stdint.h>
 
 #include "column_reader.hpp"
@@ -77,42 +78,95 @@ struct WideDecimalParquetValueConversion {
 	}
 };
 
+//! INT32/INT64-backed Parquet decimals read into a wide decimal: a DECIMAL(9,2) column, say, while every decimal is
+//! stored as a BIGNUM blob (debug_force_wide_decimal), or a file that declares a width above 38 for an integer column
+template <class PARQUET_TYPE>
+struct WideDecimalFromIntegerConversion {
+	template <bool CHECKED>
+	static string_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader);
+
+	template <bool CHECKED>
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		if (CHECKED) {
+			plain_data.inc(sizeof(PARQUET_TYPE));
+		} else {
+			plain_data.unsafe_inc(sizeof(PARQUET_TYPE));
+		}
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(PARQUET_TYPE));
+	}
+
+	static idx_t PlainConstantSize() {
+		return sizeof(PARQUET_TYPE);
+	}
+};
+
 class WideDecimalColumnReader : public ColumnReader {
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
 	WideDecimalColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
-	    : ColumnReader(reader, schema),
-	      fixed_length(schema.parquet_type == duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY) {
+	    : ColumnReader(reader, schema) {
 	}
 
 	//! The vector the plain values are currently read into, so the conversion can allocate the blobs in it
 	Vector *current_result = nullptr;
-	bool fixed_length;
 
 public:
 	void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset,
 	           Vector &result) override {
 		current_result = &result;
-		if (fixed_length) {
+		switch (Schema().parquet_type) {
+		case duckdb_parquet::Type::INT32:
+			PlainTemplated<string_t, WideDecimalFromIntegerConversion<int32_t>>(plain_data, defines, num_values,
+			                                                                    result_offset, result);
+			break;
+		case duckdb_parquet::Type::INT64:
+			PlainTemplated<string_t, WideDecimalFromIntegerConversion<int64_t>>(plain_data, defines, num_values,
+			                                                                    result_offset, result);
+			break;
+		case duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY:
 			PlainTemplated<string_t, WideDecimalParquetValueConversion<true>>(plain_data, defines, num_values,
 			                                                                  result_offset, result);
-		} else {
+			break;
+		default:
 			PlainTemplated<string_t, WideDecimalParquetValueConversion<false>>(plain_data, defines, num_values,
 			                                                                   result_offset, result);
+			break;
 		}
 		current_result = nullptr;
 	}
 
 	void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) override {
-		if (fixed_length) {
+		switch (Schema().parquet_type) {
+		case duckdb_parquet::Type::INT32:
+			PlainSkipTemplated<WideDecimalFromIntegerConversion<int32_t>>(plain_data, defines, num_values);
+			break;
+		case duckdb_parquet::Type::INT64:
+			PlainSkipTemplated<WideDecimalFromIntegerConversion<int64_t>>(plain_data, defines, num_values);
+			break;
+		case duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY:
 			PlainSkipTemplated<WideDecimalParquetValueConversion<true>>(plain_data, defines, num_values);
-		} else {
+			break;
+		default:
 			PlainSkipTemplated<WideDecimalParquetValueConversion<false>>(plain_data, defines, num_values);
+			break;
 		}
 	}
 };
+
+template <class PARQUET_TYPE>
+template <bool CHECKED>
+string_t WideDecimalFromIntegerConversion<PARQUET_TYPE>::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+	auto value = CHECKED ? plain_data.read<PARQUET_TYPE>() : plain_data.unsafe_read<PARQUET_TYPE>();
+	auto blob = BignumDecimal::FromInteger(hugeint_t(value));
+	auto &wide_reader = reader.Cast<WideDecimalColumnReader>();
+	D_ASSERT(wide_reader.current_result);
+	return StringVector::AddStringOrBlob(*wide_reader.current_result, blob.data(), blob.size());
+}
 
 template <bool FIXED_LENGTH>
 template <bool CHECKED>
