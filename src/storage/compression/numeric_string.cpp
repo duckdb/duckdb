@@ -180,8 +180,9 @@ static idx_t FormatFixedWidth(int64_t mantissa, uint8_t width, uint8_t scale, ch
 	}
 	auto o = out;
 	idx_t int_digits = total_digits - scale;
-	// zero-padded digit string
-	char padded[24];
+	// zero-padded digit string, at most the longest accepted string
+	D_ASSERT(total_digits <= MAX_LENGTH);
+	char padded[MAX_LENGTH];
 	idx_t pad = total_digits - digit_count;
 	memset(padded, '0', pad);
 	memcpy(padded + pad, ptr, digit_count);
@@ -488,13 +489,18 @@ struct InnerCheckpointState : public ColumnCheckpointState {
 //! String statistics of one appended vector, so segment statistics can be assembled for whatever row ranges the
 //! integer method decides to cut its segments at
 struct VectorStats {
-	VectorStats(idx_t row_start, idx_t count, BaseStatistics stats)
-	    : row_start(row_start), count(count), stats(std::move(stats)) {
+	VectorStats(idx_t row_start, BaseStatistics stats, vector<uint8_t> lengths)
+	    : row_start(row_start), stats(std::move(stats)), lengths(std::move(lengths)) {
 	}
 
 	idx_t row_start;
-	idx_t count;
 	BaseStatistics stats;
+	//! The string length of every row (0 for NULL): the total of a segment counts only the segment's rows
+	vector<uint8_t> lengths;
+
+	idx_t Count() const {
+		return lengths.size();
+	}
 };
 
 struct NumericStringCompressionState : public CompressionState {
@@ -534,7 +540,13 @@ struct NumericStringCompressionState : public CompressionState {
 		}
 		auto stats = BaseStatistics::CreateEmpty(checkpoint_data.GetColumnData().type);
 		stats_writer.Merge(stats);
-		pending_stats.emplace_back(rows_appended, input.size(), std::move(stats));
+		vector<uint8_t> lengths(input.size(), 0);
+		for (auto entry : input.Values<string_t>()) {
+			if (entry.IsValid()) {
+				lengths[entry.GetIndex()] = NumericCast<uint8_t>(entry.GetValue().GetSize());
+			}
+		}
+		pending_stats.emplace_back(rows_appended, std::move(stats), std::move(lengths));
 		rows_appended += input.size();
 		inner.compress(*inner_state, mantissas);
 	}
@@ -544,18 +556,26 @@ struct NumericStringCompressionState : public CompressionState {
 	}
 
 	//! Statistics for the rows [rows_flushed, rows_flushed + count): the union of the statistics of every appended
-	//! vector that overlaps the range. Segment boundaries need not align with vectors, so the result can be slightly
-	//! wider than the segment itself.
+	//! vector that overlaps the range. Segment boundaries need not align with vectors, so the bounds can be slightly
+	//! wider than the segment itself; the total string length is additive and counts only the segment's rows.
 	BaseStatistics SegmentStats(idx_t count) {
 		auto segment_end = rows_flushed + count;
 		auto stats = BaseStatistics::CreateEmpty(checkpoint_data.GetColumnData().type);
+		idx_t total_length = 0;
 		for (auto &entry : pending_stats) {
 			if (entry.row_start >= segment_end) {
 				break;
 			}
 			stats.Merge(entry.stats);
+			auto first = MaxValue(entry.row_start, rows_flushed) - entry.row_start;
+			auto last = MinValue(entry.row_start + entry.Count(), segment_end) - entry.row_start;
+			for (idx_t i = first; i < last; i++) {
+				total_length += entry.lengths[i];
+			}
 		}
-		while (!pending_stats.empty() && pending_stats.front().row_start + pending_stats.front().count <= segment_end) {
+		StringStats::SetTotalStringLength(stats, total_length);
+		while (!pending_stats.empty() &&
+		       pending_stats.front().row_start + pending_stats.front().Count() <= segment_end) {
 			pending_stats.pop_front();
 		}
 		return stats;

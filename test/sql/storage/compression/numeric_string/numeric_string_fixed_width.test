@@ -64,3 +64,35 @@ query I
 SELECT count(*) FROM mixed WHERE v = CASE WHEN i % 2 = 0 THEN lpad(i::VARCHAR, 5, '0') ELSE i::VARCHAR END;
 ----
 5000
+
+# fixed widths at and beyond 24 characters, up to the longest accepted string, and a padded decimal with 28 integer digits
+statement ok
+CREATE TABLE wide AS
+SELECT i,
+       lpad(i::VARCHAR, 24, '0') AS w24,
+       lpad(i::VARCHAR, 25, '0') AS w25,
+       lpad(i::VARCHAR, 48, '0') AS w48,
+       lpad(i::VARCHAR, 28, '0') || '.50' AS padded_decimal
+FROM range(1, 5001) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('wide') WHERE segment_type = 'VARCHAR';
+----
+NUMERIC_STRING
+
+query I
+SELECT count(*) FROM wide
+WHERE w24 IS DISTINCT FROM lpad(i::VARCHAR, 24, '0')
+   OR w25 IS DISTINCT FROM lpad(i::VARCHAR, 25, '0')
+   OR w48 IS DISTINCT FROM lpad(i::VARCHAR, 48, '0')
+   OR padded_decimal IS DISTINCT FROM lpad(i::VARCHAR, 28, '0') || '.50';
+----
+0
+
+query III
+SELECT w24, w48, padded_decimal FROM wide WHERE i = 123;
+----
+000000000000000000000123	000000000000000000000000000000000000000000000123	0000000000000000000000000123.50
