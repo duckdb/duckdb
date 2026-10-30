@@ -28,6 +28,10 @@ PartialBlockManager SingleFileTableIndexWriter::CreatePerIndexPartialBlockManage
 	return checkpoint_manager.CreatePerIndexPartialBlockManager();
 }
 
+const unordered_set<idx_t> &SingleFileTableIndexWriter::GetIndexOids() const {
+	return checkpoint_manager.index_oids;
+}
+
 void SingleFileTableIndexWriter::Flush() {
 	auto sleep_ms = Settings::Get<DebugCheckpointIndexSleepMsSetting>(checkpoint_manager.db.GetDatabase());
 	if (sleep_ms > 0) {

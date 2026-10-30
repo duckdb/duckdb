@@ -529,7 +529,9 @@ idx_t IndexEntry::GetInMemorySize() const {
 
 IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
-	D_ASSERT(owned_index);
+	if (!owned_index) {
+		throw InternalException("Index %llu was removed while a checkpoint that writes it was running", index_oid);
+	}
 
 	auto storage_version = index_writer.GetStorageVersion();
 	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
@@ -573,7 +575,7 @@ IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
 void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// Merge any data appended to the index while the checkpoint was running.
-	if (!owned_index->IsBound()) {
+	if (!owned_index || !owned_index->IsBound()) {
 		return;
 	}
 	D_ASSERT(!shadow_pending);
