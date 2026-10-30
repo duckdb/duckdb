@@ -92,15 +92,105 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 }
 
 static bool GatherOffsetsAndSizes(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count) {
-	InitializeOffsets(result.offsets, count);
 	//! First pass - collect sizes/offsets
 	return ConvertToVariant<false>(source, result, count, nullptr, nullptr, true);
 }
 
 static bool WriteVariantResultData(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count) {
-	InitializeOffsets(result.offsets, count);
 	//! Second pass - actually construct the variants
 	return ConvertToVariant<true>(source, result, count, nullptr, nullptr, true);
+}
+
+//! Builds a VARIANT vector in two passes: 'prepare' collects the sizes/offsets that the result needs, and 'write'
+//! then constructs the variants themselves
+template <class PREPARE, class WRITE>
+static bool BuildVariant(Vector &result, idx_t count, Allocator &allocator, PREPARE prepare, WRITE write) {
+	DataChunk offsets;
+	offsets.Initialize(Allocator::DefaultAllocator(),
+	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},
+	                   count);
+	offsets.SetChildCardinality(count);
+	auto &keys_entry = ListVector::GetChildMutable(VariantVector::GetKeys(result));
+
+	//! Initialize the dictionary
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
+	SelectionVector keys_selvec;
+
+	{
+		VariantVectorData variant_data(result);
+		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec, allocator);
+		InitializeOffsets(offsets, count);
+		if (!prepare(result_data, offsets)) {
+			return false;
+		}
+	}
+
+	//! This resizes the lists, invalidating the "GetData" results stored in VariantVectorData
+	idx_t keys_selvec_size;
+	InitializeVariants(offsets, result, keys_selvec, keys_selvec_size, dictionary);
+
+	{
+		VariantVectorData variant_data(result);
+		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec, allocator);
+		InitializeOffsets(offsets, count);
+		if (!write(result_data, offsets)) {
+			return false;
+		}
+	}
+
+	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
+	//! Finalize the 'data'
+	auto blob_data = FlatVector::GetDataMutable<string_t>(VariantVector::GetData(result));
+	auto blob_offsets = OffsetData::GetBlob(offsets);
+	for (idx_t i = 0; i < count; i++) {
+		auto size = blob_offsets[i];
+		blob_data[i].SetSizeAndFinalize(size, size);
+	}
+
+	keys_entry.Slice(keys_selvec, keys_selvec_size);
+	result.Verify();
+	return true;
+}
+
+bool ConvertJSONValuesToVariant(yyjson_val *values[], idx_t count, Vector &result) {
+	if (!count) {
+		return true;
+	}
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
+
+	//! First pass - collect sizes/offsets
+	auto prepare = [&](ToVariantGlobalResultData &result_data, DataChunk &offsets) {
+		vector<JSONConversionFrame> stack;
+		for (idx_t i = 0; i < count; i++) {
+			if (!values[i]) {
+				//! No value - the row stays empty and is set to NULL in the second pass
+				continue;
+			}
+			if (!ConvertJSON<false, false>(values[i], result_data, i, true, stack)) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	//! Second pass - actually construct the variants
+	auto write = [&](ToVariantGlobalResultData &result_data, DataChunk &offsets) {
+		auto values_offsets = OffsetData::GetValues(offsets);
+		auto blob_offsets = OffsetData::GetBlob(offsets);
+		vector<JSONConversionFrame> stack;
+		for (idx_t i = 0; i < count; i++) {
+			if (!values[i]) {
+				HandleVariantNull<true>(result_data, i, values_offsets, blob_offsets[i], nullptr, 0, true);
+				continue;
+			}
+			if (!ConvertJSON<true, false>(values[i], result_data, i, true, stack)) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	return BuildVariant(result, count, Allocator::DefaultAllocator(), prepare, write);
 }
 
 struct VariantCastData : BoundCastData {
@@ -197,11 +287,10 @@ static void ShreddedVectorReference(const Vector &source, Vector &result, idx_t 
 	result.Reference(source);
 }
 
-static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, VariantLocalData &local_data) {
 	if (!SupportsShreddedCast(source.GetType())) {
 		return false;
 	}
-	auto &local_data = parameters.local_state->Cast<VariantLocalData>();
 	auto &shredded_vector = local_data.GetShreddedVector(count);
 	// emit a shredded vector that references the source directly
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
@@ -212,60 +301,59 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	return true;
 }
 
+static bool ConvertUnshredded(Vector &source, Vector &result, idx_t count, Allocator &allocator) {
+	ToVariantSourceData source_data(source, count);
+
+	//! First pass - collect sizes/offsets
+	auto prepare = [&](ToVariantGlobalResultData &result_data, DataChunk &offsets) {
+		return GatherOffsetsAndSizes(source_data, result_data, count);
+	};
+
+	//! Second pass - actually construct the variants
+	auto write = [&](ToVariantGlobalResultData &result_data, DataChunk &offsets) {
+		return WriteVariantResultData(source_data, result_data, count);
+	};
+
+	return BuildVariant(result, count, allocator, prepare, write);
+}
+
+VariantShredder::VariantShredder(const LogicalType &source_type_p, Allocator &allocator)
+    : source_type(source_type_p),
+      local_state(make_uniq<VariantLocalData>(VariantUtils::ShreddedType(source_type_p), allocator)),
+      supports_shredded_cast(SupportsShreddedCast(source_type_p)) {
+}
+
+VariantShredder::~VariantShredder() {
+}
+
+Vector &VariantShredder::GetScratchVector() {
+	if (!scratch) {
+		scratch = make_uniq<Vector>(source_type);
+	}
+	return *scratch;
+}
+
+bool VariantShredder::Convert(Vector &source, Vector &result, idx_t count) {
+	if (!count) {
+		return true;
+	}
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
+	auto &local_data = local_state->Cast<VariantLocalData>();
+	if (supports_shredded_cast && TryToShreddedCast(source, result, count, local_data)) {
+		return true;
+	}
+	return ConvertUnshredded(source, result, count, local_data.allocator);
+}
+
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (!count) {
 		return true;
 	}
-	if (TryToShreddedCast(source, result, count, parameters)) {
+	auto &local_data = parameters.local_state->Cast<VariantLocalData>();
+	if (TryToShreddedCast(source, result, count, local_data)) {
 		return true;
 	}
-	auto &local_data = parameters.local_state->Cast<VariantLocalData>();
-	DataChunk offsets;
-	offsets.Initialize(Allocator::DefaultAllocator(),
-	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},
-	                   count);
-	offsets.SetChildCardinality(count);
-	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetChildMutable(keys);
-
-	//! Initialize the dictionary
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
-	SelectionVector keys_selvec;
-	ToVariantSourceData source_data(source, count);
-
-	{
-		VariantVectorData variant_data(result);
-		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec, local_data.allocator);
-		if (!GatherOffsetsAndSizes(source_data, result_data, count)) {
-			return false;
-		}
-	}
-
-	//! This resizes the lists, invalidating the "GetData" results stored in VariantVectorData
-	idx_t keys_selvec_size;
-	InitializeVariants(offsets, result, keys_selvec, keys_selvec_size, dictionary);
-
-	{
-		VariantVectorData variant_data(result);
-		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec, local_data.allocator);
-		if (!WriteVariantResultData(source_data, result_data, count)) {
-			return false;
-		}
-	}
-
-	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
-	//! Finalize the 'data'
-	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
-	auto blob_offsets = OffsetData::GetBlob(offsets);
-	for (idx_t i = 0; i < count; i++) {
-		auto size = blob_offsets[i];
-		blob_data[i].SetSizeAndFinalize(size, size);
-	}
-
-	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	result.Verify();
-	return true;
+	return ConvertUnshredded(source, result, count, local_data.allocator);
 }
 
 } // namespace variant
