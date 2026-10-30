@@ -482,15 +482,16 @@ static void FlattenDictColumn(CachingOperatorState &state, DataChunk &cache, idx
 	slot.entry = nullptr;
 }
 
-//! Append source into the cache (created lazily, sized to what is cached and grown on demand). On the first append
-//! into an empty cache, detect accumulable dictionary columns; those concatenate their selection indices instead.
+//! Append source into a lazily created cache, retaining its largest capacity across flushes.
+//! Accumulable dictionary columns concatenate selection indices instead of flattening.
 static void AppendToCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
 	if (!state.cached_chunk) {
 		// dictionary columns accumulate selection indices in place and cannot grow, so they need the full capacity
-		const idx_t capacity =
+		const idx_t initial_capacity =
 		    ChunkHasAccumulableDictionary(source) ? STANDARD_VECTOR_SIZE : CachingPhysicalOperator::CACHE_THRESHOLD;
+		state.cached_chunk_capacity = MaxValue(state.cached_chunk_capacity, initial_capacity);
 		state.cached_chunk = make_uniq<DataChunk>();
-		state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes(), capacity);
+		state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes(), state.cached_chunk_capacity);
 	}
 	auto &cache = *state.cached_chunk;
 	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasAccumulableDictionary(source)) {
@@ -499,6 +500,9 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 	if (!state.dict_cache_active) {
 		// no dict columns: plain flat append
 		cache.Append(source, VectorAppendMode::ALLOW_RESIZE);
+		if (cache.size() > state.cached_chunk_capacity) {
+			state.cached_chunk_capacity = VectorBuffer::GetReserveSize(cache.size());
+		}
 		return;
 	}
 	const idx_t base = cache.size();
