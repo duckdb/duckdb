@@ -5152,8 +5152,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_merge(duckdb_v2_statistics_han
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the bounding box of a GEOMETRY column: every vertex of every geometry lies within it. The Z and M bounds are
- * only set when the geometries have those coordinates (`has_z` / `has_m`); the others are left unknown. Fails with
- * `ERROR_INPUT_INVALID` for statistics of another type or a minimum larger than its maximum.
+ * only set when the geometries have those coordinates (`has_z` / `has_m`); otherwise they are unknown, also when an
+ * earlier call set them. Replaces the bounding box set before. Fails with `ERROR_INPUT_INVALID` for statistics of
+ * another type or a minimum larger than its maximum.
  *
  * history:
  * - unstable: v2.0.0
@@ -5183,9 +5184,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statistics_set_geometry_extent(duckdb_v2_
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the geometry types a GEOMETRY column holds, as ISO WKB type codes (e.g. 1 for a Point, 1001 for a Point with a Z
- * coordinate, 3002 for a Polygon with an M coordinate): the column holds no geometry of another type. Replaces the
- * types set before; an empty list leaves the types unknown. Fails with `ERROR_INPUT_INVALID` for statistics of another
- * type or an unknown type code.
+ * coordinate, 2003 for a Polygon with an M coordinate): the column holds no geometry of another type. Replaces the
+ * types set before; an empty list makes the types unknown again. Fails with `ERROR_INPUT_INVALID` for statistics of
+ * another type or an unknown type code.
  *
  * history:
  * - unstable: v2.0.0
@@ -13764,7 +13765,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
  *
  * The stats callback is invoked during query optimization once for each declared column the query reads. Through its
  * `duckdb_v2_table_function_stats_info_handle` it narrows the statistics of that column, which the engine then uses to
- * simplify the query. A function without a stats callback gives the engine no statistics for its columns.
+ * simplify the query. A function without a stats callback gives the engine no statistics for its columns. When the
+ * function also has a statistics callback (`duckdb_v2_table_function_set_statistics_callback()`), the statistics start
+ * out as what that callback reported instead of unknown, and the stats callback narrows them further.
  *
  * history:
  * - unstable: v2.0.0
@@ -13793,7 +13796,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_stats_callback(
  * must hold for every row the call produces: a bound that excludes a value the scan then produces leads to wrong
  * results. A multi-file function registered with `duckdb_v2_connection_register_multi_file_function()` or
  * `duckdb_v2_extension_register_multi_file_function()` asks the function it wraps for the statistics of its files and
- * combines them (for a single file, or for every file of a `union_by_name` scan).
+ * combines them (for a single file, or for every file of a `union_by_name` scan). When the function also has a stats
+ * callback (`duckdb_v2_table_function_set_stats_callback()`), that callback receives the reported statistics to narrow
+ * further.
  *
  * history:
  * - unstable: v2.0.0
@@ -13848,13 +13853,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_statistics_get_bind_data(
  * Retrieves the index of the column whose statistics are asked for.
  *
  * The index is that of a column declared with `duckdb_v2_table_function_bind_add_result_column()`, in declaration
- * order, or the column id of a virtual column the function declared.
+ * order. The callback is not asked about virtual columns or about fields extracted from a column.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param info The statistics info handle.
- * @param column_index Receives the index of the declared column, or the id of the virtual column.
+ * @param column_index Receives the index of the declared column.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR

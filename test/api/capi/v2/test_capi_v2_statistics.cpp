@@ -43,6 +43,9 @@ struct MinMaxMode {
 // What the last statistics / pushdown callback saw.
 struct MinMaxObserved {
 	idx_t statistics_calls = 0;
+	idx_t exec_calls = 0;
+	DUCKDB_V2_ERROR check_error_rc = DUCKDB_V2_ERROR_NONE;
+	DUCKDB_V2_ERROR type_mismatch_rc = DUCKDB_V2_ERROR_NONE;
 	void *user_data = nullptr;
 	idx_t column_index = 999;
 	DUCKDB_V2_LOGICAL_TYPE_ID column_type = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
@@ -72,7 +75,9 @@ void MinMaxBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_
 		return;
 	}
 	auto i = StatIdent("i");
+	auto j = StatIdent("j");
 	duckdb_v2_table_function_bind_add_result_column(result, &i, integer, err);
+	duckdb_v2_table_function_bind_add_result_column(result, &j, integer, err);
 	duckdb_v2_logical_type_destroy(&integer);
 }
 
@@ -90,20 +95,23 @@ void MinMaxExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_cont
 	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
+	g_mm.exec_calls++;
 	auto &global = *static_cast<MinMaxGlobal *>(global_ptr);
 	idx_t produced = global.produced < 3 ? 1 : 0;
 	global.produced += produced;
-	duckdb_v2_vector_handle vec = nullptr;
-	void *raw = nullptr;
-	if (duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
+	for (idx_t column = 0; column < 2; column++) {
+		duckdb_v2_vector_handle vec = nullptr;
+		void *raw = nullptr;
+		if (duckdb_v2_data_chunk_get_vector(chunk, column, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		// Every row holds 7 - a value the reported statistics (min 20, max 30) exclude.
+		for (idx_t i = 0; i < produced; i++) {
+			static_cast<int32_t *>(raw)[i] = 7;
+		}
+		duckdb_v2_vector_set_size(vec, produced, err);
 	}
-	// Every row holds 7 - a value the reported statistics (min 20, max 30) exclude.
-	for (idx_t i = 0; i < produced; i++) {
-		static_cast<int32_t *>(raw)[i] = 7;
-	}
-	duckdb_v2_vector_set_size(vec, produced, err);
 }
 
 void MinMaxStatisticsCb(duckdb_v2_table_function_statistics_info_handle info, duckdb_v2_context_handle context,
@@ -182,11 +190,25 @@ void MinMaxPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info,
 				break;
 			}
 			DUCKDB_V2_FILTER_PROPAGATE_RESULT outcome = DUCKDB_V2_FILTER_PROPAGATE_RESULT_NO_PRUNING_POSSIBLE;
-			if (duckdb_v2_expression_check_statistics(context, filter, statistics, &outcome, err) ==
-			    DUCKDB_V2_ERROR_NONE) {
+			auto rc = duckdb_v2_expression_check_statistics(context, filter, statistics, &outcome, nullptr);
+			if (rc == DUCKDB_V2_ERROR_NONE) {
 				g_mm.pushdown_checks++;
 				g_mm.check_result = outcome;
+			} else {
+				g_mm.check_error_rc = rc;
 			}
+			// Statistics of another type than the column are refused
+			duckdb_v2_logical_type_handle double_type = nullptr;
+			duckdb_v2_statistics_handle double_statistics = nullptr;
+			if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE, nullptr, nullptr, 0,
+			                                          &double_type, nullptr) == DUCKDB_V2_ERROR_NONE &&
+			    duckdb_v2_statistics_create(factory, double_type, &double_statistics, nullptr) ==
+			        DUCKDB_V2_ERROR_NONE) {
+				g_mm.type_mismatch_rc =
+				    duckdb_v2_expression_check_statistics(context, filter, double_statistics, &outcome, nullptr);
+			}
+			duckdb_v2_statistics_destroy(&double_statistics);
+			duckdb_v2_logical_type_destroy(&double_type);
 		}
 	}
 	duckdb_v2_statistics_destroy(&statistics);
@@ -230,8 +252,10 @@ TEST_CASE("V2 statistics: table function min/max reach the optimizer", "[capi_v2
 	MinMaxMode silent {false};
 	RegisterMinMax(fx.conn, "mm_silent", &silent, true, false);
 
-	// The data is 7; the reported minimum 20 makes "i < 15" unsatisfiable, so acting on the statistics yields 0.
+	// The data is 7; the reported minimum 20 makes "i < 15" unsatisfiable, so acting on the statistics yields 0 and the
+	// scan never runs.
 	REQUIRE(CountI64(fx.conn, "SELECT count(*) FROM mm_report() WHERE i < 15") == 0);
+	REQUIRE(g_mm.exec_calls == 0);
 	// And "i > 25" keeps rows the maximum 30 allows, but the data has none: a wrong 0 only if max were acted on
 	// wrongly.
 	REQUIRE(CountI64(fx.conn, "SELECT count(*) FROM mm_report() WHERE i > 100") == 0);
@@ -243,6 +267,7 @@ TEST_CASE("V2 statistics: table function min/max reach the optimizer", "[capi_v2
 
 	// A function whose callback reports nothing leaves the statistics unknown: the scan runs and returns every row.
 	REQUIRE(CountI64(fx.conn, "SELECT count(*) FROM mm_silent() WHERE i < 15") == 3);
+	REQUIRE(g_mm.exec_calls > 0);
 }
 
 TEST_CASE("V2 statistics: a predicate is checked against statistics", "[capi_v2][statistics]") {
@@ -256,6 +281,13 @@ TEST_CASE("V2 statistics: a predicate is checked against statistics", "[capi_v2]
 	(void)CountI64(fx.conn, "SELECT count(*) FROM mm_filter() WHERE i < 15");
 	REQUIRE(g_mm.pushdown_checks >= 1);
 	REQUIRE(g_mm.check_result == DUCKDB_V2_FILTER_PROPAGATE_RESULT_ALWAYS_FALSE);
+	// DOUBLE statistics for the INTEGER column are refused
+	REQUIRE(g_mm.type_mismatch_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	// A predicate over two columns cannot be checked against the statistics of one: the rows stay.
+	g_mm = MinMaxObserved {};
+	REQUIRE(CountI64(fx.conn, "SELECT count(*) FROM mm_filter() WHERE i <= j") == 3);
+	REQUIRE(g_mm.check_error_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 TEST_CASE("V2 statistics: the statistics object narrows and merges", "[capi_v2][statistics]") {

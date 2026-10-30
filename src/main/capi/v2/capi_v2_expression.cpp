@@ -124,6 +124,27 @@ CV2_ASSERT_FILTER_PROPAGATE(FILTER_TRUE_OR_NULL, TRUE_OR_NULL);
 CV2_ASSERT_FILTER_PROPAGATE(FILTER_FALSE_OR_NULL, FALSE_OR_NULL);
 #undef CV2_ASSERT_FILTER_PROPAGATE
 
+//! The predicate may refer to one column only, the one the statistics describe, and that column must have their type
+static void CV2CheckPredicateColumn(const Expression &expr, const LogicalType &stats_type,
+                                    optional_ptr<const BoundColumnRefExpression> &seen) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		if (seen && seen->Binding() != colref.Binding()) {
+			throw InvalidInputException("duckdb_v2_expression_check_statistics: the predicate refers to more than one "
+			                            "column, the statistics describe a single column");
+		}
+		if (colref.GetReturnType() != stats_type) {
+			throw InvalidInputException("duckdb_v2_expression_check_statistics: the statistics are of type %s, the "
+			                            "column the predicate refers to is of type %s",
+			                            stats_type.ToString(), colref.GetReturnType().ToString());
+		}
+		seen = &colref;
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { CV2CheckPredicateColumn(child, stats_type, seen); });
+}
+
 //! Replaces every column reference of a predicate with a reference to the single column described by the statistics:
 //! a predicate over one column refers to its column by column references, which all stand for that one column.
 static void CV2ReplaceColumnRefsWithReference(unique_ptr<Expression> &expr) {
@@ -264,6 +285,8 @@ DUCKDB_V2_ERROR duckdb_v2_expression_check_statistics(duckdb_v2_context_handle c
 			throw duckdb::InvalidInputException(
 			    "duckdb_v2_expression_check_statistics: the expression is not a predicate (it is not BOOLEAN)");
 		}
+		duckdb::optional_ptr<const duckdb::BoundColumnRefExpression> column;
+		CV2CheckPredicateColumn(predicate_expr, stats.GetType(), column);
 		auto predicate = predicate_expr.Copy();
 		CV2ReplaceColumnRefsWithReference(predicate);
 		const auto outcome = duckdb::ExpressionFilter::CheckExpressionStatistics(

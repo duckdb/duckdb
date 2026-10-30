@@ -463,7 +463,8 @@ functions:
       - [ "unstable", "v2.0.0", "2026-10-30" ]
     description: |
       Sets the bounding box of a GEOMETRY column: every vertex of every geometry lies within it. The Z and M bounds are only
-      set when the geometries have those coordinates (`has_z` / `has_m`); the others are left unknown. Fails with
+      set when the geometries have those coordinates (`has_z` / `has_m`); otherwise they are unknown, also when an earlier
+      call set them. Replaces the bounding box set before. Fails with
       `ERROR_INPUT_INVALID` for statistics of another type or a minimum larger than its maximum.
     role: method
     belongs_to: statistics
@@ -512,8 +513,8 @@ functions:
       - [ "unstable", "v2.0.0", "2026-10-30" ]
     description: |
       Sets the geometry types a GEOMETRY column holds, as ISO WKB type codes (e.g. 1 for a Point, 1001 for a Point with a Z
-      coordinate, 3002 for a Polygon with an M coordinate): the column holds no geometry of another type. Replaces the types
-      set before; an empty list leaves the types unknown. Fails with `ERROR_INPUT_INVALID` for statistics of another type or
+      coordinate, 2003 for a Polygon with an M coordinate): the column holds no geometry of another type. Replaces the types
+      set before; an empty list makes the types unknown again. Fails with `ERROR_INPUT_INVALID` for statistics of another type or
       an unknown type code.
     role: method
     belongs_to: statistics

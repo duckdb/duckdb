@@ -681,51 +681,11 @@ static auto CV2TableCardinality(ClientContext &context, const FunctionData *bind
 	return CV2TableMakeStatistics(data.cardinality, data.cardinality_is_exact);
 }
 
-static auto CV2TableStats(ClientContext &context, TableFunctionGetStatisticsInput &input)
+//! The "statistics" callback: asks the function what it knows about the values of one declared column of a bound
+//! call. The callback reports a BaseStatistics of the column's type, or nothing to leave the statistics unknown.
+static auto CV2TableReportedStatistics(ClientContext &context, const CV2TableFunctionData &data, column_t column_index)
     -> unique_ptr<BaseStatistics> {
-	const auto &data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *data.info;
-
-	// The callback only describes whole declared columns, not virtual columns or fields extracted from a column
-	const auto &column_index = input.column_index;
-	if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn() ||
-	    column_index.GetPrimaryIndex() >= data.column_types.size()) {
-		return nullptr;
-	}
-
-	auto result = BaseStatistics::CreateUnknown(data.column_types[column_index.GetPrimaryIndex()]);
-	CV2TableStatsInfo args(result);
-	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
-	args.in_column_index = column_index.GetPrimaryIndex();
-
-	CV2ErrorInfo err = {};
-	auto err_ptr = Convert(&err);
-	CV2CallbackContext callback_context(context);
-	info.stats_cb(Convert(&args), Convert(&callback_context), &err_ptr);
-
-	if (err.HasError()) {
-		err.ThrowAsException();
-	}
-
-	return result.ToUnique();
-}
-
-//! The "statistics" callback (table_statistics_t): asks the function what it knows about the values of one declared
-//! column of a bound call. The callback reports a BaseStatistics of the column's type, or nothing to leave the
-//! statistics unknown.
-static auto CV2TableStatistics(ClientContext &context, const FunctionData *bind_data, column_t column_index)
-    -> unique_ptr<BaseStatistics> {
-	const auto &data = bind_data->Cast<CV2TableFunctionData>();
-	const auto &info = *data.info;
-	if (!info.statistics_cb) {
-		return nullptr;
-	}
-	// A column the function did not declare (including a virtual column) has no statistics.
-	if (IsVirtualColumn(column_index) || column_index >= data.column_types.size()) {
-		return nullptr;
-	}
-
 	CV2TableStatisticsInfo args;
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
@@ -741,6 +701,53 @@ static auto CV2TableStatistics(ClientContext &context, const FunctionData *bind_
 		err.ThrowAsException();
 	}
 	return std::move(args.out_statistics);
+}
+
+//! The engine's statistics request for one column: what the "statistics" callback reports, which the "stats"
+//! callback then narrows further. Either callback alone works as well.
+static auto CV2TableStats(ClientContext &context, TableFunctionGetStatisticsInput &input)
+    -> unique_ptr<BaseStatistics> {
+	const auto &data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *data.info;
+
+	// The callbacks only describe whole declared columns, not virtual columns or fields extracted from a column
+	const auto &column_index = input.column_index;
+	if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn() ||
+	    column_index.GetPrimaryIndex() >= data.column_types.size()) {
+		return nullptr;
+	}
+	const auto primary_index = column_index.GetPrimaryIndex();
+	const auto &column_type = data.column_types[primary_index];
+
+	unique_ptr<BaseStatistics> reported;
+	if (info.statistics_cb) {
+		reported = CV2TableReportedStatistics(context, data, primary_index);
+		if (reported && reported->GetType() != column_type) {
+			throw InvalidInputException(
+			    "The statistics callback reported statistics of type %s for a column of type %s",
+			    reported->GetType().ToString(), column_type.ToString());
+		}
+	}
+	if (!info.stats_cb) {
+		return reported;
+	}
+
+	auto result = reported ? reported->Copy() : BaseStatistics::CreateUnknown(column_type);
+	CV2TableStatsInfo args(result);
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
+	args.in_column_index = primary_index;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context);
+	info.stats_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return result.ToUnique();
 }
 
 static auto CV2TableProgress(ClientContext &context, const FunctionData *bind_data,
@@ -928,12 +935,10 @@ public:
 		if (info.partitioning_cb) {
 			function.get_partition_info = CV2TableGetPartitionInfo;
 		}
-		// The extended variant: setting the plain one would turn off pushing field extraction into the scan
-		if (info.stats_cb) {
+		// One path serves both callbacks. The extended variant: setting the plain one would turn off pushing field
+		// extraction into the scan, and the engine ignores the plain one when the extended one is set.
+		if (info.stats_cb || info.statistics_cb) {
 			function.statistics_extended = CV2TableStats;
-		}
-		if (info.statistics_cb) {
-			function.statistics = CV2TableStatistics;
 		}
 		function.projection_pushdown = info.projection_pushdown;
 		if (info.get_bind_info_cb) {

@@ -86,6 +86,9 @@ DUCKDB_V2_ERROR duckdb_v2_statistics_create_variant_shredded(duckdb_v2_factory_h
 	return WithErrorHandler(err, [&]() {
 		auto &shredded = *Convert(shredded_statistics);
 		auto result = VariantStats::CreateShredded(shredded.GetType());
+		// The shredded builder starts from empty statistics: like the general constructor, claim nothing about NULLs
+		result.SetHasNull();
+		result.SetHasNoNull();
 		VariantStats::SetShreddedStats(result, shredded);
 		*statistics = Convert(new BaseStatistics(std::move(result)));
 	});
@@ -278,18 +281,16 @@ DUCKDB_V2_ERROR duckdb_v2_statistics_set_geometry_extent(duckdb_v2_statistics_ha
 			    "duckdb_v2_statistics_set_geometry_extent: a minimum of the bounding box is larger than its maximum");
 		}
 		auto &extent = GeometryStats::GetExtent(stats);
+		const auto unknown = duckdb::GeometryExtent::Unknown();
 		extent.x_min = x_min;
 		extent.x_max = x_max;
 		extent.y_min = y_min;
 		extent.y_max = y_max;
-		if (has_z) {
-			extent.z_min = z_min;
-			extent.z_max = z_max;
-		}
-		if (has_m) {
-			extent.m_min = m_min;
-			extent.m_max = m_max;
-		}
+		// bounds that are not given are unknown, also when an earlier call set them
+		extent.z_min = has_z ? z_min : unknown.z_min;
+		extent.z_max = has_z ? z_max : unknown.z_max;
+		extent.m_min = has_m ? m_min : unknown.m_min;
+		extent.m_max = has_m ? m_max : unknown.m_max;
 	});
 }
 
@@ -306,6 +307,7 @@ DUCKDB_V2_ERROR duckdb_v2_statistics_set_geometry_types(duckdb_v2_statistics_han
 		                "geometry types");
 		if (count == 0) {
 			// No types given: the column may hold a geometry of any type.
+			GeometryStats::GetTypes(stats) = GeometryTypeSet::Unknown();
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {

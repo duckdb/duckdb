@@ -658,7 +658,9 @@ functions:
 
       The stats callback is invoked during query optimization once for each declared column the query reads. Through
       its `[[table_function_stats_info]]` it narrows the statistics of that column, which the engine then uses to
-      simplify the query. A function without a stats callback gives the engine no statistics for its columns.
+      simplify the query. A function without a stats callback gives the engine no statistics for its columns. When the
+      function also has a statistics callback (`[[table_function_set_statistics_callback]]`), the statistics start out as
+      what that callback reported instead of unknown, and the stats callback narrows them further.
     parameters:
       function:
         type: table_function
@@ -690,7 +692,8 @@ functions:
       scan then produces leads to wrong results. A multi-file function registered with
       `[[connection_register_multi_file_function]]` or `[[extension_register_multi_file_function]]` asks the function it
       wraps for the statistics of its files and combines them (for a single file, or for every file of a `union_by_name`
-      scan).
+      scan). When the function also has a stats callback (`[[table_function_set_stats_callback]]`), that callback receives
+      the reported statistics to narrow further.
     parameters:
       function:
         type: table_function
@@ -750,8 +753,8 @@ functions:
     description: |
       Retrieves the index of the column whose statistics are asked for.
 
-      The index is that of a column declared with `[[table_function_bind_add_result_column]]`, in declaration order, or the
-      column id of a virtual column the function declared.
+      The index is that of a column declared with `[[table_function_bind_add_result_column]]`, in declaration order. The
+      callback is not asked about virtual columns or about fields extracted from a column.
     parameters:
       info:
         type: table_function_statistics_info
@@ -760,7 +763,7 @@ functions:
         type: idx
         indirection: 1
         kind: OUT
-        description: Receives the index of the declared column, or the id of the virtual column.
+        description: Receives the index of the declared column.
       err:
         type: error_info
         indirection: 1
