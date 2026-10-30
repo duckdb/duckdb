@@ -93,7 +93,7 @@ PRAGMA explain_output='optimized_only';
 
 # Common predicates interleaved with bucket predicates must still become joins.
 query II
-EXPLAIN SELECT *
+EXPLAIN (FORMAT JSON) SELECT *
 FROM (SELECT count(*)
       FROM shared_fact f, shared_dim d, shared_store s
       WHERE f.k = d.k AND d.bucket = 0 AND f.j = s.j AND s.keep) a,
@@ -101,4 +101,4 @@ FROM (SELECT count(*)
       FROM shared_fact f, shared_dim d, shared_store s
       WHERE f.k = d.k AND d.bucket = 1 AND f.j = s.j AND s.keep) b;
 ----
-logical_opt	<REGEX>:.*__common_subplan_.*Comparison Join.*Comparison Join.*CTE Scan.*
+logical_opt	<REGEX>:.*"CTE".*COMPARISON_JOIN.*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
