@@ -102,6 +102,13 @@ handles:
       detail than its columns: with identifiers of its columns (e.g. field ids), and with options - key-value facts
       about what the call reads.
 
+  table_function_statistics_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function when the optimizer asks it for the
+      statistics of a column of a bound call. The "statistics" callback receives this handle, and can use it to find out
+      which column is asked about and to hand back what it knows about the column's values (its minimum and maximum,
+      whether it holds NULLs, ...) as a `[[statistics]]` handle.
+
   multi_file_function:
     description: |
       An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already
@@ -269,6 +276,20 @@ callbacks:
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_statistics_callback:
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query the bound call is part of.
       err:
         type: error_info
         indirection: 1
@@ -649,6 +670,143 @@ functions:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Statistics Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_set_statistics_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Sets the optional "statistics" callback of the table function.
+
+      The optimizer invokes the callback for a column of a bound call when it wants to know about the column's values
+      without reading them - e.g. to prune a scan whose filter no value can satisfy, to answer `min()` / `max()` from the
+      statistics, or to estimate the selectivity of a filter. The callback finds out which column is asked about with
+      `[[table_function_statistics_get_column_index]]`, builds what it knows into a `[[statistics]]` handle (see
+      `[[statistics_create]]`) and hands it back with `[[table_function_statistics_set_result]]`; reporting nothing leaves
+      the statistics unknown. The statistics must hold for every row the call produces: a bound that excludes a value the
+      scan then produces leads to wrong results. A multi-file function registered with
+      `[[connection_register_multi_file_function]]` or `[[extension_register_multi_file_function]]` asks the function it
+      wraps for the statistics of its files and combines them (for a single file, or for every file of a `union_by_name`
+      scan).
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the statistics callback of.
+      callback:
+        type: table_function_statistics_callback
+        description: The statistics callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  table_function_statistics_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Retrieves the user data set on the table function via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  table_function_statistics_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Retrieves the bind data the function's bind callback set for the bound call whose column is asked about.
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  table_function_statistics_get_column_index:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Retrieves the index of the column whose statistics are asked for.
+
+      The index is that of a column declared with `[[table_function_bind_add_result_column]]`, in declaration order, or the
+      column id of a virtual column the function declared.
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: The statistics info handle.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column, or the id of the virtual column.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  table_function_statistics_get_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Retrieves the type of the column whose statistics are asked for, as the bind callback declared it (or as the virtual
+      column was declared). The statistics the callback reports must be of this type.
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: The statistics info handle.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the type of the column. Owned by the caller, destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  table_function_statistics_set_result:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-30" ]
+    description: |
+      Reports the statistics of the column asked about. The statistics must be of the column's type (see
+      `[[table_function_statistics_get_column_type]]`); they are borrowed and copied, the caller still owns the handle.
+      Calling this again replaces what was reported before. Not reporting anything leaves the statistics of the column
+      unknown.
+    parameters:
+      info:
+        type: table_function_statistics_info
+        description: The statistics info handle.
+      statistics:
+        type: statistics
+        description: The statistics of the column. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
