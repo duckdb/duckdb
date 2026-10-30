@@ -377,7 +377,7 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
 }
 
-UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {
+UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager, false) {
 }
 
 UpdateNode::~UpdateNode() {
