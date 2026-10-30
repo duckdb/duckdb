@@ -43,7 +43,7 @@ public:
 	bool HasContext();
 	ClientContext &GetContext();
 	optional_ptr<ClientContext> GetContextPtr();
-	//! The database of the context, or the database an executor without a context was created for
+	//! The database an executor without a context was created for (index expressions); unset otherwise
 	optional_ptr<DatabaseInstance> GetDatabasePtr();
 	Allocator &GetAllocator();
 

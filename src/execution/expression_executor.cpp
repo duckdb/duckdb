@@ -8,7 +8,6 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -68,9 +67,7 @@ optional_ptr<ClientContext> ExpressionExecutor::GetContextPtr() {
 }
 
 optional_ptr<DatabaseInstance> ExpressionExecutor::GetDatabasePtr() {
-	if (context) {
-		return &DatabaseInstance::GetDatabase(*context);
-	}
+	// deliberately not derived from the context: that would make every executor depend on the database instance
 	return database;
 }
 
