@@ -1234,8 +1234,9 @@ static void CollapseSecureViews(ProfilingNode &node) {
 }
 
 //! Leave out the rows returned by the operators between a secure view and the join that pushes filters into it, and by
-//! the view itself: those filters skip row groups by zone maps that include the rows the view hides, so how many rows
-//! leave the view depends on them. Returns whether the node returns rows of a secure view
+//! the view itself. Below a view that may hide rows those filters are checked on every row, so the same rows leave it
+//! whatever it hides; the rows are left out so that this does not rely on how each filter is checked. Returns whether
+//! the node returns rows of a secure view
 static bool HideSecureViewRows(ProfilingNode &node, bool below_join) {
 	auto &metrics = node.GetOperatorMetrics();
 	bool reads_secure_view = metrics.operator_type == PhysicalOperatorType::SECURE_VIEW;
