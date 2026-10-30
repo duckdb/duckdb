@@ -199,48 +199,31 @@ SELECT (SELECT count(*) FROM '{TEST_DIR}/folded.parquet' WHERE n IS NULL) =
 ----
 true
 
-# The budget includes filters buffered from earlier chunks and compaction scratch.
+# Buffered filters are written early when the budget runs out, freeing it for later row groups.
 statement ok
 COPY (SELECT k, label FROM input) TO '{TEST_DIR}/limited.parquet'
 (FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES 8192)
 
-query TI
-SELECT path_in_schema, count(bloom_filter_length)
+query TII
+SELECT path_in_schema, count(bloom_filter_length), count(DISTINCT bloom_filter_offset)
 FROM parquet_metadata('{TEST_DIR}/limited.parquet')
 GROUP BY path_in_schema ORDER BY path_in_schema
 ----
-k	1
-label	4
+k	4	4
+label	4	4
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/limited.parquet' WHERE k IN (md5('1'), md5('5000'))
-----
-2
-
-# Buffered filters are written between row groups once they hold most of the budget, freeing it for later ones.
-statement ok
-COPY (SELECT k FROM input) TO '{TEST_DIR}/flushed.parquet'
-(FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES 16384)
-
-query III
-SELECT count(bloom_filter_length), count(DISTINCT bloom_filter_offset), min(bloom_filter_offset) < max(data_page_offset)
-FROM parquet_metadata('{TEST_DIR}/flushed.parquet')
-----
-4	4	true
-
-# Within the budget, all filters stay after the row groups.
-query I
-SELECT min(bloom_filter_offset) > max(data_page_offset) FROM parquet_metadata('{TEST_DIR}/default-V1.parquet')
+SELECT min(bloom_filter_offset) < max(data_page_offset) FROM parquet_metadata('{TEST_DIR}/limited.parquet')
 ----
 true
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/flushed.parquet' WHERE k IN (md5('1'), md5('5000'), md5('-1'))
+SELECT count(*) FROM '{TEST_DIR}/limited.parquet' WHERE k IN (md5('1'), md5('5000'), md5('-1'))
 ----
 2
 
 query I
-SELECT bool_and(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/flushed.parquet', 'k', md5('-1'))
+SELECT bool_and(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/limited.parquet', 'k', md5('-1'))
 ----
 true
 
@@ -251,7 +234,31 @@ COPY (SELECT k FROM input) TO '{TEST_DIR}/limited-string.parquet'
 query I
 SELECT count(bloom_filter_length) FROM parquet_metadata('{TEST_DIR}/limited-string.parquet')
 ----
-1
+4
+
+# Within the budget, all filters stay after the row groups.
+query I
+SELECT min(bloom_filter_offset) > max(data_page_offset) FROM parquet_metadata('{TEST_DIR}/default-V1.parquet')
+----
+true
+
+# A filter that can never fit the budget gets skipped without writing the buffered ones early.
+statement ok
+COPY (SELECT k, label FROM input) TO '{TEST_DIR}/too-small.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES 4096)
+
+query TI
+SELECT path_in_schema, count(bloom_filter_length)
+FROM parquet_metadata('{TEST_DIR}/too-small.parquet')
+GROUP BY path_in_schema ORDER BY path_in_schema
+----
+k	0
+label	4
+
+query I
+SELECT min(bloom_filter_offset) > max(data_page_offset) FROM parquet_metadata('{TEST_DIR}/too-small.parquet')
+----
+true
 
 # Extreme requested accuracy must not overflow the size calculation.
 statement ok

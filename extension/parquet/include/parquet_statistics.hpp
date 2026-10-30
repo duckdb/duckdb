@@ -22,6 +22,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/mutex.hpp"
 
+#include <functional>
+
 namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
@@ -94,16 +96,21 @@ class ParquetBloomFilterMemory {
 public:
 	static constexpr idx_t DEFAULT_LIMIT = 64ULL * 1024 * 1024;
 
-	explicit ParquetBloomFilterMemory(idx_t limit_p) : limit(limit_p) {
+	ParquetBloomFilterMemory(idx_t limit_p, std::function<void()> make_room_p)
+	    : limit(limit_p), make_room(std::move(make_room_p)) {
 	}
+	//! When the budget is exhausted, calls make_room once to free buffered filters and retries
 	bool TryReserve(idx_t bytes);
 	void Release(idx_t bytes);
-	bool IsMoreThanHalfUsed();
+
+private:
+	bool TryReserveInternal(idx_t bytes);
 
 private:
 	mutex lock;
 	idx_t used = 0;
 	idx_t limit;
+	std::function<void()> make_room;
 };
 
 class ParquetBloomFilter {

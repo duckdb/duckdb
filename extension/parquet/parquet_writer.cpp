@@ -583,7 +583,15 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		}
 	}
 
-	bloom_filter_fallback_memory = make_shared_ptr<ParquetBloomFilterMemory>(options.bloom_filter_fallback_max_bytes);
+	bloom_filter_fallback_memory =
+	    make_shared_ptr<ParquetBloomFilterMemory>(options.bloom_filter_fallback_max_bytes, [this]() {
+		    auto batch_guard = writer->StartBatch();
+		    {
+			    lock_guard<mutex> glock(lock);
+			    FlushBloomFilters();
+		    }
+		    batch_guard.Finish();
+	    });
 	InitializeColumnWriters();
 }
 
@@ -910,11 +918,6 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		// append the row group to the file metadata
 		file_meta_data.row_groups.push_back(row_group);
 		file_meta_data.num_rows += row_group.num_rows;
-
-		// write buffered bloom filters early so later row groups can reuse their budget
-		if (bloom_filter_fallback_memory->IsMoreThanHalfUsed()) {
-			FlushBloomFilters();
-		}
 	}
 	batch_guard.Finish();
 }

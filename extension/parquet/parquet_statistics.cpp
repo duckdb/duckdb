@@ -1223,6 +1223,17 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 }
 
 bool ParquetBloomFilterMemory::TryReserve(idx_t bytes) {
+	if (TryReserveInternal(bytes)) {
+		return true;
+	}
+	if (bytes > limit) {
+		return false;
+	}
+	make_room();
+	return TryReserveInternal(bytes);
+}
+
+bool ParquetBloomFilterMemory::TryReserveInternal(idx_t bytes) {
 	lock_guard<mutex> guard(lock);
 	if (bytes > limit - used) {
 		return false;
@@ -1235,11 +1246,6 @@ void ParquetBloomFilterMemory::Release(idx_t bytes) {
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(bytes <= used);
 	used -= bytes;
-}
-
-bool ParquetBloomFilterMemory::IsMoreThanHalfUsed() {
-	lock_guard<mutex> guard(lock);
-	return used > limit / 2;
 }
 
 // see http://tfk.mit.edu/pdf/bloom.pdf
