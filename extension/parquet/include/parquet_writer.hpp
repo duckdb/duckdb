@@ -327,6 +327,7 @@ public:
 
 private:
 	void GatherWrittenStatistics();
+	void FlushBloomFilters();
 	void InitializeColumnOrders(idx_t unique_columns);
 	void InitializeStatsUnifiers();
 	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);

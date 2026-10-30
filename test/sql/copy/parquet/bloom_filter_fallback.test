@@ -189,6 +189,33 @@ SELECT count(*) FROM '{TEST_DIR}/limited.parquet' WHERE k IN (md5('1'), md5('500
 ----
 2
 
+# Buffered filters are written between row groups once they hold most of the budget, freeing it for later ones.
+statement ok
+COPY (SELECT k FROM input) TO '{TEST_DIR}/flushed.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES 16384)
+
+query III
+SELECT count(bloom_filter_length), count(DISTINCT bloom_filter_offset), min(bloom_filter_offset) < max(data_page_offset)
+FROM parquet_metadata('{TEST_DIR}/flushed.parquet')
+----
+4	4	true
+
+# Within the budget, all filters stay after the row groups.
+query I
+SELECT min(bloom_filter_offset) > max(data_page_offset) FROM parquet_metadata('{TEST_DIR}/default-V1.parquet')
+----
+true
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/flushed.parquet' WHERE k IN (md5('1'), md5('5000'), md5('-1'))
+----
+2
+
+query I
+SELECT bool_and(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/flushed.parquet', 'k', md5('-1'))
+----
+true
+
 statement ok
 COPY (SELECT k FROM input) TO '{TEST_DIR}/limited-string.parquet'
 (FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES '8KiB')
@@ -250,11 +277,11 @@ COPY (SELECT md5(i::VARCHAR) AS k, md5((i+1)::VARCHAR) AS other FROM range(65536
 TO '{TEST_DIR}/parallel.parquet'
 (FORMAT PARQUET, ROW_GROUP_SIZE 2048, BLOOM_FILTER_FALLBACK_MAX_BYTES 32768)
 
-query II
-SELECT count(bloom_filter_length)>0, sum(bloom_filter_length)<=32768
+query I
+SELECT count(bloom_filter_length)>0
 FROM parquet_metadata('{TEST_DIR}/parallel.parquet')
 ----
-true	true
+true
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/parallel.parquet'

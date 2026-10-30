@@ -1237,6 +1237,11 @@ void ParquetBloomFilterMemory::Release(idx_t bytes) {
 	used -= bytes;
 }
 
+bool ParquetBloomFilterMemory::IsMoreThanHalfUsed() {
+	lock_guard<mutex> guard(lock);
+	return used > limit / 2;
+}
+
 // see http://tfk.mit.edu/pdf/bloom.pdf
 static optional_idx BloomFilterSize(idx_t num_entries, double target) {
 	D_ASSERT(target > 0 && target <= 1);
@@ -1290,8 +1295,14 @@ unique_ptr<ParquetBloomFilter> ParquetBloomFilter::TryCreate(Allocator &allocato
 
 ParquetBloomFilter::~ParquetBloomFilter() {
 	data.reset();
+	ReleaseReservation();
+}
+
+void ParquetBloomFilter::ReleaseReservation() {
 	if (memory) {
 		memory->Release(reserved_bytes);
+		memory.reset();
+		reserved_bytes = 0;
 	}
 }
 

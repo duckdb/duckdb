@@ -98,6 +98,7 @@ public:
 	}
 	bool TryReserve(idx_t bytes);
 	void Release(idx_t bytes);
+	bool IsMoreThanHalfUsed();
 
 private:
 	mutex lock;
@@ -118,6 +119,7 @@ public:
 	bool FilterCheck(uint64_t x);
 	void Shrink(Allocator &allocator, idx_t new_block_count);
 	void FoldToTarget(Allocator &allocator, double target);
+	void ReleaseReservation();
 	double OneRatio();
 	ResizeableBuffer *Get();
 
