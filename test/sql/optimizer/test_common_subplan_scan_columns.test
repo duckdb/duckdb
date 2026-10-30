@@ -125,3 +125,24 @@ query III
 EXECUTE scan_columns_p(5, 5, 5);
 ----
 5	7	100
+
+# An ineligible repeated projection must not suppress its shareable scan.
+query RR
+SELECT sum(x), avg(x)
+FROM (
+	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
+	UNION ALL
+	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
+);
+----
+20	3.3333333333333335
+
+query II
+EXPLAIN SELECT sum(x), avg(x)
+FROM (
+	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
+	UNION ALL
+	SELECT a + 1 AS x FROM scan_columns WHERE k < 5
+);
+----
+logical_opt	<REGEX>:.*__common_subplan_.*CTE Scan.*CTE Scan.*

@@ -914,7 +914,8 @@ public:
 					const auto subplan_count = subplan_info.subplans.size() * signature.OperatorCount();
 					const auto parent_subplan_count = parent_it->second.subplans.size();
 					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
-					if (parent_subplan_count != 1 && parent_count >= subplan_count) {
+					if (parent_subplan_count != 1 && parent_count >= subplan_count &&
+					    ShouldMaterialize(parent_it->second)) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
