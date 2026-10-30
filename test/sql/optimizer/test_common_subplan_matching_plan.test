@@ -1,0 +1,80 @@
+# name: test/sql/optimizer/test_common_subplan_matching_plan.test
+# description: Plan coverage for shared scans, overlapping columns, and filtered join inputs
+# group: [optimizer]
+
+statement ok
+CREATE TABLE plan_fact AS
+SELECT i::INTEGER AS k, i::INTEGER AS a, (i * 10)::BIGINT AS b
+FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE plan_dim AS
+SELECT i::INTEGER AS k, (i % 2)::INTEGER AS bucket FROM range(10) t(i);
+
+statement ok
+SET explain_output='optimized_only';
+
+# No individual scan reads all aggregate payloads.
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT count(*) FROM plan_fact WHERE k < 5),
+                            (SELECT avg(a) FROM plan_fact WHERE k < 5),
+                            (SELECT avg(b) FROM plan_fact WHERE k < 5);
+----
+logical_opt	<REGEX>:.*"CTE".*CTE_SCAN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+# The common filter may remain above the scan.
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT sum(a) FROM plan_fact WHERE k % 5 = 1),
+                            (SELECT sum(b) FROM plan_fact WHERE k % 5 = 1);
+----
+logical_opt	<REGEX>:.*"CTE".*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+statement ok
+SET disabled_optimizers='';
+
+# Different predicates and unfiltered scans do not justify a shared producer.
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT sum(a) FROM plan_fact WHERE k < 5),
+                            (SELECT sum(b) FROM plan_fact WHERE a < 5);
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT sum(a) FROM plan_fact), (SELECT sum(b) FROM plan_fact);
+----
+logical_opt	<!REGEX>:.*__common_subplan_.*
+
+# An ineligible repeated projection must not suppress its shareable scan.
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(x), avg(x)
+FROM (
+	SELECT a + 1 AS x FROM plan_fact WHERE k < 5
+	UNION ALL
+	SELECT a + 1 AS x FROM plan_fact WHERE k < 5
+);
+----
+logical_opt	<REGEX>:.*"CTE".*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+# Joins reading different payloads share one producer exposing their union.
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT sum(a) FROM plan_fact JOIN plan_dim USING (k)),
+                            (SELECT sum(b) FROM plan_fact JOIN plan_dim USING (k));
+----
+logical_opt	<REGEX>:.*"CTE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT (SELECT sum(a) FROM plan_fact JOIN plan_dim USING (k)),
+                            (SELECT sum(b) FROM plan_fact JOIN plan_dim USING (k));
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*COMPARISON_JOIN.*
+
+# Different filters on one join input retain a single shared join.
+query II
+EXPLAIN (FORMAT JSON) SELECT *
+FROM (SELECT count(*), sum(a) FROM plan_fact JOIN plan_dim USING (k) WHERE bucket = 0) a,
+     (SELECT count(*), sum(a) FROM plan_fact JOIN plan_dim USING (k) WHERE bucket = 1) b;
+----
+logical_opt	<REGEX>:.*"CTE".*COMPARISON_JOIN.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
