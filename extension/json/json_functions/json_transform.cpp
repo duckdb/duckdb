@@ -1163,11 +1163,11 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
+	case LogicalTypeId::BLOB:
 		return TransformFromString(vals, result, count, options);
 	case LogicalTypeId::GEOMETRY:
 		return TransformGeometry(vals, result, count, options);
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count, options);
 	case LogicalTypeId::STRUCT:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
