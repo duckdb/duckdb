@@ -71,6 +71,7 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TTransport.h"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1892,7 +1893,9 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
 
 bool ParquetReader::DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state) {
 	for (auto &scan_filter : state.scan_filters) {
-		if (!ExpressionFilter::GetOptionalDynamicFilterData(scan_filter.filter)) {
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(scan_filter.filter, "ParquetReader::DynamicFiltersExcludeRowGroup");
+		if (!ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME)) {
 			continue;
 		}
 		auto &column_reader = state.GetColumnReader(MultiFileLocalIndex(scan_filter.filter_idx));

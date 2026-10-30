@@ -326,6 +326,8 @@ public:
 	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
+	//! Drops the prepared row group and returns false when the current filters prune it
+	bool RecheckPreparedRowGroup();
 	//! Releases the row group and the blocks the column scans pin, the next assignment initializes them again
 	void ReleasePins();
 

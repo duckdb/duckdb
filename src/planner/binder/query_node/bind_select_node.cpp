@@ -629,21 +629,25 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
+			// bound subqueries cannot be copied, so keep the parsed expression in case we need to bind it again
+			auto parsed_copy = group_expressions[i]->Copy();
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			if (bound_expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
 
-			// find out whether the expression contains a subquery, it can't be copied if so
-			bool contains_subquery = bound_expr->HasSubquery();
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression
+			bool contains_subquery = bound_expr->HasSubquery();
 			unique_ptr<Expression> uncollated_expr = contains_subquery ? nullptr : bound_expr->Copy();
 
 			// push a potential collation, if necessary
 			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
-			if (!contains_subquery && requires_collation) {
+			if (requires_collation && contains_subquery) {
+				uncollated_expr = group_binder.Bind(parsed_copy);
+			}
+			if (requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				auto uncollated_first = BindUncollatedFirst(*this, std::move(uncollated_expr));

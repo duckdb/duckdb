@@ -1840,11 +1840,18 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("%s setting cannot be NULL", WarningsAsErrorsSetting::Name);
 	}
+	if (!input.GetValue<bool>()) {
+		return;
+	}
+	if (!info.context) {
+		throw InvalidInputException(
+		    "Cannot set 'warnings_as_errors=true' in the startup config; no logger is available yet. To "
+		    "solve, run: 'SET enable_logging=true;' and 'SET warnings_as_errors=true;' after startup");
+	}
 	auto &log_manager = LogManager::Get(*info.context);
-	if (input == Value(true) && !log_manager.GetConfig().enabled) {
-		throw Exception(
-		    ExceptionType::SETTINGS,
-		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
+	if (!log_manager.GetConfig().enabled) {
+		throw InvalidInputException(
+		    "Cannot set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
 	}
 }
 
