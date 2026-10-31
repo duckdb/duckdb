@@ -3767,11 +3767,6 @@ void ShellState::DetectDarkLightMode() {
 		// highlight mode is specified by the user - avoid setting manually
 		return;
 	}
-	auto no_color = getenv("NO_COLOR");
-	if (no_color && no_color[0]) {
-		// colors are not wanted - don't query the terminal
-		return;
-	}
 	if (!stdout_is_console) {
 		// not printing to console - don't auto-detect
 		return;

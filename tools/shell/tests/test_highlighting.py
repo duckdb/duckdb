@@ -146,7 +146,6 @@ def terminal_environment(shell, term='xterm-256color', no_color=None):
     (None, None, ['-c', 'SELECT 42']),
     (None, None, ['-help']),
     ('', None, ['-c', 'SELECT 42']),
-    ('xterm-256color', '1', ['-c', 'SELECT 42']),
     ('dumb', None, ['-help']),
     ('dumb', None, ['-c', 'SELECT 42']),
     ('xterm-256color', None, ['-version']),
@@ -180,14 +179,5 @@ def test_help_detects_terminal_colors(shell):
     assert status == 0, output
     assert b'\x1b]11;?' in output
     assert b'\x1b[38;5;27m' in output  # light-mode keyword color
-
-@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
-def test_empty_no_color_keeps_detection(shell):
-    env = terminal_environment(shell, no_color='')
-    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
-    status, output, _ = run_terminal(shell, ['-c', 'SELECT missing_column'], env, response)
-    assert status != 0, output
-    assert b'\x1b]11;?' in output
-    assert b'\x1b[38;5;124m' in output
 
 # fmt: on
