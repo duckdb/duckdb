@@ -172,6 +172,7 @@
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
@@ -2124,6 +2125,24 @@ const char* EnumUtil::ToChars<DistinctType>(DistinctType value) {
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	return static_cast<DistinctType>(StringUtil::StringToEnum(GetDistinctTypeValues(), 2, "DistinctType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetEphemeralSecretLifetimeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(EphemeralSecretLifetime::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(EphemeralSecretLifetime::CONNECTION), "CONNECTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<EphemeralSecretLifetime>(EphemeralSecretLifetime value) {
+	return StringUtil::EnumToString(GetEphemeralSecretLifetimeValues(), 2, "EphemeralSecretLifetime", static_cast<uint32_t>(value));
+}
+
+template<>
+EphemeralSecretLifetime EnumUtil::FromString<EphemeralSecretLifetime>(const char *value) {
+	return static_cast<EphemeralSecretLifetime>(StringUtil::StringToEnum(GetEphemeralSecretLifetimeValues(), 2, "EphemeralSecretLifetime", value));
 }
 
 const StringUtil::EnumStringLiteral *GetErrorTypeValues() {

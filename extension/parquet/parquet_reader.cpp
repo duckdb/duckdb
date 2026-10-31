@@ -60,6 +60,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -1473,11 +1474,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        encryption_util, footer_size);
 		} else {
-			metadata = ObjectCache::GetObjectCache(context_p).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
+			auto &object_cache = ObjectCache::GetObjectCache(context_p);
+			auto cache_key = ObjectCache::GetFileKey<ParquetFileMetadataCache>(file);
+			metadata = object_cache.Get<ParquetFileMetadataCache>(cache_key);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 				                        encryption_util, footer_size);
-				ObjectCache::GetObjectCache(context_p).PutWithTypePrefix<ParquetFileMetadataCache>(file.path, metadata);
+				object_cache.Put(std::move(cache_key), metadata);
 			}
 		}
 	} else {
@@ -1520,7 +1523,12 @@ bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
                                                                           const OpenFileInfo &file) {
-	return ObjectCache::GetObjectCache(context).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
+	if (file.HasSecretName()) {
+		// nothing opens the file, which would check that its ephemeral secret serves this read: throws when it does not
+		SecretManager::Get(context).GetEphemeralSecret(context, file.GetSecretName(), file.path);
+	}
+	auto &object_cache = ObjectCache::GetObjectCache(context);
+	return object_cache.Get<ParquetFileMetadataCache>(ObjectCache::GetFileKey<ParquetFileMetadataCache>(file));
 }
 
 ParquetUnionData::~ParquetUnionData() {
