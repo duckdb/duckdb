@@ -7,6 +7,8 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -206,12 +208,185 @@ void EncodeVariantValue(const VariantNode &it, SINK &sink) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Fully Shredded Integer Fast Path
+//===--------------------------------------------------------------------===//
+// A VARIANT column that is fully shredded onto an integer stores all of its values in the typed
+// component, and every one of them lands in the NUMBER bucket of the encoding. The sort key can thus
+// be built straight from the typed values, which avoids both the per-row variant traversal and the
+// intermediate decimal string that VariantGetNumberKey builds for the generic encoding.
+
+bool IsIntegerShredding(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//! An integer sort key is 1 (rank) + 1 (class) + 8 (exponent) + 20 (digits) + 1 (terminator) bytes
+constexpr idx_t INTEGER_KEY_MAX_SIZE = 31;
+
+//! Sink appending into a pre-allocated block of string heap memory
+struct VariantComparatorBlockSink {
+	explicit VariantComparatorBlockSink(data_ptr_t position) : position(position) {
+	}
+
+	data_ptr_t position;
+
+	inline void Write(data_t b) {
+		*position++ = b;
+	}
+};
+
+//! Produces the exact same bytes as EncodeVariantValue() does for an integer value, without the
+//! intermediate decimal string that IntegerNumberKey/BuildNumberKey construct.
+template <class SINK>
+void EncodeIntegerKey(SINK &sink, uint64_t magnitude, bool negative) {
+	// all integers, decimals and bignums fold into the NUMBER rank
+	sink.Write(static_cast<data_t>(VariantComparisonType::NUMBER));
+	if (magnitude == 0) {
+		sink.Write(1);
+		return;
+	}
+	// decimal digits, least significant first - a 64-bit magnitude has at most 20 of them
+	char digits[20];
+	idx_t digit_count = 0;
+	for (auto remaining = magnitude; remaining > 0; remaining /= 10) {
+		digits[digit_count++] = static_cast<char>('0' + remaining % 10);
+	}
+	// trailing zeros are not significant (keep at least the leading digit)
+	idx_t first_significant = 0;
+	while (first_significant + 1 < digit_count && digits[first_significant] == '0') {
+		first_significant++;
+	}
+	// the class byte is the primary discriminator and is never complemented
+	sink.Write(negative ? 0 : 2);
+	// for negatives we complement every payload byte so that larger magnitudes sort earlier
+	auto emit = [&](data_t b) {
+		sink.Write(negative ? static_cast<data_t>(~b) : b);
+	};
+	// adjusted exponent (order-preserving signed encoding) orders magnitude
+	data_t exp_buffer[sizeof(int64_t)];
+	Radix::EncodeData<int64_t>(exp_buffer, static_cast<int64_t>(digit_count) - 1);
+	for (idx_t i = 0; i < sizeof(int64_t); i++) {
+		emit(exp_buffer[i]);
+	}
+	for (idx_t i = digit_count; i > first_significant; i--) {
+		emit(static_cast<data_t>((digits[i - 1] - '0') + 1));
+	}
+	emit(STRING_DELIMITER); // terminator
+}
+
+template <class T>
+void EncodeShreddedIntegerColumn(const Vector &shredded, const Vector &typed, idx_t count,
+                                 VectorWriter<string_t> &writer) {
+	auto wrapper_validity = shredded.Validity();
+	auto values = typed.Values<T>();
+	// keys are 12 bytes at best, so they mostly do not fit inline - allocating them one by one in the
+	// string heap dominates the runtime. Reserve a single block for the chunk instead and point the
+	// result strings into it (the block lives in the heap owned by the result vector).
+	auto block = writer.GetHeap().CreateEmptyStringInHeap(count * INTEGER_KEY_MAX_SIZE);
+	auto position = data_ptr_cast(block.GetDataWriteable());
+	for (idx_t r = 0; r < count; r++) {
+		auto entry = values[r];
+		if (!wrapper_validity.IsValid(r) || !entry.IsValid()) {
+			writer.WriteNull();
+			continue;
+		}
+		auto value = entry.GetValueUnsafe();
+		uint64_t magnitude = static_cast<uint64_t>(value);
+		bool negative = false;
+		if constexpr (std::is_signed_v<T>) {
+			if (value < 0) {
+				negative = true;
+				magnitude = uint64_t(0) - magnitude; // unsigned negate -> |value|, also handles the minimum
+			}
+		}
+		auto start = position;
+		VariantComparatorBlockSink sink(position);
+		EncodeIntegerKey(sink, magnitude, negative);
+		position = sink.position;
+		string_t encoded(const_char_ptr_cast(start), NumericCast<uint32_t>(position - start));
+		encoded.Finalize();
+		writer.WriteStringRef(encoded);
+	}
+}
+
+//! Encode a VARIANT column that is fully shredded onto an integer - returns false if the input is not
+//! shredded onto an integer, in which case the generic encoding handles it.
+bool TryCreateShreddedIntegerComparator(const Vector &input, idx_t count, Vector &result) {
+	if (count == 0 || input.GetVectorType() != VectorType::SHREDDED_VECTOR || !ShreddedVector::IsFullyShredded(input)) {
+		return false;
+	}
+	auto &shredded = ShreddedVector::GetShreddedVector(input);
+	if (shredded.size() < count) {
+		return false;
+	}
+	// a primitive shredding layer holds the typed values directly, a nested one wraps them in a
+	// STRUCT(typed_value, untyped_value_index)
+	auto typed = &shredded;
+	if (shredded.GetType().id() == LogicalTypeId::STRUCT) {
+		auto &entries = StructVector::GetEntries(shredded);
+		if (entries.empty() || entries[0].GetType().IsNested() || entries[0].size() < count) {
+			return false;
+		}
+		typed = &entries[0];
+	}
+	auto type_id = typed->GetType().id();
+	if (!IsIntegerShredding(typed->GetType())) {
+		return false;
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto writer = FlatVector::Writer<string_t>(result, count);
+	switch (type_id) {
+	case LogicalTypeId::TINYINT:
+		EncodeShreddedIntegerColumn<int8_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::SMALLINT:
+		EncodeShreddedIntegerColumn<int16_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::INTEGER:
+		EncodeShreddedIntegerColumn<int32_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::BIGINT:
+		EncodeShreddedIntegerColumn<int64_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::UTINYINT:
+		EncodeShreddedIntegerColumn<uint8_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::USMALLINT:
+		EncodeShreddedIntegerColumn<uint16_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::UINTEGER:
+		EncodeShreddedIntegerColumn<uint32_t>(shredded, *typed, count, writer);
+		return true;
+	case LogicalTypeId::UBIGINT:
+		EncodeShreddedIntegerColumn<uint64_t>(shredded, *typed, count, writer);
+		return true;
+	default:
+		throw InternalException("unreachable integer shredding type");
+	}
+}
+
 //! Encodes the *logical* value of a VARIANT into a byte-comparable sort key. VARIANT is physically a
 //! STRUCT, but the generic create_sort_key encodes that physical representation (which is reversible,
 //! so it can be used by aggregates to store/decode values). For comparison / ordering we instead
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
 void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
+	if (TryCreateShreddedIntegerComparator(input, count, result)) {
+		return;
+	}
+
 	auto variant = input.Values<VectorVariantType>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
