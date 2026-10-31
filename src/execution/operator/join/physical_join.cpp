@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_join.hpp"
 
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -28,6 +29,60 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
+static bool ScansJoinFilterTarget(Pipeline &pipeline, const JoinFilterPushdownInfo &filter_pushdown) {
+	auto source = pipeline.GetSource();
+	if (!source || source->type != PhysicalOperatorType::TABLE_SCAN) {
+		return false;
+	}
+	auto &dynamic_filters = source->Cast<PhysicalTableScan>().dynamic_filters;
+	if (!dynamic_filters) {
+		return false;
+	}
+	for (auto &info : filter_pushdown.probe_info) {
+		if (info.dynamic_filters && RefersToSameObject(*info.dynamic_filters, *dynamic_filters)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Join filters are pushed into the probe-side scans when the build side is finalized, and a scan only picks them up
+//! when its global source state is initialized. A probe-side pipeline below a blocking operator (e.g., an aggregate
+//! that groups on the join key) does not depend on the build side, so its scan would start without the filters.
+//! Make the probe-side pipelines that scan a target of the join filters wait until the build side has finished.
+static void AddJoinFilterDependencies(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
+                                      idx_t build_child_idx) {
+	switch (op.type) {
+	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::NESTED_LOOP_JOIN:
+	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+		break;
+	default:
+		return;
+	}
+	auto &filter_pushdown = op.Cast<PhysicalComparisonJoin>().filter_pushdown;
+	if (!filter_pushdown || filter_pushdown->probe_info.empty() || meta_pipeline.HasRecursiveCTE()) {
+		return;
+	}
+	auto &children = meta_pipeline.GetChildren();
+	auto &build_pipeline = children[build_child_idx]->GetBasePipeline();
+	// the child MetaPipelines that were created after the build side belong to the probe side
+	for (idx_t child_idx = build_child_idx + 1; child_idx < children.size(); child_idx++) {
+		auto &child = *children[child_idx];
+		if (child.Type() == MetaPipelineType::JOIN_BUILD && RefersToSameObject(*child.GetParent(), current)) {
+			// sibling join builds only finalize once all of them have executed: waiting for one would be cyclic
+			continue;
+		}
+		vector<shared_ptr<Pipeline>> pipelines;
+		child.GetPipelines(pipelines, true);
+		for (auto &pipeline : pipelines) {
+			if (ScansJoinFilterTarget(*pipeline, *filter_pushdown)) {
+				pipeline->AddDependency(build_pipeline);
+			}
+		}
+	}
+}
+
 void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
                                       bool build_rhs) {
 	op.op_state.reset();
@@ -44,8 +99,10 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 	vector<shared_ptr<Pipeline>> dependencies;
 	optional_ptr<MetaPipeline> last_child_ptr;
+	optional_idx build_child_idx;
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
+		build_child_idx = meta_pipeline.GetChildren().size();
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
 		child_meta_pipeline.Build(op.children[1]);
 		if (op.children[1].get().CanSaturateThreads(current.GetClientContext())) {
@@ -63,6 +120,9 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	if (last_child_ptr) {
 		// the pointer was set, set up the dependencies
 		meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
+	}
+	if (build_child_idx.IsValid()) {
+		AddJoinFilterDependencies(current, meta_pipeline, op, build_child_idx.GetIndex());
 	}
 
 	switch (op.type) {
