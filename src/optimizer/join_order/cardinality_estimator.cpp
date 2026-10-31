@@ -527,12 +527,80 @@ LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Deno
 	auto &predicate = filter.GetPredicate();
 	D_ASSERT(left.relations && right.relations);
 	D_ASSERT(left.numerator_relations && right.numerator_relations);
-	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
-	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
-	auto &preserved_numerator = left_is_preserved ? *left.numerator_relations : *right.numerator_relations;
-	auto preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
-
+	// The RHS of a LEFT predicate is its nullable side. The preserved input is the merged component
+	// without the nullable side and without nullable relations that attach through it: it can span
+	// both subgraphs (a CROSS JOIN b LEFT JOIN c), while a dependent later LEFT input is not preserved.
+	auto &nullable_set = predicate.GetRightSet();
+	auto &merged_relations = set_manager.Union(*left.relations, *right.relations);
+	unordered_set<idx_t> excluded_relations;
+	for (idx_t i = 0; i < nullable_set.count; i++) {
+		excluded_relations.insert(nullable_set.relations[i].index);
+	}
+	bool exclusion_changed = true;
+	while (exclusion_changed) {
+		exclusion_changed = false;
+		for (auto predicate_ref : predicate_model.GetPredicates()) {
+			auto &other_predicate = predicate_ref.get();
+			if (other_predicate.GetJoinType() != JoinType::LEFT) {
+				continue;
+			}
+			auto other_nullable = other_predicate.GetRightSetOptional();
+			auto other_preserved = other_predicate.GetLeftSetOptional();
+			if (!other_nullable || !other_preserved || !JoinRelationSet::IsSubset(merged_relations, *other_nullable)) {
+				continue;
+			}
+			bool nullable_excluded = true;
+			for (idx_t i = 0; i < other_nullable->count; i++) {
+				nullable_excluded =
+				    nullable_excluded && excluded_relations.count(other_nullable->relations[i].index) > 0;
+			}
+			if (nullable_excluded) {
+				continue;
+			}
+			// keep a nullable relation only when every relation it attaches through is present and preserved
+			bool attachment_preserved = JoinRelationSet::IsSubset(merged_relations, *other_preserved);
+			for (idx_t i = 0; i < other_preserved->count; i++) {
+				attachment_preserved =
+				    attachment_preserved && excluded_relations.count(other_preserved->relations[i].index) == 0;
+			}
+			if (!attachment_preserved) {
+				for (idx_t i = 0; i < other_nullable->count; i++) {
+					excluded_relations.insert(other_nullable->relations[i].index);
+				}
+				exclusion_changed = true;
+			}
+		}
+	}
+	optional_ptr<JoinRelationSet> preserved_set;
+	for (idx_t i = 0; i < merged_relations.count; i++) {
+		if (excluded_relations.count(merged_relations.relations[i].index) > 0) {
+			continue;
+		}
+		auto &relation = set_manager.GetJoinRelation(merged_relations.relations[i]);
+		preserved_set = preserved_set ? &set_manager.Union(*preserved_set, relation) : &relation;
+	}
 	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
+	optional_ptr<JoinRelationSet> preserved_numerator_ptr;
+	double preserved_denom = 1;
+	if (preserved_set && preserved_set->count < merged_relations.count) {
+		// lower-bound the output by the memoized estimate of the preserved input, expressed over the
+		// inner numerator so relations eliminated by SEMI/ANTI joins stay out of the numerator
+		auto preserved_input_cardinality = GetCardinalityBeforeFilters(*preserved_set).cardinality_before_filters;
+		if (preserved_input_cardinality > 0) {
+			auto synthetic_denom = GetNumerator(inner_numerator) / preserved_input_cardinality;
+			if (synthetic_denom > 0 && synthetic_denom < NumericLimits<double>::Maximum()) {
+				preserved_numerator_ptr = &inner_numerator;
+				preserved_denom = synthetic_denom;
+			}
+		}
+	}
+	if (!preserved_numerator_ptr) {
+		// no usable preserved input estimate: keep the subgraph that does not contain the nullable side
+		auto left_is_preserved = !JoinRelationSet::IsSubset(*left.relations, nullable_set);
+		preserved_numerator_ptr = left_is_preserved ? left.numerator_relations : right.numerator_relations;
+		preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
+	}
+	auto &preserved_numerator = *preserved_numerator_ptr;
 	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
 	auto composite_pair = predicate.GetCompositeJoinPair();
 	if (composite_pair) {
