@@ -488,26 +488,66 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	return column_ids;
 }
 
-vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
+vector<shared_ptr<IndexEntry>> TableIndexList::FindEntries(const unordered_set<idx_t> &index_oids) const {
+	vector<shared_ptr<IndexEntry>> result;
+	for (const auto &entry : index_entries) {
+		if (index_oids.find(entry->GetIndexOid()) != index_oids.end()) {
+			result.push_back(entry);
+		}
+	}
+	return result;
+}
 
+vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
+	auto &index_oids = writer.GetIndexOids();
+	vector<shared_ptr<IndexEntry>> entries;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		// the indexes of the catalog that the checkpoint writes: the list can also have uncommitted or later ones
+		entries = FindEntries(index_oids);
+	}
+
+	// written without the list lock, which every commit that changes the table takes
 	vector<unique_ptr<BoundIndex>> shadows;
 	vector<shared_ptr<const IndexStorageInfo>> infos;
-	shadows.reserve(index_entries.size());
-	infos.reserve(index_entries.size());
+	shadows.reserve(entries.size());
+	infos.reserve(entries.size());
 
-	for (const auto &entry : index_entries) {
-		auto checkpoint = entry->Checkpoint(writer);
-		shadows.push_back(std::move(checkpoint.shadow_index));
-		infos.push_back(std::move(checkpoint.storage_info));
+	try {
+		for (const auto &entry : entries) {
+			auto checkpoint = entry->Checkpoint(writer);
+			shadows.push_back(std::move(checkpoint.shadow_index));
+			infos.push_back(std::move(checkpoint.storage_info));
+		}
+		writer.Flush();
+	} catch (...) {
+		// the live indexes stay
+		for (idx_t i = 0; i < shadows.size(); i++) {
+			entries[i]->InstallShadow(nullptr);
+		}
+		throw;
 	}
 
-	writer.Flush();
-
-	for (idx_t i = 0; i < index_entries.size(); i++) {
-		index_entries[i]->InstallShadow(std::move(shadows[i]));
+	for (idx_t i = 0; i < entries.size(); i++) {
+		entries[i]->InstallShadow(std::move(shadows[i]));
 	}
 
+#ifdef D_ASSERT_IS_ENABLED
+	// the list lock was not needed: the entries of the catalog's indexes did not change meanwhile
+	vector<shared_ptr<IndexEntry>> current;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		current = FindEntries(index_oids);
+	}
+	auto entry_set = [](const vector<shared_ptr<IndexEntry>> &list) {
+		unordered_set<const IndexEntry *> result;
+		for (const auto &entry : list) {
+			result.insert(entry.get());
+		}
+		return result;
+	};
+	D_ASSERT(entry_set(current) == entry_set(entries));
+#endif
 	return infos;
 }
 
@@ -550,8 +590,13 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
+	vector<shared_ptr<IndexEntry>> entries;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		entries = index_entries;
+	}
+	// merged without the list lock, as the indexes are written
+	for (const auto &entry : entries) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }
