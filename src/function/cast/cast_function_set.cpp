@@ -176,9 +176,13 @@ static auto RelaxedTypeMatch(MAP &map, const LogicalType &type) -> decltype(map.
 
 struct MapCastInfo : public BindCastInfo {
 public:
-	optional_ptr<const MapCastNode> GetEntry(const LogicalType &source, const LogicalType &target) const {
+	optional_ptr<const MapCastNode> GetEntry(const LogicalType &source, const LogicalType &target,
+	                                         bool relax_source = true, bool relax_target = true) const {
 		auto source_type_id_entry = casts.find(source.id());
 		if (source_type_id_entry == casts.end()) {
+			if (!relax_source) {
+				return nullptr;
+			}
 			source_type_id_entry = casts.find(LogicalTypeId::ANY);
 			if (source_type_id_entry == casts.end()) {
 				return nullptr;
@@ -188,6 +192,9 @@ public:
 		auto &source_type_entries = source_type_id_entry->second;
 		auto source_type_entry = source_type_entries.find(source);
 		if (source_type_entry == source_type_entries.end()) {
+			if (!relax_source) {
+				return nullptr;
+			}
 			source_type_entry = RelaxedTypeMatch(source_type_entries, source);
 			if (source_type_entry == source_type_entries.end()) {
 				return nullptr;
@@ -197,6 +204,9 @@ public:
 		auto &target_type_id_entries = source_type_entry->second;
 		auto target_type_id_entry = target_type_id_entries.find(target.id());
 		if (target_type_id_entry == target_type_id_entries.end()) {
+			if (!relax_target) {
+				return nullptr;
+			}
 			target_type_id_entry = target_type_id_entries.find(LogicalTypeId::ANY);
 			if (target_type_id_entry == target_type_id_entries.end()) {
 				return nullptr;
@@ -206,6 +216,9 @@ public:
 		auto &target_type_entries = target_type_id_entry->second;
 		auto target_type_entry = target_type_entries.find(target);
 		if (target_type_entry == target_type_entries.end()) {
+			if (!relax_target) {
+				return nullptr;
+			}
 			target_type_entry = RelaxedTypeMatch(target_type_entries, target);
 			if (target_type_entry == target_type_entries.end()) {
 				return nullptr;
@@ -225,6 +238,11 @@ private:
 
 bool CastFunctionSet::HasRegisteredCast(const LogicalType &source, const LogicalType &target) const {
 	return map_info && map_info->GetEntry(source, target);
+}
+
+bool CastFunctionSet::HasCustomJSONCast(const LogicalType &source) const {
+	return source.HasAlias() && !source.IsJSONType() && source.id() != LogicalTypeId::GEOMETRY && map_info &&
+	       map_info->GetEntry(source, LogicalType::JSON(), false, false);
 }
 
 bool CastFunctionSet::CanOverrideDefaultCast(const LogicalType &source, const LogicalType &target) const {
