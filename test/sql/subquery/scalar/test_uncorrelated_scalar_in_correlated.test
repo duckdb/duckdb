@@ -1,0 +1,51 @@
+# name: test/sql/subquery/scalar/test_uncorrelated_scalar_in_correlated.test
+# description: Uncorrelated scalar subquery nested in a correlated subquery is not decorrelated per outer row
+# group: [scalar]
+
+statement ok
+CREATE TABLE outer_rows AS SELECT 'doc-' || i AS name FROM range(200) t(i);
+
+statement ok
+CREATE TABLE names AS SELECT i AS docid, 'doc-' || i AS name FROM range(200) t(i);
+
+statement ok
+CREATE TABLE postings AS SELECT (i % 100)::BIGINT AS docid, 1.0 AS w FROM range(300) t(i);
+
+statement ok
+CREATE TABLE one_row AS SELECT 2.0 AS c;
+
+statement ok
+CREATE TABLE two_rows AS SELECT 2.0 AS c FROM range(2);
+
+query II
+SELECT count(*), sum(score)
+FROM (
+	SELECT (WITH scores AS (
+		SELECT docid, sum(w * (SELECT c FROM one_row)) AS score FROM postings GROUP BY docid)
+	SELECT score FROM scores, names
+	WHERE scores.docid = names.docid AND names.name = outer_rows.name) AS score
+	FROM outer_rows
+) sq
+WHERE score IS NOT NULL;
+----
+100	600.00
+
+# the uncorrelated postings aggregate must not be joined with the outer rows
+query II
+EXPLAIN SELECT (WITH scores AS (
+	SELECT docid, sum(w * (SELECT c FROM one_row)) AS score FROM postings GROUP BY docid)
+SELECT score FROM scores, names
+WHERE scores.docid = names.docid AND names.name = outer_rows.name) AS score
+FROM outer_rows
+----
+physical_plan	<!REGEX>:.*delim_index.*
+
+statement error
+SELECT (SELECT sum(w * (SELECT c FROM two_rows)) FROM postings WHERE postings.docid = names.docid) FROM names;
+----
+More than one row returned by a subquery
+
+statement error
+SELECT (SELECT outer_rows.name || (SELECT c FROM two_rows)::VARCHAR) FROM outer_rows;
+----
+More than one row returned by a subquery
