@@ -397,7 +397,7 @@ static const CommandLineOption command_line_options[] = {
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
-    {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
+    {"version", 0, "", ShowVersionAndExit, nullptr, "show DuckDB version"},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
 
 optional_idx FindOption(const char *name) {

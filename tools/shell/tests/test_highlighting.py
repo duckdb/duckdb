@@ -74,4 +74,110 @@ def test_deprecated_highlight_constant(shell):
     result.check_stderr(".constant has been split into numeric_constant and string_constant")
     result.check_stderr(".highlight_colors numeric_constant brightred and .highlight_colors string_constant brightred")
 
+def run_terminal(shell, arguments, environment, response=None):
+    import fcntl
+    import pty
+    import select
+    import struct
+    import termios
+    import time
+
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
+    start = time.monotonic()
+    try:
+        process = subprocess.Popen(
+            [shell, '-no-init', *arguments],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            env=environment,
+        )
+    finally:
+        os.close(slave)
+    output = bytearray()
+    reply_at = None
+    try:
+        while time.monotonic() - start < 15:
+            if select.select([master], [], [], 0.05)[0]:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output.extend(chunk)
+            if response and reply_at is None and b'\x1b]11;?' in output:
+                reply_at = time.monotonic() + 0.8
+            if reply_at and time.monotonic() >= reply_at:
+                os.write(master, response)
+                response = None
+                reply_at = None
+            if process.poll() is not None and not select.select([master], [], [], 0)[0]:
+                break
+        try:
+            status = process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            pytest.fail('shell did not exit')
+        return status, bytes(output), time.monotonic() - start
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        os.close(master)
+
+def terminal_environment(shell, term='xterm-256color', no_color=None):
+    env = ShellTest(shell).get_environment()
+    env.pop('NO_COLOR', None)
+    env.pop('TERM', None)
+    if term is not None:
+        env['TERM'] = term
+    if no_color is not None:
+        env['NO_COLOR'] = no_color
+    return env
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+@pytest.mark.parametrize("term, no_color, arguments", [
+    (None, '1', ['-version']),
+    (None, '1', ['-json', '-c', 'SELECT 42']),
+    (None, '1', ['-agent', '-c', 'SELECT 42']),
+    (None, '1', ['-dark-mode', '-manual', 'list_contains']),
+    (None, '1', ['-dark-mode', '-version']),
+    (None, None, ['-c', 'SELECT 42']),
+    (None, None, ['-help']),
+    ('', None, ['-c', 'SELECT 42']),
+    ('dumb', None, ['-help']),
+    ('dumb', None, ['-c', 'SELECT 42']),
+    ('xterm-256color', None, ['-version']),
+    ('xterm-256color', None, ['-json', '-version']),
+    ('xterm-256color', None, ['-light-mode', '-manual', 'list_contains']),
+])
+def test_unneeded_color_probe_is_skipped(shell, term, no_color, arguments):
+    env = terminal_environment(shell, term, no_color)
+    status, output, elapsed = run_terminal(shell, arguments, env)
+    assert status == 0, output
+    assert b'\x1b]11;?' not in output
+    assert b'Timeout trying to read terminal background color' not in output
+    assert elapsed < 4
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+def test_command_color_probe_waits_for_terminal(shell):
+    env = terminal_environment(shell)
+    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
+    status, output, elapsed = run_terminal(shell, ['-c', 'SELECT missing_column'], env, response)
+    assert status != 0, output
+    assert b'\x1b]11;?' in output
+    assert elapsed >= 0.8
+    assert b'Timeout trying to read terminal background color' not in output
+    assert b'\x1b[38;5;124m' in output  # light-mode error color
+
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+def test_help_detects_terminal_colors(shell):
+    env = terminal_environment(shell)
+    response = b'\x1b]11;rgb:ffff/ffff/ffff\x07\x1b[?62c'
+    status, output, _ = run_terminal(shell, ['-help'], env, response)
+    assert status == 0, output
+    assert b'\x1b]11;?' in output
+    assert b'\x1b[38;5;27m' in output  # light-mode keyword color
+
 # fmt: on
