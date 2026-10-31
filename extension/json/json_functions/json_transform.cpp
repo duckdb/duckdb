@@ -1193,12 +1193,13 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			// no structure to shred the VARIANT into - read the JSON values directly into the VARIANT
 			return variant::ConvertJSONValuesToVariant(vals, count, result);
 		}
-		// transform into the inferred type first, then shred it into the VARIANT
-		auto &shredded = shredder->GetScratchVector();
-		if (!Transform(vals, alc, shredded, count, options, nullptr)) {
+		// read the JSON values into an unshredded VARIANT first, so that values that do not match the inferred
+		// type are not cast, and shred it afterwards - those values end up in the unshredded part of the VARIANT
+		Vector unshredded(LogicalType::VARIANT(), count);
+		if (!variant::ConvertJSONValuesToVariant(vals, count, unshredded)) {
 			return false;
 		}
-		return shredder->Convert(shredded, result, count);
+		return shredder->Shred(unshredded, result, count);
 	}
 	default:
 		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());

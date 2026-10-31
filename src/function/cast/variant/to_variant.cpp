@@ -9,6 +9,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -267,6 +268,54 @@ static bool SupportsShreddedCast(const LogicalType &type) {
 	return true;
 }
 
+//! Whether the storage can shred 'type', it recurses into objects and arrays
+static bool SupportsShreddedType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		if (child_types.empty()) {
+			// an empty object has no typed value to shred into
+			return false;
+		}
+		for (auto &child : child_types) {
+			if (!SupportsShreddedType(child.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+		return SupportsShreddedType(ListType::GetChildType(type));
+	default:
+		return VariantUtils::VariantSupportsType(type);
+	}
+}
+
+//! The type that 'type' is shredded into. Every value keeps an 'untyped_value_index', so that values that do not
+//! match the shredded type can be stored in the unshredded part of the VARIANT.
+static LogicalType ShreddedTypeWithFallback(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (auto &child : StructType::GetChildTypes(type)) {
+			children.emplace_back(child.first, ShreddedTypeWithFallback(child.second));
+		}
+		auto typed_value = LogicalType::STRUCT(std::move(children));
+		return LogicalType::STRUCT(
+		    {{"typed_value", std::move(typed_value)}, {"untyped_value_index", LogicalType::UINTEGER}});
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY: {
+		auto typed_value = LogicalType::LIST(ShreddedTypeWithFallback(ListType::GetChildType(type)));
+		return LogicalType::STRUCT(
+		    {{"typed_value", std::move(typed_value)}, {"untyped_value_index", LogicalType::UINTEGER}});
+	}
+	default:
+		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
+	}
+}
+
 static void ShreddedVectorReference(const Vector &source, Vector &result, idx_t count) {
 	if (source.GetType().id() == LogicalTypeId::STRUCT) {
 		// source is "{<children>}", target is "{typed value STRUCT(<children>)}"
@@ -317,32 +366,31 @@ static bool ConvertUnshredded(Vector &source, Vector &result, idx_t count, Alloc
 	return BuildVariant(result, count, allocator, prepare, write);
 }
 
-VariantShredder::VariantShredder(const LogicalType &source_type_p, Allocator &allocator)
-    : source_type(source_type_p),
-      local_state(make_uniq<VariantLocalData>(VariantUtils::ShreddedType(source_type_p), allocator)),
-      supports_shredded_cast(SupportsShreddedCast(source_type_p)) {
+VariantShredder::VariantShredder(const LogicalType &source_type)
+    : supports_shredding(SupportsShreddedType(source_type)) {
+	if (supports_shredding) {
+		shredded_type = LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()},
+		                                     {"shredded", ShreddedTypeWithFallback(source_type)}});
+	}
 }
 
 VariantShredder::~VariantShredder() {
 }
 
-Vector &VariantShredder::GetScratchVector() {
-	if (!scratch) {
-		scratch = make_uniq<Vector>(source_type);
-	}
-	return *scratch;
-}
-
-bool VariantShredder::Convert(Vector &source, Vector &result, idx_t count) {
+bool VariantShredder::Shred(Vector &unshredded, Vector &result, idx_t count) {
 	if (!count) {
 		return true;
 	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
-	auto &local_data = local_state->Cast<VariantLocalData>();
-	if (supports_shredded_cast && TryToShreddedCast(source, result, count, local_data)) {
-		return true;
-	}
-	return ConvertUnshredded(source, result, count, local_data.allocator);
+	D_ASSERT(supports_shredding);
+	FlatVector::SetSize(unshredded, count_t(count));
+	//! A fresh vector per call: writing the shredded data slices the keys of the unshredded part
+	Vector shredded(shredded_type, count);
+	// values that do not conform to the shredded type are moved to the unshredded part of the variant
+	VariantShredding::ShredWithFallback(unshredded, shredded, count);
+	FlatVector::SetSize(shredded, count_t(count));
+	result.Shred(shredded, count);
+	return true;
 }
 
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

@@ -76,7 +76,7 @@ JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalSta
 			variant_shredders.emplace_back();
 			continue;
 		}
-		variant_shredders.push_back(make_uniq<variant::VariantShredder>(shred_types[col_id], gstate.allocator));
+		variant_shredders.push_back(make_uniq<variant::VariantShredder>(shred_types[col_id]));
 	}
 }
 
