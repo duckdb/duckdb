@@ -97,7 +97,7 @@ void TransactionContext::Commit() {
 		err.Throw();
 	}
 	if (callback_error.HasError()) {
-		callback_error.Throw();
+		throw InternalException("Failed to commit: %s", callback_error.RawMessage());
 	}
 }
 
