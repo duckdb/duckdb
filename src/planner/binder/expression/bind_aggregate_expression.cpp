@@ -184,7 +184,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// The DESC of an ordered-set quantile is carried by negating its fraction, which describes a single sorting
 	// expression. With more sorting expressions the DESCENDING keys would silently be ignored, so reject them.
 	if (ordered_set_agg == 0 && aggr.OrderBy() && aggr.OrderBy()->orders.size() > 1 &&
-		(aggr.FunctionName() == "quantile_cont" || aggr.FunctionName() == "quantile_disc")) {
+	    (aggr.FunctionName() == "quantile_cont" || aggr.FunctionName() == "quantile_disc")) {
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.OrderBy()->orders) {
 			if (config.ResolveOrder(context, order.type) == OrderType::DESCENDING) {
