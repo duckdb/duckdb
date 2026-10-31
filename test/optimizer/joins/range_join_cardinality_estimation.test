@@ -63,6 +63,35 @@ SELECT count(*) FROM b1 JOIN b2 ON b1.a <= b2.b;
 ----
 750000
 
+# an equality plus an independent range predicate between the same pair keeps the equality
+# selectivity: 1M / 100 / 2 = 5000 (actual 4500)
+statement ok
+CREATE TABLE e1 AS SELECT (range % 100)::INTEGER AS k, (range % 1000)::INTEGER AS c FROM range(1000);
+
+statement ok
+CREATE TABLE e2 AS SELECT (range % 100)::INTEGER AS k, (range % 1000)::INTEGER AS d FROM range(1000);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM e1 JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"[456][0-9]{3}".*
+
+query I
+SELECT count(*) FROM e1 JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+4500
+
+# a LEFT join also keeps its equality domain when an additional range condition is present
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM e1 LEFT JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"(9[0-9]{3}|1[01][0-9]{3})".*
+
+query I
+SELECT count(*) FROM e1 LEFT JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+4600
+
 # a range edge that connects a third relation applies the floored ratio on top of the equality:
 # 1G / (100 * 2) = 5000000 (actual 4995000 strict, 5005000 non-strict)
 statement ok

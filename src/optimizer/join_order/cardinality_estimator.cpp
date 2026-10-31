@@ -1017,7 +1017,43 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 	return (idx_t)cardinality_as_double;
 }
 
+static bool IsSelectivityComparison(const JoinPredicate &predicate) {
+	switch (predicate.GetComparisonType()) {
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		break;
+	default:
+		return false;
+	}
+	auto predicate_class = predicate.GetPredicateClass();
+	return predicate_class == JoinPredicateClass::INNER_NON_EQUALITY ||
+	       predicate_class == JoinPredicateClass::LEFT_JOIN;
+}
+
+static bool IsSelectivityOnlyGroup(const RelationsSetToStats &stats) {
+	if (stats.predicates.empty()) {
+		return false;
+	}
+	for (auto &predicate : stats.predicates) {
+		if (!IsSelectivityComparison(predicate.get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
+	// process pure selectivity (comparison) edges last so a broad comparison domain
+	// cannot displace an equality domain from the denominator
+	auto a_selectivity_only = IsSelectivityOnlyGroup(a);
+	auto b_selectivity_only = IsSelectivityOnlyGroup(b);
+	if (a_selectivity_only != b_selectivity_only) {
+		return b_selectivity_only;
+	}
 	return a.domain_estimate.GetDistinctCount() > b.domain_estimate.GetDistinctCount();
 }
 
@@ -1031,7 +1067,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 
 	UpdateTotalDomains(set, stats);
 
-	// sort relations from greatest tdom to lowest tdom.
+	// sort domain groups from greatest tdom to lowest tdom, pure selectivity groups last.
 	std::sort(state->relation_set_stats.begin(), state->relation_set_stats.end(), SortTdoms);
 }
 
