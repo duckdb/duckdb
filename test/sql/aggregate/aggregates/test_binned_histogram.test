@@ -319,12 +319,18 @@ SELECT histogram(1, [1::VARIANT])
 ----
 {1=1}
 
-# conversions the cast function itself rejects during execution keep failing at runtime,
-# like the corresponding explicit cast
+# TYPE has no VARIANT representation, so TYPE bins bind a NULL-only cast and are rejected
 statement error
 SELECT histogram(v, b) FROM (VALUES (1::VARIANT, [get_type(1)])) t(v, b)
 ----
-<REGEX>:.*Cannot convert TYPE to VARIANT.*
+<REGEX>:Binder Error.*bins of type TYPE\[\] cannot be cast to VARIANT\[\].*
+
+# casts that bind keep failing at runtime when a bin value cannot be converted,
+# like the corresponding explicit cast
+statement error
+SELECT histogram(d, b) FROM (VALUES (DATE '2020-01-01', ['not a date'])) t(d, b)
+----
+<REGEX>:.*invalid date field format.*
 
 # bins with a valid runtime cast to the argument type still work
 query I
