@@ -577,6 +577,11 @@ void VerifyRemapArgumentTypes(const vector<LogicalType> &types) {
 	auto &from_type = types[0];
 	auto &to_type = types[1];
 
+	auto &remap_type = types[2];
+	if (remap_type.id() != LogicalTypeId::SQLNULL && !StructType::IsStruct(remap_type)) {
+		throw BinderException("The remap provided to 'remap_struct' should be of type STRUCT if it's not NULL");
+	}
+
 	auto &defaults_type = types[3];
 	if (defaults_type.id() != LogicalTypeId::SQLNULL && !StructType::IsStruct(defaults_type)) {
 		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");

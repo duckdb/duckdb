@@ -149,6 +149,22 @@ SELECT remap_struct(ROW(1, 2), NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
 ----
 <REGEX>:.*Binder Error.*Struct remap can only remap named structs.*
 
+# the remap has to be a struct
+statement error
+SELECT remap_struct({'a': 1, 'b': 2}, {'a': 1, 'c': 3}, MAP{'b': 'c'}, NULL);
+----
+<REGEX>:.*Binder Error.*remap provided to 'remap_struct' should be of type STRUCT.*
+
+statement error
+SELECT remap_struct({'a': 1, 'b': 2}, {'a': 1, 'c': 3}, ['c'], NULL);
+----
+<REGEX>:.*Binder Error.*remap provided to 'remap_struct' should be of type STRUCT.*
+
+statement error
+SELECT remap_struct({'a': 1, 'b': 2}, {'a': 1, 'c': 3}, ['c']::VARCHAR[1], NULL);
+----
+<REGEX>:.*Binder Error.*remap provided to 'remap_struct' should be of type STRUCT.*
+
 # invalid source value
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'k'}, NULL);
