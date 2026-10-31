@@ -11,8 +11,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-#include <math.h>
-
 namespace duckdb {
 
 template <>
@@ -496,12 +494,15 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return effective_d > 1 ? base_denom * (effective_d / (effective_d - 1)) : base_denom;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// Assume this blows up, but use the tdom to bound it a bit.
-		return base_denom * pow(effective_d, 2.0 / 3.0);
+		// A strict range comparison keeps (d - 1) / (2 d) of the pairs for independent columns over a shared domain.
+		// Model it as half the cross product so small domains cannot make a range-only join look cheap.
+		return base_denom * 2.0;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		// A non-strict range comparison additionally keeps the 1 / d of the pairs that are equal.
+		return base_denom * (2.0 * effective_d / (effective_d + 1));
 	default:
 		return base_denom;
 	}
