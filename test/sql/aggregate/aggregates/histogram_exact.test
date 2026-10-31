@@ -86,6 +86,12 @@ SELECT list_aggregate(map_values(histogram_exact(n, [10, 10, 20])), 'sum') FROM 
 ----
 15
 
+# bins that cannot be cast to a list of the argument type are rejected at bind time
+statement error
+SELECT histogram_exact(l, b) FROM (VALUES ([1], [1])) t(l, b)
+----
+<REGEX>:Binder Error.*histogram_exact.*bins of type INTEGER\[\] cannot be cast to INTEGER\[\]\[\].*
+
 query I
 SELECT is_histogram_other_bin(NULL)
 ----

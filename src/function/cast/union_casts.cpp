@@ -50,6 +50,15 @@ public:
 		}
 		return make_uniq<UnionMemberBoundCastData>(tag_map, std::move(member_casts_copy), type, is_member_to_member);
 	}
+	bool ContainsNullCast() const override {
+		// a union value carries one member - the cast only fails for every value if every member cast does
+		for (auto &member_cast : member_casts) {
+			if (!member_cast.ContainsNullCast()) {
+				return false;
+			}
+		}
+		return !member_casts.empty();
+	}
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -387,7 +396,10 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 		auto cast_data = BindToUnionMemberCast(input, source, target);
 		return BoundCastInfo(&ToUnionCast, std::move(cast_data), InitToUnionLocalState);
 	} catch (ConversionException &ex) {
-		return BoundCastInfo(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+		BoundCastInfo result(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+		// the stored error is raised for every non-NULL value
+		result.SetNullOnly();
+		return result;
 	}
 }
 
@@ -448,7 +460,10 @@ BoundCastInfo DefaultCasts::UnionCastSwitch(BindCastInput &input, const LogicalT
 		try {
 			return BoundCastInfo(ToUnionCast, BindUnionToUnionCast(input, source, target), InitToUnionLocalState);
 		} catch (ConversionException &ex) {
-			return BoundCastInfo(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+			BoundCastInfo result(UnionImpossibleCast, make_uniq<UnionImpossibleCastData>(ErrorData(ex).RawMessage()));
+			// the stored error is raised for every non-NULL value
+			result.SetNullOnly();
+			return result;
 		}
 	default:
 		return TryVectorNullCast;
