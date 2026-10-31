@@ -64,8 +64,9 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 			copy_option.expression = std::move(expression);
 		}
 	} else {
-		throw NotImplementedException("Unrecognized expression type %s",
-		                              ExpressionTypeToString(expression->GetExpressionType()));
+		// anything that can not be reduced to a literal is kept as an expression, the option consumer
+		// (COPY, ATTACH, CREATE SECRET, ...) binds and evaluates it
+		copy_option.expression = std::move(expression);
 	}
 }
 
