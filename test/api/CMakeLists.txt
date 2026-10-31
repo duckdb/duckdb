@@ -85,6 +85,7 @@ set(TEST_API_OBJECTS
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
     test_rollback_delete_checkpoint_flag.cpp
+    test_foreign_key_checkpoint_metadata.cpp
     test_group_commit_bound.cpp
     test_data_table_scan_without_row_groups.cpp)
 
