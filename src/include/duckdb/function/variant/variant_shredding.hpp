@@ -10,6 +10,15 @@
 
 namespace duckdb {
 
+//! An object field is only worth shredding if it occurs in at least 1/VARIANT_SHREDDED_FIELD_PRESENCE_DIVISOR of the
+//! objects it belongs to - rarer fields cost more shred type than they save in the unshredded overlay.
+constexpr idx_t VARIANT_SHREDDED_FIELD_PRESENCE_DIVISOR = 10;
+
+//! Whether a field occurring 'field_count' times in 'object_count' objects is frequent enough to shred on
+inline bool VariantFieldIsWorthShredding(idx_t field_count, idx_t object_count) {
+	return field_count * VARIANT_SHREDDED_FIELD_PRESENCE_DIVISOR >= object_count;
+}
+
 struct VariantColumnStatsData {
 public:
 	explicit VariantColumnStatsData(idx_t index) : index(index) {

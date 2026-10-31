@@ -18,6 +18,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 #include "parquet_column_schema.hpp"
 
 namespace duckdb {
@@ -203,12 +204,14 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 			}
 			auto &object_data = *state.object_data;
 
-			//! TODO: implement some logic to determine which fields are worth shredding, considering the overhead when
-			//! only 10% of rows make use of the field
 			child_list_t<LogicalType> field_types;
 			for (auto &field : object_data.fields) {
 				if (field.first.empty()) {
 					//! A STRUCT field cannot have an empty name, so the empty key stays in the 'value'
+					continue;
+				}
+				if (!VariantFieldIsWorthShredding(field.second.total_count, state.total_count)) {
+					//! Field is too rare - keep it in the 'value' instead of shredding on it
 					continue;
 				}
 				LogicalType child_type;

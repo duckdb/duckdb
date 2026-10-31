@@ -450,6 +450,10 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 				//! STRUCT field names are case-insensitive, but VARIANT object keys are case-sensitive.
 				return false;
 			}
+			if (!VariantFieldIsWorthShredding(child_column.total_count, column.total_count)) {
+				//! Field is too rare - keep it in the 'unshredded' overlay instead of shredding on it
+				continue;
+			}
 			LogicalType child_type;
 			if (GetShreddedTypeInternal(child_column, child_type, total_value_count, force_partial)) {
 				child_types.emplace_back(entry.first, child_type);
