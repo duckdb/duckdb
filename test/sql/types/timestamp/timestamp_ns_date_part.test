@@ -1,0 +1,68 @@
+# name: test/sql/types/timestamp/timestamp_ns_date_part.test
+# description: Part extraction from TIMESTAMP_NS must not round into the next second (issue #27789)
+# group: [timestamp]
+
+statement ok
+CREATE TABLE tsnsec(t TIMESTAMP_NS);
+INSERT INTO tsnsec VALUES ('1969-12-31 23:59:59.999999999'), ('2026-07-01 09:32:06.999999499'), ('2026-07-01 09:32:06.999999533'), ('2026-07-01 09:59:59.999999533');
+
+# hour/minute/second and the sub-minute microsecond count must come from the actual instant,
+# not from the value rounded to microseconds
+query IIII
+SELECT hour(t), minute(t), second(t), microsecond(t) FROM tsnsec ORDER BY t
+----
+23	59	59	59999999
+9	32	6	6999999
+9	32	6	6999999
+9	59	59	59999999
+
+query I
+SELECT year(t) FROM tsnsec ORDER BY t
+----
+1969
+2026
+2026
+2026
+
+# the two-argument date_part uses the same truncated fields
+query I
+SELECT date_part('second', t) FROM tsnsec ORDER BY t
+----
+59
+6
+6
+59
+
+query I
+SELECT date_part('year', t) FROM tsnsec ORDER BY t
+----
+1969
+2026
+2026
+2026
+
+# the nanosecond part keeps its full precision
+query I
+SELECT nanosecond(t) FROM tsnsec ORDER BY t
+----
+59999999999
+6999999499
+6999999533
+59999999533
+
+query II
+SELECT minute(t), millisecond(t) FROM tsnsec ORDER BY t
+----
+59	59999
+32	6999
+32	6999
+59	59999
+
+# epoch conversions keep the full precision and floor to microseconds
+query II
+SELECT epoch_ns(t), epoch_us(t) FROM tsnsec ORDER BY t
+----
+-1	-1
+1782898326999999499	1782898326999999
+1782898326999999533	1782898326999999
+1782899999999999533	1782899999999999
