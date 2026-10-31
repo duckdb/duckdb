@@ -67,6 +67,7 @@ set(TEST_API_OBJECTS
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
     test_query_node_copy.cpp
+    test_post_parse_hook.cpp
     test_grammar_extension.cpp
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp

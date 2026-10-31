@@ -25,6 +25,7 @@ class OptimizerExtension;
 class GrammarExtension;
 class ParserExtension;
 class PlannerExtension;
+class PostParseExtension;
 class ProfilerExtension;
 class StorageExtension;
 struct ExtensionCallbackRegistry;
@@ -45,6 +46,7 @@ public:
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
 
 	void Register(ParserExtension extension);
+	void Register(PostParseExtension extension);
 	void Register(shared_ptr<GrammarExtension> change);
 	void Register(shared_ptr<DialectExtension> extension);
 	void Register(PlannerExtension extension);
@@ -57,6 +59,7 @@ public:
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
+	ExtensionCallbackIteratorHelper<PostParseExtension> PostParseExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<DialectExtension>> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
