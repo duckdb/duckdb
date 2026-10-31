@@ -11,8 +11,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-#include <math.h>
-
 namespace duckdb {
 
 template <>
@@ -496,12 +494,15 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return effective_d > 1 ? base_denom * (effective_d / (effective_d - 1)) : base_denom;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// Assume this blows up, but use the tdom to bound it a bit.
-		return base_denom * pow(effective_d, 2.0 / 3.0);
+		// A strict range comparison keeps (d - 1) / (2 d) of the pairs for independent columns over a shared domain.
+		// Model it as half the cross product so small domains cannot make a range-only join look cheap.
+		return base_denom * 2.0;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		// A non-strict range comparison additionally keeps the 1 / d of the pairs that are equal.
+		return base_denom * (2.0 * effective_d / (effective_d + 1));
 	default:
 		return base_denom;
 	}
@@ -526,12 +527,80 @@ LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Deno
 	auto &predicate = filter.GetPredicate();
 	D_ASSERT(left.relations && right.relations);
 	D_ASSERT(left.numerator_relations && right.numerator_relations);
-	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
-	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
-	auto &preserved_numerator = left_is_preserved ? *left.numerator_relations : *right.numerator_relations;
-	auto preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
-
+	// The RHS of a LEFT predicate is its nullable side. The preserved input is the merged component
+	// without the nullable side and without nullable relations that attach through it: it can span
+	// both subgraphs (a CROSS JOIN b LEFT JOIN c), while a dependent later LEFT input is not preserved.
+	auto &nullable_set = predicate.GetRightSet();
+	auto &merged_relations = set_manager.Union(*left.relations, *right.relations);
+	unordered_set<idx_t> excluded_relations;
+	for (idx_t i = 0; i < nullable_set.count; i++) {
+		excluded_relations.insert(nullable_set.relations[i].index);
+	}
+	bool exclusion_changed = true;
+	while (exclusion_changed) {
+		exclusion_changed = false;
+		for (auto predicate_ref : predicate_model.GetPredicates()) {
+			auto &other_predicate = predicate_ref.get();
+			if (other_predicate.GetJoinType() != JoinType::LEFT) {
+				continue;
+			}
+			auto other_nullable = other_predicate.GetRightSetOptional();
+			auto other_preserved = other_predicate.GetLeftSetOptional();
+			if (!other_nullable || !other_preserved || !JoinRelationSet::IsSubset(merged_relations, *other_nullable)) {
+				continue;
+			}
+			bool nullable_excluded = true;
+			for (idx_t i = 0; i < other_nullable->count; i++) {
+				nullable_excluded =
+				    nullable_excluded && excluded_relations.count(other_nullable->relations[i].index) > 0;
+			}
+			if (nullable_excluded) {
+				continue;
+			}
+			// keep a nullable relation only when every relation it attaches through is present and preserved
+			bool attachment_preserved = JoinRelationSet::IsSubset(merged_relations, *other_preserved);
+			for (idx_t i = 0; i < other_preserved->count; i++) {
+				attachment_preserved =
+				    attachment_preserved && excluded_relations.count(other_preserved->relations[i].index) == 0;
+			}
+			if (!attachment_preserved) {
+				for (idx_t i = 0; i < other_nullable->count; i++) {
+					excluded_relations.insert(other_nullable->relations[i].index);
+				}
+				exclusion_changed = true;
+			}
+		}
+	}
+	optional_ptr<JoinRelationSet> preserved_set;
+	for (idx_t i = 0; i < merged_relations.count; i++) {
+		if (excluded_relations.count(merged_relations.relations[i].index) > 0) {
+			continue;
+		}
+		auto &relation = set_manager.GetJoinRelation(merged_relations.relations[i]);
+		preserved_set = preserved_set ? &set_manager.Union(*preserved_set, relation) : &relation;
+	}
 	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
+	optional_ptr<JoinRelationSet> preserved_numerator_ptr;
+	double preserved_denom = 1;
+	if (preserved_set && preserved_set->count < merged_relations.count) {
+		// lower-bound the output by the memoized estimate of the preserved input, expressed over the
+		// inner numerator so relations eliminated by SEMI/ANTI joins stay out of the numerator
+		auto preserved_input_cardinality = GetCardinalityBeforeFilters(*preserved_set).cardinality_before_filters;
+		if (preserved_input_cardinality > 0) {
+			auto synthetic_denom = GetNumerator(inner_numerator) / preserved_input_cardinality;
+			if (synthetic_denom > 0 && synthetic_denom < NumericLimits<double>::Maximum()) {
+				preserved_numerator_ptr = &inner_numerator;
+				preserved_denom = synthetic_denom;
+			}
+		}
+	}
+	if (!preserved_numerator_ptr) {
+		// no usable preserved input estimate: keep the subgraph that does not contain the nullable side
+		auto left_is_preserved = !JoinRelationSet::IsSubset(*left.relations, nullable_set);
+		preserved_numerator_ptr = left_is_preserved ? left.numerator_relations : right.numerator_relations;
+		preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
+	}
+	auto &preserved_numerator = *preserved_numerator_ptr;
 	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
 	auto composite_pair = predicate.GetCompositeJoinPair();
 	if (composite_pair) {
@@ -1016,7 +1085,43 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 	return (idx_t)cardinality_as_double;
 }
 
+static bool IsSelectivityComparison(const JoinPredicate &predicate) {
+	switch (predicate.GetComparisonType()) {
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		break;
+	default:
+		return false;
+	}
+	auto predicate_class = predicate.GetPredicateClass();
+	return predicate_class == JoinPredicateClass::INNER_NON_EQUALITY ||
+	       predicate_class == JoinPredicateClass::LEFT_JOIN;
+}
+
+static bool IsSelectivityOnlyGroup(const RelationsSetToStats &stats) {
+	if (stats.predicates.empty()) {
+		return false;
+	}
+	for (auto &predicate : stats.predicates) {
+		if (!IsSelectivityComparison(predicate.get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
+	// process pure selectivity (comparison) edges last so a broad comparison domain
+	// cannot displace an equality domain from the denominator
+	auto a_selectivity_only = IsSelectivityOnlyGroup(a);
+	auto b_selectivity_only = IsSelectivityOnlyGroup(b);
+	if (a_selectivity_only != b_selectivity_only) {
+		return b_selectivity_only;
+	}
 	return a.domain_estimate.GetDistinctCount() > b.domain_estimate.GetDistinctCount();
 }
 
@@ -1030,7 +1135,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 
 	UpdateTotalDomains(set, stats);
 
-	// sort relations from greatest tdom to lowest tdom.
+	// sort domain groups from greatest tdom to lowest tdom, pure selectivity groups last.
 	std::sort(state->relation_set_stats.begin(), state->relation_set_stats.end(), SortTdoms);
 }
 

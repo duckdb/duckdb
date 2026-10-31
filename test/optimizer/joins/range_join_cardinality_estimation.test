@@ -1,0 +1,124 @@
+# name: test/optimizer/joins/range_join_cardinality_estimation.test
+# group: [joins]
+
+# estimates depend on sampled distinct counts
+require vector_size 2048
+
+statement ok
+CREATE TABLE t1 AS SELECT (range % 100)::INTEGER AS a FROM range(1000);
+
+statement ok
+CREATE TABLE t2 AS SELECT (range % 100)::INTEGER AS b FROM range(1000);
+
+statement ok
+SET explain_output='optimized_only';
+
+# a < b is estimated as half the cross product: 1M / 2 = 500000 (actual 495000)
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM t1 JOIN t2 ON t1.a < t2.b;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"500000".*
+
+query I
+SELECT count(*) FROM t1 JOIN t2 ON t1.a < t2.b;
+----
+495000
+
+# a <= b additionally keeps the equal pairs: 1M * 101 / 200 = 505000 (actual 505000)
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM t1 JOIN t2 ON t1.a <= t2.b;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"50[0-9]{4}".*
+
+query I
+SELECT count(*) FROM t1 JOIN t2 ON t1.a <= t2.b;
+----
+505000
+
+# tiny domains: the strict estimate stays clamped at half the cross product, so a
+# range-only join cannot look cheaper than an equality join on the same inputs
+statement ok
+CREATE TABLE b1 AS SELECT (range % 2)::INTEGER AS a FROM range(1000);
+
+statement ok
+CREATE TABLE b2 AS SELECT (range % 2)::INTEGER AS b FROM range(1000);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM b1 JOIN b2 ON b1.a < b2.b;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"500000".*
+
+query I
+SELECT count(*) FROM b1 JOIN b2 ON b1.a < b2.b;
+----
+250000
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM b1 JOIN b2 ON b1.a <= b2.b;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"750000".*
+
+query I
+SELECT count(*) FROM b1 JOIN b2 ON b1.a <= b2.b;
+----
+750000
+
+# an equality plus an independent range predicate between the same pair keeps the equality
+# selectivity: 1M / 100 / 2 = 5000 (actual 4500)
+statement ok
+CREATE TABLE e1 AS SELECT (range % 100)::INTEGER AS k, (range % 1000)::INTEGER AS c FROM range(1000);
+
+statement ok
+CREATE TABLE e2 AS SELECT (range % 100)::INTEGER AS k, (range % 1000)::INTEGER AS d FROM range(1000);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM e1 JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"[456][0-9]{3}".*
+
+query I
+SELECT count(*) FROM e1 JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+4500
+
+# a LEFT join also keeps its equality domain when an additional range condition is present
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM e1 LEFT JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"(9[0-9]{3}|1[01][0-9]{3})".*
+
+query I
+SELECT count(*) FROM e1 LEFT JOIN e2 ON e1.k = e2.k AND e1.c < e2.d;
+----
+4600
+
+# a range edge that connects a third relation applies the floored ratio on top of the equality:
+# 1G / (100 * 2) = 5000000 (actual 4995000 strict, 5005000 non-strict)
+statement ok
+CREATE TABLE c1 AS SELECT (range % 100)::INTEGER AS k FROM range(1000);
+
+statement ok
+CREATE TABLE c2 AS SELECT (range % 100)::INTEGER AS k, (range % 1000)::INTEGER AS c FROM range(1000);
+
+statement ok
+CREATE TABLE c3 AS SELECT (range % 1000)::INTEGER AS d FROM range(1000);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM c1, c2, c3 WHERE c1.k = c2.k AND c2.c < c3.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"[45][0-9]{6}".*
+
+query I
+SELECT count(*) FROM c1, c2, c3 WHERE c1.k = c2.k AND c2.c < c3.d;
+----
+4995000
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM c1, c2, c3 WHERE c1.k = c2.k AND c2.c <= c3.d;
+----
+logical_opt	<REGEX>:.*"name":\s*"COMPARISON_JOIN".*"Estimated Cardinality":\s*"[45][0-9]{6}".*
+
+query I
+SELECT count(*) FROM c1, c2, c3 WHERE c1.k = c2.k AND c2.c <= c3.d;
+----
+5005000
