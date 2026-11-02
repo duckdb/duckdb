@@ -633,8 +633,7 @@ FlattenDependentJoins::AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperat
 
 	auto delim_index = binder.GenerateTableIndex();
 	auto left_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
-	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-	delim_gets_created.push_back(delim_index.index);
+	auto delim_scan = CreateDelimGet(delim_index);
 	left_state = CreateDelimCrossProduct(left, std::move(delim_scan), std::move(left_state));
 
 	auto attached_output = ColumnBindingLayout(left->GetColumnBindings());
@@ -970,8 +969,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 
 	unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
 	auto left_index = binder.GenerateTableIndex();
-	auto delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
-	delim_gets_created.push_back(left_index.index);
+	auto delim_scan = CreateDelimGet(left_index);
 	join->children.push_back(std::move(delim_scan));
 	join->children.push_back(std::move(plan));
 	for (idx_t i = 0; i < new_group_count; i++) {
@@ -1512,8 +1510,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownDML(unique_
 	// DML output does not carry the child columns, so re-expose the correlation keys in a separate DELIM_GET that
 	// the parent DelimJoin can reference.
 	auto expose_idx = binder.GenerateTableIndex();
-	unique_ptr<LogicalOperator> expose_delim = make_uniq<LogicalDelimGet>(expose_idx, delim_types);
-	delim_gets_created.push_back(expose_idx.index);
+	unique_ptr<LogicalOperator> expose_delim = CreateDelimGet(expose_idx);
 	plan = LogicalCrossProduct::Create(std::move(plan), std::move(expose_delim));
 	result.bindings = CreateContiguousState(ColumnBinding(expose_idx, ProjectionIndex(0)));
 	return result;
@@ -1637,9 +1634,8 @@ struct TrampolineWaveAnchoring {
 			}
 			return Anchored(*op.children[1]);
 		}
-		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		case LogicalOperatorType::LOGICAL_TRAMPOLINE: {
-			// inductive proof for nested iteration: the seed must be anchored, and
+		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+			// inductive proof for nested ordinary recursion: the seed must be anchored, and
 			// every member must stay anchored when the nested recursion's own
 			// references are assumed anchored. The recursive member executes even on
 			// an empty seed, so an independent member arm fabricates rows and seed
@@ -1651,6 +1647,20 @@ struct TrampolineWaveAnchoring {
 			}
 			for (idx_t child_idx = 1; child_idx < op.children.size(); child_idx++) {
 				anchored = Anchored(*op.children[child_idx]) && anchored;
+			}
+			return anchored;
+		}
+		case LogicalOperatorType::LOGICAL_TRAMPOLINE: {
+			// a trampoline invokes a branch only on a nonempty wave and its decorrelated
+			// feeds are restricted to the wave's domains, so an anchored seed anchors the
+			// whole construct; the branches are still walked to record materialized aliases
+			auto &cte = op.Cast<LogicalCTE>();
+			bool anchored = Anchored(*op.children[0]);
+			if (anchored) {
+				anchored_ctes.insert(cte.table_index.index);
+			}
+			for (idx_t child_idx = 1; child_idx < op.children.size(); child_idx++) {
+				Anchored(*op.children[child_idx]);
 			}
 			return anchored;
 		}
@@ -1738,13 +1748,19 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownTrampoline(
                                                                                 bool propagate_null_values,
                                                                                 vector<ColumnBinding> state) {
 	auto &trampoline = plan->Cast<LogicalTrampoline>();
-	for (idx_t branch_idx = 1; branch_idx < plan->children.size(); branch_idx++) {
-		TrampolineWaveAnchoring anchoring(trampoline.table_index);
-		if (!anchoring.Anchored(*plan->children[branch_idx])) {
-			throw NotImplementedException(
-			    "correlated TRAMPOLINE CTEs require every branch's output to derive from its current wave; "
-			    "BRANCH %llu can produce rows for outer rows whose wave is empty",
-			    branch_idx);
+	// a nested trampoline relies on activation semantics: its branches run only on
+	// nonempty waves and their decorrelated feeds are restricted to the wave's
+	// domains, so only its seed needs anchoring, which the enclosing trampoline's
+	// branch proof establishes before pushing down
+	if (trampoline_branch_depth == 0) {
+		for (idx_t branch_idx = 1; branch_idx < plan->children.size(); branch_idx++) {
+			TrampolineWaveAnchoring anchoring(trampoline.table_index);
+			if (!anchoring.Anchored(*plan->children[branch_idx])) {
+				throw NotImplementedException(
+				    "correlated TRAMPOLINE CTEs require every branch's output to derive from its current wave; "
+				    "BRANCH %llu can produce rows for outer rows whose wave is empty",
+				    branch_idx);
+			}
 		}
 	}
 	bool wants_admission = trampoline.emit_distinct;
@@ -1784,6 +1800,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownTrampoline(
 
 	// every branch starts from the same contiguous appended-domain layout
 	auto cte_state = CreateContiguousState(ColumnBinding(cte.table_index, ProjectionIndex(cte.column_count)));
+	trampoline_branch_depth++;
 	for (idx_t branch_idx = 1; branch_idx < plan->children.size(); branch_idx++) {
 		auto old_bindings = plan->children[branch_idx]->GetColumnBindings();
 		const auto delim_log_start = delim_gets_created.size();
@@ -1800,6 +1817,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownTrampoline(
 		                          delim_gets_created.end());
 		RestrictBranchDomainScans(plan->children[branch_idx], cte.table_index, wave_types, wave_names, own_delim_gets);
 	}
+	trampoline_branch_depth--;
 	RewriteCorrelatedBindings(*plan, cte_state);
 
 #ifdef DEBUG
@@ -1811,6 +1829,13 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownTrampoline(
 	cte.column_count += correlated_columns.size();
 	result.bindings = std::move(cte_state);
 	return result;
+}
+
+//! Creates a domain scan and records it: the trampoline branch restriction rewrites
+//! exactly the scans this instance created, so creation must always register.
+unique_ptr<LogicalDelimGet> FlattenDependentJoins::CreateDelimGet(TableIndex delim_index) {
+	delim_gets_created.push_back(delim_index.index);
+	return make_uniq<LogicalDelimGet>(delim_index, delim_types);
 }
 
 void FlattenDependentJoins::RestrictBranchDomainScans(unique_ptr<LogicalOperator> &plan, TableIndex cte_index,
@@ -1906,8 +1931,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTERef(uniq
 	// Missing correlations require a domain scan; constrain it by every correlation shared with the CTE.
 	auto delim_index = binder.GenerateTableIndex();
 	auto delim_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
-	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-	delim_gets_created.push_back(delim_index.index);
+	auto delim_scan = CreateDelimGet(delim_index);
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 	AddCTERefJoinConditions(*join, cteref, positions, delim_state);
 	if (!join->conditions.empty()) {
@@ -2054,8 +2078,7 @@ FlattenDependentJoins::AttachDomainToIndependentSubtree(unique_ptr<LogicalOperat
 	// then attach it above the completed subtree.
 	auto delim_index = binder.GenerateTableIndex();
 	auto delim_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
-	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-	delim_gets_created.push_back(delim_index.index);
+	auto delim_scan = CreateDelimGet(delim_index);
 	auto result = DecorrelateIndependentSubtree(plan, propagate_null_values);
 	result.bindings = CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(delim_state));
 	return result;
