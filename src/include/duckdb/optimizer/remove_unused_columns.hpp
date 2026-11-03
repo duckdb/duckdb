@@ -25,6 +25,7 @@ class ClientContext;
 class LogicalColumnDataGet;
 class LogicalRecursiveCTE;
 class LogicalSecureView;
+class LogicalSetOperation;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -172,6 +173,7 @@ private:
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void VisitSecureView(LogicalSecureView &view);
 	void CheckPushdownExtract(LogicalOperator &op);
+	bool TryPushdownUnionExtracts(LogicalSetOperation &setop);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
 	                                 const unordered_set<ProjectionIndex> &required_columns,
