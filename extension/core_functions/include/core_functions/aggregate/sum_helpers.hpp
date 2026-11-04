@@ -16,6 +16,7 @@
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include <cmath>
 #include <type_traits>
 #include <utility>
 
@@ -66,10 +67,22 @@ struct RepeatedStateValue {
 	}
 };
 
+//! Neumaier's variant of Kahan summation: the compensation also survives an input that is larger than the running
+//! sum, which the classic update loses (1 + 1e100 + 1 - 1e100 came out as 0). "err" keeps the sign convention of the
+//! exported state: the sum is summed - err
 static inline void KahanAddInternal(double input, double &summed, double &err) {
-	double diff = input - err;
-	double newval = summed + diff;
-	err = (newval - summed) - diff;
+	double newval = summed + input;
+	if (!std::isfinite(newval)) {
+		// an infinite or NaN sum has no compensation: inf - inf would turn it into NaN
+		summed = newval;
+		err = 0;
+		return;
+	}
+	if (std::fabs(summed) >= std::fabs(input)) {
+		err -= (summed - newval) + input;
+	} else {
+		err -= (input - newval) + summed;
+	}
 	summed = newval;
 }
 
@@ -101,7 +114,10 @@ struct KahanSumState {
 	void Combine(const KahanSumState &other) {
 		this->is_set = other.is_set || this->is_set;
 		KahanAddInternal(other.value, this->value, this->err);
-		KahanAddInternal(-other.err, this->value, this->err);
+		if (std::isfinite(other.value)) {
+			// a non-finite sum has no compensation (a state exported by an older version carries NaN there)
+			KahanAddInternal(-other.err, this->value, this->err);
+		}
 	}
 };
 
