@@ -921,26 +921,31 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
-	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	if (sink.partitions.empty()) {
-		return 0;
-	}
+static idx_t SourceThreads(const RadixHTGlobalSinkState &sink) {
+	return MinValue<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(), sink.partitions.size());
+}
 
-	const auto max_threads =
-	    MinValue<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(), sink.partitions.size());
+// How many partitions can be combined and scanned at the same time with the memory we can reserve right now
+static idx_t PartitionsFit(RadixHTGlobalSinkState &sink) {
 	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(
-	    sink.context, sink.stored_allocators_size + max_threads * sink.max_partition_size);
+	    sink.context, sink.stored_allocators_size + SourceThreads(sink) * sink.max_partition_size);
 
 	// we cannot spill aggregate state memory
 	const auto usable_memory = sink.temporary_memory_state->GetReservation() > sink.stored_allocators_size
 	                               ? sink.temporary_memory_state->GetReservation() - sink.stored_allocators_size
 	                               : 0;
-	// This many partitions will fit given our reservation (at least 1))
-	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
+	return MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
+}
 
-	// Minimum of the two
-	return MinValue<idx_t>(partitions_fit, max_threads);
+idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
+	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
+	if (sink.partitions.empty()) {
+		return 0;
+	}
+	// Each scanning thread holds a whole partition in memory, so memory limits how many can run at once. That limit
+	// is not applied here: the pipeline reads this only once, and the memory we can reserve keeps changing with
+	// concurrent queries. AssignTask applies it instead, blocking a thread until its partition fits.
+	return SourceThreads(sink);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -958,7 +963,7 @@ public:
 
 	//! Assigns a task to a local source state
 	SourceResultType AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
-	                            InterruptState &interrupt_state);
+	                            OperatorSourceInput &input);
 
 public:
 	//! The client context
@@ -978,6 +983,8 @@ public:
 	atomic<idx_t> scanned_rows;
 	//! The scan progress estimate drops when a larger partition starts scanning
 	MonotonicProgress scan_progress;
+	//! Partitions assigned to a thread whose scan is not done yet
+	idx_t partitions_in_flight DUCKDB_GUARDED_BY(lock);
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
@@ -1036,28 +1043,43 @@ void RadixPartitionedHashTable::ResetGlobalSourceState(ClientContext &context, G
 	gstate.started_rows = 0;
 	gstate.scanned_rows = 0;
 	gstate.scan_progress.Reset();
+	const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+	gstate.partitions_in_flight = 0;
+	gstate.ResetBlocking();
 }
 
 RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht)
     : context(context_p), finished(false), task_idx(0), task_done(0), started_partitions(0), started_rows(0),
-      scanned_rows(0) {
+      scanned_rows(0), partitions_in_flight(0) {
 	for (column_t column_id = 0; column_id < radix_ht.group_types.size(); column_id++) {
 		column_ids.push_back(column_id);
 	}
 }
 
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
-                                                      InterruptState &interrupt_state) {
+                                                      OperatorSourceInput &input) {
 	// First, try to get a partition index
-	lstate.task_idx = task_idx++;
-	if (finished || lstate.task_idx >= sink.partitions.size()) {
+	const annotated_lock_guard<annotated_mutex> guard {lock};
+	if (finished || task_idx >= sink.partitions.size()) {
 		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
 
-	// We got a partition index
-	auto &partition = *sink.partitions[lstate.task_idx];
+	auto &partition = *sink.partitions[task_idx];
 	const annotated_lock_guard<annotated_mutex> partition_guard {partition.lock};
+	if (partition.state == AggregatePartitionState::READY_TO_FINALIZE && partitions_in_flight >= PartitionsFit(sink)) {
+		// Not enough memory for another partition. Release this thread's hash table so it holds no partition memory
+		// while it waits; the next partition to finish its scan frees memory and wakes it to check again.
+		lstate.ht.reset();
+		if (input.produced) {
+			return SourceResultType::FINISHED;
+		}
+		return BlockSource(input.interrupt_state);
+	}
+
+	// We got a partition index
+	lstate.task_idx = task_idx++;
+	partitions_in_flight++;
 	switch (partition.state) {
 	case AggregatePartitionState::READY_TO_FINALIZE:
 		partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
@@ -1066,7 +1088,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 	case AggregatePartitionState::FINALIZE_IN_PROGRESS:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
-		return partition.BlockSource(interrupt_state);
+		return partition.BlockSource(input.interrupt_state);
 	case AggregatePartitionState::READY_TO_SCAN:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
@@ -1224,6 +1246,9 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
+		const annotated_lock_guard<annotated_mutex> source_guard {gstate.lock};
+		gstate.partitions_in_flight--;
+		gstate.UnblockTasks();
 		return;
 	}
 
@@ -1324,7 +1349,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 
 	while (!gstate.finished && chunk.size() == 0) {
 		if (lstate.TaskFinished()) {
-			const auto res = gstate.AssignTask(sink, lstate, input.interrupt_state);
+			const auto res = gstate.AssignTask(sink, lstate, input);
 			if (res != SourceResultType::HAVE_MORE_OUTPUT) {
 				D_ASSERT(res == SourceResultType::FINISHED || res == SourceResultType::BLOCKED);
 				return res;
