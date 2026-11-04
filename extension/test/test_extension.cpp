@@ -313,6 +313,12 @@ static void AddBundleTest(void *data, const duckdb_test::TestCase *test_case) {
 
 static vector<TestDescription> DiscoverTests(ClientContext &context, TestRegistryState &registry,
                                              const vector<string> &test_roots, const vector<string> &extension_roots) {
+	auto &config = TestConfiguration::Get();
+	static bool config_initialized = false;
+	if (!config_initialized) {
+		config.Initialize();
+		config_initialized = true;
+	}
 	DiscoverBundles(context, extension_roots);
 	vector<TestDescription> result;
 	auto &fs = FileSystem::GetFileSystem(context);
@@ -339,6 +345,9 @@ static vector<TestDescription> DiscoverTests(ClientContext &context, TestRegistr
 			test.is_slow = test.tags.find("[.]") != string::npos;
 			test.auto_switch_test_dir =
 			    StringUtil::EndsWith(normalized_root, "/test/sql") && normalized_path.find("/test/sql") != string::npos;
+			if (config.ShouldSkipTest(test.name)) {
+				return;
+			}
 			result.push_back(std::move(test));
 		});
 	}
@@ -404,7 +413,6 @@ static void InitializeSQLTestEnvironment() {
 		return;
 	}
 	auto &config = TestConfiguration::Get();
-	config.Initialize();
 	string error;
 	if (!ValidateEnvPassthrough(error) || !config.ValidateTestEnv(error)) {
 		throw InvalidInputException("%s", error);
