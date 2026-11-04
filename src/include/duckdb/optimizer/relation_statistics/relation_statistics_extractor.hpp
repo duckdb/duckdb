@@ -34,6 +34,9 @@ public:
 	optional_ptr<LogicalOperator> GetCTEDefinition(const LogicalCTERef &cte_ref) const;
 	idx_t ExtractedOperatorCount() const;
 	shared_ptr<const JoinOrderSourceStats> GetSourceStats(LogicalOperator &root);
+	ClientContext &GetContext() const {
+		return context;
+	}
 
 private:
 	optional<RelationStats> ExtractInternal(LogicalOperator &op);
