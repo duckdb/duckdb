@@ -43,6 +43,7 @@ class CheckpointTask;
 class TableIOManager;
 class CommitDropState;
 class DataTable;
+class OptimisticDataWriter;
 class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
@@ -207,12 +208,15 @@ public:
 	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
+	//! If a writer is given, the new column of each row group is written to disk as soon as it is filled
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
-	                                         ExpressionExecutor &default_executor);
+	                                         ExpressionExecutor &default_executor,
+	                                         optional_ptr<OptimisticDataWriter> writer);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
+	//! If a writer is given, the converted column of each row group is written to disk as soon as it is filled
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
-	                                         TransactionData transaction);
+	                                         TransactionData transaction, optional_ptr<OptimisticDataWriter> writer);
 	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
 	                         const BoundConstraint &constraint);
 
@@ -258,6 +262,10 @@ private:
 	                                                       idx_t count) const;
 
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
+	//! Fills result with alter's row groups and writes their column, in parallel unless volatile values need row order
+	void AlterRowGroups(ClientContext &context, RowGroupCollection &result, idx_t column_idx, bool parallel,
+	                    optional_ptr<OptimisticDataWriter> writer,
+	                    const std::function<unique_ptr<RowGroup>(SegmentNode<RowGroup> &, ColumnStatistics &)> &alter);
 
 private:
 	//! BlockManager

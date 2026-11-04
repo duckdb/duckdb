@@ -319,6 +319,12 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		throw CatalogException("Cannot alter entry %s because it is an internal system entry", entry->name);
 	}
 
+	{
+		// detect a write-write conflict before building the altered entry, which can mean rewriting a whole column
+		unique_lock<mutex> read_lock(catalog_lock);
+		GetEntryInternal(transaction, name);
+	}
+
 	unique_ptr<CatalogEntry> value;
 	if (alter_info.type == AlterType::SET_COMMENT) {
 		// Copy the existing entry; we are only changing metadata here
@@ -356,7 +362,13 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 
 	// fetch the entry again before doing the modification
 	// this will catch any write-write conflicts between transactions
-	entry = GetEntryInternal(transaction, name);
+	try {
+		entry = GetEntryInternal(transaction, name);
+	} catch (...) {
+		// a conflict that arose while altering: undo building the discarded entry, as rolling back an ALTER does
+		value->Rollback(*entry);
+		throw;
+	}
 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.GetTransactionId();
