@@ -137,7 +137,8 @@
         "test/optimizer/statistics/statistics_join_aggregate_bounds.test",
         "test/sql/join/hash_join/perfect_hash_join_lifecycle.test",
         "test/sql/optimizer/statistics/distinct_on_stats_propagation.test",
-        "test/sql/optimizer/statistics/timestamp_to_time_ns_stats.test"
+        "test/sql/optimizer/statistics/timestamp_to_time_ns_stats.test",
+        "test/optimizer/joins/unnest_list_aggregate_estimate.test"
       ]
     },
     {
