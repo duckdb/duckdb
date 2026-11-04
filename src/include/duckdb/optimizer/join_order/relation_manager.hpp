@@ -70,6 +70,11 @@ public:
 	bool ExtractFilterBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
 	bool TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const;
 	bool HasCompleteStats() const;
+	//! Whether a relation sits on a join side that can be null-extended, so its list element
+	//! counts must not scale with the combined cardinality
+	bool RelationIsNullExtended(idx_t relation_idx) const {
+		return null_extended_relations.count(relation_idx) > 0;
+	}
 	bool AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	bool AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
@@ -106,6 +111,7 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 	column_binding_map_t<ColumnBinding> normalized_bindings;
+	unordered_set<idx_t> null_extended_relations;
 	bool stats_complete = true;
 };
 
