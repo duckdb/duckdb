@@ -329,8 +329,7 @@ def core_functions_load_statement(duckdb_bin: str):
 def build_test_protocol_sql(duckdb_bin: str, query: str):
     test_extension, _, _ = resolve_test_protocol_paths(duckdb_bin)
     return (
-        "SET threads=1;\n"
-        + core_functions_load_statement(duckdb_bin)
+        core_functions_load_statement(duckdb_bin)
         + f"LOAD {sql_string(test_extension)};\n"
         + query
         + "\n"
