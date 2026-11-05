@@ -61,7 +61,7 @@ if [[ -z "$cli_path" ]]; then
 fi
 
 runner_path=""
-for runner_name in run run.py run.bat; do
+for runner_name in run run.py run.bat unittest unittest.py unittest.bat; do
 	if [[ -f "$BUILD_DIR/test/$runner_name" ]]; then
 		copy_file "$BUILD_DIR/test/$runner_name" "test/$runner_name"
 		if [[ -z "$runner_path" || "$runner_name" == "run.py" ]]; then
