@@ -1,0 +1,47 @@
+# name: test/optimizer/comparison_simplification_integral_varchar.test
+# description: CAST(int AS VARCHAR) = 'literal' is rewritten to an integer comparison
+# group: [optimizer]
+
+statement ok
+CREATE TABLE big AS SELECT range::BIGINT i FROM range(300000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big WHERE i::VARCHAR = '250000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# non-canonical literals and ordering comparisons keep the cast
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big WHERE i::VARCHAR = '0250000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM big WHERE i::VARCHAR < '250000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+statement ok
+CREATE TABLE t AS SELECT range::BIGINT i FROM range(-20, 20) UNION ALL SELECT NULL;
+
+query IIIIIII
+SELECT count(*) FILTER (i::VARCHAR = '-5'), count(*) FILTER ('5' = i::VARCHAR), count(*) FILTER (i::VARCHAR = '05'),
+	count(*) FILTER (i::VARCHAR = 'abc'), count(*) FILTER (i::VARCHAR <> '5'),
+	count(*) FILTER (i::VARCHAR IS DISTINCT FROM '5'), count(*) FILTER (i::VARCHAR < '5' AND i >= 0)
+FROM t;
+----
+1	1	0	0	39	40	15
+
+query III
+SELECT i, i::VARCHAR = '7', i::VARCHAR IS DISTINCT FROM '7' FROM t WHERE i IS NULL OR i = 7 ORDER BY i NULLS LAST;
+----
+7	true	false
+NULL	NULL	true
+
+statement ok
+CREATE TABLE b AS SELECT 127::TINYINT ti, '340282366920938463463374607431768211455'::UHUGEINT uhi;
+
+query III
+SELECT ti::VARCHAR = '127', ti::VARCHAR = '128', uhi::VARCHAR = '340282366920938463463374607431768211455' FROM b;
+----
+true	false	true

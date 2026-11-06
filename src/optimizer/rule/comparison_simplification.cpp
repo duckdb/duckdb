@@ -105,6 +105,10 @@ static bool IsLosslessIntegralToFloatingCast(const LogicalType &source_type, con
 	return false;
 }
 
+static bool IsIntegralToVarcharCast(const LogicalType &source_type, const LogicalType &target_type) {
+	return source_type.IsIntegral() && target_type.id() == LogicalTypeId::VARCHAR;
+}
+
 static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpression &expr,
                                      BoundFunctionExpression &cast_expression, const Value &constant_value,
                                      Value &cast_constant, const LogicalType &target_type, bool column_ref_left,
@@ -114,6 +118,15 @@ static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpres
 	}
 	if (cast_expression.GetReturnType().IsIntegral() && target_type.IsIntegral()) {
 		return true;
+	}
+	if (IsIntegralToVarcharCast(target_type, cast_expression.GetReturnType())) {
+		// integer -> VARCHAR is canonical, but string ordering differs from integer ordering
+		auto op = expr.GetExpressionType();
+		if (op != ExpressionType::COMPARE_EQUAL && op != ExpressionType::COMPARE_NOTEQUAL &&
+		    op != ExpressionType::COMPARE_DISTINCT_FROM && op != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return false;
+		}
+		return cast_constant.ToString() == StringValue::Get(constant_value);
 	}
 	// The constant must survive the integral round-trip exactly; the column side is checked by the caller.
 	if (IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType())) {
@@ -243,7 +256,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		auto &cast_expression = column_ref_expr.Cast<BoundFunctionExpression>();
 		auto target_type = BoundCastExpression::SourceType(cast_expression);
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType()) &&
-		    !IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType())) {
+		    !IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType()) &&
+		    !IsIntegralToVarcharCast(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
 
