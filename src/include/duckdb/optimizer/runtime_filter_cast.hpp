@@ -42,7 +42,7 @@ struct RuntimeFilterCastUtil {
 	static bool RequiresRuntimeFilterExpressionReconstruction(const JoinFilterPushdownColumn &column,
 	                                                          const LogicalType &runtime_type);
 	//! Build the input expression for evaluating a pushed runtime filter on top of the raw scan column:
-	//! a BoundReferenceExpression(0) in the storage type, followed by the recorded cast chain.
+	//! a BoundReferenceExpression(0) in the storage type, followed by field extractions and casts.
 	//! Set `preserves_cast_errors` when a default (non-try) cast in the chain can fail.
 	static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &context,
 	                                                                 const JoinFilterPushdownColumn &column,
