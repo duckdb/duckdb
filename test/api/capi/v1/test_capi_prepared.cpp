@@ -399,6 +399,41 @@ TEST_CASE("Test duckdb_param_type and duckdb_param_logical_type", "[capi]") {
 	duckdb_close(&db);
 }
 
+TEST_CASE("Untyped parameters passed to ANY arguments keep the prepared metadata", "[capi]") {
+	duckdb_database db;
+	duckdb_connection conn;
+	duckdb_prepared_statement stmt;
+
+	REQUIRE(duckdb_open("", &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+
+	REQUIRE(duckdb_prepare(conn, "SELECT hash($1) AS h, $2::INTEGER AS n", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 2);
+	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_UBIGINT);
+	REQUIRE(duckdb_prepared_statement_column_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_prepare(&stmt);
+
+	REQUIRE(duckdb_prepare(conn, "SELECT typeof($1) AS t, count($1) AS c, $2::VARCHAR AS s", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 3);
+	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_VARCHAR);
+	REQUIRE(duckdb_prepared_statement_column_type(stmt, 1) == DUCKDB_TYPE_BIGINT);
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_VARCHAR);
+	REQUIRE(duckdb_bind_int32(stmt, 1, 42) == DuckDBSuccess);
+	REQUIRE(duckdb_bind_varchar(stmt, 2, "x") == DuckDBSuccess);
+	duckdb_result result;
+	REQUIRE(duckdb_execute_prepared(stmt, &result) == DuckDBSuccess);
+	auto type_name = duckdb_value_varchar(&result, 0, 0);
+	REQUIRE(string(type_name) == "INTEGER");
+	duckdb_free(type_name);
+	REQUIRE(duckdb_value_int64(&result, 1, 0) == 1);
+	duckdb_destroy_result(&result);
+	duckdb_destroy_prepare(&stmt);
+
+	duckdb_disconnect(&conn);
+	duckdb_close(&db);
+}
+
 TEST_CASE("Test duckdb_param_type with nested casts", "[capi]") {
 	duckdb_database db;
 	duckdb_connection conn;
