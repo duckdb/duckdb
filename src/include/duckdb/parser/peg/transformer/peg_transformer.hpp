@@ -1536,6 +1536,10 @@ public:
 	                                                                           GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropFunctionTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropSignatureAnyTypeTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropSchemaTrampoline(PEGTransformer &transformer,
 	                                                                    GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropIndexTrampoline(PEGTransformer &transformer,
@@ -3355,13 +3359,17 @@ public:
 	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer, const CatalogType &table_or_view,
 	                                                    const optional<bool> &if_exists,
 	                                                    vector<unique_ptr<BaseTableRef>> base_table_name);
-	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
-	                                                            const CatalogType &comment_macro_table,
-	                                                            const optional<bool> &if_exists,
-	                                                            const vector<QualifiedName> &table_function_name);
-	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
-	                                                       const optional<bool> &if_exists,
-	                                                       const vector<QualifiedName> &function_identifier);
+	static unique_ptr<DropStatement>
+	TransformDropTableFunction(PEGTransformer &transformer, const CatalogType &comment_macro_table,
+	                           const optional<bool> &if_exists, const vector<QualifiedName> &table_function_name,
+	                           const optional<vector<LogicalType>> &drop_function_signature);
+	static unique_ptr<DropStatement>
+	TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro, const optional<bool> &if_exists,
+	                      const vector<QualifiedName> &function_identifier,
+	                      const optional<vector<LogicalType>> &drop_function_signature);
+	static vector<LogicalType> TransformDropFunctionSignature(PEGTransformer &transformer,
+	                                                          const optional<vector<LogicalType>> &type);
+	static LogicalType TransformDropSignatureAnyType(PEGTransformer &transformer);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                     const vector<QualifiedName> &qualified_name);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const optional<bool> &if_exists,

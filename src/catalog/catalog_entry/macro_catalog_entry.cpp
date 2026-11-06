@@ -61,6 +61,17 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	return std::move(info);
 }
 
+optional_idx MacroCatalogEntry::FindMember(const vector<LogicalType> &signature) const {
+	// the signature names a declared overload exactly: a type matches an equal declared type and
+	// ANY matches an untyped slot, which the create-time conflict rules keep unique
+	for (idx_t i = 0; i < macros.size(); i++) {
+		if (macros[i]->MatchesSignature(signature)) {
+			return i;
+		}
+	}
+	return optional_idx();
+}
+
 string MacroCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
 	create_info->StripCatalogQualification();

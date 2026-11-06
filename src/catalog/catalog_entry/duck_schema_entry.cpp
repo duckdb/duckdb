@@ -38,6 +38,8 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -374,10 +376,109 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		                       CatalogTypeToString(info.type));
 	}
 
+	if (info.extra_drop_info && info.extra_drop_info->info_type == ExtraDropInfoType::FUNCTION_SIGNATURE_INFO) {
+		if (existing_entry->type != CatalogType::MACRO_ENTRY &&
+		    existing_entry->type != CatalogType::TABLE_MACRO_ENTRY) {
+			throw CatalogException("Cannot drop %s with a parameter type list: dropping a single overload is only "
+			                       "supported for macros and functions",
+			                       info.GetQualifiedName().Name());
+		}
+		if (DropMacroFunctionMember(transaction, info, existing_entry->Cast<MacroCatalogEntry>())) {
+			return;
+		}
+		// the signature identified the last member, dropping it removes the whole entry
+	}
+
 	if (!DropEntryInternal(transaction, *existing_entry, info.GetQualifiedName().Name(), info.cascade,
 	                       info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
+}
+
+bool DuckSchemaEntry::DropMacroFunctionMember(CatalogTransaction transaction, DropInfo &info,
+                                              MacroCatalogEntry &existing) {
+	if (existing.internal && !info.allow_drop_internal) {
+		// the member rewrite is a drop+create: an internal entry's protection applies to it too
+		throw CatalogException("function %s is an internal system entry: its overloads cannot be dropped",
+		                       info.GetQualifiedName().Name());
+	}
+	auto &extra = info.extra_drop_info->Cast<ExtraDropFunctionSignatureInfo>();
+	auto member_idx = existing.FindMember(extra.signature);
+	if (!member_idx.IsValid()) {
+		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+			// IF EXISTS at member granularity: nothing to drop, siblings are unaffected
+			return true;
+		}
+		string signature_text;
+		for (auto &type : extra.signature) {
+			if (!signature_text.empty()) {
+				signature_text += ", ";
+			}
+			signature_text += type.ToString();
+		}
+		throw CatalogException("Function %s has no overload with signature (%s)", info.GetQualifiedName().Name(),
+		                       signature_text);
+	}
+	if (existing.macros.size() == 1) {
+		// dropping the last member drops the entry, which honors CASCADE like any entry drop
+		return false;
+	}
+	if (info.cascade) {
+		// dependencies are tracked per entry, not per member, so a cascade that leaves siblings
+		// behind has no well-defined scope: require an explicit choice
+		throw CatalogException("Cannot drop an overload of %s with CASCADE while other overloads remain: drop "
+		                       "the whole entry or its dependents first",
+		                       info.GetQualifiedName().Name());
+	}
+	// replace the entry with one that carries the remaining members
+	auto new_info_base = existing.GetInfo();
+	auto &new_info = new_info_base->Cast<CreateMacroInfo>();
+	auto removed_member = std::move(new_info.macros[member_idx.GetIndex()]);
+	new_info.macros.erase(new_info.macros.begin() + NumericCast<int64_t>(member_idx.GetIndex()));
+	new_info.temporary = existing.temporary;
+	// derive the replacement's dependencies from the members' create-time attribution: a dependency
+	// owned only by the removed member must not tie the replacement to a later cascade
+	bool attribution_known = removed_member->dependencies_recorded;
+	for (auto &member : new_info.macros) {
+		attribution_known = attribution_known && member->dependencies_recorded;
+	}
+	if (!attribution_known && !new_info.dependencies.Set().empty()) {
+		throw CatalogException("Cannot drop an overload of %s: the entry was stored before member dependency "
+		                       "tracking, so its dependencies cannot be attributed to a single overload. Drop or "
+		                       "recreate the whole entry instead",
+		                       info.GetQualifiedName().Name());
+	}
+	LogicalDependencyList member_union = removed_member->recorded_dependencies;
+	LogicalDependencyList derived_dependencies;
+	for (auto &member : new_info.macros) {
+		for (auto &dep : member->recorded_dependencies.Set()) {
+			derived_dependencies.AddDependency(dep);
+			member_union.AddDependency(dep);
+		}
+	}
+	// entry-level dependencies no member accounts for are kept
+	for (auto &dep : new_info.dependencies.Set()) {
+		if (member_union.Set().count(dep) == 0) {
+			derived_dependencies.AddDependency(dep);
+		}
+	}
+	new_info.dependencies = std::move(derived_dependencies);
+	auto function = MacroCatalogEntry::Create(catalog, *this, new_info);
+	function->internal = existing.internal;
+	// the replacement is a fresh entry on purpose: the changed oid is what makes the existing
+	// commit-time checks abort schedules that raced this mutation, like any macro replacement
+	try {
+		AddEntry(transaction, std::move(function), OnCreateConflict::REPLACE_ON_CONFLICT);
+	} catch (const DependencyException &ex) {
+		// dependencies are tracked per entry: any dependent blocks the member drop, and CASCADE is
+		// rejected for member drops, so the generic hint would send the user in a circle
+		ErrorData error(ex);
+		throw DependencyException("%s\nDependencies block dropping a single overload of %s, and CASCADE cannot "
+		                          "scope to one overload: drop the dependent entries first, or drop the whole "
+		                          "function",
+		                          error.RawMessage(), info.GetQualifiedName().Name());
+	}
+	return true;
 }
 
 void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry) {

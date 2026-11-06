@@ -1273,12 +1273,15 @@ LogicalType:
   rules:
     - Type
     - ReturnsType
+    - DropSignatureType
+    - DropSignatureAnyType
 
 LogicalTypeList:
   type: "vector<LogicalType>"
   by_value: false
   rules:
     - TypeList
+    - DropFunctionSignature
 
 TransactionModifierType:
   type: "TransactionModifierType"

@@ -296,6 +296,8 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 	}
 	other.types = types;
 	other.return_type = return_type;
+	other.dependencies_recorded = dependencies_recorded;
+	other.recorded_dependencies = recorded_dependencies;
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -347,6 +349,54 @@ void MacroFunction::FinalizeDeserialization() {
 	if (parameters.size() != types.size()) {
 		types.resize(parameters.size(), LogicalType::UNKNOWN);
 	}
+}
+
+bool MacroFunction::HasUntypedParameter() const {
+	if (types.size() < parameters.size()) {
+		return true;
+	}
+	for (auto &type : types) {
+		if (type.id() == LogicalTypeId::UNKNOWN) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool MacroFunction::MatchesSignature(const vector<LogicalType> &signature) const {
+	if (parameters.size() != signature.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < signature.size(); i++) {
+		const auto member_type_id = i < types.size() ? types[i].id() : LogicalTypeId::UNKNOWN;
+		if (signature[i].id() == LogicalTypeId::ANY) {
+			// ANY names an untyped slot exactly, it does not match a typed slot
+			if (member_type_id != LogicalTypeId::UNKNOWN) {
+				return false;
+			}
+			continue;
+		}
+		if (member_type_id == LogicalTypeId::UNKNOWN || types[i] != signature[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+string MacroFunction::SignatureToString() const {
+	string result = "(";
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		const auto &param_name = parameters[i]->Cast<ColumnRefExpression>().GetColumnName();
+		result += SQLIdentifier::ToString(param_name);
+		if (i < types.size() && types[i].id() != LogicalTypeId::UNKNOWN) {
+			result += " " + types[i].ToString();
+		}
+	}
+	result += ")";
+	return result;
 }
 
 string MacroFunction::ToSQL() const {
