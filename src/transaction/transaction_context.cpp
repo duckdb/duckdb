@@ -13,6 +13,20 @@
 
 namespace duckdb {
 
+class TransactionInterruptGuard {
+public:
+	explicit TransactionInterruptGuard(ClientContext &context_p)
+	    : context(context_p), previous(context.interrupt_state.exchange(ClientInterruptState::INTERRUPTS_SUPPRESSED)) {
+	}
+	~TransactionInterruptGuard() {
+		context.interrupt_state = previous;
+	}
+
+private:
+	ClientContext &context;
+	ClientInterruptState previous;
+};
+
 TransactionContext::TransactionContext(ClientContext &context)
     : context(context), auto_commit(true), invalidation_policy(TransactionInvalidationPolicy::STANDARD_POLICY),
       auto_rollback(false), current_transaction(nullptr) {
@@ -63,6 +77,7 @@ void TransactionContext::Commit() {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
+	TransactionInterruptGuard interrupt_guard(context);
 	autocheckpoint_error = ErrorData();
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
@@ -104,6 +119,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
+	TransactionInterruptGuard interrupt_guard(context);
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 
