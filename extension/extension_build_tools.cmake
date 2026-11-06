@@ -277,7 +277,7 @@ function(duckdb_add_test_bundle NAME)
         test/extensions
         "default-version"
         ""
-        "-warnings"
+        "-warnings -host-bound"
         "${DUCKDB_MODULE_BASE_DIR}/extension/test/test_bundle_extension.cpp"
         ${ARG_SOURCES})
     target_compile_definitions(
