@@ -106,7 +106,7 @@ ON p.s.a = q.a AND p.s.b = q.b;
 
 # Positional extraction also supports unnamed structs.
 statement ok
-CREATE TABLE tuple_probe AS SELECT i AS id, row(i, -i) AS s FROM range(100) t(i);
+CREATE TEMP TABLE tuple_probe AS SELECT i AS id, row(i, -i) AS s FROM range(100) t(i);
 
 query II
 EXPLAIN ANALYZE
