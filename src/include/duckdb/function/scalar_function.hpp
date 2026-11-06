@@ -89,6 +89,8 @@ struct FunctionStatisticsInput {
 	BoundFunctionExpression &expr;
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
+	//! Owning slot of the expression for statistics-based rewrites. Null when the callback is
+	//! invoked outside the statistics propagator (e.g. join-order cardinality estimation).
 	unique_ptr<Expression> *expr_ptr;
 };
 
@@ -378,7 +380,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	void SetExtraFunctionInfo(ARGS &&... args) {
+	void SetExtraFunctionInfo(ARGS &&...args) {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {

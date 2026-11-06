@@ -30,6 +30,9 @@ public:
 public:
 	optional_ptr<const RelationStats> Extract(LogicalOperator &op);
 	idx_t ExtractedOperatorCount() const;
+	ClientContext &GetContext() const {
+		return context;
+	}
 
 private:
 	optional<RelationStats> ExtractInternal(LogicalOperator &op);
