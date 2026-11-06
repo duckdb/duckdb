@@ -8,6 +8,7 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/function/language_macro_function.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,12 @@ void MacroFunction::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
 		serializer.WritePropertyWithDefault<LogicalType>(104, "return_type", return_type, LogicalType(LogicalTypeId::UNKNOWN));
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<bool>(105, "dependencies_recorded", dependencies_recorded, false);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<LogicalDependencyList>(106, "recorded_dependencies", recorded_dependencies, LogicalDependencyList());
+	}
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
@@ -29,8 +36,13 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	auto default_parameters = deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>>>(102, "default_parameters");
 	auto types = deserializer.ReadPropertyWithExplicitDefault<vector<LogicalType>>(103, "types", vector<LogicalType>());
 	auto return_type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(104, "return_type", LogicalType(LogicalTypeId::UNKNOWN));
+	auto dependencies_recorded = deserializer.ReadPropertyWithExplicitDefault<bool>(105, "dependencies_recorded", false);
+	auto recorded_dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(106, "recorded_dependencies", LogicalDependencyList());
 	unique_ptr<MacroFunction> result;
 	switch (type) {
+	case MacroType::LANGUAGE_MACRO:
+		result = LanguageMacroFunction::Deserialize(deserializer);
+		break;
 	case MacroType::SCALAR_MACRO:
 		result = ScalarMacroFunction::Deserialize(deserializer);
 		break;
@@ -44,8 +56,23 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	result->default_parameters = std::move(default_parameters);
 	result->types = std::move(types);
 	result->return_type = std::move(return_type);
+	result->dependencies_recorded = dependencies_recorded;
+	result->recorded_dependencies = recorded_dependencies;
 	result->FinalizeDeserialization();
 	return result;
+}
+
+void LanguageMacroFunction::Serialize(Serializer &serializer) const {
+	MacroFunction::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "language", language);
+	serializer.WritePropertyWithDefault<string>(201, "source", source);
+}
+
+unique_ptr<MacroFunction> LanguageMacroFunction::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LanguageMacroFunction>(new LanguageMacroFunction());
+	deserializer.ReadPropertyWithDefault<string>(200, "language", result->language);
+	deserializer.ReadPropertyWithDefault<string>(201, "source", result->source);
+	return std::move(result);
 }
 
 void ScalarMacroFunction::Serialize(Serializer &serializer) const {

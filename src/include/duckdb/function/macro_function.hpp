@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -19,7 +20,7 @@ class FunctionExpression;
 
 class ScalarMacroFunction;
 
-enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2 };
+enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2, LANGUAGE_MACRO = 3 };
 
 struct MacroBindResult {
 	explicit MacroBindResult(string error_p) : error(std::move(error_p)) {
@@ -45,6 +46,11 @@ public:
 	vector<LogicalType> types;
 	//! The declared return type, UNKNOWN when none was declared: the member's result is cast to it
 	LogicalType return_type = LogicalType::UNKNOWN;
+	//! Whether recorded_dependencies carries this member's create-time dependency attribution.
+	//! False for entries created or stored before member attribution existed.
+	bool dependencies_recorded = false;
+	//! The catalog dependencies this member's CREATE bind registered
+	LogicalDependencyList recorded_dependencies;
 
 public:
 	virtual ~MacroFunction() {
@@ -67,6 +73,15 @@ public:
 	                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
 	                   InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>>
 	                       &named_arguments);
+
+	//! Whether any parameter is untyped
+	bool HasUntypedParameter() const;
+	//! Whether this member's parameter types equal the given type list exactly (untyped members never match)
+	bool MatchesSignature(const vector<LogicalType> &signature) const;
+	//! Whether this member and other can resolve the same call: an untyped member occupies its whole arity
+	bool ConflictsWith(const MacroFunction &other) const;
+	//! The parameter list as "(name TYPE, ...)" for error messages
+	string SignatureToString() const;
 
 	virtual string ToSQL() const;
 
