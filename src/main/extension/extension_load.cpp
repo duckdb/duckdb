@@ -611,6 +611,10 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		    "files is not possible, error while loading from '%s', consider 'INSTALL <path>; LOAD <name>;'",
 		    filename);
 	}
+	// the macOS hardened runtime rejects relative paths in dlopen, and a bare file name is searched on the library path
+	if (direct_load) {
+		filename = ResolveRelativePath(fs, filename);
+	}
 	if (!fs.FileExists(filename)) {
 		string message;
 		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
