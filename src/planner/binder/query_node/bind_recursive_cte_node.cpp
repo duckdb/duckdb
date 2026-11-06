@@ -31,6 +31,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto setop_index = GenerateTableIndex();
 
 	auto left_binder = Binder::CreateBinder(context, this);
+	left_binder->recursive_cte_anchor = statement.ctename;
 	auto left = left_binder->BindNode(*statement.left);
 
 	BoundStatement result;
