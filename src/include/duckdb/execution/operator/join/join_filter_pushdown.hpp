@@ -43,7 +43,9 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
-	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
+	//! Struct fields extracted from the raw scan value, in evaluation order.
+	vector<idx_t> struct_extract_path;
+	//! Casts applied after extracting the struct fields, in evaluation order.
 	vector<RuntimeFilterCastStep> runtime_filter_casts;
 };
 

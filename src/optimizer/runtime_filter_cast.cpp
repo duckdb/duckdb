@@ -1,10 +1,20 @@
 #include "duckdb/optimizer/runtime_filter_cast.hpp"
 
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
+
+static LogicalType GetRuntimeFilterSourceType(const JoinFilterPushdownColumn &column) {
+	auto type = column.storage_type;
+	for (auto &child_idx : column.struct_extract_path) {
+		type = StructType::GetChildType(type, child_idx);
+	}
+	return type;
+}
 
 bool RuntimeFilterCastUtil::RuntimeFilterCastCanFail(const LogicalType &source_type, const LogicalType &target_type) {
 	if (source_type == target_type) {
@@ -30,7 +40,7 @@ bool RuntimeFilterCastUtil::RuntimeFilterCastCanFail(const LogicalType &source_t
 }
 
 bool RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(const JoinFilterPushdownColumn &column) {
-	auto source_type = column.storage_type;
+	auto source_type = GetRuntimeFilterSourceType(column);
 	for (auto &cast : column.runtime_filter_casts) {
 		if (cast.mode == RuntimeFilterCastMode::TRY_CAST || RuntimeFilterCastCanFail(source_type, cast.target_type)) {
 			return true;
@@ -45,6 +55,9 @@ LogicalType RuntimeFilterCastUtil::GetRuntimeFilterInputType(const JoinFilterPus
 	if (column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !column.runtime_filter_casts.empty()) {
 		return column.runtime_filter_casts.back().target_type;
 	}
+	if (!column.struct_extract_path.empty()) {
+		return GetRuntimeFilterSourceType(column);
+	}
 	return runtime_type;
 }
 
@@ -52,6 +65,9 @@ bool RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(const 
                                                                           const LogicalType &runtime_type) {
 	if (column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
 		return false;
+	}
+	if (!column.struct_extract_path.empty()) {
+		return true;
 	}
 	auto source_type = column.storage_type;
 	for (auto &cast : column.runtime_filter_casts) {
@@ -70,7 +86,13 @@ unique_ptr<Expression> RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression
 	D_ASSERT(column.storage_type.IsValid());
 	preserves_cast_errors = false;
 	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
-	auto source_type = column.storage_type;
+	for (auto &child_idx : column.struct_extract_path) {
+		vector<unique_ptr<Expression>> children;
+		children.push_back(std::move(input));
+		children.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
+		input = StructExtractAtFun::GetFunction().Bind(context, std::move(children));
+	}
+	auto source_type = input->GetReturnType();
 	for (auto &cast : column.runtime_filter_casts) {
 		const auto cast_can_fail = RuntimeFilterCastCanFail(source_type, cast.target_type);
 		const auto is_try_cast = cast.mode == RuntimeFilterCastMode::TRY_CAST || cast_can_fail;
