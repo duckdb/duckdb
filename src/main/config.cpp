@@ -718,7 +718,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads() {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
@@ -730,18 +730,19 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 			return MaxValue<idx_t>(slurm_threads, 1);
 		}
 	}
-	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
+	auto local_fs = FileSystem::CreateLocal();
+	return MaxValue<idx_t>(CGroups::GetCPULimit(*local_fs, physical_cores), 1);
 #else
 	return MaxValue<idx_t>(physical_cores, 1);
 #endif
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxAsyncThreads() {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
-	return MinValue<idx_t>(4 * GetSystemMaxThreads(fs), 256);
+	return MinValue<idx_t>(4 * GetSystemMaxThreads(), 256);
 #endif
 }
 
@@ -763,7 +764,7 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	} else if (slurm_mem_per_cpu) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
-			idx_t num_threads = GetSystemMaxThreads(fs);
+			idx_t num_threads = GetSystemMaxThreads();
 			return mem_per_cpu.GetIndex() * num_threads;
 		}
 	}
