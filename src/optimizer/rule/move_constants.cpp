@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -307,6 +309,14 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 			return nullptr;
 		}
 		outer_constant.SetValue(std::move(*result_value));
+	} else if (constant_type.id() == LogicalTypeId::DECIMAL && constant_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal, negate the BIGNUM blob of the unscaled value
+		const auto unscaled = outer_constant.GetValue().GetValueUnsafe<bignum_t>();
+		const BignumIntermediate intermediate(unscaled);
+		StringHeap heap;
+		auto negated = bignum_t(intermediate.Negate(heap));
+		outer_constant.SetValue(
+		    Value::DECIMAL(negated, DecimalType::GetWidth(constant_type), DecimalType::GetScale(constant_type)));
 	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
 		// negate the unscaled integer and reconstruct with the same width/scale
 		hugeint_t negated_value;

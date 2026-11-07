@@ -155,17 +155,18 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 			break;
 		}
 		auto width = info.Cast<DecimalTypeInfo>().width;
-		if (width <= Decimal::MAX_WIDTH_INT16) {
+		if (Decimal::IsWide(width)) {
+			// wide decimals hold their unscaled value as a BIGNUM blob
+			result = PhysicalType::VARCHAR;
+		} else if (width <= Decimal::MAX_WIDTH_INT16) {
 			result = PhysicalType::INT16;
 		} else if (width <= Decimal::MAX_WIDTH_INT32) {
 			result = PhysicalType::INT32;
 		} else if (width <= Decimal::MAX_WIDTH_INT64) {
 			result = PhysicalType::INT64;
-		} else if (width <= Decimal::MAX_WIDTH_INT128) {
-			result = PhysicalType::INT128;
 		} else {
-			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
-			                        width, DecimalType::MaxWidth());
+			D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
+			result = PhysicalType::INT128;
 		}
 		return true;
 	}
@@ -870,9 +871,7 @@ bool LogicalType::IsComplete() const {
 			return type.GetTypeInfo().Cast<StructTypeInfo>().child_types.empty();
 		case LogicalTypeInfoType::DECIMAL_TYPE_INFO: {
 			// A well-formed decimal is not incomplete
-			auto is_well_formed = DecimalType::GetWidth(type) >= 1 &&
-			                      DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
-			                      DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+			auto is_well_formed = Decimal::IsValidWidthScale(DecimalType::GetWidth(type), DecimalType::GetScale(type));
 			return !is_well_formed;
 		}
 		default:
@@ -988,13 +987,14 @@ bool LogicalType::GetDecimalProperties(uint32_t &width, uint32_t &scale) const {
 }
 
 //! Grows Decimal width/scale when appropriate
-static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &right) {
+static LogicalType DecimalSizeCheck(optional_ptr<ClientContext> context, const LogicalType &left,
+                                    const LogicalType &right) {
 	D_ASSERT(left.id() == LogicalTypeId::DECIMAL || right.id() == LogicalTypeId::DECIMAL);
 	D_ASSERT(left.id() != right.id());
 
 	//! Make sure the 'right' is the DECIMAL type
 	if (left.id() == LogicalTypeId::DECIMAL) {
-		return DecimalSizeCheck(right, left);
+		return DecimalSizeCheck(context, right, left);
 	}
 	auto width = DecimalType::GetWidth(right);
 	auto scale = DecimalType::GetScale(right);
@@ -1008,12 +1008,13 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
-		uint32_t new_width = other_width + scale;
+		idx_t new_width = idx_t(other_width) + scale;
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
-		if (new_width > DecimalType::MaxWidth()) {
-			new_width = DecimalType::MaxWidth();
+		const idx_t width_limit = Decimal::MaxResultWidth(context, width);
+		if (new_width > width_limit) {
+			new_width = width_limit;
 		}
-		return LogicalType::DECIMAL(new_width, scale);
+		return LogicalType::DECIMAL(NumericCast<uint32_t>(new_width), scale);
 	}
 	return right;
 }
@@ -1106,7 +1107,7 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 				//! Prefer VARIANT always
 				result = left;
 			} else {
-				result = DecimalSizeCheck(left, right);
+				result = DecimalSizeCheck(logical_type_resolver.context, left, right);
 			}
 		} else {
 			result = right;
@@ -1121,7 +1122,7 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 				//! Prefer VARIANT always
 				result = right;
 			} else {
-				result = DecimalSizeCheck(right, left);
+				result = DecimalSizeCheck(logical_type_resolver.context, right, left);
 			}
 		} else {
 			result = left;
@@ -1340,8 +1341,7 @@ void LogicalType::Verify() const {
 #ifdef DEBUG
 	switch (id()) {
 	case LogicalTypeId::DECIMAL:
-		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		D_ASSERT(Decimal::IsValidWidthScale(DecimalType::GetWidth(*this), DecimalType::GetScale(*this)));
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
@@ -1557,10 +1557,11 @@ uint32_t DecimalType::GetScale(const LogicalType &type) {
 }
 
 uint32_t DecimalType::MaxWidth() {
-	return DecimalWidth<hugeint_t>::max;
+	return NumericLimits<uint32_t>::Maximum();
 }
 
 LogicalType LogicalType::DECIMAL(uint32_t width, uint32_t scale) {
+	// width 0 and scale > width stay constructible and are reported by IsComplete
 	D_ASSERT(width >= scale);
 	auto type_info = make_uniq<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, std::move(type_info));

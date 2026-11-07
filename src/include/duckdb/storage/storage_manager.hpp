@@ -19,6 +19,8 @@
 namespace duckdb {
 struct AttachOptions;
 class ActiveCheckpointWrapper;
+class ParsedExpression;
+class QueryNode;
 class BlockManager;
 class Catalog;
 class CheckpointWriter;
@@ -138,6 +140,19 @@ public:
 		D_ASSERT(HasStorageVersion());
 		return StorageVersionInfo::GetStorageVersionString(storage_version);
 	}
+	//! Why a column type cannot be stored at the storage version of this database, empty when it can
+	string GetUnsupportedTypeReason(const LogicalType &type) const;
+	//! Throws when a column type cannot be stored at the storage version of this database
+	void CheckTypeIsSupported(const LogicalType &type) const;
+	//! Why a type written to the catalog holds a DECIMAL wider than this storage version stores, empty when it does not
+	string GetUnsupportedDecimalWidthReason(const LogicalType &type) const;
+	//! Throws when a type written to the catalog holds a DECIMAL wider than this storage version stores
+	void CheckDecimalWidthIsSupported(const LogicalType &type) const;
+	//! Throws when a stored expression casts to a DECIMAL wider than this storage version stores: below v2.0.0 a CAST
+	//! serializes its target as a LogicalType, which the engines of that version read as a fixed-size decimal
+	void CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const;
+	//! The same check over every expression of a stored query (a view or a table macro)
+	void CheckQueryDecimalsAreSupported(QueryNode &node) const;
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}

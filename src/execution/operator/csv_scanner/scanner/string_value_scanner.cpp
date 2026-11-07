@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -424,7 +426,16 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (decimal_separator == ',') {
+		if (parse_types[chunk_col_id].internal_type == PhysicalType::VARCHAR) {
+			// the bignum_t tier (width > 38) stores the BIGNUM blob of the unscaled value
+			string blob;
+			success = BignumDecimal::TryParse(value_ptr, size, parse_types[chunk_col_id].width,
+			                                  parse_types[chunk_col_id].scale, blob, decimal_separator);
+			if (success) {
+				static_cast<bignum_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+				    bignum_t(StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], blob.data(), blob.size()));
+			}
+		} else if (decimal_separator == ',') {
 			switch (parse_types[chunk_col_id].internal_type) {
 			case PhysicalType::INT16:
 				success = TryDecimalStringCast<int16_t, ','>(
@@ -1833,8 +1844,8 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::DECIMAL:
 	case LogicalType::BOOLEAN:
+	case LogicalTypeId::DECIMAL:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go

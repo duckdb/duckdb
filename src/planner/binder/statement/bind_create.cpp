@@ -498,9 +498,15 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			    });
 		}
 
-		// Constant-fold all default parameter expressions
+		// Constant-fold all default parameter expressions. The folded values are stored with their types: a database
+		// written before wide decimals folds them as the engines of its storage version do
 		identifier_map_t<Value> default_values;
 		identifier_set_t integer_literal_defaults;
+		const bool legacy_decimal_defaults =
+		    !info.temporary && attached.HasStorageManager() &&
+		    StorageManager::IsPriorToVersion(Decimal::WIDE_VERSION_ADDED,
+		                                     attached.GetStorageManager().GetStorageVersion());
+		LegacyDecimalResultTypeScope legacy_scope(context, legacy_decimal_defaults);
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
@@ -560,6 +566,26 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 					    function->default_parameters[param_name]->ToString(), param_name, type.ToString());
 					throw BinderException(msg + " Please add an explicit type cast.");
 				}
+			}
+		}
+
+		if (!info.temporary && attached.HasStorageManager()) {
+			// the parameter, default and return types are written to the catalog, and the stored expressions may cast
+			auto &storage_manager = attached.GetStorageManager();
+			for (const auto &type : function->types) {
+				storage_manager.CheckDecimalWidthIsSupported(type);
+			}
+			for (const auto &default_value : default_values) {
+				storage_manager.CheckDecimalWidthIsSupported(default_value.second.type());
+			}
+			storage_manager.CheckDecimalWidthIsSupported(function->return_type);
+			for (auto &default_parameter : function->default_parameters) {
+				storage_manager.CheckExpressionDecimalsAreSupported(*default_parameter.second);
+			}
+			if (info.type == CatalogType::MACRO_ENTRY) {
+				storage_manager.CheckExpressionDecimalsAreSupported(*function->Cast<ScalarMacroFunction>().expression);
+			} else {
+				storage_manager.CheckQueryDecimalsAreSupported(*function->Cast<TableMacroFunction>().query_node);
 			}
 		}
 
@@ -915,6 +941,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;
 			}
 		}
+		if (base.query && !base.temporary) {
+			// the query of the view is stored, so a cast in it may not target a decimal wider than the database stores
+			auto &attached = schema.ParentCatalog().GetAttached();
+			if (!attached.IsTemporary() && attached.HasStorageManager()) {
+				attached.GetStorageManager().CheckQueryDecimalsAreSupported(*base.query->node);
+			}
+		}
 		BindCreateViewInfo(base);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
@@ -1038,6 +1071,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			SetCatalogLookupCallback(dependency_callback);
 			// Bind the underlying type
 			BindLogicalType(create_type_info.type);
+			// the type is written to the catalog
+			auto &attached = catalog.GetAttached();
+			if (!create_type_info.temporary && attached.HasStorageManager()) {
+				attached.GetStorageManager().CheckDecimalWidthIsSupported(create_type_info.type);
+			}
 		}
 		break;
 	}

@@ -97,6 +97,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_sampling.test",
+        "test/sql/types/decimal/wide_decimal_quantiles.test",
         "test/sql/aggregate/group/aggregate_combine_grow_arena.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
@@ -127,9 +128,6 @@
         "test/sql/show_select/summarize_subquery.test",
         "test/sql/show_select/test_summarize.test",
         "test/sql/show_select/test_summarize_quoted.test",
-        "test/sql/types/bignum/test_big_bignum.test",
-        "test/sql/types/bignum/test_bignum_implicit_cast.test",
-        "test/sql/types/bignum/test_bignum_sum.test",
         "test/sql/types/nested/array/array_summarize.test"
       ]
     },
