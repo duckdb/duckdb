@@ -71,6 +71,10 @@ public:
 	bool TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const;
 	bool HasCompleteStats() const;
 	bool AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
+	//! Mark the most recently added relation as a recursive CTE reference
+	void MarkLastRelationRecursive();
+	bool HasRecursiveRelations() const;
+	bool RelationIsRecursive(RelationIndex index) const;
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	bool AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
 	                             optional_ptr<LogicalOperator> parent, RelationStats &child_stats);
@@ -106,6 +110,8 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 	column_binding_map_t<ColumnBinding> normalized_bindings;
+	//! Relations that scan the frontier or recurring state of a recursive CTE being planned
+	unordered_set<idx_t> recursive_relations;
 	bool stats_complete = true;
 };
 

@@ -183,11 +183,30 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		return nullptr;
 	}
 	auto cardinality = cost_model.GetCardinalityEstimator().EstimateCardinality(set);
+	// A recursive member re-executes against a frontier whose planned cardinality is unreliable, so an
+	// estimate-driven plan may build an intermediate of recursion-independent inputs that expands beyond
+	// them, while its true size is never bounded by the actual frontier. Joining independent inputs onto
+	// the frontier spine one at a time keeps every build bounded by an input relation, so reject the
+	// expanding independent pair and keep reducing ones.
+	if (query_graph_manager.relation_manager.HasRecursiveRelations() && !ContainsRecursiveRelation(left.set) &&
+	    !ContainsRecursiveRelation(right.set) &&
+	    cardinality.GetDouble() > MaxValue(left.cardinality.GetDouble(), right.cardinality.GetDouble())) {
+		return nullptr;
+	}
 	auto cost = cost_model.ComputeCost(left, right, best_candidate->join_operator, cardinality.GetDouble());
 	auto result = make_uniq<DPJoinNode>(set, best_candidate->join_operator, std::move(best_candidate->predicates),
 	                                    best_candidate->generated_cross_product, left.set, right.set, cost);
 	result->cardinality = cardinality;
 	return result;
+}
+
+bool PlanEnumerator::ContainsRecursiveRelation(const JoinRelationSet &set) const {
+	for (idx_t i = 0; i < set.count; i++) {
+		if (query_graph_manager.relation_manager.RelationIsRecursive(set.relations[i])) {
+			return true;
+		}
+	}
+	return false;
 }
 
 optional_ptr<DPJoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,

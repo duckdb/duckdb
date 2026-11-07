@@ -75,6 +75,19 @@ bool RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	return true;
 }
 
+void RelationManager::MarkLastRelationRecursive() {
+	D_ASSERT(!relations.empty());
+	recursive_relations.insert(relations.size() - 1);
+}
+
+bool RelationManager::HasRecursiveRelations() const {
+	return !recursive_relations.empty();
+}
+
+bool RelationManager::RelationIsRecursive(RelationIndex index) const {
+	return recursive_relations.find(index.index) != recursive_relations.end();
+}
+
 bool RelationManager::RegisterRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	if (!stats.stats_initialized || !stats.MatchesBindings(op.GetColumnBindings())) {
@@ -642,7 +655,11 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 			return false;
 		}
 		// A projection must preserve the recursive reference's join-order restriction.
-		return !IsProjectedRecursiveCTERef(proj, optimizer) || RecursiveCTERefCanReorder(parent);
+		if (!IsProjectedRecursiveCTERef(proj, optimizer)) {
+			return true;
+		}
+		MarkLastRelationRecursive();
+		return RecursiveCTERefCanReorder(parent);
 	}
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
 		// optimize the child and copy the stats
@@ -722,6 +739,7 @@ bool RelationManager::ExtractJoinRelation(JoinOrderOptimizer &optimizer, Pending
 
 		auto is_recursive = optimizer.recursive_cte_indexes.find(cte_ref.cte_index);
 		if (is_recursive != optimizer.recursive_cte_indexes.end()) {
+			MarkLastRelationRecursive();
 			// Only let recursive CTE references participate in join reordering when they sit directly
 			// under an equality comparison join. This still enables the reusable recursive hash-join
 			// case, while avoiding broader reorderings that let residual/range predicates drive the
