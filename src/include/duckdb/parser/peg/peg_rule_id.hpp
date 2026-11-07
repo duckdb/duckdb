@@ -809,6 +809,7 @@ enum class PEGRuleId : uint32_t {
 	ExternalResourceStatement,
 	CreateExternalResourceStmt,
 	RegisterExternalResourceStmt,
+	RegisterExternalResourcesStmt,
 	DestroyExternalResourceStmt,
 	ExternalResourceKeyword,
 	ExternalResourceType,
