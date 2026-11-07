@@ -91,11 +91,15 @@ WITH RECURSIVE walk AS (
 SELECT count(*), sum(d) FROM walk;
 
 query II
-EXPLAIN SELECT * FROM walk_step;
-----
-physical_plan	<REGEX>:(?s).* = g.*Conditions: u = u.*
-
-query II
 SELECT * FROM walk_step;
 ----
 11	45
+
+# The reducing-join choice depends on table statistics: WAL-replayed storage estimates differently
+# and picks the frontier-spine plan, which is equally valid. Pin the plan on in-memory runs only.
+require noforcestorage
+
+query II
+EXPLAIN SELECT * FROM walk_step;
+----
+physical_plan	<REGEX>:(?s).* = g.*Conditions: u = u.*
