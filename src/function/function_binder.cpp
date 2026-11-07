@@ -1,4 +1,6 @@
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/parser/parsed_data/bound_pragma_info.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -978,6 +980,18 @@ static bool IsIncompleteCastTarget(const LogicalType &type) {
 	});
 }
 
+static void MarkUnresolvedParameters(Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_PARAMETER &&
+	    expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		auto &data = expr.Cast<BoundParameterExpression>().ParameterDataMutable();
+		if (data) {
+			data->unresolved_use = true;
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { MarkUnresolvedParameters(child); });
+}
+
 void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, vector<LogicalType> &argument_types,
                                              vector<unique_ptr<Expression>> &children) {
 	for (auto &arg : argument_types) {
@@ -997,8 +1011,9 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
 			    function_name);
 		}
-		if (children[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN && !target_type.IsComplete()) {
-			// an unresolved parameter cannot take an incomplete type, the statement is bound again at EXECUTE
+		if (children[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN && target_type.id() != LogicalTypeId::ANY &&
+		    !target_type.IsComplete()) {
+			// an unresolved parameter cannot take a nested incomplete type, the statement is bound again at EXECUTE
 			throw ParameterNotResolvedException();
 		}
 		target_type.Verify();
@@ -1011,6 +1026,10 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 		    target_type.id() == LogicalTypeId::LIST) {
 			// an array passed to a LIST(ANY) parameter is cast to a list of its child type
 			children[i] = BoundCastExpression::AddArrayCastToList(context, std::move(children[i]));
+		}
+		if (target_type.id() == LogicalTypeId::ANY && children[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+			// the parameter stays untyped here, so the statement is bound again once another occurrence types it
+			MarkUnresolvedParameters(*children[i]);
 		}
 		// check if the type of child matches the type of function argument
 		// if not we need to add a cast

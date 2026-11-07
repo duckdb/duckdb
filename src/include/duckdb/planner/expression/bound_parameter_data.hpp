@@ -27,6 +27,8 @@ private:
 
 public:
 	LogicalType return_type;
+	//! Whether an occurrence was bound while the type was unknown, e.g. as an argument of type ANY
+	bool unresolved_use = false;
 
 public:
 	void SetValue(Value val) {

@@ -32,6 +32,8 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 
 	auto &context = input.GetClientContext();
 	switch (arguments[0]->GetReturnType().id()) {
+	case LogicalTypeId::UNKNOWN:
+		throw ParameterNotResolvedException();
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 		break;
