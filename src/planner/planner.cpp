@@ -263,6 +263,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
+	for (auto &kv : bound_parameters.GetParameters()) {
+		// an occurrence bound before another one typed the parameter still has an unknown type
+		auto &param = *kv.second;
+		if (param.unresolved_use && param.return_type.id() != LogicalTypeId::UNKNOWN) {
+			bound_parameters.rebind = true;
+		}
+	}
 	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
 	Planner::VerifyPlan(context, plan, bound_parameters.GetParametersPtr());

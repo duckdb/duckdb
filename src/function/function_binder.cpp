@@ -1,4 +1,6 @@
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/parser/parsed_data/bound_pragma_info.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -978,6 +980,18 @@ static bool IsIncompleteCastTarget(const LogicalType &type) {
 	});
 }
 
+static void MarkUnresolvedParameters(Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_PARAMETER &&
+	    expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		auto &data = expr.Cast<BoundParameterExpression>().ParameterDataMutable();
+		if (data) {
+			data->unresolved_use = true;
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { MarkUnresolvedParameters(child); });
+}
+
 void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, vector<LogicalType> &argument_types,
                                              vector<unique_ptr<Expression>> &children) {
 	for (auto &arg : argument_types) {
@@ -1013,15 +1027,19 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 			// an array passed to a LIST(ANY) parameter is cast to a list of its child type
 			children[i] = BoundCastExpression::AddArrayCastToList(context, std::move(children[i]));
 		}
+		if (target_type.id() == LogicalTypeId::ANY && children[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+			// the parameter stays untyped here, so the statement is bound again once another occurrence types it
+			MarkUnresolvedParameters(*children[i]);
+		}
 		// check if the type of child matches the type of function argument
 		// if not we need to add a cast
 		auto cast_result = RequiresCast(children[i]->GetReturnType(), target_type);
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			if (target_has_any && children[i]->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+			if (target_has_any) {
 				// a type that is not concrete cannot be cast to (e.g. a NULL or a VARIANT passed to LIST(ANY)) - the
-				// function has to handle the argument as-is. Unresolved parameters are still assigned the type.
+				// function has to handle the argument as-is
 				continue;
 			}
 			if (IsIncompleteCastTarget(target_type)) {

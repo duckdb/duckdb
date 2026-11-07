@@ -352,6 +352,9 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, BoundSimpleFunction &function,
                                                                vector<unique_ptr<Expression>> &arguments) {
 	auto &arg_return_type = arguments[0]->GetReturnType();
+	if (arg_return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arg_return_type.IsAggregateState()) {
 		throw BinderException("Can only %s %s, not AGGREGATE_STATE", function.GetName(), arg_return_type.ToString());
 	}
@@ -409,6 +412,11 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+	for (auto &argument : arguments) {
+		if (argument->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	auto bind_data =
 	    BindAggregateStateInternal(input.GetClientContext(), input.GetBoundFunction(), input.GetArguments());
 

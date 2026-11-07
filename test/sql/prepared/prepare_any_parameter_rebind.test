@@ -1,0 +1,69 @@
+# name: test/sql/prepared/prepare_any_parameter_rebind.test
+# description: An untyped parameter passed to an ANY argument is bound again at EXECUTE when needed
+# group: [prepared]
+
+# functions that need the type of their ANY argument at bind time
+statement ok
+PREPARE f AS SELECT finalize($1);
+
+query I
+EXECUTE f(to_aggregate_state(3::BIGINT, 'count', ['VARCHAR']));
+----
+3
+
+statement ok
+PREPARE c AS SELECT finalize(combine(to_aggregate_state(3::BIGINT, 'count', ['VARCHAR']), $1));
+
+query I
+EXECUTE c(to_aggregate_state(4::BIGINT, 'count', ['VARCHAR']));
+----
+7
+
+statement ok
+PREPARE m AS SELECT make_type('DECIMAL', $1, 2);
+
+query I
+EXECUTE m(10);
+----
+DECIMAL(10,2)
+
+# an occurrence passed to an ANY argument before another occurrence types the parameter
+statement ok
+PREPARE p1 AS SELECT typeof(struct_pack(a := $1)) AS t, $1::INTEGER AS i;
+
+query II
+EXECUTE p1(42::INTEGER);
+----
+STRUCT(a INTEGER)	42
+
+statement ok
+PREPARE p2 AS SELECT $1::INTEGER AS i, typeof(struct_pack(a := $1)) AS t;
+
+query II
+EXECUTE p2(42::INTEGER);
+----
+42	STRUCT(a INTEGER)
+
+statement ok
+PREPARE q1 AS SELECT typeof($1) AS t, $1::INTEGER AS i;
+
+query II
+EXECUTE q1(42::INTEGER);
+----
+INTEGER	42
+
+statement ok
+PREPARE q2 AS SELECT $1::INTEGER AS i, typeof($1) AS t;
+
+query II
+EXECUTE q2(42::INTEGER);
+----
+42	INTEGER
+
+statement ok
+PREPARE q3 AS SELECT typeof(TRY($1)) AS t, $1::INTEGER AS i;
+
+query II
+EXECUTE q3(42::INTEGER);
+----
+INTEGER	42
