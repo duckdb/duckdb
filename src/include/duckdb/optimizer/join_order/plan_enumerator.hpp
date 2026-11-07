@@ -52,6 +52,7 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 	const vector<reference<NeighborInfo>> &GetConnections(JoinRelationSet &left, JoinRelationSet &right);
+	bool ContainsRecursiveRelation(const JoinRelationSet &set) const;
 	const vector<reference<JoinRelationSet>> &GetAllNeighborRelationSets(vector<RelationIndex> neighbors);
 
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
