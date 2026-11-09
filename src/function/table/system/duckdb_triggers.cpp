@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_catalog_scanner.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,7 @@ struct DuckDBTriggersData : public GlobalTableFunctionState {
 
 	vector<reference<TriggerCatalogEntry>> entries;
 	idx_t offset;
+	SystemCatalogScannerStats stats;
 };
 
 static unique_ptr<FunctionData> DuckDBTriggersBind(ClientContext &context, TableFunctionBindInput &input,
@@ -64,13 +66,15 @@ static unique_ptr<FunctionData> DuckDBTriggersBind(ClientContext &context, Table
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return nullptr;
+	// triggers are found through their tables, so only the catalog and schema columns are identity columns
+	return SystemCatalogScanner::CreateBindData(names, return_types);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTriggersInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBTriggersData>();
 
-	auto schemas = Catalog::GetAllSchemas(context);
+	// scan the tables of the schemas that survive the pushed-down filters
+	auto schemas = SystemCatalogScanner::GetSchemas(context, input, result->stats);
 	vector<reference<TableCatalogEntry>> tables;
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
@@ -142,9 +146,15 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 }
 
+static void DuckDBTriggersGetMetrics(TableFunctionGetMetricsInput &input) {
+	SystemCatalogScanner::ReportMetrics(input, input.global_state->Cast<DuckDBTriggersData>().stats);
+}
+
 void DuckDBTriggersFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_triggers", {}, DuckDBTriggersFunction, DuckDBTriggersBind, DuckDBTriggersInit));
+	TableFunction triggers("duckdb_triggers", {}, DuckDBTriggersFunction, DuckDBTriggersBind, DuckDBTriggersInit);
+	SystemCatalogScanner::RegisterPushdown(triggers);
+	triggers.get_metrics = DuckDBTriggersGetMetrics;
+	set.AddFunction(triggers);
 }
 
 } // namespace duckdb
