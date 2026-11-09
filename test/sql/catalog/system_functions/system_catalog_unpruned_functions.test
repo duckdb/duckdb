@@ -1,0 +1,62 @@
+# name: test/sql/catalog/system_functions/system_catalog_unpruned_functions.test
+# description: duckdb_types() and duckdb_constraints() compute a column over the whole scan, so they cannot prune it
+# group: [system_functions]
+
+# The expected output names the default catalog 'memory'.
+require noforcestorage
+
+# duckdb_types: type_oid for a built-in type is its type id, shown once per scan and NULL for every later row with
+# the same id. The aliases int and integer share an id, and every catalog's main schema holds both, so only the first
+# row in (catalog, schema, name) order shows it. A pruned scan would show it on a row that is NULL today.
+# lower() because binding a type recases the temp catalog's entry after the name used in the lookup. The catalogs are
+# named because a test config may attach another one.
+query III
+SELECT database_name, lower(type_name), type_oid FROM duckdb_types() WHERE lower(type_name) IN ('int', 'integer') AND database_name IN ('memory', 'system', 'temp') ORDER BY ALL;
+----
+memory	int	13
+memory	integer	NULL
+system	int	NULL
+system	integer	NULL
+temp	int	NULL
+temp	integer	NULL
+
+statement ok
+ATTACH ':memory:' AS aaa;
+
+query III
+SELECT database_name, lower(type_name), type_oid FROM duckdb_types() WHERE lower(type_name) = 'int' AND database_name IN ('aaa', 'memory', 'system', 'temp') ORDER BY ALL;
+----
+aaa	int	13
+memory	int	NULL
+system	int	NULL
+temp	int	NULL
+
+# duckdb_constraints: constraint_index is one counter over every constraint row of the scan, in
+# (catalog, schema, table) order. pg_constraint.oid encodes it next to table_oid and pg_get_constraintdef() decodes
+# it, so a pruned scan would renumber the rows and break that round trip.
+statement ok
+CREATE TABLE a(i INTEGER PRIMARY KEY, j INTEGER CHECK (j > 0));
+
+statement ok
+CREATE TABLE b(x INTEGER UNIQUE, y INTEGER REFERENCES a(i));
+
+statement ok
+CREATE SCHEMA s;
+
+statement ok
+CREATE TABLE s.c(k INTEGER NOT NULL);
+
+query III
+SELECT table_name, constraint_index, constraint_type FROM duckdb_constraints() WHERE database_name = current_database() ORDER BY constraint_index;
+----
+a	0	PRIMARY KEY
+a	1	CHECK
+a	2	NOT NULL
+b	3	UNIQUE
+b	4	FOREIGN KEY
+c	5	NOT NULL
+
+query I
+SELECT pg_get_constraintdef((SELECT oid FROM pg_catalog.pg_constraint WHERE conrelid = (SELECT oid FROM pg_catalog.pg_class WHERE relname = 'b') AND contype = 'f'));
+----
+FOREIGN KEY (y) REFERENCES a(i)

@@ -1,0 +1,523 @@
+# name: test/sql/catalog/system_functions/system_catalog_scanner_functions.test
+# description: Filter pushdown on the identity columns of duckdb_indexes(), duckdb_sequences(), duckdb_functions(), duckdb_triggers() and duckdb_schemas()
+# group: [system_functions]
+
+# Fixture: two attached in-memory catalogs. In each, schema s1 holds table t1 (with index i1), view v1, sequence seq1,
+# macros m1, m2 (two overloads) and "MixedCase", a nested schema s1.child with table tc and macro m3, and a trigger on
+# t1 and on tc; schema s2 holds table t2 (with index i2), sequence seq2 and macro m1.
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+foreach db db1 db2
+
+statement ok
+CREATE SCHEMA {db}.s1;
+
+statement ok
+CREATE SCHEMA {db}.s2;
+
+statement ok
+CREATE SCHEMA {db}.s1.child;
+
+statement ok
+CREATE TABLE {db}.s1.t1(i INTEGER);
+
+statement ok
+CREATE TABLE {db}.s2.t2(i INTEGER);
+
+statement ok
+CREATE TABLE {db}.s1.child.tc(i INTEGER);
+
+statement ok
+CREATE VIEW {db}.s1.v1 AS SELECT 1 AS c1;
+
+statement ok
+CREATE INDEX i1 ON {db}.s1.t1(i);
+
+statement ok
+CREATE INDEX i2 ON {db}.s2.t2(i);
+
+statement ok
+CREATE SEQUENCE {db}.s1.seq1;
+
+statement ok
+CREATE SEQUENCE {db}.s2.seq2;
+
+statement ok
+CREATE MACRO {db}.s1.m1(x) AS x + 1;
+
+statement ok
+CREATE MACRO {db}.s2.m1(x) AS x + 2;
+
+statement ok
+CREATE MACRO {db}.s1.m2(x) AS x, (x, y) AS x + y;
+
+statement ok
+CREATE MACRO {db}.s1."MixedCase"(x) AS x;
+
+statement ok
+CREATE MACRO {db}.s1.child.m3() AS 3;
+
+# a trigger whose body writes its own table is rejected as a recursive chain, so the body targets another table
+statement ok
+CREATE TRIGGER trg_{db} AFTER INSERT ON {db}.s1.t1 DELETE FROM {db}.s2.t2 WHERE false;
+
+statement ok
+CREATE TRIGGER trg_child_{db} AFTER INSERT ON {db}.s1.child.tc DELETE FROM {db}.s2.t2 WHERE false;
+
+endloop
+
+# The snapshots must be taken before any pushed query runs: the system catalog creates its built-in entries lazily
+# on first scan, so a pruned scan that comes first would leave some uncreated when the snapshot is taken.
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+statement ok
+CREATE TABLE full_{function} AS SELECT * FROM {function}();
+
+endloop
+
+# ------------------------------------------------------------------------------------------------
+# 1. EXPLAIN: identity predicates are table filters on the scan, other predicates are not
+# ------------------------------------------------------------------------------------------------
+
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+query II
+EXPLAIN SELECT database_name FROM {function}() WHERE schema_name = 's1';
+----
+physical_plan	<REGEX>:.*Filters:.*schema_name.*s1.*
+
+query II
+EXPLAIN SELECT database_name FROM {function}() WHERE database_name = 'db1';
+----
+physical_plan	<REGEX>:.*Filters:.*database_name.*db1.*
+
+query II
+EXPLAIN SELECT database_name FROM {function}() WHERE lower(schema_name) = 's1';
+----
+physical_plan	<REGEX>:.*Filters:.*lower\(schema_name\).*s1.*
+
+endloop
+
+query II
+EXPLAIN SELECT schema_name FROM duckdb_indexes() WHERE index_name = 'i1';
+----
+physical_plan	<REGEX>:.*Filters:.*index_name.*i1.*
+
+query II
+EXPLAIN SELECT schema_name FROM duckdb_sequences() WHERE sequence_name = 'seq1';
+----
+physical_plan	<REGEX>:.*Filters:.*sequence_name.*seq1.*
+
+query II
+EXPLAIN SELECT schema_name FROM duckdb_functions() WHERE function_name = 'm1';
+----
+physical_plan	<REGEX>:.*Filters:.*function_name.*m1.*
+
+# non-identity predicates stay above the scan
+query II
+EXPLAIN SELECT index_name FROM duckdb_indexes() WHERE is_unique;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT sequence_name FROM duckdb_sequences() WHERE comment = 'x';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT function_name FROM duckdb_functions() WHERE comment = 'x';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT trigger_name FROM duckdb_triggers() WHERE comment = 'x';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT schema_name FROM duckdb_schemas() WHERE comment = 'x';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+# ------------------------------------------------------------------------------------------------
+# 2. Look-alike columns are not identity columns of the scanned entry and stay above the scan
+# ------------------------------------------------------------------------------------------------
+
+# the parent table of an index
+query II
+EXPLAIN SELECT index_name FROM duckdb_indexes() WHERE table_name = 't1';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT index_name FROM duckdb_indexes() WHERE table_oid = 0;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query III
+SELECT database_name, schema_name, index_name FROM duckdb_indexes() WHERE table_name = 't1' ORDER BY ALL;
+----
+db1	s1	i1
+db2	s1	i1
+
+# the base table of a trigger, and the trigger's own name and oid (triggers are found through their tables)
+query II
+EXPLAIN SELECT trigger_name FROM duckdb_triggers() WHERE table_name = 't1';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT trigger_name FROM duckdb_triggers() WHERE trigger_name = 'trg_db1';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query II
+EXPLAIN SELECT trigger_name FROM duckdb_triggers() WHERE trigger_oid = 0;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query III
+SELECT database_name, schema_name, trigger_name FROM duckdb_triggers() WHERE table_name = 't1' ORDER BY ALL;
+----
+db1	s1	trg_db1
+db2	s1	trg_db2
+
+query I
+SELECT database_name FROM duckdb_triggers() WHERE trigger_name = 'trg_db1';
+----
+db1
+
+# the VARCHAR database_oid of duckdb_functions
+query II
+EXPLAIN SELECT function_name FROM duckdb_functions() WHERE database_oid = '0';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT count(*) > 0 FROM duckdb_functions() WHERE database_oid = (SELECT database_oid FROM duckdb_functions() WHERE database_name = 'db1' LIMIT 1);
+----
+true
+
+# ------------------------------------------------------------------------------------------------
+# 3. Row equivalence: a pushed filter returns the rows a filter over the full scan returns
+# ------------------------------------------------------------------------------------------------
+
+# foreach splits its values on spaces, so every predicate below is written without them; oids come from variables
+statement ok
+SET VARIABLE db2_oid = (SELECT database_oid FROM duckdb_databases() WHERE database_name = 'db2');
+
+statement ok
+SET VARIABLE i2_oid = (SELECT index_oid FROM full_duckdb_indexes WHERE database_name = 'db1' AND index_name = 'i2');
+
+statement ok
+SET VARIABLE seq2_oid = (SELECT sequence_oid FROM full_duckdb_sequences WHERE database_name = 'db1' AND sequence_name = 'seq2');
+
+statement ok
+SET VARIABLE m2_oid = (SELECT DISTINCT function_oid FROM full_duckdb_functions WHERE database_name = 'db1' AND function_name = 'm2');
+
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+foreach predicate database_name='db1' database_oid=getvariable('db2_oid') schema_name='s1' schema_name=ANY(['s1','s2']) lower(schema_name)='s2' schema_name^@'s' schema_name<>'main' (database_name='db1')AND(schema_name='s1')
+
+query I
+SELECT count(*) FROM (SELECT * FROM {function}() WHERE {predicate} EXCEPT ALL SELECT * FROM full_{function} WHERE {predicate});
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM full_{function} WHERE {predicate} EXCEPT ALL SELECT * FROM {function}() WHERE {predicate});
+----
+0
+
+endloop
+
+endloop
+
+# the entry columns
+foreach predicate index_name='i1' index_name=ANY(['i1','i2']) lower(index_name)='i2' index_oid=getvariable('i2_oid') (schema_name='s1')AND(index_name='i1')
+
+query I
+SELECT count(*) FROM (SELECT * FROM duckdb_indexes() WHERE {predicate} EXCEPT ALL SELECT * FROM full_duckdb_indexes WHERE {predicate});
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM full_duckdb_indexes WHERE {predicate} EXCEPT ALL SELECT * FROM duckdb_indexes() WHERE {predicate});
+----
+0
+
+endloop
+
+foreach predicate sequence_name='seq1' sequence_name=ANY(['seq1','seq2']) lower(sequence_name)='seq2' sequence_oid=getvariable('seq2_oid') (schema_name='s1')AND(sequence_name='seq1')
+
+query I
+SELECT count(*) FROM (SELECT * FROM duckdb_sequences() WHERE {predicate} EXCEPT ALL SELECT * FROM full_duckdb_sequences WHERE {predicate});
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM full_duckdb_sequences WHERE {predicate} EXCEPT ALL SELECT * FROM duckdb_sequences() WHERE {predicate});
+----
+0
+
+endloop
+
+foreach predicate function_name='m1' function_name='m2' function_name=ANY(['m1','m3']) lower(function_name)='mixedcase' function_name='MixedCase' function_name~~*'mixedcase' function_name^@'m' function_oid=getvariable('m2_oid') (schema_name='s1')AND(function_name='m1') (database_name='db1')AND(function_name='list_value')
+
+query I
+SELECT count(*) FROM (SELECT * FROM duckdb_functions() WHERE {predicate} EXCEPT ALL SELECT * FROM full_duckdb_functions WHERE {predicate});
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM full_duckdb_functions WHERE {predicate} EXCEPT ALL SELECT * FROM duckdb_functions() WHERE {predicate});
+----
+0
+
+endloop
+
+# the IN and LIKE shapes, which need spaces
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+query I
+SELECT count(*) FROM (SELECT * FROM {function}() WHERE schema_name IN ('s1', 's2') EXCEPT ALL SELECT * FROM full_{function} WHERE schema_name IN ('s1', 's2'));
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM full_{function} WHERE schema_name LIKE 's%' EXCEPT ALL SELECT * FROM {function}() WHERE schema_name LIKE 's%');
+----
+0
+
+endloop
+
+# ------------------------------------------------------------------------------------------------
+# 4. Overloads, nested schemas and mixed case
+# ------------------------------------------------------------------------------------------------
+
+# m1 is defined in two schemas of two catalogs
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'm1';
+----
+4
+
+# m2 has two overloads in one schema of two catalogs
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'm2';
+----
+4
+
+query III
+SELECT database_name, function_name, parameters FROM duckdb_functions() WHERE database_name = 'db1' AND function_name = 'm2' ORDER BY ALL;
+----
+db1	m2	[x]
+db1	m2	[x, y]
+
+# the schema filter matches the leaf name of a nested schema
+query III
+SELECT database_name, schema_name, function_name FROM duckdb_functions() WHERE schema_name = 'child' ORDER BY ALL;
+----
+db1	child	m3
+db2	child	m3
+
+query III
+SELECT database_name, schema_name, trigger_name FROM duckdb_triggers() WHERE schema_name = 'child' ORDER BY ALL;
+----
+db1	child	trg_child_db1
+db2	child	trg_child_db2
+
+query IIII
+SELECT database_name, schema_name, parent_schema, parent_schema_oid = (SELECT oid FROM full_duckdb_schemas s WHERE s.database_name = schemas.database_name AND s.schema_name = 's1') FROM duckdb_schemas() schemas WHERE schema_name = 'child' ORDER BY ALL;
+----
+db1	child	s1	true
+db2	child	s1	true
+
+# the pushed filter sees exactly the name the row shows
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'MixedCase';
+----
+2
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'mixedcase';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE lower(function_name) = 'mixedcase';
+----
+2
+
+# duckdb_functions has no schema_oid column, so only database_name, schema_name and the entry columns are pushed
+statement error
+SELECT schema_oid FROM duckdb_functions();
+----
+Binder Error
+
+# the entries are sorted by type with a stable sort, so a filtered result is a subsequence of the full scan. The
+# fixture macros are unique per (oid, parameters) in the snapshot, so each filtered row maps to one snapshot position.
+query I
+SELECT count(*) = count(DISTINCT (function_oid, parameters)) FROM full_duckdb_functions WHERE database_name IN ('db1', 'db2');
+----
+true
+
+query II
+WITH filtered AS (
+    SELECT o.ordinality AS ord, f.pos
+    FROM duckdb_functions() WITH ORDINALITY o
+    JOIN (SELECT row_number() OVER () AS pos, * FROM full_duckdb_functions) f USING (function_oid, parameters)
+    WHERE o.database_name IN ('db1', 'db2')),
+stepped AS (SELECT pos, lag(pos) OVER (ORDER BY ord) AS prev FROM filtered)
+SELECT count(*), bool_and(prev IS NULL OR pos > prev) FROM stepped;
+----
+12	true
+
+# ------------------------------------------------------------------------------------------------
+# 5. duckdb_schemas: the schema's oid column is called oid and is pushed as the schema oid
+# ------------------------------------------------------------------------------------------------
+
+# the oid reaches the scan as a constant; a scalar subquery would be planned as a join that filters correctly even
+# if the pushed filter were dropped
+statement ok
+SET VARIABLE s2_oid = (SELECT oid FROM duckdb_schemas() WHERE database_name = 'db1' AND schema_name = 's2');
+
+query II
+EXPLAIN SELECT schema_name FROM duckdb_schemas() WHERE oid = getvariable('s2_oid');
+----
+physical_plan	<REGEX>:.*Filters:.*oid = \d+.*
+
+query II
+SELECT database_name, schema_name FROM duckdb_schemas() WHERE oid = getvariable('s2_oid');
+----
+db1	s2
+
+query II
+SELECT database_name, schema_name FROM duckdb_schemas() WHERE oid = getvariable('s2_oid') AND schema_name = 's2' AND database_oid = (SELECT database_oid FROM duckdb_databases() WHERE database_name = 'db1');
+----
+db1	s2
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE oid = getvariable('s2_oid') AND schema_name = 's1';
+----
+0
+
+# ------------------------------------------------------------------------------------------------
+# 6. EXPLAIN ANALYZE: counters
+# ------------------------------------------------------------------------------------------------
+
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+query II
+EXPLAIN ANALYZE SELECT * FROM {function}() WHERE database_name = 'db1' AND schema_name = 's1';
+----
+analyzed_plan	<REGEX>:.*Catalogs Scanned: 1/.*Schemas Scanned: 1/.*
+
+endloop
+
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_indexes() WHERE database_name = 'db1' AND schema_name = 's1' AND index_name = 'i1';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 1/.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_sequences() WHERE database_name = 'db1' AND schema_name = 's1' AND sequence_name = 'seq1';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 1/.*
+
+# duckdb_functions enumerates the schemas once and scans each for three entry types: the catalogs are counted once
+# (1/<attached catalogs>), not three times
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_functions() WHERE database_name = 'db1' AND schema_name = 's1';
+----
+analyzed_plan	<REGEX>:.*Catalogs Scanned: 1/\d\s.*Schemas Scanned: 1/\d\s.*
+
+# one macro entry, two rows
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_functions() WHERE database_name = 'db1' AND function_name = 'm2';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 1/.*
+
+# no entry filters are pushed for these two functions
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_triggers() WHERE database_name = 'db1';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 0/0.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_schemas() WHERE database_name = 'db1';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 0/0.*
+
+# ------------------------------------------------------------------------------------------------
+# 7. Filters that can throw are applied above the scan
+# ------------------------------------------------------------------------------------------------
+
+foreach function duckdb_indexes duckdb_sequences duckdb_functions duckdb_triggers duckdb_schemas
+
+query II
+EXPLAIN SELECT database_name FROM {function}() WHERE schema_name::INTEGER = 1;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+endloop
+
+# ------------------------------------------------------------------------------------------------
+# 8. Consumers: views that rename identity columns pass a predicate on them through to the scan
+# ------------------------------------------------------------------------------------------------
+
+query II
+SELECT schemaname, indexname FROM pg_catalog.pg_indexes WHERE schemaname = 's1' ORDER BY ALL;
+----
+s1	i1
+s1	i1
+
+query II
+EXPLAIN ANALYZE SELECT indexname FROM pg_catalog.pg_indexes WHERE schemaname = 's1';
+----
+analyzed_plan	<REGEX>:.*Schemas Scanned: 2/.*
+
+query II
+SELECT schemaname, sequencename FROM pg_catalog.pg_sequences WHERE schemaname = 's2' ORDER BY ALL;
+----
+s2	seq2
+s2	seq2
+
+query II
+EXPLAIN ANALYZE SELECT sequencename FROM pg_catalog.pg_sequences WHERE schemaname = 's2';
+----
+analyzed_plan	<REGEX>:.*Schemas Scanned: 2/.*
+
+query I
+SELECT count(*) FROM pg_catalog.pg_proc WHERE proname = 'm1';
+----
+4
+
+query II
+EXPLAIN ANALYZE SELECT proname FROM pg_catalog.pg_proc WHERE proname = 'm1';
+----
+analyzed_plan	<REGEX>:.*Filters: function_name = 'm1'.*Entries Scanned: 4/.*
+
+query I
+SELECT count(*) FROM pg_catalog.pg_class WHERE relname = 'i1';
+----
+2
+
+query I
+SELECT schema_name FROM information_schema.schemata WHERE catalog_name = 'db1' AND schema_name = 's1';
+----
+s1
+
+query II
+EXPLAIN ANALYZE SELECT schema_name FROM information_schema.schemata WHERE catalog_name = 'db1' AND schema_name = 's1';
+----
+analyzed_plan	<REGEX>:.*Catalogs Scanned: 1/.*Schemas Scanned: 1/.*
+
+query I
+SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'main';
+----
+1
