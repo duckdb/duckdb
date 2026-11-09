@@ -61,7 +61,10 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 	names.emplace_back("is_bound");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	return SystemCatalogScanner::CreateBindData(names, return_types, "view_name", "view_oid");
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "view_name";
+	columns.entry_oid = "view_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, TableFunctionInitInput &input) {

@@ -305,9 +305,11 @@ public:
 	          OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
-	//! The schemas a system catalog scan (duckdb_tables, duckdb_views) visits in this catalog, given the filters
-	//! pushed down on the schema identity columns. Lists every schema and keeps those the filters accept. A catalog
-	//! may override this to avoid the listing; it must return every schema the filters accept and may return more.
+	//! The schemas a system catalog scan (such as duckdb_tables) visits in this catalog, given the filters pushed down
+	//! on the schema identity columns. Lists every schema and keeps those the filters accept. A catalog may override
+	//! this to avoid the listing; it must return every schema the filters accept and may return more. A schema_name
+	//! filter is evaluated on the schema's own name, so with nested schemas it accepts every schema with that leaf
+	//! name at any depth.
 	DUCKDB_API virtual vector<reference<SchemaCatalogEntry>> GetSchemasForScan(ClientContext &context,
 	                                                                           const SchemaScanFilters &filters);
 
