@@ -133,12 +133,12 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		} else if (info.scope == "database") {
 			WriteLogValues<const DatabaseInstance>(*info.context->db, info.level, input_data, idata.sel, args.size(),
 			                                       info.type);
-		} else if (info.scope == "file_opener") {
-			WriteLogValues<const FileOpener>(*info.context->GetContext().TryGetFileOpener(), info.level, input_data,
-			                                 idata.sel, args.size(), info.type);
+		} else if (info.scope == "context") {
+			WriteLogValues<const Context>(info.context->GetContext(), info.level, input_data, idata.sel, args.size(),
+			                              info.type);
 		} else {
 			throw InvalidInputException(
-			    "write_log: 'scope' argument unknown: '%s'. Valid values are [connection, database, file_opener]",
+			    "write_log: 'scope' argument unknown: '%s'. Valid values are [connection, database, context]",
 			    info.scope);
 		}
 	}

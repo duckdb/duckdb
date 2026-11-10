@@ -52,9 +52,8 @@ public:
 	virtual ~WriteAheadLog();
 
 public:
-	//! Replay and initialize the WAL, QueryContext is passed for metric collection purposes only!!
-	static unique_ptr<WriteAheadLog> Replay(QueryContext context, StorageManager &storage_manager,
-	                                        const string &wal_path);
+	//! Replay and initialize the WAL, Context &is passed for metric collection purposes only!!
+	static unique_ptr<WriteAheadLog> Replay(Context &context, StorageManager &storage_manager, const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
 	StorageManager &GetStorageManager();

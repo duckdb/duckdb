@@ -17,7 +17,6 @@ class AttachedDatabase;
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
-class FileOpener;
 class FileSystem;
 class QueryProfiler;
 class PreparedStatementData;

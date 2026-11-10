@@ -60,8 +60,8 @@ public:
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
 	                    Vector &scan_vector) const override;
 
-	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+	void GetColumnSegmentInfo(Context &context, duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+	                          vector<duckdb::ColumnSegmentInfo> &result,
 	                          const ColumnSegmentInfoScanOptions &options) override;
 
 	bool IsPersistent() override;

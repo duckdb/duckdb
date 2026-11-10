@@ -58,10 +58,10 @@ public:
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
 	vector<ColumnSegmentInfo>
-	GetColumnSegmentInfo(const QueryContext &context,
+	GetColumnSegmentInfo(Context &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) override;
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) override;
-	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	bool ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;

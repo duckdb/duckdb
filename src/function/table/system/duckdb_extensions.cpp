@@ -130,7 +130,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
 
 			// Read the info file
-			auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, info.name);
+			auto extension_install_info =
+			    ExtensionInstallInfo::TryReadInfoFile(context.GetContext(), fs, info_file_path, info.name);
 			info.install_mode = extension_install_info->mode;
 			info.extension_version = extension_install_info->version;
 			info.signature_key_fingerprint = extension_install_info->signature_key_fingerprint;

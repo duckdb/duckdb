@@ -4,7 +4,6 @@
 
 #include <utility>
 
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -19,7 +18,7 @@ JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx
       buffer_size(buffer_size_p), buffer_start(buffer_start_p), remainder_start(DConstants::INVALID_INDEX) {
 }
 
-JSONFileHandle::JSONFileHandle(QueryContext context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
+JSONFileHandle::JSONFileHandle(Context &context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : context(context_p), file_handle(std::move(file_handle_p)), allocator(allocator_p),
       can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()),
       compressed(file_handle->GetFileCompressionType() != FileCompressionType::UNCOMPRESSED), read_position(0),
@@ -31,7 +30,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen() && !file_handle->IsPipe()) {
+	if (IsOpen() && !file_handle->IsPipe(context)) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
@@ -89,7 +88,7 @@ bool JSONFileHandle::CanSeek() const {
 }
 
 bool JSONFileHandle::IsPipe() const {
-	return file_handle->IsPipe();
+	return file_handle->IsPipe(context);
 }
 
 FileHandle &JSONFileHandle::GetHandle() {

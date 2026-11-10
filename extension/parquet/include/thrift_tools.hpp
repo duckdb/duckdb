@@ -188,7 +188,7 @@ class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTra
 public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
-	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool prefetch_mode_p,
+	ThriftFileTransport(Context &context_p, CachingFileHandle &file_handle_p, bool prefetch_mode_p,
 	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
 	    : context(context_p), file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
 	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), prefetch_mode(prefetch_mode_p) {
@@ -309,7 +309,7 @@ public:
 	}
 
 private:
-	QueryContext context;
+	Context &context;
 
 	CachingFileHandle &file_handle;
 	idx_t location;

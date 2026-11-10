@@ -48,7 +48,7 @@ struct FSSTStorage {
 	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(Context &context, ColumnSegment &segment);
 	template <bool ALLOW_FSST_VECTORS = false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
@@ -606,7 +606,7 @@ struct FSSTScanState : public SegmentScanState {
 	}
 };
 
-unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	auto layout = FSSTScanState::ParseFSSTSegmentHeader(CompressionSegmentReader::FromSegment(handle, segment, "FSST"),
@@ -743,7 +743,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	if (enable_fsst_vectors) {
 		// The result could outlive the ScanState, so keep the segment block pinned with the result vector
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		StringVector::AddHandle(result, buffer_manager.Pin(state.context, segment.GetBlockHandle()));
+		StringVector::AddHandle(result, buffer_manager.Pin(*state.context, segment.GetBlockHandle()));
 		for (idx_t i = 0; i < scan_count; i++) {
 			auto compressed_string = strings.GetCompressedString(i);
 			result_data[i] = string_t(const_char_ptr_cast(compressed_string.data()),

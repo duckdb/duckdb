@@ -121,8 +121,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	}
 }
 
-unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const QueryContext &context,
-                                                                       ColumnSegment &segment) {
+unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return make_uniq<StringScanState>(std::move(handle));
@@ -146,7 +145,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto entry = strings.GetEntry(i);
-		auto str = FetchStringFromEntry(state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(*state.context, segment, result, entry);
 		// overflow strings are already owned by the result
 		result_data[result_offset + i] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
@@ -175,7 +174,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	auto write_entry = [&](idx_t i, const StringDictionaryEntry &entry) {
-		auto str = FetchStringFromEntry(state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(*state.context, segment, result, entry);
 		result_data[result_offset + i] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
 	};
@@ -524,8 +523,8 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &context, ColumnSegment &segment,
-                                                       Vector &result, block_id_t block, int32_t offset) {
+string_t UncompressedStringStorage::ReadOverflowString(Context &context, ColumnSegment &segment, Vector &result,
+                                                       block_id_t block, int32_t offset) {
 	auto &buffer_manager = segment.GetBlockHandle()->GetMemory().GetBufferManager();
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 

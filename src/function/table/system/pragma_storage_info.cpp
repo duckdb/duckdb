@@ -167,7 +167,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &gstate = data_p.global_state->Cast<PragmaStorageGlobalState>();
 	auto &lstate = data_p.local_state->Cast<PragmaStorageLocalState>();
 	auto &columns = bind_data.table_entry.GetColumns();
-	QueryContext query_context(context);
+	Context &query_context(context);
 
 	idx_t count = 0;
 

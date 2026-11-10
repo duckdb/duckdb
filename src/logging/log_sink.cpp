@@ -5,7 +5,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/database_file_system.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -343,7 +343,7 @@ unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstanc
 		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND;
 	}
 
-	return make_uniq<BufferedFileWriter>(fs, path, flags);
+	return make_uniq<BufferedFileWriter>(fs, db.GetContext(), path, flags);
 }
 
 void FileLogSink::Truncate() {

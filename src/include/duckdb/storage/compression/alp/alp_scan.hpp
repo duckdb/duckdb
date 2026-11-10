@@ -283,7 +283,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(std::move(handle), segment);

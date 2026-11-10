@@ -87,7 +87,7 @@ unique_ptr<LocalFunctionData> WriteBlobInitializeLocal(ExecutionContext &context
 	return make_uniq_base<LocalFunctionData, WriteBlobLocalState>();
 }
 
-void WriteBlobData(QueryContext &query_context, FileHandle &handle, data_ptr_t blob_ptr, idx_t blob_len) {
+void WriteBlobData(Context &query_context, FileHandle &handle, data_ptr_t blob_ptr, idx_t blob_len) {
 	while (blob_len > 0) {
 		auto written = handle.Write(query_context, blob_ptr, blob_len);
 		if (written <= 0) {
@@ -110,7 +110,7 @@ void WriteBlobSink(ExecutionContext &context, const FunctionData &bind_data, Glo
 
 	auto &handle = state.handle;
 
-	QueryContext query_context(context.client);
+	Context &query_context(context.client);
 
 	for (auto entry : input.data[0].Values<string_t>()) {
 		if (entry.IsValid()) {
@@ -155,7 +155,7 @@ void WriteBlobFlushBatch(ClientContext &context, const FunctionData &bind_data, 
 	auto &blob_batch = batch.Cast<WriteBlobPreparedBatch>();
 	lock_guard<mutex> glock(state.lock);
 
-	QueryContext query_context(context);
+	Context &query_context(context);
 	for (auto &blob : blob_batch.blobs) {
 		WriteBlobData(query_context, *state.handle, data_ptr_cast(blob.data()), blob.size());
 	}

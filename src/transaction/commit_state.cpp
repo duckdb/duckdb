@@ -85,7 +85,7 @@ bool CommitDropState::Empty() const {
 //===--------------------------------------------------------------------===//
 // IndexDataRemover
 //===--------------------------------------------------------------------===//
-IndexDataRemover::IndexDataRemover(DuckTransaction &transaction_p, QueryContext context, IndexRemovalType removal_type)
+IndexDataRemover::IndexDataRemover(DuckTransaction &transaction_p, Context &context, IndexRemovalType removal_type)
     : transaction(transaction_p), context(context), removal_type(removal_type) {
 }
 
@@ -156,7 +156,8 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
                          ActiveTransactionState transaction_state, CommitMode commit_mode)
     : transaction(transaction_p), commit_id(commit_id),
-      index_data_remover(transaction, QueryContext(), GetIndexRemovalType(transaction_state, commit_mode)) {
+      index_data_remover(transaction, transaction.manager.GetDB().GetDatabase().GetContext(),
+                         GetIndexRemovalType(transaction_state, commit_mode)) {
 	D_ASSERT(commit_mode != CommitMode::COMMIT || IsCommitted(commit_id));
 }
 

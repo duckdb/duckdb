@@ -105,7 +105,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				const auto file_size = file_handle->GetFileSize();
 				AssertMaxFileSize(file.path, file_size);
 				// Zero-sized files could be a special file, so read until EOF.
-				const bool read_until_eof = file_handle->IsPipe() || file_size == 0;
+				const bool read_until_eof = file_handle->IsPipe(context) || file_size == 0;
 
 				// Initialize write stream if not yet done
 				if (!state.stream) {

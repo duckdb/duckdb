@@ -36,7 +36,7 @@ statement ok
 SELECT write_log('hello from the connection log scope', level := 'info', scope := 'connection', log_type := 'client_context_type' ) from range(0,3);
 
 statement ok
-SELECT write_log('hello from the file_opener log scope', level := 'info', scope := 'file_opener', log_type := 'opener_type' ) from range(0,3);
+SELECT write_log('hello from the file_opener log scope', level := 'info', scope := 'context', log_type := 'opener_type' ) from range(0,3);
 
 statement ok
 from duckdb_logs

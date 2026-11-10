@@ -20,8 +20,7 @@ class ClientContext;
 class IntegerPartitionedTupleData : public PartitionedTupleData {
 public:
 	IntegerPartitionedTupleData(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
-	                            idx_t key_col_idx, const Value &min_value, idx_t value_count,
-	                            QueryContext context = QueryContext());
+	                            idx_t key_col_idx, const Value &min_value, idx_t value_count, Context &context);
 	IntegerPartitionedTupleData(IntegerPartitionedTupleData &other);
 	~IntegerPartitionedTupleData() override;
 

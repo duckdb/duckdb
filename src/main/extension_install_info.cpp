@@ -143,7 +143,7 @@ string ExtensionRepository::ToReadableString() {
 	return path;
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs,
+unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(Context &context, FileSystem &fs,
                                                                        const std::string &info_file_path,
                                                                        const std::string &extension_name) {
 	unique_ptr<ExtensionInstallInfo> result;

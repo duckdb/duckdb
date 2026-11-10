@@ -19,9 +19,8 @@ namespace duckdb {
 class BaseSecret;
 class Context;
 struct SecretEntry;
-struct FileOpenerInfo;
+struct FileLookupInfo;
 struct CreateSecretInfo;
-class FileOpener;
 
 //! The lifetime of a secret
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT, TRANSACTION };
@@ -273,12 +272,12 @@ private:
 class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p);
+	KeyValueSecretReader(const KeyValueSecret &secret_p, Context &context_p);
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
-	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
+	KeyValueSecretReader(Context &context_p, optional_ptr<FileLookupInfo> info, const char **secret_types,
 	                     idx_t secret_types_len);
-	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char *secret_type);
+	KeyValueSecretReader(Context &context_p, optional_ptr<FileLookupInfo> info, const char *secret_type);
 
 	//! Initialize KeyValueSecretReader from a db instance
 	KeyValueSecretReader(DatabaseInstance &db, const char **secret_types, idx_t secret_types_len, string path);

@@ -57,7 +57,7 @@ namespace {
 
  */
 
-idx_t GZipConsumeString(QueryContext context, FileHandle &input) {
+idx_t GZipConsumeString(Context &context, FileHandle &input) {
 	idx_t size = 1; // terminator
 	char buffer[1];
 	while (input.Read(context, buffer, 1) == 1) {
@@ -69,7 +69,7 @@ idx_t GZipConsumeString(QueryContext context, FileHandle &input) {
 	return size;
 }
 
-idx_t GZipReadExact(QueryContext context, FileHandle &input, data_ptr_t buffer, idx_t size) {
+idx_t GZipReadExact(Context &context, FileHandle &input, data_ptr_t buffer, idx_t size) {
 	idx_t total_read = 0;
 	while (total_read < size) {
 		auto read_count = input.Read(context, buffer + total_read, size - total_read);
@@ -100,7 +100,7 @@ struct MiniZStreamWrapper : public StreamWrapper {
 	uint8_t gzip_xlen[2];
 
 public:
-	void Initialize(QueryContext context, CompressedFile &file, bool write) override;
+	void Initialize(Context &context, CompressedFile &file, bool write) override;
 
 	bool Read(StreamData &stream_data) override;
 	void FinalizeRead(StreamData &stream_data) override;
@@ -137,7 +137,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 }
 
-void MiniZStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
+void MiniZStreamWrapper::Initialize(Context &context, CompressedFile &file, bool write) {
 	D_ASSERT(mz_stream_ptr == nullptr);
 	this->file = &file;
 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
@@ -358,7 +358,7 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 		sd.out_buff_start += output_remaining - mz_stream_ptr->avail_out;
 		if (mz_stream_ptr->avail_out == 0) {
 			// no more output buffer available: flush
-			file.child_handle->Write(file.context, sd.out_buff.get(),
+			file.child_handle->Write(*file.context, sd.out_buff.get(),
 			                         UnsafeNumericCast<idx_t>(sd.out_buff_start - sd.out_buff.get()));
 			sd.out_buff_start = sd.out_buff.get();
 		}
@@ -380,7 +380,7 @@ void MiniZStreamWrapper::FlushStream() const {
 		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_FINISH);
 		sd.out_buff_start += (output_remaining - mz_stream_ptr->avail_out);
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(file->context, sd.out_buff.get(),
+			file->child_handle->Write(*file->context, sd.out_buff.get(),
 			                          UnsafeNumericCast<idx_t>(sd.out_buff_start - sd.out_buff.get()));
 			sd.out_buff_start = sd.out_buff.get();
 		}
@@ -404,7 +404,7 @@ void MiniZStreamWrapper::Close() {
 		// write the footer
 		unsigned char gzip_footer[MiniZStream::GZIP_FOOTER_SIZE];
 		MiniZStream::InitializeGZIPFooter(gzip_footer, crc, total_size);
-		file->child_handle->Write(file->context, gzip_footer, MiniZStream::GZIP_FOOTER_SIZE);
+		file->child_handle->Write(*file->context, gzip_footer, MiniZStream::GZIP_FOOTER_SIZE);
 	}
 	AbortWrite();
 }
@@ -428,7 +428,7 @@ struct GZipFileSystemHolder {
 
 class GZipFile : private GZipFileSystemHolder, public CompressedFile {
 public:
-	GZipFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	GZipFile(Context &context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
 		Initialize(context, write);
 	}
@@ -542,8 +542,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	return decompressed;
 }
 
-unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(Context &context, unique_ptr<FileHandle> handle, bool write) {
 	try {
 		auto path = handle->path;
 		return make_uniq<GZipFile>(context, std::move(handle), path, write);

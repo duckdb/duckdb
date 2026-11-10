@@ -141,7 +141,7 @@ void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 }
 
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
-	state.scan_state = function.get().init_scan(state.context, *this);
+	state.scan_state = function.get().init_scan(*state.context, *this);
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,

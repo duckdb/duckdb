@@ -76,10 +76,10 @@ public:
 	~SingleFileBlockManager() override;
 
 	//! Creates a new database.
-	void CreateNewDatabase(QueryContext context);
+	void CreateNewDatabase(Context &context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(QueryContext context);
+	void LoadExistingDatabase(Context &context);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -109,19 +109,19 @@ public:
 	//! Return the meta block id
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
-	void Read(QueryContext context, Block &block) override;
+	void Read(Context &context, Block &block) override;
 
 	//! Read individual blocks
 	void ReadBlock(Block &block, bool skip_block_header = false) const;
 	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
-	void ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
+	void ReadBlocks(Context &context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the block to disk. Use Write with client context instead.
 	void Write(FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the block to disk.
-	void Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) override;
+	void Write(Context &context, FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
+	void WriteHeader(Context &context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
 	                 transaction_t lowest_active_start) override;
 	void ReuseFreedBlocks(transaction_t lowest_active_start) override;
 	//! Sync changes to the underlying file
@@ -156,10 +156,9 @@ private:
 	//! Rewrites the main header
 	//! Usage should be avoided
 	//! Except for phasing-out the storage version
-	void RewriteMainHeader(QueryContext &context,
-	                       StorageVersion version_number = MainHeader::DEPRECATED_VERSION_NUMBER);
+	void RewriteMainHeader(Context &context, StorageVersion version_number = MainHeader::DEPRECATED_VERSION_NUMBER);
 	//! Loads the free list of the file.
-	void LoadFreeList(QueryContext context);
+	void LoadFreeList(Context &context);
 
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
@@ -168,9 +167,8 @@ private:
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
-	void ReadAndChecksum(QueryContext context, FileBuffer &handle, uint64_t location,
-	                     bool skip_block_header = false) const;
-	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
+	void ReadAndChecksum(Context &context, FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
+	void ChecksumAndWrite(Context &context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;

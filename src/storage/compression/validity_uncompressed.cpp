@@ -225,7 +225,7 @@ static unsafe_array_ptr<const validity_t> ValidityScanData(const CompressionSegm
 	return reader.GetArraySlice<validity_t>(0, entry_start, entry_end - entry_start + 1);
 }
 
-unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ValidityInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return make_uniq<ValidityScanState>(std::move(handle), segment);

@@ -62,11 +62,11 @@ CompressedFile::~CompressedFile() {
 	}
 }
 
-void CompressedFile::Initialize(QueryContext context, bool write) {
+void CompressedFile::Initialize(Context &context, bool write) {
 	Clear();
 	initialized = false;
 
-	this->context = context;
+	this->context = &context;
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
 	if (!write && FileSystem::IsRemoteFile(child_handle->path)) {
@@ -74,7 +74,7 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 		    stream_data.in_buf_size, MinValue<idx_t>(REMOTE_READ_IN_BUF_SIZE, child_handle->GetFileSize()));
 	}
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
-	auto &allocator = context.Valid() ? BufferAllocator::Get(*context.GetContext()) : Allocator::DefaultAllocator();
+	auto &allocator = BufferAllocator::Get(context);
 	stream_data.in_buff = allocator.Allocate(stream_data.in_buf_size);
 	stream_data.in_buff_start = stream_data.in_buff.get();
 	stream_data.in_buff_end = stream_data.in_buff.get();
@@ -133,7 +133,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			// empty input buffer: refill from the start
 			stream_data.in_buff_start = stream_data.in_buff.get();
 			stream_data.in_buff_end = stream_data.in_buff_start;
-			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
+			auto sz = child_handle->Read(*context, stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
 				stream_wrapper->FinalizeRead(stream_data);
 				stream_wrapper.reset();
@@ -244,7 +244,7 @@ void CompressedFileSystem::Reset(FileHandle &handle) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
 	// Preserve the query context across a reset so re-reads (e.g. the scan after the CSV sniffer) stay attributed.
-	compressed_file.Initialize(compressed_file.context, compressed_file.write);
+	compressed_file.Initialize(*compressed_file.context, compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {

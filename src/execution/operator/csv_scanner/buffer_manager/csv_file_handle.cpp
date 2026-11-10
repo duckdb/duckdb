@@ -14,7 +14,7 @@ CSVFileHandle::CSVFileHandle(ClientContext &context_p, unique_ptr<FileHandle> fi
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
-	is_pipe = file_handle->IsPipe();
+	is_pipe = file_handle->IsPipe(context);
 	compression_type = file_handle->GetFileCompressionType();
 }
 

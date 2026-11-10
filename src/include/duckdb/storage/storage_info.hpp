@@ -11,13 +11,13 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
 struct FileHandle;
 class MemoryMappedFile;
-class QueryContext;
+class Context;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
@@ -279,7 +279,7 @@ public:
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
-	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
+	static void CheckMagicBytes(Context &context, FileHandle &handle);
 	static void CheckMagicBytes(MemoryMappedFile &handle);
 
 	string LibraryGitDesc() {

@@ -151,7 +151,7 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
 	if (state.expression_state) {
 		auto &expression_state = *state.expression_state;
-		D_ASSERT(state.context.Valid());
+		D_ASSERT(state.context);
 		auto &executor = expression_state.executor;
 		auto &target = expression_state.target;
 		auto &input = expression_state.input;
@@ -534,7 +534,7 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 	this->count = validity->count.load();
 }
 
-void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void StructColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                             vector<ColumnSegmentInfo> &result,
                                             const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);

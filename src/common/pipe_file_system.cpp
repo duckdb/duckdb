@@ -15,7 +15,7 @@ struct PipeFileSystemHolder {
 
 class PipeFile : private PipeFileSystemHolder, public FileHandle {
 public:
-	explicit PipeFile(QueryContext context_p, unique_ptr<FileHandle> child_handle_p)
+	explicit PipeFile(Context &context_p, unique_ptr<FileHandle> child_handle_p)
 	    : FileHandle(pipe_fs, child_handle_p->path, child_handle_p->GetFlags()),
 	      child_handle(std::move(child_handle_p)), context(context_p) {
 	}
@@ -30,7 +30,7 @@ public:
 	}
 
 private:
-	QueryContext context;
+	Context &context;
 };
 
 int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
@@ -67,7 +67,7 @@ timestamp_t PipeFileSystem::GetLastModifiedTime(FileHandle &handle) {
 void PipeFileSystem::FileSync(FileHandle &handle) {
 }
 
-unique_ptr<FileHandle> PipeFileSystem::OpenPipe(QueryContext context, unique_ptr<FileHandle> handle) {
+unique_ptr<FileHandle> PipeFileSystem::OpenPipe(Context &context, unique_ptr<FileHandle> handle) {
 	return make_uniq<PipeFile>(context, std::move(handle));
 }
 

@@ -128,12 +128,12 @@ public:
 
 	//! Returns a list of segment information for this table, if exists
 	virtual vector<ColumnSegmentInfo>
-	GetColumnSegmentInfo(const QueryContext &context,
+	GetColumnSegmentInfo(Context &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
 	//! Initialize an incremental scan over the table's column segment info.
 	virtual void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
-	virtual bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	virtual bool ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
 	                                   vector<ColumnSegmentInfo> &result);
 
 	//! Returns the storage info of this table

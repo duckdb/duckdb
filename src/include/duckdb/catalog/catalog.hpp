@@ -50,7 +50,7 @@ class SchemaScanFilters;
 
 class AttachedDatabase;
 class ClientContext;
-class QueryContext;
+class Context;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;

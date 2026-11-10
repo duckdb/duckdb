@@ -99,6 +99,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &c
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
 		ColumnScanState scan_state(nullptr);
+		scan_state.context = &col_data.GetDatabase().GetContext();
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 

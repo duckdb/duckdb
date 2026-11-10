@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 class AsyncFileWriter;
@@ -67,7 +67,8 @@ public:
 
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(const CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,
-	          QueryContext context = QueryContext(), bool shared = true);
+	          Context &context, bool shared = true);
+
 	~CSVWriter();
 
 	//! Writes header and prefix if necessary

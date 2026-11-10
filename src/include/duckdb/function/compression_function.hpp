@@ -152,8 +152,7 @@ typedef void (*compression_compress_finalize_t)(CompressionState &state);
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
 typedef void (*compression_init_prefetch_t)(ColumnSegment &segment, PrefetchState &prefetch_state);
-typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(const QueryContext &context,
-                                                                        ColumnSegment &segment);
+typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(Context &context, ColumnSegment &segment);
 
 //! Function prototype used for reading an entire vector (STANDARD_VECTOR_SIZE)
 typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
@@ -207,8 +206,7 @@ typedef void (*compression_visit_block_ids_t)(const ColumnSegment &segment, Bloc
 // GetSegmentInfo (optional)
 //===--------------------------------------------------------------------===//
 //! Function prototype for retrieving segment information straight from the column segment
-typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(QueryContext context,
-                                                                              ColumnSegment &segment);
+typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(Context &context, ColumnSegment &segment);
 
 enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
 

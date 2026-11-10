@@ -72,6 +72,8 @@ public:
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API LogManager &GetLogManager() const;
+	//! Whether the log manager exists yet (it does not during early initialization)
+	DUCKDB_API bool HasLogManager() const;
 	DUCKDB_API OSUtil &GetOSUtil();
 	DUCKDB_API MetricsManager &GetMetricsManager();
 	DUCKDB_API ParserCache &GetParserCache();
@@ -116,6 +118,7 @@ private:
 	void Configure(DBConfig &config, const char *path);
 
 private:
+	//! Declared first: destroyed last
 	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<ExternalResourceTypeRegistry> external_resource_type_registry;
@@ -125,7 +128,7 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
-	//! Declared before the file systems: their openers reference it
+	//! Declared before the file systems: their contexts reference it
 	unique_ptr<Context> services;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	unique_ptr<LocalDatabaseFileSystem> local_db_file_system;

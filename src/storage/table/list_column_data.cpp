@@ -99,6 +99,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 		throw DataCorruptionException("Corrupted database: list offset row ID is out of range");
 	}
 	ColumnScanState offset_state(nullptr);
+	offset_state.context = &GetDatabase().GetContext();
 	ColumnData::InitializeScanWithOffset(offset_state, row_idx);
 	Vector result(LogicalType::UBIGINT, 1);
 	ScanVector(offset_state, result, 1, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -384,10 +385,11 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
 		auto child_scan_count = list_entry.length;
 		if (child_scan_count > 0) {
 			ColumnScanState child_state(nullptr);
+			child_state.context = &GetDatabase().GetContext();
 			auto &child_type = ListType::GetChildType(result.GetType());
 			Vector child_scan(child_type, child_scan_count);
 			// seek the scan towards the specified position and read [length] entries
-			child_state.Initialize(state.context, child_type, nullptr);
+			child_state.Initialize(*child_state.context, child_type, nullptr);
 			child_column->InitializeScanWithOffset(child_state, start_offset);
 			D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
 			         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());
@@ -595,7 +597,7 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
-void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void ListColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                           vector<ColumnSegmentInfo> &result,
                                           const ColumnSegmentInfoScanOptions &options) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);

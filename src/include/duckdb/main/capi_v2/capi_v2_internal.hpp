@@ -32,7 +32,7 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/file_system.hpp"
 
 // The engine implements the whole V2 C API, including the unstable surface
@@ -335,11 +335,11 @@ inline void CheckRegistrationTarget(const DatabaseInstance &created_for, const D
 //! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
 class CV2FileSystem {
 public:
-	CV2FileSystem(FileSystem &fs, QueryContext query) : fs(fs), query(query) {
+	CV2FileSystem(FileSystem &fs, Context &query) : fs(fs), query(query) {
 	}
 
 	FileSystem &fs;
-	QueryContext query;
+	Context &query;
 };
 
 //! An instance handle: a DuckDB instance, built from its startup options when the handle is created.
@@ -417,7 +417,7 @@ class CV2Context {
 public:
 	explicit CV2Context(ClientContext &context)
 	    : context(context), factory(*this), config_handle(context),
-	      file_system(FileSystem::GetFileSystem(context), QueryContext(context)) {
+	      file_system(FileSystem::GetFileSystem(context), context.GetContext()) {
 	}
 	virtual ~CV2Context() = default;
 

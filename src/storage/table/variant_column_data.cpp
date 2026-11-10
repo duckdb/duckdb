@@ -165,26 +165,30 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	state.child_states.clear();
 
 	state.child_states.emplace_back(state.parent);
+
+	state.child_states.back().context = state.context;
 	state.child_states[0].scan_options = state.scan_options;
 
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	state.child_states.emplace_back(state.parent);
-	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
+	state.child_states.back().context = state.context;
+	state.child_states[1].Initialize(*state.context, unshredded_type, state.scan_options);
 
 	if (IsShredded()) {
 		auto &shredded_column = sub_columns[1];
 		state.child_states.emplace_back(state.parent);
+		state.child_states.back().context = state.context;
 		if (state.storage_index.IsPushdownExtract()) {
 			StorageIndex struct_extract;
 			if (PushdownShreddedFieldExtract(state.storage_index.GetChildIndex(0), struct_extract)) {
 				//! Shredded field exists and is fully shredded,
 				//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
-				state.child_states[2].Initialize(state.context, shredded_column->type, struct_extract,
+				state.child_states[2].Initialize(*state.context, shredded_column->type, struct_extract,
 				                                 state.scan_options);
 				return;
 			}
 		}
-		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
+		state.child_states[2].Initialize(*state.context, shredded_column->type, state.scan_options);
 	}
 }
 
@@ -741,6 +745,8 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 
 	ColumnScanState scan_state(nullptr);
 
+	scan_state.context = &GetDatabase().GetContext();
+
 	InitializeScan(scan_state);
 	//! Scan + transform + append
 	idx_t total_count = count.load();
@@ -775,6 +781,8 @@ LogicalType VariantColumnData::GetShreddedType() {
 	auto &scan_vector = scan_chunk.data[0];
 
 	ColumnScanState scan_state(nullptr);
+
+	scan_state.context = &GetDatabase().GetContext();
 	InitializeScan(scan_state);
 	idx_t total_count = count.load();
 	idx_t vector_index = 0;
@@ -934,7 +942,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	this->count = validity->count.load();
 }
 
-void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+void VariantColumnData::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<idx_t> col_path,
                                              vector<ColumnSegmentInfo> &result,
                                              const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);

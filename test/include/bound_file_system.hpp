@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-//! Binds a BaseFileSystem to an (optional) FileOpener, for tests that exercise custom file systems
+//! Binds a BaseFileSystem to a Context, for tests that exercise custom file systems
 class BoundFileSystem : public FileSystem {
 public:
-	BoundFileSystem(BaseFileSystem &file_system_p, optional_ptr<FileOpener> opener_p)
-	    : file_system(file_system_p), opener(opener_p) {
+	BoundFileSystem(BaseFileSystem &file_system_p, Context &context_p)
+	    : file_system(file_system_p), context(context_p) {
 	}
 
 protected:
@@ -24,8 +24,8 @@ protected:
 	VirtualFileSystem &GetFileSystem() const override {
 		throw InternalException("BoundFileSystem has no virtual file system");
 	}
-	optional_ptr<FileOpener> GetOpener() const override {
-		return opener;
+	Context &GetContext() const override {
+		return context;
 	}
 	optional_ptr<BaseFileSystem> GetFixedFileSystem() const override {
 		return file_system;
@@ -33,7 +33,7 @@ protected:
 
 private:
 	BaseFileSystem &file_system;
-	optional_ptr<FileOpener> opener;
+	Context &context;
 };
 
 } // namespace duckdb

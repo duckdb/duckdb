@@ -11,7 +11,7 @@ namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            shared_ptr<TupleDataLayout> &layout_ptr_p, MemoryTag tag_p,
-                                           QueryContext context_p)
+                                           Context &context_p)
     : type(type_p), buffer_manager(buffer_manager_p), context(context_p),
       stl_allocator(make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())), layout_ptr(layout_ptr_p),
       layout(*layout_ptr), tag(tag_p), count(0), data_size(0) {

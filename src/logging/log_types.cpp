@@ -1,7 +1,6 @@
 #include "duckdb/logging/log_type.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/execution/physical_operator.hpp"

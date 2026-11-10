@@ -61,10 +61,9 @@ public:
 		return duckdb::LocalFileSystem::FileSync(handle);
 	}
 
-	void RemoveFile(const duckdb::string &filename,
-	                duckdb::optional_ptr<duckdb::FileOpener> opener = nullptr) override {
+	void RemoveFile(duckdb::Context &context, const duckdb::string &filename) override {
 		PRINT_VERBOSE("FS remove " << filename);
-		return duckdb::LocalFileSystem::RemoveFile(filename, opener);
+		return duckdb::LocalFileSystem::RemoveFile(context, filename);
 	}
 
 	void Truncate(duckdb::FileHandle &handle, int64_t new_size) override {

@@ -67,17 +67,15 @@ public:
 	                                                  bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
-	DUCKDB_API BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size,
-	                                 bool can_destroy = true) final;
-	DUCKDB_API BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	DUCKDB_API BufferHandle Allocate(Context &context, MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(Context &context, MemoryTag tag, BlockManager *block_manager,
 	                                 bool can_destroy = true) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
-	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
+	BufferHandle Pin(Context &context, shared_ptr<BlockHandle> &handle) final;
 
-	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) final;
-	vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
-	                                                  vector<shared_ptr<BlockHandle>> &handles) final;
+	void Prefetch(Context &context, vector<shared_ptr<BlockHandle>> &handles) final;
+	vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(Context &context, vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -120,7 +118,7 @@ public:
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(QueryContext context, MemoryTag tag, idx_t memory_delta,
+	TempBufferPoolReservation EvictBlocksOrThrow(Context &context, MemoryTag tag, idx_t memory_delta,
 	                                             unique_ptr<FileBuffer> *buffer, const ARGS &...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
@@ -133,7 +131,8 @@ protected:
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy,
-	                                       QueryContext context = QueryContext());
+	                                       Context &context);
+	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy);
 
 	//! Get allocated size for a block
 	idx_t GetBlockAllocSize(idx_t block_size) const;
@@ -145,9 +144,9 @@ protected:
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
+	void WriteTemporaryBuffer(Context &context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(Context &context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
@@ -172,8 +171,8 @@ protected:
 	//! Computes the contiguous runs of blocks that still need to be loaded, without performing any I/O
 	static vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
 	//! Synchronously executes every run in the plan through BatchRead
-	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
-	void BatchRead(QueryContext context, PrefetchRun &run);
+	void ExecutePrefetch(Context &context, vector<PrefetchRun> &plan);
+	void BatchRead(Context &context, PrefetchRun &run);
 
 	bool EncryptTemporaryFiles();
 

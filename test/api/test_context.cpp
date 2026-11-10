@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -23,7 +23,6 @@ TEST_CASE("Test Context", "[api]") {
 		REQUIRE(context.TryGetClientContext().get() == con.context.get());
 		REQUIRE(&context.GetDatabase() == db.instance.get());
 		REQUIRE(context.TryGetQueryProfiler());
-		REQUIRE(context.TryGetFileOpener());
 		REQUIRE(&context.GetClientConfig() == &ClientConfig::GetConfig(*con.context));
 		REQUIRE(&context.GetLogger() == &con.context->GetLogger());
 		(void)context.GetTaskScheduler();
@@ -55,16 +54,6 @@ TEST_CASE("Test Context", "[api]") {
 		auto &services = db.instance->GetContext();
 		TaskExecutor executor(services);
 		executor.WorkOnTasks();
-	}
-	SECTION("QueryContext holds services") {
-		QueryContext invalid;
-		REQUIRE(!invalid.Valid());
-		REQUIRE(!invalid.GetContext());
-		QueryContext valid(*con.context);
-		REQUIRE(valid.Valid());
-		REQUIRE(valid.GetContext().get() == &con.context->GetContext());
-		QueryContext from_ptr(optional_ptr<ClientContext>(con.context.get()));
-		REQUIRE(from_ptr.GetContext().get() == &con.context->GetContext());
 	}
 }
 

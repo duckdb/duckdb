@@ -1,3 +1,4 @@
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 #include "duckdb/common/file_buffer.hpp"
@@ -120,7 +121,7 @@ CanUnloadResult BlockMemory::CanUnload() const {
 	return CanUnloadResult::CAN_UNLOAD;
 }
 
-unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContext context) {
+unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, Context &context) {
 	VerifyMutex(l);
 
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
@@ -139,7 +140,15 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContex
 	return std::move(GetBuffer());
 }
 
-void BlockMemory::Unload(BlockLock &l, QueryContext context) {
+void BlockMemory::Unload(BlockLock &l) {
+	Unload(l, buffer_manager.GetDatabase().GetContext());
+}
+
+unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
+	return UnloadAndTakeBlock(l, buffer_manager.GetDatabase().GetContext());
+}
+
+void BlockMemory::Unload(BlockLock &l, Context &context) {
 	auto block = UnloadAndTakeBlock(l, context);
 	block.reset();
 }
@@ -211,7 +220,7 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	return BufferHandle(shared_from_this(), memory.GetBuffer());
 }
 
-BufferHandle BlockHandle::Load(BlockLock &l, QueryContext context, unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::Load(BlockLock &l, Context &context, unique_ptr<FileBuffer> reusable_buffer) {
 	memory.VerifyMutex(l);
 	if (memory.GetState() == BlockState::BLOCK_LOADED) {
 		// The block has already been loaded.

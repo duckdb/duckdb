@@ -232,7 +232,7 @@ RoaringScanState::SegmentLayout RoaringScanState::ReadLayout(const BufferHandle 
 	return {data, metadata};
 }
 
-RoaringScanState::RoaringScanState(const QueryContext &context, ColumnSegment &segment)
+RoaringScanState::RoaringScanState(Context &context, ColumnSegment &segment)
     : handle(BufferManager::GetBufferManager(segment.GetDatabase()).Pin(context, segment.GetBlockHandle())),
       segment(segment), layout(ReadLayout(handle, segment)) {
 	// Deserialize the container metadata for this segment

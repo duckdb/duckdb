@@ -12,7 +12,7 @@ namespace duckdb {
 IntegerPartitionedTupleData::IntegerPartitionedTupleData(BufferManager &buffer_manager,
                                                          shared_ptr<TupleDataLayout> layout_ptr, const MemoryTag tag,
                                                          const idx_t key_col_idx_p, const Value &min_value_p,
-                                                         const idx_t value_count_p, QueryContext context)
+                                                         const idx_t value_count_p, Context &context)
     : PartitionedTupleData(PartitionedTupleDataType::INTEGER, buffer_manager, layout_ptr, tag, context),
       key_col_idx(key_col_idx_p), min_value(min_value_p), value_count(value_count_p) {
 	D_ASSERT(key_col_idx < layout.GetTypes().size());

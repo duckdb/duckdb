@@ -26,7 +26,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	// now write random values into the file
 	auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_WRITE);
 	int8_t value = 0x22;
-	handle->Write(QueryContext(), &value, sizeof(int8_t), 100);
+	handle->Write(TestServicesContext(), &value, sizeof(int8_t), 100);
 	handle->Sync();
 	handle.reset();
 	// reloading the database no longer works

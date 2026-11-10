@@ -1,7 +1,6 @@
 #include "duckdb/main/http/http_transport_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -339,14 +338,15 @@ HTTPTransportManager::Session HTTPTransportManager::CreateSession(ClientContext 
 	return FinishSession(reservation, reservation.state->http_util->InitializeParameters(context, path));
 }
 
-HTTPTransportManager::Session HTTPTransportManager::CreateSession(optional_ptr<FileOpener> opener,
-                                                                  optional_ptr<FileOpenerInfo> info) {
-	auto opener_db = FileOpener::TryGetDatabase(opener);
-	if (opener_db) {
-		ValidateDatabase(*opener_db);
-	}
+HTTPTransportManager::Session HTTPTransportManager::CreateSession(Context &context, optional_ptr<FileLookupInfo> info) {
+	ValidateDatabase(context.GetDatabase());
+	return CreateSessionUnchecked(context, info);
+}
+
+HTTPTransportManager::Session HTTPTransportManager::CreateSessionUnchecked(Context &context,
+                                                                           optional_ptr<FileLookupInfo> info) {
 	auto reservation = ReserveSession();
-	return FinishSession(reservation, reservation.state->http_util->InitializeParameters(opener, info));
+	return FinishSession(reservation, reservation.state->http_util->InitializeParameters(context, info));
 }
 
 void HTTPTransportManager::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {

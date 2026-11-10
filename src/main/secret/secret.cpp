@@ -1,7 +1,7 @@
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/common/file_lookup_info.hpp"
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -180,9 +180,9 @@ KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char 
     : KeyValueSecretReader(context_p, &secret_type, 1, std::move(path)) {
 }
 
-KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+KeyValueSecretReader::KeyValueSecretReader(Context &context_p, optional_ptr<FileLookupInfo> info,
                                            const char *secret_type)
-    : KeyValueSecretReader(opener_p, info, &secret_type, 1) {
+    : KeyValueSecretReader(context_p, info, &secret_type, 1) {
 }
 
 void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_types_len) {
@@ -209,15 +209,15 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 }
 
-KeyValueSecretReader::KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {
-	db = opener_p.TryGetDatabase();
-	context = &opener_p.TryGetContext();
+KeyValueSecretReader::KeyValueSecretReader(const KeyValueSecret &secret_p, Context &context_p) : secret(secret_p) {
+	db = &context_p.GetDatabase();
+	context = &context_p;
 }
 
-KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+KeyValueSecretReader::KeyValueSecretReader(Context &context_p, optional_ptr<FileLookupInfo> info,
                                            const char **secret_types, idx_t secret_types_len) {
-	db = opener_p.TryGetDatabase();
-	context = &opener_p.TryGetContext();
+	db = &context_p.GetDatabase();
+	context = &context_p;
 
 	if (info) {
 		path = info->file.path;

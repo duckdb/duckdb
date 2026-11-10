@@ -13,7 +13,7 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/query_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
 #include <cstdint>

@@ -68,8 +68,7 @@ private:
 public:
 	DUCKDB_API Session CreateSession(DatabaseInstance &db, const string &path) DUCKDB_EXCLUDES(lock);
 	DUCKDB_API Session CreateSession(ClientContext &context, const string &path) DUCKDB_EXCLUDES(lock);
-	DUCKDB_API Session CreateSession(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info)
-	    DUCKDB_EXCLUDES(lock);
+	DUCKDB_API Session CreateSession(Context &context, optional_ptr<FileLookupInfo> info) DUCKDB_EXCLUDES(lock);
 
 private:
 	using ClientKey = HTTPClientPool::ClientKey;
@@ -135,6 +134,8 @@ private:
 
 	//! Session lifecycle helpers.
 	void ValidateDatabase(DatabaseInstance &db) const;
+	//! Creates a session without checking that the context belongs to the database of this manager
+	Session CreateSessionUnchecked(Context &context, optional_ptr<FileLookupInfo> info) DUCKDB_EXCLUDES(lock);
 	SessionReservation ReserveSession() DUCKDB_EXCLUDES(lock);
 	Session FinishSession(SessionReservation reservation, unique_ptr<HTTPParams> params) DUCKDB_EXCLUDES(lock);
 	void DestroySession(idx_t session_id) noexcept DUCKDB_EXCLUDES(lock);

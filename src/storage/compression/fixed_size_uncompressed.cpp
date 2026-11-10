@@ -154,7 +154,7 @@ struct FixedSizeScanState : public SegmentScanState {
 	CompressionSegmentReader reader;
 };
 
-unique_ptr<SegmentScanState> FixedSizeInitScan(const QueryContext &context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FixedSizeInitScan(Context &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return make_uniq<FixedSizeScanState>(std::move(handle), segment);

@@ -257,9 +257,9 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 }
 
 void ColumnScanState::PushDownCast(const LogicalType &original_type, const LogicalType &cast_type) {
-	D_ASSERT(context.Valid());
+	D_ASSERT(context);
 	D_ASSERT(!expression_state);
-	auto &client_context = *context.GetClientContext();
+	auto &client_context = *Context::TryGetClientContext(context);
 
 	auto input = make_uniq<BoundReferenceExpression>(original_type, 0ULL);
 	auto cast_expression = BoundCastExpression::AddCastToType(client_context, std::move(input), cast_type);
@@ -270,12 +270,12 @@ void ColumnScanState::PushDownCast(const LogicalType &original_type, const Logic
 	expression_state->expression = std::move(cast_expression);
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
+void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, const StorageIndex &column_id,
                                  optional_ptr<TableScanOptions> options) {
 	auto &children = column_id.GetChildIndexes();
 	// Register the options in the state
 	scan_options = options;
-	context = context_p;
+	context = &context_p;
 	storage_index = column_id;
 
 	D_ASSERT(type.id() != LogicalTypeId::INVALID);
@@ -305,17 +305,18 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		child_states.reserve(struct_children.size() + 1);
 		for (idx_t i = 0; i <= struct_children.size(); i++) {
 			child_states.emplace_back(parent);
+			child_states.back().context = context;
 		}
 
 		if (children.empty()) {
 			// scan all struct children
 			scan_child_column.resize(struct_children.size(), true);
 			for (idx_t i = 0; i < struct_children.size(); i++) {
-				child_states[i + 1].Initialize(context, struct_children[i].second, options);
+				child_states[i + 1].Initialize(*context, struct_children[i].second, options);
 			}
 		} else {
 			if (storage_index.IsPushdownExtract()) {
-				D_ASSERT(context.Valid());
+				D_ASSERT(context);
 				scan_child_column.resize(1, true);
 				D_ASSERT(children.size() == 1);
 				auto &child = children[0];
@@ -324,7 +325,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				if (!child.HasChildren() && child_type != child.GetType()) {
 					PushDownCast(child_type, child.GetType());
 				}
-				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
+				child_states[1].Initialize(*context, struct_children[child_index].second, child, options);
 			} else {
 				// only scan the specified subset of columns
 				scan_child_column.resize(struct_children.size(), false);
@@ -332,7 +333,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 					auto &child = children[i];
 					auto index = child.GetPrimaryIndex();
 					scan_child_column[index] = true;
-					child_states[index + 1].Initialize(context, struct_children[index].second, child, options);
+					child_states[index + 1].Initialize(*context, struct_children[index].second, child, options);
 				}
 			}
 		}
@@ -341,31 +342,33 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// validity + list child
 		for (idx_t i = 0; i < 2; i++) {
 			child_states.emplace_back(parent);
+			child_states.back().context = context;
 		}
-		child_states[1].Initialize(context, ListType::GetChildType(type), options);
+		child_states[1].Initialize(*context, ListType::GetChildType(type), options);
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		for (idx_t i = 0; i < 2; i++) {
 			child_states.emplace_back(parent);
+			child_states.back().context = context;
 		}
 		child_states[0].scan_options = options;
-		child_states[1].Initialize(context, ArrayType::GetChildType(type), options);
+		child_states[1].Initialize(*context, ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.emplace_back(parent);
+		child_states.back().context = context;
 		child_states[0].scan_options = options;
 	}
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
-                                 optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(Context &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options) {
 	auto column_id = StorageIndex(0);
 	Initialize(context_p, type, column_id, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context_p, const vector<LogicalType> &types) {
-	context = context_p;
+void CollectionScanState::Initialize(Context &context_p, const vector<LogicalType> &types) {
+	context = &context_p;
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_ids.size());
@@ -378,7 +381,7 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
 		auto &type = types[index];
-		column_scans[i].Initialize(context, type, column_ids[i], &GetOptions());
+		column_scans[i].Initialize(*context, type, column_ids[i], &GetOptions());
 	}
 }
 
@@ -850,7 +853,7 @@ void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) const
 	PrefetchState prefetch_state;
 	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
 	CollectScanBlocks(state, start_row, start_row + row_count, prefetch_state);
-	GetBlockManager().buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+	GetBlockManager().buffer_manager.Prefetch(*state.context, prefetch_state.blocks);
 }
 
 vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const {
@@ -860,7 +863,7 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 	PrefetchState prefetch_state;
 	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
 	CollectScanBlocks(state, start_row, start_row + row_count, prefetch_state);
-	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
+	return GetBlockManager().buffer_manager.CreatePrefetchTasks(*state.context, prefetch_state.blocks);
 }
 
 vector<unique_ptr<AsyncTask>> RowGroup::CollectAssignmentIOTasks(CollectionScanState &state) const {
@@ -869,7 +872,7 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectAssignmentIOTasks(CollectionScanS
 	}
 	PrefetchState prefetch_state;
 	CollectAssignmentBlocks(state, prefetch_state);
-	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
+	return GetBlockManager().buffer_manager.CreatePrefetchTasks(*state.context, prefetch_state.blocks);
 }
 
 void RowGroup::CollectAssignmentBlocks(CollectionScanState &state, PrefetchState &prefetch_state) const {
@@ -2126,8 +2129,8 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
-                                    vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
+void RowGroup::GetColumnSegmentInfo(Context &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
+                                    const ColumnSegmentInfoScanOptions &options) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		if (options.loaded_segments_only && !ColumnIsLoaded(col_idx)) {
 			// column is not loaded - skip it

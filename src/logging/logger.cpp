@@ -5,7 +5,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
@@ -41,10 +40,6 @@ Logger &Logger::Get(const ClientContext &client_context) {
 
 Logger &Logger::Get(const Context &context) {
 	return context.GetLogger();
-}
-
-Logger &Logger::Get(const FileOpener &opener) {
-	return opener.GetLogger();
 }
 
 Logger &Logger::Get(const shared_ptr<Logger> &logger) {

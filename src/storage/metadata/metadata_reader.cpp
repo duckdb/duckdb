@@ -1,3 +1,4 @@
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 
 #include "duckdb/common/numeric_utils.hpp"
@@ -27,10 +28,10 @@ MetadataReader::~MetadataReader() {
 }
 
 void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
-	ReadData(QueryContext(), buffer, read_size);
+	ReadData(manager.GetDatabase().GetContext(), buffer, read_size);
 }
 
-void MetadataReader::ReadData(QueryContext context, data_ptr_t buffer, idx_t read_size) {
+void MetadataReader::ReadData(Context &context, data_ptr_t buffer, idx_t read_size) {
 	while (offset + read_size > capacity) {
 		// cannot read entire entry from block
 		// first read what we can from this block
@@ -57,10 +58,10 @@ MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
 }
 
 void MetadataReader::ReadNextBlock() {
-	ReadNextBlock(QueryContext());
+	ReadNextBlock(manager.GetDatabase().GetContext());
 }
 
-void MetadataReader::ReadNextBlock(QueryContext context) {
+void MetadataReader::ReadNextBlock(Context &context) {
 	if (!has_next_block) {
 		throw IOException("No more data remaining in MetadataReader");
 	}

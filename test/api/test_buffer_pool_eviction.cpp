@@ -73,7 +73,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 
 	// Set limit to hold all objects and some pages, but not all pages with extra allocation
 	const idx_t memory_limit = (num_pages - 2) * actual_page_alloc_size + num_objects * obj_size;
-	buffer_pool.SetLimit(memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), memory_limit, EXCEPTION_POSTSCRIPT);
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
@@ -123,7 +123,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	// Set limit to hold all pages, some objects, and initial overhead
 	const idx_t after_eviction_memory = (num_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
-	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), total_memory_limit, EXCEPTION_POSTSCRIPT);
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
@@ -179,7 +179,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	// Set limit to hold all pages, some objects, and initial overhead
 	const idx_t after_eviction_memory = (num_evictable_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
-	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), total_memory_limit, EXCEPTION_POSTSCRIPT);
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
@@ -239,7 +239,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 
 	// Set limit to hold all pages
 	const idx_t total_memory_limit = initial_memory + num_pages * actual_page_alloc_size;
-	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), total_memory_limit, EXCEPTION_POSTSCRIPT);
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
@@ -336,7 +336,7 @@ TEST_CASE("Hash buffer eviction entries survive reuse and queue purging", "[stor
 	REQUIRE(SumApproxSize(info) < 40000);
 	REQUIRE(SumDeadNodes(info) < SumApproxSize(info));
 	pin.Destroy();
-	pool.SetLimit(initial_memory, EXCEPTION_POSTSCRIPT);
+	pool.SetLimit(db.instance->GetContext(), initial_memory, EXCEPTION_POSTSCRIPT);
 	REQUIRE(block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
 }
 
@@ -347,7 +347,7 @@ TEST_CASE("Hash buffer unpin restores an entry consumed while pinned", "[storage
 	const auto initial_memory = pool.GetUsedMemory();
 	const auto size = manager.GetBlockSize();
 	const auto allocation_size = BufferManager::GetAllocSize(size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
-	pool.SetLimit(initial_memory + allocation_size, EXCEPTION_POSTSCRIPT);
+	pool.SetLimit(db.instance->GetContext(), initial_memory + allocation_size, EXCEPTION_POSTSCRIPT);
 	auto pin = manager.Allocate(MemoryTag::HASH_TABLE, size, true);
 	auto block = pin.GetBlockHandle();
 	pin.Destroy();
@@ -382,16 +382,16 @@ TEST_CASE("Hash buffer eviction can retry a failed spill without another unpin",
 	for (idx_t i = 0; i < 10; i++) {
 		auto repinned = manager.Pin(block);
 	}
-	REQUIRE_THROWS(pool.SetLimit(initial_memory, EXCEPTION_POSTSCRIPT));
+	REQUIRE_THROWS(pool.SetLimit(db.instance->GetContext(), initial_memory, EXCEPTION_POSTSCRIPT));
 	{
 		auto lock = block->GetMemory().GetLock();
 		REQUIRE(block->GetMemory().HasLiveQueueEntry(lock));
 	}
 	manager.SetSwapLimit(32 * 1024 * 1024);
-	pool.SetLimit(initial_memory, EXCEPTION_POSTSCRIPT);
+	pool.SetLimit(db.instance->GetContext(), initial_memory, EXCEPTION_POSTSCRIPT);
 	REQUIRE(block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
 	REQUIRE(manager.GetUsedSwap() > 0);
-	pool.SetLimit(initial_memory + 2 * size, EXCEPTION_POSTSCRIPT);
+	pool.SetLimit(db.instance->GetContext(), initial_memory + 2 * size, EXCEPTION_POSTSCRIPT);
 	auto reloaded = manager.Pin(block);
 	idx_t mismatches = 0;
 	for (idx_t i = 0; i < size; i++) {
@@ -422,7 +422,7 @@ TEST_CASE("Test eviction queue: dead_nodes is incremented only for blocks with l
 	// Memory limit only large enough to hold `held_buffers` blocks at once, so subsequent
 	// allocations evict older destroyable blocks (their buffer becomes nullptr).
 	const idx_t memory_limit = initial_memory + held_buffers * actual_alloc_size;
-	buffer_pool.SetLimit(memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), memory_limit, EXCEPTION_POSTSCRIPT);
 
 	vector<shared_ptr<BlockHandle>> handles;
 	handles.reserve(total_buffers);
@@ -478,7 +478,7 @@ TEST_CASE("Test eviction queue: dead_nodes invariants hold under destroyable blo
 	const idx_t actual_alloc_size = BufferManager::GetAllocSize(buffer_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 
 	const idx_t memory_limit = initial_memory + resident_buffers * actual_alloc_size;
-	buffer_pool.SetLimit(memory_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), memory_limit, EXCEPTION_POSTSCRIPT);
 
 	// Keep a small set of pinned buffers that stay resident throughout the test.
 	// Their queue entries (after each unpin/repin cycle below) are alive, latest-version,
@@ -530,7 +530,7 @@ TEST_CASE("Test buffer pool eviction: SetLimit evicts object cache", "[storage][
 
 	// Shrink limit to only accommodate 3 objects plus initial memory overhead
 	const idx_t target_limit = initial_memory + 3 * obj_size;
-	buffer_pool.SetLimit(target_limit, EXCEPTION_POSTSCRIPT);
+	buffer_pool.SetLimit(db.instance->GetContext(), target_limit, EXCEPTION_POSTSCRIPT);
 
 	REQUIRE(cache.GetEntryCount() == 3);
 	REQUIRE(buffer_pool.GetUsedMemory() <= target_limit);
@@ -646,7 +646,8 @@ TEST_CASE("Eviction consumes purge survivors before recently unpinned buffers", 
 		worker.join();
 	}
 
-	pool.SetLimit(pool.GetUsedMemory() - old_block->GetMemory().GetMemoryUsage(), EXCEPTION_POSTSCRIPT);
+	pool.SetLimit(db.instance->GetContext(), pool.GetUsedMemory() - old_block->GetMemory().GetMemoryUsage(),
+	              EXCEPTION_POSTSCRIPT);
 	REQUIRE(old_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
 	for (const auto &block : recent_blocks) {
 		REQUIRE(block->GetMemory().GetState() == BlockState::BLOCK_LOADED);

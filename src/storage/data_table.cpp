@@ -284,7 +284,8 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(db.GetDatabase().GetContext(), state.table_state, column_ids, start_row,
+	                                     end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -428,7 +429,7 @@ void DataTable::RebuildIndexes() {
 		CreateIndexScanState state;
 		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
 		state.Initialize(scan_column_ids, nullptr);
-		QueryContext context;
+		Context &context = db.GetDatabase().GetContext();
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
 		row_groups->InitializeCreateIndexScan(state);
 
@@ -1290,8 +1291,8 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-                                  IndexRemovalType removal_type, optional_idx active_checkpoint) {
+void DataTable::RemoveFromIndexes(Context &context, Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
+                                  optional_idx active_checkpoint) {
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
@@ -1741,7 +1742,7 @@ idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context,
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(Context &context,
                                                           const ColumnSegmentInfoScanOptions &options) {
 	return row_groups->GetColumnSegmentInfo(context, options);
 }
@@ -1750,7 +1751,7 @@ void DataTable::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &stat
 	row_groups->InitializeColumnSegmentInfoScan(state);
 }
 
-bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+bool DataTable::ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
                                       vector<ColumnSegmentInfo> &result) {
 	return row_groups->ScanColumnSegmentInfo(context, state, result);
 }

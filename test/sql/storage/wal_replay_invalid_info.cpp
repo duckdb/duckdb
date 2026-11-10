@@ -16,9 +16,9 @@ static void AppendWALEntry(FileSystem &fs, const string &path, MemoryStream &pay
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND);
 	uint64_t size = payload.GetPosition();
 	uint64_t checksum = Checksum(payload.GetData(), size);
-	handle->Write(QueryContext(), &size, sizeof(uint64_t));
-	handle->Write(QueryContext(), &checksum, sizeof(uint64_t));
-	handle->Write(QueryContext(), payload.GetData(), size);
+	handle->Write(TestServicesContext(), &size, sizeof(uint64_t));
+	handle->Write(TestServicesContext(), &checksum, sizeof(uint64_t));
+	handle->Write(TestServicesContext(), payload.GetData(), size);
 }
 
 //! Replay a WAL whose only new entry is written by the callback and followed by a flush, expecting the given error

@@ -69,8 +69,7 @@ private:
 
 class CheckpointWriter {
 public:
-	CheckpointWriter(AttachedDatabase &db, QueryContext context,
-	                 optional_ptr<ClientContext> checkpoint_context = nullptr);
+	CheckpointWriter(AttachedDatabase &db, Context &context, optional_ptr<ClientContext> checkpoint_context = nullptr);
 	virtual ~CheckpointWriter();
 
 	//! The database
@@ -151,7 +150,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
+	SingleFileCheckpointWriter(Context &context, AttachedDatabase &db, BlockManager &block_manager,
 	                           CheckpointOptions options, optional_ptr<ClientContext> checkpoint_context = nullptr);
 	~SingleFileCheckpointWriter() override;
 

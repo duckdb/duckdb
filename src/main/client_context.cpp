@@ -14,7 +14,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/active_query_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -910,8 +909,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			client_data->log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
-			                                                              BufferedFileWriter::DEFAULT_OPEN_FLAGS);
+			client_data->log_query_writer = make_uniq<BufferedFileWriter>(
+			    FileSystem::GetFileSystem(*this), GetContext(), log_path, BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 		} catch (...) {
 			return;
 		}

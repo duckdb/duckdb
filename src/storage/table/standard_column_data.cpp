@@ -359,7 +359,7 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 	}
 }
 
-void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+void StandardColumnData::GetColumnSegmentInfo(Context &context, duckdb::idx_t row_group_index,
                                               vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
                                               const ColumnSegmentInfoScanOptions &options) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);

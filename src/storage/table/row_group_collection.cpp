@@ -322,7 +322,7 @@ void RowGroupCollection::Verify() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionScanState &state,
+void RowGroupCollection::InitializeScan(Context &context, CollectionScanState &state,
                                         const vector<StorageIndex> &column_ids,
                                         optional_ptr<TableFilterSet> table_filters) {
 	state.row_groups = GetRowGroups();
@@ -339,7 +339,7 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 	state.segment_lock = state.row_groups->Lock();
 }
 
-void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
+void RowGroupCollection::InitializeScanWithOffset(Context &context, CollectionScanState &state,
                                                   const vector<StorageIndex> &column_ids, idx_t start_row,
                                                   idx_t end_row) {
 	state.row_groups = GetRowGroups();
@@ -488,7 +488,7 @@ RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGrou
 		// initialize the scan
 		state = make_uniq<TableScanState>();
 		state->Initialize(column_ids, nullptr);
-		collection->InitializeScan(QueryContext(), state->local_state, column_ids, nullptr);
+		collection->InitializeScan(collection->GetDatabase().GetContext(), state->local_state, column_ids, nullptr);
 		// scan the first chunk
 		this->operator++();
 	}
@@ -1072,9 +1072,8 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 	}
 }
 
-void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
-                                           Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
-                                           optional_idx active_checkpoint) {
+void RowGroupCollection::RemoveFromIndexes(Context &context, TableIndexList &indexes, Vector &row_identifiers,
+                                           idx_t count, IndexRemovalType removal_type, optional_idx active_checkpoint) {
 	// Collect all Indexed columns on the table.
 	auto indexed_column_id_set = indexes.GetIndexedColumns();
 
@@ -1420,7 +1419,7 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(QueryContext(), types);
+		scan_state.table_state.Initialize(checkpoint_state.writer.GetContext(), types);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
@@ -2299,7 +2298,7 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionDat
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context,
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(Context &context,
                                                                    const ColumnSegmentInfoScanOptions &options) const {
 	vector<ColumnSegmentInfo> result;
 	ColumnSegmentInfoScanState state;
@@ -2319,7 +2318,7 @@ void RowGroupCollection::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanSt
 	state.current_row_group = state.row_groups->GetRootSegment();
 }
 
-bool RowGroupCollection::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+bool RowGroupCollection::ScanColumnSegmentInfo(Context &context, ColumnSegmentInfoScanState &state,
                                                vector<ColumnSegmentInfo> &result) const {
 	if (!state.current_row_group) {
 		return false;
@@ -2447,8 +2446,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction,
-                                             DataTable &parent, const BoundConstraint &constraint) {
+void RowGroupCollection::VerifyNewConstraint(Context &context, DuckTransaction &transaction, DataTable &parent,
+                                             const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;
 	}

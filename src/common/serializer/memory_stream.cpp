@@ -79,10 +79,6 @@ void MemoryStream::GrowCapacity(idx_t write_size) {
 }
 
 void MemoryStream::ReadData(data_ptr_t destination, idx_t read_size) {
-	ReadData(QueryContext(), destination, read_size);
-}
-
-void MemoryStream::ReadData(QueryContext context, data_ptr_t destination, idx_t read_size) {
 	if (position + read_size > capacity) {
 		throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
 	}
