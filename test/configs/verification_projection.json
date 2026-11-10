@@ -39,6 +39,12 @@
       ]
     },
     {
+      "reason": "Asserts EXPLAIN plan shapes with column binding numbers, which the synthetic verification projections renumber.",
+      "paths": [
+        "test/sql/optimizer/secure_view_barrier_in_clause.test"
+      ]
+    },
+    {
       "reason": "Projection placement and pullup tests assert topology changed by synthetic verification projections.",
       "paths": [
         "test/optimizer/projection_placement.test",
