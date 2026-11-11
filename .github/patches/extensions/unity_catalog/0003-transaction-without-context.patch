@@ -1,0 +1,13 @@
+diff --git a/src/storage/uc_transaction.cpp b/src/storage/uc_transaction.cpp
+index 913d92c..ccc1f54 100644
+--- a/src/storage/uc_transaction.cpp
++++ b/src/storage/uc_transaction.cpp
+@@ -8,7 +8,7 @@
+ namespace duckdb {
+ 
+ UCTransaction::UCTransaction(UnityCatalog &unity_catalog, TransactionManager &manager, ClientContext &context)
+-    : Transaction(manager, context), access_mode(unity_catalog.access_mode) {
++    : Transaction(manager), access_mode(unity_catalog.access_mode) {
+ 	//	connection = UCConnection::Open(unity_catalog.path);
+ }
+ 

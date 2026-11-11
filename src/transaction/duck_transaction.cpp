@@ -36,11 +36,11 @@ TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound
     : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
-DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                                 SnapshotView view_p, idx_t catalog_version_p)
-    : Transaction(manager, context_p), start_time(start_time), view(view_p), commit_id(0),
-      catalog_version(catalog_version_p), awaiting_cleanup(false),
-      undo_buffer(*this, DatabaseInstance::GetDatabase(context_p)), storage(make_uniq<LocalStorage>(*this)) {
+DuckTransaction::DuckTransaction(DuckTransactionManager &manager, transaction_t start_time, SnapshotView view_p,
+                                 idx_t catalog_version_p)
+    : Transaction(manager), start_time(start_time), view(view_p), commit_id(0), catalog_version(catalog_version_p),
+      awaiting_cleanup(false), undo_buffer(*this, manager.GetDB().GetDatabase()),
+      storage(make_uniq<LocalStorage>(*this)) {
 	D_ASSERT(IsCommitted(start_time) && !IsCommitted(view.transaction_id));
 }
 

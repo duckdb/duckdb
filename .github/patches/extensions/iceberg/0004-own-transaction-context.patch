@@ -1,0 +1,27 @@
+diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
+index 06d9e05fc..c447b083d 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -72,7 +72,7 @@ IcebergTable &IcebergTransactionTableState::GetOrCreateTransactionInfo(IcebergTr
+ }
+ 
+ IcebergTransaction::IcebergTransaction(IcebergCatalog &ic_catalog, TransactionManager &manager, ClientContext &context)
+-    : Transaction(manager, context), db(*context.db), catalog(ic_catalog), access_mode(ic_catalog.access_mode) {
++    : Transaction(manager), context(context.shared_from_this()), db(*context.db), catalog(ic_catalog), access_mode(ic_catalog.access_mode) {
+ }
+ 
+ IcebergTransaction::~IcebergTransaction() = default;
+diff --git a/src/include/catalog/rest/transaction/iceberg_transaction.hpp b/src/include/catalog/rest/transaction/iceberg_transaction.hpp
+index 103a4df26..10f72c6ef 100644
+--- a/src/include/catalog/rest/transaction/iceberg_transaction.hpp
++++ b/src/include/catalog/rest/transaction/iceberg_transaction.hpp
+@@ -70,6 +70,9 @@ public:
+ 	IcebergTransaction(IcebergCatalog &ic_catalog, TransactionManager &manager, ClientContext &context);
+ 	~IcebergTransaction() override;
+ 
++	//! The connection that started the transaction
++	weak_ptr<ClientContext> context;
++
+ public:
+ 	void Start();
+ 	void Commit();

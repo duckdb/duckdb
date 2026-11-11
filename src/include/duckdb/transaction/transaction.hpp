@@ -40,11 +40,10 @@ struct DatabaseModificationType;
 //! transaction
 class Transaction {
 public:
-	DUCKDB_API Transaction(TransactionManager &manager, ClientContext &context);
+	DUCKDB_API explicit Transaction(TransactionManager &manager);
 	DUCKDB_API virtual ~Transaction();
 
 	TransactionManager &manager;
-	weak_ptr<ClientContext> context;
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
 	atomic<transaction_t> active_query;

@@ -36,8 +36,8 @@ struct CommitInfo {
 
 class DuckTransaction : public Transaction {
 public:
-	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                SnapshotView view, idx_t catalog_version);
+	DuckTransaction(DuckTransactionManager &manager, transaction_t start_time, SnapshotView view,
+	                idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction

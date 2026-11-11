@@ -1,0 +1,30 @@
+diff --git a/src/include/storage/mysql_transaction.hpp b/src/include/storage/mysql_transaction.hpp
+index 7a1325a..4d2ceaf 100644
+--- a/src/include/storage/mysql_transaction.hpp
++++ b/src/include/storage/mysql_transaction.hpp
+@@ -25,6 +25,9 @@ class MySQLTransaction : public Transaction {
+ public:
+ 	MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, ClientContext &context);
+ 
++	//! The connection that started the transaction
++	weak_ptr<ClientContext> context;
++
+ 	void Start();
+ 	void Commit();
+ 	void Rollback();
+diff --git a/src/storage/mysql_transaction.cpp b/src/storage/mysql_transaction.cpp
+index 27cd593..83bf703 100644
+--- a/src/storage/mysql_transaction.cpp
++++ b/src/storage/mysql_transaction.cpp
+@@ -5,8 +5,9 @@
+ namespace duckdb {
+ 
+ MySQLTransaction::MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, ClientContext &context)
+-    : Transaction(manager, context), catalog(mysql_catalog), transactions_enabled(GetTransactionsEnabled(context)),
+-      access_mode(mysql_catalog.access_mode), conn_init_opts(GetConnectionInitOptions(context)) {
++    : Transaction(manager), context(context.shared_from_this()), catalog(mysql_catalog),
++      transactions_enabled(GetTransactionsEnabled(context)), access_mode(mysql_catalog.access_mode),
++      conn_init_opts(GetConnectionInitOptions(context)) {
+ }
+ 
+ void MySQLTransaction::Start() {

@@ -1,0 +1,30 @@
+diff --git a/src/include/storage/delta_transaction.hpp b/src/include/storage/delta_transaction.hpp
+index db31d77..0a1c8b0 100644
+--- a/src/include/storage/delta_transaction.hpp
++++ b/src/include/storage/delta_transaction.hpp
+@@ -29,6 +29,9 @@ public:
+ 	DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context);
+ 	~DeltaTransaction() override;
+ 
++	//! The connection that started the transaction
++	weak_ptr<ClientContext> context;
++
+ 	void Start();
+ 	void Commit(ClientContext &context);
+ 	void Rollback();
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+index 4c8961e..b3cc5d1 100644
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -30,8 +30,9 @@
+ namespace duckdb {
+ 
+ DeltaTransaction::DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context)
+-    : Transaction(manager, context), access_mode(delta_catalog.access_mode), parent_commit(delta_catalog.parent_commit),
+-      parent_catalog_name(delta_catalog.parent_catalog_name), unity_table_id(delta_catalog.unity_table_id) {
++    : Transaction(manager), context(context.shared_from_this()), access_mode(delta_catalog.access_mode),
++      parent_commit(delta_catalog.parent_commit), parent_catalog_name(delta_catalog.parent_catalog_name),
++      unity_table_id(delta_catalog.unity_table_id) {
+ 	commit_function = delta_catalog.commit_function;
+ }
+ 

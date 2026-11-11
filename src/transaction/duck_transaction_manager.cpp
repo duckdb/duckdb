@@ -104,7 +104,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, view, catalog_version);
+	auto transaction = make_uniq<DuckTransaction>(*this, start_time, view, catalog_version);
 	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions

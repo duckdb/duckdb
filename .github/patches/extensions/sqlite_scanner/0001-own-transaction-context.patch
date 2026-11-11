@@ -1,0 +1,27 @@
+diff --git a/src/include/storage/sqlite_transaction.hpp b/src/include/storage/sqlite_transaction.hpp
+index 2b90b84..089e2f1 100644
+--- a/src/include/storage/sqlite_transaction.hpp
++++ b/src/include/storage/sqlite_transaction.hpp
+@@ -24,6 +24,9 @@ public:
+ 	SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, ClientContext &context);
+ 	~SQLiteTransaction() override;
+ 
++	//! The connection that started the transaction
++	weak_ptr<ClientContext> context;
++
+ 	void Start();
+ 	void Commit();
+ 	void Rollback();
+diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
+index 8b4b474..89754e8 100644
+--- a/src/storage/sqlite_transaction.cpp
++++ b/src/storage/sqlite_transaction.cpp
+@@ -54,7 +54,7 @@ void SQLiteCatalogMap::EraseEntry(const string &entry_name) {
+ }
+ 
+ SQLiteTransaction::SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, ClientContext &context)
+-    : Transaction(manager, context), sqlite_catalog(sqlite_catalog), db(nullptr) {
++    : Transaction(manager), context(context.shared_from_this()), sqlite_catalog(sqlite_catalog), db(nullptr) {
+ 	if (sqlite_catalog.InMemory()) {
+ 		db = sqlite_catalog.GetInMemoryDatabase();
+ 		initialized.store(true, std::memory_order_release);
