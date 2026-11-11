@@ -1457,7 +1457,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		con.BeginTransaction();
 		auto default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
 		auto &default_catalog = Catalog::GetCatalog(client_context, default_db_name);
-		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
+		MetaTransaction::Get(client_context)
+		    .ModifyDatabase(client_context, default_catalog.GetAttached(), DatabaseModificationType());
 		default_catalog.CreateTable(client_context, std::move(tagged_table_info));
 		con.Commit();
 	}
