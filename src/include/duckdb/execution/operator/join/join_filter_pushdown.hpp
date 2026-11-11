@@ -52,6 +52,7 @@ struct JoinFilterPushdownColumn {
 		result.storage_type = storage_type;
 		result.mode = mode;
 		result.input_expression = input_expression ? input_expression->Copy() : nullptr;
+		result.value_preserving_input = value_preserving_input;
 		return result;
 	}
 
@@ -65,6 +66,9 @@ struct JoinFilterPushdownColumn {
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 	//! Filter input over BoundReferenceExpression(0) in the existing scan projection's type.
 	unique_ptr<Expression> input_expression;
+	//! Whether the statistics of the scanned column prove that every cast in input_expression succeeds and returns
+	//! its input value on the rows the scan returns
+	bool value_preserving_input = false;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };

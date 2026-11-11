@@ -89,6 +89,12 @@ public:
 	//! Compare two sets of statistics and return whether the comparison is always true or false
 	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
 	                                                 ExpressionType comparison);
+	//! Update filter statistics from a filter with a constant
+	static void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
+	//! Update filter statistics from a TableFilter
+	static void UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter);
+	//! Update filter statistics from an ExpressionFilter expression
+	static void UpdateExpressionFilterStatistics(BaseStatistics &input, const Expression &expr);
 
 private:
 	//! Propagate statistics through an operator
@@ -123,8 +129,6 @@ private:
 	static Value NumericMax(const BaseStatistics &stats);
 	static void SetNumericMin(BaseStatistics &stats, const Value &val);
 	static void SetNumericMax(BaseStatistics &stats, const Value &val);
-	//! Update filter statistics from a filter with a constant
-	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
 	void UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type);
 	//! Update filter statistics from a generic comparison
@@ -154,10 +158,6 @@ private:
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);
-	//! Update filter statistics from a TableFilter
-	void UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter);
-	//! Update filter statistics from an ExpressionFilter expression
-	void UpdateExpressionFilterStatistics(BaseStatistics &input, const Expression &expr);
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);
