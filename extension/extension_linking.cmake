@@ -79,15 +79,8 @@ function(
     CAPI_VERSION
     PARAMETERS)
     set(TARGET_NAME ${NAME}_loadable_extension)
-    set(PREBUILT_EXTENSION FALSE)
     string(FIND "${PARAMETERS}" "-host-bound" HOST_BOUND)
-    if(TARGET ${NAME}_extension)
-        get_property(
-            PREBUILT_EXTENSION
-            TARGET ${NAME}_extension
-            PROPERTY DUCKDB_PREBUILT_EXTENSION)
-    endif()
-    if(LOCAL_EXTENSION_REPO AND NOT PREBUILT_EXTENSION)
+    if(LOCAL_EXTENSION_REPO)
         add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
     endif()
     # all parameters after output_directory
@@ -257,8 +250,7 @@ function(
     add_dependencies(${TARGET_NAME} duckdb_platform)
     if(NOT ${EXTENSION_CONFIG_BUILD}
        AND NOT ${EXTENSION_TESTS_ONLY}
-       AND NOT CLANG_TIDY
-       AND NOT PREBUILT_EXTENSION)
+       AND NOT CLANG_TIDY)
         add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
     endif()
 endfunction()
