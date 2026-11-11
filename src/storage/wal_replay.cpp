@@ -522,7 +522,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		}
 		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
 		if (profiler) {
-			profiler->AddToMetricCounter(MetricStorageWALReplayEntryCount::Name, replay_entry_count);
+			profiler->AddToMetricCounter<MetricStorageWALReplayEntryCount>(replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);

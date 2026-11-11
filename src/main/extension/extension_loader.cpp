@@ -403,8 +403,8 @@ void ExtensionLoader::RegisterCombineTypesRule(CombineTypesRule rule) {
 	DBConfig::GetConfig(db).GetCastFunctions().RegisterCombineTypesRule(rule);
 }
 
-void ExtensionLoader::RegisterMetric(MetricInfo info) {
-	MetricsManager::Get(db).RegisterMetric(std::move(info));
+idx_t ExtensionLoader::RegisterMetric(MetricInfo info) {
+	return MetricsManager::Get(db).RegisterMetric(std::move(info));
 }
 
 } // namespace duckdb

@@ -139,8 +139,8 @@ public:
 	DUCKDB_API void RegisterCombineTypesRule(CombineTypesRule rule);
 
 	//! Registers a custom metric so it appears in duckdb_available_metrics, and so QueryProfiler::SetMetric accepts it.
-	//! The profiler's own metrics cannot be registered.
-	DUCKDB_API void RegisterMetric(MetricInfo info);
+	//! Returns its index, the same in every database, to update it through the QueryProfiler without a lock.
+	DUCKDB_API idx_t RegisterMetric(MetricInfo info);
 
 private:
 	void RegisterType(CreateTypeInfo &info);

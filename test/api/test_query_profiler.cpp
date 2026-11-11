@@ -278,3 +278,74 @@ TEST_CASE("Test bytes scanned by a LIMIT with read-ahead", "[api][parquet]") {
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM read_parquet('" + path + "') LIMIT 10"));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == first_row_group);
 }
+
+TEST_CASE("The profiler's own timings and counters are kept by their index", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers AS SELECT range AS i FROM range(1000)"));
+	con.EnableProfiling();
+	Settings::Set<ProfilingOutputSetting>(*con.context, SetScope::SESSION,
+	                                      Value(TestCreatePath("test_fixed_metrics_output.txt")));
+	auto before = Timestamp::GetCurrentTimestamp();
+	REQUIRE_NO_FAIL(con.Query("SELECT max(i) FROM numbers WHERE i % 7 = 0"));
+	auto after = Timestamp::GetCurrentTimestamp();
+
+	auto &profiler = QueryProfiler::Get(*con.context);
+	Value planner_time;
+	Value filter_pushdown_time;
+	profiler.GetFinalizedProfileUnderLock(
+	    [&](optional_ptr<const GatheredMetrics> metrics, optional_ptr<const ProfilingNode>) {
+		    REQUIRE(metrics);
+		    auto &values = metrics->GetMetrics();
+		    REQUIRE(values.count("planner.total_time"));
+		    REQUIRE(values.count("query.total_time"));
+		    REQUIRE(values.count("optimizer.filter_pushdown"));
+		    planner_time = values.at("planner.total_time");
+		    filter_pushdown_time = values.at("optimizer.filter_pushdown");
+	    });
+	REQUIRE(planner_time.type() == LogicalType::DOUBLE);
+	REQUIRE(planner_time.GetValue<double>() > 0);
+	REQUIRE(filter_pushdown_time.type() == LogicalType::DOUBLE);
+
+	// read back by name, with the start and end the metrics log uses
+	auto &query_metrics = profiler.GetQueryMetrics();
+	REQUIRE(query_metrics.GetStringMetricInSeconds("planner.total_time") == Approx(planner_time.GetValue<double>()));
+	auto timings = query_metrics.GetMetricTimings();
+	REQUIRE(timings.count("planner.total_time") == 1);
+	auto &planner_timing = timings["planner.total_time"];
+	REQUIRE(planner_timing.has_bounds);
+	REQUIRE(before <= planner_timing.start_time);
+	REQUIRE(planner_timing.start_time <= planner_timing.end_time);
+	REQUIRE(planner_timing.end_time <= after);
+	REQUIRE(query_metrics.GetStringMetricInSeconds("optimizer.filter_pushdown") ==
+	        Approx(filter_pushdown_time.GetValue<double>()));
+
+	// the next query starts over: its planner timing starts after the first query ended
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	auto next_timings = query_metrics.GetMetricTimings();
+	REQUIRE(next_timings["planner.total_time"].start_time >= after);
+}
+
+TEST_CASE("Merging query metrics adds up the profiler's own timings and counters", "[api]") {
+	QueryMetrics target;
+	QueryMetrics source;
+	auto start = Timestamp::GetCurrentTimestamp();
+	auto end = Timestamp::FromEpochMicroSeconds(start.value + 1000000);
+	source.AddToMetricCounter(MetricStorageWALReplayEntryCount::MetricIndex, 5);
+	source.AddToMetricTiming(MetricPlannerTotalTime::MetricIndex, 1000000000, start, end);
+	target.AddToMetricCounter(MetricStorageWALReplayEntryCount::MetricIndex, 2);
+	target.Merge(source);
+	REQUIRE(target.GetStringCounter("storage.wal_replay_entry_count") == 7);
+	REQUIRE(target.GetStringMetricInSeconds("planner.total_time") == Approx(1.0));
+	auto timings = target.GetMetricTimings();
+	REQUIRE(timings["planner.total_time"].has_bounds);
+	REQUIRE(timings["planner.total_time"].start_time == start);
+	REQUIRE(timings["planner.total_time"].end_time == end);
+}
+
+TEST_CASE("A timer with an index the process does not know records nothing", "[api]") {
+	QueryMetrics query_metrics;
+	auto unknown_index = MetricsManager::KnownMetricCount() + 1000;
+	{ MetricsTimer timer(query_metrics, unknown_index); }
+	REQUIRE(query_metrics.GetMetricTimings().empty());
+}
