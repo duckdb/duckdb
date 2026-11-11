@@ -1618,9 +1618,6 @@ typedef struct {
 	(duckdb_v2_vcatalog_database_handle database, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_database_get_user_data)
 	(duckdb_v2_vcatalog_database_handle database, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_create)
-	(duckdb_v2_vcatalog_database_handle database, const char *name, idx_t name_length,
-	 duckdb_v2_vcatalog_schema_handle *schema, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_schema_destroy)(duckdb_v2_vcatalog_schema_handle *schema);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_find_get_name)
 	(duckdb_v2_vcatalog_schema_find_info_handle info, const char **name, idx_t *name_length,
@@ -1642,13 +1639,47 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_list_get_transaction_state)
 	(duckdb_v2_vcatalog_schema_list_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_set_state)
-	(duckdb_v2_vcatalog_schema_handle schema, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_schema_find_callback)
 	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_schema_find_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_schema_list_callback)
 	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_schema_list_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_entry_create_get_name)
+	(duckdb_v2_vcatalog_entry_create_info_handle info, const char **name, idx_t *name_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_entry_create_get_transaction_state)
+	(duckdb_v2_vcatalog_entry_create_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_entry_drop_get_transaction_state)
+	(duckdb_v2_vcatalog_entry_drop_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_entry_drop_is_cascade)
+	(duckdb_v2_vcatalog_entry_drop_info_handle info, bool *cascade, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_builder_build)
+	(duckdb_v2_vcatalog_schema_builder_handle builder, duckdb_v2_vcatalog_schema_handle *schema,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_builder_create)
+	(duckdb_v2_vcatalog_database_handle database, const char *name, idx_t name_length,
+	 duckdb_v2_vcatalog_schema_builder_handle *builder, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_schema_builder_destroy)(duckdb_v2_vcatalog_schema_builder_handle *builder);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_builder_set_state)
+	(duckdb_v2_vcatalog_schema_builder_handle builder, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_create_set_schema)
+	(duckdb_v2_vcatalog_schema_create_info_handle info, duckdb_v2_vcatalog_schema_handle schema,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_schema_drop_get_schema)
+	(duckdb_v2_vcatalog_schema_drop_info_handle info, duckdb_v2_vcatalog_schema_handle *schema,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_schema_create_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_schema_create_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_schema_drop_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_schema_drop_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_table_create_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_table_create_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_table_drop_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_table_drop_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_table_find_callback)
 	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_table_find_callback_fn callback,
@@ -1656,13 +1687,58 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_table_list_callback)
 	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_table_list_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_add_column)
-	(duckdb_v2_vcatalog_table_handle table, const char *name, idx_t name_length, duckdb_v2_logical_type_handle type,
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_view_create_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_view_create_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create)
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_set_view_drop_callback)
+	(duckdb_v2_vcatalog_handle vcatalog, duckdb_v2_vcatalog_view_drop_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_add_column)
+	(duckdb_v2_vcatalog_table_builder_handle builder, const char *name, idx_t name_length,
+	 duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_build)
+	(duckdb_v2_vcatalog_table_builder_handle builder, duckdb_v2_vcatalog_table_handle *table,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_create)
 	(duckdb_v2_vcatalog_schema_handle schema, const char *name, idx_t name_length,
-	 duckdb_v2_vcatalog_table_handle *table, duckdb_v2_error_info_handle *err);
+	 duckdb_v2_vcatalog_table_builder_handle *builder, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_table_builder_destroy)(duckdb_v2_vcatalog_table_builder_handle *builder);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_set_scan_bind_callback)
+	(duckdb_v2_vcatalog_table_builder_handle builder, duckdb_v2_vcatalog_table_scan_bind_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_set_scan_function)
+	(duckdb_v2_vcatalog_table_builder_handle builder, duckdb_v2_table_function_handle function,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_builder_set_state)
+	(duckdb_v2_vcatalog_table_builder_handle builder, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_column_count)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_column_default)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t index, const char **sql, idx_t *sql_length, bool *present,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_column_name)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t index, const char **name, idx_t *name_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_column_type)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t index, duckdb_v2_logical_type_handle *type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_constraint)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t index, const char **sql, idx_t *sql_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_constraint_count)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_get_schema)
+	(duckdb_v2_vcatalog_table_create_info_handle info, duckdb_v2_vcatalog_schema_handle *schema,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_is_column_not_null)
+	(duckdb_v2_vcatalog_table_create_info_handle info, idx_t index, bool *not_null, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_create_set_table)
+	(duckdb_v2_vcatalog_table_create_info_handle info, duckdb_v2_vcatalog_table_handle table,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_table_destroy)(duckdb_v2_vcatalog_table_handle *table);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_drop_get_table)
+	(duckdb_v2_vcatalog_table_drop_info_handle info, duckdb_v2_vcatalog_table_handle *table,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_find_get_name)
 	(duckdb_v2_vcatalog_table_find_info_handle info, const char **name, idx_t *name_length,
 	 duckdb_v2_error_info_handle *err);
@@ -1674,6 +1750,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_find_set_table)
 	(duckdb_v2_vcatalog_table_find_info_handle info, duckdb_v2_vcatalog_table_handle table,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_find_set_view)
+	(duckdb_v2_vcatalog_table_find_info_handle info, duckdb_v2_vcatalog_view_handle view,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_get_name)
 	(duckdb_v2_vcatalog_table_handle table, const char **name, idx_t *name_length, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_get_schema)
@@ -1683,13 +1762,69 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_list_add_table)
 	(duckdb_v2_vcatalog_table_list_info_handle info, duckdb_v2_vcatalog_table_handle table,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_list_add_view)
+	(duckdb_v2_vcatalog_table_list_info_handle info, duckdb_v2_vcatalog_view_handle view,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_list_get_schema)
 	(duckdb_v2_vcatalog_table_list_info_handle info, duckdb_v2_vcatalog_schema_handle *schema,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_list_get_transaction_state)
 	(duckdb_v2_vcatalog_table_list_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_set_state)
-	(duckdb_v2_vcatalog_table_handle table, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_scan_bind_get_table)
+	(duckdb_v2_vcatalog_table_scan_bind_info_handle info, duckdb_v2_vcatalog_table_handle *table,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_scan_bind_get_transaction_state)
+	(duckdb_v2_vcatalog_table_scan_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_scan_bind_set_bind_data)
+	(duckdb_v2_vcatalog_table_scan_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_scan_bind_set_cardinality)
+	(duckdb_v2_vcatalog_table_scan_bind_info_handle info, idx_t cardinality, bool is_exact,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_table_scan_bind_set_order_preservation)
+	(duckdb_v2_vcatalog_table_scan_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_add_column_alias)
+	(duckdb_v2_vcatalog_view_builder_handle builder, const char *name, idx_t name_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_build)
+	(duckdb_v2_vcatalog_view_builder_handle builder, duckdb_v2_vcatalog_view_handle *view,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_create)
+	(duckdb_v2_vcatalog_schema_handle schema, const char *name, idx_t name_length,
+	 duckdb_v2_vcatalog_view_builder_handle *builder, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_create_from_sql)
+	(duckdb_v2_vcatalog_schema_handle schema, const char *sql, idx_t sql_length,
+	 duckdb_v2_vcatalog_view_builder_handle *builder, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_view_builder_destroy)(duckdb_v2_vcatalog_view_builder_handle *builder);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_set_query)
+	(duckdb_v2_vcatalog_view_builder_handle builder, const char *sql, idx_t sql_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_builder_set_state)
+	(duckdb_v2_vcatalog_view_builder_handle builder, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_create_get_column_alias)
+	(duckdb_v2_vcatalog_view_create_info_handle info, idx_t index, const char **name, idx_t *name_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_create_get_column_alias_count)
+	(duckdb_v2_vcatalog_view_create_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_create_get_query)
+	(duckdb_v2_vcatalog_view_create_info_handle info, const char **sql, idx_t *sql_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_create_get_schema)
+	(duckdb_v2_vcatalog_view_create_info_handle info, duckdb_v2_vcatalog_schema_handle *schema,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_create_set_view)
+	(duckdb_v2_vcatalog_view_create_info_handle info, duckdb_v2_vcatalog_view_handle view,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vcatalog_view_destroy)(duckdb_v2_vcatalog_view_handle *view);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_drop_get_view)
+	(duckdb_v2_vcatalog_view_drop_info_handle info, duckdb_v2_vcatalog_view_handle *view,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_get_name)
+	(duckdb_v2_vcatalog_view_handle view, const char **name, idx_t *name_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_get_schema)
+	(duckdb_v2_vcatalog_view_handle view, duckdb_v2_vcatalog_schema_handle *schema, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vcatalog_view_get_state)
+	(duckdb_v2_vcatalog_view_handle view, void **data, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3774,9 +3909,6 @@ typedef struct {
 #define duckdb_v2_vcatalog_database_get_user_data duckdb_ext_api.duckdb_v2_vcatalog_database_get_user_data
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vcatalog_schema_create duckdb_ext_api.duckdb_v2_vcatalog_schema_create
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_schema_destroy duckdb_ext_api.duckdb_v2_vcatalog_schema_destroy
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3806,13 +3938,54 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_vcatalog_schema_list_get_transaction_state
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vcatalog_schema_set_state duckdb_ext_api.duckdb_v2_vcatalog_schema_set_state
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_set_schema_find_callback duckdb_ext_api.duckdb_v2_vcatalog_set_schema_find_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_set_schema_list_callback duckdb_ext_api.duckdb_v2_vcatalog_set_schema_list_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_entry_create_get_name duckdb_ext_api.duckdb_v2_vcatalog_entry_create_get_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_entry_create_get_transaction_state                                                          \
+	duckdb_ext_api.duckdb_v2_vcatalog_entry_create_get_transaction_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_entry_drop_get_transaction_state                                                            \
+	duckdb_ext_api.duckdb_v2_vcatalog_entry_drop_get_transaction_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_entry_drop_is_cascade duckdb_ext_api.duckdb_v2_vcatalog_entry_drop_is_cascade
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_builder_build duckdb_ext_api.duckdb_v2_vcatalog_schema_builder_build
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_builder_create duckdb_ext_api.duckdb_v2_vcatalog_schema_builder_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_builder_destroy duckdb_ext_api.duckdb_v2_vcatalog_schema_builder_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_builder_set_state duckdb_ext_api.duckdb_v2_vcatalog_schema_builder_set_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_create_set_schema duckdb_ext_api.duckdb_v2_vcatalog_schema_create_set_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_schema_drop_get_schema duckdb_ext_api.duckdb_v2_vcatalog_schema_drop_get_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_set_schema_create_callback duckdb_ext_api.duckdb_v2_vcatalog_set_schema_create_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_set_schema_drop_callback duckdb_ext_api.duckdb_v2_vcatalog_set_schema_drop_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_set_table_create_callback duckdb_ext_api.duckdb_v2_vcatalog_set_table_create_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_set_table_drop_callback duckdb_ext_api.duckdb_v2_vcatalog_set_table_drop_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_set_table_find_callback duckdb_ext_api.duckdb_v2_vcatalog_set_table_find_callback
@@ -3821,13 +3994,69 @@ typedef struct {
 #define duckdb_v2_vcatalog_set_table_list_callback duckdb_ext_api.duckdb_v2_vcatalog_set_table_list_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vcatalog_table_add_column duckdb_ext_api.duckdb_v2_vcatalog_table_add_column
+#define duckdb_v2_vcatalog_set_view_create_callback duckdb_ext_api.duckdb_v2_vcatalog_set_view_create_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vcatalog_table_create duckdb_ext_api.duckdb_v2_vcatalog_table_create
+#define duckdb_v2_vcatalog_set_view_drop_callback duckdb_ext_api.duckdb_v2_vcatalog_set_view_drop_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_add_column duckdb_ext_api.duckdb_v2_vcatalog_table_builder_add_column
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_build duckdb_ext_api.duckdb_v2_vcatalog_table_builder_build
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_create duckdb_ext_api.duckdb_v2_vcatalog_table_builder_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_destroy duckdb_ext_api.duckdb_v2_vcatalog_table_builder_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_set_scan_bind_callback                                                        \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_builder_set_scan_bind_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_set_scan_function                                                             \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_builder_set_scan_function
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_builder_set_state duckdb_ext_api.duckdb_v2_vcatalog_table_builder_set_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_column_count duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_column_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_column_default                                                             \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_column_default
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_column_name duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_column_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_column_type duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_column_type
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_constraint duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_constraint
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_constraint_count                                                           \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_constraint_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_get_schema duckdb_ext_api.duckdb_v2_vcatalog_table_create_get_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_is_column_not_null                                                             \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_create_is_column_not_null
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_create_set_table duckdb_ext_api.duckdb_v2_vcatalog_table_create_set_table
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_table_destroy duckdb_ext_api.duckdb_v2_vcatalog_table_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_drop_get_table duckdb_ext_api.duckdb_v2_vcatalog_table_drop_get_table
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_table_find_get_name duckdb_ext_api.duckdb_v2_vcatalog_table_find_get_name
@@ -3843,6 +4072,9 @@ typedef struct {
 #define duckdb_v2_vcatalog_table_find_set_table duckdb_ext_api.duckdb_v2_vcatalog_table_find_set_table
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_find_set_view duckdb_ext_api.duckdb_v2_vcatalog_table_find_set_view
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_table_get_name duckdb_ext_api.duckdb_v2_vcatalog_table_get_name
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3855,6 +4087,9 @@ typedef struct {
 #define duckdb_v2_vcatalog_table_list_add_table duckdb_ext_api.duckdb_v2_vcatalog_table_list_add_table
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_list_add_view duckdb_ext_api.duckdb_v2_vcatalog_table_list_add_view
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_vcatalog_table_list_get_schema duckdb_ext_api.duckdb_v2_vcatalog_table_list_get_schema
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3862,7 +4097,74 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_vcatalog_table_list_get_transaction_state
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vcatalog_table_set_state duckdb_ext_api.duckdb_v2_vcatalog_table_set_state
+#define duckdb_v2_vcatalog_table_scan_bind_get_table duckdb_ext_api.duckdb_v2_vcatalog_table_scan_bind_get_table
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_scan_bind_get_transaction_state                                                       \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_scan_bind_get_transaction_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_scan_bind_set_bind_data duckdb_ext_api.duckdb_v2_vcatalog_table_scan_bind_set_bind_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_scan_bind_set_cardinality                                                             \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_scan_bind_set_cardinality
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_table_scan_bind_set_order_preservation                                                      \
+	duckdb_ext_api.duckdb_v2_vcatalog_table_scan_bind_set_order_preservation
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_add_column_alias duckdb_ext_api.duckdb_v2_vcatalog_view_builder_add_column_alias
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_build duckdb_ext_api.duckdb_v2_vcatalog_view_builder_build
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_create duckdb_ext_api.duckdb_v2_vcatalog_view_builder_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_create_from_sql duckdb_ext_api.duckdb_v2_vcatalog_view_builder_create_from_sql
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_destroy duckdb_ext_api.duckdb_v2_vcatalog_view_builder_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_set_query duckdb_ext_api.duckdb_v2_vcatalog_view_builder_set_query
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_builder_set_state duckdb_ext_api.duckdb_v2_vcatalog_view_builder_set_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_create_get_column_alias duckdb_ext_api.duckdb_v2_vcatalog_view_create_get_column_alias
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_create_get_column_alias_count                                                          \
+	duckdb_ext_api.duckdb_v2_vcatalog_view_create_get_column_alias_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_create_get_query duckdb_ext_api.duckdb_v2_vcatalog_view_create_get_query
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_create_get_schema duckdb_ext_api.duckdb_v2_vcatalog_view_create_get_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_create_set_view duckdb_ext_api.duckdb_v2_vcatalog_view_create_set_view
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_destroy duckdb_ext_api.duckdb_v2_vcatalog_view_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_drop_get_view duckdb_ext_api.duckdb_v2_vcatalog_view_drop_get_view
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_get_name duckdb_ext_api.duckdb_v2_vcatalog_view_get_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_get_schema duckdb_ext_api.duckdb_v2_vcatalog_view_get_schema
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_vcatalog_view_get_state duckdb_ext_api.duckdb_v2_vcatalog_view_get_state
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

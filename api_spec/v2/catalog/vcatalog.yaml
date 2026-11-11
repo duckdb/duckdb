@@ -21,8 +21,9 @@ module: vcatalog
 # implementation must synchronize its own access to it.
 #
 # The catalog of an attached database is resolved through find and list callbacks, which hand DuckDB entries the
-# implementation creates and owns, such as `[[vcatalog_schema]]`. The implementation decides how long it keeps an entry
-# and whether it shares it between transactions and connections, within two rules:
+# implementation builds and owns, such as `[[vcatalog_schema]]`. An entry is put together in a builder, such as
+# `[[vcatalog_schema_builder]]`, and no longer changes once it is built. The implementation decides how long it keeps
+# an entry and whether it shares it between transactions and connections, within two rules:
 #   - An entry handed to DuckDB must stay alive until every transaction it was handed out in has ended: binding and
 #     execution use it long after the callback returned. Destroying it from the destructor of the transaction state,
 #     or of the catalog state, is always late enough.
@@ -31,6 +32,20 @@ module: vcatalog
 #     scanning the same table.
 # An entry may be in use by several connections at once, so the implementation must synchronize its own access to the
 # state of an entry it shares.
+#
+# Tables and views share a namespace: one pair of callbacks finds and lists both. A view is a query in DuckDB's SQL
+# dialect, which DuckDB binds in place of the view wherever a statement refers to it, see `[[vcatalog_view]]`.
+#
+# The rows of a table are read by a table function the table is built with, see
+# `[[vcatalog_table_builder_set_scan_function]]`. It runs as it would for a call of the function, with projection and
+# filter pushdown, parallelism, statistics and progress, except that the table takes the place of its bind callback.
+#
+# `CREATE` and `DROP` of schemas, tables and views are passed on to create and drop callbacks, one pair per kind. Every
+# create callback receives a `[[vcatalog_entry_create_info]]` with what creating any kind of entry has in common, and
+# an info of its own kind; the drop callbacks likewise receive a `[[vcatalog_entry_drop_info]]` and an info of their
+# kind. DuckDB resolves `IF NOT EXISTS`, `OR REPLACE` and `IF EXISTS` itself, through the find callbacks, before it
+# invokes a create or drop callback: a create callback is invoked only for a name that is free, and a drop callback
+# only for an entry that exists. A statement without a callback for it fails as not supported.
 #
 # Registration is not transactional: a registered vcatalog lives for as long as the instance does.
 
@@ -71,14 +86,20 @@ handles:
     description: |
       A borrowed opaque handle to a database attached with a vcatalog, passed to every callback that runs on it, and
       valid for as long as the database stays attached. It gives access to the user data and the catalog state, and is
-      what the schemas of the database are created in, with `[[vcatalog_schema_create]]`.
+      what the schemas of the database are built in, with `[[vcatalog_schema_builder_create]]`.
+
+  vcatalog_schema_builder:
+    description: |
+      An owned opaque handle to a schema being built. Created with `[[vcatalog_schema_builder_create]]`, configured
+      with `[[vcatalog_schema_builder_set_state]]`, turned into a schema with `[[vcatalog_schema_builder_build]]`, and
+      destroyed with `[[vcatalog_schema_builder_destroy]]`.
 
   vcatalog_schema:
     description: |
-      An owned opaque handle to a schema of a database attached with a vcatalog. Created with
-      `[[vcatalog_schema_create]]`, handed to DuckDB by the schema find and list callbacks, and destroyed with
+      An owned opaque handle to a schema of a database attached with a vcatalog. Built with
+      `[[vcatalog_schema_builder_build]]`, handed to DuckDB by the schema find and list callbacks, and destroyed with
       `[[vcatalog_schema_destroy]]` within the rules of the module notes. It carries a name and the implementation's
-      own state.
+      own state, and is immutable.
 
   vcatalog_schema_find_info:
     description: |
@@ -91,25 +112,103 @@ handles:
       A borrowed opaque handle to the listing of the schemas of a database, received by the schema list callback and
       valid only for the duration of that call. It gives access to the transaction state, and receives the schemas.
 
+  vcatalog_table_builder:
+    description: |
+      An owned opaque handle to a table being built. Created with `[[vcatalog_table_builder_create]]`, configured with
+      `[[vcatalog_table_builder_add_column]]`, `[[vcatalog_table_builder_set_scan_function]]` and the other setters,
+      turned into a table with `[[vcatalog_table_builder_build]]`, and destroyed with
+      `[[vcatalog_table_builder_destroy]]`.
+
   vcatalog_table:
     description: |
-      An owned opaque handle to a table of a schema of a database attached with a vcatalog. Created with
-      `[[vcatalog_table_create]]`, given its columns with `[[vcatalog_table_add_column]]`, handed to DuckDB by the table
-      find and list callbacks, and destroyed with `[[vcatalog_table_destroy]]` within the rules of the module notes.
-      It carries a name, its columns and the implementation's own state. Reading the rows of a table is not supported
-      yet: a statement that scans one fails.
+      An owned opaque handle to a table of a schema of a database attached with a vcatalog. Built with
+      `[[vcatalog_table_builder_build]]`, handed to DuckDB by the table find and list callbacks, and destroyed with
+      `[[vcatalog_table_destroy]]` within the rules of the module notes. It carries a name, its columns, the
+      implementation's own state and the function its rows are read with, and is immutable.
+
+  vcatalog_view_builder:
+    description: |
+      An owned opaque handle to a view being built. Created with `[[vcatalog_view_builder_create]]` or
+      `[[vcatalog_view_builder_create_from_sql]]`, configured with `[[vcatalog_view_builder_set_query]]` and the other
+      setters, turned into a view with `[[vcatalog_view_builder_build]]`, and destroyed with
+      `[[vcatalog_view_builder_destroy]]`.
+
+  vcatalog_view:
+    description: |
+      An owned opaque handle to a view of a schema of a database attached with a vcatalog. Built with
+      `[[vcatalog_view_builder_build]]`, handed to DuckDB by the table find and list callbacks, and destroyed with
+      `[[vcatalog_view_destroy]]` within the rules of the module notes. It carries a name, a query and the
+      implementation's own state, and is immutable.
+
+      A statement referring to the view runs its query in its place. DuckDB binds the query every time, resolving
+      unqualified names in the database and schema of the view before the search path of the connection, so the
+      query can refer to the tables next to the view by their bare names. The columns of the view are those of the
+      query: DuckDB determines them when it first binds the view.
+
+      The query must be in DuckDB's SQL dialect. Expose a view DuckDB cannot run itself as a table instead, scanned
+      with a function that leaves running the view to the backing store.
+
+  vcatalog_entry_create_info:
+    description: |
+      A borrowed opaque handle to what creating a schema, a table and a view have in common, received by every create
+      callback next to the info of its kind, and valid only for the duration of that call. It gives access to the
+      transaction state and the name of the entry to create.
+
+  vcatalog_schema_create_info:
+    description: |
+      A borrowed opaque handle to a schema to create, received by the schema create callback and valid only for the
+      duration of that call. It reports the schema created.
+
+  vcatalog_table_create_info:
+    description: |
+      A borrowed opaque handle to a table to create, received by the table create callback and valid only for the
+      duration of that call. It gives access to the schema, the columns and the constraints of the table, and reports
+      the table created.
+
+  vcatalog_view_create_info:
+    description: |
+      A borrowed opaque handle to a view to create, received by the view create callback and valid only for the
+      duration of that call. It gives access to the schema, the query and the column aliases of the view, and reports
+      the view created.
+
+  vcatalog_entry_drop_info:
+    description: |
+      A borrowed opaque handle to what dropping a schema, a table and a view have in common, received by every drop
+      callback next to the info of its kind, and valid only for the duration of that call. It gives access to the
+      transaction state, and tells whether the drop cascades.
+
+  vcatalog_schema_drop_info:
+    description: |
+      A borrowed opaque handle to a schema to drop, received by the schema drop callback and valid only for the
+      duration of that call. It gives access to the schema.
+
+  vcatalog_table_drop_info:
+    description: |
+      A borrowed opaque handle to a table to drop, received by the table drop callback and valid only for the duration
+      of that call. It gives access to the table.
+
+  vcatalog_view_drop_info:
+    description: |
+      A borrowed opaque handle to a view to drop, received by the view drop callback and valid only for the duration of
+      that call. It gives access to the view.
+
+  vcatalog_table_scan_bind_info:
+    description: |
+      A borrowed opaque handle to a scan of a table being bound, received by the scan bind callback and valid only for
+      the duration of that call. It gives access to the transaction state and the table, and sets the bind data, the
+      cardinality and the order guarantee of the scan.
 
   vcatalog_table_find_info:
     description: |
-      A borrowed opaque handle to a request to find a table of a schema by name, received by the table find callback
-      and valid only for the duration of that call. It gives access to the transaction state, the schema and the name,
-      and reports the table found.
+      A borrowed opaque handle to a request to find a table or view of a schema by name, received by the table find
+      callback and valid only for the duration of that call. It gives access to the transaction state, the schema and
+      the name, and reports the table or view found.
 
   vcatalog_table_list_info:
     description: |
-      A borrowed opaque handle to the listing of the tables of a schema, received by the table list callback and valid
-      only for the duration of that call. It gives access to the transaction state and the schema, and receives the
-      tables.
+      A borrowed opaque handle to the listing of the tables and views of a schema, received by the table list callback
+      and valid only for the duration of that call. It gives access to the transaction state and the schema, and
+      receives the tables and views.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -256,6 +355,157 @@ callbacks:
         description: |
           Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
           the statement that listed the tables.
+    return_type: void
+
+  vcatalog_schema_create_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_create_info
+        description: Borrowed opaque handle to what creating any kind of entry has in common.
+      schema_info:
+        type: vcatalog_schema_create_info
+        description: Borrowed opaque handle to the schema to create.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection creating the schema.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement creating the schema.
+    return_type: void
+
+  vcatalog_schema_drop_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_drop_info
+        description: Borrowed opaque handle to what dropping any kind of entry has in common.
+      schema_info:
+        type: vcatalog_schema_drop_info
+        description: Borrowed opaque handle to the schema to drop.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection dropping the schema.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement dropping the schema.
+    return_type: void
+
+  vcatalog_table_create_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_create_info
+        description: Borrowed opaque handle to what creating any kind of entry has in common.
+      table_info:
+        type: vcatalog_table_create_info
+        description: Borrowed opaque handle to the table to create.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection creating the table.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement creating the table.
+    return_type: void
+
+  vcatalog_table_drop_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_drop_info
+        description: Borrowed opaque handle to what dropping any kind of entry has in common.
+      table_info:
+        type: vcatalog_table_drop_info
+        description: Borrowed opaque handle to the table to drop.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection dropping the table.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement dropping the table.
+    return_type: void
+
+  vcatalog_view_create_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_create_info
+        description: Borrowed opaque handle to what creating any kind of entry has in common.
+      view_info:
+        type: vcatalog_view_create_info
+        description: Borrowed opaque handle to the view to create.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection creating the view.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement creating the view.
+    return_type: void
+
+  vcatalog_view_drop_callback:
+    parameters:
+      info:
+        type: vcatalog_entry_drop_info
+        description: Borrowed opaque handle to what dropping any kind of entry has in common.
+      view_info:
+        type: vcatalog_view_drop_info
+        description: Borrowed opaque handle to the view to drop.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection dropping the view.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement dropping the view.
+    return_type: void
+
+  vcatalog_table_scan_bind_callback:
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: Borrowed opaque handle to the scan being bound.
+      database:
+        type: vcatalog_database
+        description: Borrowed handle to the database the callback runs on.
+      context:
+        type: context
+        description: Borrowed handle to the context of the connection scanning the table.
+      err:
+        type: error_info
+        indirection: 1
+        description: |
+          Borrowed error info handle to use to report errors that occur during the callback. Reporting an error fails
+          the statement that scans the table.
     return_type: void
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -523,13 +773,15 @@ functions:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Sets the optional table find callback of the vcatalog, invoked whenever DuckDB resolves a table name in a schema
-      of a database of its type: e.g. for `SELECT * FROM v.main.t` or `pragma_table_info('v.main.t')`.
+      Sets the optional table find callback of the vcatalog, invoked whenever DuckDB resolves the name of a table or
+      view in a schema of a database of its type: e.g. for `SELECT * FROM v.main.t` or
+      `pragma_table_info('v.main.t')`.
 
-      The callback resolves the name with `[[vcatalog_table_find_set_table]]`, or leaves it unresolved when the schema
-      has no such table. As for schemas, DuckDB keeps nothing between calls, so keep the callback fast. DuckDB finds no
-      other kinds of entries, such as functions or types, in the schemas of a vcatalog. Without a table find
-      callback, no table of a database of the type can be resolved by name.
+      The callback resolves the name with `[[vcatalog_table_find_set_table]]` or `[[vcatalog_table_find_set_view]]`,
+      or leaves it unresolved when the schema has no such table or view. As for schemas, DuckDB keeps nothing between
+      calls, so keep the callback fast. DuckDB finds no other kinds of entries, such as functions or types, in the
+      schemas of a vcatalog. Without a table find callback, no table or view of a database of the type can be
+      resolved by name.
     parameters:
       vcatalog:
         type: vcatalog
@@ -547,17 +799,159 @@ functions:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Sets the optional table list callback of the vcatalog, invoked when DuckDB lists the tables of a schema of a
-      database of its type, e.g. for `duckdb_tables()`, `duckdb_columns()` or `SHOW ALL TABLES`.
+      Sets the optional table list callback of the vcatalog, invoked when DuckDB lists the tables or the views of a
+      schema of a database of its type, e.g. for `duckdb_tables()`, `duckdb_views()`, `duckdb_columns()` or
+      `SHOW ALL TABLES`.
 
-      The callback adds every table of the schema with `[[vcatalog_table_list_add_table]]`. Without a table list
-      callback, the schemas of a database of the type list no tables.
+      The callback adds every table of the schema with `[[vcatalog_table_list_add_table]]` and every view with
+      `[[vcatalog_table_list_add_view]]`, whichever of the two DuckDB is listing. Without a table list callback, the
+      schemas of a database of the type list no tables and no views.
     parameters:
       vcatalog:
         type: vcatalog
         description: The vcatalog to set the callback of.
       callback:
         type: vcatalog_table_list_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_schema_create_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional schema create callback of the vcatalog, invoked for `CREATE SCHEMA` in a database of its type.
+
+      The callback creates the schema named by `[[vcatalog_entry_create_get_name]]` in the backing store, and reports
+      it with `[[vcatalog_schema_create_set_schema]]`. Schemas within schemas are not supported. Without a schema
+      create callback, `CREATE SCHEMA` fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_schema_create_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_schema_drop_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional schema drop callback of the vcatalog, invoked for `DROP SCHEMA` in a database of its type, and
+      for `CREATE OR REPLACE SCHEMA` of an existing schema, before its create callback.
+
+      The callback drops the schema `[[vcatalog_schema_drop_get_schema]]` gives in the backing store. What becomes of
+      the tables and views of the schema is up to the vcatalog; `[[vcatalog_entry_drop_is_cascade]]` tells whether the
+      statement asked for them to be dropped along. The handle of the schema stays owned by the implementation, which
+      must keep it alive as the module notes describe: the transaction dropping it may still be using it. Without a
+      schema drop callback, dropping a schema fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_schema_drop_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_table_create_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional table create callback of the vcatalog, invoked for `CREATE TABLE` in a schema of a database of
+      its type.
+
+      The callback creates the table in the backing store, from the name `[[vcatalog_entry_create_get_name]]` gives and
+      the columns and constraints `[[vcatalog_table_create_info]]` gives, and reports it with
+      `[[vcatalog_table_create_set_table]]`. Tables with generated columns, and `CREATE TABLE ... AS`, are not
+      supported. Without a table create callback, `CREATE TABLE` fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_table_create_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_table_drop_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional table drop callback of the vcatalog, invoked for `DROP TABLE` in a schema of a database of its
+      type, and for `CREATE OR REPLACE TABLE` of an existing table, before its create callback.
+
+      The callback drops the table `[[vcatalog_table_drop_get_table]]` gives in the backing store. The handle of the
+      table stays owned by the implementation, which must keep it alive as the module notes describe: the transaction
+      dropping it may still be using it. Without a table drop callback, dropping a table fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_table_drop_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_view_create_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional view create callback of the vcatalog, invoked for `CREATE VIEW` in a schema of a database of
+      its type.
+
+      The callback creates the view in the backing store, from the name `[[vcatalog_entry_create_get_name]]` gives and
+      the query and column aliases `[[vcatalog_view_create_info]]` gives, and reports it with
+      `[[vcatalog_view_create_set_view]]`. Without a view create callback, `CREATE VIEW` fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_view_create_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_set_view_drop_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional view drop callback of the vcatalog, invoked for `DROP VIEW` in a schema of a database of its
+      type, and for `CREATE OR REPLACE VIEW` of an existing view, before its create callback.
+
+      The callback drops the view `[[vcatalog_view_drop_get_view]]` gives in the backing store. The handle of the view
+      stays owned by the implementation, which must keep it alive as the module notes describe: the transaction
+      dropping it may still be using it. Without a view drop callback, dropping a view fails as not supported.
+    parameters:
+      vcatalog:
+        type: vcatalog
+        description: The vcatalog to set the callback of.
+      callback:
+        type: vcatalog_view_drop_callback
         description: The callback to set.
       err:
         type: error_info
@@ -844,23 +1238,23 @@ functions:
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
-  # Schema
+  # Schema Builder
   #---------------------------------------------------------------------------------------------------------------------
-  vcatalog_schema_create:
+  vcatalog_schema_builder_create:
     lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-05" ]
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Creates a schema of the database.
+      Creates a builder for a schema of the database.
 
-      The schema starts out with the given name and no state. Creating it does not make it visible: DuckDB only sees
-      the schemas the find and list callbacks hand it. The caller owns the returned handle and must destroy it with
-      `[[vcatalog_schema_destroy]]`, within the rules of the module notes.
+      The builder starts out with the given name and no state. Configure it with the setter functions, then build the
+      schema with `[[vcatalog_schema_builder_build]]`. The caller owns the returned handle and must destroy it with
+      `[[vcatalog_schema_builder_destroy]]`, also after building, and before the database is detached.
     role: constructor
-    belongs_to: vcatalog_schema
+    belongs_to: vcatalog_schema_builder
     parameters:
       database:
         type: vcatalog_database
-        description: The database to create the schema in.
+        description: The database to build the schema in.
       name:
         type: char
         indirection: 1
@@ -870,26 +1264,97 @@ functions:
       name_length:
         type: idx
         description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
-      schema:
-        type: vcatalog_schema
+      builder:
+        type: vcatalog_schema_builder
         indirection: 1
         kind: OUT
-        description: On success, receives the newly created schema. Owned by the caller.
+        description: On success, receives the newly created builder. Owned by the caller.
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  vcatalog_schema_builder_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Destroys the schema builder.
+
+      The schemas it built are not affected, and keep the state they share with it. Null-safe: passing a null pointer
+      or null handle is a no-op. The handle is set to null on return to prevent double-destruction.
+    parameters:
+      builder:
+        type: vcatalog_schema_builder
+        description: The builder to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  vcatalog_schema_builder_set_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the implementation's own state of the schema being built, retrievable from the schema via
+      `[[vcatalog_schema_get_state]]`.
+
+      DuckDB never reads the state itself. The builder shares it with every schema it builds from now on. The opaque
+      handle bundles the pointer with an optional destructor, invoked once the builder and every schema sharing the
+      state are destroyed. Calling this again replaces the state of the builder; schemas it already built keep theirs.
+    parameters:
+      builder:
+        type: vcatalog_schema_builder
+        description: The builder to set the state of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_schema_builder_build:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Builds a schema.
+
+      The schema receives the name of the builder and shares its state. Building it does not make it visible: DuckDB
+      only sees the schemas the find and list callbacks hand it. The caller owns the returned handle and must destroy
+      it with `[[vcatalog_schema_destroy]]`, within the rules of the module notes.
+
+      The builder stays usable, and changing it does not affect the schemas it already built. Every schema it builds
+      is an entry of its own to DuckDB.
+    role: constructor
+    belongs_to: vcatalog_schema
+    parameters:
+      builder:
+        type: vcatalog_schema_builder
+        description: The builder to build a schema from.
+      schema:
+        type: vcatalog_schema
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly built schema. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Schema
+  #---------------------------------------------------------------------------------------------------------------------
   vcatalog_schema_destroy:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-05" ]
     description: |
-      Destroys the schema and its state.
+      Destroys the schema. Its state is destroyed with the last holder sharing it.
 
-      Destroy a schema only once every transaction it was handed out in has ended, and after every entry created in
-      it. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
-      double-destruction.
+      Destroy a schema only once every transaction it was handed out in has ended, and after every entry built in it
+      and every builder created for it. Null-safe: passing a null pointer or null handle is a no-op. The handle is set
+      to null on return to prevent double-destruction.
     parameters:
       schema:
         type: vcatalog_schema
@@ -926,7 +1391,7 @@ functions:
   vcatalog_schema_get_database:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-05" ]
-    description: Retrieves the database the schema was created in.
+    description: Retrieves the database the schema was built in.
     parameters:
       schema:
         type: vcatalog_schema
@@ -942,32 +1407,10 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  vcatalog_schema_set_state:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-05" ]
-    description: |
-      Sets the implementation's own state of the schema, retrievable via `[[vcatalog_schema_get_state]]`.
-
-      DuckDB never reads the state itself. The opaque handle bundles the pointer with an optional destructor, invoked
-      when the schema is destroyed. Calling this again replaces the previous state, destroying it.
-    parameters:
-      schema:
-        type: vcatalog_schema
-        description: The schema to set the state of.
-      data:
-        type: opaque
-        indirection: 1
-        description: Opaque handle bundling the state pointer plus an optional destructor.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   vcatalog_schema_get_state:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-05" ]
-    description: Retrieves the state set via `[[vcatalog_schema_set_state]]`.
+    description: Retrieves the state the schema shares with its builder, set via `[[vcatalog_schema_builder_set_state]]`.
     parameters:
       schema:
         type: vcatalog_schema
@@ -1041,7 +1484,7 @@ functions:
     description: |
       Reports the schema the name refers to.
 
-      The schema must have been created in the database the request is for. It stays owned by the caller, which must
+      The schema must have been built in the database the request is for. It stays owned by the caller, which must
       keep it alive as the module notes describe. Calling this again replaces the previous schema. If the callback
       reports none, no schema is found.
     parameters:
@@ -1087,7 +1530,7 @@ functions:
     description: |
       Adds a schema to the listing.
 
-      The schema must have been created in the database the listing runs on. It stays owned by the caller, which must
+      The schema must have been built in the database the listing runs on. It stays owned by the caller, which must
       keep it alive as the module notes describe. DuckDB visits the schemas in the order they were added, once the
       callback has returned; a schema added twice is visited once.
     parameters:
@@ -1104,24 +1547,24 @@ functions:
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
-  # Table
+  # Table Builder
   #---------------------------------------------------------------------------------------------------------------------
-  vcatalog_table_create:
+  vcatalog_table_builder_create:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Creates a table of the schema.
+      Creates a builder for a table of the schema.
 
-      The table starts out with the given name, no columns and no state. Add its columns with
-      `[[vcatalog_table_add_column]]` before handing it to DuckDB. Creating it does not make it visible: DuckDB only
-      sees the tables the find and list callbacks hand it. The caller owns the returned handle and must destroy it
-      with `[[vcatalog_table_destroy]]`, within the rules of the module notes, and before the schema.
+      The builder starts out with the given name, no columns and no state. Configure it with
+      `[[vcatalog_table_builder_add_column]]` and the setter functions, then build the table with
+      `[[vcatalog_table_builder_build]]`. The caller owns the returned handle and must destroy it with
+      `[[vcatalog_table_builder_destroy]]`, also after building, and before the schema.
     role: constructor
-    belongs_to: vcatalog_table
+    belongs_to: vcatalog_table_builder
     parameters:
       schema:
         type: vcatalog_schema
-        description: The schema to create the table in.
+        description: The schema to build the table in.
       name:
         type: char
         indirection: 1
@@ -1131,45 +1574,44 @@ functions:
       name_length:
         type: idx
         description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
-      table:
-        type: vcatalog_table
+      builder:
+        type: vcatalog_table_builder
         indirection: 1
         kind: OUT
-        description: On success, receives the newly created table. Owned by the caller.
+        description: On success, receives the newly created builder. Owned by the caller.
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  vcatalog_table_destroy:
+  vcatalog_table_builder_destroy:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Destroys the table and its state.
+      Destroys the table builder.
 
-      Destroy a table only once every transaction it was handed out in has ended. Null-safe: passing a null pointer or
-      null handle is a no-op. The handle is set to null on return to prevent double-destruction.
+      The tables it built are not affected, and keep the state they share with it. Null-safe: passing a null pointer
+      or null handle is a no-op. The handle is set to null on return to prevent double-destruction.
     parameters:
-      table:
-        type: vcatalog_table
-        description: The table to destroy.
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to destroy.
         indirection: 1
     return_type: ERROR
 
-  vcatalog_table_add_column:
+  vcatalog_table_builder_add_column:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
     description: |
-      Appends a column to the table.
+      Appends a column to the table being built.
 
       Columns are numbered in the order they are added. Their names must be unique within the table, and their types
-      fully defined. Add every column before handing the table to DuckDB: DuckDB reads the columns of a table it was
-      handed without synchronization, so they must not change afterwards. The name is borrowed and copied.
+      fully defined. The name is borrowed and copied.
     parameters:
-      table:
-        type: vcatalog_table
-        description: The table to add the column to.
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to add the column to.
       name:
         type: char
         indirection: 1
@@ -1186,6 +1628,131 @@ functions:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_builder_set_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the implementation's own state of the table being built, retrievable from the table via
+      `[[vcatalog_table_get_state]]`.
+
+      DuckDB never reads the state itself. The builder shares it with every table it builds from now on. The opaque
+      handle bundles the pointer with an optional destructor, invoked once the builder and every table sharing the
+      state are destroyed. Calling this again replaces the state of the builder; tables it already built keep theirs.
+    parameters:
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to set the state of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_builder_set_scan_function:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the table function the rows of the table being built are read with.
+
+      A statement scanning the table runs the function as it would for a call of it: its init, exec, filter pushdown,
+      stats, progress and partition callbacks are invoked as `[[table_function]]` describes, with the columns of the
+      table as the declared columns. Its bind callback is not invoked, and need not be set: a scan is bound by the
+      callback set via `[[vcatalog_table_builder_set_scan_bind_callback]]` instead, whose bind data the callbacks of
+      the function receive. Its "get bind info" callback is not invoked either. A scan produces the columns of the
+      table only: the table has no `rowid`.
+
+      The function needs an exec callback and a signature without parameters, and must have been created through a
+      factory of the instance the database is attached to. Its name is optional, and shown by `EXPLAIN`. The builder
+      copies the function: changing or destroying the handle afterwards does not affect it. Calling this again
+      replaces the previous function. A table built without one cannot be read: a statement that scans it fails.
+    parameters:
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to set the scan function of.
+      function:
+        type: table_function
+        description: The table function to scan the table with. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_builder_set_scan_bind_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the optional scan bind callback of the table being built, invoked whenever a statement binds a scan of the
+      table: once for every reference to the table in the statement.
+
+      The callback stands in for the bind callback of the scan function: it sets the bind data the other callbacks of
+      the function receive, via `[[vcatalog_table_scan_bind_set_bind_data]]`, and may hint at the number of rows and
+      the order of the scan. Without a scan bind callback, the scan has no bind data.
+    parameters:
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to set the scan bind callback of.
+      callback:
+        type: vcatalog_table_scan_bind_callback
+        description: The scan bind callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_builder_build:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Builds a table.
+
+      The table receives the name, the columns and the scan of the builder and shares its state. A table needs at
+      least one column: building one without fails. Building a table does not make it visible: DuckDB only sees the tables the
+      find and list callbacks hand it. The caller owns the returned handle and must destroy it with
+      `[[vcatalog_table_destroy]]`, within the rules of the module notes, and before the schema.
+
+      The builder stays usable, and changing it does not affect the tables it already built. Every table it builds is
+      an entry of its own to DuckDB.
+    role: constructor
+    belongs_to: vcatalog_table
+    parameters:
+      builder:
+        type: vcatalog_table_builder
+        description: The builder to build a table from.
+      table:
+        type: vcatalog_table
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly built table. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Table
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_table_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Destroys the table. Its state is destroyed with the last holder sharing it.
+
+      Destroy a table only once every transaction it was handed out in has ended. Null-safe: passing a null pointer or
+      null handle is a no-op. The handle is set to null on return to prevent double-destruction.
+    parameters:
+      table:
+        type: vcatalog_table
+        description: The table to destroy.
+        indirection: 1
     return_type: ERROR
 
   vcatalog_table_get_name:
@@ -1216,7 +1783,7 @@ functions:
   vcatalog_table_get_schema:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
-    description: Retrieves the schema the table was created in.
+    description: Retrieves the schema the table was built in.
     parameters:
       table:
         type: vcatalog_table
@@ -1232,32 +1799,10 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  vcatalog_table_set_state:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-11-10" ]
-    description: |
-      Sets the implementation's own state of the table, retrievable via `[[vcatalog_table_get_state]]`.
-
-      DuckDB never reads the state itself. The opaque handle bundles the pointer with an optional destructor, invoked
-      when the table is destroyed. Calling this again replaces the previous state, destroying it.
-    parameters:
-      table:
-        type: vcatalog_table
-        description: The table to set the state of.
-      data:
-        type: opaque
-        indirection: 1
-        description: Opaque handle bundling the state pointer plus an optional destructor.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   vcatalog_table_get_state:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-10" ]
-    description: Retrieves the state set via `[[vcatalog_table_set_state]]`.
+    description: Retrieves the state the table shares with its builder, set via `[[vcatalog_table_builder_set_state]]`.
     parameters:
       table:
         type: vcatalog_table
@@ -1349,9 +1894,9 @@ functions:
     description: |
       Reports the table the name refers to.
 
-      The table must have been created in the schema it is searched for in, and have at least one column. It stays owned
-      by the caller, which must keep it alive as the module notes describe, and must not add columns to it from now on.
-      Calling this again replaces the previous table. If the callback reports none, no table is found.
+      The table must have been built in the schema it is searched for in. It stays owned by the caller, which must
+      keep it alive as the module notes describe. Calling this, or `[[vcatalog_table_find_set_view]]`, again replaces
+      what was reported before. If the callback reports neither, nothing is found.
     parameters:
       info:
         type: vcatalog_table_find_info
@@ -1359,6 +1904,28 @@ functions:
       table:
         type: vcatalog_table
         description: The table the name resolves to. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_find_set_view:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Reports the view the name refers to.
+
+      The view must have been built in the schema it is searched for in. It stays owned by the caller, which must keep
+      it alive as the module notes describe. Calling this, or `[[vcatalog_table_find_set_table]]`, again replaces what
+      was reported before.
+    parameters:
+      info:
+        type: vcatalog_table_find_info
+        description: The find info handle.
+      view:
+        type: vcatalog_view
+        description: The view the name resolves to. Remains owned by the caller.
       err:
         type: error_info
         indirection: 1
@@ -1414,10 +1981,9 @@ functions:
     description: |
       Adds a table to the listing.
 
-      The table must have been created in the schema the listing runs in, and have at least one column. It stays owned
-      by the caller, which must keep it alive as the module notes describe, and must not add columns to it from now on.
-      DuckDB visits the tables in the order they were added, once the callback has returned; a table added twice is
-      visited once.
+      The table must have been built in the schema the listing runs in. It stays owned by the caller, which must keep
+      it alive as the module notes describe. DuckDB visits the tables in the order they were added, once the callback
+      has returned; a table added twice is visited once.
     parameters:
       info:
         type: vcatalog_table_list_info
@@ -1425,6 +1991,955 @@ functions:
       table:
         type: vcatalog_table
         description: The table to add. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_list_add_view:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Adds a view to the listing.
+
+      The view must have been built in the schema the listing runs in. It stays owned by the caller, which must keep
+      it alive as the module notes describe. DuckDB visits the tables and views in the order they were added, once
+      the callback has returned; a view added twice is visited once.
+    parameters:
+      info:
+        type: vcatalog_table_list_info
+        description: The list info handle.
+      view:
+        type: vcatalog_view
+        description: The view to add. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # View Builder
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_view_builder_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Creates a builder for a view of the schema.
+
+      The builder starts out with the given name, no query, no column aliases and no state. Set its query with
+      `[[vcatalog_view_builder_set_query]]`, then build the view with `[[vcatalog_view_builder_build]]`. The caller
+      owns the returned handle and must destroy it with `[[vcatalog_view_builder_destroy]]`, also after building, and
+      before the schema.
+    role: constructor
+    belongs_to: vcatalog_view_builder
+    parameters:
+      schema:
+        type: vcatalog_schema
+        description: The schema to build the view in.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name of the view. Borrowed and copied.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
+      builder:
+        type: vcatalog_view_builder
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created builder. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_builder_create_from_sql:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Creates a builder for a view of the schema from a `CREATE VIEW` statement, as e.g. a backing store that keeps
+      the statements its views were created with has them.
+
+      The builder starts out with the name, the column aliases and the query of the statement, and no state. A
+      database or schema the statement qualifies the name with is ignored: the view is one of the given schema. The
+      statement is parsed with DuckDB's built-in grammar, without the syntax extensions add; fails with
+      `ERROR_INPUT_INVALID` when it does not parse, or is not a single `CREATE VIEW` statement. The caller owns the
+      returned handle and must destroy it with `[[vcatalog_view_builder_destroy]]`, also after building, and before
+      the schema.
+    role: constructor
+    belongs_to: vcatalog_view_builder
+    parameters:
+      schema:
+        type: vcatalog_schema
+        description: The schema to build the view in.
+      sql:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The `CREATE VIEW` statement. Borrowed and copied.
+      sql_length:
+        type: idx
+        description: The length of `sql` in bytes. `sql` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
+      builder:
+        type: vcatalog_view_builder
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created builder. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_builder_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Destroys the view builder.
+
+      The views it built are not affected, and keep the state they share with it. Null-safe: passing a null pointer
+      or null handle is a no-op. The handle is set to null on return to prevent double-destruction.
+    parameters:
+      builder:
+        type: vcatalog_view_builder
+        description: The builder to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  vcatalog_view_builder_set_query:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the query of the view being built: what `CREATE VIEW <name> AS <query>` would be given.
+
+      The query is parsed with DuckDB's built-in grammar, without the syntax extensions add; fails with
+      `ERROR_INPUT_INVALID` when it does not parse, or is not a single `SELECT` statement. It is not bound here, so a
+      name it refers to need not exist yet: a statement using the view fails if it does not exist by then. The query
+      is borrowed and copied. Calling this again replaces the previous query.
+    parameters:
+      builder:
+        type: vcatalog_view_builder
+        description: The builder to set the query of.
+      sql:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The query. Borrowed and copied.
+      sql_length:
+        type: idx
+        description: The length of `sql` in bytes. `sql` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_builder_add_column_alias:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Appends a column alias to the view being built: one of the names of `CREATE VIEW <name> (<alias>, ...)`.
+
+      The aliases rename the columns of the query in order. Columns beyond the last alias keep the names the query
+      gives them. The name is borrowed and copied.
+    parameters:
+      builder:
+        type: vcatalog_view_builder
+        description: The builder to add the alias to.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The alias. Borrowed and copied.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_builder_set_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the implementation's own state of the view being built, retrievable from the view via
+      `[[vcatalog_view_get_state]]`.
+
+      DuckDB never reads the state itself. The builder shares it with every view it builds from now on. The opaque
+      handle bundles the pointer with an optional destructor, invoked once the builder and every view sharing the
+      state are destroyed. Calling this again replaces the state of the builder; views it already built keep theirs.
+    parameters:
+      builder:
+        type: vcatalog_view_builder
+        description: The builder to set the state of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the state pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_builder_build:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Builds a view.
+
+      The view receives the name, the column aliases and the query of the builder and shares its state. A view needs
+      a query: building one without fails. Building a view does not make it visible: DuckDB only sees the views the
+      table find and list callbacks hand it. The caller owns the returned handle and must destroy it with
+      `[[vcatalog_view_destroy]]`, within the rules of the module notes, and before the schema.
+
+      The builder stays usable, and changing it does not affect the views it already built. Every view it builds is
+      an entry of its own to DuckDB.
+    role: constructor
+    belongs_to: vcatalog_view
+    parameters:
+      builder:
+        type: vcatalog_view_builder
+        description: The builder to build a view from.
+      view:
+        type: vcatalog_view
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly built view. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # View
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_view_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Destroys the view. Its state is destroyed with the last holder sharing it.
+
+      Destroy a view only once every transaction it was handed out in has ended. Null-safe: passing a null pointer or
+      null handle is a no-op. The handle is set to null on return to prevent double-destruction.
+    parameters:
+      view:
+        type: vcatalog_view
+        description: The view to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  vcatalog_view_get_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the name of the view. The name is borrowed and valid for as long as the view is.
+    parameters:
+      view:
+        type: vcatalog_view
+        description: The view.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the name. Valid for as long as the view is.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_get_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the schema the view was built in.
+    parameters:
+      view:
+        type: vcatalog_view
+        description: The view.
+      schema:
+        type: vcatalog_schema
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed schema handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_get_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the state the view shares with its builder, set via `[[vcatalog_view_builder_set_state]]`.
+    parameters:
+      view:
+        type: vcatalog_view
+        description: The view.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Table Scan Bind Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_table_scan_bind_get_transaction_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the transaction state of the transaction the scan is bound in, as set via
+      `[[vcatalog_transaction_begin_set_transaction_state]]`. The scan runs in the same transaction.
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: The scan bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the transaction state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_scan_bind_get_table:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the table being scanned.
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: The scan bind info handle.
+      table:
+        type: vcatalog_table
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed table handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_scan_bind_set_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the bind data of the scan, retrievable in the callbacks of the scan function, e.g. via
+      `[[table_function_init_global_get_bind_data]]`.
+
+      The bind data is read-only once the callback returns, and may be shared by several threads. The opaque handle
+      bundles the pointer with an optional destructor, invoked when the bound statement is destroyed, or right away if
+      the callback fails. Calling this again replaces the previous bind data, destroying it.
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: The scan bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_scan_bind_set_cardinality:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the estimated number of rows the scan will produce.
+
+      The estimate is a hint for the optimizer, not a limit: producing a different number of rows is not an error.
+      Without it, the optimizer falls back on its own defaults.
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: The scan bind info handle.
+      cardinality:
+        type: idx
+        description: The estimated number of rows.
+      is_exact:
+        type: bool
+        description: Whether the estimate is exact, which also makes it an upper bound on the row count.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_scan_bind_set_order_preservation:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Sets the order guarantee of the rows the scan produces, as `[[table_function_bind_set_order_preservation]]`
+      does for a call of a table function. Defaults to `ORDER_PRESERVATION_INSERTION_ORDER`. Fails with
+      `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+    parameters:
+      info:
+        type: vcatalog_table_scan_bind_info
+        description: The scan bind info handle.
+      order:
+        type: ORDER_PRESERVATION
+        description: The order guarantee of the produced rows.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Entry Create Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_entry_create_get_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the name of the schema, table or view to create, as written in the statement. The name is borrowed
+      and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_entry_create_info
+        description: The create info handle.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the name. Valid only for the duration of the callback.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_entry_create_get_transaction_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the transaction state of the transaction the create runs in, as set via
+      `[[vcatalog_transaction_begin_set_transaction_state]]`.
+    parameters:
+      info:
+        type: vcatalog_entry_create_info
+        description: The create info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the transaction state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Schema Create Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_schema_create_set_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Reports the schema the callback created.
+
+      The schema must have been built in the database it is created in. It stays owned by the caller, which must keep
+      it alive as the module notes describe. A callback that reports neither a schema nor an error fails the
+      statement.
+    parameters:
+      info:
+        type: vcatalog_schema_create_info
+        description: The schema create info handle.
+      schema:
+        type: vcatalog_schema
+        description: The schema created. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Table Create Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_table_create_get_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the schema the table is to be created in.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      schema:
+        type: vcatalog_schema
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed schema handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_column_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the number of columns of the table to create.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_column_name:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the name of the column at the given index. Fails if the index is out of bounds. The name is borrowed
+      and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      index:
+        type: idx
+        description: The index of the column.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the name. Valid only for the duration of the callback.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_column_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the type of the column at the given index. Fails if the index is out of bounds. The returned type is
+      owned by the caller and must be destroyed via `[[logical_type_destroy]]`.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      index:
+        type: idx
+        description: The index of the column.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the column type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_is_column_not_null:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves whether the column at the given index is declared `NOT NULL`. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      index:
+        type: idx
+        description: The index of the column.
+      not_null:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the column is declared `NOT NULL`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_column_default:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the default of the column at the given index, as the SQL of its expression in DuckDB's dialect. Fails
+      if the index is out of bounds. A column without a default has none: `present` then receives false and `sql` is
+      left untouched. The SQL is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      index:
+        type: idx
+        description: The index of the column.
+      sql:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the SQL of the default. Valid only for the duration of the callback.
+      sql_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*sql` in bytes. `*sql` is not guaranteed to be null-terminated.
+      present:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the column has a default.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_constraint_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the number of constraints of the table to create, other than the `NOT NULL` of its columns: its
+      `PRIMARY KEY`, `UNIQUE`, `CHECK` and `FOREIGN KEY` constraints, whether the statement declares them on a column
+      or on the table.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of constraints.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_get_constraint:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the constraint at the given index as SQL in DuckDB's dialect, in the form of a table constraint, e.g.
+      `PRIMARY KEY(id)` or `CHECK((x > 0))`. Fails if the index is out of bounds. The SQL is borrowed and valid only
+      for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      index:
+        type: idx
+        description: The index of the constraint.
+      sql:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the SQL of the constraint. Valid only for the duration of the callback.
+      sql_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*sql` in bytes. `*sql` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_table_create_set_table:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Reports the table the callback created.
+
+      The table must have been built in the schema it is created in. It stays owned by the caller, which must keep it
+      alive as the module notes describe. A callback that reports neither a table nor an error fails the statement.
+    parameters:
+      info:
+        type: vcatalog_table_create_info
+        description: The table create info handle.
+      table:
+        type: vcatalog_table
+        description: The table created. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # View Create Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_view_create_get_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the schema the view is to be created in.
+    parameters:
+      info:
+        type: vcatalog_view_create_info
+        description: The view create info handle.
+      schema:
+        type: vcatalog_schema
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed schema handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_create_get_query:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the query of the view to create, as SQL in DuckDB's dialect: what `[[vcatalog_view_builder_set_query]]`
+      takes. The SQL is borrowed and valid only for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_view_create_info
+        description: The view create info handle.
+      sql:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the SQL of the query. Valid only for the duration of the callback.
+      sql_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*sql` in bytes. `*sql` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_create_get_column_alias_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the number of column aliases of the view to create, the names of `CREATE VIEW <name> (<alias>, ...)`.
+    parameters:
+      info:
+        type: vcatalog_view_create_info
+        description: The view create info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of column aliases.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_create_get_column_alias:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the column alias at the given index. Fails if the index is out of bounds. The name is borrowed and
+      valid only for the duration of the callback.
+    parameters:
+      info:
+        type: vcatalog_view_create_info
+        description: The view create info handle.
+      index:
+        type: idx
+        description: The index of the column alias.
+      name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT_BORROW
+        description: Receives a borrowed pointer to the name. Valid only for the duration of the callback.
+      name_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the length of `*name` in bytes. `*name` is not guaranteed to be null-terminated.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_view_create_set_view:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Reports the view the callback created.
+
+      The view must have been built in the schema it is created in. It stays owned by the caller, which must keep it
+      alive as the module notes describe. A callback that reports neither a view nor an error fails the statement.
+    parameters:
+      info:
+        type: vcatalog_view_create_info
+        description: The view create info handle.
+      view:
+        type: vcatalog_view
+        description: The view created. Remains owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Entry Drop Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_entry_drop_is_cascade:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves whether the statement drops what depends on the entry along with it, as `DROP ... CASCADE` does.
+    parameters:
+      info:
+        type: vcatalog_entry_drop_info
+        description: The drop info handle.
+      cascade:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the drop cascades.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  vcatalog_entry_drop_get_transaction_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: |
+      Retrieves the transaction state of the transaction the drop runs in, as set via
+      `[[vcatalog_transaction_begin_set_transaction_state]]`.
+    parameters:
+      info:
+        type: vcatalog_entry_drop_info
+        description: The drop info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the transaction state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Schema Drop Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_schema_drop_get_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the schema to drop.
+    parameters:
+      info:
+        type: vcatalog_schema_drop_info
+        description: The schema drop info handle.
+      schema:
+        type: vcatalog_schema
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed schema handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Table Drop Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_table_drop_get_table:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the table to drop.
+    parameters:
+      info:
+        type: vcatalog_table_drop_info
+        description: The table drop info handle.
+      table:
+        type: vcatalog_table
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed table handle.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # View Drop Info
+  #---------------------------------------------------------------------------------------------------------------------
+  vcatalog_view_drop_get_view:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-10" ]
+    description: Retrieves the view to drop.
+    parameters:
+      info:
+        type: vcatalog_view_drop_info
+        description: The view drop info handle.
+      view:
+        type: vcatalog_view
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed view handle.
       err:
         type: error_info
         indirection: 1
