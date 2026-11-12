@@ -10,7 +10,10 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -65,13 +68,24 @@ private:
 
 	//! The actual encoded buffer
 	CSVEncoderBuffer encoded_buffer;
-	//! Potential remaining bytes
-	CSVEncoderBuffer remaining_bytes_buffer;
-	//! Actual Encoding Function
-	optional_ptr<EncodingFunction> encoding_function;
+	//! Decoded bytes that did not fit in the output buffer yet
+	string pending_decoded;
+	idx_t pending_pos = 0;
+	//! The streaming overload of the encoding's scalar function, executed on (encoded buffer, is_last)
+	unique_ptr<Expression> decode_expression;
+	unique_ptr<ExpressionExecutor> decode_executor;
+	DataChunk decode_input;
+	idx_t lookup_bytes = 1;
+	idx_t max_output_bytes = 1;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;
 	idx_t encoded_bytes_read = 0;
+
+private:
+	//! Decodes the encoded buffer into the output buffer until either one is exhausted
+	idx_t DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t output_size);
+	//! Runs the encoding's scalar function over the input, returns the number of bytes consumed
+	idx_t Decode(const char *input, idx_t input_size, bool is_last, string &decoded);
 };
 } // namespace duckdb
