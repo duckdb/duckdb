@@ -19,6 +19,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/result_format.hpp"
@@ -595,7 +596,11 @@ ErrorData ClientContext::EndStatementInternal(ClientContextLock &lock, optional_
 		active_query->executor.reset();
 	}
 	active_query->progress_bar.reset();
-	// The plan outlives the executor
+	// An EXECUTE node reuses a prepared statement's plan, which outlives the statement
+	auto &prepared = active_query->prepared;
+	if (prepared && prepared->reused_statement && prepared->reused_statement->physical_plan) {
+		prepared->reused_statement->physical_plan->ReleaseOperatorStates();
+	}
 	active_query->prepared.reset();
 	ErrorData end_error;
 	if (!active_query->statement_began) {

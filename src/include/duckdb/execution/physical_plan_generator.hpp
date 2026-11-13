@@ -67,6 +67,8 @@ public:
 	ArenaAllocator &ArenaRef() {
 		return arena;
 	}
+	//! Drop the global sink and operator states the last execution left in the operators.
+	void ReleaseOperatorStates();
 
 private:
 	//! The arena allocator storing the physical operator memory.
