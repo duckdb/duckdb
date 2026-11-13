@@ -24,8 +24,9 @@ LogicalType EncodingFunction::StreamResultType() {
 	return LogicalType::STRUCT(std::move(children));
 }
 
-ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, idx_t max_output_bytes) {
-	D_ASSERT(decode && max_output_bytes > 0);
+ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, idx_t minimum_input_window,
+                                           idx_t max_output_bytes) {
+	D_ASSERT(decode && minimum_input_window > 0 && max_output_bytes > 0);
 	const Identifier name(FunctionName(encoding_name));
 
 	ScalarFunction decode_all(name, vector<LogicalType> {LogicalType::BLOB}, LogicalType::VARCHAR,
@@ -48,6 +49,7 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 		                          }
 	                          });
 	decode_all.SetFallible();
+	decode_all.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY, Value::BIGINT(minimum_input_window));
 
 	ScalarFunction decode_stream(
 	    name, vector<LogicalType> {LogicalType::BLOB, LogicalType::BOOLEAN}, StreamResultType(),
@@ -74,6 +76,7 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 		    }
 	    });
 	decode_stream.SetFallible();
+	decode_stream.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY, Value::BIGINT(minimum_input_window));
 
 	ScalarFunctionSet set(name);
 	set.AddFunction(std::move(decode_all));

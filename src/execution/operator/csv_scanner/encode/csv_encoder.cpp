@@ -105,8 +105,12 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	decode_executor = make_uniq<ExpressionExecutor>(context_p, *decode_expression);
 	decode_input.Initialize(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN}, 1);
 
-	// The encoded buffer is even for utf-16, and fits any character plus the probe byte
-	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, MIN_ENCODED_BUFFER_SIZE));
+	auto window = function->GetProperties().GetProperty(EncodingFunction::MINIMUM_INPUT_WINDOW_PROPERTY);
+	if (window) {
+		minimum_input_window = MaxValue<idx_t>(window->GetValue<idx_t>(), 1);
+	}
+	// The encoded buffer is even for utf-16, and fits a full input window plus the probe byte
+	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, 2 * minimum_input_window + 2));
 }
 
 void CSVEncoder::Reset() {
@@ -138,7 +142,7 @@ idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t outp
 	while (encoded_buffer.HasDataToRead() && output_pos < output_size) {
 		const idx_t available = encoded_buffer.GetSize() - encoded_buffer.cur_pos;
 		// Decode as much input as there is room in the output, extended until it holds a complete character
-		idx_t slice = MinValue<idx_t>(output_size - output_pos, available);
+		idx_t slice = MinValue<idx_t>(MaxValue<idx_t>(output_size - output_pos, minimum_input_window), available);
 		idx_t consumed = 0;
 		while (true) {
 			const bool is_last = encoded_buffer.last_buffer && slice == available;
