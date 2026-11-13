@@ -45,7 +45,7 @@ void OpenerFileSystem::VerifyCanAccessFileInternal(const string &path, FileType 
 		return;
 	}
 	auto &config = db->config;
-	if (!config.CanAccessFile(path, type)) {
+	if (!config.CanAccessFile(path, type, opener)) {
 		throw PermissionException("Cannot access %s \"%s\" - file system operations are disabled by configuration",
 		                          type == FileType::FILE_TYPE_DIR ? "directory" : "file", path);
 	}

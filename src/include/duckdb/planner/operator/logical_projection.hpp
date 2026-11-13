@@ -26,6 +26,9 @@ public:
 	TableIndex table_index;
 
 public:
+	//! Projects every column of the child unchanged
+	static unique_ptr<LogicalProjection> CreateIdentity(TableIndex table_index, unique_ptr<LogicalOperator> child);
+
 	vector<ColumnBinding> GetColumnBindings() override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

@@ -65,7 +65,11 @@ statement ok
 COPY (
 	SELECT CASE WHEN i < 2048 THEN ((i % 2) * 2)::INTEGER ELSE 1 END AS filter_col,
 		CASE WHEN i % 7 = 0 THEN NULL ELSE 'value_' || lpad(i::VARCHAR, 6, '0') END AS s,
-		i::VARIANT AS v
+		i::VARIANT AS v,
+		printf('00000000-0000-0000-0000-%012d', i)::UUID AS u,
+		INTERVAL (i) MICROSECOND AS iv,
+		(i / 100.0)::DECIMAL(20, 2) AS dec,
+		i::BIGINT AS n
 	FROM range(5000) t(i)
 ) TO '{TEST_DIR}/skip_v1_encodings.parquet' (
 	FORMAT parquet, PARQUET_VERSION 'V1', ROW_GROUP_SIZE 10000, DICTIONARY_SIZE_LIMIT 1
@@ -84,3 +88,10 @@ FROM read_parquet('{TEST_DIR}/skip_v1_encodings.parquet')
 WHERE filter_col = 1
 ----
 30360	10401372
+
+query TTIIR
+SELECT min(u)::VARCHAR, max(u)::VARCHAR, sum(epoch_us(iv)), sum(n), sum(dec)
+FROM read_parquet('{TEST_DIR}/skip_v1_encodings.parquet')
+WHERE filter_col = 1
+----
+00000000-0000-0000-0000-000000002048	00000000-0000-0000-0000-000000004999	8904000	10401372	104013.72

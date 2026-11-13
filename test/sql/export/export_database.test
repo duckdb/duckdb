@@ -28,6 +28,11 @@ EXPORT DATABASE '' (FORMAT lower('csv'));
 ----
 Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 
+statement error
+EXPORT DATABASE '' (FORMAT parquet, FORMAT csv);
+----
+duplicate option
+
 # create a bunch of tables with data and views
 
 statement ok
@@ -204,9 +209,6 @@ SET debug_verify_serializer=true;
 # now export the db
 statement ok
 EXPORT DATABASE '{TEST_DIR}/export_test' (FORMAT CSV)
-
-statement ok
-PRAGMA disable_verification
 
 statement ok
 ROLLBACK

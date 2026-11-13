@@ -16,6 +16,7 @@
 namespace duckdb {
 class BaseStatistics;
 class Value;
+class StatsStructFields;
 
 enum class VariantStatsShreddingState : uint8_t {
 	//! Uninitialized, not unshredded/shredded
@@ -85,6 +86,8 @@ public:
 	//! Stats related to the 'shredded' column, which holds all structured data created during shredding
 	//! Returns the LogicalType that represents the shredding as a single DuckDB LogicalType (i.e STRUCT(col1 VARCHAR))
 	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
+	//! Wraps each level of structured_type in typed_value
+	DUCKDB_API static LogicalType GetShreddingType(const LogicalType &structured_type);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
 	//! Determine if a given path inside the variant stats is shredded
@@ -104,7 +107,9 @@ public:
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
-	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
+	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats, bool exact);
+	//! Sets the parts of the statistics the struct fields describe (the inverse of ToStruct)
+	DUCKDB_API static void SetFromStruct(BaseStatistics &stats, StatsStructFields &fields);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,

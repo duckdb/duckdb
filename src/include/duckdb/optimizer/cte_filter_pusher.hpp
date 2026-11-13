@@ -19,7 +19,7 @@ class Optimizer;
 class CTEFilterPusher {
 public:
 	explicit CTEFilterPusher(Optimizer &optimizer);
-	//! Finds all materialized CTEs and pushes OR filters into them (if applicable)
+	//! Push consumer predicates and eligible join-key restrictions into materialized CTEs.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Discard planner guarantees before transformations that do not preserve consumer identity.
 	static void ClearDependencies(LogicalOperator &op);
@@ -39,6 +39,7 @@ private:
 	//! Find all materialized CTEs and their refs
 	void FindCandidates(LogicalOperator &op);
 	bool CanPushFilter(const MaterializedCTEInfo &info);
+	bool HasValidDependency(const MaterializedCTEInfo &info);
 	//! Creates an OR filter and pushes it into a materialized CTE
 	void PushFilterIntoCTE(MaterializedCTEInfo &info);
 

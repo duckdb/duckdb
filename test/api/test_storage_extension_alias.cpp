@@ -122,7 +122,7 @@ TEST_CASE("Uncommitted attachment aliases cannot be reused", "[api]") {
 	REQUIRE_NO_FAIL(owner.Query("ROLLBACK"));
 	auto result = owner.Query("SELECT value FROM x.marker");
 	REQUIRE(!result->HasError());
-	REQUIRE(result->GetValue<int32_t>(0, 0) == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 TEST_CASE("Replaced catalogs detach after a later commit failure", "[api]") {

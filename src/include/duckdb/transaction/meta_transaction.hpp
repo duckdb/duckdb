@@ -83,6 +83,7 @@ public:
 	optional_ptr<AttachedDatabase> GetReferencedDatabase(const Identifier &name);
 	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const Identifier &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
+	void DetachDatabase(AttachedDatabase &database);
 	AttachedDatabase &AttachDatabase(shared_ptr<AttachedDatabase> &database);
 	void ReplaceDatabase(shared_ptr<AttachedDatabase> &database);
 

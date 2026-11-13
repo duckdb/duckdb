@@ -107,7 +107,10 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	string extension = "";
-	if (FileSystem::IsRemoteFile(info.path, extension)) {
+	// a storage extension named by an explicit TYPE interprets the path itself (e.g. as a connection URI)
+	// so a remote-looking path only implies a remote file (read-only, requiring e.g. httpfs) otherwise
+	bool explicit_storage_type = !options.db_type.empty() && !StringUtil::CIEquals(options.db_type, "duckdb");
+	if (!explicit_storage_type && FileSystem::IsRemoteFile(info.path, extension)) {
 		if (options.access_mode == AccessMode::AUTOMATIC) {
 			// Attaching of remote files gets bumped to READ_ONLY
 			// This is due to the fact that on most (all?) remote files writes to DB are not available
@@ -133,7 +136,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
-				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
+				throw BinderException("Database %s is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
 			if (!options.default_table.Name().empty()) {
@@ -162,7 +165,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto timer = context.client_data->profiler->StartTimer<MetricStorageWaitingToAttachLatency>();
+		auto timer = QueryProfiler::Get(context.GetContext()).StartTimer<MetricStorageWaitingToAttachLatency>();
 		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
@@ -244,7 +247,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 				detached_db = entry->second;
 				meta_transaction.ReplaceDatabase(detached_db);
 			} else {
-				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+				throw BinderException("Failed to attach database: database with name %s already exists", name);
 			}
 		}
 		db_ref = detached_db ? meta_transaction.AttachDatabase(attached_db) : meta_transaction.UseDatabase(attached_db);
@@ -285,6 +288,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 	}
 
 	auto deleter = attached_db->ExtractDeleter();
+	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
@@ -390,12 +394,13 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 	}
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name,
+                                                             optional_ptr<AttachedDatabase> database) {
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(name);
-		if (entry == databases.end()) {
+		if (entry == databases.end() || (database && entry->second.get() != database.get())) {
 			return nullptr;
 		}
 		if (entry->second->IsPendingReplacement()) {
@@ -425,25 +430,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 	return attached_db;
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::RollbackAttach(AttachedDatabase &database, optional_ptr<AttachedDatabase> replaced_database) {
+shared_ptr<AttachedDatabase> DatabaseManager::RollbackAttach(AttachedDatabase &database,
+                                                             AttachedDatabase &replaced_database) {
 	shared_ptr<AttachedDatabase> detached_db;
 	bool detached_remote_database = false;
 	bool restored_remote_database = false;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(database.GetName());
-		if (replaced_database) {
-			D_ASSERT(entry != databases.end() && entry->second.get() == &database);
-			if (entry != databases.end() && entry->second.get() == &database) {
-				detached_remote_database = database.GetCatalog().Supports(RemoteCapability::IS_REMOTE);
-				restored_remote_database = replaced_database->GetCatalog().Supports(RemoteCapability::IS_REMOTE);
-				detached_db = std::move(entry->second);
-				entry->second = replaced_database->shared_from_this();
-			}
-		} else if (entry != databases.end() && entry->second.get() == &database) {
+		D_ASSERT(entry != databases.end() && entry->second.get() == &database);
+		if (entry != databases.end() && entry->second.get() == &database) {
 			detached_remote_database = database.GetCatalog().Supports(RemoteCapability::IS_REMOTE);
+			restored_remote_database = replaced_database.GetCatalog().Supports(RemoteCapability::IS_REMOTE);
 			detached_db = std::move(entry->second);
-			databases.erase(entry);
+			entry->second = replaced_database.shared_from_this();
 		}
 		database.SetPendingReplacement(false);
 	}
@@ -462,6 +462,25 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 
 InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
 	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
+}
+
+bool DatabaseManager::IsAttachedDatabaseFile(ClientContext &context, const string &path) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	// attached database paths are canonicalized when the database is attached
+	auto canonical_path = fs.CanonicalizePath(path);
+	if (path_manager->IsDatabasePath(canonical_path)) {
+		return true;
+	}
+	// the WAL files of the database
+	for (auto &wal_suffix : {".wal", ".wal.checkpoint", ".wal.recovery"}) {
+		if (StringUtil::EndsWith(canonical_path, wal_suffix)) {
+			auto database_path = canonical_path.substr(0, canonical_path.size() - strlen(wal_suffix));
+			if (path_manager->IsDatabasePath(database_path)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
@@ -612,11 +631,17 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 }
 
 void DatabaseManager::ResetDatabases() {
-	auto shared_db_pointers = GetDatabases();
-	for (auto &entry : shared_db_pointers) {
-		entry->Close(DatabaseCloseAction::TRY_CHECKPOINT);
-		entry.reset();
+	// the instance destructor runs this, so take the map instead of allocating a copy
+	identifier_map_t<shared_ptr<AttachedDatabase>> attached;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		attached = std::move(databases);
 	}
+	for (auto &entry : attached) {
+		entry.second->Close(DatabaseCloseAction::TRY_CHECKPOINT);
+		entry.second.reset();
+	}
+	system->Close(DatabaseCloseAction::TRY_CHECKPOINT);
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

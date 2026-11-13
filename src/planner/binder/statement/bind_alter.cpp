@@ -5,6 +5,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
@@ -41,6 +43,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
+	VerifyConstraintCheckModeStorageVersion(*constraint_info.constraint, table.ParentCatalog(), table.temporary);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 
@@ -93,10 +96,18 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 		case AlterTableType::ALTER_COLUMN_TYPE: {
 			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
 			binder.BindLogicalType(alter_column_info.target_type);
+			if (!alter_column_info.expression) {
+				// without USING, the column is cast to the target type
+				alter_column_info.expression = make_uniq<CastExpression>(
+				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
+			}
 		} break;
 		default:
 			break;
 		}
+	}
+	for (auto &type : stmt.info->GetTypesToBind()) {
+		binder.BindLogicalType(type.get());
 	}
 }
 
@@ -140,9 +151,27 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 			view.BindView(context);
 		}
 	} else {
-		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->GetQualifiedName());
-		entry = entry_retriever.GetEntry(lookup_info, stmt.info->if_not_found);
+		// For any other ALTER, we retrieve the catalog entry directly, trying each type the alter accepts
+		auto lookup_types = stmt.info->GetEntryLookupTypes();
+		EntryLookupInfo lookup_info(lookup_types[0], stmt.info->GetQualifiedName());
+		if (lookup_types.size() == 1) {
+			entry = entry_retriever.GetEntry(lookup_info, stmt.info->if_not_found);
+		} else {
+			for (auto &lookup_type : lookup_types) {
+				EntryLookupInfo type_lookup(lookup_type, stmt.info->GetQualifiedName());
+				entry = entry_retriever.GetEntry(type_lookup, OnEntryNotFound::RETURN_NULL);
+				if (entry) {
+					break;
+				}
+			}
+			if (!entry) {
+				// a missing entry is reported for the first type
+				entry = entry_retriever.GetEntry(lookup_info, stmt.info->if_not_found);
+			}
+		}
+		if (entry) {
+			stmt.info->SetResolvedEntryType(entry->type);
+		}
 	}
 
 	auto &properties = GetStatementProperties();
@@ -160,17 +189,14 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	// Bind types in the same catalog as the entry
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(catalog, stmt.info->GetQualifiedName().Schema());
+	type_binder->SetSearchPath(catalog, stmt.info->GetQualifiedName().SchemaPath());
 
 	BindAlterTypes(*type_binder, stmt);
 
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
-	if (!entry->temporary) {
-		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
-	}
+	properties.RegisterDBModify(catalog, context, stmt.info->GetModifications());
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddUniqueConstraint()) {

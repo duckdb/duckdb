@@ -35,7 +35,7 @@ public:
 		REQUIRE_NO_FAIL(*result);
 		auto factory =
 		    make_uniq<ArrowTestFactory>(result->GetTypes(), IdentifiersToStrings(result->GetNames()), std::move(result),
-		                                false, source.context->GetClientProperties(), *source.context);
+		                                source.context->GetClientProperties(), *source.context);
 		auto stream = factory->ProduceStream(parameters);
 		factories.push_back(std::move(factory));
 		return stream;

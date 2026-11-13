@@ -20,20 +20,10 @@ struct ICUTableRange {
 		      calendar(other.calendar->Copy()), cardinality(other.cardinality) {
 		}
 
-		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) {
-			Value tz_value;
-			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-				tz_setting = tz_value.ToString();
-			}
+		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) : cal_setting("gregorian") {
+			context.TryGetCurrentSetting("TimeZone", tz_setting);
+			context.TryGetCurrentSetting("Calendar", cal_setting);
 			auto tz = TimeZone::TryCreate(tz_setting);
-
-			Value cal_value;
-			if (context.TryGetCurrentSetting("Calendar", cal_value)) {
-				cal_setting = cal_value.ToString();
-			} else {
-				cal_setting = "gregorian";
-			}
-
 			calendar = Calendar::TryCreate(cal_setting, tz ? std::move(tz) : TimeZone::TryCreate("UTC"));
 			if (!calendar) {
 				throw InternalException("Unable to create calendar.");
@@ -82,6 +72,11 @@ struct ICUTableRange {
 			end.store(end_p.value, std::memory_order_relaxed);
 			current.store(start_p.value, std::memory_order_relaxed);
 		}
+
+		//! Input rows are independent, so an in-out call can use all threads
+		idx_t MaxThreads() const override {
+			return GlobalTableFunctionState::MAX_THREADS;
+		}
 	};
 
 	struct ICURangeLocalState : public LocalTableFunctionState {
@@ -123,6 +118,8 @@ struct ICUTableRange {
 	template <bool GENERATE_SERIES>
 	static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, ICURangeLocalState &result) {
 		input.Flatten();
+		// the local state is reused for every input row
+		result.empty_range = false;
 		for (idx_t c = 0; c < input.ColumnCount(); c++) {
 			if (FlatVector::IsNull(input.data[c], row_id)) {
 				result.start = timestamp_tz_t::epoch();
@@ -206,7 +203,7 @@ struct ICUTableRange {
 			return nullptr;
 		}
 		auto &bind_data = bind_data_p->Cast<ICURangeBindData>();
-		return make_uniq<NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
+		return make_uniq<NodeStatistics>(bind_data.cardinality);
 	}
 
 	template <bool GENERATE_SERIES>

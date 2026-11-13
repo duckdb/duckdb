@@ -70,7 +70,6 @@ static bool ContainsLimit(const LogicalOperator &op) {
 bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return true;
 	default:
@@ -251,25 +250,8 @@ bool CTEInlining::Inline(unique_ptr<LogicalOperator> &op, LogicalOperator &mater
 					return false;
 				}
 			}
-			vector<unique_ptr<Expression>> proj_expressions;
-			definition->ResolveOperatorTypes();
-			vector<LogicalType> types = definition->types;
-			vector<ColumnBinding> bindings =
-			    requires_copy ? copy->GetColumnBindings() : definition->GetColumnBindings();
-
-			idx_t col_idx = 0;
-			for (auto &col : bindings) {
-				proj_expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], col));
-				col_idx++;
-			}
-			auto proj = make_uniq<LogicalProjection>(cteref.table_index, std::move(proj_expressions));
-
-			if (requires_copy) {
-				proj->children.push_back(std::move(copy));
-			} else {
-				proj->children.push_back(std::move(definition));
-			}
-			op = std::move(proj);
+			op = LogicalProjection::CreateIdentity(cteref.table_index,
+			                                       requires_copy ? std::move(copy) : std::move(definition));
 			return true;
 		}
 		return true;

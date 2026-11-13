@@ -35,10 +35,12 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->table->GetStorage().RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
-	case UndoFlags::DELETE_TUPLE: {
+	case UndoFlags::DELETE_TUPLE:
+	case UndoFlags::UPDATE_ROWS: {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		// reset the deleted flag on rollback
-		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, *info);
+		// the rows fall back to the ids they held before the delete or update
+		info->version_info->RollbackWrite(info->vector_idx, info->GetStoredRows(), info->count, info->GetPreviousIds(),
+		                                  info->previous_id_count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -47,10 +49,16 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::ATTACHED_DATABASE: {
-		auto database = Load<AttachedDatabase *>(data);
-		auto replaced_database = Load<AttachedDatabase *>(data + sizeof(AttachedDatabase *));
-		auto &db_manager = DatabaseManager::Get(database->GetDatabase());
-		auto attached_db = db_manager.RollbackAttach(*database, replaced_database);
+		auto db = Load<AttachedDatabase *>(data);
+		auto replaced_db = Load<AttachedDatabase *>(data + sizeof(AttachedDatabase *));
+		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
+		shared_ptr<AttachedDatabase> attached_db;
+		if (replaced_db) {
+			attached_db = db_manager.RollbackAttach(*db, *replaced_db);
+		} else {
+			// after this transaction detached it, another connection can have attached a database under the name
+			attached_db = db_manager.DetachInternal(db->name, db);
+		}
 		if (attached_db) {
 			// Teardown runs SQL, which cannot happen under the transaction lock: it would need a
 			// transaction on the same manager, and rollback may not fail. Extracting the deleter is a

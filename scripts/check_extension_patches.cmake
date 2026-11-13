@@ -21,6 +21,8 @@ endif()
 # patch directory exists unconditionally.
 set(WASM_ENABLED 0)
 set(MUSL_ENABLED 0)
+# Script mode leaves CMAKE_SYSTEM_NAME empty, which makes Linux-only configs return early
+set(CMAKE_SYSTEM_NAME "Linux")
 set(MINGW OFF)
 set(WIN32 OFF)
 set(BUILD_COMPLETE_EXTENSION_SET 1)
@@ -32,10 +34,13 @@ set(EXTENSION_CONFIG_BASE_DIR "${CONFIG_DIR}/extensions")
 # Record the extensions that ask for their patches to be applied.
 set(APPLYING "")
 macro(duckdb_extension_load NAME)
-    cmake_parse_arguments(EXT "APPLY_PATCHES;DONT_LINK;DONT_BUILD;LOAD_TESTS" "GIT_URL;GIT_TAG" "" ${ARGN})
+    cmake_parse_arguments(EXT "APPLY_PATCHES;DONT_BUILD;LOAD_TESTS" "GIT_URL;GIT_TAG" "" ${ARGN})
     if(EXT_APPLY_PATCHES)
         list(APPEND APPLYING "${NAME}")
     endif()
+endmacro()
+# What gets linked does not matter for patches.
+macro(duckdb_extension_statically_link)
 endmacro()
 
 # test-utils.cmake sits in extensions/ but is a top-level config itself: it

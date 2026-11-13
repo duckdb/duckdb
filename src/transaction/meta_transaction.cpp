@@ -4,6 +4,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
@@ -149,7 +150,7 @@ ErrorData MetaTransaction::Commit() {
 		try {
 			if (!error.HasError()) {
 				// Commit the transaction.
-				error = transaction_manager.CommitTransaction(context, transaction);
+				error = db.ScopeFatalError(transaction_manager.CommitTransaction(context, transaction));
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
 				// Rollback due to previous error.
@@ -157,7 +158,7 @@ ErrorData MetaTransaction::Commit() {
 				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
+			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 			transaction_ref.state = TransactionState::ROLLED_BACK;
 		}
 	}
@@ -184,7 +185,7 @@ void MetaTransaction::Rollback() {
 			auto &transaction = transaction_ref.transaction;
 			transaction_manager.RollbackTransaction(transaction);
 		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
+			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 		}
 		transaction_ref.state = TransactionState::ROLLED_BACK;
 	}
@@ -252,6 +253,11 @@ shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const 
 	return nullptr;
 }
 
+void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
+	lock_guard<mutex> guard(referenced_database_lock);
+	used_databases.erase(database.GetName());
+}
+
 void MetaTransaction::ReplaceDatabase(shared_ptr<AttachedDatabase> &database) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	auto &database_ref = *database;
@@ -267,9 +273,10 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	if (entry == referenced_databases.end()) {
 		auto used_entry = used_databases.emplace(db_ref.GetName(), db_ref);
 		if (!used_entry.second) {
-			// return used_entry.first->second.get();
-			throw InternalException(
-			    "Database name %s was already used by a different database for this meta transaction",
+			// e.g. a database was detached and another one attached under the same name in this transaction
+			throw TransactionException(
+			    "Database name %s was already used by a different database in this transaction - commit or roll back "
+			    "the transaction before using the name for another database",
 			    db_ref.GetName());
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
@@ -284,8 +291,9 @@ AttachedDatabase &MetaTransaction::AttachDatabase(shared_ptr<AttachedDatabase> &
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
-	if (IsReadOnly()) {
-		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
+	// Temporary objects are private to the connection, so a read-only transaction may still write them
+	if (IsReadOnly() && !db.IsTemporary()) {
+		throw TransactionException("Cannot write to database %s - transaction is launched in read-only mode",
 		                           db.GetName());
 	}
 	auto &transaction = GetTransaction(db);

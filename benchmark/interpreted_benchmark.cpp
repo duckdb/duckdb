@@ -11,15 +11,17 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 namespace duckdb {
 
@@ -166,7 +168,7 @@ BenchmarkQuery InterpretedBenchmark::ReadQueryFromReader(BenchmarkFileReader &re
 }
 
 static void ThrowResultModeError(BenchmarkFileReader &reader) {
-	vector<string> valid_options = {"streaming", "arrow", "materialized"};
+	vector<string> valid_options = {"streaming", "arrow", "arrow_stream", "materialized"};
 	auto error = StringUtil::Format("Invalid argument for resultmode, valid options are: %s",
 	                                StringUtil::Join(valid_options, ", "));
 	throw std::runtime_error(reader.FormatException(error));
@@ -254,17 +256,17 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				}
 				discard_stream_result = splits.size() == 3 && splits[2] == "drop";
 				result_mode = BenchmarkResultMode::STREAMING;
-			} else if (splits[1] == "arrow") {
+			} else if (splits[1] == "arrow" || splits[1] == "arrow_stream") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
 				if (splits.size() == 3) {
 					auto custom_batch_size = std::stoi(splits[2]);
 					arrow_batch_size = custom_batch_size;
 				}
 				if (splits.size() != 2 && splits.size() != 3) {
-					throw std::runtime_error(reader.FormatException(
-					    "resultmode 'arrow' only takes 1 optional extra parameter (batch_size)"));
+					throw std::runtime_error(reader.FormatException(StringUtil::Format(
+					    "resultmode '%s' only takes 1 optional extra parameter (batch_size)", splits[1])));
 				}
-				result_mode = BenchmarkResultMode::ARROW;
+				result_mode = splits[1] == "arrow" ? BenchmarkResultMode::ARROW : BenchmarkResultMode::ARROW_STREAM;
 			} else if (splits[1] == "materialized") {
 				if (splits.size() != 2) {
 					throw std::runtime_error(
@@ -543,7 +545,7 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 	LoadExtensions(state, true);
 	auto result = state.con.Query(load_query);
 	for (idx_t i = 0; i < retry_load; i++) {
-		if (!result->HasError()) {
+		if (!FirstError(*result)) {
 			break;
 		}
 		result = state.con.Query(load_query);
@@ -551,11 +553,17 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 	return result;
 }
 
-unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
-	duckdb::unique_ptr<QueryResult> result;
-	LoadBenchmark();
-	duckdb::unique_ptr<InterpretedBenchmarkState> state;
-	auto full_db_path = GetDatabasePath();
+optional_ptr<QueryResult> InterpretedBenchmark::FirstError(QueryResult &result) {
+	for (optional_ptr<QueryResult> current = &result; current; current = current->next.get()) {
+		if (current->HasError()) {
+			return current;
+		}
+	}
+	return nullptr;
+}
+
+unique_ptr<InterpretedBenchmarkState> InterpretedBenchmark::OpenState(const string &full_db_path) {
+	unique_ptr<InterpretedBenchmarkState> state;
 	try {
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	} catch (Exception &e) {
@@ -564,20 +572,57 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		DeleteDatabase(full_db_path);
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	}
-	AddExtension("core_functions", false);
-	AddExtension("parquet", false);
-
 	LoadExtensions(*state, false);
 	if (queries.find("init") != queries.end()) {
-		string init_query = queries["init"];
-		result = state->con.Query(init_query);
+		auto result = state->con.Query(queries["init"]);
 		while (result) {
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			result = std::move(result->next);
 		}
 	}
+	return state;
+}
+
+void InterpretedBenchmark::LoadData(unique_ptr<InterpretedBenchmarkState> &state, const string &full_db_path,
+                                    const string &load_query) {
+	static constexpr idx_t DEFAULT_HTTP_LOAD_RETRIES = 3;
+	auto fs = FileSystem::CreateLocal();
+	for (idx_t attempt = 0;; attempt++) {
+		LoadExtensions(*state, true);
+		auto result = state->con.Query(load_query);
+		auto error_result = FirstError(*result);
+		if (!error_result) {
+			return;
+		}
+		auto error = error_result->GetErrorObject();
+		bool retry =
+		    attempt < retry_load || (attempt < DEFAULT_HTTP_LOAD_RETRIES && error.Type() == ExceptionType::HTTP);
+		// never leave a partially loaded cache behind: later runs would treat it as valid
+		result.reset();
+		state.reset();
+		if (!full_db_path.empty()) {
+			DeleteDatabase(full_db_path);
+		}
+		if (!cache_file.empty()) {
+			DeleteDatabase(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file));
+		}
+		if (!retry) {
+			error.Throw();
+		}
+		fprintf(stderr, "Load failed (attempt %llu), retrying: %s\n", static_cast<unsigned long long>(attempt + 1),
+		        error.Message().c_str());
+		std::this_thread::sleep_for(std::chrono::seconds(static_cast<int64_t>(2) << MinValue<idx_t>(attempt, 4)));
+		state = OpenState(full_db_path);
+	}
+}
+
+unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
+	duckdb::unique_ptr<QueryResult> result;
+	LoadBenchmark();
+	auto full_db_path = GetDatabasePath();
+	AddExtension("core_functions", false);
+	AddExtension("parquet", false);
+	auto state = OpenState(full_db_path);
 
 	string load_query;
 	if (queries.find("load") != queries.end()) {
@@ -592,14 +637,14 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		auto fs = FileSystem::CreateLocal();
 		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
-			result = RunLoadQuery(*state, load_query);
+			LoadData(state, full_db_path, load_query);
 		} else if (!reload_query.empty()) {
 			// run reload query
 			result = RunLoadQuery(*state, reload_query);
 		}
 	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
-		result = RunLoadQuery(*state, load_query);
+		LoadData(state, full_db_path, load_query);
 	} else {
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
@@ -608,25 +653,21 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			// If tables exist, it's a good indication that the database is fine
 			// If they don't load the database
 			auto result = state->con.Query("SHOW TABLES;");
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			if (result->RowCount() > 0) {
 				in_memory_db_has_data = true;
 			}
 		}
 		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
-			result = RunLoadQuery(*state, load_query);
+			LoadData(state, full_db_path, load_query);
 		} else if (!reload_query.empty()) {
 			// succeeded: run the reload query
 			result = RunLoadQuery(*state, reload_query);
 		}
 	}
 	while (result) {
-		if (result->HasError()) {
-			result->ThrowError();
-		}
+		result->ThrowIfError();
 		result = std::move(result->next);
 	}
 
@@ -655,30 +696,13 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
-ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenchmark &benchmark) {
-	if (benchmark.ResultMode() == BenchmarkResultMode::ARROW) {
-		return ScopedConfigSetting(
-		    config,
-		    [&benchmark](ClientConfig &config) {
-			    config.get_result_collector =
-			        [&benchmark](ClientContext &context, PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
-				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
-			    };
-		    },
-		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
-	}
-	return ScopedConfigSetting(config);
-}
-
 void InterpretedBenchmark::Assert(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 
 	for (auto &assert_query : assert_queries) {
 		auto &query = assert_query.query;
 		auto result = state.con.Query(query);
-		if (result->HasError()) {
-			result->ThrowError();
-		}
+		result->ThrowIfError();
 		auto verify_result = VerifyInternal(state_p, assert_query, *result);
 		if (!verify_result.empty()) {
 			throw InvalidInputException("Assertion query failed:\n%s", verify_result);
@@ -690,8 +714,18 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	auto &context = state.con.context;
 
-	auto &config = ClientConfig::GetConfig(*context);
-	auto result_collector_setting = PrepareResultCollector(config, *this);
+	if (result_mode == BenchmarkResultMode::ARROW_STREAM) {
+		auto handle = context->Submit(run_query, make_shared_ptr<ArrowFormat>(arrow_batch_size));
+		if (handle->HasError()) {
+			state.result = std::move(handle);
+			return;
+		}
+		QueryResultStream<ArrowFormat> stream(std::move(handle));
+		while (stream.Fetch()) {
+		}
+		state.result = stream.HasError() ? make_uniq<QueryResult>(stream.GetErrorObject()) : nullptr;
+		return;
+	}
 	if (result_mode == BenchmarkResultMode::STREAMING) {
 		auto handle = context->Submit(run_query, QueryParameters());
 		if (handle->HasError()) {
@@ -706,7 +740,8 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 		unique_ptr<ColumnDataCollection> collection;
 		ColumnDataAppendState append_state;
 		if (!discard_stream_result) {
-			collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+			collection = make_uniq<ColumnDataCollection>(*context, stream.GetTypes(),
+			                                             ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 			collection->InitializeAppend(append_state);
 		}
 		while (auto chunk = stream.Fetch()) {
@@ -727,13 +762,18 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 		}
 		return;
 	}
-	auto temp_result = context->Query(run_query, QueryParameters());
+	QueryParameters parameters;
+	if (result_mode == BenchmarkResultMode::RETAINED) {
+		parameters.format = ChunkFormat::BufferManaged();
+	} else if (result_mode == BenchmarkResultMode::ARROW) {
+		parameters.format = make_shared_ptr<ArrowFormat>(arrow_batch_size);
+	}
+	auto temp_result = context->Query(run_query, parameters);
 	if (result_mode == BenchmarkResultMode::ARROW) {
-		if (temp_result->GetResultType() != QueryResultType::ARROW_RESULT) {
-			throw InternalException("Query did not produce an Arrow result, but %s",
-			                        EnumUtil::ToString(temp_result->GetResultType()));
+		if (temp_result->RowCount() > 0 && temp_result->Collection<ArrowFormat>().empty()) {
+			throw InternalException("Query produced rows but no Arrow arrays");
 		}
-		/* no-op, this is only used to test the overhead of the result collector */
+		/* no-op, this is only used to test the overhead of the conversion */
 		state.result = nullptr;
 		return;
 	}
@@ -747,9 +787,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			result = std::move(result->next);
 		}
 	}

@@ -238,6 +238,7 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 						query->select_list.push_back(std::move(column));
 					}
 					query->from_table = std::move(input);
+					input.reset();
 					auto subquery = make_uniq<SubqueryExpression>();
 					subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
 					subquery->SubqueryMutable() = make_uniq<SelectStatement>();

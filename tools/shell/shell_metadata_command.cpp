@@ -4,6 +4,9 @@
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
 
+#if !defined(_WIN32) && !defined(WIN32)
+#include <sys/wait.h>
+#endif
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
 #include "shortcuts.hpp"
@@ -191,7 +194,7 @@ MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 	}
 	int rc = 0;
 	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
-		// exit immediately if a custom error code is provided
+		// Stop all input processing and return through main's cleanup.
 		ShellState::Exit(rc);
 	}
 	return MetadataResult::EXIT;
@@ -243,6 +246,10 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+		if (duckdb::StringUtil::CIEquals(args[1], "agent")) {
+			state.PrintAgentHelp(PrintOutput::STDOUT, false);
+			return MetadataResult::SUCCESS;
+		}
 #ifdef HAVE_LINENOISE
 		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
 			auto shortcuts = duckdb::GetShellShortcuts();
@@ -337,6 +344,30 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	const char *zFile = args[1].c_str();
 	state.CloseOutputFile(state.pLog);
 	state.pLog = state.OpenOutputFile(zFile, 0);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxBytes(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max bytes: %zu\n", state.max_bytes);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_bytes = (size_t)ShellState::StringToInt(args[1]);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxCellWidth(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max cell width: %zu\n", state.max_cell_width);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_cell_width = (size_t)ShellState::StringToInt(args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -467,21 +498,21 @@ MetadataResult QuitProcess(ShellState &, const vector<string> &args) {
 }
 
 MetadataResult SetOutput(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, '\0')) {
+	if (!state.SetOutputFile(args, OutputCommand::OUTPUT)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputOnce(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'o')) {
+	if (!state.SetOutputFile(args, OutputCommand::ONCE)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputExcel(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'e')) {
+	if (!state.SetOutputFile(args, OutputCommand::EXCEL)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
@@ -506,17 +537,20 @@ MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
 		state.Print(PrintOutput::STDERR, ".sh/.system cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
-	int x;
 	if (args.size() < 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	auto zCmd = StringUtil::Format(StringUtil::Contains(args[1], ' ') ? "%s" : "\"%s\"", args[1]);
-	for (idx_t i = 2; i < args.size(); i++) {
-		zCmd += StringUtil::Format(StringUtil::Contains(args[i], ' ') ? " %s" : " \"%s\"", args[i]);
+	// the command line is passed on verbatim - quoting, pipes and redirects are handled by the system shell
+	fflush(state.out);
+	fflush(stdout);
+	int status = system(args[1].c_str());
+#if !defined(_WIN32) && !defined(WIN32)
+	if (WIFEXITED(status)) {
+		status = WEXITSTATUS(status);
 	}
-	x = system(zCmd.c_str());
-	if (x) {
-		state.PrintF(PrintOutput::STDERR, "System command returns %d\n", x);
+#endif
+	if (status) {
+		state.PrintF(PrintOutput::STDERR, "System command returns %d\n", status);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -891,6 +925,10 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	} else if (args[1] == "automatic") {
 		state.pager_mode = PagerMode::PAGER_AUTOMATIC;
 	} else {
+		if (state.safe_mode) {
+			state.Print(PrintOutput::STDERR, ".pager cannot be used in -safe mode\n");
+			return MetadataResult::FAIL;
+		}
 		state.pager_command = args[1];
 	}
 	return MetadataResult::SUCCESS;
@@ -945,7 +983,7 @@ static const MetadataCommand metadata_commands[] = {
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
-    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
+    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN (.help agent: the agent mode)", 0, ""},
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlightErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
@@ -974,8 +1012,14 @@ static const MetadataCommand metadata_commands[] = {
     {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
      "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
      "FUNCTION may be qualified: [database.][schema.]function."},
+    {"maxbytes", 0, SetMaxBytes, "COUNT",
+     "Sets the maximum number of bytes of rows for display (0 = all). Only for markdown mode in -agent mode.", 0, ""},
+    {"maxcellwidth", 0, SetMaxCellWidth, "COUNT",
+     "Sets the maximum number of characters per cell (0 = all). Only for markdown mode in -agent mode.", 0, ""},
     {"maxrows", 0, SetMaxRows, "COUNT",
-     "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
+     "Sets the maximum number of rows for display (default: 40, -1 = all). Only for duckbox mode and for markdown "
+     "mode in -agent mode.",
+     0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
      "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0, ""},
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
@@ -1028,14 +1072,14 @@ static const MetadataCommand metadata_commands[] = {
      "By default the schema is pretty-printed using the SQL formatter.\nOptions:\n\t--no-indent\tPrint the schema as "
      "it is stored, without formatting\n\t--no-format\tAlias for --no-indent\n\t--indent\tForce pretty-printing (the "
      "default)\n\t--format\tAlias for --indent"},
-    {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
+    {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, "", true},
     {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0, ""},
 #ifdef HAVE_LINENOISE
     {"singleline", 1, ToggleSingleLine, "", "Sets the render mode to single-line", 0, ""},
 #endif
     {"startup_text", 2, SetStartupText, "none|version|all",
      "Start-up text to display. Set this as the first line in .duckdbrc", 0, ""},
-    {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
+    {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, "", true},
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
     {"thousand_sep", 0, SetThousandSep, "SEP",
      "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4, ""},

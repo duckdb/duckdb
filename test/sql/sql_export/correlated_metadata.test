@@ -126,20 +126,30 @@ EXPLAIN SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
 physical_plan	<REGEX>:.*Hash Join.*
 
-statement error
-EXPLAIN (SQL) SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
+query TTT rowsort
+SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The\ MARK\ condition\ requires\ conjunction\ execution\ semantics.*
+1.0	10	true
+1.0	10	true
+2.0	20	false
+3.0	NULL	false
+4.0	40	false
+NULL	50	false
 
 query TT
 EXPLAIN SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
 physical_plan	<REGEX>:.*Hash Join.*
 
-statement error
-EXPLAIN (SQL) SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
+query TTT rowsort
+SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The\ MARK\ condition\ requires\ conjunction\ execution\ semantics.*
+1.0	10	false
+1.0	10	false
+2.0	20	true
+3.0	NULL	true
+4.0	40	true
+NULL	50	true
 
 statement ok
 CREATE TABLE union_l(g INTEGER,x UNION(i INTEGER,s VARCHAR));
@@ -170,10 +180,10 @@ INSERT INTO list_l VALUES (1,[10,NULL]);
 statement ok
 INSERT INTO list_r VALUES (1,NULL);
 
-statement error
-EXPLAIN (SQL) SELECT x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
+query T rowsort
+SELECT x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The\ MARK\ condition\ requires\ conjunction\ execution\ semantics.*
+NULL
 
 query T rowsort
 SELECT x<ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
