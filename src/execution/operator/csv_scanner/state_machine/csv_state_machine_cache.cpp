@@ -508,7 +508,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// 12) Unquoted Escape State
 	if (enable_unquoted_escape) {
-		if (state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE) {
+		if (state_machine_options.escape_mode.GetValue() != CSVEscapeMode::ALL) {
 			// The escape only escapes the quote and escape characters: any other byte keeps the meaning it has in the
 			// Standard state, so the delimiter still separates values and a newline still ends the record
 			if (multi_byte_delimiter) {
@@ -534,6 +534,38 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			// Any character can be escaped, so default to STANDARD
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
 			    CSVState::ESCAPED_RETURN;
+		}
+	}
+
+	// 12.1) Field Start State (escape_mode 'opencsv'): an escape before the first content of a field is inert - it is
+	// dropped (StringValueScanner::RemoveEscape) and the character after it keeps its meaning, so a quote after it
+	// opens a quoted field and the delimiter still separates values
+	if (enable_unquoted_escape && state_machine_options.escape_mode.GetValue() == CSVEscapeMode::OPENCSV) {
+		const auto field_start = static_cast<uint8_t>(CSVState::FIELD_START);
+		const vector<uint8_t> fresh_states {
+		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN), static_cast<uint8_t>(CSVState::NOT_SET),
+		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)};
+		for (const auto state : fresh_states) {
+			transition_array[escape][state] = CSVState::FIELD_START;
+		}
+		transition_array[escape][field_start] = CSVState::FIELD_START;
+		if (quote != '\0') {
+			transition_array[quote][field_start] = CSVState::QUOTED;
+		}
+		if (multi_byte_delimiter) {
+			transition_array[delimiter_first_byte][field_start] = CSVState::DELIMITER_FIRST_BYTE;
+		} else {
+			transition_array[delimiter_first_byte][field_start] = CSVState::DELIMITER;
+		}
+		transition_array[static_cast<uint8_t>('\n')][field_start] = CSVState::RECORD_SEPARATOR;
+		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+			transition_array[static_cast<uint8_t>('\r')][field_start] = CSVState::CARRIAGE_RETURN;
+		} else {
+			transition_array[static_cast<uint8_t>('\r')][field_start] = CSVState::RECORD_SEPARATOR;
+		}
+		if (comment != '\0') {
+			transition_array[comment][field_start] = CSVState::COMMENT;
 		}
 	}
 

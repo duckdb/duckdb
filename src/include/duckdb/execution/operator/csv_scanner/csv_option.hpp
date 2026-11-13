@@ -26,7 +26,10 @@ enum class CSVEscapeMode : uint8_t {
 	ALL = 0,
 	//! The escape character only escapes the quote and escape characters: before any other character it is dropped,
 	//! so a delimiter still separates values and a newline still ends the record
-	QUOTE = 1
+	QUOTE = 1,
+	//! As QUOTE, and the escape is inert before the first content of a field, as in opencsv: it is dropped and the
+	//! character after it keeps its meaning, so '\\x' is 'x' and a quote after it opens a quoted field
+	OPENCSV = 2
 };
 
 class Serializer;
@@ -166,6 +169,8 @@ private:
 			return "all";
 		case CSVEscapeMode::QUOTE:
 			return "quote";
+		case CSVEscapeMode::OPENCSV:
+			return "opencsv";
 		default:
 			throw InternalException("Invalid CSV Escape Mode Detected.");
 		}

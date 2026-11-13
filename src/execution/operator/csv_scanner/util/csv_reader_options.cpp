@@ -232,12 +232,15 @@ void CSVReaderOptions::SetEscapeMode(const string &input) {
 		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::ALL);
 	} else if (escape_mode == "quote") {
 		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE);
+	} else if (escape_mode == "opencsv") {
+		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV);
 	} else {
 		throw BinderException("'%s' is not accepted as an escape_mode. The escape_mode option must be one of:\n* 'all' "
 		                      "(default): the escape character escapes the character that follows it, including the "
 		                      "delimiter and a newline\n* 'quote': the escape character only escapes the quote and "
 		                      "escape characters, so a delimiter still separates values and a newline still ends the "
-		                      "record",
+		                      "record\n* 'opencsv': as 'quote', and the escape is inert before the first content of a "
+		                      "field, as in opencsv",
 		                      input);
 	}
 }
@@ -648,12 +651,13 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
 	auto &state_machine_options = dialect_options.state_machine_options;
-	if (state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE) {
+	if (state_machine_options.escape_mode.GetValue() != CSVEscapeMode::ALL) {
 		if (state_machine_options.strict_mode.GetValue() && state_machine_options.strict_mode.IsSetByUser()) {
-			throw BinderException("ESCAPE_MODE 'quote' is not supported when STRICT_MODE is manually set to true: the "
-			                      "escape character can only appear outside quotes when strict_mode = false");
+			throw BinderException("ESCAPE_MODE '%s' is not supported when STRICT_MODE is manually set to true: the "
+			                      "escape character can only appear outside quotes when strict_mode = false",
+			                      GetEscapeMode());
 		}
-		// The quote escape mode governs the escape character outside quotes, which only non-strict parsing accepts
+		// These escape modes govern the escape character outside quotes, which only non-strict parsing accepts
 		state_machine_options.strict_mode.Set(false, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.

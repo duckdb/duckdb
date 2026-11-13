@@ -701,6 +701,10 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::QUOTED: {
+				if (states.states[0] == CSVState::FIELD_START) {
+					// the inert escapes before the opening quote are not part of the quoted value
+					result.escaped = false;
+				}
 				if ((states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) &&
 				    has_escaped_value) {
 					ever_escaped = true;
@@ -737,6 +741,7 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::UNQUOTED_ESCAPE:
+			case CSVState::FIELD_START:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				used_unstrictness = true;

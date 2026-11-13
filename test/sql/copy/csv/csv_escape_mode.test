@@ -124,3 +124,56 @@ statement error
 COPY escape_mode_rows TO '{TEST_DIR}/escape_mode_write.csv' (FORMAT csv, ESCAPE_MODE 'quote');
 ----
 <REGEX>:.*escape_mode.*
+
+# escape_mode 'opencsv': as 'quote', and the escape is inert before the first content of a field
+statement ok
+COPY (SELECT * FROM (VALUES
+    ('1,\\x,7'),
+    ('2,\"a,b",8'),
+    ('3,a\\b,9'),
+    ('4,\,10')
+) t(line)) TO '{TEST_DIR}/escape_mode_opencsv.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+# - leading escapes are dropped without escaping anything, so '\\x' is 'x' (1)
+# - a quote after an inert escape opens a quoted field, so the separator inside is data (2)
+# - within a field the escape works as in 'quote' mode (3)
+# - an inert escape before the separator still splits, leaving an empty field (4)
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/escape_mode_opencsv.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='opencsv', null_padding=true, header=false, auto_detect=false) ORDER BY id;
+----
+1	x	7
+2	a,b	8
+3	a\b	9
+4	NULL	10
+
+# under 'quote' the escape stays active at the field start: '\\x' keeps one escape and '\"' is a literal quote
+query IT
+SELECT id, val FROM read_csv('{TEST_DIR}/escape_mode_opencsv.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='quote', null_padding=true, header=false, auto_detect=false) WHERE id IN (1, 3) ORDER BY id;
+----
+1	\x
+3	a\b
+
+# escape_mode 'opencsv' governs the escape character outside quotes, which strict mode does not accept
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/escape_mode_opencsv.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, escape='\', escape_mode='opencsv', strict_mode=true, header=false);
+----
+ESCAPE_MODE 'opencsv' is not supported when STRICT_MODE is manually set to true
+
+# a quoted value after an inert escape holds no escapes: it converts into a typed column
+statement ok
+COPY (SELECT * FROM (VALUES ('\"123"'), ('456')) t(line)) TO '{TEST_DIR}/escape_mode_opencsv_typed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/escape_mode_opencsv_typed.csv', columns={'v': 'INTEGER'}, delim=',', quote='"', escape='\', escape_mode='opencsv', header=false, auto_detect=false) ORDER BY v;
+----
+123
+456
+
+# the sniffer reads a trailing field of only inert escapes as the empty last value
+statement ok
+COPY (SELECT 'a,\' AS line) TO '{TEST_DIR}/escape_mode_opencsv_sniff.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query T
+SELECT * FROM read_csv('{TEST_DIR}/escape_mode_opencsv_sniff.csv', columns={'a': 'VARCHAR'}, delim=',', quote='"', escape='\', escape_mode='opencsv', header=false);
+----
+a
