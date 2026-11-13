@@ -86,8 +86,8 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 } // namespace
 
 void BuiltinFunctions::RegisterEncodingFunctions() {
-	for (auto &set : {EncodingFunction::Create("latin-1", DecodeLatin1ToUTF8, 1, 2),
-	                  EncodingFunction::Create("utf-16", DecodeUTF16ToUTF8, 4, 2)}) {
+	for (auto &set : {EncodingFunction::Create("latin-1", DecodeLatin1ToUTF8, 2),
+	                  EncodingFunction::Create("utf-16", DecodeUTF16ToUTF8, 2)}) {
 		CreateScalarFunctionInfo info(set);
 		EncodingFunction::SetSchema(info);
 		info.internal = true;

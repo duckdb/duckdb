@@ -51,6 +51,9 @@ private:
 
 class CSVEncoder {
 public:
+	//! The smallest encoded buffer, which fits any character of an encoding plus the probe byte
+	static constexpr idx_t MIN_ENCODED_BUFFER_SIZE = 64;
+
 	//! Constructor, basically takes an encoding and the output buffer size
 	CSVEncoder(ClientContext &context, const string &encoding_name, idx_t buffer_size);
 	//! Main encode function, it reads the file into an encoded buffer and converts it to the output buffer
@@ -75,8 +78,6 @@ private:
 	unique_ptr<Expression> decode_expression;
 	unique_ptr<ExpressionExecutor> decode_executor;
 	DataChunk decode_input;
-	idx_t lookup_bytes = 1;
-	idx_t max_output_bytes = 1;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;

@@ -51,7 +51,7 @@ static optional_ptr<ScalarFunctionCatalogEntry> FindEncoding(ClientContext &cont
 	    OnEntryNotFound::RETURN_NULL);
 }
 
-//! The names of all encodings: scalar functions that carry encoding info
+//! The names of all encodings: the scalar functions in the encodings schema
 static vector<string> GetLoadedEncodings(ClientContext &context) {
 	vector<string> result {"utf-8"};
 	auto &catalog = Catalog::GetSystemCatalog(context);
@@ -60,17 +60,7 @@ static vector<string> GetLoadedEncodings(ClientContext &context) {
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			return;
 		}
-		auto &functions = entry.Cast<ScalarFunctionCatalogEntry>().functions;
-		for (idx_t i = 0; i < functions.Size(); i++) {
-			auto &function = functions.GetFunctionByOffset(i);
-			if (function->HasExtraFunctionInfo()) {
-				auto info = dynamic_cast<EncodingFunctionInfo *>(&function->GetExtraFunctionInfo());
-				if (info) {
-					result.push_back(info->encoding_name);
-					break;
-				}
-			}
-		}
+		result.push_back(entry.name.GetIdentifierName());
 	});
 	std::sort(result.begin(), result.end());
 	return result;
@@ -114,12 +104,9 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	decode_expression = function->Bind(context_p, std::move(children));
 	decode_executor = make_uniq<ExpressionExecutor>(context_p, *decode_expression);
 	decode_input.Initialize(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN}, 1);
-	auto &info = function->GetExtraFunctionInfo().Cast<EncodingFunctionInfo>();
-	lookup_bytes = info.lookup_bytes;
-	max_output_bytes = info.max_output_bytes;
 
-	// The encoded buffer is even for the two byte lookup of utf-16, and fits a full lookup plus the probe byte
-	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, 2 * lookup_bytes + 2));
+	// The encoded buffer is even for utf-16, and fits any character plus the probe byte
+	encoded_buffer.Initialize(MaxValue<idx_t>(buffer_size - buffer_size % 2, MIN_ENCODED_BUFFER_SIZE));
 }
 
 void CSVEncoder::Reset() {
@@ -150,11 +137,17 @@ idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t outp
 	string decoded;
 	while (encoded_buffer.HasDataToRead() && output_pos < output_size) {
 		const idx_t available = encoded_buffer.GetSize() - encoded_buffer.cur_pos;
-		// Decode as much as is guaranteed to fit in the output, but always enough to complete one character
-		idx_t slice = MaxValue<idx_t>((output_size - output_pos) / max_output_bytes, lookup_bytes);
-		slice = MinValue<idx_t>(slice, available);
-		const bool is_last = encoded_buffer.last_buffer && slice == available;
-		const idx_t consumed = Decode(encoded_buffer.Ptr() + encoded_buffer.cur_pos, slice, is_last, decoded);
+		// Decode as much input as there is room in the output, extended until it holds a complete character
+		idx_t slice = MinValue<idx_t>(output_size - output_pos, available);
+		idx_t consumed = 0;
+		while (true) {
+			const bool is_last = encoded_buffer.last_buffer && slice == available;
+			consumed = Decode(encoded_buffer.Ptr() + encoded_buffer.cur_pos, slice, is_last, decoded);
+			if (consumed != 0 || slice == available) {
+				break;
+			}
+			slice = MinValue<idx_t>(slice * 2, available);
+		}
 		if (consumed == 0) {
 			// An incomplete character at the end of the buffer
 			break;

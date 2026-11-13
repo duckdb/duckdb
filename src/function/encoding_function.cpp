@@ -24,11 +24,9 @@ LogicalType EncodingFunction::StreamResultType() {
 	return LogicalType::STRUCT(std::move(children));
 }
 
-ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, idx_t lookup_bytes,
-                                           idx_t max_output_bytes) {
-	D_ASSERT(decode && lookup_bytes > 0 && max_output_bytes > 0);
+ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t decode, idx_t max_output_bytes) {
+	D_ASSERT(decode && max_output_bytes > 0);
 	const Identifier name(FunctionName(encoding_name));
-	auto info = make_shared_ptr<EncodingFunctionInfo>(StringUtil::Lower(encoding_name), lookup_bytes, max_output_bytes);
 
 	ScalarFunction decode_all(name, vector<LogicalType> {LogicalType::BLOB}, LogicalType::VARCHAR,
 	                          [decode, max_output_bytes](DataChunk &args, ExpressionState &, Vector &result) {
@@ -50,7 +48,6 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 		                          }
 	                          });
 	decode_all.SetFallible();
-	decode_all.SetExtraFunctionInfo(info);
 
 	ScalarFunction decode_stream(
 	    name, vector<LogicalType> {LogicalType::BLOB, LogicalType::BOOLEAN}, StreamResultType(),
@@ -77,7 +74,6 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 		    }
 	    });
 	decode_stream.SetFallible();
-	decode_stream.SetExtraFunctionInfo(info);
 
 	ScalarFunctionSet set(name);
 	set.AddFunction(std::move(decode_all));

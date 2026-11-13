@@ -21,21 +21,6 @@ namespace duckdb {
 typedef void (*decode_t)(const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
                          idx_t &written);
 
-//! Describes an encoding scalar function, which is how the CSV reader finds the encodings it can decode.
-struct EncodingFunctionInfo : public ScalarFunctionInfo {
-	EncodingFunctionInfo(string encoding_name_p, idx_t lookup_bytes_p, idx_t max_output_bytes_p)
-	    : encoding_name(std::move(encoding_name_p)), lookup_bytes(lookup_bytes_p),
-	      max_output_bytes(max_output_bytes_p) {
-	}
-
-	//! The name of the encoding, as passed to e.g. read_csv(encoding := ...)
-	string encoding_name;
-	//! The maximum number of input bytes that make up a single character
-	idx_t lookup_bytes;
-	//! The maximum number of UTF-8 bytes produced for a single input byte
-	idx_t max_output_bytes;
-};
-
 //! An encoding is a set of scalar functions named after the encoding in the system.encodings schema:
 //!   system.encodings."<name>"(BLOB) -> VARCHAR                  decodes the complete input
 //!   system.encodings."<name>"(BLOB, BOOLEAN) -> STRUCT(decoded VARCHAR, consumed BIGINT)
@@ -50,8 +35,7 @@ struct EncodingFunction {
 	//! The type returned by the streaming overload
 	DUCKDB_API static LogicalType StreamResultType();
 	//! Creates the scalar functions for an encoding that is decoded by the given function
-	DUCKDB_API static ScalarFunctionSet Create(const string &encoding_name, decode_t decode, idx_t lookup_bytes,
-	                                           idx_t max_output_bytes);
+	DUCKDB_API static ScalarFunctionSet Create(const string &encoding_name, decode_t decode, idx_t max_output_bytes);
 };
 
 } // namespace duckdb
