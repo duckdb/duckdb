@@ -74,4 +74,79 @@ Catalog Error
 query I
 SELECT count(*) FROM duckdb_functions() WHERE schema_name = 'encodings' AND function_name = 'utf-16'
 ----
-2
+3
+
+# encode and decode take the name of an encoding
+query I
+SELECT encode('café', 'latin-1')
+----
+caf\xE9
+
+query I
+SELECT decode('caf\xe9'::BLOB, 'latin-1')
+----
+café
+
+query I
+SELECT decode(encode('aé😀', 'utf-16'), 'UTF-16')
+----
+aé😀
+
+query I
+SELECT encode('aé', 'utf-16')
+----
+a\x00\xE9\x00
+
+query I
+SELECT decode('caf\xc3\xa9'::BLOB, 'utf-8')
+----
+café
+
+query I
+SELECT encode('café', 'utf-8')
+----
+caf\xC3\xA9
+
+query I
+SELECT encode(NULL, 'latin-1') IS NULL
+----
+true
+
+query II
+SELECT s, decode(encode(s, 'latin-1'), 'latin-1') = s FROM (VALUES ('abc'), ('ÿ'), ('')) t(s) ORDER BY s
+----
+(empty)	true
+abc	true
+ÿ	true
+
+# the system.encodings functions are overloaded for both directions
+query I
+SELECT system.encodings."latin-1"('é')
+----
+\xE9
+
+# the error options of decode still work
+query I
+SELECT decode('a\xff'::BLOB, 'replace')
+----
+a?
+
+statement error
+SELECT encode('€', 'latin-1')
+----
+Could not encode the character
+
+statement error
+SELECT decode('\x85'::BLOB, 'latin-1')
+----
+File is not latin-1 encoded
+
+statement error
+SELECT encode('a', 'no-such-encoding')
+----
+Unknown encoding "no-such-encoding"
+
+statement error
+SELECT decode('a'::BLOB, 'no-such-encoding')
+----
+Unknown encoding "no-such-encoding"
