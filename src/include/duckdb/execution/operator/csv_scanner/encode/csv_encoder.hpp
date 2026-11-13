@@ -77,6 +77,9 @@ private:
 	DataChunk decode_input;
 	//! The maximum number of input bytes that make up one character
 	idx_t minimum_input_window = 1;
+	//! The native decoder of the encoding (if known), called directly instead of through the executor
+	decode_t direct_decode;
+	idx_t max_output_bytes = 1;
 	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
 	char pass_on_byte;
 	bool has_pass_on_byte = false;

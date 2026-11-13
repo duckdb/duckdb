@@ -74,6 +74,13 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	decode_executor = make_uniq<ExpressionExecutor>(context_p, *decode_expression);
 	decode_input.Initialize(context_p, {LogicalType::BLOB, LogicalType::BOOLEAN}, 1);
 
+	if (function->HasExtraFunctionInfo()) {
+		auto info = dynamic_cast<EncodingFunctionInfo *>(&function->GetExtraFunctionInfo());
+		if (info) {
+			direct_decode = info->decode;
+			max_output_bytes = info->max_output_bytes;
+		}
+	}
 	auto window = function->GetProperties().GetProperty(EncodingFunction::MINIMUM_INPUT_WINDOW_PROPERTY);
 	if (window) {
 		minimum_input_window = MaxValue<idx_t>(window->GetValue<idx_t>(), 1);
@@ -92,6 +99,14 @@ void CSVEncoder::Reset() {
 }
 
 idx_t CSVEncoder::Decode(const char *input, idx_t input_size, bool is_last, string &decoded) {
+	if (direct_decode) {
+		decoded.resize(input_size * max_output_bytes);
+		idx_t consumed = 0;
+		idx_t written = 0;
+		direct_decode(input, input_size, is_last, &decoded[0], consumed, written);
+		decoded.resize(written);
+		return consumed;
+	}
 	decode_input.Reset();
 	decode_input.SetChildCardinality(1);
 	FlatVector::GetDataMutable<string_t>(decode_input.data[0])[0] =
@@ -110,6 +125,24 @@ idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t outp
 	string decoded;
 	while (encoded_buffer.HasDataToRead() && output_pos < output_size) {
 		const idx_t available = encoded_buffer.GetSize() - encoded_buffer.cur_pos;
+		if (direct_decode) {
+			// Decode straight into the output buffer if the worst case fits
+			const idx_t fitting = MinValue<idx_t>((output_size - output_pos) / max_output_bytes, available);
+			if (fitting >= minimum_input_window || fitting == available) {
+				const bool is_last = encoded_buffer.last_buffer && fitting == available;
+				idx_t consumed = 0;
+				idx_t written = 0;
+				direct_decode(encoded_buffer.Ptr() + encoded_buffer.cur_pos, fitting, is_last,
+				              output_buffer + output_pos, consumed, written);
+				if (consumed == 0) {
+					// An incomplete character at the end of the buffer
+					break;
+				}
+				encoded_buffer.cur_pos += consumed;
+				output_pos += written;
+				continue;
+			}
+		}
 		// Decode as much input as there is room in the output, extended until it holds a complete character
 		idx_t slice = MinValue<idx_t>(MaxValue<idx_t>(output_size - output_pos, minimum_input_window), available);
 		idx_t consumed = 0;

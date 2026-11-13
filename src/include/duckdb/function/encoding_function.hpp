@@ -27,6 +27,17 @@ typedef std::function<void(const char *input, idx_t input_size, bool is_last, ch
 //! input_size * minimum_input_window bytes. Throws if the input has a character the encoding cannot represent.
 typedef std::function<void(const char *input, idx_t input_size, char *output, idx_t &written)> encode_t;
 
+//! Attached to the streaming overload so that the CSV reader can call the native decoder directly
+struct EncodingFunctionInfo : public ScalarFunctionInfo {
+	EncodingFunctionInfo(decode_t decode_p, idx_t max_output_bytes_p)
+	    : decode(std::move(decode_p)), max_output_bytes(max_output_bytes_p) {
+	}
+
+	decode_t decode;
+	//! The maximum number of UTF-8 bytes produced for a single input byte
+	idx_t max_output_bytes;
+};
+
 class ClientContext;
 class ScalarFunctionCatalogEntry;
 class Expression;
