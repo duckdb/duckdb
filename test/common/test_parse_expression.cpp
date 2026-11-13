@@ -92,6 +92,8 @@ TEST_CASE("Parser list helpers reject a second statement or query node", "[parse
 	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
 	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseExpressionList("1=1 UNION SELECT 42"),
 	                    Catch::Matchers::Contains("Expected a single SELECT node"));
+	REQUIRE_THROWS_WITH(Parser::GetBuiltinParser().ParseGroupByList("i; SELECT 42"),
+	                    Catch::Matchers::Contains("Expected a single SELECT statement"));
 	duckdb::vector<Identifier> update_columns;
 	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> update_expressions;
 	REQUIRE_THROWS_WITH(
