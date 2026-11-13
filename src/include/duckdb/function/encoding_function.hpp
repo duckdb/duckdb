@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -35,15 +36,17 @@ struct EncodingFunctionInfo : public ScalarFunctionInfo {
 	idx_t max_output_bytes;
 };
 
-//! An encoding is a set of scalar functions in the system catalog:
-//!   decode_<name>(BLOB) -> VARCHAR                     decodes the complete input
-//!   decode_<name>(BLOB, BOOLEAN) -> STRUCT(decoded VARCHAR, consumed BIGINT)
-//!                                                      decodes a prefix of a stream, see decode_t
+//! An encoding is a set of scalar functions named after the encoding in the system.encodings schema:
+//!   system.encodings."<name>"(BLOB) -> VARCHAR                  decodes the complete input
+//!   system.encodings."<name>"(BLOB, BOOLEAN) -> STRUCT(decoded VARCHAR, consumed BIGINT)
+//!                                                               decodes a prefix of a stream, see decode_t
 struct EncodingFunction {
-	static constexpr const char *PREFIX = "decode_";
+	static constexpr const char *SCHEMA = "encodings";
 
 	//! The name of the scalar function that decodes the encoding
 	DUCKDB_API static string FunctionName(const string &encoding_name);
+	//! Registers the functions of an encoding in the system.encodings schema
+	DUCKDB_API static void SetSchema(CreateFunctionInfo &info);
 	//! The type returned by the streaming overload
 	DUCKDB_API static LogicalType StreamResultType();
 	//! Creates the scalar functions for an encoding that is decoded by the given function

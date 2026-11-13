@@ -9,7 +9,7 @@ struct DefaultSchema {
 	const char *name;
 };
 
-static const DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
+static const DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {"encodings"}, {nullptr}};
 
 bool DefaultSchemaGenerator::IsDefaultSchema(const Identifier &input_schema) {
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {

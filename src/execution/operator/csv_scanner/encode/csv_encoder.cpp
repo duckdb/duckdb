@@ -46,7 +46,7 @@ static optional_ptr<ScalarFunctionCatalogEntry> FindEncoding(ClientContext &cont
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	return catalog.GetEntry<ScalarFunctionCatalogEntry>(
 	    context,
-	    QualifiedName(catalog.GetName(), Identifier::DefaultSchema(),
+	    QualifiedName(catalog.GetName(), Identifier(EncodingFunction::SCHEMA),
 	                  Identifier(EncodingFunction::FunctionName(encoding_name))),
 	    OnEntryNotFound::RETURN_NULL);
 }
@@ -55,7 +55,7 @@ static optional_ptr<ScalarFunctionCatalogEntry> FindEncoding(ClientContext &cont
 static vector<string> GetLoadedEncodings(ClientContext &context) {
 	vector<string> result {"utf-8"};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &schema = catalog.GetSchema(context, Identifier::DefaultSchema());
+	auto &schema = catalog.GetSchema(context, Identifier(EncodingFunction::SCHEMA));
 	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			return;

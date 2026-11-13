@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
 
@@ -85,8 +86,13 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 } // namespace
 
 void BuiltinFunctions::RegisterEncodingFunctions() {
-	AddFunction(EncodingFunction::Create("latin-1", DecodeLatin1ToUTF8, 1, 2));
-	AddFunction(EncodingFunction::Create("utf-16", DecodeUTF16ToUTF8, 4, 2));
+	for (auto &set : {EncodingFunction::Create("latin-1", DecodeLatin1ToUTF8, 1, 2),
+	                  EncodingFunction::Create("utf-16", DecodeUTF16ToUTF8, 4, 2)}) {
+		CreateScalarFunctionInfo info(set);
+		EncodingFunction::SetSchema(info);
+		info.internal = true;
+		catalog.CreateFunction(transaction, info);
+	}
 }
 
 } // namespace duckdb

@@ -9,7 +9,12 @@
 namespace duckdb {
 
 string EncodingFunction::FunctionName(const string &encoding_name) {
-	return PREFIX + StringUtil::Lower(encoding_name);
+	return StringUtil::Lower(encoding_name);
+}
+
+void EncodingFunction::SetSchema(CreateFunctionInfo &info) {
+	info.SetQualifiedName(
+	    QualifiedName(Identifier::InvalidCatalog(), Identifier(SCHEMA), info.GetQualifiedName().Name()));
 }
 
 LogicalType EncodingFunction::StreamResultType() {
