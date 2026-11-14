@@ -69,6 +69,10 @@ public:
 	void SetActiveCheckpoint(idx_t checkpoint_id);
 	void ResetActiveCheckpoint();
 	void SetStartingCheckpointContext(optional_ptr<ClientContext> context);
+	VisibilityBound GetUncheckpointedVisibilityBound() const {
+		auto id = uncheckpointed_commit_id.load();
+		return id == 0 ? VisibilityBound::AllCommitted() : VisibilityBound::Before(id);
+	}
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -175,7 +179,7 @@ private:
 	//! that are not yet durable
 	VisibilityBound durable_bound;
 	//! Commit that skipped the WAL and is not durable until its automatic checkpoint completes
-	transaction_t uncheckpointed_commit_id = 0;
+	atomic<transaction_t> uncheckpointed_commit_id = {0};
 	idx_t uncheckpointed_catalog_version = DConstants::INVALID_INDEX;
 	//! Context starting the checkpoint transaction (which must observe uncheckpointed_commit_id)
 	optional_ptr<ClientContext> starting_checkpoint_context;

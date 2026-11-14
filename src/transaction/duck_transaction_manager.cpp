@@ -320,9 +320,10 @@ DuckTransactionManager::GetDurableSnapshot(optional_ptr<ClientContext> context) 
 		durable.visibility_bound = VisibilityBound::Before(first_unsynced->commit_id);
 		durable.catalog_version = first_unsynced->catalog_version_before_commit;
 	}
-	if (uncheckpointed_commit_id != 0 && (!context || context != starting_checkpoint_context)) {
+	auto uncheckpointed_id = uncheckpointed_commit_id.load();
+	if (uncheckpointed_id != 0 && (!context || context != starting_checkpoint_context)) {
 		durable.visibility_bound =
-		    VisibilityBound::Min(durable.visibility_bound, VisibilityBound::Before(uncheckpointed_commit_id));
+		    VisibilityBound::Min(durable.visibility_bound, VisibilityBound::Before(uncheckpointed_id));
 		durable.catalog_version = MinValue<idx_t>(durable.catalog_version, uncheckpointed_catalog_version);
 	}
 	return durable;
@@ -496,6 +497,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			transaction.catalog_version = ++last_committed_version;
 		}
 	}
+	bool is_uncheckpointed_commit =
+	    !error.HasError() && !wal_written && skip_wal_write_due_to_checkpoint && should_write_to_wal;
 	OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
 	struct UncheckpointedCommitGuard {
@@ -522,8 +525,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			if (!active) {
 				return;
 			}
-			if (advance_durable_bound && tm.uncheckpointed_commit_id >= tm.durable_bound) {
-				tm.durable_bound = VisibilityBound::Through(tm.uncheckpointed_commit_id);
+			auto commit_id = tm.uncheckpointed_commit_id.load();
+			if (advance_durable_bound && commit_id >= tm.durable_bound) {
+				tm.durable_bound = VisibilityBound::Through(commit_id);
 			}
 			tm.uncheckpointed_commit_id = 0;
 			tm.uncheckpointed_catalog_version = DConstants::INVALID_INDEX;
@@ -533,7 +537,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		DuckTransactionManager &tm;
 		mutex &t_lock;
 		bool active;
-	} uncheckpointed_guard(*this, transaction_lock, uncheckpointed_commit_id != 0);
+	} uncheckpointed_guard(*this, transaction_lock, is_uncheckpointed_commit);
 
 	if (!checkpoint_decision.can_checkpoint && lock) {
 		// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
