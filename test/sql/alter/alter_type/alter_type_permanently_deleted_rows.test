@@ -1,0 +1,131 @@
+# name: test/sql/alter/alter_type/alter_type_permanently_deleted_rows.test
+# description: ALTER TYPE ignores only permanently deleted row slots during conversion
+# group: [alter_type]
+
+statement ok
+CREATE TABLE t(v VARCHAR);
+INSERT INTO t VALUES ('1'), ('2'), ('x');
+DELETE FROM t WHERE v = 'x';
+ALTER TABLE t ALTER COLUMN v SET DATA TYPE INTEGER;
+
+query II
+SELECT count(*), sum(v) FROM t;
+----
+2	3
+
+statement ok
+ATTACH '{TEST_DIR}/alter_type_permanently_deleted.db' AS persist;
+CREATE TABLE persist.checkpointed(v VARCHAR);
+INSERT INTO persist.checkpointed VALUES ('1'), ('x');
+DELETE FROM persist.checkpointed WHERE v = 'x';
+CHECKPOINT persist;
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/alter_type_permanently_deleted.db' AS persist;
+ALTER TABLE persist.checkpointed ALTER COLUMN v SET DATA TYPE INTEGER;
+
+query II
+SELECT count(*), sum(v) FROM persist.checkpointed;
+----
+1	1
+
+# An older active snapshot can still see the deleted value, so ALTER must cast it.
+statement ok con1
+CREATE TABLE old_snapshot(v VARCHAR);
+
+statement ok con1
+INSERT INTO old_snapshot VALUES ('1'), ('x');
+
+statement ok con2
+BEGIN TRANSACTION;
+
+query I con2
+SELECT count(*) FROM old_snapshot;
+----
+2
+
+statement ok con1
+DELETE FROM old_snapshot WHERE v = 'x';
+
+statement error con1
+ALTER TABLE old_snapshot ALTER COLUMN v SET DATA TYPE INTEGER;
+----
+Conversion Error: Could not convert string 'x' to INT32
+
+statement ok con2
+COMMIT;
+
+statement ok con1
+ALTER TABLE old_snapshot ALTER COLUMN v SET DATA TYPE INTEGER;
+
+query I con1
+SELECT sum(v) FROM old_snapshot;
+----
+1
+
+# A delete in the ALTER transaction is not permanently deleted until commit.
+statement ok
+CREATE TABLE own_delete(v VARCHAR);
+INSERT INTO own_delete VALUES ('1'), ('x');
+BEGIN TRANSACTION;
+DELETE FROM own_delete WHERE v = 'x';
+
+statement error
+ALTER TABLE own_delete ALTER COLUMN v SET DATA TYPE INTEGER;
+----
+Conversion Error: Could not convert string 'x' to INT32
+
+statement ok
+ROLLBACK;
+
+
+# First vector is fully deleted, second vector has a partial delete. Both keep row slots aligned.
+statement ok
+CREATE TABLE vectors AS
+SELECT CASE WHEN i < 2048 THEN 'bad' ELSE i::VARCHAR END AS v
+FROM range(130000) r(i);
+DELETE FROM vectors WHERE v = 'bad' OR v = '2048';
+ALTER TABLE vectors ALTER COLUMN v SET DATA TYPE INTEGER;
+
+query II
+SELECT count(*), sum(v) FROM vectors;
+----
+127951	8447836824
+
+# USING expressions must still produce NULL in dead physical slots.
+statement ok
+CREATE TABLE nested(v VARCHAR);
+INSERT INTO nested VALUES ('1'), ('bad');
+DELETE FROM nested WHERE v = 'bad';
+ALTER TABLE nested ALTER COLUMN v SET DATA TYPE STRUCT(x INTEGER) USING {'x': coalesce(try_cast(v AS INTEGER), 7)};
+
+query I
+SELECT sum(v.x) FROM nested;
+----
+1
+
+# VARIANT and UNION casts use specialized null handling paths.
+statement ok
+CREATE TABLE variant_target(v VARCHAR);
+INSERT INTO variant_target VALUES ('1'), ('bad');
+DELETE FROM variant_target WHERE v = 'bad';
+ALTER TABLE variant_target ALTER COLUMN v SET DATA TYPE VARIANT USING v::VARIANT;
+
+query I
+SELECT count(*) FROM variant_target;
+----
+1
+
+statement ok
+CREATE TYPE union_target AS UNION(i INTEGER, s VARCHAR);
+CREATE TABLE union_source(v VARCHAR);
+INSERT INTO union_source VALUES ('1'), ('bad');
+DELETE FROM union_source WHERE v = 'bad';
+ALTER TABLE union_source ALTER COLUMN v SET DATA TYPE union_target USING v::union_target;
+
+query I
+SELECT count(*) FROM union_source;
+----
+1

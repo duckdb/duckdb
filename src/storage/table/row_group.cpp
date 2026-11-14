@@ -478,22 +478,61 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
+	DataChunk owned_scan_chunk;
+	owned_scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_chunk.GetTypes());
 	Vector hashes(LogicalType::HASH);
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
+	TransactionData permanent_delete_transaction(MAX_TRANSACTION_ID, transaction_manager.LowestVisibilityBound());
+	ScanOptions permanent_delete_options(permanent_delete_transaction);
+	permanent_delete_options.insert_type = InsertedScanType::ALL_ROWS;
+	permanent_delete_options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 	while (true) {
+		auto vector_index = scan_state.vector_index;
 		// scan the table
 		scan_chunk.Reset();
 		Scan(options, scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
-		// execute the expression
+		auto physical_count = scan_chunk.size();
+		SelectionVector preserved_sel(0ULL, physical_count);
+		auto preserved_count = GetSelVector(permanent_delete_options, vector_index, preserved_sel, physical_count);
+
 		append_chunk.Reset();
-		executor.ExecuteExpression(scan_chunk, append_vector);
-		changed_stats.UpdateDistinctStatistics(append_vector, scan_chunk.size(), hashes);
-		column_data->Append(append_state, append_vector, scan_chunk.size());
+		if (preserved_count == physical_count) {
+			executor.ExecuteExpression(scan_chunk, append_vector);
+		} else {
+			// Copy the scan result before masking it: scans can reference shared column storage.
+			owned_scan_chunk.Reset();
+			scan_chunk.Copy(owned_scan_chunk);
+			owned_scan_chunk.SetChildCardinality(physical_count);
+			auto preserved_idx = idx_t(0);
+			for (idx_t i = 0; i < physical_count; i++) {
+				if (preserved_idx < preserved_count && preserved_sel.get_index(preserved_idx) == i) {
+					preserved_idx++;
+					continue;
+				}
+				for (auto &input : owned_scan_chunk.data) {
+					FlatVector::SetNull(input, i, true);
+				}
+			}
+
+			executor.ExecuteExpression(owned_scan_chunk, append_vector);
+			append_vector.Flatten();
+			preserved_idx = 0;
+			for (idx_t i = 0; i < physical_count; i++) {
+				if (preserved_idx < preserved_count && preserved_sel.get_index(preserved_idx) == i) {
+					preserved_idx++;
+					continue;
+				}
+				FlatVector::SetNull(append_vector, i, true);
+			}
+		}
+		changed_stats.UpdateDistinctStatistics(append_vector, physical_count, hashes);
+		column_data->Append(append_state, append_vector, physical_count);
 	}
 	column_data->FinalizeAppend(nullptr, append_state);
 
