@@ -498,7 +498,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 			break;
 		}
 		auto physical_count = scan_chunk.size();
-		SelectionVector preserved_sel(0ULL, physical_count);
+		auto preserved_sel = SelectionVector::Incremental(physical_count);
 		auto preserved_count = GetSelVector(permanent_delete_options, vector_index, preserved_sel, physical_count);
 
 		append_chunk.Reset();
