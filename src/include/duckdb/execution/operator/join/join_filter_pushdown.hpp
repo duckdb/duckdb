@@ -35,6 +35,22 @@ enum class JoinFilterPushdownMode : uint8_t {
 };
 
 struct JoinFilterPushdownColumn {
+	JoinFilterPushdownColumn() = default;
+	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other)
+	    : join_filter_idx(other.join_filter_idx), probe_column_index(other.probe_column_index),
+	      storage_type(other.storage_type), mode(other.mode),
+	      input_expression(other.input_expression ? other.input_expression->Copy() : nullptr) {
+	}
+	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) {
+		if (this != &other) {
+			JoinFilterPushdownColumn copy(other);
+			*this = std::move(copy);
+		}
+		return *this;
+	}
+	JoinFilterPushdownColumn(JoinFilterPushdownColumn &&other) = default;
+	JoinFilterPushdownColumn &operator=(JoinFilterPushdownColumn &&other) = default;
+
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;
 	//! The probe column index to which this filter should be applied
@@ -43,8 +59,8 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
-	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
-	vector<RuntimeFilterCastStep> runtime_filter_casts;
+	//! Filter input over BoundReferenceExpression(0) in the existing scan projection's type.
+	unique_ptr<Expression> input_expression;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
@@ -55,6 +71,8 @@ struct DeferredRuntimeFilterPushdown {
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	JoinFilterPushdownColumn column;
 	ProjectionIndex filter_col_idx;
+	//! The key column of the hash table the filter is built from
+	idx_t key_idx = 0;
 };
 
 struct JoinFilterGlobalState {
@@ -121,25 +139,24 @@ public:
 	                                      optional_ptr<JoinFilterGlobalState> gstate = nullptr) const;
 
 private:
+	struct FilterFinalizer;
+
 	bool PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
 	                  const JoinFilterPushdownColumn &column, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
 	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
 	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
-	                        ProjectionIndex filter_col_idx, JoinFilterGlobalState &gstate) const;
+	                        ProjectionIndex filter_col_idx, idx_t key_idx, JoinFilterGlobalState &gstate) const;
 	bool TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
 	                                  const PhysicalOperator &op, const JoinFilterPushdownColumn &column,
-	                                  ProjectionIndex filter_col_idx, const Value &min_val, const Value &max_val,
-	                                  idx_t max_bits, JoinFilterGlobalState &gstate) const;
+	                                  ProjectionIndex filter_col_idx, idx_t key_idx, const Value &min_val,
+	                                  const Value &max_val, idx_t max_bits, JoinFilterGlobalState &gstate) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
 	                       const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;
-	bool CanUsePrefixRangeFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
-	                             const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
-	                             const ExpressionType &cmp) const;
 };
 
 } // namespace duckdb

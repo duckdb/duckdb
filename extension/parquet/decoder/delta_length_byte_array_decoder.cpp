@@ -27,51 +27,25 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	}
 	// read the binary packed lengths
 	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
-	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
+	auto &buffer_manager = reader.reader.buffer_manager;
+	// Resize (inside ReadDbpData) must run unpinned so an evicted buffer is reallocated instead of reloaded
+	ResizeableBuffer::SizedBacking backing {reader.GetAllocator(), buffer_manager};
+	DeltaByteArrayDecoder::ReadDbpData(backing, block, length_buffer, byte_array_count);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, buffer_manager);
 
 	// Verify that the sum of DBP string lengths match up with the available string data
 	idx_t total_string_length = 0;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 	for (idx_t i = 0; i < byte_array_count; i++) {
 		total_string_length += length_data[i];
 	}
-	block.available(total_string_length);
+	block.Available(total_string_length);
 
 	length_idx = 0;
 }
 
 bool IsContinuationByte(uint8_t b) {
 	return (b & 0xC0) == 0x80;
-}
-
-//! Whether a string starts or ends in the middle of a multi-byte character. These are the only strings that can be
-//! invalid on their own when the batch they are part of is valid UTF-8
-bool CutsUtf8Character(const char *data, uint32_t len) {
-	if (len == 0) {
-		return false;
-	}
-	const auto bytes = const_data_ptr_cast(data);
-	if (IsContinuationByte(bytes[0])) {
-		return true;
-	}
-	// find the first byte of the last character - a character is at most 4 bytes
-	idx_t last_start = len - 1;
-	while (last_start > 0 && len - last_start < 4 && IsContinuationByte(bytes[last_start])) {
-		last_start--;
-	}
-	const auto first_byte = bytes[last_start];
-	idx_t char_length;
-	if (first_byte < 0x80) {
-		char_length = 1;
-	} else if (first_byte >= 0xF0) {
-		char_length = 4;
-	} else if (first_byte >= 0xE0) {
-		char_length = 3;
-	} else {
-		char_length = 2;
-	}
-	return len - last_start != char_length;
 }
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
@@ -87,7 +61,8 @@ template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -108,7 +83,8 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	    reader.Type().IsJSONType() || reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option !=
 	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 
-	const auto start_ptr = block.ptr;
+	const auto start_ptr = block.GetCurrentLoc();
+	auto current_ptr = start_ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
@@ -125,24 +101,28 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 				    length_idx, byte_array_count);
 			}
 		}
-		const auto &str_len = length_data[length_idx++];
+		const auto str_len = length_data[length_idx++];
 
 		if (needs_full_individual_validation) {
-			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			auto verified = string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
-			if (CutsUtf8Character(char_ptr_cast(block.ptr), str_len)) {
-				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			// Batch validation below catches incomplete trailing characters. Within a valid batch, a character
+			// can only cross a string boundary if the next nonempty string starts with a continuation byte.
+			if (str_len > 0 && IsContinuationByte(current_ptr[0])) {
+				string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			}
-			result_data.WriteStringRef(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteStringRef(string_t(char_ptr_cast(current_ptr), str_len));
 		}
-		block.unsafe_inc(str_len);
+		current_ptr += str_len;
 	}
 
+	block.UnsafeInc(NumericCast<idx_t>(current_ptr - start_ptr));
 	if (!needs_full_individual_validation) {
-		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
+		string_column_reader.VerifyString(char_ptr_cast(start_ptr),
+		                                  NumericCast<uint32_t>(block.GetCurrentLoc() - start_ptr));
 	}
-	StringColumnReader::ReferenceBlock(result, block_ref);
+	StringColumnReader::ReferenceBlock(result, block_ref, reader.reader.buffer_manager);
 }
 
 void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
@@ -156,7 +136,8 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
-	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	ResizeableBuffer::PinGuard pin_guard(length_buffer, reader.reader.buffer_manager);
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.GetCurrentLoc());
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -183,7 +164,7 @@ void DeltaLengthByteArrayDecoder::SkipInternal(uint8_t *defines, idx_t skip_coun
 		}
 		skip_bytes += length_data[length_idx++];
 	}
-	block.inc(skip_bytes);
+	block.Inc(skip_bytes);
 }
 
 } // namespace duckdb
