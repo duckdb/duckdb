@@ -79,13 +79,13 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 		    for (auto idx = build_list.offset; idx < build_list.offset + build_list.length; idx++) {
 			    const auto entry_idx = build_format->sel->get_index(idx);
 			    if (build_format->validity.RowIsValid(entry_idx)) {
-				    set.insert(build_data[entry_idx]);
+				    set.insert(build_data[idx]);
 			    }
 		    }
 		    // Probe the set
 		    for (auto idx = probe_list.offset; idx < probe_list.offset + probe_list.length; idx++) {
 			    const auto entry_idx = probe_format->sel->get_index(idx);
-			    if (probe_format->validity.RowIsValid(entry_idx) && set.find(probe_data[entry_idx]) != set.end()) {
+			    if (probe_format->validity.RowIsValid(entry_idx) && set.find(probe_data[idx]) != set.end()) {
 				    return true;
 			    }
 		    }
@@ -148,14 +148,14 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 		    for (auto idx = build_list.offset; idx < build_list.offset + build_list.length; idx++) {
 			    const auto entry_idx = build_format.sel->get_index(idx);
 			    if (build_format.validity.RowIsValid(entry_idx)) {
-				    set.insert(build_data[entry_idx]);
+				    set.insert(build_data[idx]);
 			    }
 		    }
 
 		    // Probe the set
 		    for (auto idx = probe_list.offset; idx < probe_list.offset + probe_list.length; idx++) {
 			    const auto entry_idx = probe_format.sel->get_index(idx);
-			    if (probe_format.validity.RowIsValid(entry_idx) && set.find(probe_data[entry_idx]) == set.end()) {
+			    if (probe_format.validity.RowIsValid(entry_idx) && set.find(probe_data[idx]) == set.end()) {
 				    return false;
 			    }
 		    }
