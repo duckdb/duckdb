@@ -32,6 +32,7 @@
 #include "parquet_types.h"
 #include "parquet_geometry.hpp"
 #include "writer/parquet_cdc_chunker.hpp"
+#include "writer/parquet_cdc_scan_order.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "duckdb/execution/expression_executor.hpp"
@@ -231,6 +232,9 @@ public:
 	~ParquetWriter();
 
 public:
+	//! Prepares a row group for writing. With content-defined chunking, 'cdc_boundaries' holds the page cuts
+	//! taken by ScanRowGroup; without them the column writers roll their own chunkers here, which is only right
+	//! when no other batch is being prepared at the same time - see ParquetWritePrepareBatch.
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result,
 	                     unique_ptr<ParquetWriteTransformData> &transform_data,
 	                     const ParquetCdcBoundaries *cdc_boundaries = nullptr);
@@ -238,10 +242,13 @@ public:
 	//! Prepares and writes a row group. The copy operators flush one batch at a time per file, which
 	//! content-defined chunking relies on: its chunkers carry state from one row group to the next
 	void Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data);
-	//! Rolls the content-defined chunker over a row group's values in file order, writing nothing, and
-	//! returns the boundaries that PrepareRowGroup will then cut pages at. The chunker is the only state
-	//! that needs file order, so the copy operator runs this scan in batch order while prepares run concurrently.
-	unique_ptr<ParquetCdcBoundaries> ComputeCdcBoundaries(ColumnDataCollection &buffer);
+	//! Rolls the content-defined chunkers over a row group's values in file order, writing nothing, and returns
+	//! the page boundaries that PrepareRowGroup will then cut at. This is what lets several batches be prepared
+	//! at once: the chunkers are the only state that needs file order, so the scan takes them one batch at a
+	//! time (see ParquetCdcScanOrder) while the prepares that read the result run concurrently. 'batch_index' is
+	//! the batch's position in the file, from the copy operator; the caller must not ask for a batch out of
+	//! order, and must not skip one.
+	unique_ptr<ParquetCdcBoundaries> ScanRowGroup(ColumnDataCollection &buffer, optional_idx batch_index);
 	void Finalize();
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type,
@@ -343,6 +350,9 @@ public:
 
 private:
 	void GatherWrittenStatistics();
+	//! The work ScanRowGroup does once it holds the scan turn: the chunkers roll over every value, nothing is
+	//! written, and the cut positions come back per column per chunk
+	unique_ptr<ParquetCdcBoundaries> ComputeCdcBoundaries(ColumnDataCollection &buffer);
 	void InitializeColumnOrders(idx_t unique_columns);
 	void InitializeStatsUnifiers();
 	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);
@@ -366,6 +376,8 @@ private:
 	std::mutex lock;
 
 	vector<unique_ptr<ColumnWriter>> column_writers;
+	//! Which batch may take content-defined page cuts next, so the chunkers see values in file order
+	ParquetCdcScanOrder cdc_scan_order;
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 	vector<ParquetBloomFilterEntry> bloom_filters;

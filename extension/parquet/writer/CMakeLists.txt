@@ -6,6 +6,7 @@ add_library_unity(
   decimal_column_writer.cpp
   enum_column_writer.cpp
   list_column_writer.cpp
+  parquet_cdc_gear_tables.cpp
   primitive_column_writer.cpp
   struct_column_writer.cpp
   variant_column_writer.cpp)

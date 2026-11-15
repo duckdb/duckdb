@@ -4219,8 +4219,9 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 		D_ASSERT(prepare_global_state);
 	}
 
-	// Prepare the batch
-	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch))};
+	// Prepare the batch - no batch index here, this path does not track the order batches are flushed in
+	return {batch_analyzer,
+	        function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch), optional_idx())};
 }
 
 void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,

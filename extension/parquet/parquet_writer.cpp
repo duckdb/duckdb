@@ -811,6 +811,13 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	}
 }
 
+unique_ptr<ParquetCdcBoundaries> ParquetWriter::ScanRowGroup(ColumnDataCollection &buffer, optional_idx batch_index) {
+	D_ASSERT(ContentDefinedChunking());
+	// one batch at a time, in the order the file sees them in: the chunkers carry state across row groups
+	auto scan_turn = cdc_scan_order.Acquire(batch_index);
+	return ComputeCdcBoundaries(buffer);
+}
+
 unique_ptr<ParquetCdcBoundaries> ParquetWriter::ComputeCdcBoundaries(ColumnDataCollection &buffer) {
 	D_ASSERT(ContentDefinedChunking());
 	auto result = make_uniq<ParquetCdcBoundaries>();
@@ -823,6 +830,7 @@ unique_ptr<ParquetCdcBoundaries> ParquetWriter::ComputeCdcBoundaries(ColumnDataC
 		cuts.column_index = col_idx;
 		vector<column_t> column_ids = {NumericCast<column_t>(col_idx)};
 		for (auto &chunk : buffer.Chunks(column_ids)) {
+			context.InterruptCheck();
 			cuts.cuts_per_chunk.push_back(col_writer.RollCdcChunk(chunk.data[0], chunk.size()));
 		}
 		result->columns.push_back(std::move(cuts));

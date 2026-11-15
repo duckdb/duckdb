@@ -400,7 +400,7 @@ struct WriteCSVBatchData : public PreparedBatchData {
 
 unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
                                                    GlobalFunctionData &gstate,
-                                                   unique_ptr<ColumnDataCollection> collection) {
+                                                   unique_ptr<ColumnDataCollection> collection, optional_idx) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 
 	// create the cast chunk with VARCHAR types

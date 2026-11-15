@@ -444,7 +444,8 @@ static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data,
 }
 
 static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                                  unique_ptr<ColumnDataCollection> collection) -> unique_ptr<PreparedBatchData> {
+                                  unique_ptr<ColumnDataCollection> collection, optional_idx)
+    -> unique_ptr<PreparedBatchData> {
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToBatchInfo args = {};
@@ -560,7 +561,7 @@ static auto CV2CopyToSink(ExecutionContext &context, FunctionData &bind_data, Gl
 	}
 	auto batch = make_uniq<ColumnDataCollection>(context.client, input.GetTypes());
 	batch->Append(input);
-	auto prepared = CV2CopyToPrepareBatch(context.client, bind_data, gstate, std::move(batch));
+	auto prepared = CV2CopyToPrepareBatch(context.client, bind_data, gstate, std::move(batch), optional_idx());
 	// batches are never flushed concurrently for the same file
 	lock_guard<mutex> guard(gstate.Cast<CV2CopyToGlobalState>().flush_lock);
 	CV2CopyToFlushBatch(context.client, bind_data, gstate, *prepared);

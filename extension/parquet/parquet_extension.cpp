@@ -1014,54 +1014,40 @@ static void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const Phy
 	global_state.op = &op;
 }
 //===--------------------------------------------------------------------===//
-// Scan Batch
-//===--------------------------------------------------------------------===//
-//! The cuts produced by the ordered scan below; consumed by ParquetWritePrepareBatch, which the copy
-//! operator runs on this same thread immediately after the scan for the very same batch
-static thread_local unique_ptr<ParquetCdcBoundaries> tls_cdc_boundaries;
-
-//! Rolls the content-defined chunkers over this batch. The copy operator runs scan_batch callbacks one
-//! batch at a time, in batch order, so the chunker state stays in file order while the prepares
-//! themselves stay fully concurrent
-static void ParquetWriteScanBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                                  ColumnDataCollection &collection) {
-	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	if (!global_state.writer->ContentDefinedChunking()) {
-		return;
-	}
-	tls_cdc_boundaries = global_state.writer->ComputeCdcBoundaries(collection);
-}
-
-//===--------------------------------------------------------------------===//
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct ParquetWriteBatchData : public PreparedBatchData {
 	PreparedRowGroup prepared_row_group;
-	//! With content-defined chunking in an unordered copy the batch is prepared when it is flushed, in file order
-	unique_ptr<ColumnDataCollection> collection;
+	//! The page cuts this row group was prepared from. Nothing reads them once PrepareRowGroup is through,
+	//! but the column write states hold pointers into them, so they live as long as the batch does
+	unique_ptr<ParquetCdcBoundaries> cdc_boundaries;
+	//! A copy that hands out no batch indices (partitioned or non-batched output) has no file order to scan
+	//! in, so its row group is prepared at flush time instead - see ParquetWriteFlushBatch
+	unique_ptr<ColumnDataCollection> deferred_collection;
 };
 
 static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
                                                               GlobalFunctionData &gstate,
-                                                              unique_ptr<ColumnDataCollection> collection) {
+                                                              unique_ptr<ColumnDataCollection> collection,
+                                                              optional_idx batch_index) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
-	if (global_state.writer->ContentDefinedChunking()) {
-		if (tls_cdc_boundaries) {
-			// batched copy: the ordered scan handed this batch its cuts on this very thread
-			auto cdc_boundaries = std::move(tls_cdc_boundaries);
-			unique_ptr<ParquetWriteTransformData> transform_data;
-			global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data,
-			                                     cdc_boundaries.get());
-			return std::move(result);
-		}
-		// unordered copy: the chunkers can only roll in write order, so the batch is held and its row group
-		// prepared on the flushing thread instead, in ParquetWriteFlushBatch
-		result->collection = std::move(collection);
+	unique_ptr<ParquetWriteTransformData> transform_data;
+	if (!global_state.writer->ContentDefinedChunking()) {
+		global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 		return std::move(result);
 	}
-	unique_ptr<ParquetWriteTransformData> transform_data;
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
+	if (!batch_index.IsValid()) {
+		// the chunkers can only roll in the order the file is written in, so hold the batch and prepare it on
+		// the flushing thread, where that order is the one being written
+		result->deferred_collection = std::move(collection);
+		return std::move(result);
+	}
+	// the scan holds the page cuts to one batch at a time, in file order; the heavy prepare below just reads
+	// what it produced, so it runs concurrently with the other batches'
+	result->cdc_boundaries = global_state.writer->ScanRowGroup(*collection, batch_index);
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data,
+	                                     result->cdc_boundaries.get());
 	return std::move(result);
 }
 
@@ -1072,11 +1058,11 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch_p) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &batch = batch_p.Cast<ParquetWriteBatchData>();
-	if (batch.collection) {
-		// unordered content-defined copy: roll the chunkers and write, in write order, right here
+	if (batch.deferred_collection) {
+		// a copy without batch indices: roll the chunkers and write, in write order, right here
 		unique_ptr<ParquetWriteTransformData> transform_data;
-		global_state.writer->Flush(*batch.collection, transform_data);
-		batch.collection.reset();
+		global_state.writer->Flush(*batch.deferred_collection, transform_data);
+		batch.deferred_collection.reset();
 		return;
 	}
 	global_state.writer->FlushRowGroup(batch.prepared_row_group);
@@ -1285,7 +1271,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.copy_from_function = *scan_fun.functions[0];
 
 	function.prepare_batch = ParquetWritePrepareBatch;
-	function.scan_batch = ParquetWriteScanBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.file_size_bytes = ParquetWriteFileSizeBytes;
 

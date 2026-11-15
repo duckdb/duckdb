@@ -170,7 +170,7 @@ CopyFunctionExecutionMode LifecycleBatchExecutionMode(bool, bool) {
 }
 
 unique_ptr<PreparedBatchData> LifecycleCopyPrepareBatch(ClientContext &, FunctionData &, GlobalFunctionData &,
-                                                        unique_ptr<ColumnDataCollection>) {
+                                                        unique_ptr<ColumnDataCollection>, optional_idx) {
 	return make_uniq<LifecycleCopyPreparedData>();
 }
 
@@ -243,7 +243,7 @@ struct BackpressurePreparedData : PreparedBatchData {
 };
 
 unique_ptr<PreparedBatchData> BackpressurePrepare(ClientContext &, FunctionData &bind_data, GlobalFunctionData &,
-                                                  unique_ptr<ColumnDataCollection> collection) {
+                                                  unique_ptr<ColumnDataCollection> collection, optional_idx) {
 	auto &info = bind_data.Cast<LifecycleCopyBindData>().info->Cast<BackpressureCopyInfo>();
 	{
 		unique_lock<mutex> guard(info.lock);

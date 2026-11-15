@@ -129,7 +129,7 @@ struct WriteBlobPreparedBatch final : public PreparedBatchData {
 
 unique_ptr<PreparedBatchData> WriteBlobPrepareBatch(ClientContext &context, FunctionData &bind_data,
                                                     GlobalFunctionData &gstate,
-                                                    unique_ptr<ColumnDataCollection> collection) {
+                                                    unique_ptr<ColumnDataCollection> collection, optional_idx) {
 	auto result = make_uniq<WriteBlobPreparedBatch>();
 
 	for (auto &chunk : collection->Chunks()) {
