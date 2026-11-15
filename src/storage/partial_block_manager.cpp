@@ -297,6 +297,8 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 }
 
 void PartialBlockManager::ClearBlocks() {
+	// other tasks may be writing or flushing partial blocks concurrently
+	unique_lock<mutex> lock(partial_block_lock);
 	partially_filled_blocks.clear();
 }
 

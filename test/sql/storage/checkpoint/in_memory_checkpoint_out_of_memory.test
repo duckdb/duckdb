@@ -1,0 +1,45 @@
+# name: test/sql/storage/checkpoint/in_memory_checkpoint_out_of_memory.test
+# description: An in-memory checkpoint that runs out of memory reports the error instead of crashing
+# group: [checkpoint]
+
+require skip_reload
+
+# parallel checkpoint tasks share one partial block manager
+statement ok
+SET threads = 16
+
+statement ok
+SET temp_directory = ''
+
+# the error has to come from the explicit CHECKPOINT, not from an automatic one
+statement ok
+SET wal_autocheckpoint = '1TB'
+
+statement ok
+SET checkpoint_threshold = '1TB'
+
+statement ok
+SET memory_limit = '49MB'
+
+statement ok
+CREATE TABLE t (id BIGINT, s VARCHAR)
+
+# 260k rows / 3 row groups: several checkpoint tasks run in parallel
+loop i 0 13
+
+statement ok
+INSERT INTO t SELECT range, md5(range::VARCHAR) || repeat('y', 100) FROM range(20000)
+
+endloop
+
+query I
+SELECT count(*) FROM t
+----
+260000
+
+# under memory pressure either the metadata stream or a partial block allocation fails first; both have to
+# be reported. Before the fix this could segfault in PartialBlock::Flush instead
+statement error
+CHECKPOINT
+----
+<REGEX>:.*Failed to create checkpoint because of error: (could not allocate block|failed to allocate data).*

@@ -44,6 +44,7 @@ public:
 
 public:
 	//! Discard pending blocks without writing or finalizing; already flushed blocks are unaffected.
+	//! Safe to call while other threads write or flush; only drops the packable references.
 	void ClearBlocks();
 
 	//! Absorb other's pending blocks, leaving it empty on success; may flush and finalize packables.
