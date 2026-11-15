@@ -343,6 +343,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 void Planner::CreateExecutePlan(ExecuteStatement &statement) {
 	RunPreBindExtensions(context, *binder, statement);
 	auto execution = binder->ResolveExecute(statement);
+	executed_statement_type = execution.prepared->statement_type;
 	if (!execution.rebind && execution.prepared->physical_plan) {
 		auto &prepared = *execution.prepared;
 		prepared.Bind(context, execution.bind_values);

@@ -47,6 +47,8 @@ public:
 	bool reuse_prepared_plans = false;
 	//! The prepared statement whose physical plan is re-used - set instead of plan
 	shared_ptr<PreparedStatementData> reused_statement;
+	//! The type of the prepared statement that a top-level EXECUTE runs
+	StatementType executed_statement_type = StatementType::INVALID_STATEMENT;
 
 public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);

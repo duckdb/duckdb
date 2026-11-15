@@ -342,6 +342,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		D_ASSERT(logical_planner.plan || logical_planner.reused_statement ||
 		         !logical_planner.properties.bound_all_parameters);
 	}
+	if (logical_planner.executed_statement_type != StatementType::INVALID_STATEMENT) {
+		// an EXECUTE reports the type of the statement it runs
+		result->statement_type = logical_planner.executed_statement_type;
+	}
 	if (logical_planner.reused_statement) {
 		// re-use the physical plan of the prepared statement
 		result->properties = logical_planner.properties;

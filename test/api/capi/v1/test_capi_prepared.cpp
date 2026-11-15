@@ -536,6 +536,54 @@ TEST_CASE("Maintain prepared statement types", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
+TEST_CASE("A prepared statement result reports the type of the prepared statement", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t (i INTEGER)"));
+
+	struct ExpectedType {
+		const char *sql;
+		duckdb_statement_type type;
+	};
+	duckdb::vector<ExpectedType> cases {{"SELECT count(*) FROM t", DUCKDB_STATEMENT_TYPE_SELECT},
+	                                    {"INSERT INTO t VALUES (1)", DUCKDB_STATEMENT_TYPE_INSERT},
+	                                    {"UPDATE t SET i = 2", DUCKDB_STATEMENT_TYPE_UPDATE},
+	                                    {"DELETE FROM t", DUCKDB_STATEMENT_TYPE_DELETE},
+	                                    {"INSERT INTO t VALUES ($1)", DUCKDB_STATEMENT_TYPE_INSERT}};
+	for (auto &expected : cases) {
+		INFO(expected.sql);
+		CAPIPrepared prepared;
+		REQUIRE(prepared.Prepare(tester, expected.sql));
+		if (duckdb_nparams(prepared.prepared) > 0) {
+			REQUIRE(duckdb_bind_int32(prepared.prepared, 1, 3) == DuckDBSuccess);
+		}
+		REQUIRE(duckdb_prepared_statement_type(prepared.prepared) == expected.type);
+
+		auto executed = tester.QueryPrepared(prepared.prepared);
+		REQUIRE_NO_FAIL(*executed);
+		REQUIRE(duckdb_result_statement_type(executed->InternalResult()) == expected.type);
+
+		CAPIPending pending;
+		REQUIRE(pending.Pending(prepared));
+		auto via_pending = pending.Execute();
+		REQUIRE_NO_FAIL(*via_pending);
+		REQUIRE(duckdb_result_statement_type(via_pending->InternalResult()) == expected.type);
+
+		// a schema change forces the prepared statement to be planned again
+		REQUIRE_NO_FAIL(tester.Query("ALTER TABLE t ALTER i TYPE BIGINT"));
+		REQUIRE_NO_FAIL(tester.Query("ALTER TABLE t ALTER i TYPE INTEGER"));
+		auto rebound = tester.QueryPrepared(prepared.prepared);
+		REQUIRE_NO_FAIL(*rebound);
+		REQUIRE(duckdb_result_statement_type(rebound->InternalResult()) == expected.type);
+	}
+
+	// an EXECUTE written in SQL reports the type of the prepared statement too
+	REQUIRE_NO_FAIL(tester.Query("PREPARE ins AS INSERT INTO t VALUES ($1)"));
+	auto executed = tester.Query("EXECUTE ins(5)");
+	REQUIRE_NO_FAIL(*executed);
+	REQUIRE(duckdb_result_statement_type(executed->InternalResult()) == DUCKDB_STATEMENT_TYPE_INSERT);
+}
+
 TEST_CASE("Test duckdb_parameter_name", "[capi]") {
 	CAPITester tester;
 	duckdb_prepared_statement stmt;
