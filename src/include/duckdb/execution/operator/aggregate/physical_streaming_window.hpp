@@ -32,6 +32,8 @@ public:
 	optional_idx partition_limit;
 
 public:
+	PipelineSourceConsumption GetSourceConsumption() const override;
+
 	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
 
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
