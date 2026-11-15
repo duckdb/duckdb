@@ -70,4 +70,3 @@ benchmark/micro/pushdown/multi_key_join_filter.benchmark
 benchmark/micro/pushdown/multi_key_join_filter_covered.benchmark
 benchmark/micro/pushdown/multi_key_join_filter_holes.benchmark
 benchmark/micro/pushdown/multi_key_join_filter_wide.benchmark
-benchmark/micro/profiler/profiled_small_queries.benchmark

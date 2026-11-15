@@ -248,7 +248,15 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 		for (const auto &[key, count] : string_counters) {
 			info.SetMetric(key, count);
 		}
-		ForEachSetSlot([&](const string &name, const MetricSlot &slot) {
+		// a metric updated both by name and by index adds up
+		auto limit = slot_limit.load(std::memory_order_acquire);
+		for (idx_t i = 0; i < limit; i++) {
+			auto &slot = slot_chunks[i / MetricSlotChunk::SLOT_COUNT]->slots[i % MetricSlotChunk::SLOT_COUNT];
+			if (!slot.set.load(std::memory_order_relaxed)) {
+				continue;
+			}
+			auto name = i < MetricsManager::InternalMetricCount() ? MetricsManager::GetInternalMetric(i).name
+			                                                      : MetricsManager::GetMetric(i).name;
 			auto value = slot.value.load(std::memory_order_relaxed);
 			if (slot.is_timing) {
 				auto entry = string_timings.find(name);
@@ -259,7 +267,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 				value += entry == string_counters.end() ? 0 : entry->second;
 				info.SetMetric(name, value);
 			}
-		});
+		}
 	}
 	for (auto &entry : GetLiveMetrics()) {
 		info.SetMetric(entry.first, std::move(entry.second));
