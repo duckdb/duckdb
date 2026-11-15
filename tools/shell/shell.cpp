@@ -44,13 +44,14 @@
 #endif
 
 #include <stdlib.h>
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -1066,8 +1067,9 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
 	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
 	if (stdin_is_interactive && stdout_is_console) {
-		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
-		    duckdb::Value::BOOLEAN(false);
+		auto renderer_settings = duckdb::TreeRenderer::GetRendererSettings(*conn->context);
+		renderer_settings["expand_all"] = duckdb::Value::BOOLEAN(false);
+		duckdb::TreeRenderer::SetRendererSettings(*conn->context, renderer_settings);
 	}
 	if (!stdout_is_console) {
 		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
@@ -1279,30 +1281,30 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateAgentProgressBar() {
 	return make_uniq<AgentProgressBarDisplay>();
 }
 
-static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
+static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogSink> sink_ptr) {
 	auto *db_instance = db.instance.get();
 	auto &log_manager = db_instance->GetLogManager();
-	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
-	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
+	log_manager.RegisterLogSink("shell_log_sink", sink_ptr);
+	log_manager.SetLogSink(*db_instance, "shell_log_sink");
 	log_manager.SetEnableLogging(db_instance);
 	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
 }
 
 void ShellState::OpenDB(ShellOpenFlags flags) {
-	// log storage to stdout
-	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
-	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
+	// log sink to stdout
+	auto shell_log_sink = duckdb::make_shared_ptr<ShellLogSink>(*this);
+	duckdb::shared_ptr<duckdb::LogSink> sink_ptr = shell_log_sink;
 
 	if (!db) {
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
-			RegisterShellLogger(*db, storage_ptr);
+			RegisterShellLogger(*db, sink_ptr);
 			conn = make_uniq<duckdb::Connection>(*db);
 		} catch (std::exception &ex) {
 			PrintDatabaseError(duckdb::ErrorData(ex));
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
 				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
-				RegisterShellLogger(*db, storage_ptr);
+				RegisterShellLogger(*db, sink_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
 				ShellState::Exit(1);
@@ -2788,56 +2790,56 @@ MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &
 **
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
+static void SkipSpaces(const string &zLine, idx_t &pos) {
+	while (pos < zLine.size() && ShellState::IsSpace(zLine[pos])) {
+		pos++;
+	}
+}
+
+//! Parse one, optionally quoted, dot command argument starting at pos
+static string ParseMetaCommandArgument(const string &zLine, idx_t &pos) {
+	string arg;
+	if (zLine[pos] == '\'' || zLine[pos] == '"') {
+		// quoted argument - scan until next quote
+		auto quote = zLine[pos];
+		// skip over the initial quote
+		pos++;
+
+		while (pos < zLine.size() && zLine[pos] != quote) {
+			if (zLine[pos] == '\\' && quote == '"' && pos + 1 < zLine.size()) {
+				// skip over any escaped characters
+				arg += zLine[pos++];
+			}
+			arg += zLine[pos++];
+		}
+		if (pos < zLine.size()) {
+			// skip over the final quote
+			pos++;
+		}
+		if (quote == '"') {
+			arg = resolve_backslashes(arg);
+		}
+	} else {
+		// unquoted argument - scan until the next space
+		while (pos < zLine.size() && !ShellState::IsSpace(zLine[pos])) {
+			arg += zLine[pos];
+			pos++;
+		}
+		arg = resolve_backslashes(arg);
+	}
+	return arg;
+}
+
 int ShellState::DoMetaCommand(const string &zLine) {
 	int rc = 0;
 	vector<string> args;
 	// skip initial dot
 	idx_t pos = 1;
-	while (pos < zLine.size()) {
-		// skip initial spaces
-		while (pos < zLine.size() && IsSpace(zLine[pos])) {
-			pos++;
-		}
-		if (pos >= zLine.size()) {
-			break;
-		}
-		string arg;
-		if (zLine[pos] == '\'' || zLine[pos] == '"') {
-			// quoted argument - scan until next quote
-			auto quote = zLine[pos];
-			// skip over the initial quote
-			pos++;
-
-			while (pos < zLine.size() && zLine[pos] != quote) {
-				if (zLine[pos] == '\\' && quote == '"' && pos + 1 < zLine.size()) {
-					// skip over any escaped characters
-					arg += zLine[pos++];
-				}
-				arg += zLine[pos++];
-			}
-			if (pos < zLine.size()) {
-				// skip over the final quote
-				pos++;
-			}
-			if (quote == '"') {
-				arg = resolve_backslashes(arg);
-			}
-		} else {
-			// unquoted argument - scan until the next space
-			while (pos < zLine.size() && !IsSpace(zLine[pos])) {
-				arg += zLine[pos];
-				pos++;
-			}
-			arg = resolve_backslashes(arg);
-		}
-		args.push_back(std::move(arg));
-	}
-
-	/* Process the input line.
-	 */
-	if (args.empty()) {
+	SkipSpaces(zLine, pos);
+	if (pos >= zLine.size()) {
 		return 0; /* no tokens, no error */
 	}
+	args.push_back(ParseMetaCommandArgument(zLine, pos));
 	ClearTempFile();
 
 	string error_msg;
@@ -2848,6 +2850,18 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		rc = 1;
 	} else {
 		auto &command = *metadata_command;
+		SkipSpaces(zLine, pos);
+		if (command.raw_arguments) {
+			// e.g. a command line for .shell - the system shell does its own quoting
+			if (pos < zLine.size()) {
+				args.push_back(zLine.substr(pos));
+			}
+		} else {
+			while (pos < zLine.size()) {
+				args.push_back(ParseMetaCommandArgument(zLine, pos));
+				SkipSpaces(zLine, pos);
+			}
+		}
 		MetadataResult result = MetadataResult::PRINT_USAGE;
 		try {
 			if (!command.callback) {

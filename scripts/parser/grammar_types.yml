@@ -24,8 +24,7 @@
 # the type entry takes precedence and their value IS extracted. Keep this list
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
-# Note: some entries (e.g. SingleArrowPair,
-# IntervalNumber, Program) also appear in type categories because
+# Note: some entries (e.g. IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
 #
@@ -81,6 +80,7 @@ SQLStatement:
     - DetachStatement
     - DisconnectStatement
     - DropStatement
+    - DropMemberStatement
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
@@ -121,6 +121,7 @@ SQLStatement:
     - DestroyExternalResourceStmt
     - ExtensionRepositoryStatement
     - CreateExtensionRepositoryStmt
+    - CreateExtensionRepositoryFromHostStmt
     - DropExtensionRepositoryStmt
 
 SelectStatement:
@@ -223,6 +224,9 @@ AlterInfo:
     - AlterSequenceOptions
     - RenameAlterSequenceOptions
     - SetSequenceOption
+    - DropMember
+    - DropTableFunctionMember
+    - DropFunctionMember
 
 AlterTableInfo:
   type: "unique_ptr<AlterTableInfo>"
@@ -387,7 +391,6 @@ Expression:
     - ColumnDefaultExpr
     - SingleExpression
     - BaseExpression
-    - LambdaArrowExpression
     - LogicalOrExpression
     - LogicalOrExpressionTail
     - ColDefOrExpr
@@ -462,7 +465,6 @@ Expression:
     - SliceExpression
     - EndSliceBound
     - StepSliceBound
-    - SingleArrowPair
     - StarExpression
     - SpecialFunctionExpression
     - CoalesceExpression
@@ -621,6 +623,8 @@ TableRef:
     - SubqueryReference
     - BaseTableRef
     - ParensTableRef
+    - JoinedTableRef
+    - JoinedTableRefChain
     - ValuesRef
     - MergeIntoUsingClause
     - UpdateTarget
@@ -837,6 +841,8 @@ QualifiedName:
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
     - QualifiedTableFunction
+    - CatalogReservedSchemaTableFunctionName
+    - TableFunctionNameAsQualifiedName
     - UseTarget
     - UseTargetCatalogSchema
     - SchemaNameAsUseTarget
@@ -1273,12 +1279,15 @@ LogicalType:
   rules:
     - Type
     - ReturnsType
+    - DropSignatureType
+    - DropSignatureAnyType
 
 LogicalTypeList:
   type: "vector<LogicalType>"
   by_value: false
   rules:
     - TypeList
+    - DropFunctionSignature
 
 TransactionModifierType:
   type: "TransactionModifierType"
@@ -1749,6 +1758,24 @@ overrides:
   OtherOperatorExpressionTail:
     type: "OtherOperatorTail"
     by_value: true
+  SingleArrowTail:
+    type: "OtherOperatorTail"
+    by_value: true
+  ArrowChainTail:
+    type: "OtherOperatorTail"
+    by_value: true
+  DoubleArrowTail:
+    type: "OtherOperatorTail"
+    by_value: true
+  SingleArrowBody:
+    type: "ArrowBody"
+    by_value: true
+  ArrowChainBody:
+    type: "ArrowBody"
+    by_value: true
+  ArrowFullBody:
+    type: "ArrowBody"
+    by_value: true
   AdditiveExpressionTail:
     type: "BinaryExpressionTail"
     by_value: true
@@ -1795,6 +1822,9 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
+    - FromSourceName
     - ShowExternalResourcesType
     - UsingColumnName
     - ColLabelOrString
@@ -1883,6 +1913,9 @@ matcher_rule_overrides:
   TableFunctionName:
     matcher: identifier
     suggestion: SUGGEST_TABLE_FUNCTION_NAME
+  ReservedTableFunctionName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_TABLE_FUNCTION_NAME
   TypeName:
     matcher: identifier
     suggestion: SUGGEST_TYPE_NAME
@@ -1923,13 +1956,13 @@ expression_depth_nesting_rules:
   - CustomPrefixExpression
 
 expression_depth_chain_rules:
-  - LambdaArrowExpression
   - NotExpression
   - IsExpressionContinuation
   - IsDistinctFromExpression
   - ComparisonExpression
   - BetweenInLikeExpression
   - InfixOtherOperatorExpression
+  - ArrowChainBody
   - BitwiseExpression
   - TildeExpression
   - AdditiveExpression
@@ -1947,7 +1980,6 @@ expression_depth_chain_rules:
 collapsible_rules:
   - Expression
   - ColumnDefaultExpr
-  - LambdaArrowExpression
   - LogicalOrExpression
   - ColDefOrExpr
   - LogicalAndExpression
@@ -1975,6 +2007,7 @@ collapsible_rules:
 packrat_memoized_rules:
   - Expression
   - TableRef
+  - ParensTableRef
   - Identifier
   - ColId
   - CatalogQualification
@@ -1987,7 +2020,6 @@ packrat_memoized_rules:
 rule_labels:
   an expression:
     - Expression
-    - LambdaArrowExpression
     - LogicalOrExpression
     - LogicalAndExpression
     - LogicalNotExpression

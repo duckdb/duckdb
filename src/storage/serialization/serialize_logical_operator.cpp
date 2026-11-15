@@ -375,7 +375,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
-	deserializer.ReadDeletedProperty<unique_ptr<Expression>>(208, "predicate");
+	auto predicate = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(208, "predicate");
+	if (predicate) {
+		result->conditions.emplace_back(std::move(predicate));
+	}
 	return std::move(result);
 }
 
@@ -953,7 +956,6 @@ void LogicalUpdate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
 	serializer.WritePropertyWithDefault<bool>(207, "capture_old_rows", capture_old_rows, false);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(208, "old_row_columns", old_row_columns);
-	serializer.WritePropertyWithDefault<RowIdHandling>(209, "row_id_handling", row_id_handling, RowIdHandling::ASSUME_UNIQUE);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -967,7 +969,6 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "capture_old_rows", result->capture_old_rows, false);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(208, "old_row_columns", result->old_row_columns);
-	deserializer.ReadPropertyWithExplicitDefault<RowIdHandling>(209, "row_id_handling", result->row_id_handling, RowIdHandling::ASSUME_UNIQUE);
 	return std::move(result);
 }
 

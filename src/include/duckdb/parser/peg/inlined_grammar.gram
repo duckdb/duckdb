@@ -11,6 +11,7 @@ Statement <-
 	PragmaStatement /
 	CallStatement /
 	InsertStatement /
+	DropMemberStatement /
 	DropStatement /
 	CopyStatement /
 	ExplainStatement /
@@ -57,6 +58,7 @@ FunctionName <- Identifier
 ReservedFunctionName <- Identifier
 ReservedTypeName <- Identifier
 TableFunctionName <- Identifier
+ReservedTableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier
@@ -1540,6 +1542,10 @@ DescRule <- 'DESC'
 DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
 DropStatement <- 'DROP' DropEntries DropBehavior?
+DropMemberStatement <- 'DROP' DropMember DropBehavior?
+DropMember <- DropTableFunctionMember / DropFunctionMember
+DropTableFunctionMember <- CommentMacroTable IfExists? QualifiedTableFunction DropFunctionSignature
+DropFunctionMember <- FunctionTypeMacro IfExists? FunctionIdentifier DropFunctionSignature
 
 DropEntries <-
 	DropTable /
@@ -1558,6 +1564,9 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(QualifiedTableFunction)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
+DropFunctionSignature <- Parens(List(DropSignatureType)?)
+DropSignatureType <- DropSignatureAnyType / Type
+DropSignatureAnyType <- 'ANY'
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / QualifiedIndexNameString
@@ -1601,6 +1610,7 @@ ExplainableStatements <-
     CreateStatement /
     DeallocateStatement /
     DeleteStatement /
+    DropMemberStatement /
     DropStatement /
     ExecuteStatement /
     InsertStatement /
@@ -1788,11 +1798,8 @@ SingleExpression <-
     DefaultExpression
 
 # LEVEL 1 (Lowest)
-Expression <- LambdaArrowExpression
+Expression <- LogicalOrExpression
 ColumnDefaultExpr <- ColDefOrExpr
-# LEVEL 1.5
-LambdaArrowExpression <- LogicalOrExpression SingleArrowPair*
-SingleArrowPair <- '->' LogicalOrExpression
 LogicalOrExpression <- LogicalAndExpression LogicalOrExpressionTail*
 LogicalOrExpressionTail <- 'OR' LogicalAndExpression
 ColDefOrExpr <- ColDefAndExpr ColDefOrExpressionTail*
@@ -1878,9 +1885,17 @@ Asymmetric <- 'ASYMMETRIC'
 # LEVEL 8
 OtherOperatorExpression <- InfixOtherOperatorExpression
 InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
-OtherOperatorTail <- AnyAllSubqueryTail / OtherOperatorExpressionTail
+OtherOperatorTail <- AnyAllSubqueryTail / OtherOperatorExpressionTail / SingleArrowTail
 AnyAllSubqueryTail <- AnyAllParsedOperator SubqueryReference
 OtherOperatorExpressionTail <- OtherOperator BitwiseExpression
+# '->' is the lambda arrow or the JSON extract operator. Its operand extends as far as possible (the lambda body),
+# unless another arrow follows directly: then the arrows chain to the left, like in PostgreSQL.
+SingleArrowTail <- '->' SingleArrowBody
+SingleArrowBody <- ArrowChainBody / ArrowFullBody
+ArrowChainBody <- BitwiseExpression ArrowChainTail+
+ArrowChainTail <- DoubleArrowTail / SingleArrowTail
+DoubleArrowTail <- '->>' BitwiseExpression
+ArrowFullBody <- LogicalOrExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator
@@ -2063,15 +2078,25 @@ InstallStatement <- 'FORCE'? 'INSTALL' InstallAndLoad? IdentifierOrStringLiteral
 InstallAndLoad <- 'AND' 'LOAD'
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
-FromSourceIdentifier <- 'FROM' Identifier
+FromSourceIdentifier <- 'FROM' FromSourceName
 FromSourceString <- 'FROM' StringLiteral
+# a repository named after its host is spelled as dotted words: INSTALL x FROM carlopi.github.io
+FromSourceName <- ExtensionRepositoryHostName / Identifier
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 
-ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / DropExtensionRepositoryStmt
-CreateExtensionRepositoryStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ColIdOrString RepositoryPrefix RepositoryPublicKey?
+ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / CreateExtensionRepositoryFromHostStmt / DropExtensionRepositoryStmt
+CreateExtensionRepositoryStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ExtensionRepositoryName RepositoryPrefix RepositoryPublicKey?
 RepositoryPrefix <- 'WITH'? 'PREFIX' StringLiteral
 RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)
-DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ColIdOrString
+# "CREATE EXTENSION REPOSITORY carlopi.github.io": without a prefix the name is the host of the publisher, and the host
+# says where its repository is: https://<name>/.well-known/duckdb-extension-repo.json names the prefix (and may carry
+# the signing keys). The rest is CREATE EXTENSION REPOSITORY <name> WITH PREFIX <that prefix>.
+CreateExtensionRepositoryFromHostStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ExtensionRepositoryName
+DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ExtensionRepositoryName
+# A repository name: an identifier or a string, or a host spelled as dotted words. A host with a '-' in it cannot be
+# spelled unquoted ('-' is an operator); it is given as a string: 'duckdb-extensions.example.com'
+ExtensionRepositoryName <- ExtensionRepositoryHostName / ColIdOrString
+ExtensionRepositoryHostName <- ColId DotColLabel+
 
 TableMatchRecognizeClause <- 'MATCH_RECOGNIZE' Parens(MatchRecognizeBody) TableAlias?
 MatchRecognizeBody <- MatchRecognizeClause+
@@ -2274,7 +2299,9 @@ TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias? SampleC
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
 ValuesRef <- TableAliasColon? ValuesClause TableAlias? SampleClause?
-ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+ParensTableRef <- TableAliasColon? Parens(JoinedTableRef) TableAlias? SampleClause?
+JoinedTableRef <- JoinedTableRefChain / ParensTableRef
+JoinedTableRefChain <- InnerTableRef JoinOrPivot+
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
@@ -2305,7 +2332,10 @@ TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias? SampleClause?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
+QualifiedTableFunction <- CatalogReservedSchemaTableFunctionName / TableFunctionNameAsQualifiedName
+# after a qualification a reserved keyword can name a table function, as in g.describe('a')
+CatalogReservedSchemaTableFunctionName <- CatalogQualification SchemaQualification* ReservedTableFunctionName
+TableFunctionNameAsQualifiedName <- TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
 NamedFunctionArgument <- TypeFuncName NamedParameterAssignment Expression
@@ -2335,7 +2365,7 @@ NearestValuesRef <- ValuesClause
 NearestTableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality?
 NearestTableSubquery <- Lateral? SubqueryReference
 NearestBaseTableRef <- BaseTableName AtClause? SampleClause?
-NearestParensTableRef <- Parens(TableRef) SampleClause?
+NearestParensTableRef <- Parens(JoinedTableRef) SampleClause?
 ApproxOrExact <- NearestApprox / NearestExact
 NearestApprox <- 'APPROX'
 NearestExact <- 'EXACT'

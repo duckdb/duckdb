@@ -30,12 +30,33 @@ struct FunctionStatisticsInput;
 
 enum class StatisticsPropagationMode : uint8_t { FILTER_SIMPLIFICATION, FULL };
 
+//! Suspends attaching verification statistics to propagated expressions for the lifetime of the guard
+struct VerificationStatsGuard {
+	explicit VerificationStatsGuard(bool &attach_p) : attach(attach_p), previous(attach_p) {
+		attach = false;
+	}
+	~VerificationStatsGuard() {
+		Release();
+	}
+	//! Restores attaching before the guard goes out of scope
+	void Release() {
+		attach = previous;
+	}
+
+	bool &attach;
+	bool previous;
+};
+
 class StatisticsPropagator {
 public:
 	StatisticsPropagator(Optimizer &optimizer, unique_ptr<LogicalOperator> &root,
 	                     StatisticsPropagationMode mode = StatisticsPropagationMode::FULL);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
+	//! Propagate statistics through a standalone expression, given the statistics of the columns it references
+	unique_ptr<BaseStatistics>
+	PropagateExpressionStatistics(unique_ptr<Expression> &expr,
+	                              column_binding_map_t<unique_ptr<BaseStatistics>> column_statistics);
 
 	column_binding_map_t<unique_ptr<BaseStatistics>> GetStatisticsMap() {
 		return std::move(statistics_map);
@@ -84,6 +105,7 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalLimit &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOrder &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalWindow &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalUnnest &op, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
