@@ -1,0 +1,170 @@
+# name: test/sql/copy/parquet/writer/parquet_write_content_defined_pages_paths.test
+# description: The paths a content-defined copy can take - batched, partitioned (deferred), several row groups
+#              per file - and that an interrupted copy does not strand the batches waiting behind it
+# group: [sql, test]
+
+require parquet
+
+statement ok
+create macro cdc_pages(path, file) as
+	(select sum(s.count) from (select unnest(encoding_stats) s from parquet_metadata(file) where path_in_schema = path) where s.page_type = 'DATA_PAGE');
+
+# pages of one column of one row group, which is how the cross-row-group state is checked below
+statement ok
+create macro cdc_pages_rg(path, file, rg) as
+	(select sum(s.count) from (select unnest(encoding_stats) s from parquet_metadata(file) where path_in_schema = path and row_group_id = rg) where s.page_type = 'DATA_PAGE');
+
+statement ok
+create macro file_digest(file) as
+	(select md5(hex(content)) from read_blob(file));
+
+# Writing the same rows twice gives the same bytes. Batches are prepared in parallel and only their page-cut
+# scan is held in file order, so this is where a lost or reordered scan turn would show up.
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(400_000)) to '{TEST_DIR}/repeat_a.parquet' (format parquet, compression uncompressed, row_group_size 25_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(400_000)) to '{TEST_DIR}/repeat_b.parquet' (format parquet, compression uncompressed, row_group_size 25_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query I
+select file_digest('{TEST_DIR}/repeat_a.parquet') = file_digest('{TEST_DIR}/repeat_b.parquet');
+----
+true
+
+# cut into pages, and the values come back unchanged at a batch size that shares no factor with a page size
+query I
+select cdc_pages('s', '{TEST_DIR}/repeat_a.parquet') > 10;
+----
+true
+
+query I
+select count(*) from read_parquet('{TEST_DIR}/repeat_a.parquet') where s <> repeat(md5(i::varchar), 4);
+----
+0
+
+# A copy without batch indices - a partitioned write, where each file gets its own chunkers - prepares each row
+# group at flush time. Re-writing such a file through the batched path has to give back the same bytes.
+# The column carries nulls so both sides write it OPTIONAL: a REQUIRED column has no definition levels to hash
+# and cuts different pages from the same values.
+statement ok
+copy (select case when i % 997 = 0 then null else i end v, i % 4 p from range(200_000) tbl(i) order by p, i) to '{TEST_DIR}/parts' (format parquet, compression uncompressed, row_group_size 10_000_000, partition_by (p), overwrite true, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select v from read_parquet('{TEST_DIR}/parts/p=1/data_0.parquet')) to '{TEST_DIR}/again_p1.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select v from read_parquet('{TEST_DIR}/parts/p=3/data_0.parquet')) to '{TEST_DIR}/again_p3.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select v from read_parquet('{TEST_DIR}/parts/p=1/data_0.parquet')) to '{TEST_DIR}/plain_p1.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000);
+
+query I
+select file_digest('{TEST_DIR}/parts/p=1/data_0.parquet') = file_digest('{TEST_DIR}/again_p1.parquet') and
+       file_digest('{TEST_DIR}/parts/p=3/data_0.parquet') = file_digest('{TEST_DIR}/again_p3.parquet');
+----
+true
+
+# and those are content pages: the same data without the option stays in fewer, size-cut pages
+query I
+select cdc_pages('v', '{TEST_DIR}/again_p1.parquet') > cdc_pages('v', '{TEST_DIR}/plain_p1.parquet');
+----
+true
+
+# The chunkers carry state from one row group to the next, as Arrow's do: a file's first row group cuts what a
+# file holding only those rows cuts, while its second row group starts from wherever the first left the hash.
+statement ok
+copy (select i from range(100_000) tbl(i)) to '{TEST_DIR}/first_half.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select i from range(100_000, 200_000) tbl(i)) to '{TEST_DIR}/second_half.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select i from range(200_000) tbl(i)) to '{TEST_DIR}/both_halves.parquet' (format parquet, compression uncompressed, row_group_size 100_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query I
+select cdc_pages_rg('i', '{TEST_DIR}/first_half.parquet', 0) =
+       cdc_pages_rg('i', '{TEST_DIR}/both_halves.parquet', 0);
+----
+true
+
+query I
+select cdc_pages_rg('i', '{TEST_DIR}/second_half.parquet', 0) <>
+       cdc_pages_rg('i', '{TEST_DIR}/both_halves.parquet', 1);
+----
+true
+
+# Several row groups per file keeps the boundaries running across them, and every file stays readable
+statement ok
+copy (select i from range(200_000) tbl(i)) to '{TEST_DIR}/rgpf' (format parquet, compression uncompressed, row_group_size 25_000, row_groups_per_file 2, overwrite true, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query I
+select count(*) from glob('{TEST_DIR}/rgpf/*.parquet');
+----
+4
+
+query I
+select count(*) from read_parquet('{TEST_DIR}/rgpf/*.parquet');
+----
+200000
+
+query I
+select sum(s.count) > 8
+from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/rgpf/*.parquet') where path_in_schema = 'i')
+where s.page_type = 'DATA_PAGE';
+----
+true
+
+# An unordered copy - here, one file per thread - has no batch index to hand out, so its row groups are
+# prepared at flush time
+statement ok
+set threads=4;
+
+statement ok
+set preserve_insertion_order=false;
+
+statement ok
+copy (select i from range(200_000) tbl(i)) to '{TEST_DIR}/per_thread' (format parquet, compression uncompressed, row_group_size 25_000, per_thread_output true, overwrite true, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query I
+select count(*) from read_parquet('{TEST_DIR}/per_thread/*.parquet');
+----
+200000
+
+query I
+select sum(s.count) > 1
+from (select unnest(encoding_stats) s from parquet_metadata('{TEST_DIR}/per_thread/*.parquet') where path_in_schema = 'i')
+where s.page_type = 'DATA_PAGE';
+----
+true
+
+statement ok
+reset preserve_insertion_order;
+
+statement ok
+reset threads;
+
+# RETURN_STATS reports the same rows and row groups when the page cuts come from content
+statement ok
+copy (select i from range(200_000) tbl(i)) to '{TEST_DIR}/stats.parquet' (format parquet, compression uncompressed, row_group_size 25_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072}, return_stats true);
+
+# An interrupted copy has to report the interrupt rather than leave the batches behind it waiting for a scan
+# turn that never comes
+statement ok
+set max_execution_time=50;
+
+statement error
+copy (select range i, repeat(md5(range::varchar), 4) s from range(2_000_000)) to '{TEST_DIR}/interrupted.parquet' (format parquet, compression uncompressed, row_group_size 10_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+----
+<REGEX>:.*(Interrupt|interrupt|maximum execution time).*
+
+statement ok
+reset max_execution_time;
+
+# and the copy works again once the deadline is gone
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(200_000)) to '{TEST_DIR}/after_interrupt.parquet' (format parquet, compression uncompressed, row_group_size 25_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query I
+select count(*) from read_parquet('{TEST_DIR}/after_interrupt.parquet');
+----
+200000
