@@ -27,6 +27,12 @@ public:
 		BuildCache();
 	}
 
+	//! The cache is immutable and the same for every caller, so it is built once per process, on first use
+	static const DateLookupCache &Get() {
+		static const DateLookupCache cache;
+		return cache;
+	}
+
 	//! Extracts the component, or returns nullopt if the date is infinite
 	optional<int64_t> ExtractElement(date_t date) const {
 		if (DUCKDB_UNLIKELY(date.days < CACHE_MIN_DATE || date.days >= CACHE_MAX_DATE)) {
