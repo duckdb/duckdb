@@ -4,6 +4,9 @@
 
 require skip_reload
 
+# a persistent database can evict blocks instead of running out of memory
+require noforcestorage
+
 # parallel checkpoint tasks share one partial block manager
 statement ok
 SET threads = 16
@@ -42,4 +45,4 @@ SELECT count(*) FROM t
 statement error
 CHECKPOINT
 ----
-<REGEX>:.*Failed to create checkpoint because of error: (could not allocate block|failed to allocate data).*
+<REGEX>:.*(could not allocate block of size 256|failed to allocate data).*
