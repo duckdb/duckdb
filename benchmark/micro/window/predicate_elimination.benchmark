@@ -1,0 +1,21 @@
+# name: benchmark/micro/window/partitioned_scan.benchmark
+# description: Equivalence 13 from Lidner+ VLDB 2026
+# group: [window]
+
+name PredicateElimination
+group micro
+subgroup window
+
+argument rows 1_000_000
+argument k 7
+argument disabled ''
+
+load
+SET disabled_optimizers=${disabled};
+CREATE OR REPLACE TABLE t AS (
+	FROM range(${rows}) tbl(i)
+);
+	
+run
+FROM t
+QUALIFY row_number() OVER (ORDER BY i DESC) <= ${k};

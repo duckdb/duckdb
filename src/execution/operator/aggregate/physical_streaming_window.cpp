@@ -161,8 +161,7 @@ public:
 
 		const auto remaining = partition_limit.GetIndex() - emitted_count;
 		if (remaining < output.size()) {
-			output.Flatten();
-			output.SetChildCardinality(MinValue(output.size(), remaining));
+			output.Slice(0, remaining);
 		}
 		emitted_count += output.size();
 
@@ -321,6 +320,13 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		}
 		aggregate.GetStateFinalizeCallback()(statev, aggr_input_data, result, 1, i);
 	}
+}
+
+PipelineSourceConsumption PhysicalStreamingWindow::GetSourceConsumption() const {
+	if (partition_limit.IsValid()) {
+		return PipelineSourceConsumption::MAY_STOP_EARLY;
+	}
+	return PhysicalOperator::GetSourceConsumption();
 }
 
 void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataChunk &output, DataChunk &delayed,
