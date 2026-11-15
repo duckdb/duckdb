@@ -2,9 +2,6 @@
 # description: Test file backed log storage persistence
 # group: [logging]
 
-# Due to different file locking behaviour, this currently fails on windows
-require notwindows
-
 # load the DB from disk
 load {TEMP_DIR}/logging_file_persistence.test
 

@@ -4,9 +4,6 @@
 
 require noforcestorage
 
-# Due to different file locking behaviour, this currently fails on windows
-require notwindows
-
 statement ok
 CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_truncate_rewrite.csv', 'normalize': false});
 
