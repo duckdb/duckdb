@@ -1,5 +1,5 @@
 diff --git a/src/core/hive_location.cpp b/src/core/hive_location.cpp
-index ac04004..5e7a3cb 100644
+index 245fcbb..ee5b022 100644
 --- a/src/core/hive_location.cpp
 +++ b/src/core/hive_location.cpp
 @@ -1,5 +1,6 @@
@@ -31,10 +31,10 @@ index ac04004..5e7a3cb 100644
  	auto scheme = StringUtil::Lower(result.substr(0, 6));
  	if (scheme == "s3a://" || scheme == "s3n://") {
 diff --git a/src/include/core/hive_location.hpp b/src/include/core/hive_location.hpp
-index 85014ba..ac6109b 100644
+index 35c0ed4..1889e1f 100644
 --- a/src/include/core/hive_location.hpp
 +++ b/src/include/core/hive_location.hpp
-@@ -12,6 +12,8 @@ class MultiFileList;
+@@ -14,6 +14,8 @@ class MultiFileList;
  //! A location to compare with other locations: s3a://, s3n:// and S3:// name the same bucket and key as s3://, and a
  //! trailing slash is dropped. Only for comparing; files are listed and read at the location as registered.
  string ComparableLocation(const string &location);
@@ -43,22 +43,3 @@ index 85014ba..ac6109b 100644
  //! Whether one comparable location holds the other, so that files of one are files of the other
  bool LocationsOverlap(const string &a, const string &b);
  //! The hive directory of a partition relative to its table: <key>=<value>/..., escaped, with a Glue value of
-diff --git a/src/planning/hive_multi_file_reader.cpp b/src/planning/hive_multi_file_reader.cpp
-index 11e35b9..2f300f8 100644
---- a/src/planning/hive_multi_file_reader.cpp
-+++ b/src/planning/hive_multi_file_reader.cpp
-@@ -273,10 +273,12 @@ string HiveScanInfo::Describe() const {
- //! a directory, so only the last component is checked); and a zero-byte object of any name holds no rows and is not a
- //! file of any format the reader opens
- bool IsDataFile(const OpenFileInfo &file, const string &prefix) {
--	if (!StringUtil::StartsWith(file.path, prefix)) {
-+	auto path = NormalizeLocalSeparators(file.path);
-+	auto normalized_prefix = NormalizeLocalSeparators(prefix);
-+	if (!StringUtil::StartsWith(path, normalized_prefix)) {
- 		return false;
- 	}
--	auto components = StringUtil::Split(file.path.substr(prefix.size()), '/');
-+	auto components = StringUtil::Split(path.substr(normalized_prefix.size()), '/');
- 	for (auto &component : components) {
- 		if (component.empty() || component[0] == '_' || component[0] == '.') {
- 			return false;
