@@ -86,7 +86,21 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 			} else {
 				binder.target_type = LogicalType(LogicalTypeId::INVALID);
 			}
-			auto bound_expr = binder.Bind(expression_list[val_idx]);
+			auto &value_expr = expression_list[val_idx];
+			unique_ptr<Expression> bound_expr;
+			// A known target type fixes the type of this VALUES slot.
+			if (binder.target_type.IsValid() && value_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
+				auto bound_result = binder.Bind(value_expr, idx_t(0), true);
+				if (bound_result.HasError()) {
+					bound_result.error.Throw();
+				}
+				bound_expr = std::move(bound_result.expression);
+				if (bound_expr->GetReturnType() != binder.target_type) {
+					bound_expr = BoundCastExpression::AddCastToType(context, std::move(bound_expr), binder.target_type);
+				}
+			} else {
+				bound_expr = binder.Bind(value_expr);
+			}
 			list.push_back(std::move(bound_expr));
 		}
 		values.push_back(std::move(list));
