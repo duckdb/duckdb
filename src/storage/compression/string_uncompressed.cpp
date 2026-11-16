@@ -311,7 +311,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	    UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
 	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
 	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
-	result.select_supports_preserve_positions = true;
+	result.supports_selective_filtering = true;
 	result.zero_initialize_segments = false;
 	return result;
 }
