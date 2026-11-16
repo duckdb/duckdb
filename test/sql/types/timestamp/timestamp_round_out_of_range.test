@@ -110,3 +110,9 @@ SELECT CAST(x AS TIMESTAMP_S) FROM ts_ms_mixed ORDER BY x;
 ----
 1970-01-01 00:00:00
 infinity
+
+# TIMESTAMP_MS infinity renders through the new specialization for both signs
+query II
+SELECT CAST(TIMESTAMP_MS '-infinity' AS VARCHAR), CAST(TIMESTAMP_MS 'infinity' AS VARCHAR);
+----
+-infinity	infinity
