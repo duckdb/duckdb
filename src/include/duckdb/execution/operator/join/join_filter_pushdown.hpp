@@ -35,6 +35,23 @@ enum class JoinFilterPushdownMode : uint8_t {
 };
 
 struct JoinFilterPushdownColumn {
+	JoinFilterPushdownColumn() = default;
+	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other)
+	    : join_filter_idx(other.join_filter_idx), probe_column_index(other.probe_column_index),
+	      storage_type(other.storage_type), mode(other.mode),
+	      input_expression(other.input_expression ? other.input_expression->Copy() : nullptr),
+	      crossed_secure_view(other.crossed_secure_view) {
+	}
+	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) {
+		if (this != &other) {
+			JoinFilterPushdownColumn copy(other);
+			*this = std::move(copy);
+		}
+		return *this;
+	}
+	JoinFilterPushdownColumn(JoinFilterPushdownColumn &&other) = default;
+	JoinFilterPushdownColumn &operator=(JoinFilterPushdownColumn &&other) = default;
+
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;
 	//! The probe column index to which this filter should be applied
@@ -43,10 +60,10 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
-	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
-	vector<RuntimeFilterCastStep> runtime_filter_casts;
-	//! Whether the filter crossed a secure view that may hide rows. Below one, every filter is checked on every row:
-	//! zone maps and selectivity are measured over the rows the view hides too
+	//! Filter input over BoundReferenceExpression(0) in the existing scan projection's type.
+	unique_ptr<Expression> input_expression;
+	//! Whether the filter crossed a secure view that may hide rows. The profiler leaves out the rows that leave such a
+	//! view (CrossesSecureView); how the filter is checked does not depend on it
 	bool crossed_secure_view = false;
 };
 
