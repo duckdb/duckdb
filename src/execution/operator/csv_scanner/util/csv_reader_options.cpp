@@ -222,44 +222,22 @@ void CSVReaderOptions::SetRFC4180(bool input) {
 	this->dialect_options.state_machine_options.strict_mode.Set(input);
 }
 
-string CSVReaderOptions::GetEscapeMode() const {
-	return dialect_options.state_machine_options.escape_mode.FormatValue();
+string CSVReaderOptions::GetDialect() const {
+	return dialect.FormatValue();
 }
 
-void CSVReaderOptions::SetEscapeMode(const string &input) {
-	auto escape_mode = StringUtil::Lower(input);
-	if (escape_mode == "all") {
-		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::ALL);
-	} else if (escape_mode == "quote") {
-		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE);
-	} else if (escape_mode == "opencsv") {
-		dialect_options.state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV);
+void CSVReaderOptions::SetDialect(const string &input) {
+	auto dialect_name = StringUtil::Lower(input);
+	if (dialect_name == "standard") {
+		dialect.Set(CSVDialect::STANDARD);
+	} else if (dialect_name == "opencsv") {
+		dialect.Set(CSVDialect::OPENCSV);
 	} else {
-		throw BinderException("'%s' is not accepted as an escape_mode. The escape_mode option must be one of:\n* 'all' "
-		                      "(default): the escape character escapes the character that follows it, including the "
-		                      "delimiter and a newline\n* 'quote': the escape character only escapes the quote and "
-		                      "escape characters, so a delimiter still separates values and a newline still ends the "
-		                      "record\n* 'opencsv': as 'quote', and the escape is inert before the first content of a "
-		                      "field, as in opencsv",
-		                      input);
-	}
-}
-
-string CSVReaderOptions::GetQuoteMode() const {
-	return dialect_options.state_machine_options.quote_mode.FormatValue();
-}
-
-void CSVReaderOptions::SetQuoteMode(const string &input) {
-	auto quote_mode = StringUtil::Lower(input);
-	if (quote_mode == "standard") {
-		dialect_options.state_machine_options.quote_mode.Set(CSVQuoteMode::STANDARD);
-	} else if (quote_mode == "lines") {
-		dialect_options.state_machine_options.quote_mode.Set(CSVQuoteMode::LINES);
-	} else {
-		throw BinderException("'%s' is not accepted as a quote_mode. The quote_mode option must be one of:\n* "
-		                      "'standard' (default): a quoted value continues across line breaks\n* 'lines': a line "
-		                      "break ends the record even inside quotes, and a quote that is never closed reads its "
-		                      "field as NULL, so every line break is a record boundary",
+		throw BinderException("'%s' is not accepted as a dialect. The dialect option must be one of:\n* 'standard' "
+		                      "(default): DuckDB's own CSV reading, governed by the individual options\n* 'opencsv': "
+		                      "read as Hive/Athena's OpenCSVSerde does - the escape character only escapes the quote "
+		                      "and escape characters and is inert before the first content of a field, and a line "
+		                      "break ends the record even inside quotes",
 		                      input);
 	}
 }
@@ -413,10 +391,8 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
-	} else if (loption == "escape_mode") {
-		SetEscapeMode(ParseString(value, loption));
-	} else if (loption == "quote_mode") {
-		SetQuoteMode(ParseString(value, loption));
+	} else if (loption == "dialect") {
+		SetDialect(ParseString(value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -578,14 +554,9 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += FormatOptionLine("comment", comment);
 	// strict_mode
 	error += FormatOptionLine("strict_mode", strict_mode);
-	// escape_mode and quote_mode (only ever set by the user, never sniffed)
-	auto &escape_mode = dialect_options.state_machine_options.escape_mode;
-	if (escape_mode.IsSetByUser()) {
-		error += FormatOptionLine("escape_mode", escape_mode);
-	}
-	auto &quote_mode = dialect_options.state_machine_options.quote_mode;
-	if (quote_mode.IsSetByUser()) {
-		error += FormatOptionLine("quote_mode", quote_mode);
+	// dialect (only ever set by the user, never sniffed)
+	if (dialect.IsSetByUser()) {
+		error += FormatOptionLine("dialect", dialect);
 	}
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
@@ -675,21 +646,15 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	if (rejects_limit != 0 && !store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
-	auto &state_machine_options = dialect_options.state_machine_options;
-	if (state_machine_options.escape_mode.GetValue() != CSVEscapeMode::ALL) {
+	if (dialect.GetValue() == CSVDialect::OPENCSV) {
+		auto &state_machine_options = dialect_options.state_machine_options;
 		if (state_machine_options.strict_mode.GetValue() && state_machine_options.strict_mode.IsSetByUser()) {
-			throw BinderException("ESCAPE_MODE '%s' is not supported when STRICT_MODE is manually set to true: the "
-			                      "escape character can only appear outside quotes when strict_mode = false",
-			                      GetEscapeMode());
+			throw BinderException("DIALECT 'opencsv' is not supported when STRICT_MODE is manually set to true: "
+			                      "OpenCSVSerde reading is not strict");
 		}
-		// These escape modes govern the escape character outside quotes, which only non-strict parsing accepts
-		state_machine_options.strict_mode.Set(false, false);
-	}
-	if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
-		if (state_machine_options.strict_mode.GetValue() && state_machine_options.strict_mode.IsSetByUser()) {
-			throw BinderException("QUOTE_MODE 'lines' is not supported when STRICT_MODE is manually set to true: a "
-			                      "record that ends inside an open quote is not strict");
-		}
+		// the internal parsing options the dialect is made of, which only non-strict parsing accepts
+		state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV, false);
+		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
 		state_machine_options.strict_mode.Set(false, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
@@ -958,11 +923,8 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	if (strict_mode.IsSetByUser()) {
 		named_params["strict_mode"] = Value(GetRFC4180());
 	}
-	if (dialect_options.state_machine_options.escape_mode.IsSetByUser()) {
-		named_params["escape_mode"] = Value(GetEscapeMode());
-	}
-	if (dialect_options.state_machine_options.quote_mode.IsSetByUser()) {
-		named_params["quote_mode"] = Value(GetQuoteMode());
+	if (dialect.IsSetByUser()) {
+		named_params["dialect"] = Value(GetDialect());
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 	if (dialect_options.skip_rows.IsSetByUser()) {

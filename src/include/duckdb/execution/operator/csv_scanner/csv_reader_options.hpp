@@ -129,6 +129,8 @@ struct CSVReaderOptions {
 
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
+	//! The CSV dialect the file is read as: a preset over the internal parsing options
+	CSVOption<CSVDialect> dialect = CSVDialect::STANDARD;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;
 
@@ -179,11 +181,8 @@ struct CSVReaderOptions {
 	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
 
-	string GetEscapeMode() const;
-	void SetEscapeMode(const string &escape_mode);
-
-	string GetQuoteMode() const;
-	void SetQuoteMode(const string &quote_mode);
+	string GetDialect() const;
+	void SetDialect(const string &dialect);
 
 	CSVOption<char> GetSingleByteDelimiter() const;
 	CSVOption<string> GetMultiByteDelimiter() const;

@@ -506,27 +506,33 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		    CSVState::RECORD_SEPARATOR;
 	}
 
+	// A delimiter byte starts a split from 'state'
+	auto split_on_delimiter = [&](CSVState state) {
+		const auto from = static_cast<uint8_t>(state);
+		if (multi_byte_delimiter) {
+			transition_array[delimiter_first_byte][from] = CSVState::DELIMITER_FIRST_BYTE;
+		} else {
+			transition_array[delimiter_first_byte][from] = CSVState::DELIMITER;
+		}
+	};
+	// A line break ends the record from 'state'
+	auto end_record_on_line_break = [&](CSVState state) {
+		const auto from = static_cast<uint8_t>(state);
+		transition_array[static_cast<uint8_t>('\n')][from] = CSVState::RECORD_SEPARATOR;
+		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::CARRIAGE_RETURN;
+		} else {
+			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::RECORD_SEPARATOR;
+		}
+	};
+
 	// 12) Unquoted Escape State
 	if (enable_unquoted_escape) {
 		if (state_machine_options.escape_mode.GetValue() != CSVEscapeMode::ALL) {
 			// The escape only escapes the quote and escape characters: any other byte keeps the meaning it has in the
 			// Standard state, so the delimiter still separates values and a newline still ends the record
-			if (multi_byte_delimiter) {
-				transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				    CSVState::DELIMITER_FIRST_BYTE;
-			} else {
-				transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				    CSVState::DELIMITER;
-			}
-			transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-			    CSVState::RECORD_SEPARATOR;
-			if (new_line_id == NewLineIdentifier::CARRY_ON) {
-				transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				    CSVState::CARRIAGE_RETURN;
-			} else {
-				transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				    CSVState::RECORD_SEPARATOR;
-			}
+			split_on_delimiter(CSVState::UNQUOTED_ESCAPE);
+			end_record_on_line_break(CSVState::UNQUOTED_ESCAPE);
 			if (comment != '\0') {
 				transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::COMMENT;
 			}
@@ -553,17 +559,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (quote != '\0') {
 			transition_array[quote][field_start] = CSVState::QUOTED;
 		}
-		if (multi_byte_delimiter) {
-			transition_array[delimiter_first_byte][field_start] = CSVState::DELIMITER_FIRST_BYTE;
-		} else {
-			transition_array[delimiter_first_byte][field_start] = CSVState::DELIMITER;
-		}
-		transition_array[static_cast<uint8_t>('\n')][field_start] = CSVState::RECORD_SEPARATOR;
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
-			transition_array[static_cast<uint8_t>('\r')][field_start] = CSVState::CARRIAGE_RETURN;
-		} else {
-			transition_array[static_cast<uint8_t>('\r')][field_start] = CSVState::RECORD_SEPARATOR;
-		}
+		split_on_delimiter(CSVState::FIELD_START);
+		end_record_on_line_break(CSVState::FIELD_START);
 		if (comment != '\0') {
 			transition_array[comment][field_start] = CSVState::COMMENT;
 		}
@@ -573,16 +570,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// is a record boundary; a record that ends inside an open quote reads the field in progress as NULL
 	// (StringValueResult::AddUnterminatedQuoteNull)
 	if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
-		const vector<uint8_t> line_bound_states {
-		    static_cast<uint8_t>(CSVState::QUOTED), static_cast<uint8_t>(CSVState::ESCAPE),
-		    static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE), static_cast<uint8_t>(CSVState::ESCAPED_RETURN)};
-		for (const auto state : line_bound_states) {
-			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			if (new_line_id == NewLineIdentifier::CARRY_ON) {
-				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
-			} else {
-				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
-			}
+		for (const auto state :
+		     {CSVState::QUOTED, CSVState::ESCAPE, CSVState::UNQUOTED_ESCAPE, CSVState::ESCAPED_RETURN}) {
+			end_record_on_line_break(state);
 		}
 	}
 

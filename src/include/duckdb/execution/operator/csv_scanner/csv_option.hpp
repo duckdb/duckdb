@@ -41,6 +41,15 @@ enum class CSVQuoteMode : uint8_t {
 	LINES = 1
 };
 
+//! A named CSV dialect: a preset over the internal parsing options
+enum class CSVDialect : uint8_t {
+	//! DuckDB's own CSV reading, governed by the individual options
+	STANDARD = 0,
+	//! Hive/Athena's OpenCSVSerde: the escape character only escapes the quote and escape characters and is inert
+	//! before the first content of a field, and a line break ends the record even inside quotes
+	OPENCSV = 1
+};
+
 class Serializer;
 class Deserializer;
 
@@ -193,6 +202,17 @@ private:
 			return "lines";
 		default:
 			throw InternalException("Invalid CSV Quote Mode Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVDialect &val) const {
+		switch (val) {
+		case CSVDialect::STANDARD:
+			return "standard";
+		case CSVDialect::OPENCSV:
+			return "opencsv";
+		default:
+			throw InternalException("Invalid CSV Dialect Detected.");
 		}
 	}
 
