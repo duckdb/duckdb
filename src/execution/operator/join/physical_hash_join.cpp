@@ -7,16 +7,19 @@
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -41,6 +44,7 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -1812,17 +1816,58 @@ static unique_ptr<Expression> CreateJoinFilterComparisonExpression(
 	return RetainRuntimeFilterNulls(std::move(filter_expr), std::move(null_check_input));
 }
 
+static bool CollectInFilterValues(ClientContext &context, Vector &build_vector, const LogicalType &filter_input_type,
+                                  idx_t threshold, bool retain_nulls, vector<Value> &in_list) {
+	GroupedAggregateHashTable distinct_keys(context, Allocator::Get(context), {filter_input_type});
+	DataChunk keys;
+	keys.Initialize(context, {filter_input_type});
+	Vector input(build_vector.GetType());
+	Vector addresses(LogicalType::POINTER);
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	CastFunctionSet cast_functions;
+	auto cast_input = GetCastFunctionInput::Default();
+	for (idx_t offset = 0; offset < build_vector.size(); offset += STANDARD_VECTOR_SIZE) {
+		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, build_vector.size() - offset);
+		keys.Reset();
+		input.Slice(build_vector, offset, offset + count);
+		if (build_vector.GetType() == filter_input_type) {
+			keys.data[0].Reference(input);
+		} else {
+			string error;
+			if (!VectorOperations::TryCast(cast_functions, cast_input, input, keys.data[0], count, &error)) {
+				return false;
+			}
+		}
+		keys.CheckCardinality(count);
+		const auto new_count = distinct_keys.FindOrCreateGroups(keys, addresses, new_groups);
+		for (idx_t i = 0; i < new_count; i++) {
+			auto value = keys.data[0].GetValue(new_groups.get_index(i));
+			if (value.IsNull()) {
+				if (retain_nulls) {
+					continue;
+				}
+				return false;
+			}
+			in_list.push_back(std::move(value));
+			if (in_list.size() > threshold) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
                                           const JoinFilterPushdownColumn &column, JoinHashTable &ht,
-                                          const PhysicalOperator &op, idx_t filter_idx,
-                                          ProjectionIndex filter_col_idx) const {
+                                          const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
+                                          InFilterMode mode) const {
 	// Generate an IN filter by scanning the build-side key column.
 	auto build_idx = join_condition[filter_idx];
 	const auto &runtime_type = ht.conditions[build_idx].GetLHS().GetReturnType();
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
 	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
 	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
-	if (key_count == 0) {
+	if (key_count == 0 || key_count != ht.Count()) {
 		return false;
 	}
 
@@ -1844,30 +1889,26 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 	}
 
 	const auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
-	value_set_t unique_ht_values;
-	for (idx_t k = 0; k < key_count; k++) {
-		auto value = build_vector.GetValue(k).DefaultTryCastAs(filter_input_type);
-		if (!value) {
-			return false;
-		}
-		if (retain_nulls && value->IsNull()) {
-			continue;
-		}
-		unique_ht_values.insert(std::move(*value));
-		if (unique_ht_values.size() > dynamic_or_filter_threshold) {
-			// too many distinct values for an IN filter - the caller falls back to a min/max filter
-			return false;
-		}
+	vector<Value> in_list;
+	if (!CollectInFilterValues(context, build_vector, filter_input_type, dynamic_or_filter_threshold, retain_nulls,
+	                           in_list)) {
+		return false;
 	}
-	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
-	// An IN filter is only useful when the values are neither null nor dense.
-	if (in_list.empty() || FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
+	// An IN filter is only useful when the values are not dense.
+	if (in_list.empty() || FilterCombiner::IsDenseRange(in_list)) {
 		return false;
 	}
 
 	auto in_expr = ExpressionFilter::CreateInExpression(std::move(filter_input), std::move(in_list));
 	in_expr = RetainRuntimeFilterNulls(std::move(in_expr), std::move(null_check_input));
+	if (mode == InFilterMode::ADAPTIVE_ROW_FILTERING && column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
+	    ExpressionFilterExecutor::TryCreate(*in_expr)) {
+		auto filter = CreateSelectivityOptionalExpressionFilter(std::move(in_expr), column.storage_type,
+		                                                        SelectivityOptionalFilterType::IN_FILTER);
+		info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+		return true;
+	}
 	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 	return true;
@@ -2060,11 +2101,6 @@ void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilter
 	                          PrefixRangeFilter::SupportedType(ht->conditions[key_idx].GetLHS().GetReturnType()) &&
 	                          can_compute_span;
 
-	bool pushed_in_filter = false;
-	if (pushdown.CanUseInFilter(context, ht, cmp)) {
-		pushed_in_filter = pushdown.PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
-	}
-
 	static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
 	const auto exact_prf_bits = MinValue<idx_t>(SMALL_EXACT_PRF_BITS, prefix_range_bit_budget);
 	bool registered_prf =
@@ -2083,6 +2119,18 @@ void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilter
 		    pushdown.TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx, key_idx,
 		                                          min_val_before_cast, max_val_before_cast, bloom_filter_bits, *gstate);
 	}
+	const auto can_use_bloom = !registered_prf && allow_bloom_filters && can_emit_runtime_filters &&
+	                           (ht->HasPublishableBloomFilter(key_idx) || allow_prefix_range_filters);
+	bool pushed_in_filter = false;
+	if (pushdown.CanUseInFilter(context, ht, cmp)) {
+		// String prefixes can leave false positives that a small IN filter removes.
+		const auto prefer_prf =
+		    registered_prf && ht->conditions[key_idx].GetLHS().GetReturnType().InternalType() != PhysicalType::VARCHAR;
+		const auto mode =
+		    prefer_prf || can_use_bloom ? InFilterMode::PRUNING_ONLY : InFilterMode::ADAPTIVE_ROW_FILTERING;
+		pushed_in_filter =
+		    pushdown.PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx, mode);
+	}
 	// Keep multi-key min/max filters for their complementary statistics pruning.
 	if (registered_prf && ht->HasSingleEqualityKey()) {
 		return;
@@ -2092,7 +2140,7 @@ void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilter
 		CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val, max_val,
 		                           condition_type, reconstruct_filter_expression, true);
 	}
-	if (!registered_prf && allow_bloom_filters && can_emit_runtime_filters) {
+	if (can_use_bloom) {
 		if (ht->HasPublishableBloomFilter(key_idx)) {
 			// A complete filter was accumulated during Sink (external joins build it there).
 			pushdown.DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,

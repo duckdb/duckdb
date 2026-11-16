@@ -74,11 +74,14 @@ TEST_CASE("Published pure runtime-filter children support adaptive caches", "[fi
 }
 
 TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adaptive_cache]") {
+	const auto in_filter = GENERATE(false, true);
 	DuckDB db(nullptr);
 	Connection con(db);
 	float threshold;
 	idx_t vectors;
-	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::MIN_MAX, threshold, vectors);
+	GetThresholdAndVectorsToCheck(in_filter ? SelectivityOptionalFilterType::IN_FILTER
+	                                        : SelectivityOptionalFilterType::MIN_MAX,
+	                              threshold, vectors);
 	Vector dictionary(LogicalType::BIGINT, 3);
 	{
 		auto writer = FlatVector::Writer<int64_t>(dictionary, 3);
@@ -89,6 +92,11 @@ TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adapti
 	for (int32_t order = 0; order < 3; order++) {
 		auto lower =
 		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::BIGINT(2700));
+		if (in_filter) {
+			lower = make_uniq<ExpressionFilter>(ExpressionFilter::CreateInExpression(
+			    make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0),
+			    vector<Value> {Value::BIGINT(2700), Value::BIGINT(3000), Value(LogicalType::BIGINT)}));
+		}
 		auto required =
 		    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::BIGINT(2000));
 		auto optional =
@@ -104,6 +112,7 @@ TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adapti
 		ExpressionFilter filter(std::move(expression));
 		auto state = TableFilterState::Initialize(*con.context, filter);
 		auto oracle = TableFilterState::Initialize(*con.context, filter);
+		REQUIRE(state->can_cache);
 		auto cache = state->CreateCache(dictionary, dictionary.size());
 		for (idx_t batch = 0; batch < 6 * vectors; batch++) {
 			CAPTURE(order, batch);
@@ -293,18 +302,29 @@ TEST_CASE("Expired filter caches cannot prune pages", "[filter][adaptive_cache]"
 	REQUIRE_FALSE(cache->CanSkipAll());
 }
 
-static unique_ptr<ExpressionFilter> AdaptiveCacheFilter(bool mandatory) {
+static unique_ptr<ExpressionFilter> AdaptiveCacheFilter(bool mandatory, bool in_filter = false) {
 	float threshold;
 	idx_t vectors;
-	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::MIN_MAX, threshold, vectors);
+	GetThresholdAndVectorsToCheck(in_filter ? SelectivityOptionalFilterType::IN_FILTER
+	                                        : SelectivityOptionalFilterType::MIN_MAX,
+	                              threshold, vectors);
 	auto lower =
 	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::BIGINT(2700));
 	auto upper =
 	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_LESSTHANOREQUALTO, Value::BIGINT(3000));
-	auto optional = make_uniq<BoundConjunctionExpression>(
-	    ExpressionType::CONJUNCTION_AND,
-	    CreateSelectivityOptionalFilterExpression(lower->expr->Copy(), LogicalType::BIGINT, threshold, vectors),
-	    CreateSelectivityOptionalFilterExpression(upper->expr->Copy(), LogicalType::BIGINT, threshold, vectors));
+	unique_ptr<Expression> optional;
+	if (in_filter) {
+		optional = CreateSelectivityOptionalFilterExpression(
+		    ExpressionFilter::CreateInExpression(
+		        make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0),
+		        vector<Value> {Value::BIGINT(2900), Value::BIGINT(3000), Value(LogicalType::BIGINT)}),
+		    LogicalType::BIGINT, threshold, vectors);
+	} else {
+		optional = make_uniq<BoundConjunctionExpression>(
+		    ExpressionType::CONJUNCTION_AND,
+		    CreateSelectivityOptionalFilterExpression(lower->expr->Copy(), LogicalType::BIGINT, threshold, vectors),
+		    CreateSelectivityOptionalFilterExpression(upper->expr->Copy(), LogicalType::BIGINT, threshold, vectors));
+	}
 	if (!mandatory) {
 		return make_uniq<ExpressionFilter>(std::move(optional));
 	}
@@ -586,6 +606,7 @@ TEST_CASE("Filter cache capabilities reject mutable, throwing, and unsupported a
 
 TEST_CASE("Adaptive predicate caches share row feedback with fallback and preserve mandatory filters",
           "[filter][adaptive_cache]") {
+	const auto in_filter = GENERATE(false, true);
 	DuckDB db(nullptr);
 	Connection con(db);
 	Vector dictionary(LogicalType::BIGINT, 6);
@@ -597,7 +618,7 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 		writer.WriteNull();
 	}
 	for (const bool mandatory : {false, true}) {
-		auto filter = AdaptiveCacheFilter(mandatory);
+		auto filter = AdaptiveCacheFilter(mandatory, in_filter);
 		auto state = TableFilterState::Initialize(*con.context, *filter);
 		auto oracle = TableFilterState::Initialize(*con.context, *filter);
 		REQUIRE(state->can_cache);
@@ -662,6 +683,7 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 }
 
 TEST_CASE("Constant cached batches preserve adaptive feedback and mandatory predicates", "[filter][adaptive_cache]") {
+	const auto in_filter = GENERATE(false, true);
 	DuckDB db(nullptr);
 	Connection con(db);
 	vector<Value> keys {Value::BIGINT(1),    Value::BIGINT(2500), Value::BIGINT(2900),
@@ -678,7 +700,7 @@ TEST_CASE("Constant cached batches preserve adaptive feedback and mandatory pred
 		}
 	}
 	for (bool mandatory : {false, true}) {
-		auto filter = AdaptiveCacheFilter(mandatory);
+		auto filter = AdaptiveCacheFilter(mandatory, in_filter);
 		auto state = TableFilterState::Initialize(*con.context, *filter);
 		auto oracle = TableFilterState::Initialize(*con.context, *filter);
 		auto cache = state->CreateCache(dictionary, dictionary.size());

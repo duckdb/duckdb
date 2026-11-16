@@ -62,6 +62,8 @@ private:
 struct ExpressionFilterExecutor {
 	virtual ~ExpressionFilterExecutor() = default;
 
+	static unique_ptr<ExpressionFilterExecutor> TryCreate(const Expression &expression);
+
 	virtual idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                              idx_t &approved_tuple_count) = 0;
 	virtual bool CanCache() const {
