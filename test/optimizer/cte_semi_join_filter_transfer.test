@@ -1,5 +1,5 @@
-# name: test/optimizer/semi_join_key_filter_transfer.test
-# description: A predicate that every row of the right side of a SEMI join (or of a MARK join under a filter on its mark) satisfies on an equality key also filters a materialized CTE on the left side: a correlated EXISTS with a predicate on the outer key only filters the outer scan
+# name: test/optimizer/cte_semi_join_filter_transfer.test
+# description: The CTE filter pusher filters a materialized CTE on the left side of a SEMI join (or of a MARK join under a filter on its mark) by what the filters on the right side imply for the join keys: a correlated EXISTS with a predicate on the outer key only filters the outer scan
 # group: [optimizer]
 
 # fact: duplicate, NULL and unmatched keys (-1, 9); dim: duplicate and NULL keys, an unmatched key (7)
@@ -17,11 +17,6 @@ INSERT INTO dim VALUES (1, 1), (2, 2), (3, 3), (3, 4), (4, 6), (5, 7), (NULL, 8)
 
 statement ok
 CREATE TABLE empty_dim(k INTEGER, c INTEGER);
-
-query I
-SELECT name FROM duckdb_optimizers() WHERE name = 'semi_join_key_filter_transfer';
-----
-semi_join_key_filter_transfer
 
 # 1: the outer-only conjunct of a correlated EXISTS: only fact rows with k > 2 can match
 query II
@@ -111,7 +106,7 @@ SELECT * FROM fact f WHERE f.k IN (SELECT k FROM dim WHERE k < 2 OR k > 3) ORDER
 4	40
 5	50
 
-# 10: a null-safe correlation: the NULL keys match each other, IS NULL is transferred as it is
+# 10: a null-safe correlation: the NULL keys match each other
 query II
 SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k IS NOT DISTINCT FROM f.k AND f.k IS NULL) ORDER BY ALL
 ----
@@ -307,6 +302,15 @@ WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k
 4	40
 5	50
 
+# 32b: the reference is filtered already
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE v > 20 AND k IN (SELECT k FROM dim WHERE k > 2) ORDER BY ALL
+----
+3	30
+3	31
+4	40
+5	50
+
 # 33: two references, the other one filtered: the CTE keeps the rows either consumer needs
 query II
 WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k > 2) UNION ALL SELECT * FROM c WHERE v > 60 ORDER BY ALL
@@ -445,19 +449,31 @@ EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k A
 ----
 logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
-# 6 an uncorrelated IN over a scan: not this rule (left alone)
+# 6 an uncorrelated IN over a scan: no CTE reference on the left side (left alone)
 query II
 EXPLAIN SELECT * FROM fact f WHERE f.k IN (SELECT k FROM dim WHERE k > 2);
 ----
 logical_opt	<!REGEX>:(?s).*Filters: k > 2 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
-# 10 null-safe: IS NULL is transferred
+# 10 null-safe: a NULL test is not a comparison with constants, the outer scan stays unfiltered
 query II
 EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k IS NOT DISTINCT FROM f.k AND f.k IS NULL);
 ----
-logical_opt	<REGEX>:(?s).*Filters: k IS NULL *│[^\n]*\n[^\n]*│ Table: \S*fact .*
+logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
-# 12 a predicate on another column of the subquery: an IS NOT NULL on dim.k is not copied across the =
+# 10b null-safe with a comparison: NULL fails the comparison on either side
+query II
+EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k IS NOT DISTINCT FROM f.k AND f.k > 2);
+----
+logical_opt	<REGEX>:(?s).*Filters: k > 2 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
+# 29 an OR over the outer key is not a comparison with constants either
+query II
+EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k AND (f.k < 2 OR f.k > 3));
+----
+logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
+# 12 a predicate on another column of the subquery: nothing for the key
 query II
 EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k AND d.c > 5);
 ----
@@ -505,6 +521,12 @@ EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (
 ----
 logical_opt	<REGEX>:(?s).*Filters: k > 2 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
+# 32b the reference is filtered already: both filters reach the scan
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE v > 20 AND k IN (SELECT k FROM dim WHERE k > 2);
+----
+logical_opt	<REGEX>:(?s).*Filters: k > 2, v > 20 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
 # 33 two references, both filtered now: the disjunction is pushed into the CTE
 query II
 EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k > 2) UNION ALL SELECT * FROM c WHERE v > 60;
@@ -529,9 +551,9 @@ EXPLAIN SELECT v FROM dfact f WHERE EXISTS (SELECT 1 FROM ddim d WHERE d.k = f.k
 ----
 logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*dfact .*
 
-# without the rule the outer scan of the correlated EXISTS is unfiltered
+# without the CTE filter pusher the outer scan of the correlated EXISTS is unfiltered
 statement ok
-SET disabled_optimizers = 'semi_join_key_filter_transfer';
+SET disabled_optimizers = 'cte_filter_pusher';
 
 # 1 disabled
 query II
@@ -544,3 +566,41 @@ query II
 EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k > 2) UNION ALL SELECT * FROM c WHERE v > 60;
 ----
 logical_opt	<!REGEX>:(?s).*\(k > 2\) OR \(v > 60\).*
+
+# 32b disabled
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE v > 20 AND k IN (SELECT k FROM dim WHERE k > 2);
+----
+logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
+# the results are the same without the CTE filter pusher
+query II
+SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k AND f.k > 2) ORDER BY ALL
+----
+3	30
+3	31
+4	40
+5	50
+
+query II
+SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k IS NOT DISTINCT FROM f.k AND (f.k IS NULL OR f.k > 3)) ORDER BY ALL
+----
+4	40
+5	50
+NULL	60
+NULL	61
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE v > 20 AND k IN (SELECT k FROM dim WHERE k > 2) ORDER BY ALL
+----
+3	30
+3	31
+4	40
+5	50
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM t) SELECT k FROM c WHERE signbit(k * '0.0'::DOUBLE) UNION ALL SELECT k FROM c WHERE k > 10 UNION ALL SELECT k FROM c WHERE signbit(k * '-0.0'::DOUBLE) AND k < 10 ORDER BY k
+----
+-1.0
+1.0
+20.0

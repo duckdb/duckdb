@@ -29,6 +29,7 @@ add_library_unity(
   cte_join_filter_collector.cpp
   cte_join_filter_pusher.cpp
   cte_runtime_filter_pushdown.cpp
+  cte_semi_join_filter_transfer.cpp
   cte_inlining.cpp
   deliminator.cpp
   duplicate_eliminated_domain_optimizer.cpp
@@ -43,7 +44,6 @@ add_library_unity(
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
   runtime_filter_cast.cpp
-  semi_join_key_filter_transfer.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp

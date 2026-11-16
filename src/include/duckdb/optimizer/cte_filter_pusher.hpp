@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/insertion_order_preserving_map.hpp"
-#include "duckdb/common/table_index.hpp"
-#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -21,11 +19,6 @@ class Optimizer;
 class CTEFilterPusher {
 public:
 	explicit CTEFilterPusher(Optimizer &optimizer);
-	//! The materialized CTEs for which the filter of a reference may be dropped from the pushed disjunction when it
-	//! includes the filter of another reference (see SemiJoinKeyFilterTransfer)
-	void SetKeyFilteredCTEs(unordered_set<TableIndex> key_filtered_ctes_p) {
-		key_filtered_ctes = std::move(key_filtered_ctes_p);
-	}
 	//! Push consumer predicates and eligible join-key restrictions into materialized CTEs.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Discard planner guarantees before transformations that do not preserve consumer identity.
@@ -45,6 +38,10 @@ private:
 private:
 	//! Find all materialized CTEs and their refs
 	void FindCandidates(LogicalOperator &op);
+	//! Filters the reference of a materialized CTE on the left side of a SEMI join (or of a MARK join below a filter on
+	//! its mark) by what the filters on the right side imply for the join keys, when that makes every reference of the
+	//! CTE a filtered one
+	void GenerateSemiJoinFilters(LogicalOperator &op);
 	bool CanPushFilter(const MaterializedCTEInfo &info);
 	bool HasValidDependency(const MaterializedCTEInfo &info);
 	//! Creates an OR filter and pushes it into a materialized CTE
@@ -53,8 +50,6 @@ private:
 private:
 	//! The optimizer
 	Optimizer &optimizer;
-	//! The materialized CTEs that have a reference filtered by SemiJoinKeyFilterTransfer
-	unordered_set<TableIndex> key_filtered_ctes;
 	//! Mapping from CTE index to CTE info, order preserving so deepest CTEs are done first
 	InsertionOrderPreservingMap<unique_ptr<MaterializedCTEInfo>> cte_info_map;
 };
