@@ -1,5 +1,7 @@
 #include "test_capi_v2.hpp"
 
+#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -12,6 +14,40 @@
 namespace test_capi_v2 {
 
 namespace {
+
+class OpenOptionsFileSystem : public duckdb::FileSystem {
+public:
+	struct Handle : duckdb::FileHandle {
+		Handle(FileSystem &fs, const duckdb::string &path, duckdb::FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		}
+
+		void Close() override {
+		}
+	};
+
+	duckdb::vector<duckdb::OpenFileInfo> opened_files;
+
+public:
+	duckdb::string GetName() const override {
+		return "OpenOptionsFileSystem";
+	}
+
+	bool CanHandleFile(const duckdb::string &path) override {
+		return path == "open-options://file";
+	}
+
+protected:
+	bool SupportsOpenFileExtended() const override {
+		return true;
+	}
+
+	duckdb::unique_ptr<duckdb::FileHandle> OpenFileExtended(const duckdb::OpenFileInfo &file,
+	                                                        duckdb::FileOpenFlags flags,
+	                                                        duckdb::optional_ptr<duckdb::FileOpener>) override {
+		opened_files.push_back(file);
+		return duckdb::make_uniq<Handle>(*this, file.path, flags);
+	}
+};
 
 duckdb_v2_file_system_handle FsOf(duckdb_v2_connection_handle conn) {
 	duckdb_v2_file_system_handle fs = nullptr;
@@ -409,6 +445,45 @@ TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file
 	auto reader = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_READ});
 	REQUIRE(FsReadAll(reader, 32) == "data");
 	duckdb_v2_file_destroy(&reader);
+}
+
+TEST_CASE("V2 file system: reusing open options preserves earlier files", "[capi_v2][file_system]") {
+	EnvFixture fx;
+	auto &db = *duckdb::capiv2::Convert(fx.instance)->GetDatabase().instance;
+	auto recording_fs = duckdb::make_uniq<OpenOptionsFileSystem>();
+	auto &opened_files = recording_fs->opened_files;
+	duckdb::FileSystem::GetFileSystem(db).RegisterSubSystem(std::move(recording_fs));
+	auto fs = FsOf(fx.conn);
+	auto options = FsOptions(fs, {DUCKDB_V2_FILE_FLAG_READ});
+	auto path = Convert("open-options://file");
+	duckdb_v2_file_handle handles[3] = {nullptr, nullptr, nullptr};
+
+	REQUIRE(duckdb_v2_file_system_open(fs, &path, options, &handles[0], nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto name = Convert(duckdb::ExtendedOpenFileInfo::SECRET_OPTION);
+	auto secret_a = MakeVarcharValue(fx.factory, "secret_a");
+	REQUIRE(duckdb_v2_file_open_options_set_value(options, &name, secret_a, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&secret_a);
+	REQUIRE(duckdb_v2_file_system_open(fs, &path, options, &handles[1], nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	auto secret_b = MakeVarcharValue(fx.factory, "secret_b");
+	REQUIRE(duckdb_v2_file_open_options_set_value(options, &name, secret_b, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&secret_b);
+	REQUIRE(duckdb_v2_file_system_open(fs, &path, options, &handles[2], nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_open_options_destroy(&options) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(opened_files.size() == 3);
+	REQUIRE_FALSE(opened_files[0].extended_info);
+	duckdb::string secret_name;
+	REQUIRE(opened_files[1].extended_info);
+	REQUIRE(opened_files[1].extended_info->TryGetSecretName(secret_name));
+	REQUIRE(secret_name == "secret_a");
+	REQUIRE(opened_files[2].extended_info);
+	REQUIRE(opened_files[2].extended_info->TryGetSecretName(secret_name));
+	REQUIRE(secret_name == "secret_b");
+
+	for (auto &handle : handles) {
+		REQUIRE(duckdb_v2_file_destroy(&handle) == DUCKDB_V2_ERROR_NONE);
+	}
 }
 
 TEST_CASE("V2 file system: open options null arguments", "[capi_v2][file_system]") {
