@@ -113,10 +113,7 @@ static void PreserveRuntimeFilterCastErrors(unique_ptr<Expression> &expr, bool &
 	auto bound_cast = BoundCastExpression::GetBoundCast(cast).Copy();
 	auto &target_type = cast.GetReturnType();
 	auto child = std::move(BoundCastExpression::ChildMutable(cast));
-	auto safe_cast =
-	    BoundCastExpression::IsDefaultCast(cast)
-	        ? BoundCastExpression::CreateDefault(std::move(child), target_type, std::move(bound_cast), true)
-	        : BoundCastExpression::Create(std::move(child), target_type, std::move(bound_cast), true);
+	auto safe_cast = BoundCastExpression::Create(std::move(child), target_type, std::move(bound_cast), true);
 	safe_cast->SetAlias(cast.GetAlias());
 	safe_cast->SetQueryLocation(cast.GetQueryLocation());
 	expr = std::move(safe_cast);

@@ -65,12 +65,12 @@ static BoundCastInfo CountCastBinding(BindCastInput &, const LogicalType &, cons
 	return BoundCastInfo(IntegerToBigintPlusOne);
 }
 
-//! Casts using only the built-in SQL casts, regardless of the casts registered in the database
+//! Binds a cast using only the built-in SQL casts, regardless of the casts registered in the database
 static unique_ptr<Expression> DefaultCast(unique_ptr<Expression> expr, const LogicalType &target_type) {
 	CastFunctionSet default_casts;
 	auto get_input = GetCastFunctionInput::Default();
 	auto bound_cast = default_casts.GetCastFunction(expr->GetReturnType(), target_type, get_input);
-	return BoundCastExpression::CreateDefault(std::move(expr), target_type, std::move(bound_cast), false);
+	return BoundCastExpression::Create(std::move(expr), target_type, std::move(bound_cast), false);
 }
 
 TEST_CASE("Bound expression SQL export resolves columns only by binding", "[sql_export][bound_expression_sql_export]") {

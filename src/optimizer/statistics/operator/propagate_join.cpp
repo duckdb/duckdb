@@ -121,8 +121,7 @@ static optional_ptr<const Expression> GetFilterColumn(ClientContext &context, co
 		    !BoundCastExpression::CastIsInvertibleForEquality(source_type, target_type)) {
 			return nullptr;
 		}
-		if (!BoundCastExpression::IsDefaultCast(cast) &&
-		    CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
+		if (CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
 			return nullptr;
 		}
 		column = BoundCastExpression::Child(cast);
