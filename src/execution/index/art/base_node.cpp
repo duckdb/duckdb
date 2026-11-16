@@ -75,12 +75,13 @@ void Node4::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const N
 	Node16::InsertChild(art, node_ptr, byte, child_ptr);
 }
 
-void Node4::DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte, const GateStatus status) {
+void Node4::DeleteChild(ART &art, NodePtrHandle node_ptr_handle, NodePtr &parent_ptr, const uint8_t byte,
+                        const GateStatus status) {
 	NodePtr child_ptr;
 	uint8_t remaining_byte;
 
 	{
-		auto handle = DeleteChildInternal(art, node_ptr, byte);
+		auto handle = DeleteChildInternal(art, node_ptr_handle.Get(), byte);
 		auto &n = handle.Get<Node4>();
 
 		if (n.count != 1) {
@@ -92,11 +93,12 @@ void Node4::DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const 
 		remaining_byte = n.key[0];
 	}
 
-	auto prev_node4_status = node_ptr.GetGateStatus();
-	NodePtr::FreeNode(art, node_ptr);
+	auto prev_node4_status = node_ptr_handle.Get().GetGateStatus();
+	NodePtr::FreeNode(art, node_ptr_handle.Get());
 	// Propagate both the prev_node_4 status and the general gate status (if the gate was earlier on),
 	// since the concatenation logic depends on both.
-	PrefixHandle::Concat(art, parent_ptr, node_ptr, child_ptr, remaining_byte, prev_node4_status, status);
+	PrefixHandle::Concat(art, parent_ptr, std::move(node_ptr_handle), child_ptr, remaining_byte, prev_node4_status,
+	                     status);
 }
 
 void Node4::ShrinkNode16(ART &art, NodePtr &node4_ptr, NodePtr &node16_ptr) {
