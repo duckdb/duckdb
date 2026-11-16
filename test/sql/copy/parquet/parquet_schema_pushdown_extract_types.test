@@ -102,6 +102,10 @@ SELECT id FROM as_variant WHERE s.n.a::INTEGER = 10
 ----
 1
 
+# Older releases cannot deserialize VARIANT in persisted views.
+statement ok
+DROP VIEW as_variant
+
 statement ok
 COPY (
 	SELECT * FROM (VALUES (1, {'n': '{a: 42}'}), (2, NULL), (3, {'n': NULL})) t(id, s)

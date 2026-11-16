@@ -78,6 +78,10 @@ SELECT a FROM variant_default WHERE v.outer.answer::INTEGER IS NULL
 ----
 6
 
+# Older releases cannot deserialize VARIANT in persisted views.
+statement ok
+DROP VIEW variant_default
+
 # a struct without child definitions maps the fields of each file by name, as reading the whole column does
 statement ok
 COPY (SELECT range AS id, {'email': 'e' || range, 'phone': 'p' || range} AS customer FROM range(3)) TO '{TEMP_DIR}/extract_missing_old.parquet' (FIELD_IDS {id: 1, customer: {__duckdb_field_id: 2, email: 3, phone: 4}})
