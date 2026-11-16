@@ -2,7 +2,6 @@
 
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
@@ -52,20 +51,6 @@ Prefix Prefix::NewInternal(ART &art, NodePtr &node_ptr, const data_ptr_t data, c
 	}
 	prefix.child_slot->Clear();
 	return prefix;
-}
-
-void Prefix::New(ART &art, reference<NodePtr> &node_ptr_ref, const ARTKey &key, const idx_t depth, idx_t count) {
-	idx_t offset = 0;
-
-	while (count) {
-		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
-		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, node_ptr_ref, key.data, this_count, offset + depth);
-
-		node_ptr_ref = *prefix.child_slot;
-		offset += this_count;
-		count -= this_count;
-	}
 }
 
 void Prefix::Reduce(ART &art, NodePtr &node_ptr, const idx_t pos) {

@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-class ARTKey;
-
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
 //! It also contains a child NodePtr.
@@ -41,9 +39,6 @@ public:
 	static uint8_t GetByte(const ART &art, const NodePtr &node_ptr, const uint8_t pos);
 
 public:
-	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
-	static void New(ART &art, reference<NodePtr> &node_ptr_ref, const ARTKey &key, const idx_t depth, idx_t count);
-
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
 	static void Reduce(ART &art, NodePtr &node_ptr, const idx_t pos);
