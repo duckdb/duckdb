@@ -335,24 +335,28 @@ bool ScanReadAhead::TryReserveSlot() {
 	return true;
 }
 
-void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
+void ScanReadAhead::ScheduleJobIO(ScanReadAheadJob &job, vector<unique_ptr<AsyncTask>> io_tasks, idx_t slot_bytes) {
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
-	job->io_completion = completion;
+	job.io_completion = completion;
 	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
 	vector<unique_ptr<BaseExecutorTask>> read_tasks;
 	read_tasks.reserve(io_tasks.size());
 	for (auto &task : io_tasks) {
-		job->io_bytes += task->GetIOSize();
+		job.io_bytes += task->GetIOSize();
 		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion, *this));
 	}
-	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
-	// the minimum charge was taken by TryReserveSlot, charge the remainder
-	pending_io_bytes += job->io_bytes - MINIMUM_JOB_IO_CHARGE;
+	job.io_bytes = MaxValue<idx_t>(job.io_bytes, MINIMUM_JOB_IO_CHARGE);
+	// the minimum charge of a queued job was taken by TryReserveSlot, charge the remainder
+	pending_io_bytes += job.io_bytes - slot_bytes;
 	// schedule the reads detached on the async pool right away, logged under their own label
 	if (!read_tasks.empty()) {
 		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "READ_AHEAD", read_tasks.size());
 	}
 	executor->ScheduleTasks(std::move(read_tasks));
+}
+
+void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
+	ScheduleJobIO(*job, std::move(io_tasks), MINIMUM_JOB_IO_CHARGE);
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {
 		// Reserve room for the next job before admission checks the budget.

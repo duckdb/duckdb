@@ -52,7 +52,7 @@ namespace duckdb {
 struct TableScanJobState {
 	//! Rows of the assignment, counted as scanned by the progress once a thread decodes the job
 	idx_t rows = 0;
-	//! The scan state the job's I/O and decoding operate on
+	//! The scan state the job's I/O and decoding operate on, null for a job on the worker's own scan state
 	unique_ptr<TableScanState> scan_state;
 };
 using TableScanJob = ScanReadAheadJobWrapper<TableScanJobState>;
@@ -367,6 +367,20 @@ private:
 	optional_ptr<SampleOptions> sample_options;
 	//! Guards assignment claims, keeping job batch indexes dense in claim order
 	mutex read_ahead_lock;
+	//! Whether assignments are queued as jobs, set by the first one that needs I/O
+	atomic<bool> queue_jobs {false};
+	//! Workers claiming an assignment for themselves, the first queued claim waits for them
+	atomic<idx_t> own_claims {0};
+	//! Holds an own claim in own_claims for the guard's lifetime, also when the claim throws
+	struct OwnClaimGuard {
+		explicit OwnClaimGuard(atomic<idx_t> &own_claims_p) : own_claims(own_claims_p) {
+			++own_claims;
+		}
+		~OwnClaimGuard() {
+			--own_claims;
+		}
+		atomic<idx_t> &own_claims;
+	};
 	//! Batch index assigned to the next produced job
 	idx_t next_job_index = 0;
 	ScanStatePool<TableScanState> state_pool;
@@ -479,6 +493,10 @@ public:
 		{
 			// only the claim and its index need the lock, the per-column setup runs outside it
 			lock_guard<mutex> guard(read_ahead_lock);
+			// every assignment a worker claimed for itself comes before the first queued one
+			while (own_claims > 0) {
+				TaskScheduler::YieldThread();
+			}
 			const auto rows = storage.NextParallelScan(context, state, *job->scan_state, false);
 			if (!rows.IsValid()) {
 				return nullptr;
@@ -492,9 +510,34 @@ public:
 		return job;
 	}
 
+	//! Claims the next assignment into the worker's own scan state as a job that is not queued, null when none is left
+	unique_ptr<TableScanJob> ProduceOwnJob(ClientContext &context, TableScanLocalState &l_state,
+	                                       vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto &scan_state = l_state.scan_state;
+		// announced before the check, so a queued claim either sees this claim or this claim sees the jobs are queued
+		optional_idx rows;
+		{
+			OwnClaimGuard own_claim(own_claims);
+			rows = queue_jobs ? optional_idx() : storage.NextParallelScan(context, state, scan_state, false);
+		}
+		if (!rows.IsValid()) {
+			return nullptr;
+		}
+		auto job = make_uniq<TableScanJob>();
+		job->rows = rows.GetIndex();
+		scan_state.InitializeColumnScans();
+		scan_state.table_state.PrepareScanIO(tx, io_tasks, true);
+		return job;
+	}
+
+	//! The scan state the worker decodes from, the claimed job's own state or else the worker's
+	static TableScanState &JobScanState(TableScanLocalState &l_state) {
+		return l_state.job && l_state.job->scan_state ? *l_state.job->scan_state : l_state.scan_state;
+	}
+
 	//! Drops a settled job's row group when a filter set since it was produced prunes it
 	static void RecheckJob(TableScanLocalState &l_state) {
-		if (!l_state.job->scan_state->table_state.RecheckPreparedRowGroup()) {
+		if (!JobScanState(l_state).table_state.RecheckPreparedRowGroup()) {
 			// the row group is dropped without being scanned
 			l_state.row_groups_scanned--;
 		}
@@ -518,6 +561,23 @@ public:
 				read_ahead->WaitForJob(*l_state.job);
 				RecheckJob(l_state);
 			}
+			if (!l_state.job && !queue_jobs) {
+				// without I/O so far the worker decodes its own assignments, as the scan without read-ahead does
+				vector<unique_ptr<AsyncTask>> io_tasks;
+				l_state.job = ProduceOwnJob(context, l_state, io_tasks);
+				if (l_state.job) {
+					l_state.row_groups_scanned++;
+					l_state.assignment_progress.Start(l_state.job->rows);
+					if (!io_tasks.empty()) {
+						// the job's I/O goes through the read-ahead, as that of the jobs queued from now on
+						queue_jobs = true;
+						read_ahead->ScheduleJobIO(*l_state.job, std::move(io_tasks));
+						continue;
+					}
+				} else if (!queue_jobs) {
+					return false;
+				}
+			}
 			if (!l_state.job) {
 				unique_ptr<ScanReadAheadJob> claimed;
 				auto acquired = read_ahead->AcquireJob(
@@ -534,7 +594,7 @@ public:
 				}
 				RecheckJob(l_state);
 			}
-			auto &job_scan = *l_state.job->scan_state;
+			auto &job_scan = JobScanState(l_state);
 			// the job's I/O was registered when it was produced, so no I/O is scheduled here
 			auto scan_result = ScanPersistentStorage(context, data_p, l_state, job_scan, output);
 			UpdateScanProgress(l_state, job_scan);
@@ -560,7 +620,9 @@ public:
 			job_scan.local_state.rows_scanned = 0;
 			// a pooled state outlives the pipeline, it must not keep blocks pinned that a sink may still convert
 			job_scan.ReleasePins();
-			state_pool.Push(std::move(l_state.job->scan_state));
+			if (l_state.job->scan_state) {
+				state_pool.Push(std::move(l_state.job->scan_state));
+			}
 			l_state.job.reset();
 			if (TryYieldControl(data_p)) {
 				return true;
@@ -588,7 +650,7 @@ public:
 			} else if (read_ahead) {
 				if (!ScanWithReadAhead(context, data_p, l_state, output) &&
 				    data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-					// every assignment went to a read-ahead job, the thread's own scan state never claims one
+					// no assignment or queued job is left for this worker, the scan is done
 					data_p.async_result = AsyncResultType::FINISHED;
 				}
 				return;
@@ -646,7 +708,7 @@ public:
 	                                                TableFunctionGetPartitionInput &input) override {
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
 		// with read-ahead the assignment being decoded lives in the claimed job's scan state
-		auto &scan_state = l_state.job ? *l_state.job->scan_state : l_state.scan_state;
+		auto &scan_state = JobScanState(l_state);
 		if (scan_state.table_state.GetRowGroup()) {
 			return OperatorPartitionData(scan_state.table_state.batch_index);
 		}
@@ -659,7 +721,8 @@ public:
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
 		const auto &l_state = state.Cast<TableScanLocalState>();
 		auto result = l_state.scan_state.RowsScanned() + l_state.job_rows_scanned;
-		if (l_state.job) {
+		// a job on the worker's own scan state is counted above, a queued job's state is not
+		if (l_state.job && l_state.job->scan_state) {
 			result += l_state.job->scan_state->RowsScanned();
 		}
 		return result;

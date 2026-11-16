@@ -200,4 +200,105 @@ TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]"
 	observer->UpdateReservation(context);
 	REQUIRE(observer->GetReservation() == full_reservation);
 }
+
+namespace {
+
+//! A read that counts its executions and reports a fixed size to the read-ahead budget
+class CountingReadTask : public AsyncTask {
+public:
+	CountingReadTask(std::atomic<idx_t> &executions_p, idx_t io_size_p) : executions(executions_p), io_size(io_size_p) {
+	}
+
+	void Execute() override {
+		executions++;
+	}
+	idx_t GetIOSize() const override {
+		return io_size;
+	}
+
+private:
+	std::atomic<idx_t> &executions;
+	idx_t io_size;
+};
+
+duckdb::vector<duckdb::unique_ptr<AsyncTask>> MakeReads(std::atomic<idx_t> &executions, idx_t count, idx_t io_size) {
+	duckdb::vector<duckdb::unique_ptr<AsyncTask>> reads;
+	for (idx_t i = 0; i < count; i++) {
+		reads.push_back(make_uniq<CountingReadTask>(executions, io_size));
+	}
+	return reads;
+}
+
+} // namespace
+
+TEST_CASE("Read-ahead runs the reads of a job that is not queued", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
+
+	ScanReadAhead read_ahead(*con.context, 1, nullptr);
+	struct JobState {};
+	std::atomic<idx_t> executions {0};
+	auto job = make_uniq<ScanReadAheadJobWrapper<JobState>>();
+	read_ahead.ScheduleJobIO(*job, MakeReads(executions, 3, 1024));
+	REQUIRE(job->io_completion);
+
+	read_ahead.WaitForJob(*job);
+	REQUIRE(executions == 3);
+	REQUIRE(job->io_bytes == 0);
+}
+
+TEST_CASE("A job that is not queued holds its budget charge until it settles", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=-1"));
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit='1GB'"));
+
+	auto read_ahead = ScanReadAhead::Create(*con.context);
+	REQUIRE(read_ahead);
+	struct JobState {};
+	const idx_t job_count = 32;
+	idx_t produced = 0;
+	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
+		if (produced == job_count) {
+			return nullptr;
+		}
+		auto job = make_uniq<ScanReadAheadJobWrapper<JobState>>();
+		job->batch_index = produced++;
+		return std::move(job);
+	};
+	TableFunctionInput input(nullptr, nullptr, nullptr);
+
+	// a read larger than any budget, its job is decoded by the thread that claimed it
+	const idx_t over_budget_size = 1ULL << 40;
+	std::atomic<idx_t> executions {0};
+	auto direct_job = make_uniq<ScanReadAheadJobWrapper<JobState>>();
+	read_ahead->ScheduleJobIO(*direct_job, MakeReads(executions, 1, over_budget_size));
+
+	// while its charge is held the scan is over budget, so the queue holds a single job
+	duckdb::unique_ptr<ScanReadAheadJob> job;
+	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 0);
+	REQUIRE(produced == 1);
+	job.reset();
+
+	// settling the job returns its charge and the backlog grows again
+	read_ahead->WaitForJob(*direct_job);
+	REQUIRE(executions == 1);
+	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 1);
+	REQUIRE(produced > 2);
+	job.reset();
+
+	// the queued jobs keep their order and every one is consumed
+	for (idx_t consumed = 2; consumed < job_count; consumed++) {
+		REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::ACQUIRED);
+		REQUIRE(job->batch_index == consumed);
+		job.reset();
+	}
+	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::EXHAUSTED);
+	REQUIRE(produced == job_count);
+}
 #endif
