@@ -139,8 +139,10 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
 	// ourselves
-	auto self_type = cte_def.type == QueryNodeType::RECURSIVE_CTE_NODE ? CTEType::CANNOT_BE_REFERENCED_RECURSIVE
-	                                                                   : CTEType::CANNOT_BE_REFERENCED;
+	// a trampoline's seed is its non-recursive term
+	auto is_recursive =
+	    cte_def.type == QueryNodeType::RECURSIVE_CTE_NODE || cte_def.type == QueryNodeType::TRAMPOLINE_CTE_NODE;
+	auto self_type = is_recursive ? CTEType::CANNOT_BE_REFERENCED_RECURSIVE : CTEType::CANNOT_BE_REFERENCED;
 	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<Identifier>(),
 	                                         vector<LogicalType>(), self_type);
 

@@ -92,6 +92,16 @@ SELECT * FROM t;
 ----
 <REGEX>:Binder Error.*integ.*
 
+# the seed is the non-recursive term and cannot reference the CTE itself
+statement error
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+    (SELECT b, n FROM t)
+    BRANCH 1: (SELECT 0, n FROM t)
+)
+SELECT * FROM t;
+----
+Binder Error: Recursive reference to CTE "t" must not appear in its non-recursive term
+
 # all branches must produce the same number of columns as the seed
 statement error
 WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
