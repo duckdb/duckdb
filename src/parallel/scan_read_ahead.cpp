@@ -71,6 +71,8 @@ public:
 		completion->AddIOTask();
 	}
 	~ReadAheadIOTask() override {
+		// release the task's resources before waking the scan, they may outlive the database otherwise
+		task.reset();
 		// If we are done we decrement the pending
 		completion->FinishIOTask();
 	}
@@ -83,6 +85,8 @@ public:
 			// recording the error through the read-ahead also wakes the threads waiting for progress
 			read_ahead.PushError(ErrorData(ex));
 		}
+		// release the task's resources while the executor still counts this task as running
+		task.reset();
 	}
 
 private:
@@ -177,7 +181,7 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context) {
 	if (configured_depth < 0) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
 		return make_uniq<ScanReadAhead>(context, NumericLimits<idx_t>::Maximum(),
-		                                make_uniq<ManagedAsyncMemoryGovernor>(context));
+		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()));
 	}
 	return make_uniq<ScanReadAhead>(context, NumericCast<idx_t>(configured_depth), nullptr);
 }
@@ -215,6 +219,15 @@ bool ScanReadAhead::IsDone() const {
 
 bool ScanReadAhead::HasActiveProducers() const {
 	return active_producers.load() > 0;
+}
+
+void ScanReadAhead::ReleaseMemoryReservation() {
+	// a finished scan returns its reservation now, not at query end, so later joins and aggregates can use it
+	if (!memory_governor) {
+		return;
+	}
+	memory_governor->Release();
+	backlog_budget = 0;
 }
 
 unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
@@ -262,6 +275,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 					throw InternalException("Read-ahead exhausted with jobs still held back, "
 					                        "batch indexes must be gapless from 0");
 				}
+				ReleaseMemoryReservation();
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 		}

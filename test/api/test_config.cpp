@@ -84,6 +84,11 @@ TEST_CASE("Test allowed options", "[api]") {
 		option = "logging_mode";
 	}
 
+	SECTION("logging_sink") {
+		config_dict.emplace("logging_sink", Value::BOOLEAN(false));
+		option = "logging_sink";
+	}
+
 	SECTION("logging_storage") {
 		config_dict.emplace("logging_storage", Value::BOOLEAN(false));
 		option = "logging_storage";
@@ -311,6 +316,42 @@ TEST_CASE("Test deprecated extension options warn when set", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
+TEST_CASE("Test extension option defaults are not user settings", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("my_option", "An option", LogicalType::VARCHAR, Value("default"));
+	ExtensionOption option;
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_option"), option));
+	auto setting_index = option.setting_index.GetIndex();
+	Value value;
+
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	auto result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// setting the default explicitly is not the same as leaving it unset
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'default'"));
+	REQUIRE(bool(config.TryGetCurrentUserSetting(setting_index, value)));
+	REQUIRE_NO_FAIL(con.Query("RESET GLOBAL my_option"));
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// RESET clears the session value, so the connection sees the global value again
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'global'"));
+	REQUIRE_NO_FAIL(con.Query("SET my_option = 'session'"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option"));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"global"}));
+
+	// an option without a default is unset again after RESET, not NULL
+	config.AddExtensionOption("my_option_without_default", "An option", LogicalType::BOOLEAN);
+	REQUIRE_NO_FAIL(con.Query("SET my_option_without_default = true"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option_without_default"));
+	REQUIRE(!con.context->TryGetCurrentSetting(Identifier("my_option_without_default"), value));
+}
+
 TEST_CASE("Test every deprecated setting warns when set", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -340,4 +381,51 @@ TEST_CASE("Test every deprecated setting warns when set", "[api]") {
 		}
 	}
 	REQUIRE(checked > 0);
+}
+
+TEST_CASE("Test the per-connection progress bar options in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar", Value("true")),
+	                    Catch::Contains("enable_progress_bar") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar_print", Value("false")),
+	                    Catch::Contains("enable_progress_bar_print") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("progress_bar_time", Value("100")),
+	                    Catch::Contains("progress_bar_time") && Catch::Contains("as a global option"));
+	// the options remain settable per connection
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET progress_bar_time = 100"));
+	auto result = con.Query("SELECT current_setting('progress_bar_time'), current_setting('enable_progress_bar')");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true}));
+}
+
+TEST_CASE("Test buffer_manager_track_eviction_timestamps is fixed once the database is running", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("buffer_manager_track_eviction_timestamps", Value::BOOLEAN(true)));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SET buffer_manager_track_eviction_timestamps = false");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Cannot change buffer_manager_track_eviction_timestamps setting "
+	                                                 "while database is running"));
+	result = con.Query("SELECT current_setting('buffer_manager_track_eviction_timestamps')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}
+
+TEST_CASE("Test tracked_metrics in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("tracked_metrics", Value("['query.*']")));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("tracked_metrics", Value("['query.*', NULL]")),
+	                    Catch::Contains("cannot contain NULL entries"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto expected = Value::LIST(LogicalType::VARCHAR, {Value("query.*")});
+	auto result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
+	// a session value resets to the configured global value
+	REQUIRE_NO_FAIL(con.Query("SET tracked_metrics = ['optimizer.*']"));
+	REQUIRE_NO_FAIL(con.Query("RESET tracked_metrics"));
+	result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
 }

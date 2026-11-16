@@ -206,6 +206,16 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		return timestamp_tz_ns_t(result);
 	}
 
+	static inline timestamp_tz_t Operation(Calendar *calendar, date_t naive) {
+		if (DUCKDB_UNLIKELY(naive == date_t::infinity())) {
+			return timestamp_tz_t::infinity();
+		}
+		if (DUCKDB_UNLIKELY(naive == date_t::ninfinity())) {
+			return timestamp_tz_t::ninfinity();
+		}
+		return Operation(calendar, Timestamp::FromDatetime(naive, dtime_t(0)));
+	}
+
 	template <class SRC, class DST>
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
@@ -236,7 +246,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 
 	template <typename SRC>
 	static BoundCastInfo BindCastFromNaiveType(BindCastInput &input, const LogicalType &target) {
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		auto cast_data = BindCastData(input);
 		switch (target.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return BoundCastInfo(CastFromNaive<SRC, timestamp_tz_t>, std::move(cast_data));
@@ -366,6 +376,20 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		return result;
 	}
 
+	//! Rounds the local time micros * 1000 + nanos to microseconds, away from zero on ties like the other casts.
+	//! The nanosecond value is not formed, as it can overflow int64 where the microsecond value does not.
+	static timestamp_t RoundToMicros(timestamp_t micros, int32_t nanos) {
+		auto value = micros.value;
+		if (value == 0) {
+			value = nanos >= 500 ? 1 : (nanos <= -500 ? -1 : 0);
+		} else if (value > 0) {
+			value += nanos >= 0 ? (nanos >= 500 ? 1 : 0) : (nanos < -500 ? -1 : 0);
+		} else {
+			value += nanos <= 0 ? (nanos <= -500 ? -1 : 0) : (nanos > 500 ? 1 : 0);
+		}
+		return timestamp_t(value);
+	}
+
 	template <class SRC, class DST>
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
@@ -374,6 +398,21 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 
 		bool all_converted = true;
 		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) -> optional<DST> {
+			if constexpr (std::is_same<SRC, timestamp_tz_ns_t>::value && std::is_same<DST, timestamp_t>::value) {
+				if (input.IsFinite()) {
+					// shift in microseconds: the local time can lie outside the timestamp_ns range
+					timestamp_t micros_naive;
+					string micros_error;
+					const auto nanos = UnsafeNumericCast<int32_t>(input.value % Interval::NANOS_PER_MICRO);
+					const timestamp_tz_t micros(input.value / Interval::NANOS_PER_MICRO);
+					if (!TryOperation(calendar.get(), micros, micros_naive, micros_error)) {
+						HandleCastError::AssignError(micros_error, parameters);
+						all_converted = false;
+						return nullopt;
+					}
+					return RoundToMicros(micros_naive, nanos);
+				}
+			}
 			using NAIVE = timestamp_base_t<SRC::PRECISION, false>;
 			// the zone shift itself can fail, and a TRY_CAST must see that as NULL rather than an exception
 			NAIVE naive;
@@ -404,7 +443,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			                      LogicalTypeIdToString(target.id()));
 		}
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		auto cast_data = BindCastData(input);
 
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:
@@ -422,6 +461,8 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			}
 		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			switch (target.id()) {
+			case LogicalType::TIMESTAMP:
+				return BoundCastInfo(CastToNaive<timestamp_tz_ns_t, timestamp_t>, std::move(cast_data));
 			case LogicalType::TIMESTAMP_NS:
 				return BoundCastInfo(CastToNaive<timestamp_tz_ns_t, timestamp_ns_t>, std::move(cast_data));
 			default:
@@ -446,6 +487,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_S);
 
+		AddCast(casts, LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_NS);
 	}
 };
@@ -499,6 +541,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
+		// the bind reads the start of the transaction
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 };
@@ -515,6 +559,8 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
+		// the bind reads the start of the transaction
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 };
@@ -590,7 +636,7 @@ BoundCastInfo ICUToTimeTZ::BindCastToTimeTZ(BindCastInput &input, const LogicalT
 		throw InternalException("Missing context for TIMESTAMPTZ to TIMETZ cast.");
 	}
 
-	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+	auto cast_data = BindCastData(input);
 
 	return BoundCastInfo(CastToTimeTZ, std::move(cast_data));
 }
@@ -625,7 +671,7 @@ BoundCastInfo ICUToTimeTZ::BindCastFromTime(BindCastInput &input, const LogicalT
 		throw InternalException("Missing context for TIME to TIMETZ cast.");
 	}
 
-	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+	auto cast_data = BindCastData(input);
 
 	return BoundCastInfo(CastFromTime, std::move(cast_data));
 }
@@ -699,8 +745,14 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ_NS);
 		set.AddFunction(timetzns_fun);
 
+		ScalarFunction date_fun({}, LogicalType::TIMESTAMP_TZ, Execute<ICUFromNaiveTimestamp, date_t, timestamp_tz_t>,
+		                        Bind);
+		date_fun.GetSignature().AddParameter("timezone", LogicalType::VARCHAR).AddParameter("date", LogicalType::DATE);
+		set.AddFunction(date_fun);
+
 		set.ApplyToFunctions([](ScalarFunction &func) {
 			func.SetFallible();
+			func.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 			func.SetInitStateCallback(InitCalendarCache);
 		});
 		loader.RegisterFunction(set);
