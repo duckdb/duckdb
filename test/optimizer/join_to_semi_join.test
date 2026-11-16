@@ -89,6 +89,32 @@ select a.x, bool_or(a.y > 60), bool_and(a.y > 60) from a, p where a.y > p.hi gro
 8	true	true
 9	true	true
 
+# must not fire: an exported state shows its input, the state of an ordered aggregate holds every row
+query II
+explain select (min(a.x order by a.x) export_state)::varchar from a, p where a.y > p.hi;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query I
+select len((min(a.x order by a.x) export_state)::varchar) from a, p where a.y > p.hi;
+----
+165
+
+query II
+explain select (bool_and(a.y > 50 order by a.y) export_state)::varchar from a, p where a.y > p.hi;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query II
+explain select (min(a.x) export_state)::varchar from a, p where a.y > p.hi;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query I
+select (min(a.x) export_state)::varchar from a, p where a.y > p.hi;
+----
+4
+
 # must not fire: any_value does not depend on duplicates either, but on which row comes first
 query II
 explain select a.x, any_value(a.y) from a, p where a.y > p.hi group by a.x;

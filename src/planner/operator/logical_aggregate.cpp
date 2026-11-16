@@ -94,13 +94,18 @@ bool LogicalAggregate::IgnoresDuplicates() const {
 			return false;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			// an exported state shows its input: the state of an ordered aggregate holds every row
+			return false;
+		}
 		if (aggregate.IsDistinct()) {
 			continue;
 		}
+		// a function that is not distinct-dependent returns the same value over repeated rows; one that depends on
+		// the order of its input (first, last) may still pick its value from a different row
 		auto &function = aggregate.Function();
 		if (function.GetDistinctDependent() != AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT ||
 		    function.GetOrderDependent() != AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
-			// first() and any_value() do not depend on duplicates either, but on which row comes first
 			return false;
 		}
 	}
