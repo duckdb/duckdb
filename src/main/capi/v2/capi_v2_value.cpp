@@ -123,6 +123,15 @@ Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t s
 	if (!Hugeint::TryCast<int64_t>(value, narrow)) {
 		throw InvalidInputException("value does not fit the storage tier of the declared width");
 	}
+	int64_t limit = NumericLimits<int64_t>::Maximum();
+	if (type.InternalType() == PhysicalType::INT16) {
+		limit = NumericLimits<int16_t>::Maximum();
+	} else if (type.InternalType() == PhysicalType::INT32) {
+		limit = NumericLimits<int32_t>::Maximum();
+	}
+	if (narrow > limit || narrow < -limit) {
+		throw InvalidInputException("value does not fit the storage tier of the declared width");
+	}
 	return Value::DECIMAL(narrow, width, scale);
 }
 
