@@ -30,20 +30,18 @@ struct DistinctGroupRef {
 
 class PipelineInfo {
 public:
-	unique_ptr<LogicalOperator> root = nullptr;
+	//! The tables the operators above (and the conditions of the joins above) reference
 	unordered_set<TableIndex> ref_table_ids;
+	//! The operators above return the same result when rows of this pipeline are repeated
+	bool ignores_duplicates = false;
+	//! Column sets that are distinct: the ones of the operators above, and the ones found on the way down
 	unordered_map<TableIndex, column_binding_set_t> distinct_groups;
 
-	// pushdown filter condition(ex in table scan operator),
-	// if have outer table columns then cannot elimination
+	//! Found in this pipeline: a pushed-down filter condition (e.g. in a table scan operator)
 	bool has_filter = false;
-	// the operators above return the same result when rows of this pipeline are repeated
-	bool ignores_duplicates = false;
-
-	optional_ptr<LogicalOperator> join_parent = nullptr;
-	idx_t join_index = 0;
 
 public:
+	//! The state a pipeline below starts with: what is inherited from the operators above, nothing that was found
 	PipelineInfo CreateChild() {
 		auto result = PipelineInfo();
 		result.ref_table_ids = ref_table_ids;
@@ -57,7 +55,6 @@ public:
 	explicit JoinElimination() {
 	}
 
-	void OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx);
 	// with specific condition we can eliminate a (left/right, semi, inner) join.
 	// exemplify left/right join eliminaion condition:
 	// 1. output can only have outer table columns
@@ -70,7 +67,6 @@ public:
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Whether Optimize removed a join
 	bool RemovedJoin() const;
-	void OptimizeInternal(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	unique_ptr<JoinElimination> CreateChildren() {
@@ -80,23 +76,23 @@ public:
 	}
 
 private:
-	//! Analyses both children of the join `op` of this pipeline
-	void OptimizeJoinChildren(LogicalOperator &op);
-	void OptimizeJoinChild(JoinElimination &child, LogicalOperator &join, idx_t child_idx);
-	unique_ptr<LogicalOperator> TryEliminateJoin();
-	//! Replaces the join of this pipeline by its outer child when it can; returns whether it did
-	bool TryEliminateJoinInternal();
-	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
-	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
+	//! Analyses the operators of this pipeline from `op` down. A join is replaced in place, through `op`, by its outer
+	//! side when it can be removed; `replaceable`: whether `op` itself may be replaced (false for the root of the
+	//! plan and for the children of operators that may read their columns by position)
+	void OptimizeOperator(unique_ptr<LogicalOperator> &op, bool replaceable);
+	//! Analyses child `child_idx` of `op` with `child_optimizer` and keeps the projection map `op` has for that child
+	//! valid when a join was removed below
+	void OptimizeChild(LogicalOperator &op, idx_t child_idx, JoinElimination &child_optimizer, bool replaceable);
+	//! Analyses the join `op` of this pipeline and both of its sides, and removes it when it can
+	void OptimizeJoin(unique_ptr<LogicalOperator> &op);
+	void OptimizeJoinChild(LogicalOperator &join, idx_t child_idx, JoinElimination &child);
+	//! Replaces the join `op` by its outer side when it can; returns whether it did
+	bool TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElimination &left_child, JoinElimination &right_child);
+	bool ContainDistinctGroup(const unordered_map<TableIndex, column_binding_set_t> &distinct_groups,
+	                          vector<ColumnBinding> &column_bindings);
 
 	PipelineInfo pipe_info;
-
-	optional_ptr<LogicalOperator> children_root;
-	vector<unique_ptr<JoinElimination>> children;
-
-	unique_ptr<JoinElimination> left_child;
-	unique_ptr<JoinElimination> right_child;
-
-	bool removed_join = false;
+	//! The number of joins removed in this pipeline and the pipelines below it
+	idx_t removed_joins = 0;
 };
 } // namespace duckdb
