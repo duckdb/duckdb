@@ -154,3 +154,14 @@ statement error
 COPY dialect_rows TO '{TEST_DIR}/dialect_write.csv' (FORMAT csv, DIALECT 'opencsv');
 ----
 <REGEX>:.*dialect.*
+
+# a doubled quote inside a quoted value is one quote, also with the '\' escape, and both forms mix
+statement ok
+COPY (SELECT * FROM (VALUES ('5,"a""b",11'), ('6,"a\"b""c",12'), ('7,"a""",13')) t(line)) TO '{TEST_DIR}/dialect_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+5	a"b	11
+6	a"b"c	12
+7	a"	13

@@ -1252,6 +1252,13 @@
         "property": "options.dialect",
         "type": "CSVOption<CSVDialect>",
         "default": "CSVOption<CSVDialect>(CSVDialect::STANDARD)"
+      },
+      {
+        "id": 148,
+        "name": "doubled_quotes",
+        "property": "options.doubled_quotes",
+        "type": "CSVOption<bool>",
+        "default": "CSVOption<bool>(false)"
       }
     ],
     "constructor": [

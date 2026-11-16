@@ -656,6 +656,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV, false);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
 		state_machine_options.strict_mode.Set(false, false);
+		doubled_quotes.Set(true, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
 	if (buffer_size_option.IsSetByUser() && maximum_line_size.IsSetByUser()) {
