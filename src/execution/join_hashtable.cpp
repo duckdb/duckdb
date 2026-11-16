@@ -263,13 +263,18 @@ static void PrefetchSlots(const JoinHashTable &ht, const ht_entry_t *entries, co
 	}
 }
 
+template <bool HAS_SEL>
+idx_t GetOptionalIndex(optional_ptr<const SelectionVector> sel, const idx_t idx) {
+	return HAS_SEL ? sel->get_index(idx) : idx;
+}
+
 //! Finds the first slot of every row whose salt matches (USE_SALTS) or that is occupied, and returns the number of
 //! rows in keys_to_compare_sel, with their entry pointer in pointers_result_v. Linear probing of all rows at once, one
 //! slot per round, without data-dependent branches; the probe works on dense indices, mapped through row_sel.
-template <bool USE_SALTS>
-static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &ht,
-                              unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
-                              const SelectionVector &row_sel, const idx_t count) {
+template <bool USE_SALTS, bool HAS_ROW_SEL>
+static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht,
+                                      unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
+                                      optional_ptr<const SelectionVector> row_sel, const idx_t count) {
 	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 	const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 	const auto bitmask = ht.bitmask;
@@ -284,7 +289,7 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 	// pointers go to their row index, so rows outside the selection keep theirs
 	const auto pointers = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
 	for (idx_t i = 0; i < count; i++) {
-		pointers[row_sel.get_index(i)] = loaded[i].GetPointerOrNull();
+		pointers[GetOptionalIndex<HAS_ROW_SEL>(row_sel, i)] = loaded[i].GetPointerOrNull();
 	}
 
 	// check every slot; dense, so the loop vectorizes also with a row selection
@@ -313,19 +318,29 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 			bool row_is_match;
 			bool row_needs_next;
 			CheckEntry<USE_SALTS>(loaded[i], hashes_dense[dense_index], row_is_match, row_needs_next);
-			pointers[row_sel.get_index(dense_index)] = loaded[i].GetPointerOrNull();
+			pointers[GetOptionalIndex<HAS_ROW_SEL>(row_sel, dense_index)] = loaded[i].GetPointerOrNull();
 			state.keys_to_compare_sel.AppendIf(compare_count, dense_index, row_is_match);
 			state.rows_to_probe_sel.AppendIf(next_probe_count, dense_index, row_needs_next);
 		}
 		probe_count = next_probe_count;
 	}
 
-	if (row_sel.IsSet()) {
+	if (HAS_ROW_SEL) {
 		for (idx_t i = 0; i < compare_count; i++) {
-			compare[i] = UnsafeNumericCast<sel_t>(row_sel.get_index(compare[i]));
+			compare[i] = UnsafeNumericCast<sel_t>(row_sel->get_index(compare[i]));
 		}
 	}
 	return compare_count;
+}
+
+template <bool USE_SALTS>
+static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &ht,
+                              unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
+                              optional_ptr<const SelectionVector> row_sel, const bool has_row_sel, const idx_t count) {
+	if (has_row_sel) {
+		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, pointers_result_v, row_sel, count);
+	}
+	return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, pointers_result_v, row_sel, count);
 }
 
 //! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the key_match_sel
@@ -361,9 +376,8 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	idx_t elements_to_probe_count = count;
 
 	do {
-		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(
-		    state, ht, entries, pointers_result_v, has_row_sel ? *row_sel : *FlatVector::IncrementalSelectionVector(),
-		    elements_to_probe_count);
+		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, pointers_result_v, row_sel,
+		                                                                has_row_sel, elements_to_probe_count);
 
 		// if there are no keys to compare, we are done
 		if (keys_to_compare_count == 0) {
