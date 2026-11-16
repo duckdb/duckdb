@@ -11,6 +11,7 @@
 #include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 using namespace duckdb;
 
@@ -80,15 +81,15 @@ TEST_CASE("Sibling coordination uses build input cardinality", "[runtime_filter_
 	}
 }
 
-TEST_CASE("Small runtime filter builds exclude blocking and larger inputs", "[runtime_filter_schedule]") {
+TEST_CASE("Small runtime filter builds bound input work", "[runtime_filter_schedule]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Executor executor(*con.context, false);
 	PipelineBuildState state;
 	PhysicalPlan plan(Allocator::Get(*con.context));
-	auto &probe = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, 100000);
-	auto &small_input = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, DEFAULT_STANDARD_VECTOR_SIZE);
-	auto &large_input = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, DEFAULT_STANDARD_VECTOR_SIZE + 1);
+	auto &probe = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, 1000000);
+	auto &small_input = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, DEFAULT_ROW_GROUP_SIZE);
+	auto &large_input = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, DEFAULT_ROW_GROUP_SIZE + 1);
 	auto &unknown_input = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, 0);
 	auto &small_projection =
 	    plan.Make<PhysicalProjection>(vector<LogicalType> {}, vector<unique_ptr<Expression>> {}, 1);
@@ -102,9 +103,19 @@ TEST_CASE("Small runtime filter builds exclude blocking and larger inputs", "[ru
 	auto &aggregate_projection =
 	    plan.Make<PhysicalProjection>(vector<LogicalType> {}, vector<unique_ptr<Expression>> {}, 1);
 	aggregate_projection.children.push_back(aggregate);
+	LogicalComparisonJoin logical_mark(JoinType::MARK);
+	auto &small_mark = plan.Make<PhysicalHashJoin>(logical_mark, small_input, small_input, vector<JoinCondition> {},
+	                                               JoinType::MARK, DEFAULT_ROW_GROUP_SIZE);
+	auto &large_mark = plan.Make<PhysicalHashJoin>(logical_mark, large_input, small_input, vector<JoinCondition> {},
+	                                               JoinType::MARK, 1);
+	auto &aggregate_mark =
+	    plan.Make<PhysicalHashJoin>(logical_mark, small_input, aggregate, vector<JoinCondition> {}, JoinType::MARK, 1);
+	LogicalComparisonJoin logical_inner(JoinType::INNER);
+	auto &small_join = plan.Make<PhysicalHashJoin>(logical_inner, small_input, small_input, vector<JoinCondition> {},
+	                                               JoinType::INNER, 1);
 	auto &scan =
 	    plan.Make<PhysicalTableScan>(vector<LogicalType> {}, BoundTableFunction(), nullptr, vector<LogicalType> {},
-	                                 vector<ColumnIndex> {}, vector<idx_t> {}, vector<string> {}, nullptr, 100000,
+	                                 vector<ColumnIndex> {}, vector<idx_t> {}, vector<string> {}, nullptr, 1000000,
 	                                 ExtraOperatorInfo(), vector<Value> {}, virtual_column_map_t {})
 	        .Cast<PhysicalTableScan>();
 	scan.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
@@ -112,7 +123,9 @@ TEST_CASE("Small runtime filter builds exclude blocking and larger inputs", "[ru
 
 	vector<pair<reference<PhysicalOperator>, bool>> builds {{small_input, true},      {large_input, false},
 	                                                        {small_projection, true}, {large_projection, false},
-	                                                        {aggregate, false},       {aggregate_projection, false}};
+	                                                        {aggregate, false},       {aggregate_projection, false},
+	                                                        {small_mark, true},       {large_mark, false},
+	                                                        {aggregate_mark, false},  {small_join, false}};
 	vector<pair<bool, bool>> consumers {{false, false}, {true, false}, {false, true}};
 	for (auto &build : builds) {
 		for (auto &consumer : consumers) {
@@ -136,7 +149,7 @@ TEST_CASE("Small runtime filter builds exclude blocking and larger inputs", "[ru
 			producer.filter_pushdown->build_side_has_filter = false;
 			JoinFilterPushdownFilter target;
 			target.dynamic_filters = scan.dynamic_filters;
-			target.estimated_scan_cardinality = 100000;
+			target.estimated_scan_cardinality = 1000000;
 			producer.filter_pushdown->probe_info.push_back(std::move(target));
 			auto consumer_pipeline = make_shared_ptr<Pipeline>(executor);
 			state.SetPipelineSource(*consumer_pipeline, scan);
