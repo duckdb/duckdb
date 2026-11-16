@@ -245,6 +245,25 @@ void CSVReaderOptions::SetEscapeMode(const string &input) {
 	}
 }
 
+string CSVReaderOptions::GetQuoteMode() const {
+	return dialect_options.state_machine_options.quote_mode.FormatValue();
+}
+
+void CSVReaderOptions::SetQuoteMode(const string &input) {
+	auto quote_mode = StringUtil::Lower(input);
+	if (quote_mode == "standard") {
+		dialect_options.state_machine_options.quote_mode.Set(CSVQuoteMode::STANDARD);
+	} else if (quote_mode == "lines") {
+		dialect_options.state_machine_options.quote_mode.Set(CSVQuoteMode::LINES);
+	} else {
+		throw BinderException("'%s' is not accepted as a quote_mode. The quote_mode option must be one of:\n* "
+		                      "'standard' (default): a quoted value continues across line breaks\n* 'lines': a line "
+		                      "break ends the record even inside quotes, and a quote that is never closed reads its "
+		                      "field as NULL, so every line break is a record boundary",
+		                      input);
+	}
+}
+
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -396,6 +415,8 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		encoding = ParseString(value, loption);
 	} else if (loption == "escape_mode") {
 		SetEscapeMode(ParseString(value, loption));
+	} else if (loption == "quote_mode") {
+		SetQuoteMode(ParseString(value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -557,10 +578,14 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += FormatOptionLine("comment", comment);
 	// strict_mode
 	error += FormatOptionLine("strict_mode", strict_mode);
-	// escape_mode (only ever set by the user, never sniffed)
+	// escape_mode and quote_mode (only ever set by the user, never sniffed)
 	auto &escape_mode = dialect_options.state_machine_options.escape_mode;
 	if (escape_mode.IsSetByUser()) {
 		error += FormatOptionLine("escape_mode", escape_mode);
+	}
+	auto &quote_mode = dialect_options.state_machine_options.quote_mode;
+	if (quote_mode.IsSetByUser()) {
+		error += FormatOptionLine("quote_mode", quote_mode);
 	}
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
@@ -658,6 +683,13 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			                      GetEscapeMode());
 		}
 		// These escape modes govern the escape character outside quotes, which only non-strict parsing accepts
+		state_machine_options.strict_mode.Set(false, false);
+	}
+	if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
+		if (state_machine_options.strict_mode.GetValue() && state_machine_options.strict_mode.IsSetByUser()) {
+			throw BinderException("QUOTE_MODE 'lines' is not supported when STRICT_MODE is manually set to true: a "
+			                      "record that ends inside an open quote is not strict");
+		}
 		state_machine_options.strict_mode.Set(false, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
@@ -928,6 +960,9 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	}
 	if (dialect_options.state_machine_options.escape_mode.IsSetByUser()) {
 		named_params["escape_mode"] = Value(GetEscapeMode());
+	}
+	if (dialect_options.state_machine_options.quote_mode.IsSetByUser()) {
+		named_params["quote_mode"] = Value(GetQuoteMode());
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 	if (dialect_options.skip_rows.IsSetByUser()) {

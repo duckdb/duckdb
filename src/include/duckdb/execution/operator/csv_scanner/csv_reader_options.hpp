@@ -182,6 +182,9 @@ struct CSVReaderOptions {
 	string GetEscapeMode() const;
 	void SetEscapeMode(const string &escape_mode);
 
+	string GetQuoteMode() const;
+	void SetQuoteMode(const string &quote_mode);
+
 	CSVOption<char> GetSingleByteDelimiter() const;
 	CSVOption<string> GetMultiByteDelimiter() const;
 

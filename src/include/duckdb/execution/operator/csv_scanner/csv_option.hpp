@@ -32,6 +32,15 @@ enum class CSVEscapeMode : uint8_t {
 	OPENCSV = 2
 };
 
+//! What quotes mean at record boundaries
+enum class CSVQuoteMode : uint8_t {
+	//! A quoted value continues across line breaks, and an unclosed quote runs on
+	STANDARD = 0,
+	//! A line break ends the record even inside quotes, and a quote that is never closed reads its field as NULL,
+	//! as line-based readers such as OpenCSVSerde do; every line break is a record boundary
+	LINES = 1
+};
+
 class Serializer;
 class Deserializer;
 
@@ -173,6 +182,17 @@ private:
 			return "opencsv";
 		default:
 			throw InternalException("Invalid CSV Escape Mode Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVQuoteMode &val) const {
+		switch (val) {
+		case CSVQuoteMode::STANDARD:
+			return "standard";
+		case CSVQuoteMode::LINES:
+			return "lines";
+		default:
+			throw InternalException("Invalid CSV Quote Mode Detected.");
 		}
 	}
 

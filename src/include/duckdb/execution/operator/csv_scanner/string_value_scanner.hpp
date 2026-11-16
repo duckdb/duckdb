@@ -292,6 +292,21 @@ public:
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();
+	//! Whether the record ended while a quote was still open: with quote_mode 'lines' a line break exits the quoted
+	//! states, so a record-end transition out of them is a line break inside quotes, and still being inside them at a
+	//! value add is the end of the file
+	inline bool RecordEndsInsideQuotes() const {
+		if (state_machine.state_machine_options.quote_mode.GetValue() != CSVQuoteMode::LINES) {
+			return false;
+		}
+		const auto current_inside = states.states[1] == CSVState::QUOTED || states.states[1] == CSVState::ESCAPE;
+		const auto previous_inside = states.states[0] == CSVState::QUOTED || states.states[0] == CSVState::ESCAPE;
+		const auto record_end =
+		    states.states[1] == CSVState::RECORD_SEPARATOR || states.states[1] == CSVState::CARRIAGE_RETURN;
+		return current_inside || (previous_inside && record_end);
+	}
+	//! quote_mode 'lines': the record ended inside an open quote, so the field in progress is NULL
+	void AddUnterminatedQuoteNull();
 	//! Moves last_position past the newline that ends the row at buffer_pos
 	inline void SetLastPositionAfterNewline(idx_t buffer_pos);
 	//! Keeps the position of the current row for the error messages of Flush

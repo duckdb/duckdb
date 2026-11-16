@@ -569,6 +569,23 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
+	// 12.2) Line records (quote_mode 'lines'): a line break ends the record whatever the state, so every line break
+	// is a record boundary; a record that ends inside an open quote reads the field in progress as NULL
+	// (StringValueResult::AddUnterminatedQuoteNull)
+	if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
+		const vector<uint8_t> line_bound_states {
+		    static_cast<uint8_t>(CSVState::QUOTED), static_cast<uint8_t>(CSVState::ESCAPE),
+		    static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE), static_cast<uint8_t>(CSVState::ESCAPED_RETURN)};
+		for (const auto state : line_bound_states) {
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
+			if (new_line_id == NewLineIdentifier::CARRY_ON) {
+				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
+			} else {
+				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
+			}
+		}
+	}
+
 	// 13) Escaped Return State
 	if (enable_unquoted_escape) {
 		// The new state is STANDARD for \r + \n and \r + ordinary character.

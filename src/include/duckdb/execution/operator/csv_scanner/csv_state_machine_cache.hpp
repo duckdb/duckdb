@@ -52,9 +52,13 @@ struct HashCSVStateMachineConfig {
 		auto h_newline = Hash(static_cast<uint8_t>(config.new_line.GetValue()));
 		auto h_comment = Hash(static_cast<uint8_t>(config.comment.GetValue()));
 		auto h_escape_mode = Hash(static_cast<uint8_t>(config.escape_mode.GetValue()));
+		auto h_quote_mode = Hash(static_cast<uint8_t>(config.quote_mode.GetValue()));
 		return CombineHash(
 		    h_delimiter,
-		    CombineHash(h_quote, CombineHash(h_escape, CombineHash(h_newline, CombineHash(h_comment, h_escape_mode)))));
+		    CombineHash(
+		        h_quote,
+		        CombineHash(h_escape,
+		                    CombineHash(h_newline, CombineHash(h_comment, CombineHash(h_escape_mode, h_quote_mode))))));
 	}
 };
 

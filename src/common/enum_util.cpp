@@ -1094,6 +1094,24 @@ CSVEscapeMode EnumUtil::FromString<CSVEscapeMode>(const char *value) {
 	return static_cast<CSVEscapeMode>(StringUtil::StringToEnum(GetCSVEscapeModeValues(), 3, "CSVEscapeMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCSVQuoteModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CSVQuoteMode::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(CSVQuoteMode::LINES), "LINES" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CSVQuoteMode>(CSVQuoteMode value) {
+	return StringUtil::EnumToString(GetCSVQuoteModeValues(), 2, "CSVQuoteMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CSVQuoteMode EnumUtil::FromString<CSVQuoteMode>(const char *value) {
+	return static_cast<CSVQuoteMode>(StringUtil::StringToEnum(GetCSVQuoteModeValues(), 2, "CSVQuoteMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CSVState::STANDARD), "STANDARD" },

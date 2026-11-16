@@ -118,6 +118,8 @@ enum class CAPIResultSetType : uint8_t;
 
 enum class CSVEscapeMode : uint8_t;
 
+enum class CSVQuoteMode : uint8_t;
+
 enum class CSVState : uint8_t;
 
 enum class CTEExecutionMode : uint8_t;
@@ -837,6 +839,9 @@ const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
 
 template<>
 const char* EnumUtil::ToChars<CSVEscapeMode>(CSVEscapeMode value);
+
+template<>
+const char* EnumUtil::ToChars<CSVQuoteMode>(CSVQuoteMode value);
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value);
@@ -1852,6 +1857,9 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
 
 template<>
 CSVEscapeMode EnumUtil::FromString<CSVEscapeMode>(const char *value);
+
+template<>
+CSVQuoteMode EnumUtil::FromString<CSVQuoteMode>(const char *value);
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value);

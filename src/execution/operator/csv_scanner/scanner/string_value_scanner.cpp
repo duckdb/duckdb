@@ -595,6 +595,32 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.quoted = false;
 }
 
+void StringValueResult::AddUnterminatedQuoteNull() {
+	quoted = false;
+	escaped = false;
+	if (cur_col_id >= number_of_columns) {
+		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
+			used_unstrictness = true;
+		}
+		return;
+	}
+	if (projecting_columns && !projected_columns[cur_col_id]) {
+		cur_col_id++;
+		return;
+	}
+	bool empty = false;
+	if (cur_col_id < state_machine.options.force_not_null.size()) {
+		empty = state_machine.options.force_not_null[cur_col_id];
+	}
+	if (empty) {
+		static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+	} else {
+		validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
+	}
+	cur_col_id++;
+	chunk_col_id++;
+}
+
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
@@ -686,7 +712,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::SkipValueInternal() {
 	D_ASSERT(CanSkipValue(*this));
-	if (quoted && !unquoted) {
+	if (quoted && !unquoted && !RecordEndsInsideQuotes()) {
 		current_errors.Insert(UNTERMINATED_QUOTES, cur_col_id, chunk_col_id, last_position);
 	}
 	cur_col_id++;
@@ -987,7 +1013,10 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.quoted) {
+		if (result.quoted && result.RecordEndsInsideQuotes()) {
+			// quote_mode 'lines': the line break ended the record inside an open quote
+			result.AddUnterminatedQuoteNull();
+		} else if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
 			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
@@ -1594,7 +1623,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 			skip_value = true;
 		}
 	}
-	if (!skip_value) {
+	if (!skip_value && result.quoted && !result.comment && result.RecordEndsInsideQuotes()) {
+		// quote_mode 'lines': the line break ended the record inside an open quote
+		result.AddUnterminatedQuoteNull();
+	} else if (!skip_value) {
 		string_t value;
 		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;

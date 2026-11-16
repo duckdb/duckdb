@@ -105,6 +105,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("encoding", LogicalType::VARCHAR)
 		    .Add("strict_mode", LogicalType::BOOLEAN)
 		    .Add("escape_mode", LogicalType::VARCHAR)
+		    .Add("quote_mode", LogicalType::VARCHAR)
 		    .Add("thousands", LogicalType::VARCHAR)
 		    .Add("files_to_sniff", LogicalType::BIGINT);
 	});
