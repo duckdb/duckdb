@@ -80,3 +80,7 @@ SELECT id, s.n.y FROM default_only_struct ORDER BY id;
 2	NULL
 3	NULL
 4	5
+
+# Older releases cannot bind the default-only struct mapping in a persisted view.
+statement ok
+DROP VIEW default_only_struct;
