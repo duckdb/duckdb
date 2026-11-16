@@ -200,13 +200,24 @@ EXPLAIN SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE r.k = l.k AND r.c > 
 ----
 logical_opt	<!REGEX>:(?s).*(SEMI|ANTI).*
 
-# Computed IN-list inputs cannot rely on a pushed scan filter.
+# Infallible computed inputs can become SEMI joins without a pushed scan filter.
 query II
-EXPLAIN SELECT * FROM l WHERE (k * 2) IN (2, 4, 6, 8, 10, 14);
+EXPLAIN SELECT * FROM l WHERE coalesce(k, 0) IN (0, 1, 3, 5, 10, 14);
 ----
 logical_opt	<REGEX>:(?s).*Join Type: SEMI.*
 
 query II
-EXPLAIN SELECT * FROM l WHERE (k * 2) IN (2, 4, 6, 8, 10, 14);
+EXPLAIN SELECT * FROM l WHERE coalesce(k, 0) IN (0, 1, 3, 5, 10, 14);
 ----
 logical_opt	<!REGEX>:(?s).*MARK.*
+
+# Fallible comparison inputs retain the MARK join's evaluation boundary.
+query II
+EXPLAIN SELECT * FROM l WHERE (k * 2) IN (2, 4, 6, 8, 10, 14);
+----
+logical_opt	<REGEX>:(?s).*Join Type: MARK.*
+
+query II
+EXPLAIN SELECT * FROM l WHERE (k * 2) IN (2, 4, 6, 8, 10, 14);
+----
+logical_opt	<!REGEX>:(?s).*(SEMI|ANTI).*
