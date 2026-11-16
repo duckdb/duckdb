@@ -1,0 +1,59 @@
+# name: test/sql/function/list/aggregates/list_histogram_arena_state.test
+# description: list_distinct/list_unique read the (arena-backed) histogram state, list_aggr runs the arena aggregates
+# group: [aggregates]
+
+query IIII
+SELECT list_sort(list_distinct([1, 2, 2, NULL, 3])), list_unique([1, 2, 2, NULL, 3]), list_distinct([]), list_unique(NULL);
+----
+[1, 2, 3]	3	[]	NULL
+
+query II
+SELECT list_sort(list_distinct([1.5, 'NaN'::DOUBLE, 'NaN'::DOUBLE, -0.0, 0.0])), list_unique([1.5, 'NaN'::DOUBLE, 'NaN'::DOUBLE, -0.0, 0.0]);
+----
+[0.0, 1.5, nan]	3
+
+query II
+SELECT list_sort(list_distinct(['a', 'b', 'a', 'a string that is not inlined', 'a string that is not inlined', NULL])), list_unique(['a', 'b', 'a', 'a string that is not inlined', NULL]);
+----
+[a, a string that is not inlined, b]	3
+
+query II
+SELECT list_sort(list_distinct([{'a': 1, 'b': 'x'}, {'a': 1, 'b': 'x'}, {'a': 2, 'b': 'a string that is not inlined'}])), list_unique([[1, 2], [1, 2], [3], NULL, []]);
+----
+[{'a': 1, 'b': x}, {'a': 2, 'b': a string that is not inlined}]	3
+
+query II
+SELECT list_sort(list_distinct([1::HUGEINT, 1::HUGEINT, 2])), list_sort(list_distinct([INTERVAL 1 DAY, INTERVAL 24 HOURS, INTERVAL 1 DAY]));
+----
+[1, 2]	['24:00:00', 1 day]
+
+query IIII
+SELECT list_histogram([1, 1, 2, NULL]), list_aggr(['b', 'a', 'b'], 'histogram'), list_histogram([]), list_histogram(NULL);
+----
+{1=2, 2=1}	{a=1, b=2}	NULL	NULL
+
+query IIII
+SELECT list_mode([1, 2, 2, NULL]), list_mode(['x', 'a string that is not inlined', 'a string that is not inlined']), list_entropy([1, 2, 2, 3]), list_entropy([]);
+----
+2	a string that is not inlined	1.5	0.0
+
+query III
+SELECT list_aggr([1, 2, 2], 'mode'), list_aggr([[1], [1], [2]], 'mode'), round(list_aggr(['a', 'b'], 'entropy'), 6);
+----
+2	[1]	1.0
+
+query III
+SELECT list_aggr([1, 2, 3, 3], 'approx_top_k', 1), list_aggr([1.0, 2.0, 3.0], 'reservoir_quantile', 0.5), list_aggr([1, 5, 9], 'histogram', [4, 8]);
+----
+[3]	2.0	{4=1, 8=1, 2147483647=1}
+
+# many lists in one chunk and across chunks
+query II
+SELECT sum(list_unique(l)), sum(len(list_distinct(l))) FROM (SELECT [i % 3, i % 5, (i * 7) % 11, NULL] l FROM range(10000) r(i));
+----
+26361	26361
+
+query I
+SELECT count(*) FROM (SELECT list_histogram([md5((i % 3)::VARCHAR), md5((i % 3)::VARCHAR), md5(i::VARCHAR)]) h FROM range(5000) r(i)) WHERE cardinality(h) != 2;
+----
+3

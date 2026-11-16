@@ -2,6 +2,7 @@
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -15,23 +16,13 @@ namespace duckdb {
 
 namespace {
 
+//! All state memory is allocated from the aggregate's arena, so the state needs no destructor
 template <class T>
 struct HistogramBinState {
 	using TYPE = T;
 
-	unsafe_vector<T> *bin_boundaries;
-	unsafe_vector<idx_t> *counts;
-
-	void Destroy() {
-		if (bin_boundaries) {
-			delete bin_boundaries;
-			bin_boundaries = nullptr;
-		}
-		if (counts) {
-			delete counts;
-			counts = nullptr;
-		}
-	}
+	unsafe_arena_vector<T> *bin_boundaries;
+	unsafe_arena_vector<idx_t> *counts;
 
 	bool IsSet() {
 		return bin_boundaries;
@@ -39,8 +30,9 @@ struct HistogramBinState {
 
 	template <class OP>
 	void InitializeBins(Vector &bin_vector, idx_t pos, AggregateInputData &aggr_input) {
-		bin_boundaries = new unsafe_vector<T>();
-		counts = new unsafe_vector<idx_t>();
+		auto &allocator = aggr_input.allocator;
+		auto &new_boundaries = *allocator.Make<unsafe_arena_vector<T>>(allocator);
+		auto &new_counts = *allocator.Make<unsafe_arena_vector<idx_t>>(allocator);
 		auto bin_counts = bin_vector.Values<list_entry_t>();
 		auto bin_entry = bin_counts[pos];
 		if (!bin_entry.IsValid()) {
@@ -53,34 +45,31 @@ struct HistogramBinState {
 		auto extra_state = OP::CreateExtraState();
 		OP::PrepareData(bin_child, extra_state, bin_child_data);
 
-		bin_boundaries->reserve(bin_list.length);
+		new_boundaries.reserve(bin_list.length);
 		for (idx_t i = 0; i < bin_list.length; i++) {
 			auto bin_child_idx = bin_child_data.sel->get_index(bin_list.offset + i);
 			if (!bin_child_data.validity.RowIsValid(bin_child_idx)) {
 				throw BinderException("Histogram bin entry cannot be NULL");
 			}
-			bin_boundaries->push_back(OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input));
+			new_boundaries.push_back(OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input));
 		}
 		// sort the bin boundaries
-		std::sort(bin_boundaries->begin(), bin_boundaries->end());
+		std::sort(new_boundaries.begin(), new_boundaries.end());
 		// ensure there are no duplicate bin boundaries
-		for (idx_t i = 1; i < bin_boundaries->size(); i++) {
-			if (Equals::Operation((*bin_boundaries)[i - 1], (*bin_boundaries)[i])) {
-				bin_boundaries->erase_at(i);
+		for (idx_t i = 1; i < new_boundaries.size(); i++) {
+			if (Equals::Operation(new_boundaries[i - 1], new_boundaries[i])) {
+				new_boundaries.erase_at(i);
 				i--;
 			}
 		}
 
-		counts->resize(bin_boundaries->size() + 1);
+		new_counts.resize(new_boundaries.size() + 1);
+		bin_boundaries = &new_boundaries;
+		counts = &new_counts;
 	}
 };
 
 struct HistogramBinFunction {
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.Destroy();
-	}
-
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -92,11 +81,15 @@ struct HistogramBinFunction {
 			return;
 		}
 		if (!target.bin_boundaries) {
-			// target does not have bin boundaries - copy everything over
-			target.bin_boundaries = new unsafe_vector<typename STATE::TYPE>();
-			target.counts = new unsafe_vector<idx_t>();
-			*target.bin_boundaries = *source.bin_boundaries;
-			*target.counts = *source.counts;
+			// target does not have bin boundaries - copy everything over into the caller's arena
+			// (element-wise: copy-assigning would adopt the source's arena)
+			auto &allocator = input_data.allocator;
+			auto &boundaries = *allocator.Make<unsafe_arena_vector<typename STATE::TYPE>>(allocator);
+			auto &counts = *allocator.Make<unsafe_arena_vector<idx_t>>(allocator);
+			boundaries.insert(boundaries.end(), source.bin_boundaries->begin(), source.bin_boundaries->end());
+			counts.insert(counts.end(), source.counts->begin(), source.counts->end());
+			target.bin_boundaries = &boundaries;
+			target.counts = &counts;
 		} else {
 			// both source and target have bin boundaries
 			if (*target.bin_boundaries != *source.bin_boundaries) {
@@ -119,7 +112,7 @@ struct HistogramRange {
 	static constexpr bool EXACT = false;
 
 	template <class T>
-	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+	static idx_t GetBin(T value, const unsafe_arena_vector<T> &bin_boundaries) {
 		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
 		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
 	}
@@ -129,7 +122,7 @@ struct HistogramExact {
 	static constexpr bool EXACT = true;
 
 	template <class T>
-	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+	static idx_t GetBin(T value, const unsafe_arena_vector<T> &bin_boundaries) {
 		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
 		if (entry == bin_boundaries.end() || !(*entry == value)) {
 			// entry not found - return last bucket
@@ -345,11 +338,11 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	const char *function_name = HIST::EXACT ? "histogram_exact" : "histogram";
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	AggregateFunction function(
-	    function_name, {}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
-	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
-	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
+	AggregateFunction function(function_name, {}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	                           AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>,
+	                           HistogramBinUpdateFunction<OP, T, HIST>,
+	                           AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>,
+	                           HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr, nullptr);
 	function.GetSignature().AddParameter("arg", type).AddParameter("bins", LogicalType::LIST(type));
 	return function;
 }
