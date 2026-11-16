@@ -1,0 +1,23 @@
+# name: benchmark/micro/pushdown/correlated_not_exists.benchmark
+# description: Correlated NOT EXISTS with selective equality keys and a residual comparison
+# group: [pushdown]
+
+name CorrelatedNotExists
+group micro
+subgroup pushdown
+
+load
+CREATE TABLE orders AS
+SELECT i AS id, i % 97 AS amount FROM range(20000000) t(i);
+CREATE TABLE refunds AS
+SELECT 19000000 + i * 10 AS order_id, i % 89 AS amount FROM range(100000) t(i);
+
+run
+SELECT count(*), sum(o.amount)
+FROM orders o
+WHERE NOT EXISTS (
+    SELECT 1 FROM refunds r WHERE r.order_id = o.id AND r.amount > o.amount
+);
+
+result II
+19954647	958683734
