@@ -189,7 +189,9 @@ bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
 		// cannot generate join filters for these join types
 		// mark/single - cannot change cardinality of probe side
 		// left/outer always need to include every row from probe side
-		// FIXME: anti/right_anti - we could do this, but need to invert the join conditions
+		// anti - the probe rows without a match are the result
+		// right_anti - join filters are generated (see CanGenerateJoinFilters), but the build side optimizer, which
+		// asks this function as well, does not take them into account
 		return false;
 	default:
 		return true;
@@ -746,12 +748,15 @@ static void SimplifyJoinFilterCastChain(ClientContext &context, JoinFilterPushdo
 	column.input_expression = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
 	if (target_type != column.storage_type) {
 		column.input_expression =
-		    BoundCastExpression::AddDefaultCastToType(std::move(column.input_expression), target_type, true);
+		    BoundCastExpression::AddCastToType(context, std::move(column.input_expression), target_type, true);
 	}
 }
 
 bool JoinFilterPushdownOptimizer::CanGenerateJoinFilters(const LogicalComparisonJoin &join) {
-	if (!JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
+	// a RIGHT ANTI join emits the build rows without a match: its probe rows only mark build rows as matched.
+	// a probe row whose key is not in the build side cannot mark anything, so it can be filtered out like for
+	// a RIGHT SEMI join
+	if (join.join_type != JoinType::RIGHT_ANTI && !JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
 		return false;
 	}
 	for (auto &condition : join.conditions) {
