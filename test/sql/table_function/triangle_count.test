@@ -1,0 +1,140 @@
+# name: test/sql/table_function/triangle_count.test
+# description: Test triangle_count table function
+# group: [table_function]
+
+statement ok
+CREATE TABLE edges(src INTEGER, dst INTEGER);
+
+# empty edge table has no triangles
+query I
+SELECT triangle_count FROM triangle_count('edges', 'src', 'dst');
+----
+0
+
+# 1-2, 1-3, 2-3, 1-4, 3-4, 1-5 -> {1,2,3} and {1,3,4}
+statement ok
+INSERT INTO edges VALUES (1,2),(1,3),(2,3),(1,4),(3,4),(1,5);
+
+query I
+SELECT triangle_count FROM triangle_count('edges', 'src', 'dst');
+----
+2
+
+# a star has no triangles regardless of which vertex is the hub
+statement ok
+CREATE TABLE star AS SELECT 0 AS src, range AS dst FROM range(1, 200);
+
+query I
+SELECT triangle_count FROM triangle_count('star', 'src', 'dst');
+----
+0
+
+# same star, but the hub now holds the largest id: ordering must not matter
+statement ok
+CREATE TABLE star_high AS SELECT range AS src, 200 AS dst FROM range(200);
+
+query I
+SELECT triangle_count FROM triangle_count('star_high', 'src', 'dst');
+----
+0
+
+# complete graph K5 has C(5,3) = 10 triangles
+statement ok
+CREATE TABLE k5 AS SELECT a.range AS src, b.range AS dst FROM range(5) a, range(5) b WHERE a.range < b.range;
+
+query I
+SELECT triangle_count FROM triangle_count('k5', 'src', 'dst');
+----
+10
+
+# reversed duplicates, exact duplicates, self-loops and NULLs are all ignored
+statement ok
+CREATE TABLE messy(src INTEGER, dst INTEGER);
+
+statement ok
+INSERT INTO messy VALUES (0,1),(1,0),(0,2),(0,3),(1,2),(1,3),(2,3),(2,3),(NULL,1),(3,NULL),(2,2);
+
+query I
+SELECT triangle_count FROM triangle_count('messy', 'src', 'dst');
+----
+4
+
+# vertex ids need not be dense, small or positive
+statement ok
+CREATE TABLE sparse(src BIGINT, dst BIGINT);
+
+statement ok
+INSERT INTO sparse VALUES (-500,9000),(-500,12),(-500,777),(9000,12),(9000,777),(12,777);
+
+query I
+SELECT triangle_count FROM triangle_count('sparse', 'src', 'dst');
+----
+4
+
+# agrees with the equivalent 3-way self join on a random graph
+statement ok
+CREATE TABLE rnd AS SELECT a.range AS src, b.range AS dst FROM range(150) a, range(150) b
+    WHERE a.range < b.range AND hash(a.range * 1000 + b.range) % 100 < 10;
+
+statement ok
+CREATE TABLE rnd_undirected AS SELECT src, dst FROM rnd UNION ALL SELECT dst, src FROM rnd;
+
+query I
+SELECT count(*) // 6 FROM rnd_undirected e1, rnd_undirected e2, rnd_undirected e3
+    WHERE e1.dst = e2.src AND e2.dst = e3.src AND e3.dst = e1.src;
+----
+629
+
+query I
+SELECT triangle_count FROM triangle_count('rnd', 'src', 'dst');
+----
+629
+
+# large enough to take the parallel path; must agree with the single-threaded count
+statement ok
+CREATE TABLE big AS SELECT a.range AS src, b.range AS dst FROM range(500) a, range(500) b
+    WHERE a.range < b.range AND hash(a.range * 1000 + b.range) % 100 < 8;
+
+statement ok
+SET threads=4;
+
+query I nosort big_triangles
+SELECT triangle_count FROM triangle_count('big', 'src', 'dst');
+----
+
+statement ok
+SET threads=1;
+
+query I nosort big_triangles
+SELECT triangle_count FROM triangle_count('big', 'src', 'dst');
+----
+
+statement ok
+RESET threads;
+
+# a quoted / non-default column name still resolves
+statement ok
+CREATE TABLE quoted("from node" INTEGER, "to node" INTEGER);
+
+statement ok
+INSERT INTO quoted VALUES (0,1),(1,2),(0,2);
+
+query I
+SELECT triangle_count FROM triangle_count('quoted', 'from node', 'to node');
+----
+1
+
+statement error
+SELECT * FROM triangle_count('edges', 'src', 'nonexistent');
+----
+<REGEX>:.*Binder Error.*nonexistent.*
+
+statement error
+SELECT * FROM triangle_count('no_such_table', 'src', 'dst');
+----
+<REGEX>:.*(Catalog Error|Table with name no_such_table).*
+
+statement error
+SELECT * FROM triangle_count(NULL, 'src', 'dst');
+----
+<REGEX>:.*cannot be NULL.*

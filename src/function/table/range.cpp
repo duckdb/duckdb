@@ -1,5 +1,6 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table/summary.hpp"
+#include "duckdb/function/table/triangle_count.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/operator/add.hpp"
@@ -562,6 +563,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	ReadBlobFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
 	QueryTableFunction::RegisterFunction(*this);
+	TriangleCountTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb
