@@ -57,8 +57,7 @@ JoinHashTable::ProbeState::ProbeState()
     : SharedState(), hashes(LogicalType::HASH), hashes_dense_v(LogicalType::HASH), non_empty_sel(STANDARD_VECTOR_SIZE),
       rows_to_probe_sel(STANDARD_VECTOR_SIZE),
       loaded_entries(make_unsafe_uniq_array_uninitialized<ht_entry_t>(STANDARD_VECTOR_SIZE)),
-      is_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)),
-      is_next(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)) {
+      is_match_v(LogicalType::BOOLEAN), needs_next_v(LogicalType::BOOLEAN) {
 }
 
 JoinHashTable::ProbeDictionaryState::ProbeDictionaryState()
@@ -245,12 +244,12 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 }
 
 template <bool USE_SALTS>
-static inline void CheckEntry(const ht_entry_t entry, const hash_t hash, bool &is_match, bool &is_next) {
+static inline void CheckEntry(const ht_entry_t entry, const hash_t hash, bool &is_match, bool &needs_next) {
 	const bool occupied = entry.IsOccupied();
 	// an empty entry reads as salt 0, so a match also needs occupied; & instead of && keeps it branch-free
 	const bool match = occupied & (!USE_SALTS || entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
 	is_match = match;
-	is_next = occupied & !match;
+	needs_next = occupied & !match;
 }
 
 //! Prefetch the initial hash table slot of every probing row for large tables.
@@ -289,10 +288,10 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 	}
 
 	// check every slot; dense, so the loop vectorizes also with a row selection
-	const auto is_match = state.is_match.get();
-	const auto is_next = state.is_next.get();
+	const auto is_match = FlatVector::GetDataMutable<bool>(state.is_match_v);
+	const auto needs_next = FlatVector::GetDataMutable<bool>(state.needs_next_v);
 	for (idx_t i = 0; i < count; i++) {
-		CheckEntry<USE_SALTS>(loaded[i], hashes_dense[i], is_match[i], is_next[i]);
+		CheckEntry<USE_SALTS>(loaded[i], hashes_dense[i], is_match[i], needs_next[i]);
 	}
 
 	// rows to compare and rows to probe further, 8 rows per step
@@ -301,7 +300,7 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 	idx_t compare_count =
 	    SelectionVector::SelectFromBoolean(is_match, nullptr, count, array_ptr<sel_t>(compare, STANDARD_VECTOR_SIZE));
 	idx_t probe_count =
-	    SelectionVector::SelectFromBoolean(is_next, nullptr, count, array_ptr<sel_t>(probe, STANDARD_VECTOR_SIZE));
+	    SelectionVector::SelectFromBoolean(needs_next, nullptr, count, array_ptr<sel_t>(probe, STANDARD_VECTOR_SIZE));
 
 	// the rows that hit another salt probe slot hash + round; probe is compacted in place
 	for (idx_t round = 1; probe_count > 0; round++) {
@@ -311,14 +310,12 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 		idx_t next_probe_count = 0;
 		for (idx_t i = 0; i < probe_count; i++) {
 			const auto dense_index = probe[i];
-			bool match;
-			bool next;
-			CheckEntry<USE_SALTS>(loaded[i], hashes_dense[dense_index], match, next);
+			bool row_is_match;
+			bool row_needs_next;
+			CheckEntry<USE_SALTS>(loaded[i], hashes_dense[dense_index], row_is_match, row_needs_next);
 			pointers[row_sel.get_index(dense_index)] = loaded[i].GetPointerOrNull();
-			compare[compare_count] = dense_index;
-			compare_count += match;
-			probe[next_probe_count] = dense_index;
-			next_probe_count += next;
+			state.keys_to_compare_sel.AppendIf(compare_count, dense_index, row_is_match);
+			state.rows_to_probe_sel.AppendIf(next_probe_count, dense_index, row_needs_next);
 		}
 		probe_count = next_probe_count;
 	}

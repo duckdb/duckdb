@@ -299,8 +299,8 @@ public:
 		SelectionVector rows_to_probe_sel;
 		//! Loaded ht entry and probe flags per dense row
 		unsafe_unique_array<ht_entry_t> loaded_entries;
-		unsafe_unique_array<bool> is_match;
-		unsafe_unique_array<bool> is_next;
+		Vector is_match_v;
+		Vector needs_next_v;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
