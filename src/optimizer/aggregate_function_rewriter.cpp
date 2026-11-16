@@ -171,16 +171,18 @@ private:
 };
 
 //! SUM(x + C) -> SUM(x) + C * COUNT(x)
+//! SUM(x - C) -> SUM(x) - C * COUNT(x)
+//! SUM(C - x) -> C * COUNT(x) - SUM(x)
 class SumRewriteRule : public AggregateRewriteRule {
 public:
 	explicit SumRewriteRule(Optimizer &optimizer) : AggregateRewriteRule(optimizer) {
-		// Match SUM(x + C) or SUM(C + x) on integer types
+		// Match SUM(x + C), SUM(C + x), SUM(x - C) or SUM(C - x) on integer types
 		auto op = make_uniq<AggregateExpressionMatcher>();
 		op->function = make_uniq<SpecificFunctionMatcher>("sum");
 		op->policy = SetMatcher::Policy::UNORDERED;
 
 		auto arithmetic = make_uniq<FunctionExpressionMatcher>();
-		arithmetic->function = make_uniq<SpecificFunctionMatcher>("+");
+		arithmetic->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"+", "-"});
 		arithmetic->type = make_uniq<IntegerTypeMatcher>();
 		auto child_constant_matcher = make_uniq<ConstantExpressionMatcher>();
 		auto child_expression_matcher = make_uniq<StableExpressionMatcher>();
@@ -196,35 +198,99 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
-		// This can probably be relaxed to be the same check as AvgRewriteRule,
-		// but behaviour (for now) is the same as the old SumRewriterOptimizer
-		return !aggr.groups.empty();
+		return !aggr.grouping_functions.empty();
+	}
+
+	bool ShouldRewrite(const LogicalAggregate &aggr, Expression &expr) override {
+		auto &arithmetic = GetArithmetic(expr);
+		// unsigned subtraction commonly underflows and throws, and the rewrite would hide that error
+		if (arithmetic.Function().GetName() == "-" && !arithmetic.GetReturnType().IsSigned()) {
+			return false;
+		}
+		if (aggr.groups.empty()) {
+			return true;
+		}
+		if (optimizer.OptimizerDisabled(OptimizerType::COMMON_AGGREGATE)) {
+			return false;
+		}
+		// the added COUNT(x) is extra per-group state, so only rewrite if SUM(x) or COUNT(x) is shared
+		auto &argument = *arithmetic.GetChildren()[1 - GetConstantIndex(arithmetic)];
+		for (auto &other : aggr.expressions) {
+			if (expr.Equals(*other)) {
+				continue;
+			}
+			if (ComputesSumOrCount(*other, argument)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &, vector<reference<Expression>> &bindings,
 	                               vector<unique_ptr<Expression>> &additional_expressions) override {
 		auto &sum = bindings[0].get().Cast<BoundAggregateExpression>();
-		auto &addition = bindings[1].get().Cast<BoundFunctionExpression>();
-		idx_t const_idx = addition.GetChildren()[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
-		auto const_expr = std::move(addition.GetChildrenMutable()[const_idx]);
-		auto main_expr = std::move(addition.GetChildrenMutable()[1 - const_idx]);
+		auto &arithmetic = bindings[1].get().Cast<BoundFunctionExpression>();
+		const auto const_idx = GetConstantIndex(arithmetic);
+		const bool is_subtract = arithmetic.Function().GetName() == "-";
+		const bool sum_is_left = !is_subtract || const_idx == 1;
+		auto const_expr = std::move(arithmetic.GetChildrenMutable()[const_idx]);
+		auto main_expr = std::move(arithmetic.GetChildrenMutable()[1 - const_idx]);
 
-		// Turn SUM(x + C) into SUM(x)
+		// Turn SUM(x +/- C) into SUM(x) - this destroys the arithmetic expression
 		sum.GetChildrenMutable()[0] = main_expr->Copy();
 
 		additional_expressions.push_back(std::move(const_expr));
+		additional_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_subtract)));
+		additional_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(sum_is_left)));
 		return main_expr;
 	}
 
 	unique_ptr<Expression> CreateProjectionExpression(const LogicalType &aggr_type, unique_ptr<Expression> aggr_ref,
 	                                                  vector<unique_ptr<Expression>> additional_expressions) override {
-		// SUM(x) + C * COUNT(x): additional_expressions[0] is the const, additional_expressions[1] is COUNT(x) ref
+		// additional_expressions: the const, whether it is a subtraction, whether SUM(x) is the left operand,
+		// the COUNT(x) ref
 		auto cast_const =
 		    BoundCastExpression::AddCastToType(optimizer.context, std::move(additional_expressions[0]), aggr_type);
+		auto is_subtract = additional_expressions[1]->Cast<BoundConstantExpression>().GetValue().GetValue<bool>();
+		auto sum_is_left = additional_expressions[2]->Cast<BoundConstantExpression>().GetValue().GetValue<bool>();
 		auto cast_count =
-		    BoundCastExpression::AddCastToType(optimizer.context, std::move(additional_expressions[1]), aggr_type);
+		    BoundCastExpression::AddCastToType(optimizer.context, std::move(additional_expressions[3]), aggr_type);
 		auto multiply = optimizer.BindScalarFunction("*", std::move(cast_count), std::move(cast_const));
-		return optimizer.BindScalarFunction("+", std::move(aggr_ref), std::move(multiply));
+		const Identifier function_name = is_subtract ? "-" : "+";
+		if (sum_is_left) {
+			return optimizer.BindScalarFunction(function_name, std::move(aggr_ref), std::move(multiply));
+		}
+		return optimizer.BindScalarFunction(function_name, std::move(multiply), std::move(aggr_ref));
+	}
+
+private:
+	static idx_t GetConstantIndex(const BoundFunctionExpression &arithmetic) {
+		return arithmetic.GetChildren()[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
+	}
+
+	BoundFunctionExpression &GetArithmetic(Expression &expr) {
+		vector<reference<Expression>> bindings;
+		if (!matcher->Match(expr, bindings)) {
+			throw InternalException("SumRewriteRule: expression does not match SUM(x +/- C)");
+		}
+		return bindings[1].get().Cast<BoundFunctionExpression>();
+	}
+
+	//! Whether expr is SUM(argument), COUNT(argument) or SUM(argument +/- C)
+	bool ComputesSumOrCount(Expression &expr, const Expression &argument) {
+		vector<reference<Expression>> bindings;
+		if (matcher->Match(expr, bindings)) {
+			auto &arithmetic = bindings[1].get().Cast<BoundFunctionExpression>();
+			return arithmetic.GetChildren()[1 - GetConstantIndex(arithmetic)]->Equals(argument);
+		}
+		auto &aggregate = expr.Cast<BoundAggregateExpression>();
+		if (aggregate.GetFilter() || aggregate.GetOrderBys() ||
+		    aggregate.GetAggregateType() != AggregateType::NON_DISTINCT) {
+			return false;
+		}
+		const auto &name = aggregate.Function().GetName();
+		auto &children = aggregate.GetChildren();
+		return (name == "sum" || name == "count") && children.size() == 1 && children[0]->Equals(argument);
 	}
 };
 

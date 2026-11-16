@@ -32,6 +32,7 @@
         "test/optimizer/remove_redundant_order.test",
         "test/optimizer/runtime_key_domain_plan.test",
         "test/optimizer/shared_key_domain_plan.test",
+        "test/optimizer/sum_rewrite_subtract_grouped.test",
         "test/optimizer/statistics/statistics_count_not_null_join_pruning.test",
         "test/optimizer/statistics/statistics_count_not_null_pruning.test",
         "test/optimizer/statistics/statistics_join_aggregate_bounds.test",
