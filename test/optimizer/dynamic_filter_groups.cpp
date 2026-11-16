@@ -307,6 +307,7 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	    strings ? vector<Value> {Value(wide_span ? "a" : "same-a"), Value(wide_span ? "z" : "same-z")}
 	            : vector<Value> {Value::INTEGER(2), Value::INTEGER(wide_span ? 2147483647 : 8)};
 	const vector<LogicalType> key_types = multiple_keys ? vector<LogicalType> {type, type} : vector<LogicalType> {type};
+	const idx_t filter_key = multiple_keys ? 1 : 0;
 	auto &probe = test.plan.Make<PhysicalDummyScan>(key_types, 1);
 	auto &build = test.plan.Make<PhysicalDummyScan>(key_types, build_count);
 	LogicalComparisonJoin logical(JoinType::SEMI);
@@ -328,19 +329,18 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	DataChunk keys;
 	keys.Initialize(allocator, key_types);
 	keys.SetChildCardinality(build_count);
-	if (strings) {
-		auto writer = FlatVector::Writer<string_t>(keys.data[0], build_count);
-		for (idx_t i = 0; i < build_count; i++) {
-			writer.WriteValue(StringValue::Get(values[i + 1 == build_count ? 1 : 0]));
+	for (idx_t column = 0; column < key_types.size(); column++) {
+		if (strings) {
+			auto writer = FlatVector::Writer<string_t>(keys.data[column], build_count);
+			for (idx_t i = 0; i < build_count; i++) {
+				writer.WriteValue(StringValue::Get(values[column == filter_key && i + 1 == build_count ? 1 : 0]));
+			}
+		} else {
+			auto writer = FlatVector::Writer<int32_t>(keys.data[column], build_count);
+			for (idx_t i = 0; i < build_count; i++) {
+				writer.WriteValue(values[column == filter_key && i + 1 == build_count ? 1 : 0].GetValue<int32_t>());
+			}
 		}
-	} else {
-		auto writer = FlatVector::Writer<int32_t>(keys.data[0], build_count);
-		for (idx_t i = 0; i < build_count; i++) {
-			writer.WriteValue(values[i + 1 == build_count ? 1 : 0].GetValue<int32_t>());
-		}
-	}
-	if (multiple_keys) {
-		keys.data[1].Reference(keys.data[0]);
 	}
 	DataChunk payload;
 	payload.Initialize(allocator, {});
@@ -353,7 +353,7 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	REQUIRE(ht->Count() == build_count);
 
 	JoinFilterPushdownInfo pushdown;
-	pushdown.join_condition = {0};
+	pushdown.join_condition = {filter_key};
 	pushdown.build_side_has_filter = true;
 	for (idx_t target = 0; target < 4; target++) {
 		JoinFilterPushdownColumn column;
@@ -377,18 +377,19 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	min_max->data[1].SetValue(0, values[1]);
 	JoinFilterGlobalState global_state;
 	pushdown.FinalizeFilters(context, join, std::move(min_max), *ht, allow_bloom, true, global_state);
-	const auto expect_prf = eligible_targets && !multiple_keys && !wide_span && prf_supported;
-	const auto expect_bloom = eligible_targets && !multiple_keys && !expect_prf && allow_bloom;
+	const auto expect_prf = eligible_targets && !wide_span && prf_supported;
+	const auto expect_bloom = eligible_targets && !expect_prf && allow_bloom;
 	REQUIRE(global_state.deferred_runtime_filters.size() == (expect_prf || expect_bloom ? 2 : 0));
 	for (auto &filter : global_state.deferred_runtime_filters) {
 		REQUIRE(filter.type ==
 		        (expect_prf ? DeferredRuntimeFilterType::PREFIX_RANGE : DeferredRuntimeFilterType::BLOOM_FILTER));
+		REQUIRE(filter.key_idx == filter_key);
 	}
 	if (expect_prf) {
-		REQUIRE(ht->GetPrefixRangeFilter());
-		REQUIRE_FALSE(ht->GetPrefixRangeFilter()->IsInitialized());
+		REQUIRE(ht->GetPrefixRangeFilter(filter_key));
+		REQUIRE_FALSE(ht->GetPrefixRangeFilter(filter_key)->IsInitialized());
 	} else {
-		REQUIRE_FALSE(ht->GetPrefixRangeFilter());
+		REQUIRE_FALSE(ht->GetPrefixRangeFilter(filter_key));
 	}
 	for (idx_t target = 0; target < pushdown.probe_info.size(); target++) {
 		auto snapshot = pushdown.probe_info[target].dynamic_filters->GetFinalTableFilters(test.scan, nullptr);

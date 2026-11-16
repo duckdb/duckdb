@@ -541,7 +541,7 @@ unique_ptr<Expression> AggregateReuseOptimizer::VisitReplace(BoundColumnRefExpre
                                                              unique_ptr<Expression> *expression_ptr) {
 	auto entry = replacement_map.find(expression.Binding());
 	if (entry != replacement_map.end()) {
-		expression.BindingMutable() = entry->second;
+		return expression.WithBinding(entry->second);
 	}
 	return nullptr;
 }
@@ -628,11 +628,10 @@ bool AggregateReuseOptimizer::TryReuseSemiAggregate(unique_ptr<LogicalOperator> 
 	}
 	auto state_ref =
 	    make_uniq<BoundColumnRefExpression>(state_type, ColumnBinding(upper_aggregate_index, ProjectionIndex(0)));
-	auto finalized = optimizer.BindScalarFunction("finalize", std::move(state_ref));
+	auto finalized = optimizer.BindScalarFunction("finalize", std::move(state_ref), outer_aggregate.GetAlias());
 	if (finalized->GetReturnType() != outer_aggregate.GetReturnType()) {
 		throw InternalException("Aggregate return type changed while binding aggregate reuse finalization");
 	}
-	finalized->SetAlias(outer_aggregate.GetAlias());
 	expressions.push_back(std::move(finalized));
 	replacement_map[ColumnBinding(aggregate.aggregate_index, ProjectionIndex(0))] =
 	    ColumnBinding(projection_index, ProjectionIndex(aggregate.groups.size()));
