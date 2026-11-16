@@ -75,6 +75,16 @@ struct VariantNormalizeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct VariantStructureFun {
+	static constexpr const char *Name = "variant_structure";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Returns the structure of the `input_variant`. Defaults to `VARIANT` if the structure is inconsistent (e.g., incompatible types in an array).";
+	static constexpr const char *Example = "variant_structure({'a': 42, 'b': ['duck', 'goose']}::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
 struct VariantComparatorFun {
 	static constexpr const char *Name = "variant_comparator";
 	static constexpr const char *Parameters = "input_variant";

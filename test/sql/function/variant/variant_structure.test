@@ -1,0 +1,236 @@
+# name: test/sql/function/variant/variant_structure.test
+# description: Test variant_structure
+# group: [variant]
+
+require json
+
+query I
+SELECT variant_structure(42::VARIANT)::JSON;
+----
+"INT32"
+
+query I
+SELECT variant_structure({'a': 42, 'b': ['duck', 'goose']}::VARIANT)::JSON;
+----
+{"a":"INT32","b":["VARCHAR"]}
+
+query I
+SELECT variant_structure([true, NULL, false]::VARIANT)::JSON;
+----
+["BOOLEAN"]
+
+query I
+SELECT variant_structure([1::VARIANT, 'duck'::VARIANT]::VARIANT)::JSON;
+----
+["VARIANT"]
+
+# SQL NULL, and a VARIANT null at the root is a SQL NULL
+query III
+SELECT variant_structure(NULL::VARIANT), variant_structure(NULL), variant_structure('null'::JSON::VARIANT);
+----
+NULL	NULL	NULL
+
+# VARIANT nulls below the root
+query I
+SELECT variant_structure({'a': NULL, 'b': [NULL]}::VARIANT)::JSON;
+----
+{"a":"NULL","b":["NULL"]}
+
+# empty containers
+query IIII
+SELECT
+	variant_structure('{}'::JSON::VARIANT)::JSON,
+	variant_structure([]::VARIANT)::JSON,
+	variant_structure('{"a": {}, "b": []}'::JSON::VARIANT)::JSON,
+	variant_structure([[], [1, 2], []]::VARIANT)::JSON;
+----
+"VARIANT"	["NULL"]	{"a":"VARIANT","b":["NULL"]}	[["INT32"]]
+
+query II
+SELECT
+	variant_structure('[{}, {"a": 1}]'::JSON::VARIANT)::JSON,
+	variant_structure('[{}, {}]'::JSON::VARIANT)::JSON;
+----
+[{"a":"UINT64"}]	["VARIANT"]
+
+# primitive types
+query II
+SELECT id, variant_structure(v)::JSON FROM (VALUES
+	(1, true::VARIANT),
+	(2, false::VARIANT),
+	(3, 1::TINYINT::VARIANT),
+	(4, 1::SMALLINT::VARIANT),
+	(5, 1::INTEGER::VARIANT),
+	(6, 1::BIGINT::VARIANT),
+	(7, 1::HUGEINT::VARIANT),
+	(8, 1::UTINYINT::VARIANT),
+	(9, 1::USMALLINT::VARIANT),
+	(10, 1::UINTEGER::VARIANT),
+	(11, 1::UBIGINT::VARIANT),
+	(12, 1::UHUGEINT::VARIANT),
+	(13, 1::FLOAT::VARIANT),
+	(14, 1::DOUBLE::VARIANT),
+	(15, 1.5::VARIANT),
+	(16, 'duck'::VARIANT),
+	(17, '\xAA'::BLOB::VARIANT),
+	(18, '00000000-0000-0000-0000-000000000000'::UUID::VARIANT),
+	(19, '2020-01-01'::DATE::VARIANT),
+	(20, '12:00:00'::TIME::VARIANT),
+	(21, '2020-01-01'::TIMESTAMP_S::VARIANT),
+	(22, '2020-01-01'::TIMESTAMP_MS::VARIANT),
+	(23, '2020-01-01'::TIMESTAMP::VARIANT),
+	(24, '2020-01-01'::TIMESTAMP_NS::VARIANT),
+	(25, '12:00:00+00'::TIMETZ::VARIANT),
+	(26, '2020-01-01 00:00:00+00'::TIMESTAMPTZ::VARIANT),
+	(27, INTERVAL 1 DAY::VARIANT),
+	(28, 1::BIGNUM::VARIANT),
+	(29, '0101'::BIT::VARIANT)
+) t(id, v) ORDER BY id;
+----
+1	"BOOLEAN"
+2	"BOOLEAN"
+3	"INT8"
+4	"INT16"
+5	"INT32"
+6	"INT64"
+7	"INT128"
+8	"UINT8"
+9	"UINT16"
+10	"UINT32"
+11	"UINT64"
+12	"UINT128"
+13	"FLOAT"
+14	"DOUBLE"
+15	"DECIMAL"
+16	"VARCHAR"
+17	"BLOB"
+18	"UUID"
+19	"DATE"
+20	"TIME_MICROS"
+21	"TIMESTAMP_SEC"
+22	"TIMESTAMP_MILIS"
+23	"TIMESTAMP_MICROS"
+24	"TIMESTAMP_NANOS"
+25	"TIME_MICROS_TZ"
+26	"TIMESTAMP_MICROS_TZ"
+27	"INTERVAL"
+28	"BIGNUM"
+29	"BITSTRING"
+
+# object keys are merged across array elements
+query I
+SELECT variant_structure('[{"a": 1}, {"b": "x"}, null, {"a": 2, "c": [true]}]'::JSON::VARIANT)::JSON;
+----
+[{"a":"UINT64","b":"VARCHAR","c":["BOOLEAN"]}]
+
+query I
+SELECT variant_structure('[[1], [null], [2, null], []]'::JSON::VARIANT)::JSON;
+----
+[["UINT64"]]
+
+# incompatible structures fall back to VARIANT at the position of the conflict
+query I
+SELECT variant_structure('[{"a": 1}, {"a": "x", "b": 2}]'::JSON::VARIANT)::JSON;
+----
+[{"a":"VARIANT","b":"UINT64"}]
+
+query I
+SELECT variant_structure('[{"a": 1, "b": [1]}, {"a": [1], "b": [2]}, {"a": 3}]'::JSON::VARIANT)::JSON;
+----
+[{"a":"VARIANT","b":["UINT64"]}]
+
+query I
+SELECT variant_structure('[[1], ["x"], [2]]'::JSON::VARIANT)::JSON;
+----
+[["VARIANT"]]
+
+query IIIII
+SELECT
+	variant_structure('[1, "x", 2]'::JSON::VARIANT)::JSON,
+	variant_structure('[[1], {"a": 1}]'::JSON::VARIANT)::JSON,
+	variant_structure('[1, [1]]'::JSON::VARIANT)::JSON,
+	variant_structure('[{"a": 1}, 1]'::JSON::VARIANT)::JSON,
+	variant_structure('[[1], "x", [2]]'::JSON::VARIANT)::JSON;
+----
+["VARIANT"]	["VARIANT"]	["VARIANT"]	["VARIANT"]	["VARIANT"]
+
+query III
+SELECT
+	variant_structure([1::VARIANT, true::VARIANT]::VARIANT)::JSON,
+	variant_structure(['duck'::VARIANT, '\xAA'::BLOB::VARIANT]::VARIANT)::JSON,
+	variant_structure(['2020-01-01'::DATE::VARIANT, '2020-01-01'::TIMESTAMP::VARIANT]::VARIANT)::JSON;
+----
+["VARIANT"]	["VARIANT"]	["VARIANT"]
+
+# numeric types are widened
+query IIIIII
+SELECT
+	variant_structure('[1, -1]'::JSON::VARIANT)::JSON,
+	variant_structure('[1, 2.5]'::JSON::VARIANT)::JSON,
+	variant_structure([1::TINYINT::VARIANT, 1000::SMALLINT::VARIANT]::VARIANT)::JSON,
+	variant_structure([1::UTINYINT::VARIANT, (-1)::TINYINT::VARIANT]::VARIANT)::JSON,
+	variant_structure([1::VARIANT, 2.5::VARIANT]::VARIANT)::JSON,
+	variant_structure([2.5::VARIANT, 1.25::VARIANT]::VARIANT)::JSON;
+----
+["INT128"]	["DOUBLE"]	["INT16"]	["INT16"]	["DECIMAL"]	["DECIMAL"]
+
+# multiple chunks with NULL rows
+query II
+SELECT variant_structure(CASE
+	WHEN i % 3 = 0 THEN NULL
+	WHEN i % 3 = 1 THEN {'a': i}::VARIANT
+	ELSE [i]::VARIANT
+END)::JSON s, count(*) FROM range(10000) t(i) GROUP BY s ORDER BY s;
+----
+["INT64"]	3333
+{"a":"INT64"}	3333
+NULL	3334
+
+statement ok
+CREATE TABLE variants AS SELECT * FROM (VALUES
+	(1, {'a': 42, 'b': ['duck', 'goose']}::VARIANT),
+	(2, NULL),
+	(3, [1, 2, 3]::VARIANT),
+	(4, 'duck'::VARIANT),
+	(5, '[{"x": 1}, {"y": true}]'::JSON::VARIANT)
+) t(id, v);
+
+query II
+SELECT id, variant_structure(v)::JSON FROM variants ORDER BY id;
+----
+1	{"a":"INT32","b":["VARCHAR"]}
+2	NULL
+3	["INT32"]
+4	"VARCHAR"
+5	[{"x":"UINT64","y":"BOOLEAN"}]
+
+# the result is a VARIANT
+query I
+SELECT variant_typeof(variant_structure({'a': 42}::VARIANT));
+----
+OBJECT(a)
+
+# deep nesting is not bounded by the thread stack
+statement ok
+CREATE TABLE deep_json AS SELECT
+	repeat('[', 50000) || '1' || repeat(']', 50000) AS arr,
+	repeat('{"k":', 50000) || '1' || repeat('}', 50000) AS obj;
+
+query II
+SELECT variant_typeof(s), s IS NOT NULL FROM (SELECT variant_structure(arr::JSON::VARIANT) s FROM deep_json);
+----
+ARRAY(1)	true
+
+query II
+SELECT variant_typeof(s), s IS NOT NULL FROM (SELECT variant_structure(obj::JSON::VARIANT) s FROM deep_json);
+----
+OBJECT(k)	true
+
+query II
+SELECT
+	variant_structure((repeat('[', 100) || '1' || repeat(']', 100))::JSON::VARIANT)::JSON::VARCHAR
+		= repeat('[', 100) || '"UINT64"' || repeat(']', 100),
+	variant_structure((repeat('{"k":', 100) || '1' || repeat('}', 100))::JSON::VARIANT)::JSON::VARCHAR
+		= repeat('{"k":', 100) || '"UINT64"' || repeat('}', 100);
+----
+true	true

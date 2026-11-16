@@ -472,6 +472,74 @@ bool VariantUtils::ShreddedCastMatchesVariantCast(const LogicalType &shredded_ty
 	return VariantSupportsType(target);
 }
 
+LogicalType VariantUtils::GetNumericType(const VariantNode &value) {
+	switch (value.GetTypeId()) {
+	case VariantLogicalType::INT8:
+		return LogicalType::TINYINT;
+	case VariantLogicalType::INT16:
+		return LogicalType::SMALLINT;
+	case VariantLogicalType::INT32:
+		return LogicalType::INTEGER;
+	case VariantLogicalType::INT64:
+		return LogicalType::BIGINT;
+	case VariantLogicalType::INT128:
+		return LogicalType::HUGEINT;
+	case VariantLogicalType::UINT8:
+		return LogicalType::UTINYINT;
+	case VariantLogicalType::UINT16:
+		return LogicalType::USMALLINT;
+	case VariantLogicalType::UINT32:
+		return LogicalType::UINTEGER;
+	case VariantLogicalType::UINT64:
+		return LogicalType::UBIGINT;
+	case VariantLogicalType::UINT128:
+		return LogicalType::UHUGEINT;
+	case VariantLogicalType::FLOAT:
+		return LogicalType::FLOAT;
+	case VariantLogicalType::DOUBLE:
+		return LogicalType::DOUBLE;
+	case VariantLogicalType::DECIMAL: {
+		const auto properties = value.GetDecimalProperties();
+		return LogicalType::DECIMAL(properties.width, properties.scale);
+	}
+	default:
+		return LogicalType::INVALID;
+	}
+}
+
+VariantLogicalType VariantUtils::GetNumericVariantType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return VariantLogicalType::INT8;
+	case LogicalTypeId::SMALLINT:
+		return VariantLogicalType::INT16;
+	case LogicalTypeId::INTEGER:
+		return VariantLogicalType::INT32;
+	case LogicalTypeId::BIGINT:
+		return VariantLogicalType::INT64;
+	case LogicalTypeId::HUGEINT:
+		return VariantLogicalType::INT128;
+	case LogicalTypeId::UTINYINT:
+		return VariantLogicalType::UINT8;
+	case LogicalTypeId::USMALLINT:
+		return VariantLogicalType::UINT16;
+	case LogicalTypeId::UINTEGER:
+		return VariantLogicalType::UINT32;
+	case LogicalTypeId::UBIGINT:
+		return VariantLogicalType::UINT64;
+	case LogicalTypeId::UHUGEINT:
+		return VariantLogicalType::UINT128;
+	case LogicalTypeId::FLOAT:
+		return VariantLogicalType::FLOAT;
+	case LogicalTypeId::DOUBLE:
+		return VariantLogicalType::DOUBLE;
+	case LogicalTypeId::DECIMAL:
+		return VariantLogicalType::DECIMAL;
+	default:
+		throw InternalException("Unexpected numeric type for VARIANT: %s", type.ToString());
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // ToVariant sources
 //===--------------------------------------------------------------------===//

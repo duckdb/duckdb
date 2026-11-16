@@ -1,0 +1,54 @@
+# name: test/sql/function/variant/variant_structure_shredded.test
+# description: Test variant_structure with shredded VARIANT values
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_structure_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b VARCHAR[], obj STRUCT(x INTEGER))';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+	-- partially shredded
+	(1, {'z': true, 'a': 1, 'b': ['duck', 'goose'], 'obj': {'x': 10, 'y': 'x'}}::VARIANT),
+	-- VARIANT_NULL
+	(2, {'a': 10, 'b': NULL, 'obj': NULL}::VARIANT),
+	-- missing values in shredded schema
+	(3, {'a': 20}::VARIANT),
+	-- root with different type than shredded schema
+	(4, 42::VARIANT),
+	-- SQL-NULL
+	(5, NULL::VARIANT),
+	-- values with different types than shredded schema
+	(6, {'a': 'duck', 'b': [1, 2], 'obj': [true, false]}::VARIANT),
+	-- array elements that are partially shredded
+	(7, {'b': ['duck', NULL]}::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query II
+SELECT id, variant_structure(v)::JSON FROM variants ORDER BY id;
+----
+1	{"a":"INT32","b":["VARCHAR"],"obj":{"x":"INT32","y":"VARCHAR"},"z":"BOOLEAN"}
+2	{"a":"INT32","b":"NULL","obj":"NULL"}
+3	{"a":"INT32"}
+4	"INT32"
+5	NULL
+6	{"a":"VARCHAR","b":["INT32"],"obj":["BOOLEAN"]}
+7	{"b":["VARCHAR"]}

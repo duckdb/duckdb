@@ -16,6 +16,7 @@
 
 namespace duckdb {
 class VariantIterator;
+class VariantNode;
 
 struct VariantPathBindData : public FunctionData {
 public:
@@ -157,6 +158,10 @@ struct VariantUtils {
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
 	//! Whether casting a value shredded as "shredded_type" to "target" gives the same result as casting the VARIANT
 	DUCKDB_API static bool ShreddedCastMatchesVariantCast(const LogicalType &shredded_type, const LogicalType &target);
+	//! Returns the LogicalType of a numeric VARIANT value, or INVALID if the value is not numeric
+	DUCKDB_API static LogicalType GetNumericType(const VariantNode &value);
+	//! Returns the VARIANT type of a numeric LogicalType
+	DUCKDB_API static VariantLogicalType GetNumericVariantType(const LogicalType &type);
 
 	//! Build a canonical (unshredded) VARIANT vector by traversing a variant directly through a
 	//! VariantIterator - avoids materializing the intermediate vector<VariantValue> tree
