@@ -37,6 +37,8 @@ public:
 	// pushdown filter condition(ex in table scan operator),
 	// if have outer table columns then cannot elimination
 	bool has_filter = false;
+	// the operators above return the same result when rows of this pipeline are repeated
+	bool ignores_duplicates = false;
 
 	optional_ptr<LogicalOperator> join_parent = nullptr;
 	idx_t join_index = 0;
@@ -63,7 +65,11 @@ public:
 	// 3. must ensure each outer row can match at most one inner table row, such as:
 	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table
 	//  join condition columns contains a whole distinct group) 2) join result columns contains a whole distinct group
+	// condition 3 is not needed when the operators above the join ignore duplicates (a GROUP BY with only min, max
+	// and DISTINCT aggregates, the right side of a SEMI or ANTI join): the join then only repeats outer rows.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	//! Whether Optimize removed a join
+	bool RemovedJoin() const;
 	void OptimizeInternal(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
@@ -74,7 +80,12 @@ public:
 	}
 
 private:
+	//! Analyses both children of the join `op` of this pipeline
+	void OptimizeJoinChildren(LogicalOperator &op);
+	void OptimizeJoinChild(JoinElimination &child, LogicalOperator &join, idx_t child_idx);
 	unique_ptr<LogicalOperator> TryEliminateJoin();
+	//! Replaces the join of this pipeline by its outer child when it can; returns whether it did
+	bool TryEliminateJoinInternal();
 	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
 	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
 
@@ -85,5 +96,7 @@ private:
 
 	unique_ptr<JoinElimination> left_child;
 	unique_ptr<JoinElimination> right_child;
+
+	bool removed_join = false;
 };
 } // namespace duckdb

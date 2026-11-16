@@ -229,11 +229,22 @@ EXPLAIN SELECT count(*) FROM q WHERE x IN (SELECT a.o FROM ws a, ws b WHERE a.o 
 ----
 physical_plan	<REGEX>:[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*
 
-# a LEFT join
+# a LEFT join (join elimination removes it on its own: nothing reads b on the right side of the SEMI join)
+statement ok
+SET disabled_optimizers = 'join_elimination';
+
 query II
 EXPLAIN SELECT count(*) FROM q WHERE x IN (SELECT a.o FROM ws a LEFT JOIN ws b ON a.o = b.o AND a.w <> b.w)
 ----
 physical_plan	<REGEX>:[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*
+
+statement ok
+SET disabled_optimizers = '';
+
+query II
+EXPLAIN SELECT count(*) FROM q WHERE x IN (SELECT a.o FROM ws a LEFT JOIN ws b ON a.o = b.o AND a.w <> b.w)
+----
+physical_plan	<!REGEX>:[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*Seq Scan[\s\S]*
 
 # a VARCHAR inequality, whose ordering may not agree with its equality under a collation
 query II

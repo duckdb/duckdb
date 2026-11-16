@@ -2,6 +2,11 @@
 # description: Fixed-key replacement eliminates the old duplicate-producing source
 # group: [optimizer]
 
+# join elimination removes the LEFT JOIN of old_keys on its own, since it only repeats rows on the right side of a
+# SEMI join; this file pins what the fixed-key replacement does, so that optimizer stays out of it
+statement ok
+SET disabled_optimizers = 'join_elimination';
+
 statement ok
 CREATE TABLE fact_data AS SELECT (i % 1000)::INTEGER k, i::BIGINT v FROM range(10000) t(i);
 

@@ -1,0 +1,343 @@
+# name: test/optimizer/join_elimination_duplicate_insensitive.test
+# description: Outer joins that only repeat rows are eliminated below aggregates that ignore duplicates
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+create table a(ida int, valuea int);
+
+statement ok
+create table b(idb int, valueb int);
+
+statement ok
+create table c(idc int, valuec int);
+
+statement ok
+insert into a values (1,1), (2,2), (1,1),(NUll, NULL),(3, NULL),(NULL,4);
+
+statement ok
+insert into b values (1,1), (2,2), (3,3),(4,4),(3,3),(NUll, NULL),(3, NULL),(NULL,4);
+
+statement ok
+insert into c values (1,1), (2,2), (3,3),(4,4),(3,3),(NUll, NULL),(3, NULL),(NULL,4);
+
+# min / max over the outer side: the join only repeats rows of b
+query II
+explain select b.idb, max(b.valueb), min(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query III
+select b.idb, max(b.valueb), min(b.valueb) from b left join a on b.idb=a.ida group by b.idb order by all;
+----
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+NULL	4	4
+
+# the aggregates over the inner side are not read: the join goes once they are pruned
+query II
+explain select idb, m from (select b.idb, max(b.valueb) m, max(a.valuea) n, count(a.ida) cnt from b left join a on b.idb=a.ida group by b.idb);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+select idb, m from (select b.idb, max(b.valueb) m, max(a.valuea) n, count(a.ida) cnt from b left join a on b.idb=a.ida group by b.idb) order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# a chain of dead outer joins, the upper one joined on a column of the lower one's inner side
+query II
+explain select b.idb, min(b.valueb) from b left join a on b.idb=a.ida left join c on a.valuea=c.idc group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+select b.idb, min(b.valueb) from b left join a on b.idb=a.ida left join c on a.valuea=c.idc group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# a dead outer join below a join that stays
+query II
+explain select b.idb, max(c.valuec) from b left join a on b.idb=a.ida left join c on b.idb=c.idc group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+explain select b.idb, max(c.valuec) from b left join a on b.idb=a.ida left join c on b.idb=c.idc group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, max(c.valuec) from b left join a on b.idb=a.ida left join c on b.idb=c.idc group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	NULL
+
+# the right side of a semi join is read as a set
+query II
+explain select idc, valuec from c where idc in (select b.idb from b left join a on b.idb = a.ida);
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+select idc, valuec from c where idc in (select b.idb from b left join a on b.idb = a.ida) order by all;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+
+# RIGHT join, DISTINCT aggregate
+query II
+explain select b.idb, count(distinct b.valueb) from a right join b on b.idb=a.ida group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+select b.idb, count(distinct b.valueb) from a right join b on b.idb=a.ida group by b.idb order by all;
+----
+1	1
+2	1
+3	1
+4	1
+NULL	1
+
+# must not fire: sum and count see the repeated rows
+query II
+explain select b.idb, sum(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, sum(b.valueb) from b left join a on b.idb=a.ida group by b.idb order by all;
+----
+1	2
+2	2
+3	6
+4	4
+NULL	4
+
+query II
+explain select b.idb, max(b.valueb), count(*) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query III
+select b.idb, max(b.valueb), count(*) from b left join a on b.idb=a.ida group by b.idb order by all;
+----
+1	1	2
+2	2	1
+3	3	3
+4	4	1
+NULL	4	2
+
+# must not fire: an inner join filters, a full join adds rows
+query II
+explain select b.idb, max(b.valueb) from b join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, max(b.valueb) from b join a on b.idb=a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+
+query II
+explain select b.idb, max(b.valueb) from b full join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# must not fire: the inner side is read by a filter
+query II
+explain select b.idb, max(b.valueb) from b left join a on b.idb=a.ida where a.valuea is null group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb=a.ida where a.valuea is null group by b.idb order by all;
+----
+3	3
+4	4
+NULL	4
+
+# must not fire: a window between the aggregate and the join counts the repeated rows
+query II
+explain select idb, max(valueb) from (select b.*, count(*) over (partition by b.idb) cnt from b left join a on b.idb=a.ida) where cnt = 2 group by idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select idb, max(valueb) from (select b.*, count(*) over (partition by b.idb) cnt from b left join a on b.idb=a.ida) where cnt = 2 group by idb order by all;
+----
+1	1
+NULL	4
+
+# must not fire: min(x, n) lists the n smallest values, duplicates included
+query II
+explain select b.idb, min(b.valueb, 2) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, min(b.valueb, 2) from b left join a on b.idb=a.ida group by b.idb order by all;
+----
+1	[1, 1]
+2	[2]
+3	[3, 3]
+4	[4]
+NULL	[4]
+
+# a filter on the inner side does not matter: the join can only repeat rows of b
+query II
+explain select b.idb, max(b.valueb) from b left join (select * from a where valuea > 1) a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+select b.idb, max(b.valueb) from b left join (select * from a where valuea > 1) a on b.idb=a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# a dead outer join below both sides of an inner join that stays
+query II
+explain select distinct b.idb, c.valuec from (b left join a on b.idb=a.ida) join (c left join a a2 on c.idc=a2.ida) on b.idb=c.idc;
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+select distinct b.idb, c.valuec from (b left join a on b.idb=a.ida) join (c left join a a2 on c.idc=a2.ida) on b.idb=c.idc order by all;
+----
+1	1
+2	2
+3	3
+3	NULL
+4	4
+
+# DISTINCT over the outer side of a join on a non-key column
+query II
+explain select distinct b.idb, b.valueb from b left join a on b.valueb=a.valuea;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+select distinct b.idb, b.valueb from b left join a on b.valueb=a.valuea order by all;
+----
+1	1
+2	2
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# the right side of an anti join, in a correlated subquery
+query II
+explain select idc, valuec from c where not exists (select 1 from b left join a on b.valueb = a.valuea where b.idb = c.idc);
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+select idc, valuec from c where not exists (select 1 from b left join a on b.valueb = a.valuea where b.idb = c.idc) order by all;
+----
+NULL	4
+NULL	NULL
+
+# a LEFT join whose inner side is read by the join above it stays
+query II
+explain select b.idb, max(b.valueb) from b left join a on b.idb=a.ida join c on a.valuea=c.idc group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb=a.ida join c on a.valuea=c.idc group by b.idb order by all;
+----
+1	1
+2	2
+
+# must not fire: a volatile expression between the aggregate and the join is evaluated once per repeated row
+query II
+explain select idb, max(r) from (select b.idb, random() r from b left join a on b.idb=a.ida) group by idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# must not fire: a LIMIT between the aggregate and the join counts the repeated rows
+query II
+explain select idb, max(valueb) from (select b.* from b left join a on b.idb=a.ida limit 5) group by idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# must not fire: a scalar subquery raises an error when the join repeats its row
+statement error
+select (select b.idb from b left join a on b.idb=a.ida where b.idb = 1);
+----
+More than one row returned by a subquery
+
+# the optimizer can be switched off
+statement ok
+SET disabled_optimizers = 'join_elimination';
+
+query II
+explain select b.idb, max(b.valueb), min(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+statement ok
+SET disabled_optimizers = '';
+
+# the unread aggregate over a 20-fold join: larger tables, results compared with the optimizer disabled
+statement ok
+create table f as select i as k, i % 100 as g from range(10000) t(i);
+
+statement ok
+create table d1 as select i % 1000 as k, i as x from range(20000) t(i);
+
+statement ok
+create table d2 as select i % 100 as k, i as y from range(5000) t(i);
+
+query II
+explain select count(*), sum(mx) from (select f.k, max(d1.x) as mx, max(d2.y) as my from f left join d1 on f.k = d1.k left join d2 on f.g = d2.k group by f.k);
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+select count(*), sum(mx) from (select f.k, max(d1.x) as mx, max(d2.y) as my from f left join d1 on f.k = d1.k left join d2 on f.g = d2.k group by f.k);
+----
+10000	19499500
+
+# a LEFT join below a join inside a correlated subquery, with a side that keeps no column
+statement ok
+create table integers(i integer);
+
+statement ok
+insert into integers values (1), (2), (3), (NULL);
+
+query II
+select i, (select sum(ss1.i) from (select i from integers s1 where i>any(select i from integers where i<>s1.i)) ss1 left outer join (select i from integers s1 where i=i1.i and i=any(select i from integers where i=s1.i)) ss2 on ss1.i=ss2.i) as j from integers i1 order by i;
+----
+1	5
+2	5
+3	5
+NULL	5

@@ -8,6 +8,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/self_join_aggregate.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -18,6 +19,63 @@
 #include <utility>
 
 namespace duckdb {
+
+static bool AnyVolatile(const LogicalOperator &op) {
+	bool is_volatile = false;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expr) {
+		if ((*expr)->IsVolatile()) {
+			is_volatile = true;
+		}
+	});
+	return is_volatile;
+}
+
+void JoinElimination::OptimizeJoinChildren(LogicalOperator &op) {
+	left_child = CreateChildren();
+	right_child = CreateChildren();
+	// the joins below must keep the columns this join's conditions read
+	left_child->VisitOperatorExpressions(op);
+	right_child->VisitOperatorExpressions(op);
+	// repeated input rows only repeat the output rows of these joins, and a SEMI or ANTI join never sees how often a
+	// row of its right side occurs
+	const bool is_volatile = AnyVolatile(op);
+	const bool ignores_duplicates = pipe_info.ignores_duplicates && !is_volatile;
+	switch (op.Cast<LogicalComparisonJoin>().join_type) {
+	case JoinType::INNER:
+	case JoinType::LEFT:
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+		left_child->pipe_info.ignores_duplicates = ignores_duplicates;
+		right_child->pipe_info.ignores_duplicates = ignores_duplicates;
+		break;
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		left_child->pipe_info.ignores_duplicates = ignores_duplicates;
+		right_child->pipe_info.ignores_duplicates = !is_volatile;
+		break;
+	default:
+		break;
+	}
+	OptimizeJoinChild(*left_child, op, 0);
+	OptimizeJoinChild(*right_child, op, 1);
+}
+
+void JoinElimination::OptimizeJoinChild(JoinElimination &child, LogicalOperator &join, idx_t child_idx) {
+	if (join.children[child_idx]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		child.OptimizeInternal(std::move(join.children[child_idx]));
+		return;
+	}
+	// a join that is the child of a join is analysed, in place, in a copy of the child's pipeline that is dropped
+	// afterwards: what holds below the nested join says nothing about its output
+	auto nested = child.CreateChildren();
+	nested->pipe_info.ignores_duplicates = child.pipe_info.ignores_duplicates;
+	nested->pipe_info.join_parent = join;
+	nested->pipe_info.join_index = child_idx;
+	nested->OptimizeJoinChildren(*join.children[child_idx]);
+	nested->TryEliminateJoin();
+	child.removed_join = nested->removed_join;
+}
+
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		if (!parent) {
@@ -26,17 +84,25 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		D_ASSERT(!pipe_info.join_parent);
 		pipe_info.join_parent = parent;
 		pipe_info.join_index = idx;
-		left_child = CreateChildren();
-		right_child = CreateChildren();
-		// the joins below must keep the columns this join's conditions read
-		left_child->VisitOperatorExpressions(op);
-		right_child->VisitOperatorExpressions(op);
-		left_child->OptimizeInternal(std::move(op.children[0]));
-		right_child->OptimizeInternal(std::move(op.children[1]));
+		OptimizeJoinChildren(op);
 		return;
 	}
 
 	VisitOperatorExpressions(op);
+
+	// whether the operators above return the same result when rows of their input are repeated
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		pipe_info.ignores_duplicates = SelfJoinAggregate::AggregateIgnoresDuplicates(op.Cast<LogicalAggregate>());
+		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		pipe_info.ignores_duplicates = pipe_info.ignores_duplicates && !AnyVolatile(op);
+		break;
+	default:
+		pipe_info.ignores_duplicates = false;
+		break;
+	}
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -201,6 +267,10 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 	return std::move(pipe_info.root);
 }
 
+bool JoinElimination::RemovedJoin() const {
+	return removed_join;
+}
+
 void JoinElimination::OptimizeInternal(unique_ptr<LogicalOperator> op) {
 	pipe_info.root = std::move(op);
 	OptimizeChildren(*pipe_info.root, nullptr, 0);
@@ -215,18 +285,37 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 
 		for (idx_t idx = 0; idx < children.size(); idx++) {
 			children_root->children[idx] = children[idx]->TryEliminateJoin();
+			removed_join = removed_join || children[idx]->removed_join;
 		}
 		return std::move(pipe_info.root);
 	}
 	if (!pipe_info.join_parent) {
 		return std::move(pipe_info.root);
 	}
+	while (TryEliminateJoinInternal()) {
+		removed_join = true;
+		// the outer child took the place of the join: when it is a join, it is tried in this pipeline in turn
+		auto &replacement = *pipe_info.join_parent->children[pipe_info.join_index];
+		if (replacement.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			break;
+		}
+		OptimizeJoinChildren(replacement);
+	}
+	return std::move(pipe_info.root);
+}
 
+bool JoinElimination::TryEliminateJoinInternal() {
 	auto join_parent = pipe_info.join_parent;
 
 	auto &join_op = pipe_info.join_parent->children[pipe_info.join_index];
-	join_op->children[0] = left_child->TryEliminateJoin();
-	join_op->children[1] = right_child->TryEliminateJoin();
+	// a child that is a join itself was analysed in place
+	if (left_child->pipe_info.root) {
+		join_op->children[0] = left_child->TryEliminateJoin();
+	}
+	if (right_child->pipe_info.root) {
+		join_op->children[1] = right_child->TryEliminateJoin();
+	}
+	removed_join = removed_join || left_child->removed_join || right_child->removed_join;
 
 	auto &join = join_op->Cast<LogicalComparisonJoin>();
 	bool is_output_unique = false;
@@ -244,21 +333,27 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		break;
 	}
 	default:
-		return std::move(pipe_info.root);
+		return false;
 	}
 	auto &inner_child = inner_idx == 0 ? left_child : right_child;
-	if (inner_child->pipe_info.has_filter) {
-		return std::move(pipe_info.root);
-	}
 	if (join.filter_pushdown) {
-		return std::move(pipe_info.root);
+		return false;
 	}
 	auto inner_bindings = join.children[inner_idx]->GetColumnBindings();
 	// ensure join output columns only contains outer table columns
 	for (auto &binding : inner_bindings) {
 		if (pipe_info.ref_table_ids.find(binding.table_index) != pipe_info.ref_table_ids.end()) {
-			return std::move(pipe_info.root);
+			return false;
 		}
+	}
+	// 0. the operators above ignore duplicates: an outer join that nothing reads the inner side of only repeats its
+	// outer rows, whatever the inner side holds (a SINGLE join raises an error on a second match, so it stays)
+	if (pipe_info.ignores_duplicates && join.join_type != JoinType::SINGLE) {
+		join_parent->children[pipe_info.join_index] = std::move(join_op->children[outer_idx]);
+		return true;
+	}
+	if (inner_child->pipe_info.has_filter) {
+		return false;
 	}
 
 	if (inner_idx == 1) {
@@ -272,7 +367,7 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 	}
 
 	if (pipe_info.distinct_groups.empty()) {
-		return std::move(pipe_info.root);
+		return false;
 	}
 	// 1. TODO: guarantee by primary/foreign key
 
@@ -306,11 +401,14 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 	if (is_output_unique) {
 		join_parent->children[pipe_info.join_index] = std::move(join_op->children[outer_idx]);
 	}
-	return std::move(pipe_info.root);
+	return is_output_unique;
 }
 
 bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_bindings) {
-	D_ASSERT(!column_bindings.empty());
+	if (column_bindings.empty()) {
+		// a side whose columns were all pruned, or a join without conditions
+		return false;
+	}
 	auto &column_binding = column_bindings[0];
 	auto it = pipe_info.distinct_groups.find(column_binding.table_index);
 	if (it == pipe_info.distinct_groups.end()) {

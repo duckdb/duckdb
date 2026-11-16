@@ -371,6 +371,10 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
 		JoinElimination join_elimination;
 		plan = join_elimination.Optimize(std::move(plan));
+		if (join_elimination.RemovedJoin()) {
+			// the operators above a removed join select its columns by position
+			ClearProjectionMaps(*plan);
+		}
 	});
 
 	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
@@ -389,6 +393,24 @@ void Optimizer::RunBuiltInOptimizers() {
 		RemoveUnusedColumns unused(*this);
 		unused.VisitOperator(plan);
 	});
+
+	// a join whose inner side was only read by columns that nothing reads can be removed now; the columns that only
+	// that join read are pruned in turn
+	bool removed_join = false;
+	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
+		JoinElimination join_elimination;
+		plan = join_elimination.Optimize(std::move(plan));
+		removed_join = join_elimination.RemovedJoin();
+		if (removed_join) {
+			ClearProjectionMaps(*plan);
+		}
+	});
+	if (removed_join) {
+		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+			RemoveUnusedColumns unused(*this);
+			unused.VisitOperator(plan);
+		});
+	}
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
