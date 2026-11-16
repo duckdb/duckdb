@@ -49,7 +49,7 @@ EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE n IS NULL;
 ----
 physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "122880"[\s\S]*
 
-# a VARCHAR range has no numeric span to interpolate: the row groups are skipped or count whole
+# a VARCHAR range
 query II
 EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE s < 'k0122880';
 ----
@@ -71,38 +71,44 @@ SELECT (SELECT count(*) FROM z WHERE i < 122880), (SELECT count(*) FROM z WHERE 
 122880	122880	122880	122880	122880	122880
 
 # ---------------------------------------------------------------------------------------------------------------
-# the estimate is left alone: the EXPLAIN output with the rule is the EXPLAIN output without it
+# the estimate is left alone
 # ---------------------------------------------------------------------------------------------------------------
 
 # a scan without table filters
-query II nosort no_filter
-EXPLAIN SELECT sum(i) FROM z;
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(i) FROM z;
 ----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "1000000"[\s\S]*
 
-# a source without row group statistics at plan time
-query II nosort parquet
-EXPLAIN SELECT sum(c10) FROM read_parquet('{TEST_DIR}/scan_selectivity_zonemaps_guards.parquet') WHERE i < 122880;
+# a source without row group statistics at plan time: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM read_parquet('{TEST_DIR}/scan_selectivity_zonemaps_guards.parquet') WHERE i < 122880;
 ----
+physical_plan	<REGEX>:[\s\S]*"READ_PARQUET"[^}]*"Estimated Cardinality": "200000"[\s\S]*
 
-# a filter that no zonemap refutes
-query II nosort not_equal
-EXPLAIN SELECT sum(c10) FROM z WHERE i <> 5;
+# a filter that no zonemap refutes: all rows but the ones of one of about 1,000,000 distinct values
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i <> 5;
 ----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "99999[0-9]"[\s\S]*
 
-# a range on a column that is not stored in runs
-query II nosort unclustered
-EXPLAIN SELECT sum(i) FROM z WHERE c10 < 2;
+# a range on a column whose row groups all span its whole range: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(i) FROM z WHERE c10 < 2;
 ----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
 
-# a filter on the row id
-query II nosort row_id
-EXPLAIN SELECT sum(c10) FROM z WHERE rowid < 122880;
+# a filter on the row id is not checked against the zonemaps: the default selectivity of a range
+query II
+EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE rowid < 122880;
 ----
+physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
 
 # an empty table
-query II nosort empty_table
+query II
 EXPLAIN SELECT sum(c10) FROM z_empty WHERE i < 5;
 ----
+physical_plan	<REGEX>:(?s).*Empty Result.*
 
 # a filter that the statistics of the table refute keeps its 0 rows: the bound never replaces the proof
 statement ok
@@ -114,39 +120,6 @@ EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i > 2000000;
 physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "0"[\s\S]*
 
 statement ok
-SET disabled_optimizers = 'scan_selectivity_zonemaps';
-
-query II nosort no_filter
-EXPLAIN SELECT sum(i) FROM z;
-----
-
-query II nosort parquet
-EXPLAIN SELECT sum(c10) FROM read_parquet('{TEST_DIR}/scan_selectivity_zonemaps_guards.parquet') WHERE i < 122880;
-----
-
-query II nosort not_equal
-EXPLAIN SELECT sum(c10) FROM z WHERE i <> 5;
-----
-
-query II nosort unclustered
-EXPLAIN SELECT sum(i) FROM z WHERE c10 < 2;
-----
-
-query II nosort row_id
-EXPLAIN SELECT sum(c10) FROM z WHERE rowid < 122880;
-----
-
-query II nosort empty_table
-EXPLAIN SELECT sum(c10) FROM z_empty WHERE i < 5;
-----
-
-# without the rule the default selectivity is the estimate of the first filter above
-query II
-EXPLAIN (FORMAT JSON) SELECT sum(c10) FROM z WHERE i < 122880;
-----
-physical_plan	<REGEX>:[\s\S]*"SEQ_SCAN"[^}]*"Estimated Cardinality": "200000"[\s\S]*
-
-statement ok
 SET disabled_optimizers = '';
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -156,23 +129,18 @@ SET disabled_optimizers = '';
 statement ok
 CREATE TABLE dim AS SELECT range::INTEGER AS k, range % 7 AS g FROM range(150000);
 
-# 30,000 rows of z pass the filter: z is the build side
+# one row group of z is left by the filter (122,880 rows, below the 150,000 of dim): z is the build side
 query II
 EXPLAIN SELECT count(*) FROM z JOIN dim ON z.c10 = dim.k WHERE z.i < 30000;
 ----
 physical_plan	<REGEX>:(?s).*Conditions: k = c10.*
 
-statement ok
-SET disabled_optimizers = 'scan_selectivity_zonemaps';
-
-# without the bound the filter is estimated at 200,000 rows and dim is the build side
+# two row groups are left (245,760 rows): the estimate of the table statistics (200,000 rows) stands and dim is
+# the build side
 query II
-EXPLAIN SELECT count(*) FROM z JOIN dim ON z.c10 = dim.k WHERE z.i < 30000;
+EXPLAIN SELECT count(*) FROM z JOIN dim ON z.c10 = dim.k WHERE z.i < 130000;
 ----
 physical_plan	<REGEX>:(?s).*Conditions: c10 = k.*
-
-statement ok
-SET disabled_optimizers = '';
 
 # ---------------------------------------------------------------------------------------------------------------
 # a table that was just attached: the zonemaps of the filtered column are read for the estimate
