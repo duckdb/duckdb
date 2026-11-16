@@ -25,6 +25,13 @@ void ParserTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, 
 	TokenizerBehavior::PushToken(start, end, type, unterminated);
 }
 
+void ParserTokenizerBehavior::PushWordToken(idx_t start, idx_t end, TokenType type, const GrammarLiteralTable &table,
+                                            LiteralInfo info) {
+	// a word is neither a comment nor a quoted identifier, so none of the PushToken checks apply
+	D_ASSERT(start < end && (type == TokenType::KEYWORD || type == TokenType::IDENTIFIER));
+	EmplaceToken(start, end, type).SetLiteralInfo(table, info);
+}
+
 void ParserTokenizerBehavior::OnStatementEnd(idx_t pos) {
 	// Always emit ';' as a TERMINATOR token so the grammar can consume it.
 	// Statement boundaries are determined by the PEG grammar (Program rule), not the tokenizer.

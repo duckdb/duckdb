@@ -11,9 +11,7 @@ TokenIterator::TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens_p)
 	if (!owned_tokens) {
 		throw InternalException("Cannot construct an owning TokenIterator without tokens");
 	}
-	for (auto &token : tokens) {
-		token.ResetLiteralInfo();
-	}
+	// Owned tokens come straight from the tokenizer and keep the literal info it cached on them.
 }
 
 TokenIterator::TokenIterator(TokenizerBehavior &behavior)
