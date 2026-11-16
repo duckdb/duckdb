@@ -3,6 +3,9 @@
 # group: [cte]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE free AS SELECT i AS ofs FROM range(100) t(i);
 
 # plan the joins below as piecewise merge joins: their operator state is reused by every iteration
@@ -31,12 +34,29 @@ WITH RECURSIVE t(i) AS (
 ----
 6	0
 
+# a MARK join: the marker of a row-valued > ANY is projected (a single-column > ANY is planned as a comparison with
+# the minimum of the subquery, and a marker that is only filtered becomes a SEMI join)
+query II
+EXPLAIN WITH RECURSIVE t(i) AS (
+	SELECT 1::BIGINT
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t),
+	      marked AS (SELECT f.ofs, (f.ofs, 0) > ANY (SELECT i, 0 FROM tmp) AS above FROM free f),
+	      nextfree AS (SELECT min(ofs) FILTER (WHERE above) AS nf, count(*) FILTER (WHERE above IS NULL) AS unknown
+	                   FROM marked)
+	 SELECT nf FROM nextfree WHERE nf < 10)
+) SELECT count(*), max(i) FROM t;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Join Type: MARK.*
+
 query II
 WITH RECURSIVE t(i) AS (
 	SELECT 1::BIGINT
 	UNION ALL
 	(WITH tmp AS (SELECT * FROM t),
-	      nextfree AS (SELECT min(f.ofs) AS nf FROM free f WHERE f.ofs > ANY (SELECT i FROM tmp))
+	      marked AS (SELECT f.ofs, (f.ofs, 0) > ANY (SELECT i, 0 FROM tmp) AS above FROM free f),
+	      nextfree AS (SELECT min(ofs) FILTER (WHERE above) AS nf, count(*) FILTER (WHERE above IS NULL) AS unknown
+	                   FROM marked)
 	 SELECT nf FROM nextfree WHERE nf < 10)
 ) SELECT count(*), max(i) FROM t;
 ----
