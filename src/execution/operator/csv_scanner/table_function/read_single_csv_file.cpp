@@ -18,14 +18,10 @@ struct ReadSingleCSVFileData : public ReadCSVData {
 	vector<LogicalType> csv_types;
 };
 
-static idx_t GetCSVFileCount(ClientContext &context, const ReadCSVData &csv_data, const TableFunctionInitInput &input) {
+static idx_t GetCSVFileCount(ClientContext &context, const TableFunctionInitInput &input) {
 	auto &file_input = TableFunctionFileInitInput::Get(input);
 	if (!file_input.file_list) {
 		return 1;
-	}
-	if (csv_data.options.store_rejects.GetValue()) {
-		// Rejects tables reserve a distinct block of file indexes for each scan.
-		return file_input.file_list->GetTotalFileCount();
 	}
 	// Parallelism only needs to know whether there are more than twice as many files as threads.
 	return file_input.file_list->GetFileCount(context.db->NumberOfThreads() * 2 + 1).count;
@@ -35,7 +31,7 @@ struct ReadSingleCSVFileGlobalState : public GlobalTableFunctionState {
 public:
 	ReadSingleCSVFileGlobalState(ClientContext &context, ReadSingleCSVFileData &csv_data,
 	                             const TableFunctionInitInput &input)
-	    : state(context, csv_data, csv_data.csv_names, GetCSVFileCount(context, csv_data, input), input.op) {
+	    : state(context, csv_data, csv_data.csv_names, GetCSVFileCount(context, input), input.op) {
 	}
 
 public:

@@ -88,7 +88,7 @@ TEST_CASE("CSV initialization only expands the file count it needs", "[api][mult
 	bool store_rejects = false;
 	SECTION("Parallelism uses a bounded count") {
 	}
-	SECTION("Rejects require an exact count") {
+	SECTION("Rejects use a bounded count") {
 		store_rejects = true;
 	}
 
@@ -111,8 +111,7 @@ TEST_CASE("CSV initialization only expands the file count it needs", "[api][mult
 	bind_data.initial_reader->PrepareReader(*con.context, *state);
 
 	auto count = files.GetFileCount();
-	REQUIRE(count.count == (store_rejects ? 8 : 3));
-	REQUIRE(count.type ==
-	        (store_rejects ? FileExpansionType::ALL_FILES_EXPANDED : FileExpansionType::NOT_ALL_FILES_KNOWN));
+	REQUIRE(count.count == 3);
+	REQUIRE(count.type == FileExpansionType::NOT_ALL_FILES_KNOWN);
 	con.Rollback();
 }
