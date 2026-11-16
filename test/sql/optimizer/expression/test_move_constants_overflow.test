@@ -262,13 +262,22 @@ SELECT count(*) FROM uh_vals WHERE v - 1 = 3402823669209384634633746074317682114
 1
 
 # in-range UHUGEINT constants still get rewritten and give correct results (rewrite is not skipped when
-# both constants fit in hugeint_t)
+# both constants fit in hugeint_t). Uses a separate small table so that evaluating `v + 5` for every row
+# never overflows UHUGEINT when the optimizer is disabled (test/configs/disable_optimizer.json) -- on
+# uh_vals the top row is uhugeint max - 1, and max - 1 + 5 would throw Out of Range in the un-rewritten
+# evaluation.
+statement ok
+CREATE OR REPLACE TABLE uh_small(v UHUGEINT);
+
+statement ok
+INSERT INTO uh_small VALUES (5);
+
 query I
-SELECT count(*) FROM uh_vals WHERE v + 5 = 10;
+SELECT count(*) FROM uh_small WHERE v + 5 = 10;
 ----
 1
 
 query I
-SELECT count(*) FROM uh_vals WHERE v - 1 = 4;
+SELECT count(*) FROM uh_small WHERE v - 1 = 4;
 ----
 1
