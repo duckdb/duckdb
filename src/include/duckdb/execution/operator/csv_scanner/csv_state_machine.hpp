@@ -91,6 +91,7 @@ struct CSVStates {
 		case CSVState::UNQUOTED_ESCAPE:
 		case CSVState::ESCAPED_RETURN:
 		case CSVState::FIELD_START:
+		case CSVState::FIELD_QUOTE:
 			return true;
 		case CSVState::QUOTED:
 			return states[0] == CSVState::UNQUOTED || states[0] == CSVState::MAYBE_QUOTED;

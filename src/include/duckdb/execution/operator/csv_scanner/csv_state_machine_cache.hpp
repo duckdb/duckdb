@@ -19,7 +19,7 @@ namespace duckdb {
 //! Class to wrap the state machine matrix
 class StateMachine {
 public:
-	static constexpr uint32_t NUM_STATES = 20;
+	static constexpr uint32_t NUM_STATES = 21;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 	//! Transitions where we might skip processing
@@ -52,7 +52,8 @@ struct HashCSVStateMachineConfig {
 		auto h_newline = Hash(static_cast<uint8_t>(config.new_line.GetValue()));
 		auto h_comment = Hash(static_cast<uint8_t>(config.comment.GetValue()));
 		auto h_escape_mode = Hash(static_cast<uint8_t>(config.escape_mode.GetValue()));
-		auto h_quote_mode = Hash(static_cast<uint8_t>(config.quote_mode.GetValue()));
+		auto h_quote_mode = Hash(static_cast<uint8_t>((static_cast<uint8_t>(config.quote_mode.GetValue()) << 1) +
+		                                              config.doubled_quotes.GetValue()));
 		return CombineHash(
 		    h_delimiter,
 		    CombineHash(

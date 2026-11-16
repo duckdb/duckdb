@@ -661,7 +661,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				    !result.quoted &&
 				        result.state_machine.dialect_options.state_machine_options.escape_mode.GetValue() ==
 				            CSVEscapeMode::OPENCSV,
-				    result.quoted && result.state_machine.options.doubled_quotes.GetValue(),
+				    result.state_machine.dialect_options.state_machine_options.doubled_quotes.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -1407,6 +1407,7 @@ void StringValueScanner::ProcessExtraRow() {
 		case CSVState::UNQUOTED_ESCAPE:
 		case CSVState::ESCAPED_RETURN:
 		case CSVState::FIELD_START:
+		case CSVState::FIELD_QUOTE:
 			result.SetEscaped(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1681,7 +1682,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
 					    state_machine->dialect_options.state_machine_options.quote.GetValue(),
 					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(), false,
-					    result.state_machine.options.doubled_quotes.GetValue(),
+					    result.state_machine.dialect_options.state_machine_options.doubled_quotes.GetValue(),
 					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1716,7 +1717,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
 					    result.state_machine.dialect_options.state_machine_options.escape_mode.GetValue() ==
 					        CSVEscapeMode::OPENCSV,
-					    false, result.parse_chunk.data[result.chunk_col_id]);
+					    result.state_machine.dialect_options.state_machine_options.doubled_quotes.GetValue(),
+					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}

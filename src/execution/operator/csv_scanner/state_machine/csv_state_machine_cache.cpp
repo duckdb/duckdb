@@ -576,6 +576,24 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
+	// 12.3) Field Quote State (doubled_quotes): a quote inside an unquoted field; a second quote is one literal
+	// quote (collapsed in StringValueScanner::RemoveEscape), any other byte keeps the meaning it has in the Standard
+	// state, so a lone quote in a field stays data
+	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		transition_array[quote][static_cast<uint8_t>(CSVState::STANDARD)] = CSVState::FIELD_QUOTE;
+		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::STANDARD);
+		transition_array[quote][field_quote] = CSVState::STANDARD;
+		if (enable_unquoted_escape) {
+			transition_array[escape][field_quote] = CSVState::UNQUOTED_ESCAPE;
+		}
+		split_on_delimiter(CSVState::FIELD_QUOTE);
+		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		if (comment != '\0') {
+			transition_array[comment][field_quote] = CSVState::COMMENT;
+		}
+	}
+
 	// 13) Escaped Return State
 	if (enable_unquoted_escape) {
 		// The new state is STANDARD for \r + \n and \r + ordinary character.
@@ -626,6 +644,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_standard[comment] = false;
 	if (enable_unquoted_escape) {
 		transition_array.skip_standard[escape] = false;
+	}
+	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+		// a quote in the middle of a field changes the state
+		transition_array.skip_standard[quote] = false;
 	}
 
 	// For quoted we only care about quote, escape and for delimiters \r and \n

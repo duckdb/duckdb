@@ -742,6 +742,7 @@ protected:
 				break;
 			case CSVState::UNQUOTED_ESCAPE:
 			case CSVState::FIELD_START:
+			case CSVState::FIELD_QUOTE:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				used_unstrictness = true;

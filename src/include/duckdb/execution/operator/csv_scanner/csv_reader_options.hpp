@@ -131,9 +131,6 @@ struct CSVReaderOptions {
 	string encoding = "utf-8";
 	//! The CSV dialect the file is read as: a preset over the internal parsing options
 	CSVOption<CSVDialect> dialect = CSVDialect::STANDARD;
-	//! A doubled quote inside a quoted value is one quote, also when the escape character differs from the quote,
-	//! as opencsv reads it (internal: only set through the dialect option for now)
-	CSVOption<bool> doubled_quotes = false;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;
 

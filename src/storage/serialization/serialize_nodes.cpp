@@ -733,7 +733,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
 	serializer.WritePropertyWithDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
 	serializer.WritePropertyWithDefault<CSVOption<CSVDialect>>(147, "dialect", options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
-	serializer.WritePropertyWithDefault<CSVOption<bool>>(148, "doubled_quotes", options.doubled_quotes, CSVOption<bool>(false));
+	serializer.WritePropertyWithDefault<CSVOption<bool>>(148, "doubled_quotes", options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 }
 
 SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -823,7 +823,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", result.options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVDialect>>(147, "dialect", result.options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.doubled_quotes, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 	return result;
 }
 

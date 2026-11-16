@@ -165,3 +165,15 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER
 5	a"b	11
 6	a"b"c	12
 7	a"	13
+
+# a doubled quote in an unquoted field is one quote too; a lone quote in a field stays data
+statement ok
+COPY (SELECT * FROM (VALUES ('8,a""b,14'), ('9,a"b,15'), ('10,a""b""c,16'), ('11,a"",17')) t(line)) TO '{TEST_DIR}/dialect_field_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+8	a"b	14
+9	a"b	15
+10	a"b"c	16
+11	a"	17

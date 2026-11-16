@@ -1256,7 +1256,7 @@
       {
         "id": 148,
         "name": "doubled_quotes",
-        "property": "options.doubled_quotes",
+        "property": "options.dialect_options.state_machine_options.doubled_quotes",
         "type": "CSVOption<bool>",
         "default": "CSVOption<bool>(false)"
       }
