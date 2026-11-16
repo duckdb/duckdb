@@ -31,6 +31,23 @@ enum class TokenizeState {
 
 class Tokenizer;
 
+//! The first check of the STANDARD state that applies to a byte, in the order the checks are made
+enum class StandardByteClass : uint8_t {
+	STRING_QUOTE,
+	QUOTED_IDENTIFIER,
+	SEMICOLON,
+	DOLLAR,
+	MINUS,
+	SLASH,
+	SPACE,
+	COLON,
+	SINGLE_BYTE_OPERATOR,
+	NUMBER,
+	SPECIAL_STRING_PREFIX,
+	OPERATOR,
+	WORD
+};
+
 class TokenizerBehavior {
 public:
 	explicit TokenizerBehavior(const string &sql);
@@ -116,22 +133,6 @@ private:
 	void TokenizeWord(TokenizerBehavior &behavior, const bool *is_word, idx_t &i, idx_t &last_pos,
 	                  TokenizeState &state) const;
 
-	//! The first check of the STANDARD state that applies to a byte, in the order the checks are made
-	enum class StandardByteClass : uint8_t {
-		STRING_QUOTE,
-		QUOTED_IDENTIFIER,
-		SEMICOLON,
-		DOLLAR,
-		MINUS,
-		SLASH,
-		SPACE,
-		COLON,
-		SINGLE_BYTE_OPERATOR,
-		NUMBER,
-		SPECIAL_STRING_PREFIX,
-		OPERATOR,
-		WORD
-	};
 	//! What the STANDARD state knows about each byte
 	struct ByteTables {
 		array<StandardByteClass, 256> standard_classes;

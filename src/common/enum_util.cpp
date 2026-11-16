@@ -216,6 +216,7 @@
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -6488,6 +6489,35 @@ const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
 	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 3, "SourceResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStandardByteClassValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StandardByteClass::STRING_QUOTE), "STRING_QUOTE" },
+		{ static_cast<uint32_t>(StandardByteClass::QUOTED_IDENTIFIER), "QUOTED_IDENTIFIER" },
+		{ static_cast<uint32_t>(StandardByteClass::SEMICOLON), "SEMICOLON" },
+		{ static_cast<uint32_t>(StandardByteClass::DOLLAR), "DOLLAR" },
+		{ static_cast<uint32_t>(StandardByteClass::MINUS), "MINUS" },
+		{ static_cast<uint32_t>(StandardByteClass::SLASH), "SLASH" },
+		{ static_cast<uint32_t>(StandardByteClass::SPACE), "SPACE" },
+		{ static_cast<uint32_t>(StandardByteClass::COLON), "COLON" },
+		{ static_cast<uint32_t>(StandardByteClass::SINGLE_BYTE_OPERATOR), "SINGLE_BYTE_OPERATOR" },
+		{ static_cast<uint32_t>(StandardByteClass::NUMBER), "NUMBER" },
+		{ static_cast<uint32_t>(StandardByteClass::SPECIAL_STRING_PREFIX), "SPECIAL_STRING_PREFIX" },
+		{ static_cast<uint32_t>(StandardByteClass::OPERATOR), "OPERATOR" },
+		{ static_cast<uint32_t>(StandardByteClass::WORD), "WORD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StandardByteClass>(StandardByteClass value) {
+	return StringUtil::EnumToString(GetStandardByteClassValues(), 13, "StandardByteClass", static_cast<uint32_t>(value));
+}
+
+template<>
+StandardByteClass EnumUtil::FromString<StandardByteClass>(const char *value) {
+	return static_cast<StandardByteClass>(StringUtil::StringToEnum(GetStandardByteClassValues(), 13, "StandardByteClass", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStarExpressionTypeValues() {
