@@ -56,7 +56,7 @@ public:
 
 private:
 	//! Sink radix bits to initialize with
-	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 5;
+	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
 
 public:
 	//! Maximum Sink radix bits (independent of threads)

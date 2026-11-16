@@ -124,6 +124,36 @@ public:
 	unsafe_vector<idx_t> filter;
 };
 
+TEST_CASE("Materialized tuple size includes staged string heaps", "[radix_ht_sink]") {
+	if (STANDARD_VECTOR_SIZE < 6) {
+		return;
+	}
+	RadixSinkFixture fixture("512MB");
+	fixture.Keys(0, 3, 1000);
+	fixture.Sink();
+	auto &ht = *fixture.Local().ht;
+	const auto row_size = ht.GetPartitionedData().GetLayout().GetRowWidth() + 1001;
+	REQUIRE(ht.GetMaterializedCount() == 3);
+	REQUIRE(ht.GetMaterializedSize() == 3 * row_size);
+
+	ht.Abandon();
+	ht.SetRadixBits(4);
+	ht.Repartition();
+	fixture.Keys(0, 6, 1000);
+	fixture.Sink();
+	REQUIRE(ht.GetPartitionedData().Count() == 3);
+	REQUIRE(ht.GetMaterializedCount() == 9);
+	REQUIRE(ht.GetMaterializedSize() == 9 * row_size);
+
+	ht.Abandon();
+	ht.SetRadixBits(5);
+	ht.Repartition();
+	REQUIRE(ht.GetMaterializedSize() == 9 * row_size);
+	auto data = ht.AcquirePartitionedData();
+	REQUIRE(data->GetDataSize() == 9 * row_size);
+	REQUIRE(ht.GetMaterializedSize() == 0);
+}
+
 TEST_CASE("Large aggregate tables spill before their occupancy limit", "[radix_ht_sink]") {
 	RadixSinkFixture fixture("512MB");
 	fixture.Keys(0, 65536);

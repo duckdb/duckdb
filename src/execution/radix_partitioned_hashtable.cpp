@@ -209,6 +209,10 @@ void RadixHTGlobalSinkState::Destroy() {
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
     : sink(sink_p), row_width(sink.radix_ht.GetLayout().GetRowWidth()), sink_capacity(SinkCapacity()),
       sink_radix_bits(InitialSinkRadixBits(sink.number_of_threads)), maximum_sink_radix_bits(MaximumSinkRadixBits()) {
+	static_assert(MAXIMUM_INITIAL_SINK_RADIX_BITS <= MAXIMUM_FINAL_SINK_RADIX_BITS,
+	              "Initial sink radix bits exceed the final limit");
+	static_assert(MAXIMUM_FINAL_SINK_RADIX_BITS <= RadixPartitioning::MAX_RADIX_BITS,
+	              "Sink radix bits exceed radix partitioning support");
 }
 
 void RadixHTConfig::ResetForNewIteration(const idx_t scheduled_workers) {
@@ -697,9 +701,14 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto current_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
-	const auto row_size_per_partition =
-	    ht.GetMaterializedCount() * ht.GetPartitionedData().GetLayout().GetRowWidth() / partition_count;
-	if (row_size_per_partition >
+	const auto &layout = ht.GetPartitionedData().GetLayout();
+	auto data_size = ht.GetMaterializedCount() * layout.GetRowWidth();
+	if (!layout.AllConstant() && partition_count < gstate.number_of_threads) {
+		// Include heap bytes when additional partitions can expose more parallelism.
+		data_size = ht.GetMaterializedSize();
+	}
+	const auto size_per_partition = data_size / partition_count;
+	if (size_per_partition >
 	    LossyNumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(gstate.block_alloc_size))) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
