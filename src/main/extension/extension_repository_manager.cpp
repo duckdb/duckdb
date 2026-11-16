@@ -298,31 +298,40 @@ void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
 }
 
-void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, bool from_host) {
+static constexpr const char *REPOSITORIES_DOCS = "https://duckdb.org/docs/stable/extensions/extension_repositories";
+
+void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host) {
 	CheckNotLocked(db);
 	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first - except for a
 	// repository resolved from its host: the name says who is trusted, and the host's own file says what, so the
 	// 'hosts' default lets it through
-	switch (GetAccess(db)) {
-	case ExtensionRepositoryAccess::ALLOWED:
+	auto access = GetAccess(db);
+	if (access == ExtensionRepositoryAccess::ALLOWED || (from_host && access != ExtensionRepositoryAccess::FORBIDDEN)) {
 		return;
-	case ExtensionRepositoryAccess::FORBIDDEN:
-		throw PermissionException("Adding extension repositories has been forbidden through configuration");
-	case ExtensionRepositoryAccess::HOSTS_ONLY:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories by prefix is not permitted while "
-		                          "allow_extension_repositories='hosts_only': use `CREATE EXTENSION REPOSITORY <host>` "
-		                          "without a prefix, so that the host names its repository");
-	default:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories is not enabled: set "
-		                          "allow_extension_repositories='allowed' to opt in, or use `CREATE EXTENSION "
-		                          "REPOSITORY <host>` without a prefix, so that the host names its repository");
 	}
+	string message;
+	if (access == ExtensionRepositoryAccess::FORBIDDEN) {
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is "
+		                             "'forbidden', which does not allow adding any repository.",
+		                             name);
+	} else {
+		// 'hosts' or 'hosts_only', and a prefix was given
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is '%s', "
+		                             "which does not allow adding arbitrary repositories, only repositories named by "
+		                             "their host.",
+		                             name, AccessToString(access));
+		auto host_form = IsHostName(name)
+		                     ? StringUtil::Format("`CREATE EXTENSION REPOSITORY %s` without a prefix", name)
+		                     : string("`CREATE EXTENSION REPOSITORY <host>` without a prefix");
+		if (access == ExtensionRepositoryAccess::HOSTS) {
+			// the default can still be opened up; 'hosts_only' cannot, the setting only tightens
+			message += "\nConsider changing the setting, or creating the repository by its host: " + host_form + ".";
+		} else {
+			message += "\nConsider creating the repository by its host: " + host_form + ".";
+		}
+	}
+	message += StringUtil::Format("\nCheck the docs: %s", REPOSITORIES_DOCS);
+	throw PermissionException(message);
 }
 
 bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, string &result) {
@@ -763,7 +772,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		}
 	}
 	// from here on something is added: the opt-in applies
-	CheckCanCreate(db, from_host);
+	CheckCanCreate(db, name, from_host);
 
 	ExtensionRepository repository(name, requested.path, requested.public_keys);
 	vector<string> public_keys;
@@ -787,7 +796,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		                            name);
 	}
 	// the fetches took time: the access may have been tightened meanwhile, so check again before persisting
-	CheckCanCreate(db, from_host);
+	CheckCanCreate(db, name, from_host);
 
 	if (!fs.DirectoryExists(directory)) {
 		fs.CreateDirectoriesRecursive(directory);

@@ -156,7 +156,7 @@ SET allow_extension_repositories='hosts_only'
 statement error
 CREATE EXTENSION REPOSITORY other WITH PREFIX '{TEST_DIR}/repo'
 ----
-<REGEX>:Permission Error.*by prefix is not permitted.*hosts_only.*
+<REGEX>:Permission Error.*Cannot create extension repository 'other'.*allow_extension_repositories is 'hosts_only'.*Consider creating the repository by its host.*Check the docs: https://duckdb.org/docs/stable/extensions/extension_repositories.*
 
 # the repository added by prefix is distrusted: installing from it is refused before anything is fetched
 statement error

@@ -260,8 +260,19 @@ TEST_CASE("Test that a repository resolved from its host does not need the opt-i
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// 'hosts' (the default): a repository by prefix is refused, the one resolved from its host is trusted
-	REQUIRE_FAIL(con.Query(StringUtil::Format("CREATE EXTENSION REPOSITORY by_prefix WITH PREFIX '%s'", prefix)));
+	// 'hosts' (the default): a repository by prefix is refused, the one resolved from its host is trusted. The refusal
+	// says what the setting is and where to read on, without inviting to change the setting; a host-shaped name also
+	// gets the host form
+	auto refused = con.Query(StringUtil::Format("CREATE EXTENSION REPOSITORY by_prefix WITH PREFIX '%s'", prefix));
+	REQUIRE(refused->HasError());
+	REQUIRE(StringUtil::Contains(refused->GetError(), "allow_extension_repositories is 'hosts'"));
+	REQUIRE(!StringUtil::Contains(refused->GetError(), "SET allow_extension_repositories"));
+	REQUIRE(
+	    StringUtil::Contains(refused->GetError(), "https://duckdb.org/docs/stable/extensions/extension_repositories"));
+	REQUIRE(!StringUtil::Contains(refused->GetError(), "without a prefix"));
+	refused = con.Query(StringUtil::Format("CREATE EXTENSION REPOSITORY other.example WITH PREFIX '%s'", prefix));
+	REQUIRE(refused->HasError());
+	REQUIRE(StringUtil::Contains(refused->GetError(), "CREATE EXTENSION REPOSITORY other.example` without a prefix"));
 	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "listed.example", TEST_PUBLIC_KEY));
 	REQUIRE(UserRepositoryCount(con) == 1);
 
