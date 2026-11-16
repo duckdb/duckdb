@@ -55,7 +55,7 @@ void ForeignKeyConstraint::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(204, "table", info.table);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", info.pk_keys);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", info.fk_keys);
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (referenced_table.Path().size() > 2)) {
+	if (referenced_table.Path().size() > 3) {
 		serializer.WriteProperty<QualifiedName>(207, "referenced_table", referenced_table);
 	}
 }

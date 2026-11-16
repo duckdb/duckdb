@@ -89,7 +89,8 @@
         "name": "referenced_table",
         "type": "QualifiedName",
         "version": "v2.0.0",
-        "serialize_condition": "referenced_table.Path().size() > 2",
+        "serialize_condition": "referenced_table.Path().size() > 3",
+        "serialize_only_condition": true,
         "deserialize_default": "QualifiedName()"
       }
     ]
