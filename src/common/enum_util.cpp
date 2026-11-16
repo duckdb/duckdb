@@ -387,6 +387,24 @@ AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *valu
 	return static_cast<AdaptiveFilterSource>(StringUtil::StringToEnum(GetAdaptiveFilterSourceValues(), 2, "AdaptiveFilterSource", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAggregateCombineSourceRetentionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateCombineSourceRetention::MAY_RETAIN), "MAY_RETAIN" },
+		{ static_cast<uint32_t>(AggregateCombineSourceRetention::NEVER_RETAINS), "NEVER_RETAINS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateCombineSourceRetention>(AggregateCombineSourceRetention value) {
+	return StringUtil::EnumToString(GetAggregateCombineSourceRetentionValues(), 2, "AggregateCombineSourceRetention", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateCombineSourceRetention EnumUtil::FromString<AggregateCombineSourceRetention>(const char *value) {
+	return static_cast<AggregateCombineSourceRetention>(StringUtil::StringToEnum(GetAggregateCombineSourceRetentionValues(), 2, "AggregateCombineSourceRetention", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AggregateCombineType::PRESERVE_INPUT), "PRESERVE_INPUT" },

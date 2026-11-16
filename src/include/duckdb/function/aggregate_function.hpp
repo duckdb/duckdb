@@ -354,6 +354,9 @@ public:
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 
+	//! Whether combining can leave the target referencing the source's memory
+	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -403,6 +406,10 @@ public: // Properties
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }
 	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+	//! Whether combining can leave the target referencing the source's memory
+	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
+	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }

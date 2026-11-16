@@ -541,9 +541,15 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
+	// when the targets never keep source memory, the temporary states go into a scratch arena freed per call
+	unique_ptr<ArenaAllocator> scratch;
+	if (underlying_aggr.GetCombineSourceRetention() == AggregateCombineSourceRetention::NEVER_RETAINS) {
+		scratch = make_uniq<ArenaAllocator>(aggr_input_data.allocator.GetUnderlyingAllocator());
+	}
+	auto &source_allocator = scratch ? *scratch : aggr_input_data.allocator;
 	try {
 		AggregateStateSerialization::DeserializeStates(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(),
-		                                               aggr_input_data.allocator, StateMemoryOwnership::BORROWED);
+		                                               source_allocator, StateMemoryOwnership::BORROWED);
 		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (input_count == 2) {
@@ -551,10 +557,10 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		}
 		underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 	} catch (...) {
-		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, source_allocator);
 		throw;
 	}
-	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, source_allocator);
 }
 
 void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
