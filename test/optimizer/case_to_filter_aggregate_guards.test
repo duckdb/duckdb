@@ -83,13 +83,14 @@ EXPLAIN SELECT g, sum(CASE WHEN c THEN dbl END), sum(CASE WHEN c THEN dbl ELSE 0
 ----
 physical_plan	<REGEX>:(?s).*sum\(#[0-9]+\) FILTER \(WHERE.*
 
-# aggregates that already carry a FILTER: the user's filter stays, the CASE arguments are still computed
+# the ELSE 0 forms of aggregates that already carry a FILTER: the user's filter stays, the CASE arguments are still
+# computed (the ELSE NULL forms combine the two conditions, see case_to_filter_aggregate_distinct_filter.test)
 query II
-EXPLAIN SELECT g, sum(CASE WHEN c THEN v ELSE 0 END) FILTER (WHERE nb), count(CASE WHEN c THEN v END) FILTER (WHERE nb) FROM t GROUP BY g
+EXPLAIN SELECT g, sum(CASE WHEN c THEN v ELSE 0 END) FILTER (WHERE nb), sum(CASE WHEN c THEN q ELSE 0 END) FILTER (WHERE nb) FROM t GROUP BY g
 ----
-physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*WHEN \(c\) THEN \(v\) ELSE 0 END.*WHEN \(c\) THEN \(v\) ELSE NULL.*
+physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*WHEN \(c\) THEN \(v\) ELSE 0 END.*WHEN \(c\) THEN \(q\) ELSE 0 END.*
 
-# DISTINCT aggregates
+# DISTINCT aggregates are grouped aggregates over the CASE by the time the rule runs
 query II
 EXPLAIN SELECT g, sum(DISTINCT CASE WHEN c THEN v END), count(DISTINCT CASE WHEN c THEN v END) FROM t GROUP BY g
 ----

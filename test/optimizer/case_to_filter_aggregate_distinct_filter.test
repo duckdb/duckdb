@@ -1,0 +1,302 @@
+# name: test/optimizer/case_to_filter_aggregate_distinct_filter.test
+# description: f(CASE WHEN c THEN x END) -> f(x) FILTER (WHERE c) for DISTINCT aggregates and aggregates with a FILTER
+# group: [optimizer]
+
+# f(DISTINCT CASE WHEN c THEN x END) -> f(DISTINCT x) FILTER (WHERE c)
+# f(CASE WHEN c THEN x END) FILTER (WHERE p) -> f(x) FILTER (WHERE p AND c)
+#
+# DISTINCT aggregates are turned into grouped aggregates over their argument before the rule runs (the optimizer
+# distinct_aggregate_rewrite), so that the rule only meets one when that optimizer is disabled. Every query runs with
+# both optimizers disabled and enabled; the rows are those of the CASE form.
+
+statement ok
+SET explain_output='physical_only'
+
+# c and p are true, false or NULL. Group 1 has duplicates and a NULL x among the matching rows, group 2 no row with a
+# true c, group 3 only NULL x, group 4 no row with a true p
+statement ok
+CREATE TABLE s AS SELECT * FROM (VALUES
+	(1, true, true, 1), (1, true, true, 1), (1, true, true, 2), (1, false, true, 3), (1, true, false, 4),
+	(1, NULL, true, 5), (1, true, NULL, 6), (1, true, true, NULL),
+	(2, false, true, 7), (2, NULL, NULL, 8),
+	(3, true, true, NULL), (3, true, true, NULL),
+	(4, true, false, 9), (4, true, NULL, 9)) t(g, c, p, x)
+
+statement ok
+CREATE TABLE empty_s AS SELECT * FROM s WHERE false
+
+statement ok
+CREATE TABLE d AS
+SELECT (i % 5)::INTEGER AS g, (i % 3)::INTEGER AS h, CASE WHEN i % 7 = 0 THEN NULL ELSE i % 4 = 0 END AS c,
+       CASE WHEN i % 11 = 0 THEN NULL ELSE i % 3 <> 0 END AS p,
+       CASE WHEN i % 6 = 0 THEN NULL ELSE (i % 13)::INTEGER END AS x, (i % 9)::DOUBLE / 7 AS dbl, i % 2 = 0 AS b,
+       's' || (i % 4) AS str
+FROM range(3000) r(i)
+
+foreach disabled 'case_to_filter_aggregate' '' 'distinct_aggregate_rewrite,case_to_filter_aggregate' 'distinct_aggregate_rewrite'
+
+statement ok
+SET disabled_optimizers = {disabled}
+
+# 1. DISTINCT: the distinct x of the matching rows; a constant THEN is one distinct value, not a count of rows
+query IIIIII
+SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       avg(DISTINCT CASE WHEN c THEN x END), count(DISTINCT CASE WHEN c THEN 1 END), count(CASE WHEN c THEN 1 END)
+FROM s GROUP BY g ORDER BY g
+----
+1	4	13	3.25	1	6
+2	0	NULL	NULL	0	0
+3	0	NULL	NULL	1	2
+4	1	9	9.0	1	2
+
+query IIIII
+SELECT count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       count(DISTINCT CASE WHEN c THEN 1 END), count(DISTINCT CASE WHEN c THEN 'k' END),
+       max(DISTINCT CASE WHEN c THEN x END)
+FROM s
+----
+5	22	1	1	9
+
+# 2. an existing FILTER: a row counts if p and c are both true - not if either is false or NULL
+query IIIIII
+SELECT g, count(CASE WHEN c THEN x END) FILTER (WHERE p), count(CASE WHEN c THEN 1 END) FILTER (WHERE p),
+       sum(CASE WHEN c THEN x END) FILTER (WHERE p), min(CASE WHEN c THEN x END) FILTER (WHERE p),
+       avg(CASE WHEN c THEN x END) FILTER (WHERE p)
+FROM s GROUP BY g ORDER BY g
+----
+1	3	4	4	1	1.3333333333333333
+2	0	0	NULL	NULL	NULL
+3	0	2	NULL	NULL	NULL
+4	0	0	NULL	NULL	NULL
+
+query IIII
+SELECT count(CASE WHEN c THEN x END) FILTER (WHERE p), count(CASE WHEN c THEN 1 END) FILTER (WHERE p),
+       sum(CASE WHEN c THEN x END) FILTER (WHERE p), count(CASE WHEN c THEN 1 END) FILTER (WHERE p IS NULL)
+FROM s
+----
+3	6	4	2
+
+# 3. DISTINCT and an existing FILTER
+query IIII
+SELECT g, count(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p), sum(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p)
+FROM s GROUP BY g ORDER BY g
+----
+1	2	3	1
+2	0	NULL	0
+3	0	NULL	1
+4	0	NULL	0
+
+query III
+SELECT count(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p), sum(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p)
+FROM s
+----
+2	3	1
+
+# 4. an empty input, and an input without a matching row: count is 0, the others are NULL
+query IIIIII
+SELECT count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       count(DISTINCT CASE WHEN c THEN 1 END), count(CASE WHEN c THEN x END) FILTER (WHERE p),
+       sum(CASE WHEN c THEN x END) FILTER (WHERE p), count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p)
+FROM empty_s
+----
+0	NULL	0	0	NULL	0
+
+query IIIIII
+SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       count(CASE WHEN c THEN x END) FILTER (WHERE p), sum(CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p)
+FROM empty_s GROUP BY g
+----
+
+query IIIIII
+SELECT count(DISTINCT CASE WHEN x > 100 THEN x END), sum(DISTINCT CASE WHEN x > 100 THEN x END),
+       count(DISTINCT CASE WHEN x > 100 THEN 1 END), count(CASE WHEN c THEN x END) FILTER (WHERE x > 100),
+       sum(CASE WHEN x > 100 THEN x END) FILTER (WHERE p), count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE x > 100)
+FROM s
+----
+0	NULL	0	0	NULL	0
+
+# 5. ROLLUP and grouping sets, also over an empty input
+query IIIIII
+SELECT g, c, count(DISTINCT CASE WHEN c THEN x END), sum(CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p), GROUPING(g, c)
+FROM s GROUP BY ROLLUP (g, c) ORDER BY ALL
+----
+1	false	0	NULL	0	0
+1	true	4	4	1	0
+1	NULL	0	NULL	0	0
+1	NULL	4	4	1	1
+2	false	0	NULL	0	0
+2	NULL	0	NULL	0	0
+2	NULL	0	NULL	0	1
+3	true	0	NULL	1	0
+3	NULL	0	NULL	1	1
+4	true	1	NULL	0	0
+4	NULL	1	NULL	0	1
+NULL	NULL	5	4	1	3
+
+query IIII
+SELECT g, count(DISTINCT CASE WHEN c THEN x END), count(CASE WHEN c THEN 1 END) FILTER (WHERE p),
+       sum(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p)
+FROM empty_s GROUP BY GROUPING SETS ((g), ()) ORDER BY ALL
+----
+NULL	0	0	NULL
+
+# 6. a larger input: compare the runs with each other
+query IIIIIIIII nosort distinct_grouped
+SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       avg(DISTINCT CASE WHEN c THEN x END), min(DISTINCT CASE WHEN c THEN x END),
+       bool_or(DISTINCT CASE WHEN c THEN b END), count(DISTINCT CASE WHEN c THEN 1 END),
+       count(DISTINCT CASE WHEN c THEN str END), count(DISTINCT CASE WHEN p THEN x END)
+FROM d GROUP BY g ORDER BY g
+----
+
+query IIIIIIII nosort filter_grouped
+SELECT g, count(CASE WHEN c THEN x END) FILTER (WHERE p), sum(CASE WHEN c THEN x END) FILTER (WHERE p),
+       avg(CASE WHEN c THEN x END) FILTER (WHERE p), max(CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(CASE WHEN c THEN 1 END) FILTER (WHERE p), bool_and(CASE WHEN c THEN b END) FILTER (WHERE p),
+       sum(CASE WHEN c THEN dbl END) FILTER (WHERE p)::VARCHAR
+FROM d GROUP BY g ORDER BY g
+----
+
+query IIIIII nosort distinct_filter_grouped
+SELECT g, count(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p), sum(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p),
+       count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p), count(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE h = 1),
+       count(DISTINCT x) FILTER (WHERE c)
+FROM d GROUP BY g ORDER BY g
+----
+
+query IIIIIII nosort distinct_rollup
+SELECT g, h, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END),
+       count(CASE WHEN c THEN x END) FILTER (WHERE p), count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p),
+       GROUPING(g, h)
+FROM d GROUP BY ROLLUP (g, h) ORDER BY ALL
+----
+
+# next to the forms that are not rewritten: ELSE 0 under DISTINCT or with a FILTER, DISTINCT sums of DOUBLE values
+query IIIIIII nosort distinct_mixed
+SELECT g, sum(DISTINCT CASE WHEN c THEN x ELSE 0 END), sum(CASE WHEN c THEN x ELSE 0 END) FILTER (WHERE p),
+       sum(CASE WHEN c THEN 1 ELSE 0 END) FILTER (WHERE p), count(DISTINCT CASE WHEN c THEN dbl END),
+       count(DISTINCT x), sum(CASE WHEN c THEN x ELSE 0 END)
+FROM d GROUP BY g ORDER BY g
+----
+
+endloop
+
+# the plans
+statement ok
+SET disabled_optimizers = ''
+
+# an existing FILTER: the two conditions are one filter, no CASE is left
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN x END) FILTER (WHERE p), min(CASE WHEN c THEN x END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*p AND c.*
+
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN x END) FILTER (WHERE p), min(CASE WHEN c THEN x END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*CASE.*
+
+# a constant THEN counts the rows that pass both conditions
+query II
+EXPLAIN SELECT g, count(CASE WHEN c THEN 1 END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*count\(\) FILTER.*p AND c.*
+
+# not rewritten: a filter that is volatile or can throw, and the ELSE 0 forms (their counts are those of all rows of
+# the group, not of the rows that pass the filter)
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN x END) FILTER (WHERE random() < 2), count(CASE WHEN c THEN x END) FILTER (WHERE random() < 2) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).* AND .*
+
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN x END) FILTER (WHERE str::INTEGER > 0), count(CASE WHEN c THEN x END) FILTER (WHERE str::INTEGER > 0) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).* AND .*
+
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN x ELSE 0 END) FILTER (WHERE p), sum(CASE WHEN c THEN 1 ELSE 0 END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).* AND .*
+
+# a DISTINCT aggregate is a grouped aggregate over the CASE by the time the rule runs: the plan is that of the CASE
+# form, which groups by fewer values than the plan of `count(DISTINCT x) FILTER (WHERE c)` does
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+# with the DISTINCT aggregates left in place the rule rewrites them
+statement ok
+SET disabled_optimizers = 'distinct_aggregate_rewrite'
+
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN x END) FROM d GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*count\(DISTINCT #[0-9]+\) FILTER \(WHERE #[0-9]+\).*
+
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(DISTINCT CASE WHEN c THEN x END) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*CASE.*
+
+# a constant THEN stays a DISTINCT count of the constant: 0 or 1, not the number of matching rows
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN 1 END) FROM d GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*count\(DISTINCT #[0-9]+\) FILTER \(WHERE #[0-9]+\).*Projections: g, 1, c.*
+
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN 1 END), count(DISTINCT CASE WHEN c THEN 'k' END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*count\(\).*
+
+# DISTINCT and an existing FILTER
+query II
+EXPLAIN SELECT g, sum(DISTINCT CASE WHEN c THEN x END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*sum_no_overflow\(DISTINCT #[0-9]+\) FILTER \(WHERE #[0-9]+\).*p AND c.*
+
+# an ungrouped aggregate and the grouping sets of a ROLLUP
+query II
+EXPLAIN SELECT count(DISTINCT CASE WHEN c THEN x END), count(DISTINCT CASE WHEN c THEN 1 END) FILTER (WHERE p) FROM d
+----
+physical_plan	<REGEX>:(?s).*count\(DISTINCT #[0-9]+\) FILTER.*count\(DISTINCT #[0-9]+\) FILTER.*
+
+query II
+EXPLAIN SELECT g, h, count(DISTINCT CASE WHEN c THEN x END) FROM d GROUP BY ROLLUP (g, h)
+----
+physical_plan	<!REGEX>:(?s).*CASE.*
+
+# not rewritten: the ELSE 0 form (the 0 is one of the distinct values), a DISTINCT sum of DOUBLE values (it adds the
+# distinct values in the order of their hash table), min / max over strings
+query II
+EXPLAIN SELECT g, sum(DISTINCT CASE WHEN c THEN x ELSE 0 END), sum(DISTINCT CASE WHEN c THEN 1 ELSE 0 END) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+query II
+EXPLAIN SELECT g, sum(DISTINCT CASE WHEN c THEN dbl END), avg(DISTINCT CASE WHEN c THEN dbl END) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+query II
+EXPLAIN SELECT g, min(DISTINCT CASE WHEN c THEN str END), max(DISTINCT CASE WHEN c THEN str END) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+# the rule disabled
+statement ok
+SET disabled_optimizers = 'distinct_aggregate_rewrite,case_to_filter_aggregate'
+
+query II
+EXPLAIN SELECT g, count(DISTINCT CASE WHEN c THEN x END), sum(CASE WHEN c THEN x END) FILTER (WHERE p) FROM d GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*(DISTINCT #[0-9]+\) FILTER| AND ).*
+
+statement ok
+SET disabled_optimizers = ''

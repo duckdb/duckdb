@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
@@ -374,10 +375,13 @@ unique_ptr<Expression> ListRewriteRule::Rewrite(unique_ptr<Expression> &expr, ve
 //! not be able to throw and must not be volatile.
 enum class CaseToFilterKind : uint8_t {
 	//! f(CASE WHEN c THEN x END) -> f(x) FILTER (WHERE c)
-	//! for sum / count / avg / min / max / bool_and / bool_or: both are NULL (0 for count) without a matching row
+	//! for sum / count / avg / min / max / bool_and / bool_or: both are NULL (0 for count) without a matching row.
+	//! A DISTINCT stays on the aggregate: the distinct values of the CASE are the distinct x of the matching rows and
+	//! a NULL, which these aggregates ignore. An existing FILTER (WHERE p) becomes FILTER (WHERE p AND c)
 	FILTERED_AGGREGATE,
 	//! count(CASE WHEN c THEN k END) -> count(*) FILTER (WHERE c)
-	//! for a non-NULL constant k
+	//! for a non-NULL constant k. Not under DISTINCT: count(DISTINCT CASE WHEN c THEN k END) is 0 or 1, and is
+	//! rewritten as a FILTERED_AGGREGATE to count(DISTINCT k) FILTER (WHERE c)
 	FILTERED_COUNT_STAR,
 	//! sum(CASE WHEN c THEN x ELSE 0 END) -> coalesce(sum(x) FILTER (WHERE c), 0)
 	//! if x is provably not NULL
@@ -474,6 +478,8 @@ private:
 		optional_ptr<const Expression> condition;
 		//! x
 		optional_ptr<const Expression> value;
+		//! p of an existing FILTER (WHERE p)
+		optional_ptr<const Expression> filter;
 		//! Whether the CASE has an ELSE 0 (under sum) instead of an ELSE NULL
 		bool else_zero = false;
 
@@ -512,8 +518,15 @@ private:
 		}
 		auto &aggr = expr.Cast<BoundAggregateExpression>();
 		if (aggr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT || aggr.GetOrderBys() ||
-		    aggr.GetFilter() || aggr.IsDistinct() || aggr.GetChildren().size() != 1) {
+		    aggr.GetChildren().size() != 1) {
 			return false;
+		}
+		if (aggr.GetFilter()) {
+			// the rewritten aggregate has the filter `p AND c`, which evaluates p or c for a part of the rows only
+			auto &filter = *aggr.GetFilter();
+			if (filter.IsVolatile() || !filter.IsConsistent() || filter.CanThrow() || filter.HasSubquery()) {
+				return false;
+			}
 		}
 		auto &name = aggr.Function().GetName().GetIdentifierName();
 		if (!IsRewritableFunction(name)) {
@@ -544,6 +557,11 @@ private:
 			return false;
 		}
 		const auto is_sum = name == "sum";
+		// the sum of the distinct values adds them in the order of the hash table that holds them, which is another
+		// order once the values of the rows that do not match are no longer part of it
+		if ((is_sum || name == "avg") && aggr.IsDistinct() && then_expr.GetReturnType().IsFloating()) {
+			return false;
+		}
 		// sum and avg add value * count for a constant input vector instead of adding the value count times, which
 		// is another floating point number. A constant THEN branch is such a vector in every chunk: the filtered sum
 		// would never be the sum of the CASE form, so that it keeps its CASE. A column is not covered by this: it
@@ -561,12 +579,17 @@ private:
 			return false;
 		}
 		auto &else_value = else_expr.Cast<BoundConstantExpression>().GetValue();
-		if (!else_value.IsNull() && (!is_sum || !IsZero(else_value))) {
-			return false;
+		if (!else_value.IsNull()) {
+			// the ELSE 0 forms count the rows of the group: these counts are not those of the rows that pass an
+			// existing filter, and the 0 is one of the distinct values
+			if (!is_sum || !IsZero(else_value) || aggr.GetFilter() || aggr.IsDistinct()) {
+				return false;
+			}
 		}
 		result.aggregate = aggr;
 		result.condition = when_expr;
 		result.value = then_expr;
+		result.filter = aggr.GetFilter().get();
 		result.else_zero = !else_value.IsNull();
 		return true;
 	}
@@ -615,7 +638,7 @@ private:
 	CaseToFilterKind GetKind(LogicalAggregate &aggr, const ConditionalAggregate &input) {
 		auto &value = *input.value;
 		if (!input.else_zero) {
-			if (input.FunctionName() == "count" && IsNonNullConstant(value)) {
+			if (input.FunctionName() == "count" && IsNonNullConstant(value) && !input.aggregate->IsDistinct()) {
 				return CaseToFilterKind::FILTERED_COUNT_STAR;
 			}
 			return CaseToFilterKind::FILTERED_AGGREGATE;
@@ -639,12 +662,22 @@ private:
 		return function_binder.BindAggregateFunction(count_fun, {}, std::move(filter), AggregateType::NON_DISTINCT);
 	}
 
+	//! The filter of the rewritten aggregate: c, or `p AND c` for an aggregate with a FILTER (WHERE p). A row passes
+	//! it if p and c are both true, which are the rows that the CASE aggregate reads a value for
+	static unique_ptr<Expression> GetFilter(const ConditionalAggregate &input) {
+		if (!input.filter) {
+			return input.condition->Copy();
+		}
+		return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, input.filter->Copy(),
+		                                             input.condition->Copy());
+	}
+
 	//! Binds the filtered aggregate that replaces the conditional aggregate, or returns nullptr if it cannot replace it
 	unique_ptr<Expression> BindFiltered(const ConditionalAggregate &input, CaseToFilterKind kind) const {
 		auto &aggr = *input.aggregate;
 		unique_ptr<Expression> result;
 		if (kind == CaseToFilterKind::FILTERED_COUNT_STAR || kind == CaseToFilterKind::SCALED_COUNT) {
-			result = BindCountStar(input.condition->Copy());
+			result = BindCountStar(GetFilter(input));
 			if (result->GetReturnType() != LogicalType::BIGINT) {
 				return nullptr;
 			}
@@ -657,8 +690,8 @@ private:
 			FunctionBinder function_binder(optimizer.context);
 			vector<unique_ptr<Expression>> children;
 			children.push_back(input.value->Copy());
-			result = function_binder.BindAggregateFunction(function, std::move(children), input.condition->Copy(),
-			                                               AggregateType::NON_DISTINCT);
+			result = function_binder.BindAggregateFunction(function, std::move(children), GetFilter(input),
+			                                               aggr.GetAggregateType());
 			if (result->GetReturnType() != aggr.GetReturnType()) {
 				return nullptr;
 			}
@@ -790,8 +823,8 @@ private:
 		return nullptr;
 	}
 
-	//! Replaces the aggregate by the rewrite that the analyzer plans for it (if any) and adds the helper aggregates
-	bool RewritePlanned(LogicalAggregate &aggr, idx_t aggr_idx, RewriteInfo &rewrite_info) {
+	//! Replaces the aggregate by the rewrite that the analyzer returns for it (if any) and adds the helper aggregates
+	bool RewriteAnalyzed(LogicalAggregate &aggr, idx_t aggr_idx, RewriteInfo &rewrite_info) {
 		rewrite_info.analyzed = analyzer->Analyze(aggr, *aggr.expressions[aggr_idx]);
 		if (!rewrite_info.analyzed) {
 			return false;
@@ -825,7 +858,7 @@ private:
 		for (idx_t i = 0; i < aggr_count; ++i) {
 			RewriteInfo rewrite_info;
 			if (analyzer) {
-				if (RewritePlanned(aggr, i, rewrite_info)) {
+				if (RewriteAnalyzed(aggr, i, rewrite_info)) {
 					needs_projection = needs_projection || rewrite_info.analyzed->HasProjection();
 					rewrites.emplace(i, std::move(rewrite_info));
 				}

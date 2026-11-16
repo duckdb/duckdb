@@ -15,6 +15,7 @@
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/avg_rewrite_profitability.test",
         "test/optimizer/case_to_filter_aggregate.test",
+        "test/optimizer/case_to_filter_aggregate_distinct_filter.test",
         "test/optimizer/case_to_filter_aggregate_exactness.test",
         "test/optimizer/case_to_filter_aggregate_guards.test",
         "test/optimizer/case_to_filter_aggregate_statistics.test",
