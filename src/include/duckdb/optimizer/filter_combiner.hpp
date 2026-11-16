@@ -70,6 +70,8 @@ public:
 	                                        vector<FilterPushdownResult> &pushdown_results);
 
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
+	//! Push a copy of a single-column expression that the scan only uses for pruning
+	FilterPushdownResult TryPushdownGenericPruningExpression(LogicalGet &get, Expression &expr);
 
 private:
 	FilterResult AddFilter(Expression &expr);

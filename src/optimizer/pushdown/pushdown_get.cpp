@@ -196,6 +196,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
 		if (expr.CanThrow() && filters.size() > 1) {
+			// the scan may only use it for pruning: the filter itself stays above the scan
+			combiner.TryPushdownGenericPruningExpression(get, expr);
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

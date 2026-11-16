@@ -156,23 +156,44 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	return found;
 }
 
-static unique_ptr<Expression> UnwrapOptionalFiltersForConstantEvaluation(const Expression &expr) {
+static unique_ptr<Expression> TryEvaluateOptionalChildWithConstant(ClientContext &context, unique_ptr<Expression> child,
+                                                                   const Value &val) {
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    child, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &slot) {
+		    slot = make_uniq<BoundConstantExpression>(val);
+	    });
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+	}
+	return make_uniq<BoundConstantExpression>(std::move(result));
+}
+
+static unique_ptr<Expression> UnwrapOptionalFiltersForConstantEvaluation(ClientContext &context, const Expression &expr,
+                                                                         const Value &val) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (IsOptionalInternalFunction(func) && func.BindInfo()) {
 			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
-			return optional_child ? UnwrapOptionalFiltersForConstantEvaluation(*optional_child)
-			                      : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			if (!optional_child) {
+				return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			}
+			auto child = UnwrapOptionalFiltersForConstantEvaluation(context, *optional_child, val);
+			if (child->CanThrow()) {
+				return TryEvaluateOptionalChildWithConstant(context, std::move(child), val);
+			}
+			return child;
 		}
 	}
 	auto result = expr.Copy();
-	ExpressionIterator::EnumerateChildren(
-	    *result, [&](unique_ptr<Expression> &child) { child = UnwrapOptionalFiltersForConstantEvaluation(*child); });
+	ExpressionIterator::EnumerateChildren(*result, [&](unique_ptr<Expression> &child) {
+		child = UnwrapOptionalFiltersForConstantEvaluation(context, *child, val);
+	});
 	return result;
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
-	auto constant_eval_expr = UnwrapOptionalFiltersForConstantEvaluation(*expr);
+	auto constant_eval_expr = UnwrapOptionalFiltersForConstantEvaluation(context, *expr, val);
 	ExpressionExecutor executor(context, *constant_eval_expr);
 	return EvaluateWithConstant(executor, val);
 }

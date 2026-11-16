@@ -1,0 +1,74 @@
+# name: test/sql/filter/test_throwing_filter_scan_pruning.test
+# description: A filter that can throw is used for scan pruning next to other filters, without raising new errors
+# group: [filter]
+
+require parquet
+
+# the cast is used to skip row groups, even though it stays above the scan
+statement ok
+COPY (SELECT i::BIGINT AS id, 'row_' || i AS s FROM range(6144) t(i))
+TO '{TEST_DIR}/throwing_filter_row_groups.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/throwing_filter_row_groups.parquet'
+WHERE CAST(id AS INTEGER) = 3000 AND length(s) > 0
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/throwing_filter_row_groups.parquet'
+WHERE length(s) > 0 AND CAST(id AS INTEGER) = 3000
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/throwing_filter_row_groups.parquet' WHERE CAST(id AS INTEGER) = 3000 AND length(s) > 0
+----
+1
+
+# the value that the cast cannot convert only occurs in a row that the other filter removes
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1::BIGINT, 'a'), (3000000000::BIGINT, '')) v(id, s)
+
+query I
+SELECT count(*) FROM t WHERE CAST(id AS INTEGER) = 1 AND length(s) > 0
+----
+1
+
+statement ok
+COPY t TO '{TEST_DIR}/throwing_filter_scan_pruning.parquet' (FORMAT parquet)
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/throwing_filter_scan_pruning.parquet' WHERE CAST(id AS INTEGER) = 1 AND length(s) > 0
+----
+1
+
+# the error is still raised when the rows that cannot be converted are actually filtered by the cast
+statement error
+SELECT count(*) FROM t WHERE CAST(id AS INTEGER) = 1
+----
+<REGEX>:.*Conversion Error.*3000000000.*
+
+# the pruning copy is evaluated against the partition value of every file, which the cast cannot convert here
+statement ok
+COPY (SELECT * FROM (VALUES (1::BIGINT, 'a'), (-3000000000::BIGINT, '')) v(id, s))
+TO '{TEST_DIR}/throwing_filter_hive' (FORMAT parquet, PARTITION_BY (id))
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/throwing_filter_hive/*/*.parquet', hive_partitioning = true)
+WHERE CAST(id AS INTEGER) = 1 AND length(s) > 0
+----
+1
+
+# a column that is missing from one of the files
+statement ok
+COPY (SELECT 1::BIGINT AS id, 'a' AS s) TO '{TEST_DIR}/throwing_filter_union_a.parquet' (FORMAT parquet)
+
+statement ok
+COPY (SELECT 'b' AS s) TO '{TEST_DIR}/throwing_filter_union_b.parquet' (FORMAT parquet)
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/throwing_filter_union_*.parquet', union_by_name = true)
+WHERE CAST(id AS INTEGER) = 1 AND length(s) > 0
+----
+1

@@ -494,6 +494,15 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 	return make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes));
 }
 
+static bool ReferencesSingleColumn(const vector<ColumnBinding> &bindings) {
+	for (idx_t binding_idx = 1; binding_idx < bindings.size(); ++binding_idx) {
+		if (bindings[binding_idx] != bindings[0]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
@@ -505,14 +514,7 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	bool has_multiple_bindings = false;
-	for (idx_t binding_idx = 1; binding_idx < bindings.size(); ++binding_idx) {
-		if (bindings[binding_idx] != bindings[0]) {
-			has_multiple_bindings = true;
-			break;
-		}
-	}
-	if (has_multiple_bindings) {
+	if (!ReferencesSingleColumn(bindings)) {
 		auto table = get.GetTable();
 		if (table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr)) {
 			auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
@@ -535,6 +537,29 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
 	get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
+}
+
+FilterPushdownResult FilterCombiner::TryPushdownGenericPruningExpression(LogicalGet &get, Expression &expr) {
+	if (!get.function.pushdown_expression) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	vector<ColumnBinding> bindings;
+	ColumnLifetimeAnalyzer::ExtractColumnBindings(expr, bindings);
+	if (bindings.empty() || !ReferencesSingleColumn(bindings)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (!get.function.pushdown_expression(context, get, expr)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	optional_ptr<const LogicalType> column_type;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &colref) { column_type = colref.GetReturnType(); });
+	D_ASSERT(column_type);
+	auto filter_expr = expr.Copy();
+	ReplaceWithBoundReference(filter_expr);
+	get.table_filters.PushFilter(bindings[0].column_index,
+	                             CreateOptionalExpressionFilter(std::move(filter_expr), *column_type));
+	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &table_filters,
