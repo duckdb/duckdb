@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
+class LogicalAggregate;
 
 //! Rewrites a self-join of one table on equal keys and exactly one inequality, read only through its keys by a
 //! parent that ignores duplicates, into GROUP BY keys HAVING min(x) <> max(x) over a single scan.
@@ -20,6 +21,10 @@ public:
 	explicit SelfJoinAggregate(Optimizer &optimizer);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+
+	//! Whether the result of a GROUP BY is the same over its input with or without repeated rows: every aggregate
+	//! is min, max or a DISTINCT one
+	static bool AggregateIgnoresDuplicates(const LogicalAggregate &aggregate);
 
 private:
 	Optimizer &optimizer;

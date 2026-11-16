@@ -25,6 +25,7 @@
 #include "duckdb/optimizer/join_elimination.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_to_semi_join.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
@@ -227,6 +228,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::SELF_JOIN_AGGREGATE, [&]() {
 		SelfJoinAggregate self_join_aggregate(*this);
 		plan = self_join_aggregate.Optimize(std::move(plan));
+	});
+
+	// An INNER join against a relation that only predicates read, and that they compare with one other relation
+	// only, becomes a SEMI join on that relation when repeated rows do not matter. Runs before filter pushdown,
+	// which then pushes the remaining filters below the SEMI join
+	RunOptimizer(OptimizerType::JOIN_TO_SEMI_JOIN, [&]() {
+		JoinToSemiJoin join_to_semi_join(*this);
+		plan = join_to_semi_join.Optimize(std::move(plan));
 	});
 
 	// computes sibling scalar aggregates over the same table(s) in one pass, while their predicates are still filters
