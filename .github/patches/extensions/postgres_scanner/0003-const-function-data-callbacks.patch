@@ -1,3 +1,29 @@
+diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
+index 3a220e2..0ba2d87 100644
+--- a/database-connector/src/optimizer/optimizer_util.cpp
++++ b/database-connector/src/optimizer/optimizer_util.cpp
+@@ -25,7 +25,7 @@ bool OptimizerUtil::FindExtensionGet(const std::string &table_scan_name, Logical
+ 		return false;
+ 	}
+ 	get_out = &get;
+-	bind_out = &get.bind_data->Cast<dbconnector::BindData>();
++	bind_out = &get.bind_data.write().Cast<dbconnector::BindData>();
+ 	return true;
+ }
+ 
+diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+index 1a8f16d..4d2f19d 100644
+--- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
++++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+@@ -329,7 +329,7 @@ void OrderByAndLimitOptimizer::Optimize(const OrderByAndLimitOptimizer::Config &
+ 		default:
+ 			return;
+ 		}
+-		auto &bind_data = get.bind_data->Cast<dbconnector::BindData>();
++		auto &bind_data = get.bind_data.write().Cast<dbconnector::BindData>();
+ 		auto &order_by_and_limit_bind_data = bind_data.GetOrderByAndLimitBindData();
+ 		if (!order_by_and_limit_bind_data.limit_clause.empty()) {
+ 			return;
 diff --git a/src/include/postgres_binary_copy.hpp b/src/include/postgres_binary_copy.hpp
 index 2e8fb9d..abf5114 100644
 --- a/src/include/postgres_binary_copy.hpp
@@ -84,3 +110,38 @@ index 03ded22..9035e9c 100644
                                    const BoundTableFunction &function) {
  	throw NotImplementedException("PostgresScanSerialize");
  }
+diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
+index 4142df9..1ba04db 100644
+--- a/src/storage/postgres_insert.cpp
++++ b/src/storage/postgres_insert.cpp
+@@ -531,7 +531,7 @@ void PostgresCatalog::MaterializePostgresScans(PhysicalOperator &op) {
+ 	if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = op.Cast<PhysicalTableScan>();
+ 		if (PostgresCatalog::IsPostgresScan(table_scan.function.GetName().GetIdentifierName())) {
+-			auto &bind_data = table_scan.bind_data->Cast<PostgresBindData>();
++			auto &bind_data = table_scan.bind_data.write().Cast<PostgresBindData>();
+ 			bind_data.requires_materialization = true;
+ 			bind_data.max_threads = 1;
+ 			bind_data.can_use_main_thread = true;
+diff --git a/src/storage/postgres_optimizer.cpp b/src/storage/postgres_optimizer.cpp
+index afbb219..e064f05 100644
+--- a/src/storage/postgres_optimizer.cpp
++++ b/src/storage/postgres_optimizer.cpp
+@@ -77,7 +77,7 @@ static void OptimizePostgresScanLimitPushdown(unique_ptr<LogicalOperator> &op) {
+ 			return;
+ 		}
+ 
+-		auto &bind_data = get.bind_data->Cast<PostgresBindData>();
++		auto &bind_data = get.bind_data.write().Cast<PostgresBindData>();
+ 
+ 		string generated_limit_clause = "";
+ 		if (limit.limit_val.Type() != LimitNodeType::UNSET) {
+@@ -120,7 +120,7 @@ void PostgresOptimizer::Optimize(OptimizerExtensionInput &input, unique_ptr<Logi
+ 	for (auto &entry : operators.scans) {
+ 		auto multiple_scans = entry.second.size() > 1;
+ 		for (auto &scan : entry.second) {
+-			auto &bind_data = scan.get().bind_data->Cast<PostgresBindData>();
++			auto &bind_data = scan.get().bind_data.write().Cast<PostgresBindData>();
+ 			// if there is a single scan in the plan we can always stream using the main thread
+ 			// if there is more than one scan we either (1) need to materialize, or (2) cannot use the main thread
+ 			if (multiple_scans) {
