@@ -50,8 +50,12 @@ MacroBindResult MacroFunction::BindMacroFunction(
     Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const Identifier &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
-    idx_t depth) {
+    idx_t depth, optional_ptr<const ExpressionBinder> calling_binder) {
 	ExpressionBinder expr_binder(binder, binder.context);
+	if (calling_binder) {
+		// binding an argument can expand the macro again: continue the expression depth of the call
+		expr_binder.ContinueStackDepth(*calling_binder);
+	}
 	expr_binder.lambda_bindings = binder.lambda_bindings;
 
 	// Figure out whether we even need to bind arguments
