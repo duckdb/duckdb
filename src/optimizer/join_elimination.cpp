@@ -20,6 +20,7 @@
 
 namespace duckdb {
 
+//! Whether an expression of `op` itself is volatile (LogicalOperator::HasVolatileExpressions covers a whole subtree)
 static bool AnyVolatile(const LogicalOperator &op) {
 	bool is_volatile = false;
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expr) {
@@ -28,19 +29,6 @@ static bool AnyVolatile(const LogicalOperator &op) {
 		}
 	});
 	return is_volatile;
-}
-
-//! Whether an operator of the plan below (and including) `op` has a volatile expression
-static bool AnyVolatileInPlan(const LogicalOperator &op) {
-	if (AnyVolatile(op)) {
-		return true;
-	}
-	for (auto &child : op.children) {
-		if (AnyVolatileInPlan(*child)) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void JoinElimination::OptimizeChild(LogicalOperator &op, idx_t child_idx, JoinElimination &child_optimizer,
@@ -343,7 +331,7 @@ bool JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElim
 	// An inner side or a join condition with a volatile expression (nextval, random) stays as well: it has an effect
 	// of its own
 	if (pipe_info.ignores_duplicates && join.join_type != JoinType::SINGLE && !AnyVolatile(join) &&
-	    !AnyVolatileInPlan(*join.children[inner_idx])) {
+	    !join.children[inner_idx]->HasVolatileExpressions()) {
 		op = LogicalJoin::PromoteJoinSide(std::move(join.children[outer_idx]), std::move(outer_projection_map));
 		return true;
 	}
