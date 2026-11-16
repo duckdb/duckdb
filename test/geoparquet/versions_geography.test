@@ -187,10 +187,13 @@ COPY (
 	geo: '{"version":"1.1.0","primary_column":"a","columns":{"a":{"encoding":"WKB","geometry_types":[],"edges":"spherical"},"b":{"encoding":"WKB","geometry_types":[],"edges":"planar"},"c":{"encoding":"WKB","geometry_types":[]},"d":{"encoding":"WKB","geometry_types":[],"edges":"spherical"}}}'
 });
 
-query IIII
-SELECT typeof(a), typeof(b), typeof(c), typeof(d) FROM '{TEST_DIR}/test_geography_edges.parquet';
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM '{TEST_DIR}/test_geography_edges.parquet') ORDER BY column_name;
 ----
-GEOGRAPHY('OGC:CRS84')	GEOMETRY('OGC:CRS84')	GEOMETRY('OGC:CRS84')	GEOGRAPHY('OGC:CRS84')
+a	GEOGRAPHY('OGC:CRS84')
+b	GEOMETRY('OGC:CRS84')
+c	GEOMETRY('OGC:CRS84')
+d	GEOGRAPHY('OGC:CRS84')
 
 query III
 SELECT ST_AsText(a), b, c FROM '{TEST_DIR}/test_geography_edges.parquet';
