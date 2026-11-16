@@ -582,8 +582,10 @@ public:
 
 public:
 	bool IsProfitable(LogicalComparisonJoin &restriction, LogicalOperator &domain);
+	//! The cheapest of the permitted actions. Keeping is always permitted, removal when it is safe; replacement by
+	//! `domain` only with `allow_replace`.
 	RestrictionAction ChooseRestrictionAction(const DomainRestriction &existing, LogicalAggregate &domain,
-	                                          bool keys_may_expand = false);
+	                                          bool keys_may_expand = false, bool allow_replace = true);
 	//! Removing the restriction also stops the production of the key domain at `production` and the materialization
 	//! of the source it is read from (`source_values` values): work only a kept restriction pays for.
 	void SetReleasedWork(LogicalOperator &production, double source_values);
@@ -706,7 +708,7 @@ bool DomainCostModel::IsProfitable(LogicalComparisonJoin &restriction, LogicalOp
 }
 
 RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestriction &existing, LogicalAggregate &domain,
-                                                           bool keys_may_expand) {
+                                                           bool keys_may_expand, bool allow_replace) {
 	if (keys_may_expand && !existing.CanRemove()) {
 		return RestrictionAction::KEEP;
 	}
@@ -730,7 +732,7 @@ RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestricti
 	if (!old_input) {
 		// Key containment bounds aggregation/probe work; cheaper key production/build can justify replacement.
 		// Missing old selectivity cannot justify removal.
-		return !keys_may_expand && IsCheaper(new_key_work, old_key_rows + old_producer_work)
+		return allow_replace && !keys_may_expand && IsCheaper(new_key_work, old_key_rows + old_producer_work)
 		           ? RestrictionAction::REPLACE
 		           : RestrictionAction::KEEP;
 	}
@@ -747,7 +749,9 @@ RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestricti
 			action = alternative;
 		}
 	};
-	if (restricted) {
+	if (!allow_replace) {
+		// only keeping and removing are compared
+	} else if (restricted) {
 		consider(EstimateAggregateWork(*restricted, group_binding) +
 		             EstimateSemiJoinWork(input_rows, static_cast<double>(restricted->cardinality), distinct_key_rows) +
 		             new_producer_work,
@@ -1006,7 +1010,7 @@ static RestrictionAction TryOptimizeRuntimeRestriction(ClientContext &context, D
                                                        idx_t demand_index, unique_ptr<LogicalAggregate> &domain,
                                                        ExpressionType consumer_comparison,
                                                        const vector<reference<LogicalMaterializedCTE>> &cte_scopes,
-                                                       bool keys_may_expand = false, bool remove_only = false) {
+                                                       bool keys_may_expand = false, bool allow_replace = true) {
 	DomainRestriction existing(context, cte_scopes, aggregate, consumer_comparison);
 	auto restriction = existing.GetJoin();
 	if (!restriction || !existing.HasSimpleProjections()) {
@@ -1029,8 +1033,8 @@ static RestrictionAction TryOptimizeRuntimeRestriction(ClientContext &context, D
 	if (!contains_demand) {
 		return RestrictionAction::KEEP;
 	}
-	auto action = costs.ChooseRestrictionAction(existing, *domain, keys_may_expand);
-	if (action == RestrictionAction::REMOVE || (action == RestrictionAction::REPLACE && !remove_only)) {
+	auto action = costs.ChooseRestrictionAction(existing, *domain, keys_may_expand, allow_replace);
+	if (action != RestrictionAction::KEEP) {
 		existing.Apply(domain, action);
 	}
 	return action;
@@ -1518,7 +1522,7 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 		costs.SetReleasedWork(*released_production, released_source_values);
 	}
 	auto action = TryOptimizeRuntimeRestriction(optimizer.context, costs, aggregate, demand, demand_index, domain,
-	                                            comparison, cte_scopes, false, remove_only);
+	                                            comparison, cte_scopes, false, !remove_only);
 	if (remove_only) {
 		return action == RestrictionAction::REMOVE;
 	}
