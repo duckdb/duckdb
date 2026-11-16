@@ -675,8 +675,7 @@ enum class PushdownExtractMapping {
 	PUSHDOWN,
 	//! the file lacks a field on the path whose default is NULL, so the extracted field is NULL in every row
 	NULL_VALUE,
-	//! the file lacks the column, or a field on the path whose default is not NULL but is NULL where the parent struct
-	//! is NULL, so the whole column has to be read
+	//! the whole column must be mapped before the field can be extracted
 	WHOLE_COLUMN
 };
 
@@ -685,8 +684,20 @@ enum class PushdownExtractMapping {
 static PushdownExtractMapping GetPushdownExtractMappingByName(const LogicalType &global_type,
                                                               const LogicalType &local_type,
                                                               const ColumnIndex &global_index) {
-	if (!global_index.IsPushdownExtract() || global_type.id() != LogicalTypeId::STRUCT ||
-	    local_type.id() != LogicalTypeId::STRUCT) {
+	if (local_type.id() == LogicalTypeId::SQLNULL) {
+		return PushdownExtractMapping::NULL_VALUE;
+	}
+	if (!global_index.IsPushdownExtract()) {
+		// preserve the schema conversion before a pushed cast
+		if (global_type != local_type && global_type != global_index.GetScanType()) {
+			return PushdownExtractMapping::WHOLE_COLUMN;
+		}
+		return PushdownExtractMapping::PUSHDOWN;
+	}
+	if (global_type.id() != local_type.id()) {
+		return PushdownExtractMapping::WHOLE_COLUMN;
+	}
+	if (global_type.id() != LogicalTypeId::STRUCT) {
 		return PushdownExtractMapping::PUSHDOWN;
 	}
 	auto &child_index = global_index.GetChildIndex(0);
@@ -732,8 +743,17 @@ static PushdownExtractMapping GetPushdownExtractMapping(ClientContext &context,
 		// an explicitly NULL field is NULL whatever is extracted from it
 		return PushdownExtractMapping::NULL_VALUE;
 	}
-	if (!global_index.IsPushdownExtract() || global_column.type.id() != LogicalTypeId::STRUCT ||
-	    local_column.type.id() != LogicalTypeId::STRUCT) {
+	if (!global_index.IsPushdownExtract()) {
+		if (global_column.children.empty() && global_column.type != local_column.type &&
+		    global_column.type != global_index.GetScanType()) {
+			return PushdownExtractMapping::WHOLE_COLUMN;
+		}
+		return PushdownExtractMapping::PUSHDOWN;
+	}
+	if (global_column.type.id() != local_column.type.id()) {
+		return PushdownExtractMapping::WHOLE_COLUMN;
+	}
+	if (global_column.type.id() != LogicalTypeId::STRUCT) {
 		return PushdownExtractMapping::PUSHDOWN;
 	}
 	if (global_column.children.empty()) {
