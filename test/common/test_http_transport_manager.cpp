@@ -1273,29 +1273,33 @@ TEST_CASE("UPDATE EXTENSIONS does not send an etag to a moved repository", "[htt
 		    StringUtil::Format("CREATE OR REPLACE EXTENSION REPOSITORY my_repo WITH PREFIX '%s' USING PUBLIC KEY '%s'",
 		                       prefix, PUBLIC_KEY)));
 	};
+
 	auto update = [&]() {
 		provider->state->observed_if_none_match.clear();
 		REQUIRE_NO_FAIL(connection.Query("UPDATE EXTENSIONS"));
 		REQUIRE(!provider->state->request_urls.empty());
-		return provider->state->request_urls.back();
+		auto url = provider->state->request_urls.back();
+		auto scheme_end = url.find("://");
+		REQUIRE(scheme_end != string::npos);
+		return url.substr(scheme_end + 3);
 	};
 	create_repository("http://old.test/repo");
 	REQUIRE_NO_FAIL(connection.Query("INSTALL loadable_extension_demo FROM my_repo"));
 
 	// the repository still points where the extension came from: the etag is sent
 	auto url = update();
-	CHECK(StringUtil::StartsWith(url, "http://old.test/repo/"));
+	CHECK(StringUtil::StartsWith(url, "old.test/repo/"));
 	CHECK(provider->state->observed_if_none_match == "mock-etag");
 
 	// the repository moved: the etag of the old url is not sent, so the new binary is downloaded
 	create_repository("http://new.test/repo");
 	url = update();
-	CHECK(StringUtil::StartsWith(url, "http://new.test/repo/"));
+	CHECK(StringUtil::StartsWith(url, "new.test/repo/"));
 	CHECK(provider->state->observed_if_none_match.empty());
 
 	// the install info now records the new url, so the etag is sent again
 	url = update();
-	CHECK(StringUtil::StartsWith(url, "http://new.test/repo/"));
+	CHECK(StringUtil::StartsWith(url, "new.test/repo/"));
 	CHECK(provider->state->observed_if_none_match == "mock-etag");
 
 	TestDeleteDirectory(extension_directory);
