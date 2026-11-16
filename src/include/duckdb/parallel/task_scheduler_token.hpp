@@ -34,7 +34,7 @@ public:
 public:
 	annotated_mutex producer_lock;
 	std::condition_variable producer_cv;
-	//! A task that only the threads fetching from this producer run, it is not in a queue that worker threads read
+	//! A task that only the threads fetching from this producer take, it is not in a queue that worker threads read
 	shared_ptr<Task> producer_task DUCKDB_GUARDED_BY(producer_lock);
 
 private:

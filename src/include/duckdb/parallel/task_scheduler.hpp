@@ -56,7 +56,7 @@ public:
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task);
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Schedule regular tasks, keeping one for the threads fetching from the producer unless it already keeps one.
-	//! Worker threads are woken for the other tasks only, and never run the kept one
+	//! Worker threads are woken for the other tasks only, and never take the kept one from its slot
 	void ScheduleTasksKeepingOne(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);

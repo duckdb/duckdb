@@ -399,7 +399,7 @@ void Executor::UnregisterTask() {
 
 void Executor::ScheduleTasks(vector<shared_ptr<Task>> &tasks) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	// worker threads never run a kept task, so only the caller keeps one, which it runs once its current task is done
+	// worker threads never take a kept task, so only the caller keeps one, which it runs once its current task is done
 	if (OnCompletingThread()) {
 		scheduler.ScheduleTasksKeepingOne(GetToken(), tasks);
 	} else {
