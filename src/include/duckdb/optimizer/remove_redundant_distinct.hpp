@@ -20,11 +20,14 @@ class LogicalOperator;
 //! groups, it is replaced by a projection of the groups.
 class RemoveRedundantDistinct {
 public:
+	RemoveRedundantDistinct() : distinctness(DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
+	}
+
 	void VisitOperator(unique_ptr<LogicalOperator> &op);
 
 private:
 	//! The operators are visited bottom-up, so the unique sets of an operator are only computed (and cached) after
-	//! the operator and everything below it has been visited
+	//! the operator and everything below it has been visited: an aggregate is replaced before it is asked about
 	Distinctness distinctness;
 };
 
