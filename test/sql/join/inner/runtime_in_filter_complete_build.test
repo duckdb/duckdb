@@ -40,10 +40,10 @@ EXECUTE runtime_in_query;
 409700
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
 FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*county.*IN.*99.*
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters":.*county IN \([^)]*'99'.*
 
 # Reject a distinct set above the configured limit without publishing a prefix.
 statement ok
@@ -70,10 +70,10 @@ EXECUTE runtime_in_query;
 6553700
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
 FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
 ----
-analyzed_plan	<!REGEX>:(?s).*Dynamic.*Filters:.*county.*IN.*
+analyzed_plan	<!REGEX>:(?s).*"Dynamic Filters":.*county IN \(.*
 
 # Exactly the cap is eligible, independently of vector size.
 statement ok
@@ -85,10 +85,10 @@ EXECUTE runtime_in_query;
 6553600
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
 FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*county.*IN.*
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters":.*county IN \(.*
 
 statement ok
 DELETE FROM build;
