@@ -583,8 +583,13 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 template <class T>
 void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
                idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	D_ASSERT(sel_count <= vector_count);
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	const auto run_count = scan_state.layout.ValidateAllRuns();
+	if (sel_count == 0) {
+		scan_state.SkipInternal(vector_count);
+		return;
+	}
 	const auto run_values = scan_state.layout.GetRunValues(run_count);
 	if (!scan_state.filter_cache || !scan_state.filter_cache->IsValidFor(filter_state)) {
 		Vector values(result.GetType(), run_count);

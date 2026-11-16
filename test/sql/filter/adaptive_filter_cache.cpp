@@ -73,6 +73,71 @@ TEST_CASE("Published pure runtime-filter children support adaptive caches", "[fi
 	}
 }
 
+TEST_CASE("Cached comparisons match row evaluation for vector representations", "[filter][adaptive_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const idx_t count = GENERATE(0, 2, 4);
+	const vector<string> inputs {
+	    "VALUES (NULL::INTEGER), (-1), (0), (1)",
+	    "VALUES (NULL::BIGINT), (-1000000000000), (0), (1000000000000)",
+	    "VALUES (NULL::UHUGEINT), (0::UHUGEINT), (1::UHUGEINT), (18446744073709551616::UHUGEINT)",
+	    "VALUES (NULL::DOUBLE), ('NaN'::DOUBLE), ('-Infinity'::DOUBLE), ('Infinity'::DOUBLE)",
+	    "VALUES (NULL::INTERVAL), ('1 month'::INTERVAL), ('30 days'::INTERVAL), ('1 day'::INTERVAL)",
+	    "VALUES (NULL::VARCHAR), ('a'), ('a longer string than an inline string'), ('z')",
+	    "VALUES (NULL::BOOLEAN), (false), (true), (false)"};
+	const vector<ExpressionType> comparisons {
+	    ExpressionType::COMPARE_EQUAL,       ExpressionType::COMPARE_NOTEQUAL,
+	    ExpressionType::COMPARE_GREATERTHAN, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	    ExpressionType::COMPARE_LESSTHAN,    ExpressionType::COMPARE_LESSTHANOREQUALTO};
+	for (const auto &sql : inputs) {
+		auto result = con.Query(sql);
+		REQUIRE_NO_FAIL(*result);
+		auto rows = result->Collection().GetRows();
+		Vector source(result->GetTypes()[0], 4);
+		FlatVector::SetSize(source, count_t(4));
+		for (idx_t row = 0; row < 4; row++) {
+			source.SetValue(row, rows.GetValue(0, row));
+		}
+		for (idx_t representation = 0; representation < 4; representation++) {
+			Vector values(source.GetType());
+			if (representation == 0) {
+				values.Reference(source);
+			} else if (representation == 1) {
+				SelectionVector order(4);
+				order.set_index(0, 3);
+				order.set_index(1, 1);
+				order.set_index(2, 0);
+				order.set_index(3, 1);
+				values.Slice(source, order, 4);
+			} else {
+				values.Reference(representation == 2 ? source.GetValue(1) : Value(source.GetType()), count_t(4));
+			}
+			for (const auto comparison_type : comparisons) {
+				for (const bool null_predicate : {false, true}) {
+					CAPTURE(sql, representation, comparison_type, null_predicate, count);
+					auto predicate = null_predicate ? Value(source.GetType()) : source.GetValue(1);
+					auto comparison = ExpressionFilter::CreateComparisonFilter(comparison_type, predicate);
+					auto oracle = TableFilterState::Initialize(*con.context, *comparison);
+					ExpressionFilter optional(
+					    CreateSelectivityOptionalFilterExpression(comparison->expr->Copy(), source.GetType(), 1.0f, 6));
+					auto state = TableFilterState::Initialize(*con.context, optional);
+					REQUIRE(state->can_cache);
+					auto cache = state->CreateCache(values, count);
+					SelectionVector codes, selected, expected;
+					auto selected_count = count;
+					auto expected_count = count;
+					cache->Filter(codes, selected, selected_count);
+					ColumnSegment::FilterSelection(expected, values, *oracle, count, expected_count);
+					REQUIRE(selected_count == expected_count);
+					for (idx_t row = 0; row < selected_count; row++) {
+						REQUIRE(selected.get_index(row) == expected.get_index(row));
+					}
+				}
+			}
+		}
+	}
+}
+
 TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adaptive_cache]") {
 	DuckDB db(nullptr);
 	Connection con(db);
