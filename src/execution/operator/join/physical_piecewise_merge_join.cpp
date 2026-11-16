@@ -468,6 +468,10 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
+	if (!state.rhs_iterator) {
+		// the state was reset for reuse (a recursive CTE runs its pipelines once per iteration)
+		state.InitializeRightScanState(gstate);
+	}
 	state.ResolveJoinKeys(context, input);
 	auto &lhs_table = *state.lhs_global_table;
 	auto &lhs_keys = state.lhs_local_table->keys;

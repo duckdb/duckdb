@@ -1,0 +1,43 @@
+# name: test/sql/cte/recursive_cte_semi_range_join.test
+# description: A range SEMI / ANTI / MARK join in the recursive member of a recursive CTE runs once per iteration
+# group: [cte]
+
+statement ok
+CREATE TABLE free AS SELECT i AS ofs FROM range(100) t(i);
+
+# plan the joins below as piecewise merge joins: their operator state is reused by every iteration
+statement ok
+SET nested_loop_join_threshold = 0;
+
+query II
+WITH RECURSIVE t(i) AS (
+	SELECT 1::BIGINT
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t),
+	      nextfree AS (SELECT min(f.ofs) AS nf FROM free f SEMI JOIN tmp ON f.ofs > tmp.i)
+	 SELECT nf FROM nextfree WHERE nf < 10)
+) SELECT count(*), max(i) FROM t;
+----
+9	9
+
+query II
+WITH RECURSIVE t(i) AS (
+	SELECT 5::BIGINT
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t),
+	      prevfree AS (SELECT max(f.ofs) AS pf FROM free f ANTI JOIN tmp ON f.ofs >= tmp.i)
+	 SELECT pf FROM prevfree WHERE pf >= 0)
+) SELECT count(*), min(i) FROM t;
+----
+6	0
+
+query II
+WITH RECURSIVE t(i) AS (
+	SELECT 1::BIGINT
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t),
+	      nextfree AS (SELECT min(f.ofs) AS nf FROM free f WHERE f.ofs > ANY (SELECT i FROM tmp))
+	 SELECT nf FROM nextfree WHERE nf < 10)
+) SELECT count(*), max(i) FROM t;
+----
+9	9
