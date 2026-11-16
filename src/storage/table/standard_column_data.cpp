@@ -93,6 +93,14 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
 		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
 		// filter already removed - pushing the filter down there must not raise errors that would not occur otherwise
+		if (compression && compression->supports_selective_filtering && !verify_fetch_row && !HasUpdates() &&
+		    !validity->HasUpdates()) {
+			validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count,
+			                     ScanVectorType::SCAN_FLAT_VECTOR, state.update_scan_type);
+			SelectVector(state, result, target_count, sel, count, ScanVectorType::SCAN_FLAT_VECTOR_PRESERVE_POSITIONS);
+			ColumnSegment::FilterSelection(sel, result, filter_state, target_count, count);
+			return;
+		}
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
