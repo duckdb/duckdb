@@ -505,16 +505,19 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		if (cconn->context->IsConnected()) {
 			return DuckDBError;
 		}
+		// construct the `arrow_scan(...)` function expression
 		auto factory = duckdb::make_shared_ptr<CArrowScanFactory>(*input);
 		auto scan = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		scan->function = duckdb::make_uniq<duckdb::FunctionExpression>(
 		    "arrow_scan", duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>());
 		scan->bind_info = std::move(factory);
+		// construct the `SELECT * FROM arrow_scan(...)` statement
 		auto node = duckdb::make_uniq<duckdb::SelectNode>();
 		node->select_list.push_back(duckdb::make_uniq<duckdb::StarExpression>());
 		node->from_table = std::move(scan);
 		auto select = duckdb::make_uniq<duckdb::SelectStatement>();
 		select->node = std::move(node);
+		// construct the `CREATE TEMP VIEW AS` statement using the select statement
 		auto info = duckdb::make_uniq<duckdb::CreateViewInfo>(duckdb::QualifiedName(
 		    duckdb::Identifier(), duckdb::Identifier::InvalidSchema(), duckdb::Identifier(table_name)));
 		info->query = std::move(select);
@@ -522,6 +525,7 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		info->on_conflict = duckdb::OnCreateConflict::REPLACE_ON_CONFLICT;
 		auto statement = duckdb::make_uniq<duckdb::CreateStatement>();
 		statement->info = std::move(info);
+		// Execute the CREATE VIEW
 		if (cconn->Query(std::move(statement))->HasError()) {
 			return DuckDBError;
 		}
