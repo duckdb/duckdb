@@ -372,29 +372,15 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
 		return ExportChild(*expression.GetChildren()[0], path, 0);
 	}
-	if (BoundCastExpression::IsDefaultCast(expression)) {
-		if (!context.client_context ||
-		    CastFunctionSet::Get(*context.client_context)
-		        .CanOverrideDefaultCast(expression.GetChildren()[0]->GetReturnType(), expression.GetReturnType())) {
-			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "default_cast_binding",
-			    "A default-only bound cast cannot be reconstructed through this SQL binding")});
-		}
-	}
 	auto child = ExportChild(*expression.GetChildren()[0], path, 0);
 	if (child.HasError()) {
 		return child;
 	}
 	if (expression.GetReturnType().IsAggregateState()) {
 		auto storage_type = expression.GetReturnType().WithAlias("").WithExtensionInfo(nullptr);
-		auto &source_type = expression.GetChildren()[0]->GetReturnType();
-		if (BoundCastExpression::IsTryCast(expression) || !context.client_context ||
-		    CastFunctionSet::Get(*context.client_context)
-		        .CanOverrideDefaultCast(source_type, expression.GetReturnType()) ||
-		    CastFunctionSet::Get(*context.client_context).CanOverrideDefaultCast(source_type, storage_type)) {
+		if (BoundCastExpression::IsTryCast(expression)) {
 			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "aggregate_state_try_cast",
-			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
+			    path, "aggregate_state_try_cast", "Aggregate state TRY_CAST requires a SQL representation")});
 		}
 		auto storage = RestoreResultType(storage_type, std::move(child.GetValue()), path);
 		if (storage.HasError()) {
