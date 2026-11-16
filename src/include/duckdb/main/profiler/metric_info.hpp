@@ -20,4 +20,7 @@ struct MetricInfo {
 	string unit;
 };
 
+//! The most metric indexes a process can have, the profiler's own included
+static constexpr idx_t MAX_METRIC_COUNT = 16384;
+
 } // namespace duckdb

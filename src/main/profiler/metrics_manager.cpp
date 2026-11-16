@@ -1,5 +1,4 @@
 #include "duckdb/main/profiler/metrics_manager.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/main/profiler/metrics.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -16,15 +15,16 @@ struct MetricDescriptor {
 	const char *metric_type;
 	const char *description;
 	const char *unit;
+	idx_t index;
 };
 
 } // namespace
 
 // clang-format off
 #define DUCKDB_METRIC(METRIC) \
-	{METRIC::Name, METRIC::TypeStr, METRIC::Description, METRIC::Unit}
+	{METRIC::Name, METRIC::TypeStr, METRIC::Description, METRIC::Unit, METRIC::MetricIndex}
 #define FINAL_METRIC \
-	{nullptr, nullptr, nullptr, nullptr}
+	{nullptr, nullptr, nullptr, nullptr, 0}
 
 static const MetricDescriptor internal_metrics[] = {
 	DUCKDB_METRIC(MetricQueryCPUTime),
@@ -93,6 +93,8 @@ MetricsManager &MetricsManager::Get(DatabaseInstance &db) {
 struct MetricsManager::InternalMetrics {
 	InternalMetrics() {
 		for (idx_t i = 0; internal_metrics[i].name; i++) {
+			// the generated MetricIndex of every metric is its position in the list
+			D_ASSERT(internal_metrics[i].index == i);
 			MetricInfo info;
 			info.name = internal_metrics[i].name;
 			info.metric_type = internal_metrics[i].metric_type;
@@ -129,7 +131,8 @@ struct MetricsManager::InternalMetrics {
 };
 
 const MetricsManager::InternalMetrics &MetricsManager::GetInternalMetrics() {
-	static const InternalMetrics internal;
+	// never destroyed, so that a database destroyed at exit can still read it
+	static const auto &internal = *new InternalMetrics();
 	return internal;
 }
 
@@ -145,8 +148,9 @@ idx_t MetricsManager::OptimizerMetricIndex(OptimizerType type) {
 	auto &optimizer_indexes = GetInternalMetrics().optimizer_indexes;
 	auto type_value = static_cast<idx_t>(type);
 	if (type_value >= optimizer_indexes.size() || !optimizer_indexes[type_value].IsValid()) {
-		throw InternalException("Optimizer %s has no metric: add it to the list of optimizers",
-		                        EnumUtil::ToString(type));
+		// its timer records nothing
+		D_ASSERT(false);
+		return MAX_METRIC_COUNT;
 	}
 	return optimizer_indexes[type_value].GetIndex();
 }
@@ -167,7 +171,8 @@ struct MetricsManager::RegisteredMetrics {
 };
 
 MetricsManager::RegisteredMetrics &MetricsManager::GetRegisteredMetrics() {
-	static RegisteredMetrics registered;
+	// never destroyed, so that a database destroyed at exit can still read it
+	static auto &registered = *new RegisteredMetrics();
 	return registered;
 }
 
@@ -183,6 +188,21 @@ MetricInfo MetricsManager::GetMetric(idx_t metric_index) {
 	lock_guard<mutex> guard(registered.lock);
 	D_ASSERT(metric_index - InternalMetricCount() < registered.metrics.size());
 	return registered.metrics[metric_index - InternalMetricCount()];
+}
+
+vector<string> MetricsManager::GetMetricTypes(idx_t begin, idx_t end) {
+	vector<string> types;
+	for (idx_t i = begin; i < MinValue<idx_t>(end, InternalMetricCount()); i++) {
+		types.push_back(GetInternalMetric(i).metric_type);
+	}
+	if (end > InternalMetricCount()) {
+		auto &registered = GetRegisteredMetrics();
+		lock_guard<mutex> guard(registered.lock);
+		for (idx_t i = MaxValue<idx_t>(begin, InternalMetricCount()); i < end; i++) {
+			types.push_back(registered.metrics[i - InternalMetricCount()].metric_type);
+		}
+	}
+	return types;
 }
 
 optional_idx MetricsManager::TryGetMetricIndex(const string &name) {
@@ -245,19 +265,15 @@ idx_t MetricsManager::RegisterMetric(MetricInfo info) {
 		}
 	}
 	lock_guard<mutex> guard(registered_metrics_lock);
-	if (std::find(registered_here.begin(), registered_here.end(), index) == registered_here.end()) {
+	if (registered_names.insert(GetMetric(index).name).second) {
 		registered_here.push_back(index);
 	}
 	return index;
 }
 
 bool MetricsManager::IsRegisteredMetric(const string &name) const {
-	auto index = TryGetMetricIndex(name);
-	if (!index.IsValid() || index.GetIndex() < InternalMetricCount()) {
-		return false;
-	}
 	lock_guard<mutex> guard(registered_metrics_lock);
-	return std::find(registered_here.begin(), registered_here.end(), index.GetIndex()) != registered_here.end();
+	return registered_names.find(name) != registered_names.end();
 }
 
 } // namespace duckdb

@@ -20,15 +20,15 @@ optional_ptr<MetricSlot> QueryMetrics::GrowSlots(idx_t metric_index) {
 	}
 	lock_guard<mutex> guard(slot_chunks_lock);
 	auto limit = slot_limit.load(std::memory_order_relaxed);
+	auto metric_types = MetricsManager::GetMetricTypes(limit, known_count);
 	for (idx_t i = limit; i < known_count; i++) {
 		auto chunk_index = i / MetricSlotChunk::SLOT_COUNT;
 		if (!slot_chunks[chunk_index]) {
 			slot_chunks[chunk_index] = make_uniq<MetricSlotChunk>();
 		}
 		auto &slot = slot_chunks[chunk_index]->slots[i % MetricSlotChunk::SLOT_COUNT];
-		auto metric_type = MetricsManager::GetMetric(i).metric_type;
-		slot.is_counter = metric_type == "uint64";
-		slot.is_timing = metric_type == "double";
+		slot.is_counter = metric_types[i - limit] == "uint64";
+		slot.is_timing = metric_types[i - limit] == "double";
 	}
 	if (known_count > limit) {
 		slot_limit.store(known_count, std::memory_order_release);

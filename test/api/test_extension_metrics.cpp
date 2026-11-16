@@ -390,7 +390,8 @@ TEST_CASE("Updates by index may come from another thread while queries start and
 			profiler.AddToMetricCounter(latest.load(), 1);
 		}
 	});
-	for (idx_t i = 0; i < 300; i++) {
+	// enough to cross into another chunk of slots
+	for (idx_t i = 0; i < 70; i++) {
 		// the newest metric has no slot yet, so the updates make the connection allocate more while queries start
 		latest = metrics_manager.RegisterMetric({"test.background_" + to_string(i), "uint64", "Aside", "rows"});
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));

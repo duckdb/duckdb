@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -27,9 +28,6 @@ class DatabaseInstance;
 //! metrics registered by extensions at runtime. A metric's index is the same in every database of the process.
 class MetricsManager {
 public:
-	//! The most metrics a process can know, with the profiler's own
-	static constexpr idx_t MAX_METRIC_COUNT = 16384;
-
 	MetricsManager() = default;
 
 	DUCKDB_API static MetricsManager &Get(ClientContext &context);
@@ -51,6 +49,8 @@ public:
 	DUCKDB_API static idx_t KnownMetricCount();
 	//! The metric with the index `metric_index`, which must be known
 	DUCKDB_API static MetricInfo GetMetric(idx_t metric_index);
+	//! The types of the metric indexes from begin to end, which must be known
+	DUCKDB_API static vector<string> GetMetricTypes(idx_t begin, idx_t end);
 	//! The index of the metric `name`, or an invalid index when the process does not know it
 	DUCKDB_API static optional_idx TryGetMetricIndex(const string &name);
 
@@ -58,7 +58,7 @@ public:
 	DUCKDB_API static idx_t InternalMetricCount();
 	//! One of the profiler's own metrics or optimizer timings, by its index
 	DUCKDB_API static const MetricInfo &GetInternalMetric(idx_t metric_index);
-	//! The index of an optimizer's timing
+	//! The index of an optimizer's timing, or an index no metric has when the optimizer is not listed
 	DUCKDB_API static idx_t OptimizerMetricIndex(OptimizerType type);
 	//! The index of one of the profiler's own metrics or optimizer timings, or an invalid index
 	DUCKDB_API static optional_idx TryGetInternalMetricIndex(const string &name);
@@ -70,8 +70,9 @@ private:
 	static RegisteredMetrics &GetRegisteredMetrics();
 
 	mutable mutex registered_metrics_lock;
-	//! The indexes of the metrics registered in this database, in the order they were registered
+	//! The indexes of the metrics registered in this database, in the order they were registered, and their names
 	vector<idx_t> registered_here;
+	unordered_set<string> registered_names;
 };
 
 } // namespace duckdb

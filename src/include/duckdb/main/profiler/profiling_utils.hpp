@@ -15,7 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
-#include "duckdb/main/profiler/metrics_manager.hpp"
+#include "duckdb/main/profiler/metric_info.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -192,7 +192,7 @@ public:
 			string_counters.clear();
 			string_values.clear();
 		}
-		// an update that races the reset may survive it in part, as no timer or counter outlives its query
+		// a late update from another thread may land in the next query
 		ResetMetricSlots();
 
 		query_sql = "";
@@ -240,7 +240,7 @@ public:
 	}
 
 private:
-	static constexpr idx_t MAX_SLOT_CHUNKS = MetricsManager::MAX_METRIC_COUNT / MetricSlotChunk::SLOT_COUNT;
+	static constexpr idx_t MAX_SLOT_CHUNKS = MAX_METRIC_COUNT / MetricSlotChunk::SLOT_COUNT;
 
 	//! The index of `key` when it is one of the profiler's own timings (or counters)
 	static optional_idx TryGetInternalMetricIndex(const string &key, bool timing);
