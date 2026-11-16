@@ -30,11 +30,6 @@ CREATE TABLE small_str AS SELECT 'key_' || i AS k, (i % 7)::INTEGER AS v FROM ra
 statement ok
 CREATE TABLE big_str AS SELECT 'key_' || ((i % 50000) * 3) AS k, (i % 11)::INTEGER AS v FROM range(2000000) t(i);
 
-query I
-SELECT name FROM duckdb_optimizers() WHERE name = 'join_filter_right_anti';
-----
-join_filter_right_anti
-
 # the anti join is flipped to RIGHT_ANTI (the small side is the build side) and the scan of the probe side gets the
 # build keys as a join filter
 query II
@@ -195,9 +190,9 @@ SELECT count(*), sum(s.k) FROM small s ANTI JOIN big b ON s.k = b.k WHERE s.k < 
 ----
 333	83167
 
-# the optimizer can be disabled: the RIGHT_ANTI join is still there, but without a filter
+# without join filter pushdown the RIGHT_ANTI join is still there, but without a filter
 statement ok
-SET disabled_optimizers = 'join_filter_right_anti';
+SET disabled_optimizers = 'join_filter_pushdown';
 
 query II
 EXPLAIN ANALYZE SELECT count(*), sum(s.k) FROM small s ANTI JOIN big b ON s.k = b.k WHERE s.k < 500;
@@ -218,15 +213,6 @@ query III
 SELECT count(*), count(s.k), sum(s.k) FROM small_null s ANTI JOIN big_null b ON s.k IS NOT DISTINCT FROM b.k WHERE s.k < 500 OR s.k IS NULL;
 ----
 300	300	74997
-
-# so does disabling join filter pushdown as a whole
-statement ok
-SET disabled_optimizers = 'join_filter_pushdown';
-
-query II
-EXPLAIN ANALYZE SELECT count(*), sum(s.k) FROM small s ANTI JOIN big b ON s.k = b.k WHERE s.k < 500;
-----
-analyzed_plan	<!REGEX>:(?s).*Dynamic Filters.*
 
 statement ok
 RESET disabled_optimizers;
@@ -328,7 +314,7 @@ SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.t
 
 # the same results without the filters
 statement ok
-SET disabled_optimizers = 'join_filter_right_anti';
+SET disabled_optimizers = 'join_filter_pushdown';
 
 query II
 EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
