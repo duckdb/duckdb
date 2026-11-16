@@ -553,8 +553,8 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	ColumnMapResult result;
 	result.local_column = local_column;
 
-	if (!column_mapping.empty()) {
-		// we have column mappings at this level - construct the struct
+	if (!column_mapping.empty() || !is_root) {
+		// A nested source still supplies validity when every selected child comes from a default.
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
