@@ -276,6 +276,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		// a predicate with default NULL handling (LIKE, contains, ...) is NULL for every row when an argument holds
 		// only NULLs
 		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
 		return PropagateExpression(expr_ptr);
 	}
 	auto constant_stats = PropagateConstantInputs(context, func, stats);

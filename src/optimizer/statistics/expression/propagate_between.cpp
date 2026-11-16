@@ -20,6 +20,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateBetween(BoundFunctionE
 		// an input that holds only NULLs: the BETWEEN is NULL for every row
 		// (a bound that holds only NULLs leaves FALSE or NULL, which is not a constant)
 		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
 		return PropagateExpression(expr_ptr);
 	}
 	if (!input_stats) {

@@ -50,6 +50,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		if (removable) {
 			// x [NOT] IN (...) is NULL for every row when x holds only NULLs
 			expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+			removed_expressions = true;
 			return PropagateExpression(expr_ptr);
 		}
 	}

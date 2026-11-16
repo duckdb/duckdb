@@ -206,6 +206,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFuncti
 	    IsRemovable(*right)) {
 		// an operand that holds only NULLs: the comparison is NULL for every row
 		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
 		return PropagateExpression(expr_ptr);
 	}
 	if (!left_stats || !right_stats) {

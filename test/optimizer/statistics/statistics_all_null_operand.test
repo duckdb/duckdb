@@ -106,6 +106,32 @@ SELECT count(*), count(n = g), count(n IN (g, id)), count(s LIKE 'a%') FROM t;
 ----
 10000	0	0	0
 
+# the columns that only a folded comparison reads are not scanned any more
+query II
+EXPLAIN SELECT n = g FROM t;
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Projections.*
+
+query II
+EXPLAIN SELECT id, n = g, n BETWEEN g AND id, n IN (g, id), s LIKE 'a%' FROM t;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: id  .*
+
+query II
+EXPLAIN SELECT u.id, n < d, contains(v, s) FROM t JOIN u USING (id);
+----
+physical_plan	<!REGEX>:.*HASH_JOIN.*Projections: (id,|n|s|d|v).*
+
+query IIIIII
+SELECT count(*), count(id), count(a), count(b), count(c), count(d) FROM (SELECT id, n = g, n BETWEEN g AND id, n IN (g, id), s LIKE 'a%' FROM t) x(id, a, b, c, d);
+----
+10000	10000	0	0	0	0
+
+query III
+SELECT count(*), count(c1), count(c2) FROM (SELECT u.id, n < d AS c1, contains(v, s) AS c2 FROM t JOIN u USING (id));
+----
+10000	0	0
+
 # joins
 
 # INNER, also under a cast that cannot throw
@@ -134,7 +160,7 @@ SELECT count(*) FROM t JOIN u ON t.n < u.d;
 ----
 0
 
-# the join that cannot match is removed before the join order: nothing of a five-way join is left
+# a join that cannot match empties the joins around it: nothing of a five-way join is left
 query II
 EXPLAIN SELECT u.v, w.id FROM w JOIN u ON w.id = u.id JOIN t ON t.n = u.d JOIN u u2 ON u2.id = t.id JOIN w w2 ON w2.id = u2.id ORDER BY u.v;
 ----
@@ -258,6 +284,187 @@ SELECT count(*) FROM u WHERE u.d = (SELECT max(n) FROM t WHERE t.n = u.d);
 
 query II
 SELECT count(*), count(x) FROM (SELECT (SELECT t.id FROM t WHERE t.n = u.d) AS x FROM u);
+----
+10000	0
+
+# a residual predicate next to the comparisons of a join: when it is NULL for every pair the join cannot match either
+
+# INNER and SEMI: nothing is left
+query II
+EXPLAIN SELECT count(*) FROM u JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*(SEQ_SCAN|JOIN).*
+
+query I
+SELECT count(*) FROM u JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+0
+
+query II
+EXPLAIN SELECT count(*) FROM u SEMI JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*(SEQ_SCAN|JOIN).*
+
+query I
+SELECT count(*) FROM u SEMI JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+0
+
+query I
+SELECT count(*) FROM u WHERE EXISTS (SELECT 1 FROM t WHERE u.id = t.id AND contains(u.v, t.s));
+----
+0
+
+# LEFT: every left row, the right side is not read - whichever side the column that holds only NULLs is on
+query II
+EXPLAIN SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*Table: \S+\.t\s.*
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+10000	0
+
+query II
+EXPLAIN SELECT count(*), count(u.id) FROM t LEFT JOIN u ON u.id = t.id AND contains(u.v, t.s) WHERE t.g < 2;
+----
+physical_plan	<!REGEX>:.*Table: \S+\.u\s.*
+
+query II
+SELECT count(*), count(u.id) FROM t LEFT JOIN u ON u.id = t.id AND contains(u.v, t.s) WHERE t.g < 2;
+----
+2000	0
+
+query III
+SELECT u.id, u.v, t.id FROM u LEFT JOIN t ON u.id = t.id AND contains(u.v, t.s) WHERE u.id < 3 ORDER BY u.id;
+----
+0	0	NULL
+1	1	NULL
+2	2	NULL
+
+# RIGHT: every right row
+query II
+EXPLAIN SELECT count(*), count(t.id) FROM t RIGHT JOIN u ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*Table: \S+\.t\s.*
+
+query II
+SELECT count(*), count(t.id) FROM t RIGHT JOIN u ON u.id = t.id AND contains(u.v, t.s);
+----
+10000	0
+
+# FULL: both sides are needed, the join stays - without the columns that only the residual predicate read
+query II
+EXPLAIN SELECT count(*), count(t.id), count(u.id) FROM t FULL JOIN u ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<REGEX>:.*FULL.*Table: \S+\.[tu]\s.*Table: \S+\.[tu]\s.*
+
+query II
+EXPLAIN SELECT count(*), count(t.id), count(u.id) FROM t FULL JOIN u ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*HASH_JOIN.*Projections: (id,|s|v).*
+
+query III
+SELECT count(*), count(t.id), count(u.id) FROM t FULL JOIN u ON u.id = t.id AND contains(u.v, t.s);
+----
+20000	10000	10000
+
+# ANTI: every left row
+query II
+EXPLAIN SELECT u.id FROM u ANTI JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+physical_plan	<!REGEX>:.*(JOIN|Table: \S+\.t\s).*
+
+query I
+SELECT count(*) FROM u ANTI JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+10000
+
+query I
+SELECT count(*) FROM u WHERE NOT EXISTS (SELECT 1 FROM t WHERE u.id = t.id AND contains(u.v, t.s));
+----
+10000
+
+# MARK: the subquery has no row for any row of u, so NOT IN is TRUE and IN is FALSE, not NULL
+query I
+SELECT count(*) FROM u WHERE u.id NOT IN (SELECT t.id FROM t WHERE contains(u.v, t.s));
+----
+10000
+
+query I
+SELECT count(*) FROM u WHERE u.id IN (SELECT t.id FROM t WHERE contains(u.v, t.s));
+----
+0
+
+query II
+SELECT id, id IN (SELECT t.id FROM t WHERE contains(u.v, t.s)) FROM u WHERE id < 2 ORDER BY id;
+----
+0	false
+1	false
+
+# a scalar subquery (SINGLE join)
+query II
+SELECT count(*), count(x) FROM (SELECT (SELECT t.g FROM t WHERE t.id = u.id AND contains(u.v, t.s)) AS x FROM u);
+----
+10000	0
+
+# an ASOF join
+query II
+SELECT count(*), count(t.id) FROM u ASOF LEFT JOIN t ON u.id >= t.id AND contains(u.v, t.s);
+----
+10000	0
+
+query I
+SELECT count(*) FROM u ASOF JOIN t ON u.id >= t.id AND contains(u.v, t.s);
+----
+0
+
+# a residual predicate that the value ranges prove FALSE or NULL for every pair
+query II
+EXPLAIN SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND (u.d + t.g > 20000 OR t.g + u.dn < -5);
+----
+physical_plan	<!REGEX>:.*Table: \S+\.t\s.*
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND (u.d + t.g > 20000 OR t.g + u.dn < -5);
+----
+10000	0
+
+# residual predicates that are not NULL for every pair stay
+query II
+EXPLAIN SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND (contains(u.v, t.s) OR t.g > 5);
+----
+physical_plan	<REGEX>:.*Table: \S+\.t\s.*
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND (contains(u.v, t.s) OR t.g > 5);
+----
+10000	4000
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND contains(u.v, t.s) IS NULL;
+----
+10000	10000
+
+query II
+EXPLAIN SELECT count(*), count(one.id) FROM u LEFT JOIN one ON u.id = one.id AND contains(u.v, CAST(CAST(one.n AS INTEGER) AS VARCHAR));
+----
+physical_plan	<REGEX>:.*Table: \S+\.one\s.*
+
+query II
+SELECT count(*), count(one.id) FROM u LEFT JOIN one ON u.id = one.id AND contains(u.v, CAST(CAST(one.n AS INTEGER) AS VARCHAR));
+----
+10000	1
+
+# a residual predicate that can throw stays in the plan
+query II
+EXPLAIN SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND starts_with(u.v, CAST(CAST(t.n AS INTEGER) AS VARCHAR));
+----
+physical_plan	<REGEX>:.*starts_with.*Table: \S+\.t\s.*
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND starts_with(u.v, CAST(CAST(t.n AS INTEGER) AS VARCHAR));
 ----
 10000	0
 
@@ -940,6 +1147,122 @@ SELECT count(*) FROM (SELECT g, max(n) AS mx FROM t GROUP BY g) a JOIN u ON a.mx
 ----
 0
 
+# the join that cannot match is found before the join order is chosen, also when the column reaches the comparison
+# through a projection, an aggregate, a set operation or a materialized CTE: the LEFT join loses its right side
+# before the build side is picked. Found only by the statistics propagation after the join order, the join has been
+# flipped to a RIGHT join by then and a materialized CTE is still computed.
+# the column itself
+query II
+EXPLAIN SELECT count(*), count(x.id) FROM u LEFT JOIN t x ON x.n = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*), count(x.id) FROM u LEFT JOIN t x ON x.n = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+SELECT count(*), count(x.id) FROM u LEFT JOIN t x ON x.n = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through a projection
+query II
+EXPLAIN SELECT count(*), count(x.id) FROM u LEFT JOIN (SELECT id, n AS nn FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*), count(x.id) FROM u LEFT JOIN (SELECT id, n AS nn FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+SELECT count(*), count(x.id) FROM u LEFT JOIN (SELECT id, n AS nn FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through a view
+query II
+EXPLAIN SELECT count(*), count(tv.id) FROM u LEFT JOIN tv ON tv.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*), count(tv.id) FROM u LEFT JOIN tv ON tv.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+SELECT count(*), count(tv.id) FROM u LEFT JOIN tv ON tv.nn = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through an aggregate
+query II
+EXPLAIN SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t GROUP BY n) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t GROUP BY n) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t GROUP BY n) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through a set operation
+query II
+EXPLAIN SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t UNION ALL SELECT n FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t UNION ALL SELECT n FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+SELECT count(*), count(x.nn) FROM u LEFT JOIN (SELECT n AS nn FROM t UNION ALL SELECT n FROM t) x ON x.nn = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through a materialized CTE, which is not materialized either
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t) SELECT count(*), count(c.id) FROM u LEFT JOIN c ON c.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t) SELECT count(*), count(c.id) FROM u LEFT JOIN c ON c.nn = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t) SELECT count(*), count(c.id) FROM u LEFT JOIN c ON c.nn = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
+# through a materialized CTE that reads another one
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t), c2 AS MATERIALIZED (SELECT id, nn AS nn2 FROM c WHERE id > 5) SELECT count(*), count(c2.id) FROM u LEFT JOIN c2 ON c2.nn2 = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*EMPTY_RESULT.*
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t), c2 AS MATERIALIZED (SELECT id, nn AS nn2 FROM c WHERE id > 5) SELECT count(*), count(c2.id) FROM u LEFT JOIN c2 ON c2.nn2 = u.d JOIN w ON w.id = u.id;
+----
+physical_plan	<!REGEX>:.*(RIGHT|CTE|Table: \S+\.t\s).*
+
+query II
+WITH c AS MATERIALIZED (SELECT id, n AS nn FROM t), c2 AS MATERIALIZED (SELECT id, nn AS nn2 FROM c WHERE id > 5) SELECT count(*), count(c2.id) FROM u LEFT JOIN c2 ON c2.nn2 = u.d JOIN w ON w.id = u.id;
+----
+100	0
+
 # the null-extended side of an outer join
 query I
 SELECT count(*) FROM (SELECT u.id, t.n FROM u LEFT JOIN t ON t.id = u.id + 20000) a JOIN w ON a.n = w.id;
@@ -1022,5 +1345,15 @@ SELECT count(*) FROM t JOIN u ON t.n = u.d;
 
 query I
 SELECT count(*) FROM t WHERE n < g;
+----
+0
+
+query II
+SELECT count(*), count(t.id) FROM u LEFT JOIN t ON u.id = t.id AND contains(u.v, t.s);
+----
+10000	0
+
+query I
+SELECT count(*) FROM u JOIN t ON u.id = t.id AND contains(u.v, t.s);
 ----
 0

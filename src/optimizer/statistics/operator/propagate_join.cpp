@@ -151,6 +151,17 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto &condition = join.conditions[i];
 		if (!condition.IsComparison()) {
 			PropagateExpression(condition.JoinExpressionReference());
+			switch (ClassifyFilter(condition.GetJoinExpression())) {
+			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
+				// a residual predicate that never passes: none of the join conditions matter
+				if (HandleJoinNeverMatches(join, node_ptr)) {
+					return;
+				}
+				break;
+			default:
+				break;
+			}
 			continue;
 		}
 
