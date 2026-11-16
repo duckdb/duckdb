@@ -3,6 +3,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/order/top_n_boundary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -24,49 +25,13 @@ PhysicalTopKeyFilter::~PhysicalTopKeyFilter() {
 //===--------------------------------------------------------------------===//
 // Global State
 //===--------------------------------------------------------------------===//
-//! The bound shared by the threads: the smallest of the largest keys of the full local sets, as a sort key
+//! The bound shared by the threads: the smallest of the largest keys of the full local sets
 class TopKeyFilterGlobalState : public GlobalOperatorState {
 public:
-	explicit TopKeyFilterGlobalState(const PhysicalTopKeyFilter &op)
-	    : op(op), boundary_vector(op.orders[0].expression->GetReturnType()),
-	      boundary_modifiers(op.orders[0].type, op.orders[0].null_order) {
+	explicit TopKeyFilterGlobalState(const PhysicalTopKeyFilter &op) : boundary(op.orders, op.dynamic_filter.get()) {
 	}
 
-	const PhysicalTopKeyFilter &op;
-	mutex lock;
-	string boundary_value;
-	bool is_set = false;
-	Vector boundary_vector;
-	OrderModifiers boundary_modifiers;
-
-public:
-	bool TryGetBoundaryValue(string &current_boundary) {
-		unique_lock<mutex> l(lock, std::try_to_lock);
-		if (!l.owns_lock() || boundary_value == current_boundary) {
-			return false;
-		}
-		current_boundary = boundary_value;
-		return true;
-	}
-
-	void UpdateValue(const string &new_boundary) {
-		unique_lock<mutex> l(lock);
-		if (is_set && new_boundary >= boundary_value) {
-			return;
-		}
-		boundary_value = new_boundary;
-		is_set = true;
-		if (!op.dynamic_filter) {
-			return;
-		}
-		// the first key of the bound is the bound of the dynamic filter in the scans
-		CreateSortKeyHelpers::DecodeSortKey(string_t(boundary_value), boundary_vector, 0, boundary_modifiers);
-		auto new_dynamic_value = boundary_vector.GetValue(0);
-		l.unlock();
-		if (!new_dynamic_value.IsNull()) {
-			op.dynamic_filter->SetValue(std::move(new_dynamic_value));
-		}
-	}
+	TopNBoundaryValue boundary;
 };
 
 //===--------------------------------------------------------------------===//
@@ -90,10 +55,10 @@ public:
 
 public:
 	TopKeyFilterState(ExecutionContext &context, const PhysicalTopKeyFilter &op)
-	    : op(op), executor(context.client), seen(SEEN_HASH_SLOTS, 0), hashes(LogicalType::HASH),
-	      pass_sel(STANDARD_VECTOR_SIZE), ordered_sel(STANDARD_VECTOR_SIZE), candidate_sel(STANDARD_VECTOR_SIZE),
-	      new_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE),
-	      new_remaining_sel(STANDARD_VECTOR_SIZE) {
+	    : op(op), executor(context.client),
+	      selector(BufferManager::GetBufferManager(context.client).GetBufferAllocator(), op.orders),
+	      seen(SEEN_HASH_SLOTS, 0), hashes(LogicalType::HASH), pass_sel(STANDARD_VECTOR_SIZE),
+	      candidate_sel(STANDARD_VECTOR_SIZE), new_sel(STANDARD_VECTOR_SIZE) {
 		vector<LogicalType> key_types;
 		for (auto &order : op.orders) {
 			key_types.push_back(order.expression->GetReturnType());
@@ -102,12 +67,9 @@ public:
 		}
 		auto &allocator = BufferManager::GetBufferManager(context.client).GetBufferAllocator();
 		key_chunk.Initialize(allocator, key_types);
-		boundary_values.Initialize(allocator, key_types);
 		local_max_values.Initialize(allocator, key_types);
-		compare_chunk.Initialize(allocator, key_types);
 		candidates.Initialize(allocator, key_types, vector<bool>(key_types.size(), false));
 		sort_key_chunk.Initialize(allocator, {LogicalType::BLOB});
-		pass_flags = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
 	}
 
 	const PhysicalTopKeyFilter &op;
@@ -115,9 +77,9 @@ public:
 	vector<OrderModifiers> modifiers;
 	//! The keys of the current input chunk
 	DataChunk key_chunk;
-	//! The global bound as this thread last saw it: as a sort key and as constant vectors
-	string boundary_val;
-	DataChunk boundary_values;
+	//! The global bound as this thread last saw it, and the selection of the rows up to a bound. A bound that is older
+	//! than the global one sorts after it: it only lets more rows pass.
+	TopNBoundarySelector selector;
 	//! The smallest "limit" distinct sort keys that this thread has seen, and the largest of them as constant vectors
 	set<string> heap;
 	DataChunk local_max_values;
@@ -126,7 +88,6 @@ public:
 	Vector hashes;
 	DataChunk candidates;
 	DataChunk sort_key_chunk;
-	DataChunk compare_chunk;
 	//! The number of chunks since the local set last changed
 	idx_t idle_chunks = 0;
 	//! The number of rows that this thread has seen
@@ -138,108 +99,12 @@ public:
 	bool pass_through = false;
 
 	SelectionVector pass_sel;
-	SelectionVector ordered_sel;
 	SelectionVector candidate_sel;
 	SelectionVector new_sel;
-	SelectionVector true_sel;
-	SelectionVector false_sel;
-	SelectionVector new_remaining_sel;
-	unsafe_unique_array<bool> pass_flags;
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
-	}
-
-	static void Decode(const string &sort_key, DataChunk &target, const vector<OrderModifiers> &modifiers) {
-		target.Reset();
-		CreateSortKeyHelpers::DecodeSortKey(string_t(sort_key), target, 0, modifiers);
-		for (auto &col : target.data) {
-			col.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-	}
-
-	//! Selects the rows whose left value sorts strictly before the right value in the given order
-	static idx_t SelectBefore(const BoundOrderByNode &order, Vector &left, Vector &right, SelectionVector &sel,
-	                          idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
-		if (order.null_order == OrderByNullType::NULLS_LAST) {
-			if (order.type == OrderType::ASCENDING) {
-				return VectorOperations::DistinctLessThan(left, right, &sel, count, &true_sel, &false_sel);
-			}
-			return VectorOperations::DistinctGreaterThanNullsFirst(left, right, &sel, count, &true_sel, &false_sel);
-		}
-		if (order.type == OrderType::ASCENDING) {
-			return VectorOperations::DistinctLessThanNullsFirst(left, right, &sel, count, &true_sel, &false_sel);
-		}
-		return VectorOperations::DistinctGreaterThan(left, right, &sel, count, &true_sel, &false_sel);
-	}
-
-	//! Selects the rows (of sel, or of the whole chunk) whose keys sort before the bound - or, if inclusive, before or
-	//! equal to the bound - in the lexicographic order of the keys. Returns their number; their indexes are written
-	//! to result in ascending order if the input selection is ascending.
-	idx_t SelectPrefix(DataChunk &bound, bool inclusive, optional_ptr<const SelectionVector> sel, idx_t count,
-	                   SelectionVector &result) {
-		bound.SetChildCardinality(count);
-		idx_t final_count = 0;
-		idx_t appended_runs = 0;
-		SelectionVector remaining_sel(nullptr);
-		if (sel) {
-			remaining_sel.Initialize(*sel);
-		}
-		idx_t remaining_count = count;
-		const auto column_count = op.orders.size();
-		for (idx_t i = 0; i < column_count && remaining_count > 0; i++) {
-			auto &order = op.orders[i];
-			if (remaining_sel.data()) {
-				compare_chunk.data[i].Slice(key_chunk.data[i], remaining_sel, remaining_count);
-			} else {
-				compare_chunk.data[i].Reference(key_chunk.data[i]);
-			}
-			const auto is_last = i + 1 == column_count;
-			if (is_last && inclusive) {
-				// before or equal to the bound: the rows that the bound does not sort before
-				const auto after_count = SelectBefore(order, bound.data[i], compare_chunk.data[i], remaining_sel,
-				                                      remaining_count, false_sel, true_sel);
-				const auto pass_count = remaining_count - after_count;
-				if (pass_count > 0) {
-					memcpy(result.data() + final_count, true_sel.data(), pass_count * sizeof(sel_t));
-					final_count += pass_count;
-					appended_runs++;
-				}
-				break;
-			}
-			const auto true_count = SelectBefore(order, compare_chunk.data[i], bound.data[i], remaining_sel,
-			                                     remaining_count, true_sel, false_sel);
-			if (true_count > 0) {
-				memcpy(result.data() + final_count, true_sel.data(), true_count * sizeof(sel_t));
-				final_count += true_count;
-				appended_runs++;
-			}
-			const auto false_count = remaining_count - true_count;
-			if (false_count == 0 || is_last) {
-				break;
-			}
-			// the rows that are equal on this key continue with the next key
-			compare_chunk.data[i].Slice(key_chunk.data[i], false_sel, false_count);
-			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], bound.data[i], &false_sel,
-			                                                    false_count, &new_remaining_sel, nullptr);
-			remaining_sel.Initialize(new_remaining_sel);
-		}
-		if (appended_runs > 1) {
-			// restore the order of the rows
-			const auto row_count = key_chunk.size();
-			memset(pass_flags.get(), 0, row_count * sizeof(bool));
-			for (idx_t i = 0; i < final_count; i++) {
-				pass_flags[result.get_index(i)] = true;
-			}
-			idx_t result_idx = 0;
-			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				result.set_index(result_idx, row_idx);
-				result_idx += pass_flags[row_idx];
-			}
-			D_ASSERT(result_idx == final_count);
-		}
-		return final_count;
 	}
 
 	//! Offers the rows that passed (sel, or the whole chunk) to the local set and publishes a changed bound
@@ -256,7 +121,9 @@ public:
 		auto candidate_count = count;
 		auto candidates_sel = sel;
 		if (is_full) {
-			candidate_count = SelectPrefix(local_max_values, false, sel, count, candidate_sel);
+			// strictly before the largest key of the set: an equal key is in the set already
+			candidate_count = selector.Select(key_chunk, local_max_values, sel, count, TopNBoundaryTies::EXCLUDE,
+			                                  TopNBoundaryRowOrder::ANY, candidate_sel);
 			candidates_sel = &candidate_sel;
 		}
 		if (candidate_count == 0) {
@@ -309,8 +176,8 @@ public:
 		idle_chunks = 0;
 		if (heap.size() >= op.limit) {
 			auto &local_max = *heap.rbegin();
-			Decode(local_max, local_max_values, modifiers);
-			gstate.UpdateValue(local_max);
+			selector.Decode(local_max, local_max_values);
+			gstate.boundary.UpdateValue(string_t(local_max));
 		}
 	}
 };
@@ -341,14 +208,15 @@ OperatorResultType PhysicalTopKeyFilter::Execute(ExecutionContext &context, Data
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	if (state.pass_through) {
+		// contract: passing a row is always allowed
 		chunk.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	state.rows_seen += count;
 	const auto warming_up = state.rows_seen <= TopKeyFilterState::WARMUP_ROWS_PER_KEY * limit;
-	const auto boundary_updated = gstate.TryGetBoundaryValue(state.boundary_val);
-	if (warming_up && state.boundary_val.empty()) {
-		// no bound to filter with and no key to offer yet: the rows pass as they are
+	const auto has_boundary = state.selector.Refresh(gstate.boundary);
+	if (warming_up && !has_boundary) {
+		// no bound to filter with and no key to offer yet: the rows pass as they are (contract: extra rows may pass)
 		chunk.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
@@ -357,11 +225,12 @@ OperatorResultType PhysicalTopKeyFilter::Execute(ExecutionContext &context, Data
 
 	// the rows up to the global bound, as far as this thread knows it
 	idx_t pass_count = count;
-	if (!state.boundary_val.empty()) {
-		if (boundary_updated) {
-			TopKeyFilterState::Decode(state.boundary_val, state.boundary_values, state.modifiers);
-		}
-		pass_count = state.SelectPrefix(state.boundary_values, true, nullptr, count, state.pass_sel);
+	if (has_boundary) {
+		// the rows of the bound key itself pass (it is the key of a group that can be returned), in the order of the
+		// input (the aggregate may depend on it)
+		pass_count =
+		    state.selector.Select(state.key_chunk, state.selector.BoundaryValues(), nullptr, count,
+		                          TopNBoundaryTies::INCLUDE, TopNBoundaryRowOrder::INPUT_ORDER, state.pass_sel);
 		if (pass_count == 0) {
 			return OperatorResultType::NEED_MORE_INPUT;
 		}

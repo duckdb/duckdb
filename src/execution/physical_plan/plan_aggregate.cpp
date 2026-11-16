@@ -84,7 +84,8 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 			break;
 		}
 		case PhysicalOperatorType::FILTER:
-			// continue into child operators
+		case PhysicalOperatorType::TOP_KEY_FILTER:
+			// these operators only remove rows and forward every column: continue into child operators
 			child_ref = child_op.children[0];
 			break;
 		default:

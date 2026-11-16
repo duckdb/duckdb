@@ -1,0 +1,115 @@
+# name: test/optimizer/group_by_top_key_contract.test
+# description: The top-key filter is conservative: it may pass rows of groups that are not returned, it never removes a row of a group that is
+# group: [optimizer]
+
+# 20,000 rows with a distinct key each, in three orders of arrival. Only the rows of the "limit" smallest keys are
+# needed (one row per key).
+statement ok
+CREATE TABLE ascending AS SELECT i::INTEGER AS k, i AS v FROM range(20000) r(i);
+
+statement ok
+CREATE TABLE descending AS SELECT (19999 - i)::INTEGER AS k, i AS v FROM range(20000) r(i);
+
+statement ok
+CREATE TABLE shuffled AS SELECT ((i * 7919) % 20000)::INTEGER AS k, i AS v FROM range(20000) r(i);
+
+# 300 keys with 100 rows each, in runs and interleaved
+statement ok
+CREATE TABLE runs AS SELECT (i // 100)::INTEGER AS k, (i % 3)::INTEGER AS k2, i AS v FROM range(30000) r(i);
+
+statement ok
+CREATE TABLE interleaved AS SELECT (i % 300)::INTEGER AS k, (i % 7)::INTEGER AS k2, i AS v FROM range(30000) r(i);
+
+# never a subset: every group that is returned is complete, for every limit, order of arrival and number of threads.
+# Every query runs with the rule disabled and enabled; its result is recorded and compared below.
+statement ok
+CREATE TABLE results(arm VARCHAR, threads INTEGER, query VARCHAR, a HUGEINT, b HUGEINT, c HUGEINT, d HUGEINT);
+
+foreach disabled 'group_by_top_key' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+foreach threads 1 8
+
+statement ok
+SET threads = {threads};
+
+foreach tbl ascending descending shuffled
+
+foreach lim 1 10 1000 9999
+
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim}', count(*), sum(k), sum(c * v), 0 FROM (SELECT k, count(*) c, sum(v) v FROM {tbl} GROUP BY k ORDER BY k LIMIT {lim})
+
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim} desc', count(*), sum(k), sum(c * v), 0 FROM (SELECT k, count(*) c, sum(v) v FROM {tbl} GROUP BY k ORDER BY k DESC LIMIT {lim} OFFSET 1)
+
+endloop
+
+endloop
+
+foreach tbl runs interleaved
+
+foreach lim 1 10 299 1000
+
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim}', count(*), sum(k), sum(c), sum(v) FROM (SELECT k, count(*) c, sum(v) v FROM {tbl} GROUP BY k ORDER BY k LIMIT {lim})
+
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim} two keys', count(*), sum(k * 3 + k2), sum(c), sum(v) FROM (SELECT k, k2, count(*) c, sum(v) v FROM {tbl} GROUP BY k, k2 ORDER BY k DESC, k2 LIMIT {lim})
+
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim} prefix', count(*), sum(k * 3 + k2), sum(c), sum(v) FROM (SELECT k, k2, count(*) c, sum(v) v FROM {tbl} GROUP BY k, k2 ORDER BY k, c DESC, k2 LIMIT {lim})
+
+# a LIMIT without ORDER BY returns any groups: every group that is returned has all of its 100 rows
+statement ok
+INSERT INTO results SELECT {disabled}, {threads}, '{tbl} {lim} limit only', count(*), count(DISTINCT k), sum(c), min(c) FROM (SELECT k, count(*) c, sum(v) v FROM {tbl} GROUP BY k LIMIT {lim})
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';
+
+statement ok
+SET threads = 1;
+
+# 2 thread counts * (3 tables * 4 limits * 2 queries + 2 tables * 4 limits * 4 queries) per arm
+query II
+SELECT arm, count(*) FROM results GROUP BY arm ORDER BY arm
+----
+(empty)	112
+group_by_top_key	112
+
+# every query has one result: the same with the rule disabled and enabled and with every number of threads
+query I
+SELECT count(*) FROM (SELECT query FROM results GROUP BY query HAVING count(DISTINCT (a, b, c, d)) <> 1 OR count(*) <> 4)
+----
+0
+
+# the recorded results are not trivially equal
+query IIIII
+SELECT query, a, b, c, d FROM results WHERE arm = '' AND threads = 8 AND query IN ('shuffled 10', 'descending 1000 desc', 'interleaved 299 two keys', 'runs 10 prefix', 'interleaved 10 limit only') ORDER BY query
+----
+descending 1000 desc	1000	19498500	500500	0
+interleaved 10 limit only	10	10	1000	100
+interleaved 299 two keys	299	250384	4271	64606147
+runs 10 prefix	10	45	334	56733
+shuffled 10	10	45	95555	0
+
+# hand-checked: the smallest key has all of its rows
+query III
+SELECT k, count(*), sum(v) FROM runs GROUP BY k ORDER BY k LIMIT 1
+----
+0	100	4950
+
+query III
+SELECT k, count(*), sum(v) FROM interleaved GROUP BY k ORDER BY k LIMIT 1
+----
+0	100	1485000

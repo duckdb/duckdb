@@ -24,10 +24,12 @@ class Optimizer;
 //!         <input>                                           TOP_KEY_FILTER(n, keys: k1 [, k2 ..])
 //!                                                             <input>      (+ a dynamic filter on k1 in the scans)
 //!
-//! The filter keeps the n smallest distinct key tuples seen so far and only passes rows that are not larger than the
-//! largest of them. That bound is never smaller than the n-th smallest distinct key tuple of the whole input, so every
-//! group that the Top-N can return still receives all of its rows and its aggregates are exact. A prefix of the
-//! ORDER BY suffices because the order is lexicographic.
+//! The filter keeps the n smallest distinct key tuples seen so far and removes rows that sort after the largest of
+//! them. That bound is never smaller than the n-th smallest distinct key tuple of the whole input, so every group that
+//! the Top-N can return still receives all of its rows and its aggregates are exact. The filter is conservative: it
+//! may pass rows of other groups (see LogicalTopKeyFilter), so the aggregate can still produce more than n groups,
+//! some of them incomplete, and the Top-N stays in the plan to pick the result. A prefix of the ORDER BY suffices
+//! because the order is lexicographic.
 //!
 //! The filter computes a key for every input row, the Top-N for one row of a group. A key therefore has to be a group
 //! key (through projections that preserve the order), or an expression over group keys that has the same value for all

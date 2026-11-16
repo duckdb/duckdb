@@ -557,3 +557,37 @@ query II
 EXPLAIN SELECT k1::TINYINT k, count(*) c FROM t WHERE k1 < 100 GROUP BY k1 ORDER BY k LIMIT 3
 ----
 logical_opt	<REGEX>:.*Top Key Filter.*
+
+# ---------------------------------------------------------------------------------------------------------------
+# The filter is conservative: its output is a superset of the rows of the groups that are returned
+# ---------------------------------------------------------------------------------------------------------------
+
+# 20,000 distinct keys that arrive in descending order: every row is smaller than every bound so far, so every row
+# passes and the aggregate builds every group, although one group is returned. The result is that of the Top-N.
+statement ok
+CREATE TABLE descending AS SELECT (19999 - i)::INTEGER AS k, i AS v FROM range(20000) r(i);
+
+statement ok
+SET threads = 1;
+
+query II
+EXPLAIN ANALYZE SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k LIMIT 1
+----
+analyzed_plan	<REGEX>:.*Top N[^╭]* 1 row .*Hash Group By[^╭]* 20,000 rows.*Top Key Filter[^╭]*Limit: 1 [^╭]* 20,000 rows.*
+
+query III
+SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k LIMIT 1
+----
+0	1	19999
+
+# the other way around the filter removes rows: the largest keys arrive first, and the rows after the first ones are
+# larger than the bound
+query II
+EXPLAIN ANALYZE SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k DESC LIMIT 1
+----
+analyzed_plan	<!REGEX>:.*Top Key Filter[^╭]*Limit: 1 [^╭]* 20,000 rows.*
+
+query III
+SELECT k, count(*), sum(v) FROM descending GROUP BY k ORDER BY k DESC LIMIT 1
+----
+19999	1	0
