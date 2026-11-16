@@ -652,6 +652,29 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			throw BinderException("DIALECT 'opencsv' is not supported when STRICT_MODE is manually set to true: "
 			                      "OpenCSVSerde reading is not strict");
 		}
+		// OpenCSVSerde reads with a '\' escape when none is given
+		state_machine_options.escape.Set('\\', false);
+		const auto &delimiter = state_machine_options.delimiter.GetValue();
+		const auto quote = state_machine_options.quote.GetValue();
+		const auto escape = state_machine_options.escape.GetValue();
+		if (delimiter.empty() || quote == '\0' || escape == '\0') {
+			throw BinderException(
+			    "DIALECT 'opencsv' requires a delimiter, a quote character and an escape character, as opencsv does");
+		}
+		if (quote == escape || delimiter.find(quote) != string::npos || delimiter.find(escape) != string::npos) {
+			throw BinderException("DIALECT 'opencsv' requires the delimiter, quote and escape characters to differ, "
+			                      "as opencsv requires");
+		}
+		if (state_machine_options.comment.GetValue() != '\0') {
+			throw BinderException("DIALECT 'opencsv' does not support a comment character: opencsv has no comments");
+		}
+		// OpenCSVSerde reads an empty field as an empty string and pads missing fields with NULL
+		if (null_str.size() == 1 && null_str[0].empty()) {
+			null_str.clear();
+		}
+		if (user_defined_parameters.count(Identifier("null_padding")) == 0) {
+			null_padding = true;
+		}
 		// the internal parsing options the dialect is made of, which only non-strict parsing accepts
 		state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV, false);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);

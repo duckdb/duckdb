@@ -12,13 +12,13 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INT
 ----
 2
 
-# dialect 'opencsv': the line break ends the record and the inert escape leaves an empty field
+# the inert escape leaves an empty field, which the dialect reads as an empty string, as OpenCSVSerde does
 query IT
-SELECT * FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+SELECT id, concat('<', val, '>') FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
 ----
-1	NULL
-2	b
-3	c
+1	<>
+2	<b>
+3	<c>
 
 # the escape rules: inert at the start of a field, only the quote and escape characters within one
 statement ok
@@ -103,15 +103,26 @@ SELECT id FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER',
 1
 2
 
-# a closed quoted value on one line reads as always, also with the quote as the escape
+# a closed quoted value on one line reads as always; the escape defaults to '\' under the dialect
 statement ok
 COPY (SELECT * FROM (VALUES ('3,"q uoted",9'), ('4,"a""b",10')) t(line)) TO '{TEST_DIR}/dialect_closed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
-SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='"', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
 ----
 3	q uoted	9
 4	a"b	10
+
+# the delimiter, quote and escape characters must differ, and opencsv has no comments
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, quote='"', escape='"', dialect='opencsv', header=false);
+----
+DIALECT 'opencsv' requires the delimiter, quote and escape characters to differ
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/dialect_closed.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, comment='#', dialect='opencsv', header=false);
+----
+DIALECT 'opencsv' does not support a comment character
 
 # '\r\n' line breaks end the record inside quotes as well
 statement ok
@@ -143,11 +154,11 @@ statement ok
 COPY dialect_rows FROM '{TEST_DIR}/dialect_rows.csv' (DELIM ',', QUOTE '"', ESCAPE '\', DIALECT 'opencsv', HEADER false);
 
 query IT
-SELECT * FROM dialect_rows ORDER BY id;
+SELECT id, concat('<', val, '>') FROM dialect_rows ORDER BY id;
 ----
-1	NULL
-2	b
-3	c
+1	<>
+2	<b>
+3	<c>
 
 # dialect is a read option: the CSV writer does not accept it
 statement error
@@ -177,3 +188,31 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_field_doubled.csv', columns={'id': 'I
 9	a"b	15
 10	a"b"c	16
 11	a"	17
+
+# missing trailing fields are NULL without setting null_padding, as the dialect implies it
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a'), ('2,b,8')) t(line)) TO '{TEST_DIR}/dialect_padding.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+1	a	NULL
+2	b	8
+
+# a NUL byte is data
+statement ok
+COPY (SELECT '1,a' || chr(0) || 'b,7' AS line) TO '{TEST_DIR}/dialect_nul.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query III
+SELECT id, length(val), n FROM read_csv('{TEST_DIR}/dialect_nul.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', header=false, auto_detect=false);
+----
+1	3	7
+
+# a fully empty line is skipped, where OpenCSVSerde reads a row of one empty field: a known divergence
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a,7'), (''), ('2,b,8')) t(line)) TO '{TEST_DIR}/dialect_empty_line.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', header=false, auto_detect=false);
+----
+2
