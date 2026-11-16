@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -1566,7 +1567,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 
 Value SchemaSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	return client_data.catalog_search_path->GetDefault().GetSchema();
+	return Value(client_data.catalog_search_path->GetDefault().GetSchemaName());
 }
 
 //===----------------------------------------------------------------------===//
