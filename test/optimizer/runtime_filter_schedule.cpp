@@ -83,7 +83,7 @@ TEST_CASE("Sibling coordination uses build input cardinality", "[runtime_filter_
 TEST_CASE("Small runtime filter builds exclude blocking and larger inputs", "[runtime_filter_schedule]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	Executor executor(*con.context);
+	Executor executor(*con.context, false);
 	PipelineBuildState state;
 	PhysicalPlan plan(Allocator::Get(*con.context));
 	auto &probe = plan.Make<PhysicalDummyScan>(vector<LogicalType> {}, 100000);
