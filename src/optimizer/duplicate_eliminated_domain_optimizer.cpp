@@ -1240,41 +1240,7 @@ static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 		}
 		bindings.push_back(condition.GetRHS().Cast<BoundColumnRefExpression>().Binding());
 	}
-	reference<LogicalOperator> current = *join.children[1];
-	while (current.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		auto &node = current.get();
-		if (node.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto outputs = node.GetColumnBindings();
-			for (auto &binding : bindings) {
-				auto entry = std::find(outputs.begin(), outputs.end(), binding);
-				if (entry == outputs.end()) {
-					return false;
-				}
-				auto &expression = *node.expressions[NumericCast<idx_t>(entry - outputs.begin())];
-				if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-				    expression.Cast<BoundColumnRefExpression>().Depth() != 0) {
-					return false;
-				}
-				binding = expression.Cast<BoundColumnRefExpression>().Binding();
-			}
-		} else if (node.type != LogicalOperatorType::LOGICAL_FILTER) {
-			return false;
-		}
-		current = *node.children[0];
-	}
-	auto &aggregate = current.get().Cast<LogicalAggregate>();
-	// One full grouping set (or no groups: a single row).
-	if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1 ||
-	    (!aggregate.groups.empty() && !HasSimpleGrouping(aggregate))) {
-		return false;
-	}
-	for (idx_t group = 0; group < aggregate.groups.size(); group++) {
-		ColumnBinding binding(aggregate.group_index, ProjectionIndex(group));
-		if (std::find(bindings.begin(), bindings.end(), binding) == bindings.end()) {
-			return false;
-		}
-	}
-	return true;
+	return LogicalAggregate::KeysAreUnique(*join.children[1], std::move(bindings));
 }
 
 //! Matches, at an INNER / LEFT / SINGLE join,
