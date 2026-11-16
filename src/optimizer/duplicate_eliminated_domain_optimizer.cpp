@@ -1133,10 +1133,11 @@ struct OuterDomainJoin {
 };
 
 //! The (CTE, column) an output column reads from a materialized CTE through plain projections. With `distinct` the
-//! column must pass exactly one duplicate elimination of `group_count` groups (inline or as a visible CTE).
+//! column must pass exactly one duplicate elimination of `group_count` groups (inline or as a visible CTE); `group`
+//! is the group of that duplicate elimination the column reads.
 static bool TraceSourceColumn(LogicalOperator &op, idx_t column,
                               const vector<reference<LogicalMaterializedCTE>> &cte_scopes, bool distinct,
-                              idx_t group_count, TableIndex &source, idx_t &source_column) {
+                              idx_t group_count, TableIndex &source, idx_t &source_column, idx_t &group) {
 	reference<LogicalOperator> current = op;
 	bool seen_distinct = false;
 	while (true) {
@@ -1164,6 +1165,7 @@ static bool TraceSourceColumn(LogicalOperator &op, idx_t column,
 			if (!index.IsValid()) {
 				return false;
 			}
+			group = column;
 			column = index.GetIndex();
 			seen_distinct = true;
 			current = *node.children[0];
@@ -1261,7 +1263,9 @@ static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 		current = *node.children[0];
 	}
 	auto &aggregate = current.get().Cast<LogicalAggregate>();
-	if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1) {
+	// One full grouping set (or no groups: a single row).
+	if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1 ||
+	    (!aggregate.groups.empty() && !HasSimpleGrouping(aggregate))) {
 		return false;
 	}
 	for (idx_t group = 0; group < aggregate.groups.size(); group++) {
@@ -1329,8 +1333,11 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 		return false;
 	}
 
-	// The inner LEFT join compares every domain column with a group of the aggregate.
+	// The inner LEFT join compares every domain column with a group of the aggregate. The domain columns are the
+	// groups of the duplicate elimination, each of them exactly once: a group that is not output, or one that is output
+	// twice in place of another, leaves several domain rows per key and would multiply the rows of the LHS.
 	vector<idx_t> sources;
+	vector<bool> domain_groups(key_count, false);
 	for (idx_t index = 0; index < key_count; index++) {
 		idx_t compared = 0;
 		for (auto &condition : domain_join.conditions) {
@@ -1348,9 +1355,12 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 		}
 		TableIndex cte;
 		idx_t column;
-		if (compared != 1 || !TraceSourceColumn(domain, index, cte_scopes, true, key_count, cte, column)) {
+		idx_t group = 0;
+		if (compared != 1 || !TraceSourceColumn(domain, index, cte_scopes, true, key_count, cte, column, group) ||
+		    group >= key_count || domain_groups[group]) {
 			return false;
 		}
+		domain_groups[group] = true;
 		if (index == 0) {
 			result.source = cte;
 		} else if (result.source != cte) {
@@ -1373,8 +1383,9 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 		auto left_index = ReferenceIndex(condition.GetLHS(), *join.children[0]);
 		TableIndex cte;
 		idx_t column;
+		idx_t group = 0;
 		if (!left_index.IsValid() ||
-		    !TraceSourceColumn(*join.children[0], left_index.GetIndex(), cte_scopes, false, 0, cte, column)) {
+		    !TraceSourceColumn(*join.children[0], left_index.GetIndex(), cte_scopes, false, 0, cte, column, group)) {
 			return false;
 		}
 		auto binding = condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
