@@ -132,3 +132,19 @@ query III
 SELECT count(*) FILTER (v = -id), count(*) FILTER (s = 'staged with a small memory limit ' || id), count(*) FROM tgt WHERE id < 300000
 ----
 300000	300000	300000
+
+# a row matched more than once takes all of its columns from one of the matches
+statement ok
+CREATE TABLE multi_tgt AS SELECT i AS id, 0 AS a, NULL::INTEGER AS b FROM range(200000) t(i);
+
+statement ok
+CREATE TABLE multi_src AS SELECT i AS id, CASE WHEN j = 0 THEN 1 END AS a, CASE WHEN j = 1 THEN 1 END AS b
+FROM range(200000) t(i), range(2) u(j) ORDER BY hash(i, j);
+
+statement ok
+UPDATE multi_tgt SET a = multi_src.a, b = multi_src.b FROM multi_src WHERE multi_tgt.id = multi_src.id
+
+query II
+SELECT count(*), count(*) FILTER ((a IS NULL) = (b IS NULL)) FROM multi_tgt
+----
+200000	0

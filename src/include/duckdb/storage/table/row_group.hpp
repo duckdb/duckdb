@@ -340,6 +340,8 @@ private:
 
 private:
 	mutable mutex row_group_lock;
+	//! Held while an update writes its columns, so concurrent updates of a row never mix their columns
+	mutex update_lock;
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)
 	mutable unique_ptr<atomic<bool>[]> is_loaded;

@@ -350,6 +350,19 @@ static bool RowIdsAreSorted(Vector &row_ids, idx_t count) {
 	return true;
 }
 
+//! Keeps one entry per row id of a chunk sorted by row id. Updating a row id more than once in a single chunk would
+//! let every column pick its value from a different entry; across chunks, every entry still overwrites the whole row.
+static idx_t SelectLastPerRowId(Vector &row_ids, idx_t count, SelectionVector &sel) {
+	auto ids = row_ids.Values<row_t>();
+	idx_t kept = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (i + 1 == count || ids[i + 1].GetValueUnsafe() != ids[i].GetValueUnsafe()) {
+			sel.set_index(kept++, i);
+		}
+	}
+	return kept;
+}
+
 void PhysicalUpdate::StageUpdates(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                                   DataChunk &updates, Vector &row_ids, InterruptState &interrupt_state) const {
 	auto &g_state = gstate.Cast<UpdateGlobalState>();
@@ -408,13 +421,19 @@ void PhysicalUpdate::FlushStagedUpdates(ExecutionContext &context, GlobalSinkSta
 		sorted_updates.InitializeEmpty(update_types);
 	}
 	auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
+	SelectionVector unique_sel(STANDARD_VECTOR_SIZE);
 	while (true) {
+		context.client.InterruptCheck();
 		sorted_chunk.Reset();
 		auto result = sort.GetData(context, sorted_chunk, source_input);
 		if (result == SourceResultType::BLOCKED) {
 			throw InternalException("Sorting the staged updates of an UPDATE unexpectedly blocked");
 		}
 		if (sorted_chunk.size() > 0) {
+			auto unique_count = SelectLastPerRowId(sorted_chunk.data.back(), sorted_chunk.size(), unique_sel);
+			if (unique_count < sorted_chunk.size()) {
+				sorted_chunk.Slice(unique_sel, unique_count);
+			}
 			for (idx_t c = 0; c < sorted_updates.ColumnCount(); c++) {
 				sorted_updates.data[c].Reference(sorted_chunk.data[c]);
 			}
