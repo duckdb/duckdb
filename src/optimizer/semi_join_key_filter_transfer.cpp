@@ -153,7 +153,7 @@ static void Rebind(unique_ptr<Expression> &expr, const ColumnBinding &from, cons
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &column_ref = expr->Cast<BoundColumnRefExpression>();
 		if (column_ref.Binding() == from) {
-			column_ref.BindingMutable() = to;
+			expr = column_ref.WithBinding(to);
 		}
 	}
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) { Rebind(child, from, to); });
