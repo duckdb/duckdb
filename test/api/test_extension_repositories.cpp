@@ -268,7 +268,14 @@ TEST_CASE("Test that a repository resolved from its host does not need the opt-i
 	// the conflict is decided before the host is contacted: IF NOT EXISTS returns the stored definition, a plain CREATE
 	// reports the duplicate; OR REPLACE does resolve, fails here (no httpfs), and keeps the old definition
 	REQUIRE_NO_FAIL(con.Query("CREATE EXTENSION REPOSITORY IF NOT EXISTS listed.example"));
-	REQUIRE_FAIL(con.Query("CREATE EXTENSION REPOSITORY listed.example"));
+	// a plain CREATE of the host form asks for what is stored: it passes without reaching for the host
+	REQUIRE_NO_FAIL(con.Query("CREATE EXTENSION REPOSITORY listed.example"));
+	// with a prefix it asks for something else than the stored, host-resolved repository: that is reported as the
+	// difference it is, before the opt-in that adding by prefix would need
+	auto differing =
+	    con.Query(StringUtil::Format("CREATE EXTENSION REPOSITORY listed.example WITH PREFIX '%s'", prefix));
+	REQUIRE(differing->HasError());
+	REQUIRE(StringUtil::Contains(differing->GetError(), "resolved from its host"));
 	REQUIRE_FAIL(con.Query("CREATE OR REPLACE EXTENSION REPOSITORY listed.example"));
 	REQUIRE_FAIL(con.Query("CREATE EXTENSION REPOSITORY unlisted.example"));
 	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "listed.example", TEST_PUBLIC_KEY));
