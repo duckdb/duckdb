@@ -148,7 +148,7 @@ query II
 SELECT * FROM empty_dim f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k = f.k AND f.k > 2) ORDER BY ALL
 ----
 
-# 16: a predicate that can throw is not transferred: fact has k = -1, dim does not
+# 16: a cast of the key is compared, not the key: not a filter on the key (left alone before the CanThrow check)
 query II
 SELECT * FROM fact f WHERE f.k IN (SELECT k FROM dim WHERE k::UTINYINT < 4) ORDER BY ALL
 ----
@@ -157,6 +157,32 @@ SELECT * FROM fact f WHERE f.k IN (SELECT k FROM dim WHERE k::UTINYINT < 4) ORDE
 2	20
 3	30
 3	31
+
+# 16b: a comparison of the bare key with a constant, over a materialized CTE reference: transferred
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k < 4) ORDER BY ALL
+----
+1	10
+1	11
+2	20
+3	30
+3	31
+
+# 16c: a cast of the key is not a filter on the key, so not transferred: it exits before CanThrow, not through it
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k::UTINYINT < 4) ORDER BY ALL
+----
+1	10
+1	11
+2	20
+3	30
+3	31
+
+# 16d: a filter on the key whose constant side can throw is not transferred (CanThrow bailout); the empty right side is
+# what keeps the right-hand evaluation itself from raising, in the CTE every row of fact would reach it
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM empty_dim WHERE k < 'abc'::INTEGER) ORDER BY ALL
+----
 
 # 17: the key comes from the null-extended side of a LEFT join: its filter does not hold for the NULLs the join adds, and they match the NULL keys of fact
 query II
@@ -455,6 +481,24 @@ EXPLAIN SELECT * FROM fact f WHERE f.k IN (SELECT k FROM dim WHERE k > 2);
 ----
 logical_opt	<!REGEX>:(?s).*Filters: k > 2 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
 
+# 16b a comparison of the bare key with a constant: transferred
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k < 4);
+----
+logical_opt	<REGEX>:(?s).*Filters: k < 4 *│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
+# 16c a cast of the key is not a filter on the key: not transferred
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k::UTINYINT < 4);
+----
+logical_opt	<!REGEX>:(?s).*Filters:[^│\n]*│[^\n]*\n[^\n]*│ Table: \S*fact .*
+
+# 16d a filter on the key whose constant side can throw (CanThrow bailout): it stays on the right side, in the plan once
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM empty_dim WHERE k < 'abc'::INTEGER);
+----
+logical_opt	<!REGEX>:(?s).*'abc'.*'abc'.*
+
 # 10 null-safe: a NULL test is not a comparison with constants, the outer scan stays unfiltered
 query II
 EXPLAIN SELECT * FROM fact f WHERE EXISTS (SELECT 1 FROM dim d WHERE d.k IS NOT DISTINCT FROM f.k AND f.k IS NULL);
@@ -604,3 +648,25 @@ WITH c AS MATERIALIZED (SELECT * FROM t) SELECT k FROM c WHERE signbit(k * '0.0'
 -1.0
 1.0
 20.0
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k < 4) ORDER BY ALL
+----
+1	10
+1	11
+2	20
+3	30
+3	31
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM dim WHERE k::UTINYINT < 4) ORDER BY ALL
+----
+1	10
+1	11
+2	20
+3	30
+3	31
+
+query II
+WITH c AS MATERIALIZED (SELECT * FROM fact) SELECT * FROM c WHERE k IN (SELECT k FROM empty_dim WHERE k < 'abc'::INTEGER) ORDER BY ALL
+----
