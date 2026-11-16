@@ -2450,7 +2450,7 @@ public:
 	/// Place it in the vector owning this heap with `Vector::SetString`.
 	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		ValidateUTF8(data);
@@ -2465,7 +2465,7 @@ public:
 
 	/// `AddString` for arbitrary bytes rather than text.
 	auto AddBlob(std::string_view data) -> blob_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		const auto size = static_cast<uint32_t>(data.size());

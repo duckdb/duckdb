@@ -502,6 +502,22 @@ TEST_CASE("Stable C++API: DECIMAL Values of a runtime width and scale", "[cpp_ap
 	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {1, 0}, 39, 0), Exception);
 	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {1, 0}, 4, 5), Exception);
 	REQUIRE_THROWS_AS(Value::CreateDecimal(factory, int128_t {100000, 0}, 4, 0), Exception);
+	// A value with more digits than the width is refused, in every storage tier.
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {10000, 0}, 4, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {40000, 0}, 4, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {3000000000ULL, 0}, 9, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, int128_t {0, INT64_MIN}, 38, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// 10^38 does not fit DECIMAL(38, 0), 10^38 - 1 does.
+	auto ten_pow_38 = int128_t {687399551400673280ULL, 5421010862427522170LL};
+	REQUIRE_THROWS_MATCHES(Value::CreateDecimal(factory, ten_pow_38, 38, 0), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	auto widest = Value::CreateDecimal(factory, int128_t {687399551400673279ULL, 5421010862427522170LL}, 38, 0);
+	REQUIRE(widest.GetDecimal().value.upper == 5421010862427522170LL);
+	REQUIRE(Value::CreateDecimal(factory, int128_t {9999, 0}, 4, 0).GetDecimal().value.lower == 9999);
 	// Reading a DECIMAL off another type, or off NULL, is refused.
 	REQUIRE_THROWS_AS(Value::Create(factory, int32_t(42)).GetDecimal(), Exception);
 	auto decimal_type = factory.ParseType("DECIMAL(9, 3)");

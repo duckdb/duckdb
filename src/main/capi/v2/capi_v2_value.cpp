@@ -104,8 +104,8 @@ LogicalType RequireValueType(duckdb_v2_logical_type_handle type) {
 
 // The DECIMAL storage tier follows from the width, and the engine's hugeint
 // constructor covers only the widest one, so the narrower tiers go through the
-// int64 form. Width and scale are gated here: an out-of-range pair would build
-// a broken type rather than a bad value.
+// int64 form. Width, scale and the value's digit count are gated here: either
+// would otherwise build a broken value.
 Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t scale) {
 	if (width < 1 || width > Decimal::MAX_WIDTH_DECIMAL) {
 		throw InvalidInputException(": DECIMAL width must be between 1 and " +
@@ -115,24 +115,13 @@ Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t s
 		throw InvalidInputException(": DECIMAL scale cannot exceed the width");
 	}
 	auto value = Convert(in_value);
-	auto type = LogicalType::DECIMAL(width, scale);
-	if (type.InternalType() == PhysicalType::INT128) {
+	if (value >= Hugeint::POWERS_OF_TEN[width] || value <= -Hugeint::POWERS_OF_TEN[width]) {
+		throw InvalidInputException("value does not fit the declared DECIMAL width");
+	}
+	if (width > Decimal::MAX_WIDTH_INT64) {
 		return Value::DECIMAL(value, width, scale);
 	}
-	int64_t narrow = 0;
-	if (!Hugeint::TryCast<int64_t>(value, narrow)) {
-		throw InvalidInputException("value does not fit the storage tier of the declared width");
-	}
-	int64_t limit = NumericLimits<int64_t>::Maximum();
-	if (type.InternalType() == PhysicalType::INT16) {
-		limit = NumericLimits<int16_t>::Maximum();
-	} else if (type.InternalType() == PhysicalType::INT32) {
-		limit = NumericLimits<int32_t>::Maximum();
-	}
-	if (narrow > limit || narrow < -limit) {
-		throw InvalidInputException("value does not fit the storage tier of the declared width");
-	}
-	return Value::DECIMAL(narrow, width, scale);
+	return Value::DECIMAL(Hugeint::Cast<int64_t>(value), width, scale);
 }
 
 // BIT carries a mandatory padding-header byte, BIGNUM a header plus at least

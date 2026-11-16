@@ -774,7 +774,7 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 39, 0, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &one, 4, 5, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	// A value too wide for the tier the width selects is refused rather than
+	// A value with more digits than the width is refused rather than
 	// silently truncated.
 	duckdb_v2_hugeint_t huge {0, 1};
 	REQUIRE(duckdb_v2_value_create_decimal(fx.factory, &huge, 4, 2, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
