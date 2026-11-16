@@ -245,7 +245,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		return PropagateComparison(func, expr_ptr);
 	}
 	vector<BaseStatistics> stats;
-	stats.reserve(func.GetChildrenMutable().size());
+	stats.reserve(func.GetChildren().size());
 	bool has_invalidated_parameter = false;
 	bool has_all_null_argument = false;
 	for (auto &child : func.GetChildrenMutable()) {
