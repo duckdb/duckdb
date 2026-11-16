@@ -402,9 +402,13 @@ static bool JoinIsLikelyExternal(ClientContext &context, const PhysicalHashJoin 
 	return build_size > memory_budget / LIKELY_IN_MEMORY_BUILD_MEMORY_FRACTION;
 }
 
-//! Whether to accumulate a bloom filter during Sink. Only an external join needs that: its finalize only ever
+static bool IsEqualityComparison(ExpressionType cmp) {
+	return cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+}
+
+//! Whether to accumulate bloom filters during Sink. Only an external join needs that: its finalize only ever
 //! materializes some partitions, so a filter built there would be incomplete, while every row passes through
-//! Sink. An in-memory join builds its filter during finalize instead, where the actual build count and the
+//! Sink. An in-memory join builds its filters during finalize instead, where the actual build count and the
 //! competing filter choices are known. The estimate-based checks mirror CanUseBloomFilter, which decides
 //! publication once the actual build count is known.
 static bool ShouldBuildBloomFilterInSink(ClientContext &context, const PhysicalHashJoin &op) {
@@ -413,17 +417,19 @@ static bool ShouldBuildBloomFilterInSink(ClientContext &context, const PhysicalH
 	}
 	idx_t equality_count = 0;
 	for (auto &cond : op.conditions) {
-		const auto cmp = cond.GetComparisonType();
-		if (cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		if (IsEqualityComparison(cond.GetComparisonType())) {
 			equality_count++;
 		}
 	}
-	if (equality_count != 1) {
+	if (equality_count == 0) {
 		return false;
 	}
 	const auto build_estimate = static_cast<double>(op.children[1].get().estimated_cardinality);
 	const auto probe_estimate = static_cast<double>(op.children[0].get().estimated_cardinality);
 	if (build_estimate > BUILD_TO_PROBE_RATIO_THRESHOLD * probe_estimate) {
+		return false;
+	}
+	if (equality_count > 1 && build_estimate > MULTI_KEY_RATIO_THRESHOLD * probe_estimate) {
 		return false;
 	}
 	if (!op.filter_pushdown->build_side_has_filter && build_estimate > NON_FILTERING_RATIO_THRESHOLD * probe_estimate &&
@@ -487,10 +493,27 @@ public:
 			}
 			return;
 		}
+		const auto build_estimate = MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1);
+		if (!hash_table->HasSingleEqualityKey()) {
+			// the hash table hashes all keys together, so each pushed key column gets a filter of its own
+			vector<idx_t> key_idxs;
+			for (auto &info : op.filter_pushdown->probe_info) {
+				for (auto &column : info.columns) {
+					const auto key_idx = op.filter_pushdown->join_condition[column.join_filter_idx];
+					if (IsEqualityComparison(op.conditions[key_idx].GetComparisonType()) &&
+					    column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
+					    std::find(key_idxs.begin(), key_idxs.end(), key_idx) == key_idxs.end()) {
+						key_idxs.push_back(key_idx);
+					}
+				}
+			}
+			hash_table->InitializeKeyBloomFilters(key_idxs, build_estimate, GetJoinRuntimeFilterMemoryBudget(context));
+			return;
+		}
 		if (!recycled_filter) {
 			recycled_filter = make_shared_ptr<BloomFilter>();
 		}
-		recycled_filter->Initialize(context, MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1));
+		recycled_filter->Initialize(context, build_estimate);
 		hash_table->SetBloomFilter(std::move(recycled_filter));
 	}
 
@@ -615,6 +638,7 @@ public:
 		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
 		// every thread inserts into this one filter - InsertOne is an atomic fetch_or, so it needs no lock
 		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
+		hash_table->SetKeyBloomFilters(gstate.hash_table->GetKeyBloomFilters());
 		// sink_collection exists only after the layout is published on the first build chunk, so
 		// InitializeAppendState runs lazily inside Sink.
 		keep_hash_table = gstate.keep_local_hash_tables;
@@ -664,6 +688,7 @@ public:
 		// the global state resets before any local one, so the filter this picks up is always a fresh one
 		D_ASSERT(!gstate.hash_table->GetBloomFilter() || !gstate.hash_table->GetBloomFilter()->IsSealed());
 		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
+		hash_table->SetKeyBloomFilters(gstate.hash_table->GetKeyBloomFilters());
 		keep_hash_table = gstate.keep_local_hash_tables;
 		gstate.active_local_states++;
 		if (gstate.global_filter_state) {

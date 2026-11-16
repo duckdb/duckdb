@@ -620,7 +620,7 @@ private:
 	//! Whether finalize should build the bloom filter from the materialized build side
 	bool should_build_bloom_filter = false;
 
-	//! Per-key-column bloom filters of a join with several equality keys
+	//! Per-key-column bloom filters of a join with several equality keys, filled and shared like bloom_filter
 	vector<shared_ptr<BloomFilter>> key_bloom_filters;
 	vector<bool> should_build_key_bloom_filters;
 	//! Per-column bitmap budget after sharing memory with the other runtime filters.
@@ -713,6 +713,15 @@ public:
 	//! Whether the join has one equality key, so the hash table hashes are that key's hashes
 	bool HasSingleEqualityKey() const {
 		return equality_predicate_columns.size() == 1;
+	}
+	//! Creates the per-key-column bloom filters that an external join with several equality keys fills during
+	//! Sink. They split the memory budget between them
+	void InitializeKeyBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget);
+	void SetKeyBloomFilters(vector<shared_ptr<BloomFilter>> filters) {
+		key_bloom_filters = std::move(filters);
+	}
+	const vector<shared_ptr<BloomFilter>> &GetKeyBloomFilters() const {
+		return key_bloom_filters;
 	}
 	//! Requests a finalize-built bloom filter for a key column (in-memory joins only)
 	void SetBuildBloomFilter(idx_t key_idx);
