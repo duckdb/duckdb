@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 73552f5..1fbf4a3 100644
+index 358d45c..964c125 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -9,6 +9,7 @@ project(${TARGET_NAME}_project)
@@ -9,7 +9,7 @@ index 73552f5..1fbf4a3 100644
 +set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
  
  # DUCKDB_VERSION is passed down as an env var to Vortex which
- # in turn builds against the respective version. It is mandatory 
+ # in turn builds against the respective version. It is mandatory
 @@ -46,7 +47,7 @@ if(EXISTS "/.dockerenv")
      find_program(YUM_EXEC yum)
      if(YUM_EXEC AND NOT INSTALL_SUCCESS)
