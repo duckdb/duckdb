@@ -295,6 +295,23 @@ select (select b.idb from b left join a on b.idb=a.ida where b.idb = 1);
 ----
 More than one row returned by a subquery
 
+# the correlated form reaches the SINGLE join, which is never removed: the error stays with the optimizer on and off
+statement error
+select (select b.idb from b left join a on b.idb = a.ida where b.idb = o.idb) from b o;
+----
+More than one row returned by a subquery
+
+statement ok
+SET disabled_optimizers = 'join_elimination';
+
+statement error
+select (select b.idb from b left join a on b.idb = a.ida where b.idb = o.idb) from b o;
+----
+More than one row returned by a subquery
+
+statement ok
+SET disabled_optimizers = '';
+
 # the optimizer can be switched off
 statement ok
 SET disabled_optimizers = 'join_elimination';
@@ -961,3 +978,32 @@ query II
 explain select b.idb, last(b.valueb) from b left join a on b.idb = a.ida group by b.idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# a join that is the direct child of a join (this raised an assertion in the nested-join analysis)
+statement ok
+create table n1(i integer);
+
+statement ok
+create table n2(i integer);
+
+statement ok
+create table n3(i integer);
+
+statement ok
+insert into n1 values (1);
+
+statement ok
+insert into n2 values (1), (1);
+
+statement ok
+insert into n3 values (1);
+
+query I
+select max(n1.i) from n1 left join n2 on n1.i = n2.i left join n3 on n2.i = n3.i;
+----
+1
+
+query II
+explain select max(n1.i) from n1 left join n2 on n1.i = n2.i left join n3 on n2.i = n3.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
