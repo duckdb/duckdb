@@ -30,6 +30,12 @@ SELECT count(*) FROM duckdb_logs(sink='memory') WHERE message = 'once'
 ----
 1
 
+# duckdb_log_sinks lists the main log sink and the added sinks
+query II
+SELECT name, main FROM duckdb_log_sinks()
+----
+memory	true
+
 # sinks are named by their type, an unknown name does not create a sink
 statement error
 CALL add_log_sink('audit')
@@ -86,6 +92,13 @@ Log sink 'unknown' is not yet registered
 statement ok
 CALL add_log_sink('STDOUT')
 
+# the main log sink comes first, then the added sinks by name
+query II
+SELECT name, main FROM duckdb_log_sinks()
+----
+memory	true
+stdout	false
+
 statement error
 SELECT count(*) FROM duckdb_logs(sink='stdout')
 ----
@@ -117,6 +130,11 @@ CALL add_log_sink('stdout')
 statement ok
 SET logging_sink='stdout'
 
+query II
+SELECT name, main FROM duckdb_log_sinks()
+----
+stdout	true
+
 statement error
 CALL remove_log_sink('stdout')
 ----
@@ -129,3 +147,9 @@ statement error
 CALL remove_log_sink('stdout')
 ----
 Log sink 'stdout' is not enabled
+
+# switching the main log sink drops the previous one
+query II
+SELECT name, main FROM duckdb_log_sinks()
+----
+memory	true

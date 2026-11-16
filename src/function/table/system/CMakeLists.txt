@@ -20,6 +20,7 @@ add_library_unity(
   duckdb_keywords.cpp
   duckdb_log.cpp
   duckdb_log_contexts.cpp
+  duckdb_log_sinks.cpp
   duckdb_indexes.cpp
   duckdb_live_query_metrics.cpp
   duckdb_memory.cpp

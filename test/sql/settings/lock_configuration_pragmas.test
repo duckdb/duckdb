@@ -215,6 +215,22 @@ CALL disable_logging();
 the configuration has been locked
 
 statement error
+CALL add_log_sink('file', path='{TEST_DIR}/locked_added_logs');
+----
+the configuration has been locked
+
+statement error
+CALL remove_log_sink('stdout');
+----
+the configuration has been locked
+
+# the log sinks can still be listed
+query II
+SELECT name, main FROM duckdb_log_sinks();
+----
+memory	true
+
+statement error
 CALL add_grammar_extension('shell');
 ----
 the configuration has been locked

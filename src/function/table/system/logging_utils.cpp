@@ -248,6 +248,7 @@ public:
 
 static unique_ptr<FunctionData> BindLogSinkName(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
+	DBConfig::GetConfig(context).CheckLock(LoggingSink::Name);
 	if (input.inputs[0].IsNull()) {
 		throw InvalidInputException("The log sink name cannot be NULL");
 	}
@@ -264,6 +265,8 @@ static unique_ptr<FunctionData> BindLogSinkName(ClientContext &context, TableFun
 
 static unique_ptr<FunctionData> BindAddLogSink(ClientContext &context, TableFunctionBindInput &input,
                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
+	// adding a sink turns logging on
+	DBConfig::GetConfig(context).CheckLock(EnableLogging::Name);
 	auto result = BindLogSinkName(context, input, return_types, names);
 	auto &bind_data = result->Cast<LogSinkNameBindData>();
 	for (const auto &param : input.named_parameters) {
