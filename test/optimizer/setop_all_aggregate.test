@@ -188,6 +188,28 @@ EXPLAIN SELECT MAP {k: s} FROM l EXCEPT ALL SELECT MAP {k: s} FROM r
 ----
 physical_plan	<!REGEX>:.*Unnest.*
 
+# hand-written queries of the same form (numbered rows, SEMI / ANTI join on the columns and the number) are not what
+# the pass matches: their numbering is a projection below the join, and they keep their plan
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE NOT EXISTS (SELECT 1 FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN WITH l2 AS (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l), r2 AS (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) SELECT l2.k, l2.s FROM l2 WHERE EXISTS (SELECT 1 FROM r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
 # ---- The answers are the same with the optimizer off and on --------------------------------------------------------
 
 loop i 0 2
@@ -571,6 +593,171 @@ query I
 SELECT count(*) FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b WHERE i = 7)
 ----
 99
+
+# hand-written queries of the form the set operations are planned as, and variants that differ from it in one
+# property each
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE EXISTS (SELECT 1 FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# = instead of IS NOT DISTINCT FROM: rows with a NULL never match
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k = r2.k AND l2.s = r2.s AND l2.rn = r2.rn
+----
+1	a
+1	a
+3	NULL
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s = r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+
+# the rows are numbered within some of the columns only, in a fixed order
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY s ORDER BY k) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY s ORDER BY k) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+# rank() numbers every copy of a row alike
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, rank() OVER (PARTITION BY k, s ORDER BY k) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, rank() OVER (PARTITION BY k, s ORDER BY k) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+4	d
+
+# the join compares some of the columns only
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+# the join does not compare the numbers
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s
+----
+4	d
+
+# one more join condition
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn AND l2.k < 2
+----
+1	a
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn AND r2.s <> 'a'
+----
+1	a
+1	a
+1	a
+3	NULL
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn <= r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# the number is read above the join
+query II rowsort
+SELECT l2.k, l2.rn FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	2
+1	3
+4	1
+NULL	2
+
+# a filter between the numbering and the join
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l QUALIFY rn > 1) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT * FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE rn = 2) r3 ON l2.k IS NOT DISTINCT FROM r3.k AND l2.s IS NOT DISTINCT FROM r3.s AND l2.rn IS NOT DISTINCT FROM r3.rn
+----
+2	b
+
+# the two sides number different expressions
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k::BIGINT AS k, lower(s) AS s, row_number() OVER (PARTITION BY k % 2, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# IN compares with =
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE (k, s, rn) IN (SELECT k, s, rn FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2)
+----
+1	a
+2	b
+2	b
+
+# an input with a LIMIT, the same input on both sides, an input with a volatile filter
+query IT rowsort
+(SELECT * FROM l ORDER BY ALL LIMIT 5) EXCEPT ALL SELECT * FROM r
+----
+1	a
+1	a
+
+query IT rowsort
+WITH x AS (SELECT * FROM l WHERE k IS NOT NULL) (SELECT * FROM x UNION ALL SELECT * FROM x) EXCEPT ALL SELECT * FROM x
+----
+1	a
+1	a
+1	a
+2	b
+2	b
+3	NULL
+4	d
+
+query I
+SELECT count(*) FROM (SELECT k FROM l WHERE random() >= 0 INTERSECT ALL SELECT k FROM r WHERE random() >= 0)
+----
+5
 
 # prepared, with a parameter inside and above the set operation
 statement ok
