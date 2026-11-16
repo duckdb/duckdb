@@ -28,6 +28,9 @@ drop table test
 statement ok
 create table test as select repeat('a', 2097150) s;
 
+statement ok
+CHECKPOINT
+
 restart
 
 # no min string length
