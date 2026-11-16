@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -23,8 +24,13 @@ static vector<JoinCondition> Comparison(TableIndex left, TableIndex right, Expre
 }
 
 static unique_ptr<Expression> ThrowingColumn(TableIndex table_index) {
-	auto narrowed = BoundCastExpression::AddDefaultCastToType(Column(table_index), LogicalType::TINYINT);
-	return BoundCastExpression::AddDefaultCastToType(std::move(narrowed), LogicalType::INTEGER);
+	CastFunctionSet default_casts;
+	auto cast_input = GetCastFunctionInput::Default();
+	auto narrow_cast = default_casts.GetCastFunction(LogicalType::INTEGER, LogicalType::TINYINT, cast_input);
+	auto narrowed =
+	    BoundCastExpression::CreateDefault(Column(table_index), LogicalType::TINYINT, std::move(narrow_cast));
+	auto widen_cast = default_casts.GetCastFunction(LogicalType::TINYINT, LogicalType::INTEGER, cast_input);
+	return BoundCastExpression::CreateDefault(std::move(narrowed), LogicalType::INTEGER, std::move(widen_cast));
 }
 
 static unique_ptr<Expression> VolatileColumn(TableIndex table_index) {
@@ -186,7 +192,7 @@ TEST_CASE("CD-C splits filtering join predicates only when each satisfies the co
 		relation_mapping.erase(TableIndex(0));
 	}
 	SECTION("A binding is correlated") {
-		first_lhs->Cast<BoundColumnRefExpression>().DepthMutable() = 1;
+		first_lhs = first_lhs->Cast<BoundColumnRefExpression>().WithDepth(1);
 	}
 	SECTION("A binding is already physical") {
 		first_lhs = make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0);

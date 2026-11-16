@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -500,7 +501,10 @@ TEST_CASE("Reconstructed IN consumers retain the pruning fallback", "[dynamic_fi
 	auto type = LogicalType::INTEGER;
 	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(type, 0);
 	if (cast) {
-		input = BoundCastExpression::AddDefaultCastToType(std::move(input), LogicalType::BIGINT);
+		CastFunctionSet default_casts;
+		auto cast_input = GetCastFunctionInput::Default();
+		auto bound_cast = default_casts.GetCastFunction(type, LogicalType::BIGINT, cast_input);
+		input = BoundCastExpression::CreateDefault(std::move(input), LogicalType::BIGINT, std::move(bound_cast));
 	}
 	auto input_type = input->GetReturnType();
 	auto filter = ExpressionFilter::CreateInExpression(
