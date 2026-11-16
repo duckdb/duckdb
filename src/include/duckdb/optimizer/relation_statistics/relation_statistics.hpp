@@ -29,14 +29,15 @@ public:
 
 struct SemiAntiJoinDomainEvidence {
 public:
-	void TightenFilterDomainBound(idx_t bound);
+	//! A bound established by predicates or a closed input, independent of estimated row retention.
+	void TightenDomainBound(idx_t bound);
 	void MarkUnique();
 	void Invalidate();
 	optional_idx GetSupportedDomainSize(idx_t current_domain) const;
-	optional_idx GetFilterDomainBound() const;
+	optional_idx GetDomainBound() const;
 
 private:
-	optional_idx filter_domain_bound;
+	optional_idx domain_bound;
 	bool is_unique = false;
 };
 
@@ -76,6 +77,9 @@ public:
 	//! Cumulative estimated fraction of rows retained from the most recent statistics source.
 	//! Aggregation and DISTINCT establish a new source.
 	double row_retention = 1;
+	//! Indexes of the columns that together identify a row of a join-order relation, e.g. the groups of an
+	//! aggregate. Empty when no such key is known.
+	vector<idx_t> unique_key;
 	bool stats_initialized = false;
 	Identifier table_name;
 };

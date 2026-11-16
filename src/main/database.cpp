@@ -20,6 +20,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
@@ -49,6 +50,7 @@
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
+#include "duckdb/main/settings.hpp"
 #endif
 
 namespace duckdb {
@@ -87,6 +89,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
+	services = make_uniq<Context>(*this);
 }
 
 ParserCache &DatabaseInstance::GetParserCache() {
@@ -609,9 +612,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
-		                                                 config.options.buffer_manager_track_eviction_timestamps,
-		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
+		config.buffer_pool = make_shared_ptr<BufferPool>(
+		    *config.block_allocator, config.options.maximum_memory,
+		    Settings::Get<BufferManagerTrackEvictionTimestampsSetting>(config),
+		    DBConfig::ParseMemoryLimitOrMaximum(Settings::Get<AllocatorBulkDeallocationFlushThresholdSetting>(config)));
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);
@@ -658,7 +662,7 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil(bool force_mbedtls) 
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
-	auto force_mbedtls = config.options.force_mbedtls;
+	auto force_mbedtls = Settings::Get<ForceMbedtlsUnsafeSetting>(config);
 
 	if (force_mbedtls) {
 		// return mbedtls if setting is enabled

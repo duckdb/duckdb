@@ -10,8 +10,7 @@ namespace duckdb {
 ColumnBinding JoinOrderUtil::GetEquivalenceBinding(const Expression &expression) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.Depth() == 0);
-		return colref.Binding();
+		return colref.Depth() == 0 ? colref.Binding() : ColumnBinding();
 	}
 	if (BoundCastExpression::IsCast(expression)) {
 		auto &cast = expression.Cast<BoundFunctionExpression>();
@@ -322,12 +321,17 @@ const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const 
 	return equality_classes;
 }
 
-bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
+optional_ptr<const RelationPairEqualitySummary> JoinPredicateModel::GetDirectEqualityPair(JoinRelationSet &pair) const {
 	auto entry = equality_pairs.find(pair);
 	if (entry == equality_pairs.end()) {
-		return false;
+		return nullptr;
 	}
-	return entry->second.HasDirectCompositeEquality();
+	return entry->second;
+}
+
+bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
+	auto summary = GetDirectEqualityPair(pair);
+	return summary && summary->HasDirectCompositeEquality();
 }
 
 } // namespace duckdb

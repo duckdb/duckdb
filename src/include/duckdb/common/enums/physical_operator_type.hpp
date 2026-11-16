@@ -48,7 +48,6 @@ enum class PhysicalOperatorType : uint8_t {
 	CHUNK_SCAN,
 	RECURSIVE_CTE_SCAN,
 	RECURSIVE_RECURRING_CTE_SCAN,
-	TRAMPOLINE_FRONTIER_SCAN,
 	CTE_SCAN,
 	DELIM_SCAN,
 	EXPRESSION_SCAN,
@@ -73,7 +72,6 @@ enum class PhysicalOperatorType : uint8_t {
 	RECURSIVE_CTE,
 	RECURSIVE_KEY_CTE,
 	CTE,
-	TRAMPOLINE,
 
 	// -----------------------------
 	// Updates
@@ -110,8 +108,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EXPLAIN,
 	EXPLAIN_ANALYZE,
 	EMPTY_RESULT,
-	EXECUTE,
-	PREPARE,
+	// 70 was EXECUTE - keep the values of the operators after it
+	PREPARE = 71,
 	VACUUM,
 	EXPORT,
 	SET,
@@ -137,6 +135,9 @@ enum class PhysicalOperatorType : uint8_t {
 	SECURE_VIEW,
 	//! Source of a MERGE INTO action pipeline. Keep appended to preserve existing enum values.
 	MERGE_ACTION_SOURCE,
+	//! Trampoline CTE and its frontier scan. Keep appended to preserve existing enum values.
+	TRAMPOLINE,
+	TRAMPOLINE_FRONTIER_SCAN,
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);
