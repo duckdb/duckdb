@@ -424,6 +424,14 @@
         "is_debug": true
     },
     {
+        "name": "debug_force_flush_append_failure",
+        "description": "Force the commit-time flush of transaction-local storage to fail after appending to the table. Can be used for testing commit error recovery.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_force_mbedtls_unsafe",
         "description": "Enable mbedtls for encryption. Unsafe to use.",
         "type": "BOOLEAN",
@@ -1045,6 +1053,22 @@
         "scope": "global",
         "default_value": "",
         "struct": "HTTPProxyUsernameSetting"
+    },
+    {
+        "name": "http_retry_quota_throttled",
+        "description": "Whether the per-host retry quota can refuse the retry of a throttled request (HTTP 429 or 503). When false, a throttled retry is still charged to the quota but is not refused when the quota is empty.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "struct": "HTTPRetryQuotaThrottledSetting"
+    },
+    {
+        "name": "http_retry_throttled_wait_ms",
+        "description": "Smallest base wait, in milliseconds, of the back-off between retries of a throttled request (HTTP 429 or 503). Throttled retries back off from the larger of this and http_retry_wait_ms.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "0",
+        "struct": "HTTPRetryThrottledWaitMsSetting"
     },
     {
         "name": "ieee_floating_point_ops",

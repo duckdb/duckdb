@@ -24,9 +24,19 @@ int64_t BaseSecret::MatchScore(const string &path) const {
 			longest_match = 0;
 			continue;
 		}
-		if (StringUtil::StartsWith(path, prefix)) {
-			longest_match = MaxValue<int64_t>(NumericCast<int64_t>(prefix.length()), longest_match);
+		if (!StringUtil::StartsWith(path, prefix)) {
+			continue;
 		}
+		// Authority-only URI scopes have an implicit trailing slash.
+		auto authority = StringUtil::GetURIAuthority(prefix);
+		bool authority_only = !authority.empty() && prefix.size() == prefix.find("://") + 3 + authority.size();
+		if (authority_only) {
+			bool at_authority_boundary = path.size() == prefix.size() || path[prefix.size()] == '/';
+			if (!at_authority_boundary) {
+				continue;
+			}
+		}
+		longest_match = MaxValue<int64_t>(NumericCast<int64_t>(prefix.length()), longest_match);
 	}
 	return longest_match;
 }
@@ -63,7 +73,9 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		result.append(it->first.GetIdentifierName());
 		result.append("=");
-		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
+		// Refresh metadata can contain credentials even when the stored redaction list omits it.
+		if (mode == SecretDisplayType::REDACTED &&
+		    (it->first == "refresh_info" || redact_keys.find(it->first) != redact_keys.end())) {
 			result.append("redacted");
 		} else {
 			result.append(it->second.ToString());

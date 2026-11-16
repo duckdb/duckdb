@@ -6,9 +6,9 @@ else ()
 endif()
 if (NOT MINGW)
   duckdb_extension_load(iceberg
-     #FIXME: restore autoloading tests ${LOAD_ICEBERG_TESTS}
+            ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 4c0c0874c48ec82a3e29910554891d04bcc0e988
+            GIT_TAG c639b0e0ffdd293d7fdce35b7aa3fdd6573ec157
             APPLY_PATCHES
             )
 endif()

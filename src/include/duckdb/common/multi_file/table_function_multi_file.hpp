@@ -292,9 +292,12 @@ public:
 	TableFunction function;
 	//! The bind data of the wrapped function for this file
 	shared_ptr<FunctionData> bind_data;
-	//! The names/types the wrapped function bound to for this file
+	//! The names/types the wrapped function bound to for this file - follow any change to the names with
+	//! name_index.Build(names)
 	vector<Identifier> names;
 	vector<LogicalType> types;
+	//! The position of each of the names, for the statistics of a column - built with them in BindFunction
+	ColumnNameIndex name_index;
 	//! The cardinality estimate of the wrapped function for this file (if it has one)
 	optional_idx cardinality;
 	//! The virtual columns that are read, as a map of the index they are projected in to their virtual column id
@@ -415,6 +418,7 @@ public:
 	                MultiFileBindData &bind_data) override;
 	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
+	void ReadFilesForStatistics(ClientContext &context, MultiFileBindData &bind_data) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,

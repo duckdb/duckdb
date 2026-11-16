@@ -273,6 +273,7 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		}
 		expr.FunctionMutable().SetFunctionCallback(
 		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		expr.FunctionMutable().SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -402,7 +403,9 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	if (check_overflow) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
 	} else {
+		// the result type holds every result of the operation, so it cannot overflow
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	if (IS_SUBTRACT) {
 		bound_function.SetStatisticsCallback(
@@ -431,6 +434,7 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(return_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
@@ -611,6 +615,30 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			// not monotonic: adding months clamps the day but keeps the time, e.g.
 			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
 			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_SEC) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_sec_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_MS) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_ms_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			return function;
+		} else if (right_type.id() == LogicalTypeId::TIMESTAMP_NS) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<interval_t, timestamp_ns_t, timestamp_ns_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
+			return function;
 		}
 		break;
 	case LogicalTypeId::TIME:
@@ -640,10 +668,40 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			return function;
 		}
 		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_sec_t, interval_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: see INTERVAL + TIMESTAMP_SEC
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_ms_t, interval_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: see INTERVAL + TIMESTAMP_MS
+			return function;
+		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
+			function.SetFallible();
+			// not monotonic: see INTERVAL + TIMESTAMP
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "+", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<timestamp_ns_t, interval_t, timestamp_ns_t, AddOperator>);
 			function.SetFallible();
 			// not monotonic: see INTERVAL + TIMESTAMP
 			return function;
@@ -697,8 +755,17 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME));
 
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_S, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_S));
+
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_MS, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_MS));
+
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP_NS, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP_NS));
 
 	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
@@ -903,6 +970,42 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			return function;
 		}
 		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_sec_t, interval_t, timestamp_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_ms_t, interval_t, timestamp_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+
+			return function;
+		}
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			ScalarFunction function(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP_NS,
+			    ScalarFunction::BinaryFunction<timestamp_ns_t, interval_t, timestamp_ns_t, SubtractOperator>);
+			function.SetFallible();
+			// not monotonic: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+
+			return function;
+		}
+		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function(
@@ -964,6 +1067,9 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_S, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_MS, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP_NS, LogicalType::INTERVAL));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	// we can negate intervals
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL));
@@ -1082,7 +1188,9 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		bound_function.SetFunctionCallback(
 		    GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
 	} else {
+		// the result type holds every product of the input types, so the operation cannot overflow
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(
 	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
@@ -1329,12 +1437,17 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 
-	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+	const auto ieee_ops = Settings::Get<IeeeFloatingPointOpsSetting>(context);
+	const auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
+	if (ieee_ops) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
-		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 		bound_function.SetFunctionCallback(
 		    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
+	}
+	if (std::is_same<OP, DivideOperator>::value && (ieee_ops || null_on_zero)) {
+		// a division by zero yields inf, nan or NULL instead of raising an error
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	return nullptr;
 }
@@ -1794,7 +1907,8 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 	hugeint_t delta_hugeint = hi;
 	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
 		const auto delta = Hugeint::Cast<double>(delta_hugeint);
-		return lo + Hugeint::Convert(delta * d);
+		// Rounding delta to double can carry the offset past hi, and past the HUGEINT range when hi is the minimum.
+		return Hugeint::Add(lo, Hugeint::Convert(delta * d));
 	}
 
 	// if delta overflows, we fall back to original subtraction to avoid UB
