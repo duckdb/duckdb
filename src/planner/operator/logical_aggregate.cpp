@@ -1,6 +1,7 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -80,6 +81,30 @@ InsertionOrderPreservingMap<string> LogicalAggregate::ParamsToString() const {
 	result["Expressions"] = expressions_info;
 	SetParamsEstimatedCardinality(result);
 	return result;
+}
+
+bool LogicalAggregate::IgnoresDuplicates() const {
+	for (auto &group : groups) {
+		if (group->IsVolatile()) {
+			return false;
+		}
+	}
+	for (auto &expr : expressions) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE || expr->IsVolatile()) {
+			return false;
+		}
+		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (aggregate.IsDistinct()) {
+			continue;
+		}
+		auto &function = aggregate.Function();
+		if (function.GetDistinctDependent() != AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT ||
+		    function.GetOrderDependent() != AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+			// first() and any_value() do not depend on duplicates either, but on which row comes first
+			return false;
+		}
+	}
+	return true;
 }
 
 idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {

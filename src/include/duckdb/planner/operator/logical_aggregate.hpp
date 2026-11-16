@@ -58,6 +58,11 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
+	//! Whether the result is the same over the input with or without repeated rows: no group or aggregate is
+	//! volatile, and every aggregate is DISTINCT or depends neither on duplicates nor on the order of its input
+	//! (min, max, bool_and, bool_or)
+	bool IgnoresDuplicates() const;
+
 	const Expression &GetExpression(ColumnBinding binding) const;
 	const Expression &GetGroupExpression(ProjectionIndex group_index) const;
 

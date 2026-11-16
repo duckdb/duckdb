@@ -24,10 +24,11 @@
 //   SEMI join changes which joins of the region run first and which relations are read to the end. That is within
 //   what the join order may do anyway, but a query that ran must not start to fail because of this rewrite, nor
 //   the other way round;
-// - repeats of the region's rows do not matter: the parent chain ignores duplicates (a GROUP BY whose aggregates are
-//   min, max or DISTINCT ones, a DISTINCT, the right side of a SEMI / ANTI / MARK join, through projections, filters
-//   and joins without volatile expressions), or R holds exactly one row (a projection over a dummy scan) and the
-//   region has a third relation (with L and R alone the SEMI join would sit where the INNER join sits);
+// - repeats of the region's rows do not matter: the parent chain ignores duplicates (a GROUP BY whose aggregates
+//   ignore them, LogicalAggregate::IgnoresDuplicates: min, max, bool_and, bool_or and DISTINCT ones; a DISTINCT; the
+//   right side of a SEMI / ANTI / MARK join, through projections, filters and joins without volatile expressions), or R
+//   holds exactly one row (a projection over a dummy scan) and the region has a third relation (with L and R alone the
+//   SEMI join would sit where the INNER join sits);
 // - the SEMI join is not slower than the join it replaces. What the two are depends on the predicates between L and
 //   R, split into their conjuncts (a BETWEEN is two range comparisons):
 //   * none is a comparison of an expression over L with one over R: the INNER join is a cross product with a filter
@@ -46,7 +47,6 @@
 // with a one-row R every such row occurs exactly once in both.
 #include "duckdb/optimizer/join_to_semi_join.hpp"
 
-#include "duckdb/optimizer/self_join_aggregate.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"

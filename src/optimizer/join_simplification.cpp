@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/join_simplification.hpp"
 
 #include "duckdb/optimizer/join_to_semi_join.hpp"
-#include "duckdb/optimizer/self_join_aggregate.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -531,7 +530,7 @@ void JoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOper
 	}
 	// everything above reads the columns the aggregate computes, not the columns below it
 	ParentInfo info;
-	info.ignores_duplicates = SelfJoinAggregate::AggregateIgnoresDuplicates(aggregate);
+	info.ignores_duplicates = aggregate.IgnoresDuplicates();
 	info.reads_known = true;
 	JoinToSemiJoin::AddReadTables(op, info.read_tables);
 	VisitChildInNewContext(op.children[0], std::move(child_required_columns), std::move(info));

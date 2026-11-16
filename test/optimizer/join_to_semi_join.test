@@ -73,6 +73,28 @@ select a.x, max(a.y) from a, p where a.y > p.hi group by a.x order by all;
 8	80
 9	90
 
+# so do bool_and / bool_or: every aggregate that depends neither on duplicates nor on the order of its input
+query II
+explain select a.x, bool_or(a.y > 60), bool_and(a.y > 60) from a, p where a.y > p.hi group by a.x;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+query III
+select a.x, bool_or(a.y > 60), bool_and(a.y > 60) from a, p where a.y > p.hi group by a.x order by all;
+----
+4	false	false
+5	false	false
+6	false	false
+7	true	true
+8	true	true
+9	true	true
+
+# must not fire: any_value does not depend on duplicates either, but on which row comes first
+query II
+explain select a.x, any_value(a.y) from a, p where a.y > p.hi group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
 # the right side of a semi join is read as a set
 query II
 explain select * from b where b.x in (select a.x from a, p where a.y < p.lo);
