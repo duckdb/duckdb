@@ -29,24 +29,24 @@ ARTConflictType ARTBuilder::Build() {
 		}
 
 		// True, if we reached a leaf: all bytes of start_key and end_key match.
-		if (start.len == entry.depth) {
-			// Get the number of row IDs in the leaf.
-			auto row_id_count = entry.end - entry.start + 1;
-			if (art.IsUnique() && row_id_count != 1) {
-				return ARTConflictType::CONSTRAINT;
-			}
+		auto is_leaf = start.len == entry.depth;
+		auto row_id_count = entry.end - entry.start + 1;
+		if (is_leaf && art.IsUnique() && row_id_count != 1) {
+			return ARTConflictType::CONSTRAINT;
+		}
 
-			// Create the prefix, if any. The tail stays pinned while we fill its child.
-			reference<NodePtr> node_ptr_ref(entry.node_ptr);
-			optional<PrefixHandle> tail;
-			auto count = UnsafeNumericCast<idx_t>(start.len - prefix_depth);
-			if (count != 0) {
-				auto chain = PrefixHandle::New(art, start, prefix_depth, count);
-				entry.node_ptr = chain.root_ptr;
-				tail = std::move(chain.tail);
-				node_ptr_ref = tail->Child(art);
-			}
+		// Create the prefix, if any. The tail stays pinned while we fill its child.
+		reference<NodePtr> node_ptr_ref(entry.node_ptr);
+		optional<PrefixHandle> tail;
+		auto prefix_length = entry.depth - prefix_depth;
+		if (prefix_length != 0) {
+			auto chain = PrefixHandle::New(art, start, prefix_depth, prefix_length);
+			entry.node_ptr = chain.root_ptr;
+			tail = std::move(chain.tail);
+			node_ptr_ref = tail->Child(art);
+		}
 
+		if (is_leaf) {
 			// Inline the row ID.
 			if (row_id_count == 1) {
 				Leaf::New(node_ptr_ref, row_ids[entry.start].GetRowId());
@@ -62,17 +62,6 @@ ARTConflictType ARTBuilder::Build() {
 			}
 			node_ptr_ref.get().SetGateStatus(GateStatus::GATE_SET);
 			continue;
-		}
-
-		// Create the prefix, if any. The tail stays pinned while we fill its child.
-		reference<NodePtr> node_ptr_ref(entry.node_ptr);
-		optional<PrefixHandle> tail;
-		auto prefix_length = entry.depth - prefix_depth;
-		if (prefix_length != 0) {
-			auto chain = PrefixHandle::New(art, start, prefix_depth, prefix_length);
-			entry.node_ptr = chain.root_ptr;
-			tail = std::move(chain.tail);
-			node_ptr_ref = tail->Child(art);
 		}
 
 		vector<idx_t> child_offsets;
