@@ -473,6 +473,10 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 	if (new_path != base_path || (normalize_changed && !new_path.empty())) {
 		base_path = new_path;
 		SetPaths(new_path);
+		// the open files are the ones of the previous path
+		for (auto &table : tables) {
+			table.second.initialized = false;
+		}
 	}
 
 	for (const auto &it : to_remove) {

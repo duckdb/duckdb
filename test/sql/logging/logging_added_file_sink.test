@@ -11,7 +11,7 @@ statement ok
 CALL enable_logging()
 
 statement ok
-CALL add_log_sink('file', path='{TEST_DIR}/logging_added_file_sink.csv')
+CALL add_log_sink('file', sink_path='{TEST_DIR}/logging_added_file_sink.csv')
 
 statement ok
 SELECT write_log('to both')
@@ -26,9 +26,20 @@ SELECT count(*) FROM duckdb_logs(sink='file', denormalized_table=true) WHERE mes
 ----
 1
 
+# a csv file only holds the denormalized logs
+statement error
+SELECT count(*) FROM duckdb_logs(sink='file')
+----
+Log sink 'file' stores the logs denormalized, read them with duckdb_logs(sink='file', denormalized_table=true)
+
+statement error
+SELECT count(*) FROM duckdb_log_contexts(sink='file')
+----
+Log sink 'file' stores the logs denormalized
+
 # adding the file sink again updates its config and keeps its path
 statement ok
-CALL add_log_sink('file', buffer_size=100)
+CALL add_log_sink('file', sink_buffer_size=100)
 
 statement ok
 SELECT write_log('after update')
@@ -99,6 +110,11 @@ SELECT count(*) FROM duckdb_logs(denormalized_table=true) WHERE message = 'to bo
 1
 
 statement error
+SELECT count(*) FROM duckdb_logs()
+----
+Log sink 'file' stores the logs denormalized, read them with duckdb_logs(sink='file', denormalized_table=true)
+
+statement error
 CALL remove_log_sink('file')
 ----
 Log sink 'file' is the main log sink and cannot be removed
@@ -116,3 +132,29 @@ statement error
 SELECT * FROM duckdb_logs(sink='file')
 ----
 Log sink 'file' is not enabled
+
+# a new path moves an enabled file sink to that file
+statement ok
+CALL add_log_sink('file', sink_path='{TEST_DIR}/logging_added_file_sink_a.csv')
+
+statement ok
+SELECT write_log('in a')
+
+statement ok
+CALL add_log_sink('file', sink_path='{TEST_DIR}/logging_added_file_sink_b.csv')
+
+statement ok
+SELECT write_log('in b')
+
+query I
+SELECT message FROM duckdb_logs(sink='file', denormalized_table=true) WHERE message IN ('in a', 'in b')
+----
+in b
+
+statement ok
+CALL add_log_sink('file', sink_path='{TEST_DIR}/logging_added_file_sink_a.csv')
+
+query I
+SELECT message FROM duckdb_logs(sink='file', denormalized_table=true) WHERE message IN ('in a', 'in b')
+----
+in a

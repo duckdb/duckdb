@@ -215,7 +215,7 @@ CALL disable_logging();
 the configuration has been locked
 
 statement error
-CALL add_log_sink('file', path='{TEST_DIR}/locked_added_logs');
+CALL add_log_sink('file', sink_path='{TEST_DIR}/locked_added_logs');
 ----
 the configuration has been locked
 

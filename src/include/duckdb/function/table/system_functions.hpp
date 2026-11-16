@@ -157,6 +157,9 @@ struct DuckDBLogFun {
 
 	//! The value of the sink parameter, or an empty string if it was not given
 	static string GetSinkName(TableFunctionBindInput &input);
+	//! Throws a hint to use denormalized_table=true if the sink only stores the denormalized logs
+	static void VerifyNormalizedLogs(ClientContext &context, TableFunctionBindInput &input, LogSink &log_sink,
+	                                 const string &sink_name);
 };
 
 struct DuckDBLogContextFun {

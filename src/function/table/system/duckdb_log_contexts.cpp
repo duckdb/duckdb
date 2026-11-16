@@ -65,10 +65,15 @@ void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static unique_ptr<TableRef> DuckDBLogContextsBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto log_sink = LogManager::Get(context).GetLogSink(DuckDBLogFun::GetSinkName(input));
+	auto sink_name = DuckDBLogFun::GetSinkName(input);
+	auto log_sink = LogManager::Get(context).GetLogSink(sink_name);
 
 	// Attempt to let the sink BindReplace the scan function
-	return log_sink->BindReplace(context, input, LoggingTargetTable::LOG_CONTEXTS);
+	auto res = log_sink->BindReplace(context, input, LoggingTargetTable::LOG_CONTEXTS);
+	if (!res) {
+		DuckDBLogFun::VerifyNormalizedLogs(context, input, *log_sink, sink_name);
+	}
+	return res;
 }
 
 void DuckDBLogContextFun::RegisterFunction(BuiltinFunctions &set) {

@@ -58,9 +58,9 @@ CALL add_log_sink(NULL)
 The log sink name cannot be NULL
 
 statement error
-CALL add_log_sink('stdout', config=42)
+CALL add_log_sink('stdout', sink_config=42)
 ----
-add_log_sink: config must be a struct
+add_log_sink: sink_config must be a struct
 
 # the main log sink cannot be removed, and a sink that was not added cannot be removed or read
 statement error

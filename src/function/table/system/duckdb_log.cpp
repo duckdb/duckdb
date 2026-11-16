@@ -43,6 +43,18 @@ string DuckDBLogFun::GetSinkName(TableFunctionBindInput &input) {
 	return sink_setting->second.GetValue<string>();
 }
 
+void DuckDBLogFun::VerifyNormalizedLogs(ClientContext &context, TableFunctionBindInput &input, LogSink &log_sink,
+                                        const string &sink_name) {
+	if (log_sink.CanScan(LoggingTargetTable::LOG_ENTRIES) ||
+	    !log_sink.BindReplace(context, input, LoggingTargetTable::ALL_LOGS)) {
+		return;
+	}
+	auto name = sink_name.empty() ? LogManager::Get(context).GetConfig().storage : sink_name;
+	throw InvalidConfigurationException(
+	    "Log sink '%s' stores the logs denormalized, read them with duckdb_logs(sink=%s, denormalized_table=true)",
+	    name, SQLString(name));
+}
+
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("context_id");
@@ -108,6 +120,9 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	// Without join contexts we simply scan the LOG_ENTRIES tables
 	if (!denormalized_table) {
 		auto res = log_sink->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
+		if (!res) {
+			DuckDBLogFun::VerifyNormalizedLogs(context, input, *log_sink, sink_name);
+		}
 		return res;
 	}
 

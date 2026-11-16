@@ -32,6 +32,35 @@ static string GetSinkParameterName(const string &storage_parameter) {
 	return "sink" + storage_parameter.substr(strlen("storage"));
 }
 
+//! The sink parameters that enable_logging and add_log_sink share
+static TypedKwargs &AddSinkParameters(TypedKwargs &options) {
+	// sink_path, sink_normalize and sink_buffer_size are forwarded to the sink_config struct as syntactic sugar
+	return options.Add("sink_config", LogicalType::ANY)
+	    .Add("sink_path", LogicalType::VARCHAR)
+	    .Add("sink_normalize", LogicalType::BOOLEAN)
+	    .Add("sink_buffer_size", LogicalType::UBIGINT);
+}
+
+//! Puts a sink parameter into the sink config, returns false if the key is not a sink parameter
+static bool SetSinkParameter(const string &function_name, const string &key, const string &name, const Value &value,
+                             case_insensitive_map_t<Value> &sink_config) {
+	if (key == "sink_config") {
+		if (value.type().id() != LogicalTypeId::STRUCT) {
+			throw InvalidInputException("%s: %s must be a struct", function_name, name);
+		}
+		auto &children = StructValue::GetChildren(value);
+		for (idx_t i = 0; i < children.size(); i++) {
+			sink_config[StructType::GetChildName(value.type(), i).GetIdentifierName()] = children[i];
+		}
+		return true;
+	}
+	if (key == "sink_path" || key == "sink_normalize" || key == "sink_buffer_size") {
+		sink_config[key.substr(strlen("sink_"))] = value;
+		return true;
+	}
+	return false;
+}
+
 //! File logging requires a path. Reject switching to the file sink without one before mutating any state, so the
 //! active sink is preserved instead of becoming a path-less sink that throws on every later flush (end-of-query
 //! and shutdown included).
@@ -151,21 +180,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		} else if (key == "sink") {
 			sink_isset = true;
 			result->config.storage = param.second.ToString();
-		} else if (key == "sink_config") {
-			if (param.second.type().id() != LogicalTypeId::STRUCT) {
-				throw InvalidInputException("EnableLogging: %s must be a struct", name);
-			}
-			auto &children = StructValue::GetChildren(param.second);
-			for (idx_t i = 0; i < children.size(); i++) {
-				result->sink_config[StructType::GetChildName(param.second.type(), i).GetIdentifierName()] = children[i];
-			}
-		} else if (key == "sink_path") {
-			result->sink_config["path"] = param.second;
-		} else if (key == "sink_normalize") {
-			result->sink_config["normalize"] = param.second;
-		} else if (key == "sink_buffer_size") {
-			result->sink_config["buffer_size"] = param.second;
-		} else {
+		} else if (!SetSinkParameter("EnableLogging", key, name, param.second, result->sink_config)) {
 			throw InvalidInputException("EnableLogging: unknown named parameter: %s", param.first.c_str());
 		}
 	}
@@ -271,18 +286,7 @@ static unique_ptr<FunctionData> BindAddLogSink(ClientContext &context, TableFunc
 	auto &bind_data = result->Cast<LogSinkNameBindData>();
 	for (const auto &param : input.named_parameters) {
 		auto &name = param.first.GetIdentifierName();
-		if (name == "config") {
-			if (param.second.type().id() != LogicalTypeId::STRUCT) {
-				throw InvalidInputException("add_log_sink: config must be a struct");
-			}
-			auto &children = StructValue::GetChildren(param.second);
-			for (idx_t i = 0; i < children.size(); i++) {
-				bind_data.sink_config[StructType::GetChildName(param.second.type(), i).GetIdentifierName()] =
-				    children[i];
-			}
-		} else if (name == "path" || name == "normalize" || name == "buffer_size") {
-			bind_data.sink_config[name] = param.second;
-		} else {
+		if (!SetSinkParameter("add_log_sink", name, name, param.second, bind_data.sink_config)) {
 			throw InvalidInputException("add_log_sink: unknown named parameter: %s", name);
 		}
 	}
@@ -307,12 +311,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	    .AddArgs("args", LogicalType::ANY)
 	    .AddKeywordOnly("level", LogicalType::VARCHAR, Value("INFO"))
 	    .WithTypedKwargs("options", [](TypedKwargs &options) {
-		    options.Add("sink", LogicalType::VARCHAR)
-		        .Add("sink_config", LogicalType::ANY)
-		        // forwarded to the sink_config struct as syntactic sugar
-		        .Add("sink_path", LogicalType::VARCHAR)
-		        .Add("sink_normalize", LogicalType::BOOLEAN)
-		        .Add("sink_buffer_size", LogicalType::UBIGINT)
+		    AddSinkParameters(options.Add("sink", LogicalType::VARCHAR))
 		        // deprecated names of the sink parameters
 		        .Add("storage", LogicalType::VARCHAR)
 		        .Add("storage_config", LogicalType::ANY)
@@ -335,13 +334,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 
 	TableFunction add_sink_fun("add_log_sink", FunctionSignature().AddPositionalOnly("sink", LogicalType::VARCHAR),
 	                           AddLogSink, BindAddLogSink);
-	add_sink_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
-		// path, normalize and buffer_size are forwarded to the config struct as syntactic sugar
-		options.Add("config", LogicalType::ANY)
-		    .Add("path", LogicalType::VARCHAR)
-		    .Add("normalize", LogicalType::BOOLEAN)
-		    .Add("buffer_size", LogicalType::UBIGINT);
-	});
+	add_sink_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) { AddSinkParameters(options); });
 	// adds a log sink per execution
 	add_sink_fun.stability = FunctionStability::VOLATILE;
 	set.AddFunction(add_sink_fun);

@@ -355,7 +355,7 @@ void LogManager::AddLogSink(DatabaseInstance &db, const string &requested_sink_n
 			if (path_entry == config_copy.end() || path_entry->second.IsNull() ||
 			    path_entry->second.ToString().empty()) {
 				throw InvalidInputException(
-				    "The 'file' log sink requires a path, e.g. CALL add_log_sink('file', path='log.csv')");
+				    "The 'file' log sink requires a path, e.g. CALL add_log_sink('file', sink_path='log.csv')");
 			}
 		}
 		sink = CreateLogSinkInternal(db, sink_name);
