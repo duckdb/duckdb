@@ -117,7 +117,8 @@
         "test/sql/window/test_window_agg_stats_propagation.test",
         "test/sql/sql_export/call_values.test",
         "test/sql/sql_export/quantile_constant_arguments.test",
-        "test/sql/aggregate/aggregates/approx_top_k_state_spilling.test_slow"
+        "test/sql/aggregate/aggregates/approx_top_k_state_spilling.test_slow",
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
       ]
     },
     {

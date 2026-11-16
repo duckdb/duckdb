@@ -24,4 +24,10 @@ SELECT histogram[min], histogram[max] FROM (
 ----
 1	1
 
+query I
+SELECT count(*) FROM (SELECT DISTINCT bool IS NULL k, histogram("{col}") OVER (PARTITION BY bool IS NULL) h FROM all_types) w
+JOIN (SELECT bool IS NULL k, histogram("{col}") h FROM all_types GROUP BY k) g USING (k) WHERE w.h IS DISTINCT FROM g.h
+----
+0
+
 endloop

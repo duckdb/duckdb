@@ -23,4 +23,10 @@ SELECT mode IS NOT DISTINCT FROM max_val FROM (
 ----
 true
 
+query I
+SELECT count(*) FROM (SELECT DISTINCT bool IS NULL k, entropy("{col}") OVER (PARTITION BY bool IS NULL) e FROM all_types) w
+JOIN (SELECT bool IS NULL k, entropy("{col}") e FROM all_types GROUP BY k) g USING (k) WHERE w.e != g.e
+----
+0
+
 endloop

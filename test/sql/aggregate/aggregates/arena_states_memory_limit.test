@@ -1,0 +1,41 @@
+# name: test/sql/aggregate/aggregates/arena_states_memory_limit.test
+# description: Histogram, binned histogram and mode states count against the memory limit, sorted and combined states are reclaimed
+# group: [aggregates]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET memory_limit='100MB';
+
+# the window self-join turns these into grouped aggregates over the raw states
+statement error
+SELECT count(*) FROM (SELECT histogram(i) OVER (PARTITION BY i % 100) x FROM range(1000000) r(i)) WHERE x IS NOT NULL;
+----
+Out of Memory Error
+
+statement error
+SELECT count(*) FROM (SELECT mode(i) OVER (PARTITION BY i % 100) x FROM range(1000000) r(i)) WHERE x IS NOT NULL;
+----
+Out of Memory Error
+
+statement error
+SELECT count(*) FROM (SELECT i % 20000 g, histogram(i, range(0, 100000, 200)) x FROM range(200000) r(i) GROUP BY g) WHERE cardinality(x) > 0;
+----
+Out of Memory Error
+
+# the inner states of a sorted aggregate are reclaimed per batch of groups
+query II
+SELECT count(*), sum(len(x)) FROM (SELECT i % 50000 g, approx_top_k(i % 13, 10 ORDER BY i DESC) x FROM range(100000) r(i) GROUP BY g);
+----
+50000	100000
+
+# combine_aggr imports the input states into a scratch arena that is freed per call
+query II
+SELECT count(*), sum(len(x)) FROM (
+	SELECT g1, finalize(combine_aggr(s)) x FROM (
+		SELECT i % 1000 g1, i % 10000 g2, approx_top_k(i % 13, 10) EXPORT_STATE s FROM range(200000) r(i) GROUP BY g1, g2
+	) GROUP BY g1
+);
+----
+1000	10000
