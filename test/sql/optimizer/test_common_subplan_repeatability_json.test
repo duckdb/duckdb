@@ -7,6 +7,10 @@ require json
 statement ok
 SET explain_output='optimized_only';
 
+# the ALL set operations below are the vehicle for a shared window subplan: keep them a join of two windows
+statement ok
+SET disabled_optimizers='set_operation_aggregate';
+
 # JSON each with duplicates and NULL.
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM json_each('[1,1,null]') INTERSECT ALL SELECT * FROM json_each('[1,1,null]');

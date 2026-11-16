@@ -36,6 +36,7 @@
 #include "duckdb/optimizer/scalar_aggregate_merger.hpp"
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/self_join_aggregate.hpp"
+#include "duckdb/optimizer/set_operation_aggregate.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/aggregate_reuse.hpp"
@@ -320,6 +321,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
 		EmptyResultPullup empty_result_pullup;
 		plan = empty_result_pullup.Optimize(std::move(plan));
+	});
+
+	// Rewrites EXCEPT ALL / INTERSECT ALL into one aggregate over the UNION ALL of both inputs. Runs after filter
+	// pushdown, which moves filters from one input to the other through the conditions of the join this replaces
+	RunOptimizer(OptimizerType::SET_OPERATION_AGGREGATE, [&]() {
+		SetOperationAggregate set_operation_aggregate(*this);
+		plan = set_operation_aggregate.Optimize(std::move(plan));
 	});
 
 	// Replaces some window computations with self-joins

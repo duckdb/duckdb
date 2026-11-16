@@ -71,6 +71,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   self_join_aggregate.cpp
+  set_operation_aggregate.cpp
   projection_pullup.cpp
   projection_placement.cpp
   remote_pushdown_optimizer.cpp

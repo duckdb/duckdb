@@ -6,6 +6,10 @@
 # parked schedule, only an interrupt can.
 set query_timeout 60
 
+# the EXCEPT ALL below is the vehicle for a CTE with a buffered consumer: keep it a join of two windows
+statement ok
+SET disabled_optimizers='set_operation_aggregate';
+
 statement ok
 CREATE TABLE t(a INTEGER, b VARCHAR);
 
