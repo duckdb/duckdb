@@ -1,4 +1,4 @@
-# name: benchmark/micro/window/partitioned_scan.benchmark
+# name: benchmark/micro/window/predicate_elimination.benchmark
 # description: Equivalence 13 from Lidner+ VLDB 2026
 # group: [window]
 
@@ -6,16 +6,19 @@ name PredicateElimination
 group micro
 subgroup window
 
+# Note that Table 3 varies alpha and the partition count, even though neither is appropriate.
+# It also doesn't mention the limits used
 argument rows 1_000_000
-argument k 7
+argument k 10
 argument disabled ''
 
 load
 SET disabled_optimizers=${disabled};
 CREATE OR REPLACE TABLE t AS (
+	SELECT i, i::VARCHAR AS v
 	FROM range(${rows}) tbl(i)
 );
 	
 run
 FROM t
-QUALIFY row_number() OVER (ORDER BY i DESC) <= ${k};
+QUALIFY row_number() OVER (ORDER BY v DESC) <= ${k};
