@@ -586,9 +586,10 @@ public:
 	//! `domain` only with `allow_replace`.
 	RestrictionAction ChooseRestrictionAction(const DomainRestriction &existing, LogicalAggregate &domain,
 	                                          bool keys_may_expand = false, bool allow_replace = true);
-	//! Removing the restriction also stops the production of the key domain at `production` and the materialization
-	//! of the source it is read from (`source_values` values): work only a kept restriction pays for.
-	void SetReleasedWork(LogicalOperator &production, double source_values);
+	//! Work only a kept restriction pays for: the production of the key domain at `production` and the materialization
+	//! of the source it is read from (`source_values` values), each only when the caller has proven that it stops
+	//! with the removal (no production, 0 values otherwise).
+	void SetReleasedWork(optional_ptr<LogicalOperator> production, double source_values);
 
 private:
 	static bool IsCheaper(double candidate, double original);
@@ -606,12 +607,13 @@ private:
 	double released_work = 0;
 };
 
-void DomainCostModel::SetReleasedWork(LogicalOperator &production, double source_values) {
+void DomainCostModel::SetReleasedWork(optional_ptr<LogicalOperator> production, double source_values) {
 	// The unit of this model is one row through a hash table. Producing the key domain and materializing its source
 	// are counted per value by the formulas, but measured they cost about one such unit per source row each (0.25 to
 	// 0.46 of the formula for sources of 3 columns and 1 column), so the released work is scaled down.
 	static constexpr double RELEASED_WORK_SCALE = 0.3;
-	released_work = RELEASED_WORK_SCALE * (EstimateKeyProductionWork(production) + source_values);
+	auto production_work = production ? EstimateKeyProductionWork(*production) : 0;
+	released_work = RELEASED_WORK_SCALE * (production_work + source_values);
 }
 
 bool DomainCostModel::IsCheaper(double candidate, double original) {
@@ -1449,9 +1451,9 @@ static BindingReplacementGraph MaterializeRuntimeDomain(Optimizer &optimizer, un
 bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<LogicalOperator> &op,
                                                                   LogicalAggregate &aggregate, idx_t aggregate_side,
                                                                   idx_t demand_index, ExpressionType comparison,
-                                                                  optional_ptr<LogicalOperator> released_domain) {
+                                                                  optional_ptr<const ReleasedDomainWork> released) {
 	// With a released domain the caller only asks whether the aggregate stops reading the demand's keys.
-	bool remove_only = released_domain;
+	bool remove_only = released;
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	auto &demand = *join.children[1 - aggregate_side];
 	if (!ReferencesVisibleOwners(demand, cte_scopes) || !ReferencesVisibleOwners(aggregate, cte_scopes)) {
@@ -1475,22 +1477,9 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	if (!source_stats) {
 		return false;
 	}
-	// Without the restriction nothing reads the released key domain: its production stops, and so does the
-	// materialization of the source for it.
-	optional_ptr<LogicalOperator> released_production;
+	// The materialization of the source counts as released only when it is proven to stop with the restriction.
 	double released_source_values = 0;
-	if (released_domain) {
-		released_production = released_domain;
-		while (released_production->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			released_production = *released_production->children[0];
-		}
-		if (released_production->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-			auto &reference = released_production->Cast<LogicalCTERef>();
-			auto owner = FindVisibleOwner(reference.cte_index, cte_scopes);
-			if (reference.cte_index != owner_index && owner) {
-				released_production = *owner->children[0];
-			}
-		}
+	if (released && released->source) {
 		released_source_values = static_cast<double>(source_stats->cardinality) *
 		                         static_cast<double>(source.input->GetColumnBindings().size());
 	}
@@ -1505,8 +1494,8 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 			auto key = make_uniq<BoundColumnRefExpression>(type, scan->GetColumnBindings()[scan_source.key]);
 			scan_domain = CreateKeyDomain(optimizer, std::move(scan), std::move(key));
 			DomainCostModel costs(extractor, aggregate, scan_source.rows, scan_source.scan_rows);
-			if (released_production) {
-				costs.SetReleasedWork(*released_production, released_source_values);
+			if (released) {
+				costs.SetReleasedWork(released->production, released_source_values);
 			}
 			// A scan supplies the keys: the demand's source is released either way.
 			if (TryOptimizeRuntimeRestriction(optimizer.context, costs, aggregate, demand, demand_index, scan_domain,
@@ -1530,8 +1519,8 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	// CTE readers scan the full row. A new owner also writes it and replaces the consumer with another reader.
 	auto source_read_write_work = (source.owner ? 1 : 3) * source_rows * static_cast<double>(source_types.size());
 	DomainCostModel costs(extractor, aggregate, source_rows, source_read_write_work);
-	if (released_production) {
-		costs.SetReleasedWork(*released_production, released_source_values);
+	if (released) {
+		costs.SetReleasedWork(released->production, released_source_values);
 	}
 	auto action = TryOptimizeRuntimeRestriction(optimizer.context, costs, aggregate, demand, demand_index, domain,
 	                                            comparison, cte_scopes, false, !remove_only);
@@ -1559,6 +1548,56 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	return true;
 }
 
+//! The number of references of the materialized CTE `cte` below `op`, nested CTE definitions included.
+static idx_t CountReferences(LogicalOperator &op, TableIndex cte) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		return op.Cast<LogicalCTERef>().cte_index == cte ? 1 : 0;
+	}
+	idx_t count = 0;
+	for (auto &child : op.children) {
+		count += CountReferences(*child, cte);
+	}
+	return count;
+}
+
+//! Which producers stop when the restriction of the aggregate input to the keys of `domain` is removed and the outer
+//! side `demand` takes the place of the domain. The restriction keys and the domain go away with the rewrite; their
+//! producers only stop when nothing else reads them:
+//! - the duplicate elimination behind the domain, when it is inline or a CTE that only the domain and the restriction
+//!   keys reference;
+//! - the materialization of the source, when the demand is its only remaining reference and the CTE is not
+//!   materialized on request (it is then inlined).
+static ReleasedDomainWork FindReleasedDomainWork(LogicalOperator &demand, LogicalOperator &domain,
+                                                 LogicalOperator &restriction_keys, TableIndex source,
+                                                 const vector<reference<LogicalMaterializedCTE>> &cte_scopes) {
+	ReleasedDomainWork released;
+	reference<LogicalOperator> production = domain;
+	while (production.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		production = *production.get().children[0];
+	}
+	auto released_source_references = CountReferences(domain, source) + CountReferences(restriction_keys, source);
+	bool production_stops = true;
+	if (production.get().type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto index = production.get().Cast<LogicalCTERef>().cte_index;
+		auto owner = FindVisibleOwner(index, cte_scopes);
+		production_stops = owner && index != source &&
+		                   CountReferences(*owner->children[1], index) ==
+		                       CountReferences(domain, index) + CountReferences(restriction_keys, index);
+		if (production_stops) {
+			production = *owner->children[0];
+			released_source_references += CountReferences(production, source);
+		}
+	}
+	if (production_stops) {
+		released.production = production.get();
+	}
+	auto owner = FindVisibleOwner(source, cte_scopes);
+	released.source = owner && owner->materialize != CTEMaterialize::CTE_MATERIALIZE_ALWAYS &&
+	                  CountReferences(demand, source) == 1 &&
+	                  CountReferences(*owner->children[1], source) == 1 + released_source_references;
+	return released;
+}
+
 //! The join matches FindOuterDomainJoin and the aggregate does not need the keys of the LHS, or the cost model removes
 //! its restriction to them: the LHS takes the place of the key domain (`L LEFT JOIN aggregate`) and the operators that
 //! sat on the inner LEFT join move above the join, passing the LHS columns through. Nothing reads the
@@ -1574,6 +1613,7 @@ bool DuplicateEliminatedDomainOptimizer::TryPullUpOuterDomainJoin(unique_ptr<Log
 			return false;
 		}
 		auto &aggregate_side = *matched.domain_join->children[1];
+		ReleasedDomainWork released;
 		{
 			// The restriction must be the aggregate side's only reader of the keys.
 			DomainRestriction restriction(optimizer.context, cte_scopes, *matched.aggregate, matched.comparison);
@@ -1583,9 +1623,10 @@ bool DuplicateEliminatedDomainOptimizer::TryPullUpOuterDomainJoin(unique_ptr<Log
 			        CountSourceReaders(*restriction_join->children[1], matched.source, cte_scopes)) {
 				return false;
 			}
+			released = FindReleasedDomainWork(*op->children[0], *matched.domain_join->children[0],
+			                                  *restriction_join->children[1], matched.source, cte_scopes);
 		}
-		if (!TryOptimizeRuntimeDomain(op, *matched.aggregate, 1, matched.demand_index, matched.comparison,
-		                              matched.domain_join->children[0].get())) {
+		if (!TryOptimizeRuntimeDomain(op, *matched.aggregate, 1, matched.demand_index, matched.comparison, &released)) {
 			return false;
 		}
 		if (CountSourceReaders(aggregate_side, matched.source, cte_scopes) != 0) {

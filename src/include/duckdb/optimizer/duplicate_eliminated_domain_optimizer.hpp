@@ -15,6 +15,14 @@ class Optimizer;
 class LogicalAggregate;
 class LogicalMaterializedCTE;
 
+//! The producers a restriction to the outer keys keeps running, as far as they are proven to stop with its removal
+struct ReleasedDomainWork {
+	//! The producer of the key domain, when nothing else reads it
+	optional_ptr<LogicalOperator> production;
+	//! Whether the source is no longer materialized
+	bool source = false;
+};
+
 //! Restrict local grouped aggregates to their consumer's demand keys.
 class DuplicateEliminatedDomainOptimizer : public LogicalOperatorVisitor {
 public:
@@ -28,7 +36,7 @@ private:
 	bool TryOptimizeDomain(unique_ptr<LogicalOperator> &op, idx_t aggregate_side, idx_t condition_index);
 	bool TryOptimizeRuntimeDomain(unique_ptr<LogicalOperator> &op, LogicalAggregate &aggregate, idx_t aggregate_side,
 	                              idx_t demand_index, ExpressionType comparison,
-	                              optional_ptr<LogicalOperator> released_domain = nullptr);
+	                              optional_ptr<const ReleasedDomainWork> released = nullptr);
 	bool TryPullUpOuterDomainJoin(unique_ptr<LogicalOperator> &op);
 
 private:
