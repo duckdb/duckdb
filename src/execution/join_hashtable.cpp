@@ -2668,6 +2668,7 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 }
 
 idx_t JoinHashTable::ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const {
+	FlatVector::SetSize(result, count_t(0));
 	// nothing to scan if the build side is empty
 	if (data_collection->ChunkCount() == 0) {
 		return 0;
@@ -2681,6 +2682,7 @@ idx_t JoinHashTable::ScanKeyColumn(Vector &addresses, Vector &result, idx_t colu
 	}
 	const auto &sel = *FlatVector::IncrementalSelectionVector();
 	data_collection->Gather(addresses, sel, key_count, column_index, result, sel, nullptr);
+	FlatVector::SetSize(result, count_t(key_count));
 	return key_count;
 }
 

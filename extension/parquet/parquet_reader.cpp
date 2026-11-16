@@ -32,6 +32,10 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -1921,6 +1925,10 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
 	return prune_result;
 }
 
+void ParquetScanFilter::Initialize(ClientContext &context) {
+	filter_state = TableFilterState::Initialize(context, filter);
+}
+
 bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state,
                                            bool dynamic_filters_only) {
 	for (auto &scan_filter : state.scan_filters) {
@@ -1936,6 +1944,11 @@ bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReader
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return true;
+		}
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			scan_filter.filter_state.reset();
+		} else if (!scan_filter.filter_state) {
+			scan_filter.Initialize(context);
 		}
 	}
 	return false;
@@ -2458,9 +2471,8 @@ idx_t ParquetReader::GetDataSize() const {
 	return data_size;
 }
 
-ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter)
+ParquetScanFilter::ParquetScanFilter(ClientContext &, ProjectionIndex filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
-	filter_state = TableFilterState::Initialize(context, filter);
 }
 
 ParquetScanFilter::~ParquetScanFilter() {
@@ -2968,8 +2980,12 @@ idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &r
 
 		auto &result_vector = result.data[local_idx.GetIndex()];
 		ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
-		child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
-		                    filter_count, is_first_filter);
+		if (scan_filter.filter_state) {
+			child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
+			                    filter_count, is_first_filter);
+		} else {
+			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
+		}
 		if (log_prefetch) {
 			auto &filters_used = state.prefetch_metrics.logger.filters_used;
 			if (filters_used.size() != state.scan_filters.size()) {
