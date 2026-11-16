@@ -47,11 +47,13 @@ public:
 	static NodePtr Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_node4_ptr, const uint8_t pos);
 
 	//! Replaces a freed Node4 that had one remaining child: concatenates parent -> byte -> child.
-	//! parent_ptr is the inner node above the Node4, or the head of the prefix chain ending at node4_ptr.
-	//! node4_ptr is the slot of the freed Node4, node4_status its gate status, and status is GATE_SET
-	//! if the Node4 is the gate or inside one.
-	static void Concat(ART &art, NodePtr &parent_ptr, NodePtr &node4_ptr, const NodePtr child_ptr, const uint8_t byte,
-	                   const GateStatus node4_status, const GateStatus status);
+	//! parent_ptr points to the inner node above the Node4, or to the head of the prefix chain ending at the Node4.
+	//! node4_ptr_handle refers to the NodePtr that pointed to the freed Node4, which FreeNode cleared.
+	//! It pins the node storing that NodePtr: the inner node above the Node4, or the tail of parent_ptr's
+	//! prefix chain. At the root, it is unpinned, and parent_ptr is that same cleared NodePtr, so it is not a PREFIX.
+	//! node4_status is the Node4's gate status, and status is GATE_SET if the Node4 is the gate or inside one.
+	static void Concat(ART &art, NodePtr &parent_ptr, NodePtrHandle node4_ptr_handle, const NodePtr child_ptr,
+	                   const uint8_t byte, const GateStatus node4_status, const GateStatus status);
 
 	//! Create a new deprecated prefix node and return a handle to it.
 	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node_ptr);
@@ -108,9 +110,6 @@ private:
 	                                const idx_t offset);
 	static PrefixHandle AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte);
 	static void Append(ART &art, PrefixHandle prefix, NodePtr other_ptr);
-
-	//! Returns a handle to the tail of the prefix chain, pinning one link at a time.
-	static PrefixHandle GetTail(ART &art, const NodePtr node_ptr);
 
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
 	                                              const uint8_t byte);
