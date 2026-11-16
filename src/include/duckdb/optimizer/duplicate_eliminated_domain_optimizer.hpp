@@ -27,7 +27,9 @@ private:
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 	bool TryOptimizeDomain(unique_ptr<LogicalOperator> &op, idx_t aggregate_side, idx_t condition_index);
 	bool TryOptimizeRuntimeDomain(unique_ptr<LogicalOperator> &op, LogicalAggregate &aggregate, idx_t aggregate_side,
-	                              idx_t demand_index, ExpressionType comparison);
+	                              idx_t demand_index, ExpressionType comparison,
+	                              optional_ptr<LogicalOperator> released_domain = nullptr);
+	bool TryPullUpOuterDomainJoin(unique_ptr<LogicalOperator> &op);
 
 private:
 	Optimizer &optimizer;
