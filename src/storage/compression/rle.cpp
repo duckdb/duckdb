@@ -706,10 +706,10 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	scan_state.SkipInternal(vector_count - previous);
 	scan_state.filter_cache->Filter(scan_state.run_indices, sel, sel_count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto data = FlatVector::GetDataMutable<T>(result);
+	auto writer = FlatVector::ScatterWriter<T>(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		const auto row = sel.get_index(i);
-		data[row] = run_values[scan_state.run_indices.get_index(row)];
+		writer[row] = run_values[scan_state.run_indices.get_index(row)];
 	}
 }
 
