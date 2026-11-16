@@ -26,6 +26,10 @@ class WindowFunction;
 //! catalog and schema name of its definition, like any function bound from SQL.
 shared_ptr<const ScalarFunction> GetBuiltinScalarFunction(ClientContext &context, const Identifier &name,
                                                           const vector<LogicalType> &arguments);
+//! Like GetBuiltinScalarFunction, but returns nullptr instead of throwing when there is no such function or no overload
+//! matches
+shared_ptr<const ScalarFunction> TryGetBuiltinScalarFunction(ClientContext &context, const Identifier &name,
+                                                             const vector<LogicalType> &arguments);
 //! Aggregate counterpart of GetBuiltinScalarFunction
 shared_ptr<const AggregateFunction> GetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
                                                                 const vector<LogicalType> &arguments);
