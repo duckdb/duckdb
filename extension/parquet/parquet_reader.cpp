@@ -1918,10 +1918,6 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
 	return prune_result;
 }
 
-void ParquetScanFilter::Initialize(ClientContext &context) {
-	filter_state = TableFilterState::Initialize(context, filter);
-}
-
 bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state,
                                            bool dynamic_filters_only) {
 	for (auto &scan_filter : state.scan_filters) {
@@ -1941,7 +1937,7 @@ bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReader
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 			scan_filter.filter_state.reset();
 		} else if (!scan_filter.filter_state) {
-			scan_filter.Initialize(context);
+			scan_filter.filter_state = TableFilterState::Initialize(context, scan_filter.filter);
 		}
 	}
 	return false;
@@ -2464,7 +2460,7 @@ idx_t ParquetReader::GetDataSize() const {
 	return data_size;
 }
 
-ParquetScanFilter::ParquetScanFilter(ClientContext &, ProjectionIndex filter_idx, TableFilter &filter)
+ParquetScanFilter::ParquetScanFilter(ProjectionIndex filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
 }
 
@@ -2512,7 +2508,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices,
 		                                                     context.GetContext().GetLoggerPtr(), file.path);
 		for (auto &entry : *filters) {
-			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
+			state.scan_filters.emplace_back(entry.GetIndex(), entry.Filter());
 		}
 	}
 	if (state.filter_eliminated_all_rows.size() != state.scan_filters.size()) {

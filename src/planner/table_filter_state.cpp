@@ -6,7 +6,6 @@
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -26,17 +25,6 @@ public:
 		memset(matches.get(), 0, count * sizeof(bool));
 		for (idx_t i = 0; i < selected_count; i++) {
 			matches[selected.get_index(i)] = true;
-		}
-	}
-
-	BooleanFilterCache(const Vector &result, idx_t count)
-	    : matches(make_unsafe_uniq_array<bool>(count)), match_count(0), value_count(count) {
-		auto values = result.Values<bool>();
-		D_ASSERT(count <= values.size());
-		for (idx_t i = 0; i < count; i++) {
-			const auto entry = values[i];
-			matches[i] = entry.IsValid() && entry.GetValueUnsafe();
-			match_count += matches[i];
 		}
 	}
 
@@ -362,35 +350,7 @@ public:
 		return true;
 	}
 	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
-		if (count == 0) {
-			return make_uniq<BooleanFilterCache>(SelectionVector(), 0, 0);
-		}
-		Vector input(values, 0, count);
-		Vector predicate(constant, count_t(count));
-		Vector result(LogicalType::BOOLEAN, count);
-		switch (comparison_type) {
-		case ExpressionType::COMPARE_EQUAL:
-			VectorOperations::Equals(input, predicate, result);
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-			VectorOperations::NotEquals(input, predicate, result);
-			break;
-		case ExpressionType::COMPARE_GREATERTHAN:
-			VectorOperations::GreaterThan(input, predicate, result);
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			VectorOperations::GreaterThanEquals(input, predicate, result);
-			break;
-		case ExpressionType::COMPARE_LESSTHAN:
-			VectorOperations::LessThan(input, predicate, result);
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			VectorOperations::LessThanEquals(input, predicate, result);
-			break;
-		default:
-			InternalException::Throw("Unsupported comparison type for comparison filter executor");
-		}
-		return make_uniq<BooleanFilterCache>(result, count);
+		return CreateBooleanCache(*this, values, count);
 	}
 	ComparisonFilterExecutor(ExpressionType comparison_type_p, Value constant_p)
 	    : comparison_type(comparison_type_p), constant(std::move(constant_p)) {
@@ -677,18 +637,23 @@ protected:
 
 	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t> row_counts, SelectionVector &sel,
 	                        idx_t &count) override {
-		const auto before_rows = CountRunRows(row_counts, sel, count);
-		if (before_rows == 0) {
+		if (!stats.get().IsActive()) {
+			for (idx_t i = 0; i < count; i++) {
+				if (row_counts[sel.get_index(i)] != 0) {
+					stats.get().Update(0, 0);
+					break;
+				}
+			}
 			return;
 		}
-		if (!stats.get().IsActive()) {
-			stats.get().Update(0, 0);
+		const auto before_rows = CountRunRows(row_counts, sel, count);
+		if (before_rows == 0) {
 			return;
 		}
 		const auto before_count = count;
 		const auto had_selection = sel.IsSet();
 		child->FilterRuns(values, row_counts, sel, count);
-		const auto accepted_rows = CountRunRows(row_counts, sel, count);
+		const auto accepted_rows = count == before_count ? before_rows : CountRunRows(row_counts, sel, count);
 		stats.get().Update(accepted_rows, before_rows);
 		if (!had_selection && !KeepOptionalSelection(stats.get(), accepted_rows, before_rows)) {
 			sel = SelectionVector();
