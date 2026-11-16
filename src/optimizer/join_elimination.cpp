@@ -30,6 +30,19 @@ static bool AnyVolatile(const LogicalOperator &op) {
 	return is_volatile;
 }
 
+//! Whether an operator of the plan below (and including) `op` has a volatile expression
+static bool AnyVolatileInPlan(const LogicalOperator &op) {
+	if (AnyVolatile(op)) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (AnyVolatileInPlan(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void JoinElimination::OptimizeJoinChildren(LogicalOperator &op) {
 	left_child = CreateChildren();
 	right_child = CreateChildren();
@@ -347,8 +360,11 @@ bool JoinElimination::TryEliminateJoinInternal() {
 		}
 	}
 	// 0. the operators above ignore duplicates: an outer join that nothing reads the inner side of only repeats its
-	// outer rows, whatever the inner side holds (a SINGLE join raises an error on a second match, so it stays)
-	if (pipe_info.ignores_duplicates && join.join_type != JoinType::SINGLE) {
+	// outer rows, whatever the inner side holds (a SINGLE join raises an error on a second match, so it stays).
+	// An inner side or a join condition with a volatile expression (nextval, random) stays as well: it has an effect
+	// of its own
+	if (pipe_info.ignores_duplicates && join.join_type != JoinType::SINGLE && !AnyVolatile(join) &&
+	    !AnyVolatileInPlan(*join.children[inner_idx])) {
 		join_parent->children[pipe_info.join_index] = std::move(join_op->children[outer_idx]);
 		return true;
 	}

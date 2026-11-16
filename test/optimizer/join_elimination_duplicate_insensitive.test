@@ -341,3 +341,606 @@ select i, (select sum(ss1.i) from (select i from integers s1 where i>any(select 
 2	5
 3	5
 NULL	5
+
+# ---- Adversarial shapes around the pattern: every query returns the result of the unoptimized plan, with the --------
+# ---- optimizer disabled (i = 0) and enabled (i = 1) -------------------------------------------------------------------
+
+loop i 0 2
+
+statement ok
+SET disabled_optimizers = CASE WHEN {i} = 0 THEN 'join_elimination' ELSE '' END;
+
+# join conditions that are not a plain equality, read only the inner side, or are constant
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb < a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida and b.valueb <> a.valuea group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on a.valuea > 1 group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on false group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on NULL group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida or b.valueb = a.valuea group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb is not distinct from a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# RIGHT and FULL joins: only the preserved side may be kept
+
+query II
+select a.ida, min(a.valuea) from b right join a on b.idb = a.ida group by a.ida order by all;
+----
+1	1
+2	2
+3	NULL
+NULL	4
+
+query II
+select b.idb, min(b.valueb) from b right join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+NULL	NULL
+
+query II
+select b.idb, min(b.valueb) from b full join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select a.ida, min(a.valuea) from b full join a on b.idb = a.ida group by a.ida order by all;
+----
+1	1
+2	2
+3	NULL
+NULL	4
+
+# aggregates: FILTER, ORDER BY, DISTINCT next to aggregates that count the repeated rows
+
+query III
+select b.idb, max(b.valueb) filter (where b.valueb > 1), min(b.valueb) filter (where b.idb < 4) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	NULL	1
+2	2	2
+3	3	3
+4	4	NULL
+NULL	4	NULL
+
+query III
+select b.idb, min(b.valueb order by b.valueb desc), count(distinct b.valueb) filter (where b.valueb > 2) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	0
+2	2	0
+3	3	1
+4	4	1
+NULL	4	1
+
+query III
+select b.idb, count(distinct b.valueb), count(*) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	2
+2	1	1
+3	1	3
+4	1	1
+NULL	1	2
+
+query III
+select b.idb, sum(distinct b.valueb), sum(b.valueb) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	2
+2	2	2
+3	3	6
+4	4	4
+NULL	4	4
+
+query IIII
+select b.idb, sum(distinct b.valueb), count(distinct b.valueb), list(distinct b.valueb order by b.valueb) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	1	[1]
+2	2	1	[2]
+3	3	1	[3, NULL]
+4	4	1	[4]
+NULL	4	1	[4, NULL]
+
+query III
+select b.idb, bool_and(b.valueb > 1), bool_or(b.valueb > 1) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	false	false
+2	true	true
+3	true	true
+4	true	true
+NULL	true	true
+
+query IIII
+select b.idb, any_value(b.idb), first(b.idb order by b.idb), count(b.idb) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	1	2
+2	2	2	1
+3	3	3	3
+4	4	4	1
+NULL	NULL	NULL	0
+
+query III
+select b.idb, max(b.valueb), list(b.valueb order by b.valueb) from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	[1, 1]
+2	2	[2]
+3	3	[3, 3, NULL]
+4	4	[4]
+NULL	4	[4, NULL]
+
+query III
+select b.idb, max(b.valueb), avg(b.valueb)::int from b left join a on b.idb = a.ida group by b.idb order by all;
+----
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+NULL	4	4
+
+query II
+select max(b.valueb), min(b.idb) from b left join a on b.idb = a.ida;
+----
+4	1
+
+query II
+select max(b.valueb), count(*) from b left join a on b.idb = a.ida;
+----
+4	9
+
+# grouping sets and HAVING
+
+query IIII
+select b.idb, b.valueb, max(b.valueb), grouping(b.idb) from b left join a on b.idb = a.ida group by rollup (b.idb, b.valueb) order by all;
+----
+1	1	1	0
+1	NULL	1	0
+2	2	2	0
+2	NULL	2	0
+3	3	3	0
+3	NULL	3	0
+3	NULL	NULL	0
+4	4	4	0
+4	NULL	4	0
+NULL	4	4	0
+NULL	NULL	4	0
+NULL	NULL	4	1
+NULL	NULL	NULL	0
+
+query III
+select b.idb, b.valueb, count(*) from b left join a on b.idb = a.ida group by grouping sets ((b.idb), (b.valueb)) order by all;
+----
+1	NULL	2
+2	NULL	1
+3	NULL	3
+4	NULL	1
+NULL	1	2
+NULL	2	1
+NULL	3	2
+NULL	4	2
+NULL	NULL	2
+NULL	NULL	2
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida group by b.idb having count(*) > 1 order by all;
+----
+1	1
+3	3
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida group by b.idb having min(b.valueb) > 1 order by all;
+----
+2	2
+3	3
+4	4
+NULL	4
+
+query I
+select idb from (select b.idb, max(b.valueb) m, count(*) c from b left join a on b.idb = a.ida group by b.idb) where c > 1 order by all;
+----
+1
+3
+NULL
+
+query II
+select idb, m from (select b.idb, max(b.valueb) m, count(*) c, sum(a.valuea) s from b left join a on b.idb = a.ida group by b.idb) order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# operators between the join and the aggregate that see the repeated rows
+
+query II
+select idb, max(valueb) from (select b.*, row_number() over (partition by b.idb order by b.valueb) rn from b left join a on b.idb = a.ida) where rn = 2 group by idb order by all;
+----
+1	1
+3	3
+NULL	NULL
+
+query III
+select idb, max(valueb), max(rn) from (select b.*, row_number() over (partition by b.idb order by b.valueb) rn from b left join a on b.idb = a.ida) group by idb order by all;
+----
+1	1	2
+2	2	1
+3	3	3
+4	4	1
+NULL	4	2
+
+query II
+select idb, max(valueb) from (select b.* from b left join a on b.idb = a.ida order by b.idb nulls last, b.valueb nulls last limit 5) group by idb order by all;
+----
+1	1
+2	2
+3	3
+
+query II
+select idb, max(valueb) from (select b.* from b left join a on b.idb = a.ida order by b.idb nulls last, b.valueb nulls last limit 3 offset 2) group by idb order by all;
+----
+2	2
+3	3
+
+query II
+select idb, max(valueb) from (select distinct on (b.idb) b.idb, b.valueb from b left join a on b.idb = a.ida order by b.idb, b.valueb) group by idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query III
+select idb, max(valueb), count(*) from (select b.idb, b.valueb from b left join a on b.idb = a.ida union all select idc, valuec from c) group by idb order by all;
+----
+1	1	3
+2	2	2
+3	3	6
+4	4	2
+NULL	4	4
+
+query II
+select idb, max(valueb) from (select b.idb, b.valueb from b left join a on b.idb = a.ida union all select idc, valuec from c) group by idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select idb, count(*) from (select b.idb, b.valueb from b left join a on b.idb = a.ida union select idc, valuec from c) group by idb order by all;
+----
+1	1
+2	1
+3	2
+4	1
+NULL	2
+
+query II
+select idb, max(valueb) from (select b.idb, b.valueb from b left join a on b.idb = a.ida except all select idc, valuec from c) group by idb order by all;
+----
+1	1
+
+query II
+select max(r), count(distinct r) from (select b.rowid r from b left join a on b.idb = a.ida);
+----
+7	8
+
+query II
+select idb, max(u) from (select b.idb, unnest([b.valueb, b.idb]) u from b left join a on b.idb = a.ida) group by idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select idb, max(n) from (select b.idb, count(*) n from b left join a on b.idb = a.ida group by b.idb) group by idb order by all;
+----
+1	2
+2	1
+3	3
+4	1
+NULL	2
+
+# SEMI / ANTI joins: the removed side on their right side, also with other conditions
+
+query II
+select idc, valuec from c where idc in (select b.idb from b left join a on b.valueb < a.valuea) order by all;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+
+query II
+select idc, valuec from c where idc not in (select b.valueb from b left join a on b.idb = a.ida where b.valueb is not null) order by all;
+----
+
+
+query II
+select idc, valuec from c where exists (select 1 from b left join a on b.idb = a.ida where b.idb = c.idc and b.valueb <= c.valuec) order by all;
+----
+1	1
+2	2
+3	3
+3	3
+4	4
+
+
+query II
+select idc, valuec from c where exists (select 1 from b left join a on b.idb = a.ida where b.idb = c.idc and a.valuea <= c.valuec) order by all;
+----
+1	1
+2	2
+
+
+query II
+select idc, valuec from c where not exists (select 1 from b left join a on b.idb = a.ida where b.idb = c.idc and a.valuea is null) order by all;
+----
+1	1
+2	2
+NULL	4
+NULL	NULL
+
+query II
+select idc, valuec from c where exists (select 1 from b left join a on b.idb = a.ida and a.valuea = c.valuec where b.idb = c.idc) order by all;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+
+query II
+select idc, (select count(*) from b left join a on b.idb = a.ida where b.idb = c.idc) from c order by all;
+----
+1	2
+2	1
+3	3
+3	3
+3	3
+4	1
+NULL	0
+NULL	0
+
+query II
+select idc, (select max(b.valueb) from b left join a on b.idb = a.ida where b.idb = c.idc) from c order by all;
+----
+1	1
+2	2
+3	3
+3	3
+3	3
+4	4
+NULL	NULL
+NULL	NULL
+
+query II
+select idc, valuec from c semi join (b left join a on b.idb = a.ida) on c.idc = b.idb order by all;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+
+query II
+select idc, valuec from c anti join (b left join a on b.idb = a.ida) on c.idc = b.idb and c.valuec = a.valuea order by all;
+----
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# USING / NATURAL joins and the merged column
+
+query II
+select ida, max(b.valueb) from (select idb as ida, valueb from b) b left join a using (ida) group by ida order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select ida, max(b.valueb) from (select idb as ida, valueb from b) b right join a using (ida) group by ida order by all;
+----
+1	1
+2	2
+3	3
+NULL	NULL
+
+query II
+select ida, max(b.valueb) from (select idb as ida, valueb from b) b full join a using (ida) group by ida order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select ida, max(valueb) from (select idb as ida, valueb from b) b natural left join a group by ida order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+# lateral and correlated references to the removed side
+
+query II
+select b.idb, max(b.valueb) from b left join lateral (select a.valuea from a where a.ida = b.idb) s on true group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(s.v) from b left join a on b.idb = a.ida, lateral (select a.valuea + 1 as v) s group by b.idb order by all;
+----
+1	2
+2	3
+3	NULL
+4	NULL
+NULL	NULL
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida where (select max(c.valuec) from c where c.idc = a.ida) is null group by b.idb order by all;
+----
+4	4
+NULL	4
+
+# a volatile join condition (always true here) and an inner side that is a table function
+
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = a.ida and random() < 2 group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join range(3) r on b.idb = r.range group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query II
+select b.idb, max(b.valueb) from b left join (select unnest([1, 1, 2]) u) r on b.idb = r.u group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';
+
+# an inner side or a join condition with a volatile expression stays: a sequence is advanced once per inner row
+statement ok
+create sequence seq;
+
+query II
+explain select b.idb, max(b.valueb) from b left join (select ida, nextval('seq') n from a) a on b.idb = a.ida and a.n > 0 group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.idb, max(b.valueb) from b left join (select ida, nextval('seq') n from a) a on b.idb = a.ida and a.n > 0 group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+query I
+select nextval('seq');
+----
+7
+
+query II
+explain select b.idb, max(b.valueb) from b left join a on b.idb = a.ida and random() < 2 group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# an error that only the removed inner side or the removed join condition raises is not raised any more, like the error
+# of any other expression that is not evaluated because nothing reads it
+query II
+select b.idb, max(b.valueb) from b left join a on b.idb = cast('x' || a.ida as int) group by b.idb order by all;
+----
+1	1
+2	2
+3	3
+4	4
+NULL	4
+
+statement ok
+SET disabled_optimizers = 'join_elimination';
+
+statement error
+select b.idb, max(b.valueb) from b left join a on b.idb = cast('x' || a.ida as int) group by b.idb order by all;
+----
+Conversion Error
+
+statement ok
+SET disabled_optimizers = '';
