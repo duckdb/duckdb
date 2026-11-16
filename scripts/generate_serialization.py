@@ -354,6 +354,7 @@ supported_member_entries = [
     "status",
     "version",
     "serialize_condition",
+    "serialize_only_condition",
     "required_until",
     # equality/hash generation annotations (used by generate_util.py)
     "equals_skip",
@@ -433,6 +434,8 @@ class MemberVariable:
         # version gate (above) would skip it. Used e.g. to always serialize a value that an older format cannot
         # otherwise represent (nested schema paths).
         self.serialize_condition = entry.get("serialize_condition", None)
+        # When set, the property is serialized only if serialize_condition holds, regardless of the storage version.
+        self.serialize_only_condition = entry.get("serialize_only_condition", False)
         if "default" in entry:
             self.has_default = True
             self.default = entry["default"]
@@ -442,7 +445,7 @@ class MemberVariable:
             self.deserialize_default = entry["deserialize_default"]
         if "status" in entry:
             self.status = parse_status(entry["status"])
-        if self.default is None:
+        if self.default is None and self.deserialize_default is None:
             # default default
             self.has_default = has_default_by_default(self.type)
         if "required_until" in entry:
@@ -686,7 +689,10 @@ class SerializableClass:
                 # conditional serialization
                 condition = f"serializer.ShouldSerialize({storage_version_enum})"
                 if entry.serialize_condition is not None:
-                    condition = f"{condition} || ({entry.serialize_condition})"
+                    if entry.serialize_only_condition:
+                        condition = entry.serialize_condition
+                    else:
+                        condition = f"{condition} || ({entry.serialize_condition})"
                 code.append(f"\tif ({condition}) {{")
             code.append("\t" + serialization_code)
 

@@ -945,8 +945,8 @@
       {
         "id": 209,
         "name": "row_id_handling",
-        "type": "RowIdHandling",
-        "default": "RowIdHandling::ASSUME_UNIQUE"
+        "type": "uint8_t",
+        "status": "deleted"
       }
     ],
     "constructor": [

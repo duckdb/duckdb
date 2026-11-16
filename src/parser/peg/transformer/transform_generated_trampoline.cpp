@@ -326,7 +326,7 @@ static const TransformChildPlan FRAME_CHILDREN_20[] = {{PEGRuleId::AlterSequence
                                                         {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_23 = {FRAME_CHILDREN_20, 3, 3, false, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_21[] = {{PEGRuleId::SchemaQualification,
-                                                        TransformChildKind::OPTIONAL,
+                                                        TransformChildKind::OPTIONAL_REPEAT,
                                                         1,
                                                         1,
                                                         false,
@@ -339,7 +339,7 @@ static const TransformChildPlan FRAME_CHILDREN_21[] = {{PEGRuleId::SchemaQualifi
                                                         false,
                                                         {0, TRANSFORM_PATH_END, 0},
                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_24 = {FRAME_CHILDREN_21, 2, 2, false, 0, {}};
+static const TransformFramePlan FRAME_PLAN_24 = {FRAME_CHILDREN_21, 2, 2, true, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_22[] = {{PEGRuleId::RenameAlter,
                                                         TransformChildKind::REQUIRED,
                                                         0,
@@ -2253,9 +2253,9 @@ static const TransformChildPlan FRAME_CHILDREN_156[] = {{PEGRuleId::TableRef,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_169 = {FRAME_CHILDREN_156, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_157[] = {{PEGRuleId::SelectStatementInternal,
-                                                         TransformChildKind::REQUIRED,
-                                                         1,
+static const TransformChildPlan FRAME_CHILDREN_157[] = {{PEGRuleId::ShowExternalResourcesType,
+                                                         TransformChildKind::OPTIONAL,
+                                                         4,
                                                          1,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
@@ -2275,7 +2275,7 @@ static const TransformChildPlan FRAME_CHILDREN_158[] = {{PEGRuleId::SelectStatem
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::DescribeOrSummarize,
+                                                        {PEGRuleId::ShowRule,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
@@ -2283,15 +2283,30 @@ static const TransformChildPlan FRAME_CHILDREN_158[] = {{PEGRuleId::SelectStatem
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_171 = {FRAME_CHILDREN_158, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_159[] = {{PEGRuleId::ShowOrDescribe,
+static const TransformChildPlan FRAME_CHILDREN_159[] = {{PEGRuleId::SelectStatementInternal,
+                                                         TransformChildKind::REQUIRED,
+                                                         1,
+                                                         1,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}},
+                                                        {PEGRuleId::DescribeOrSummarize,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_172 = {FRAME_CHILDREN_159, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_160[] = {{PEGRuleId::QualifiedName,
+static const TransformFramePlan FRAME_PLAN_172 = {FRAME_CHILDREN_159, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_160[] = {{PEGRuleId::ShowOrDescribe,
+                                                         TransformChildKind::REQUIRED,
+                                                         0,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_173 = {FRAME_CHILDREN_160, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_161[] = {{PEGRuleId::QualifiedName,
                                                          TransformChildKind::REQUIRED,
                                                          3,
                                                          1,
@@ -2305,8 +2320,8 @@ static const TransformChildPlan FRAME_CHILDREN_160[] = {{PEGRuleId::QualifiedNam
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_173 = {FRAME_CHILDREN_160, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_161[] = {{PEGRuleId::ShowTarget,
+static const TransformFramePlan FRAME_PLAN_174 = {FRAME_CHILDREN_161, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_162[] = {{PEGRuleId::ShowTarget,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -2320,8 +2335,8 @@ static const TransformChildPlan FRAME_CHILDREN_161[] = {{PEGRuleId::ShowTarget,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_174 = {FRAME_CHILDREN_161, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_162[] = {{PEGRuleId::DescribeTarget,
+static const TransformFramePlan FRAME_PLAN_175 = {FRAME_CHILDREN_162, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_163[] = {{PEGRuleId::DescribeTarget,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -2335,18 +2350,10 @@ static const TransformChildPlan FRAME_CHILDREN_162[] = {{PEGRuleId::DescribeTarg
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_175 = {FRAME_CHILDREN_162, 2, 2, false, 0, {}};
+static const TransformFramePlan FRAME_PLAN_176 = {FRAME_CHILDREN_163, 2, 2, false, 0, {}};
 static const char *const FRAME_NAMES_7[] = {"ShowSpecialForm"};
-static const TransformFramePlan FRAME_PLAN_176 = {nullptr, 0, 1, false, 0, {0, 0, false, true, 1, FRAME_NAMES_7}};
-static const TransformChildPlan FRAME_CHILDREN_163[] = {{PEGRuleId::QualifiedTableName,
-                                                         TransformChildKind::REQUIRED,
-                                                         0,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_177 = {FRAME_CHILDREN_163, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_164[] = {{PEGRuleId::BaseTableName,
+static const TransformFramePlan FRAME_PLAN_177 = {nullptr, 0, 1, false, 0, {0, 0, false, true, 1, FRAME_NAMES_7}};
+static const TransformChildPlan FRAME_CHILDREN_164[] = {{PEGRuleId::QualifiedTableName,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
@@ -2354,7 +2361,7 @@ static const TransformChildPlan FRAME_CHILDREN_164[] = {{PEGRuleId::BaseTableNam
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_178 = {FRAME_CHILDREN_164, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_165[] = {{PEGRuleId::SummarizeRule,
+static const TransformChildPlan FRAME_CHILDREN_165[] = {{PEGRuleId::BaseTableName,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
@@ -2362,15 +2369,23 @@ static const TransformChildPlan FRAME_CHILDREN_165[] = {{PEGRuleId::SummarizeRul
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_179 = {FRAME_CHILDREN_165, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_166[] = {{PEGRuleId::IfExists,
+static const TransformChildPlan FRAME_CHILDREN_166[] = {{PEGRuleId::SummarizeRule,
+                                                         TransformChildKind::REQUIRED,
+                                                         0,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_180 = {FRAME_CHILDREN_166, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_167[] = {{PEGRuleId::IfExists,
                                                          TransformChildKind::OPTIONAL,
                                                          2,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_180 = {FRAME_CHILDREN_166, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_167[] = {{PEGRuleId::DropBehavior,
+static const TransformFramePlan FRAME_PLAN_181 = {FRAME_CHILDREN_167, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_168[] = {{PEGRuleId::DropBehavior,
                                                          TransformChildKind::OPTIONAL,
                                                          2,
                                                          1,
@@ -2384,8 +2399,8 @@ static const TransformChildPlan FRAME_CHILDREN_167[] = {{PEGRuleId::DropBehavior
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_181 = {FRAME_CHILDREN_167, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_168[] = {{PEGRuleId::BaseTableName,
+static const TransformFramePlan FRAME_PLAN_182 = {FRAME_CHILDREN_168, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_169[] = {{PEGRuleId::BaseTableName,
                                                          TransformChildKind::REQUIRED,
                                                          4,
                                                          2,
@@ -2406,8 +2421,8 @@ static const TransformChildPlan FRAME_CHILDREN_168[] = {{PEGRuleId::BaseTableNam
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_182 = {FRAME_CHILDREN_168, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_169[] = {{PEGRuleId::BaseTableName,
+static const TransformFramePlan FRAME_PLAN_183 = {FRAME_CHILDREN_169, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_170[] = {{PEGRuleId::BaseTableName,
                                                          TransformChildKind::LIST,
                                                          2,
                                                          2,
@@ -2428,8 +2443,8 @@ static const TransformChildPlan FRAME_CHILDREN_169[] = {{PEGRuleId::BaseTableNam
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_183 = {FRAME_CHILDREN_169, 3, 3, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_170[] = {{PEGRuleId::QualifiedTableFunction,
+static const TransformFramePlan FRAME_PLAN_184 = {FRAME_CHILDREN_170, 3, 3, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_171[] = {{PEGRuleId::QualifiedTableFunction,
                                                          TransformChildKind::LIST,
                                                          2,
                                                          2,
@@ -2450,8 +2465,8 @@ static const TransformChildPlan FRAME_CHILDREN_170[] = {{PEGRuleId::QualifiedTab
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_184 = {FRAME_CHILDREN_170, 3, 3, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_171[] = {{PEGRuleId::FunctionIdentifier,
+static const TransformFramePlan FRAME_PLAN_185 = {FRAME_CHILDREN_171, 3, 3, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_172[] = {{PEGRuleId::FunctionIdentifier,
                                                          TransformChildKind::LIST,
                                                          2,
                                                          2,
@@ -2472,23 +2487,8 @@ static const TransformChildPlan FRAME_CHILDREN_171[] = {{PEGRuleId::FunctionIden
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_185 = {FRAME_CHILDREN_171, 3, 3, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_172[] = {{PEGRuleId::QualifiedName,
-                                                         TransformChildKind::LIST,
-                                                         2,
-                                                         1,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::IfExists,
-                                                         TransformChildKind::OPTIONAL,
-                                                         1,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_186 = {FRAME_CHILDREN_172, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_173[] = {{PEGRuleId::QualifiedIndexName,
+static const TransformFramePlan FRAME_PLAN_186 = {FRAME_CHILDREN_172, 3, 3, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_173[] = {{PEGRuleId::QualifiedName,
                                                          TransformChildKind::LIST,
                                                          2,
                                                          1,
@@ -2503,21 +2503,21 @@ static const TransformChildPlan FRAME_CHILDREN_173[] = {{PEGRuleId::QualifiedInd
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_187 = {FRAME_CHILDREN_173, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_174[] = {{PEGRuleId::ReservedSchemaQualification,
-                                                         TransformChildKind::REQUIRED,
-                                                         1,
+static const TransformChildPlan FRAME_CHILDREN_174[] = {{PEGRuleId::QualifiedIndexName,
+                                                         TransformChildKind::LIST,
+                                                         2,
                                                          1,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::CatalogQualification,
-                                                         TransformChildKind::REQUIRED,
-                                                         0,
+                                                        {PEGRuleId::IfExists,
+                                                         TransformChildKind::OPTIONAL,
+                                                         1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_188 = {FRAME_CHILDREN_174, 2, 2, false, 0, {}};
+static const TransformFramePlan FRAME_PLAN_188 = {FRAME_CHILDREN_174, 2, 2, true, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_175[] = {{PEGRuleId::QualifiedSequenceName,
                                                          TransformChildKind::LIST,
                                                          2,
@@ -4498,15 +4498,7 @@ static const TransformChildPlan FRAME_CHILDREN_331[] = {{PEGRuleId::ColId,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_346 = {FRAME_CHILDREN_331, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_332[] = {{PEGRuleId::ShowAllModifier,
-                                                         TransformChildKind::OPTIONAL,
-                                                         1,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_347 = {FRAME_CHILDREN_332, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_333[] = {{PEGRuleId::AttachOptions,
+static const TransformChildPlan FRAME_CHILDREN_332[] = {{PEGRuleId::AttachOptions,
                                                          TransformChildKind::OPTIONAL,
                                                          4,
                                                          2,
@@ -4527,8 +4519,8 @@ static const TransformChildPlan FRAME_CHILDREN_333[] = {{PEGRuleId::AttachOption
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_348 = {FRAME_CHILDREN_333, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_334[] = {{PEGRuleId::AttachOptions,
+static const TransformFramePlan FRAME_PLAN_347 = {FRAME_CHILDREN_332, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_333[] = {{PEGRuleId::AttachOptions,
                                                          TransformChildKind::OPTIONAL,
                                                          3,
                                                          1,
@@ -4542,16 +4534,16 @@ static const TransformChildPlan FRAME_CHILDREN_334[] = {{PEGRuleId::AttachOption
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_349 = {FRAME_CHILDREN_334, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_335[] = {{PEGRuleId::ExternalResourceCreationOptions,
+static const TransformFramePlan FRAME_PLAN_348 = {FRAME_CHILDREN_333, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_334[] = {{PEGRuleId::ExternalResourceCreationOptions,
                                                          TransformChildKind::OPTIONAL,
                                                          4,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_350 = {FRAME_CHILDREN_335, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_336[] = {{PEGRuleId::ReturningClause,
+static const TransformFramePlan FRAME_PLAN_349 = {FRAME_CHILDREN_334, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_335[] = {{PEGRuleId::ReturningClause,
                                                          TransformChildKind::OPTIONAL,
                                                          10,
                                                          7,
@@ -4607,8 +4599,16 @@ static const TransformChildPlan FRAME_CHILDREN_336[] = {{PEGRuleId::ReturningCla
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_351 = {FRAME_CHILDREN_336, 8, 8, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_337[] = {{PEGRuleId::InsertByName,
+static const TransformFramePlan FRAME_PLAN_350 = {FRAME_CHILDREN_335, 8, 8, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_336[] = {{PEGRuleId::InsertByName,
+                                                         TransformChildKind::REQUIRED,
+                                                         1,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_351 = {FRAME_CHILDREN_336, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_337[] = {{PEGRuleId::InsertByPosition,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
@@ -4616,15 +4616,7 @@ static const TransformChildPlan FRAME_CHILDREN_337[] = {{PEGRuleId::InsertByName
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_352 = {FRAME_CHILDREN_337, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_338[] = {{PEGRuleId::InsertByPosition,
-                                                         TransformChildKind::REQUIRED,
-                                                         1,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_353 = {FRAME_CHILDREN_338, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_339[] = {{PEGRuleId::InsertAlias,
+static const TransformChildPlan FRAME_CHILDREN_338[] = {{PEGRuleId::InsertAlias,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -4638,8 +4630,8 @@ static const TransformChildPlan FRAME_CHILDREN_339[] = {{PEGRuleId::InsertAlias,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_354 = {FRAME_CHILDREN_339, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_340[] = {{PEGRuleId::OnConflictAction,
+static const TransformFramePlan FRAME_PLAN_353 = {FRAME_CHILDREN_338, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_339[] = {{PEGRuleId::OnConflictAction,
                                                          TransformChildKind::REQUIRED,
                                                          3,
                                                          1,
@@ -4653,8 +4645,8 @@ static const TransformChildPlan FRAME_CHILDREN_340[] = {{PEGRuleId::OnConflictAc
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_355 = {FRAME_CHILDREN_340, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_341[] = {{PEGRuleId::WhereClause,
+static const TransformFramePlan FRAME_PLAN_354 = {FRAME_CHILDREN_339, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_340[] = {{PEGRuleId::WhereClause,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -4668,16 +4660,16 @@ static const TransformChildPlan FRAME_CHILDREN_341[] = {{PEGRuleId::WhereClause,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_356 = {FRAME_CHILDREN_341, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_342[] = {{PEGRuleId::ConstraintName,
+static const TransformFramePlan FRAME_PLAN_355 = {FRAME_CHILDREN_340, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_341[] = {{PEGRuleId::ConstraintName,
                                                          TransformChildKind::REQUIRED,
                                                          2,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_357 = {FRAME_CHILDREN_342, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_343[] = {{PEGRuleId::WhereClause,
+static const TransformFramePlan FRAME_PLAN_356 = {FRAME_CHILDREN_341, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_342[] = {{PEGRuleId::WhereClause,
                                                          TransformChildKind::OPTIONAL,
                                                          4,
                                                          1,
@@ -4691,16 +4683,16 @@ static const TransformChildPlan FRAME_CHILDREN_343[] = {{PEGRuleId::WhereClause,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_358 = {FRAME_CHILDREN_343, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_344[] = {{PEGRuleId::TargetList,
+static const TransformFramePlan FRAME_PLAN_357 = {FRAME_CHILDREN_342, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_343[] = {{PEGRuleId::TargetList,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_359 = {FRAME_CHILDREN_344, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_345[] = {{PEGRuleId::ExtensionAlias,
+static const TransformFramePlan FRAME_PLAN_358 = {FRAME_CHILDREN_343, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_344[] = {{PEGRuleId::ExtensionAlias,
                                                          TransformChildKind::OPTIONAL,
                                                          3,
                                                          2,
@@ -4721,8 +4713,8 @@ static const TransformChildPlan FRAME_CHILDREN_345[] = {{PEGRuleId::ExtensionAli
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_360 = {FRAME_CHILDREN_345, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_346[] = {{PEGRuleId::VersionNumber,
+static const TransformFramePlan FRAME_PLAN_359 = {FRAME_CHILDREN_344, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_345[] = {{PEGRuleId::VersionNumber,
                                                          TransformChildKind::OPTIONAL,
                                                          5,
                                                          3,
@@ -4750,17 +4742,17 @@ static const TransformChildPlan FRAME_CHILDREN_346[] = {{PEGRuleId::VersionNumbe
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_361 = {FRAME_CHILDREN_346, 4, 4, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_347[] = {{PEGRuleId::FromSourceName,
+static const TransformFramePlan FRAME_PLAN_360 = {FRAME_CHILDREN_345, 4, 4, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_346[] = {{PEGRuleId::FromSourceName,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_362 = {FRAME_CHILDREN_347, 1, 1, false, 0, {}};
+static const TransformFramePlan FRAME_PLAN_361 = {FRAME_CHILDREN_346, 1, 1, false, 0, {}};
 static const char *const FRAME_NAMES_9[] = {"Identifier"};
-static const TransformFramePlan FRAME_PLAN_363 = {nullptr,
+static const TransformFramePlan FRAME_PLAN_362 = {nullptr,
                                                   0,
                                                   1,
                                                   false,
@@ -4769,15 +4761,15 @@ static const TransformFramePlan FRAME_PLAN_363 = {nullptr,
                                                        ParseResultTypeBit(ParseResultType::KEYWORD) |
                                                        ParseResultTypeBit(ParseResultType::STRING),
                                                    0, true, true, 1, FRAME_NAMES_9}};
-static const TransformChildPlan FRAME_CHILDREN_348[] = {{PEGRuleId::IdentifierOrStringLiteral,
+static const TransformChildPlan FRAME_CHILDREN_347[] = {{PEGRuleId::IdentifierOrStringLiteral,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_364 = {FRAME_CHILDREN_348, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_349[] = {{PEGRuleId::RepositoryPublicKey,
+static const TransformFramePlan FRAME_PLAN_363 = {FRAME_CHILDREN_347, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_348[] = {{PEGRuleId::RepositoryPublicKey,
                                                          TransformChildKind::OPTIONAL,
                                                          7,
                                                          4,
@@ -4812,8 +4804,8 @@ static const TransformChildPlan FRAME_CHILDREN_349[] = {{PEGRuleId::RepositoryPu
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_365 = {FRAME_CHILDREN_349, 5, 5, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_350[] = {{PEGRuleId::ExtensionRepositoryName,
+static const TransformFramePlan FRAME_PLAN_364 = {FRAME_CHILDREN_348, 5, 5, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_349[] = {{PEGRuleId::ExtensionRepositoryName,
                                                          TransformChildKind::REQUIRED,
                                                          5,
                                                          2,
@@ -4834,8 +4826,8 @@ static const TransformChildPlan FRAME_CHILDREN_350[] = {{PEGRuleId::ExtensionRep
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_366 = {FRAME_CHILDREN_350, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_351[] = {{PEGRuleId::ExtensionRepositoryName,
+static const TransformFramePlan FRAME_PLAN_365 = {FRAME_CHILDREN_349, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_350[] = {{PEGRuleId::ExtensionRepositoryName,
                                                          TransformChildKind::REQUIRED,
                                                          4,
                                                          1,
@@ -4849,8 +4841,8 @@ static const TransformChildPlan FRAME_CHILDREN_351[] = {{PEGRuleId::ExtensionRep
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_367 = {FRAME_CHILDREN_351, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_352[] = {{PEGRuleId::DotColLabel,
+static const TransformFramePlan FRAME_PLAN_366 = {FRAME_CHILDREN_350, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_351[] = {{PEGRuleId::DotColLabel,
                                                          TransformChildKind::REPEAT,
                                                          1,
                                                          1,
@@ -4864,8 +4856,8 @@ static const TransformChildPlan FRAME_CHILDREN_352[] = {{PEGRuleId::DotColLabel,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_368 = {FRAME_CHILDREN_352, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_353[] = {{PEGRuleId::ReturningClause,
+static const TransformFramePlan FRAME_PLAN_367 = {FRAME_CHILDREN_351, 2, 2, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_352[] = {{PEGRuleId::ReturningClause,
                                                          TransformChildKind::OPTIONAL,
                                                          7,
                                                          5,
@@ -4907,16 +4899,16 @@ static const TransformChildPlan FRAME_CHILDREN_353[] = {{PEGRuleId::ReturningCla
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_369 = {FRAME_CHILDREN_353, 6, 6, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_354[] = {{PEGRuleId::TableRef,
+static const TransformFramePlan FRAME_PLAN_368 = {FRAME_CHILDREN_352, 6, 6, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_353[] = {{PEGRuleId::TableRef,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_370 = {FRAME_CHILDREN_354, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_355[] = {{PEGRuleId::MatchedClauseAction,
+static const TransformFramePlan FRAME_PLAN_369 = {FRAME_CHILDREN_353, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_354[] = {{PEGRuleId::MatchedClauseAction,
                                                          TransformChildKind::REQUIRED,
                                                          4,
                                                          1,
@@ -4930,16 +4922,24 @@ static const TransformChildPlan FRAME_CHILDREN_355[] = {{PEGRuleId::MatchedClaus
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_371 = {FRAME_CHILDREN_355, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_356[] = {{PEGRuleId::UpdateMatchInfo,
+static const TransformFramePlan FRAME_PLAN_370 = {FRAME_CHILDREN_354, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_355[] = {{PEGRuleId::UpdateMatchInfo,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_371 = {FRAME_CHILDREN_355, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_356[] = {{PEGRuleId::UpdateMatchSetClause,
+                                                         TransformChildKind::REQUIRED,
+                                                         0,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_372 = {FRAME_CHILDREN_356, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_357[] = {{PEGRuleId::UpdateMatchSetClause,
+static const TransformChildPlan FRAME_CHILDREN_357[] = {{PEGRuleId::ByNameOrPosition,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
@@ -4947,31 +4947,23 @@ static const TransformChildPlan FRAME_CHILDREN_357[] = {{PEGRuleId::UpdateMatchS
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_373 = {FRAME_CHILDREN_357, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_358[] = {{PEGRuleId::ByNameOrPosition,
-                                                         TransformChildKind::REQUIRED,
-                                                         0,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_374 = {FRAME_CHILDREN_358, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_359[] = {{PEGRuleId::InsertMatchInfo,
+static const TransformChildPlan FRAME_CHILDREN_358[] = {{PEGRuleId::InsertMatchInfo,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_375 = {FRAME_CHILDREN_359, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_360[] = {{PEGRuleId::ByNameOrPosition,
+static const TransformFramePlan FRAME_PLAN_374 = {FRAME_CHILDREN_358, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_359[] = {{PEGRuleId::ByNameOrPosition,
                                                          TransformChildKind::OPTIONAL,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_376 = {FRAME_CHILDREN_360, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_361[] = {{PEGRuleId::Expression,
+static const TransformFramePlan FRAME_PLAN_375 = {FRAME_CHILDREN_359, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_360[] = {{PEGRuleId::Expression,
                                                          TransformChildKind::LIST,
                                                          2,
                                                          1,
@@ -4985,16 +4977,16 @@ static const TransformChildPlan FRAME_CHILDREN_361[] = {{PEGRuleId::Expression,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_377 = {FRAME_CHILDREN_361, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_362[] = {{PEGRuleId::UpdateMatchSetInfo,
+static const TransformFramePlan FRAME_PLAN_376 = {FRAME_CHILDREN_360, 2, 2, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_361[] = {{PEGRuleId::UpdateMatchSetInfo,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_378 = {FRAME_CHILDREN_362, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_363[] = {{PEGRuleId::MatchedClauseAction,
+static const TransformFramePlan FRAME_PLAN_377 = {FRAME_CHILDREN_361, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_362[] = {{PEGRuleId::MatchedClauseAction,
                                                          TransformChildKind::REQUIRED,
                                                          6,
                                                          2,
@@ -5015,24 +5007,24 @@ static const TransformChildPlan FRAME_CHILDREN_363[] = {{PEGRuleId::MatchedClaus
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_379 = {FRAME_CHILDREN_363, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_364[] = {{PEGRuleId::PivotColumnList,
+static const TransformFramePlan FRAME_PLAN_378 = {FRAME_CHILDREN_362, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_363[] = {{PEGRuleId::PivotColumnList,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_380 = {FRAME_CHILDREN_364, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_365[] = {{PEGRuleId::PivotColumnEntry,
+static const TransformFramePlan FRAME_PLAN_379 = {FRAME_CHILDREN_363, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_364[] = {{PEGRuleId::PivotColumnEntry,
                                                          TransformChildKind::LIST,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_381 = {FRAME_CHILDREN_365, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_366[] = {{PEGRuleId::SelectStatementInternal,
+static const TransformFramePlan FRAME_PLAN_380 = {FRAME_CHILDREN_364, 1, 1, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_365[] = {{PEGRuleId::SelectStatementInternal,
                                                          TransformChildKind::REQUIRED,
                                                          2,
                                                          1,
@@ -5046,8 +5038,8 @@ static const TransformChildPlan FRAME_CHILDREN_366[] = {{PEGRuleId::SelectStatem
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_382 = {FRAME_CHILDREN_366, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_367[] = {{PEGRuleId::OptionalParensNameList,
+static const TransformFramePlan FRAME_PLAN_381 = {FRAME_CHILDREN_365, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_366[] = {{PEGRuleId::OptionalParensNameList,
                                                          TransformChildKind::REQUIRED,
                                                          4,
                                                          1,
@@ -5061,48 +5053,48 @@ static const TransformChildPlan FRAME_CHILDREN_367[] = {{PEGRuleId::OptionalPare
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_383 = {FRAME_CHILDREN_367, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_368[] = {{PEGRuleId::ColIdOrString,
+static const TransformFramePlan FRAME_PLAN_382 = {FRAME_CHILDREN_366, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_367[] = {{PEGRuleId::ColIdOrString,
                                                          TransformChildKind::LIST,
                                                          0,
                                                          0,
                                                          false,
                                                          {1, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_384 = {FRAME_CHILDREN_368, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_369[] = {{PEGRuleId::ColIdOrString,
+static const TransformFramePlan FRAME_PLAN_383 = {FRAME_CHILDREN_367, 1, 1, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_368[] = {{PEGRuleId::ColIdOrString,
                                                          TransformChildKind::LIST,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_385 = {FRAME_CHILDREN_369, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_370[] = {{PEGRuleId::PragmaAssignOrFunction,
+static const TransformFramePlan FRAME_PLAN_384 = {FRAME_CHILDREN_368, 1, 1, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_369[] = {{PEGRuleId::PragmaAssignOrFunction,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_386 = {FRAME_CHILDREN_370, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_371[] = {{PEGRuleId::VariableList,
+static const TransformFramePlan FRAME_PLAN_385 = {FRAME_CHILDREN_369, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_370[] = {{PEGRuleId::VariableList,
                                                          TransformChildKind::REQUIRED,
                                                          2,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_387 = {FRAME_CHILDREN_371, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_372[] = {{PEGRuleId::PragmaParameters,
+static const TransformFramePlan FRAME_PLAN_386 = {FRAME_CHILDREN_370, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_371[] = {{PEGRuleId::PragmaParameters,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_388 = {FRAME_CHILDREN_372, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_373[] = {{PEGRuleId::Statement,
+static const TransformFramePlan FRAME_PLAN_387 = {FRAME_CHILDREN_371, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_372[] = {{PEGRuleId::Statement,
                                                          TransformChildKind::REQUIRED,
                                                          4,
                                                          2,
@@ -5123,11 +5115,11 @@ static const TransformChildPlan FRAME_CHILDREN_373[] = {{PEGRuleId::Statement,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_389 = {FRAME_CHILDREN_373, 3, 3, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_374[] = {
+static const TransformFramePlan FRAME_PLAN_388 = {FRAME_CHILDREN_372, 3, 3, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_373[] = {
     {PEGRuleId::Type, TransformChildKind::LIST, 0, 0, false, {1, TRANSFORM_PATH_END, 0}, {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_390 = {FRAME_CHILDREN_374, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_375[] = {{PEGRuleId::SelectSetOpChainTail,
+static const TransformFramePlan FRAME_PLAN_389 = {FRAME_CHILDREN_373, 1, 1, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_374[] = {{PEGRuleId::SelectSetOpChainTail,
                                                          TransformChildKind::OPTIONAL_REPEAT,
                                                          1,
                                                          1,
@@ -5141,8 +5133,8 @@ static const TransformChildPlan FRAME_CHILDREN_375[] = {{PEGRuleId::SelectSetOpC
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_391 = {FRAME_CHILDREN_375, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_376[] = {{PEGRuleId::IntersectChain,
+static const TransformFramePlan FRAME_PLAN_390 = {FRAME_CHILDREN_374, 2, 2, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_375[] = {{PEGRuleId::IntersectChain,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          1,
@@ -5156,8 +5148,8 @@ static const TransformChildPlan FRAME_CHILDREN_376[] = {{PEGRuleId::IntersectCha
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_392 = {FRAME_CHILDREN_376, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_377[] = {{PEGRuleId::IntersectChainTail,
+static const TransformFramePlan FRAME_PLAN_391 = {FRAME_CHILDREN_375, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_376[] = {{PEGRuleId::IntersectChainTail,
                                                          TransformChildKind::OPTIONAL_REPEAT,
                                                          1,
                                                          1,
@@ -5171,8 +5163,8 @@ static const TransformChildPlan FRAME_CHILDREN_377[] = {{PEGRuleId::IntersectCha
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_393 = {FRAME_CHILDREN_377, 2, 2, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_378[] = {{PEGRuleId::SelectAtom,
+static const TransformFramePlan FRAME_PLAN_392 = {FRAME_CHILDREN_376, 2, 2, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_377[] = {{PEGRuleId::SelectAtom,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          1,
@@ -5186,16 +5178,16 @@ static const TransformChildPlan FRAME_CHILDREN_378[] = {{PEGRuleId::SelectAtom,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_394 = {FRAME_CHILDREN_378, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_379[] = {{PEGRuleId::DistinctOrAll,
+static const TransformFramePlan FRAME_PLAN_393 = {FRAME_CHILDREN_377, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_378[] = {{PEGRuleId::DistinctOrAll,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_395 = {FRAME_CHILDREN_379, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_380[] = {{PEGRuleId::DistinctOrAll,
+static const TransformFramePlan FRAME_PLAN_394 = {FRAME_CHILDREN_378, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_379[] = {{PEGRuleId::DistinctOrAll,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -5209,8 +5201,8 @@ static const TransformChildPlan FRAME_CHILDREN_380[] = {{PEGRuleId::DistinctOrAl
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_396 = {FRAME_CHILDREN_380, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_381[] = {{PEGRuleId::LimitOffset,
+static const TransformFramePlan FRAME_PLAN_395 = {FRAME_CHILDREN_379, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_380[] = {{PEGRuleId::LimitOffset,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -5224,8 +5216,8 @@ static const TransformChildPlan FRAME_CHILDREN_381[] = {{PEGRuleId::LimitOffset,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_397 = {FRAME_CHILDREN_381, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_382[] = {{PEGRuleId::OffsetClause,
+static const TransformFramePlan FRAME_PLAN_396 = {FRAME_CHILDREN_380, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_381[] = {{PEGRuleId::OffsetClause,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -5239,9 +5231,24 @@ static const TransformChildPlan FRAME_CHILDREN_382[] = {{PEGRuleId::OffsetClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_398 = {FRAME_CHILDREN_382, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_383[] = {{PEGRuleId::LimitClause,
+static const TransformFramePlan FRAME_PLAN_397 = {FRAME_CHILDREN_381, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_382[] = {{PEGRuleId::LimitClause,
                                                          TransformChildKind::OPTIONAL,
+                                                         1,
+                                                         1,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}},
+                                                        {PEGRuleId::OffsetClause,
+                                                         TransformChildKind::REQUIRED,
+                                                         0,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_398 = {FRAME_CHILDREN_382, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_383[] = {{PEGRuleId::FetchClause,
+                                                         TransformChildKind::REQUIRED,
                                                          1,
                                                          1,
                                                          false,
@@ -5255,22 +5262,7 @@ static const TransformChildPlan FRAME_CHILDREN_383[] = {{PEGRuleId::LimitClause,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_399 = {FRAME_CHILDREN_383, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_384[] = {{PEGRuleId::FetchClause,
-                                                         TransformChildKind::REQUIRED,
-                                                         1,
-                                                         1,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::OffsetClause,
-                                                         TransformChildKind::REQUIRED,
-                                                         0,
-                                                         0,
-                                                         false,
-                                                         {0, TRANSFORM_PATH_END, 0},
-                                                         {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_400 = {FRAME_CHILDREN_384, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_385[] = {{PEGRuleId::OffsetClause,
+static const TransformChildPlan FRAME_CHILDREN_384[] = {{PEGRuleId::OffsetClause,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          1,
@@ -5284,32 +5276,32 @@ static const TransformChildPlan FRAME_CHILDREN_385[] = {{PEGRuleId::OffsetClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_401 = {FRAME_CHILDREN_385, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_386[] = {{PEGRuleId::FetchClause,
+static const TransformFramePlan FRAME_PLAN_400 = {FRAME_CHILDREN_384, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_385[] = {{PEGRuleId::FetchClause,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_402 = {FRAME_CHILDREN_386, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_387[] = {{PEGRuleId::BaseTableName,
+static const TransformFramePlan FRAME_PLAN_401 = {FRAME_CHILDREN_385, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_386[] = {{PEGRuleId::BaseTableName,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_403 = {FRAME_CHILDREN_387, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_388[] = {{PEGRuleId::SimpleSelect,
+static const TransformFramePlan FRAME_PLAN_402 = {FRAME_CHILDREN_386, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_387[] = {{PEGRuleId::SimpleSelect,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
                                                          false,
                                                          {1, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_404 = {FRAME_CHILDREN_388, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_389[] = {{PEGRuleId::FromClause,
+static const TransformFramePlan FRAME_PLAN_403 = {FRAME_CHILDREN_387, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_388[] = {{PEGRuleId::FromClause,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -5323,8 +5315,8 @@ static const TransformChildPlan FRAME_CHILDREN_389[] = {{PEGRuleId::FromClause,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_405 = {FRAME_CHILDREN_389, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_390[] = {{PEGRuleId::SelectClause,
+static const TransformFramePlan FRAME_PLAN_404 = {FRAME_CHILDREN_388, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_389[] = {{PEGRuleId::SelectClause,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          1,
@@ -5338,8 +5330,8 @@ static const TransformChildPlan FRAME_CHILDREN_390[] = {{PEGRuleId::SelectClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_406 = {FRAME_CHILDREN_390, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_391[] = {{PEGRuleId::CTEBody,
+static const TransformFramePlan FRAME_PLAN_405 = {FRAME_CHILDREN_389, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_390[] = {{PEGRuleId::CTEBody,
                                                          TransformChildKind::REQUIRED,
                                                          5,
                                                          4,
@@ -5374,24 +5366,24 @@ static const TransformChildPlan FRAME_CHILDREN_391[] = {{PEGRuleId::CTEBody,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_407 = {FRAME_CHILDREN_391, 5, 5, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_392[] = {{PEGRuleId::Statement,
+static const TransformFramePlan FRAME_PLAN_406 = {FRAME_CHILDREN_390, 5, 5, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_391[] = {{PEGRuleId::Statement,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
                                                          false,
                                                          {1, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_408 = {FRAME_CHILDREN_392, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_393[] = {{PEGRuleId::TargetList,
+static const TransformFramePlan FRAME_PLAN_407 = {FRAME_CHILDREN_391, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_392[] = {{PEGRuleId::TargetList,
                                                          TransformChildKind::REQUIRED,
                                                          2,
                                                          0,
                                                          false,
                                                          {1, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_409 = {FRAME_CHILDREN_393, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_394[] = {{PEGRuleId::TargetList,
+static const TransformFramePlan FRAME_PLAN_408 = {FRAME_CHILDREN_392, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_393[] = {{PEGRuleId::TargetList,
                                                          TransformChildKind::OPTIONAL,
                                                          2,
                                                          1,
@@ -5405,24 +5397,24 @@ static const TransformChildPlan FRAME_CHILDREN_394[] = {{PEGRuleId::TargetList,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_410 = {FRAME_CHILDREN_394, 2, 2, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_395[] = {{PEGRuleId::AliasedExpression,
+static const TransformFramePlan FRAME_PLAN_409 = {FRAME_CHILDREN_393, 2, 2, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_394[] = {{PEGRuleId::AliasedExpression,
                                                          TransformChildKind::LIST,
                                                          0,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_411 = {FRAME_CHILDREN_395, 1, 1, true, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_396[] = {{PEGRuleId::DistinctOnTargets,
+static const TransformFramePlan FRAME_PLAN_410 = {FRAME_CHILDREN_394, 1, 1, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_395[] = {{PEGRuleId::DistinctOnTargets,
                                                          TransformChildKind::OPTIONAL,
                                                          1,
                                                          0,
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_412 = {FRAME_CHILDREN_396, 1, 1, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_397[] = {{PEGRuleId::SampleClause,
+static const TransformFramePlan FRAME_PLAN_411 = {FRAME_CHILDREN_395, 1, 1, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_396[] = {{PEGRuleId::SampleClause,
                                                          TransformChildKind::OPTIONAL,
                                                          4,
                                                          4,
@@ -5457,8 +5449,8 @@ static const TransformChildPlan FRAME_CHILDREN_397[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_413 = {FRAME_CHILDREN_397, 5, 5, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_398[] = {{PEGRuleId::SampleClause,
+static const TransformFramePlan FRAME_PLAN_412 = {FRAME_CHILDREN_396, 5, 5, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_397[] = {{PEGRuleId::SampleClause,
                                                          TransformChildKind::OPTIONAL,
                                                          4,
                                                          4,
@@ -5493,8 +5485,8 @@ static const TransformChildPlan FRAME_CHILDREN_398[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_414 = {FRAME_CHILDREN_398, 5, 5, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_399[] = {{PEGRuleId::SampleClause,
+static const TransformFramePlan FRAME_PLAN_413 = {FRAME_CHILDREN_397, 5, 5, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_398[] = {{PEGRuleId::SampleClause,
                                                          TransformChildKind::OPTIONAL,
                                                          3,
                                                          3,
@@ -5522,8 +5514,8 @@ static const TransformChildPlan FRAME_CHILDREN_399[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_415 = {FRAME_CHILDREN_399, 4, 4, false, 0, {}};
-static const TransformChildPlan FRAME_CHILDREN_400[] = {{PEGRuleId::SampleClause,
+static const TransformFramePlan FRAME_PLAN_414 = {FRAME_CHILDREN_398, 4, 4, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_399[] = {{PEGRuleId::SampleClause,
                                                          TransformChildKind::OPTIONAL,
                                                          3,
                                                          3,
@@ -5537,7 +5529,7 @@ static const TransformChildPlan FRAME_CHILDREN_400[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::TableRef,
+                                                        {PEGRuleId::JoinedTableRef,
                                                          TransformChildKind::REQUIRED,
                                                          1,
                                                          1,
@@ -5551,7 +5543,22 @@ static const TransformChildPlan FRAME_CHILDREN_400[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}}};
-static const TransformFramePlan FRAME_PLAN_416 = {FRAME_CHILDREN_400, 4, 4, false, 0, {}};
+static const TransformFramePlan FRAME_PLAN_415 = {FRAME_CHILDREN_399, 4, 4, false, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_400[] = {{PEGRuleId::JoinOrPivot,
+                                                         TransformChildKind::REPEAT,
+                                                         1,
+                                                         1,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}},
+                                                        {PEGRuleId::InnerTableRef,
+                                                         TransformChildKind::REQUIRED,
+                                                         0,
+                                                         0,
+                                                         false,
+                                                         {0, TRANSFORM_PATH_END, 0},
+                                                         {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_416 = {FRAME_CHILDREN_400, 2, 2, true, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_401[] = {{PEGRuleId::TableAlias,
                                                          TransformChildKind::OPTIONAL,
                                                          2,
@@ -6026,7 +6033,7 @@ static const TransformChildPlan FRAME_CHILDREN_427[] = {{PEGRuleId::SampleClause
                                                          false,
                                                          {0, TRANSFORM_PATH_END, 0},
                                                          {0, TRANSFORM_PATH_END, 0}},
-                                                        {PEGRuleId::TableRef,
+                                                        {PEGRuleId::JoinedTableRef,
                                                          TransformChildKind::REQUIRED,
                                                          0,
                                                          0,
@@ -7402,34 +7409,38 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
      &PEGTransformerFactory::FinalizeDeleteUsingClauseTrampoline, &FRAME_PLAN_169},
     {"DescribeStatement", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizeDescribeStatementTrampoline, &FRAME_PLAN_1},
+    {"ShowExternalResources", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizeShowExternalResourcesTrampoline, &FRAME_PLAN_170},
+    {"ShowExternalResourcesType", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_13},
     {"ShowDeprecatedSelect", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowDeprecatedSelectTrampoline, &FRAME_PLAN_170},
+     &PEGTransformerFactory::FinalizeShowDeprecatedSelectTrampoline, &FRAME_PLAN_171},
     {"DescribeSelect", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDescribeSelectTrampoline, &FRAME_PLAN_171},
+     &PEGTransformerFactory::FinalizeDescribeSelectTrampoline, &FRAME_PLAN_172},
     {"ShowAllTables", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowAllTablesTrampoline, &FRAME_PLAN_172},
+     &PEGTransformerFactory::FinalizeShowAllTablesTrampoline, &FRAME_PLAN_173},
     {"ShowTables", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowTablesTrampoline, &FRAME_PLAN_173},
+     &PEGTransformerFactory::FinalizeShowTablesTrampoline, &FRAME_PLAN_174},
     {"ShowByName", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowByNameTrampoline, &FRAME_PLAN_174},
+     &PEGTransformerFactory::FinalizeShowByNameTrampoline, &FRAME_PLAN_175},
     {"DescribeByName", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDescribeByNameTrampoline, &FRAME_PLAN_175},
+     &PEGTransformerFactory::FinalizeDescribeByNameTrampoline, &FRAME_PLAN_176},
     {"DescribeOrSummarize", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"ShowTarget", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
-     &PEGTransformerFactory::FinalizeShowTargetTrampoline, &FRAME_PLAN_176},
+     &PEGTransformerFactory::FinalizeShowTargetTrampoline, &FRAME_PLAN_177},
     {"ShowDeprecatedQualifiedTableName", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowDeprecatedQualifiedTableNameTrampoline, &FRAME_PLAN_177},
+     &PEGTransformerFactory::FinalizeShowDeprecatedQualifiedTableNameTrampoline, &FRAME_PLAN_178},
     {"ShowSettingName", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeShowSettingNameTrampoline, &FRAME_PLAN_12},
     {"DescribeTarget", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"DescribeBaseTableName", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDescribeBaseTableNameTrampoline, &FRAME_PLAN_178},
+     &PEGTransformerFactory::FinalizeDescribeBaseTableNameTrampoline, &FRAME_PLAN_179},
     {"DescribeStringLiteral", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDescribeStringLiteralTrampoline, &FRAME_PLAN_12},
     {"Summarize", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSummarizeTrampoline, &FRAME_PLAN_179},
+     &PEGTransformerFactory::FinalizeSummarizeTrampoline, &FRAME_PLAN_180},
     {"SummarizeRule", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeSummarizeRuleTrampoline, &FRAME_PLAN_12},
     {"ShowOrDescribe", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
@@ -7443,23 +7454,23 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"DescRule", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDescRuleTrampoline, &FRAME_PLAN_12},
     {"DetachStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDetachStatementTrampoline, &FRAME_PLAN_180},
+     &PEGTransformerFactory::FinalizeDetachStatementTrampoline, &FRAME_PLAN_181},
     {"DropStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropStatementTrampoline, &FRAME_PLAN_181},
+     &PEGTransformerFactory::FinalizeDropStatementTrampoline, &FRAME_PLAN_182},
     {"DropEntries", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"DropTrigger", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropTriggerTrampoline, &FRAME_PLAN_182},
+     &PEGTransformerFactory::FinalizeDropTriggerTrampoline, &FRAME_PLAN_183},
     {"DropTable", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropTableTrampoline, &FRAME_PLAN_183},
+     &PEGTransformerFactory::FinalizeDropTableTrampoline, &FRAME_PLAN_184},
     {"DropTableFunction", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropTableFunctionTrampoline, &FRAME_PLAN_184},
+     &PEGTransformerFactory::FinalizeDropTableFunctionTrampoline, &FRAME_PLAN_185},
     {"DropFunction", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropFunctionTrampoline, &FRAME_PLAN_185},
+     &PEGTransformerFactory::FinalizeDropFunctionTrampoline, &FRAME_PLAN_186},
     {"DropSchema", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropSchemaTrampoline, &FRAME_PLAN_186},
+     &PEGTransformerFactory::FinalizeDropSchemaTrampoline, &FRAME_PLAN_187},
     {"DropIndex", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropIndexTrampoline, &FRAME_PLAN_187},
+     &PEGTransformerFactory::FinalizeDropIndexTrampoline, &FRAME_PLAN_188},
     {"QualifiedIndexName", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"QualifiedIndexNameString", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -7467,7 +7478,7 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"SchemaReservedIndex", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeSchemaReservedIndexTrampoline, &FRAME_PLAN_56},
     {"CatalogReservedSchemaIndex", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeCatalogReservedSchemaIndexTrampoline, &FRAME_PLAN_188},
+     &PEGTransformerFactory::FinalizeCatalogReservedSchemaIndexTrampoline, &FRAME_PLAN_55},
     {"DropSequence", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDropSequenceTrampoline, &FRAME_PLAN_189},
     {"DropCollation", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8106,24 +8117,20 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
      &PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline, &FRAME_PLAN_345},
     {"DestroyExternalResourceStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline, &FRAME_PLAN_346},
-    {"ShowExternalResourcesStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline, &FRAME_PLAN_347},
-    {"ShowAllModifier", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeShowAllModifierTrampoline, &FRAME_PLAN_12},
     {"ExternalResourceCreationOptions", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_33},
     {"AttachToExternalResource", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeAttachToExternalResourceTrampoline, &FRAME_PLAN_348},
+     &PEGTransformerFactory::FinalizeAttachToExternalResourceTrampoline, &FRAME_PLAN_347},
     {"ConnectToExternalResource", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeConnectToExternalResourceTrampoline, &FRAME_PLAN_349},
+     &PEGTransformerFactory::FinalizeConnectToExternalResourceTrampoline, &FRAME_PLAN_348},
     {"ExternalResourceSource", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"ExternalResourceCreateClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeExternalResourceCreateClauseTrampoline, &FRAME_PLAN_350},
+     &PEGTransformerFactory::FinalizeExternalResourceCreateClauseTrampoline, &FRAME_PLAN_349},
     {"ExternalResourceReferenceClause", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeExternalResourceReferenceClauseTrampoline, &FRAME_PLAN_32},
     {"InsertStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInsertStatementTrampoline, &FRAME_PLAN_351},
+     &PEGTransformerFactory::FinalizeInsertStatementTrampoline, &FRAME_PLAN_350},
     {"OrAction", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"InsertOrReplace", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8133,15 +8140,15 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"ByNameOrPosition", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"InsertByNameOrder", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_352},
+     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_351},
     {"InsertByPositionOrder", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_353},
+     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_352},
     {"InsertByName", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeInsertByNameTrampoline, &FRAME_PLAN_12},
     {"InsertByPosition", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeInsertByPositionTrampoline, &FRAME_PLAN_12},
     {"InsertTarget", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInsertTargetTrampoline, &FRAME_PLAN_354},
+     &PEGTransformerFactory::FinalizeInsertTargetTrampoline, &FRAME_PLAN_353},
     {"InsertAlias", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeInsertAliasTrampoline, &FRAME_PLAN_12},
     {"ColumnList", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8155,27 +8162,27 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"DefaultValues", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDefaultValuesTrampoline, &FRAME_PLAN_12},
     {"OnConflictClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOnConflictClauseTrampoline, &FRAME_PLAN_355},
+     &PEGTransformerFactory::FinalizeOnConflictClauseTrampoline, &FRAME_PLAN_354},
     {"OnConflictTarget", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"OnConflictExpressionTarget", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOnConflictExpressionTargetTrampoline, &FRAME_PLAN_356},
+     &PEGTransformerFactory::FinalizeOnConflictExpressionTargetTrampoline, &FRAME_PLAN_355},
     {"OnConflictIndexTarget", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOnConflictIndexTargetTrampoline, &FRAME_PLAN_357},
+     &PEGTransformerFactory::FinalizeOnConflictIndexTargetTrampoline, &FRAME_PLAN_356},
     {"OnConflictAction", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"OnConflictUpdate", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOnConflictUpdateTrampoline, &FRAME_PLAN_358},
+     &PEGTransformerFactory::FinalizeOnConflictUpdateTrampoline, &FRAME_PLAN_357},
     {"OnConflictNothing", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeOnConflictNothingTrampoline, &FRAME_PLAN_12},
     {"ReturningClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeReturningClauseTrampoline, &FRAME_PLAN_359},
+     &PEGTransformerFactory::FinalizeReturningClauseTrampoline, &FRAME_PLAN_358},
     {"LoadStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeLoadStatementTrampoline, &FRAME_PLAN_360},
+     &PEGTransformerFactory::FinalizeLoadStatementTrampoline, &FRAME_PLAN_359},
     {"ExtensionAlias", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeExtensionAliasTrampoline, &FRAME_PLAN_12},
     {"InstallStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInstallStatementTrampoline, &FRAME_PLAN_361},
+     &PEGTransformerFactory::FinalizeInstallStatementTrampoline, &FRAME_PLAN_360},
     {"InstallAndLoad", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeInstallAndLoadTrampoline, &FRAME_PLAN_12},
     {"UpdateExtensionsStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8183,71 +8190,71 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"FromSource", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"FromSourceIdentifier", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeFromSourceIdentifierTrampoline, &FRAME_PLAN_362},
+     &PEGTransformerFactory::FinalizeFromSourceIdentifierTrampoline, &FRAME_PLAN_361},
     {"FromSourceString", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeFromSourceStringTrampoline, &FRAME_PLAN_12},
     {"FromSourceName", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
-     &PEGTransformerFactory::FinalizeFromSourceNameTrampoline, &FRAME_PLAN_363},
+     &PEGTransformerFactory::FinalizeFromSourceNameTrampoline, &FRAME_PLAN_362},
     {"VersionNumber", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeVersionNumberTrampoline, &FRAME_PLAN_364},
+     &PEGTransformerFactory::FinalizeVersionNumberTrampoline, &FRAME_PLAN_363},
     {"ExtensionRepositoryStatement", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"CreateExtensionRepositoryStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeCreateExtensionRepositoryStmtTrampoline, &FRAME_PLAN_365},
+     &PEGTransformerFactory::FinalizeCreateExtensionRepositoryStmtTrampoline, &FRAME_PLAN_364},
     {"RepositoryPrefix", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeRepositoryPrefixTrampoline, &FRAME_PLAN_12},
     {"RepositoryPublicKey", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeRepositoryPublicKeyTrampoline, &FRAME_PLAN_12},
     {"CreateExtensionRepositoryFromHostStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeCreateExtensionRepositoryFromHostStmtTrampoline, &FRAME_PLAN_366},
+     &PEGTransformerFactory::FinalizeCreateExtensionRepositoryFromHostStmtTrampoline, &FRAME_PLAN_365},
     {"DropExtensionRepositoryStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDropExtensionRepositoryStmtTrampoline, &FRAME_PLAN_367},
+     &PEGTransformerFactory::FinalizeDropExtensionRepositoryStmtTrampoline, &FRAME_PLAN_366},
     {"ExtensionRepositoryName", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizeExtensionRepositoryNameTrampoline, &FRAME_PLAN_146},
     {"ExtensionRepositoryHostName", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeExtensionRepositoryHostNameTrampoline, &FRAME_PLAN_368},
+     &PEGTransformerFactory::FinalizeExtensionRepositoryHostNameTrampoline, &FRAME_PLAN_367},
     {"MergeIntoStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeMergeIntoStatementTrampoline, &FRAME_PLAN_369},
+     &PEGTransformerFactory::FinalizeMergeIntoStatementTrampoline, &FRAME_PLAN_368},
     {"MergeIntoUsingClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeMergeIntoUsingClauseTrampoline, &FRAME_PLAN_370},
+     &PEGTransformerFactory::FinalizeMergeIntoUsingClauseTrampoline, &FRAME_PLAN_369},
     {"MergeMatch", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"MatchedClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeMatchedClauseTrampoline, &FRAME_PLAN_371},
+     &PEGTransformerFactory::FinalizeMatchedClauseTrampoline, &FRAME_PLAN_370},
     {"MatchedClauseAction", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"UpdateMatchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeUpdateMatchClauseTrampoline, &FRAME_PLAN_372},
+     &PEGTransformerFactory::FinalizeUpdateMatchClauseTrampoline, &FRAME_PLAN_371},
     {"UpdateMatchInfo", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"UpdateMatchSetAction", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeUpdateMatchSetActionTrampoline, &FRAME_PLAN_373},
+     &PEGTransformerFactory::FinalizeUpdateMatchSetActionTrampoline, &FRAME_PLAN_372},
     {"UpdateByNameOrPosition", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeUpdateByNameOrPositionTrampoline, &FRAME_PLAN_374},
+     &PEGTransformerFactory::FinalizeUpdateByNameOrPositionTrampoline, &FRAME_PLAN_373},
     {"DeleteMatchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDeleteMatchClauseTrampoline, &FRAME_PLAN_12},
     {"InsertMatchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInsertMatchClauseTrampoline, &FRAME_PLAN_375},
+     &PEGTransformerFactory::FinalizeInsertMatchClauseTrampoline, &FRAME_PLAN_374},
     {"InsertMatchInfo", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"InsertDefaultValues", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeInsertDefaultValuesTrampoline, &FRAME_PLAN_12},
     {"InsertByNameOrPosition", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInsertByNameOrPositionTrampoline, &FRAME_PLAN_376},
+     &PEGTransformerFactory::FinalizeInsertByNameOrPositionTrampoline, &FRAME_PLAN_375},
     {"InsertValuesList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeInsertValuesListTrampoline, &FRAME_PLAN_377},
+     &PEGTransformerFactory::FinalizeInsertValuesListTrampoline, &FRAME_PLAN_376},
     {"DoNothingMatchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDoNothingMatchClauseTrampoline, &FRAME_PLAN_12},
     {"ErrorMatchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeErrorMatchClauseTrampoline, &FRAME_PLAN_66},
     {"UpdateMatchSetClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_378},
+     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_377},
     {"UpdateMatchSetInfo", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizeUpdateMatchSetInfoTrampoline, &FRAME_PLAN_80},
     {"AndExpression", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeAndExpressionTrampoline, &FRAME_PLAN_21},
     {"NotMatchedClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeNotMatchedClauseTrampoline, &FRAME_PLAN_379},
+     &PEGTransformerFactory::FinalizeNotMatchedClauseTrampoline, &FRAME_PLAN_378},
     {"BySourceOrTarget", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"BySource", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8257,27 +8264,27 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"PivotStatement", &PEGTransformerFactory::InitializePivotStatementTrampoline,
      &PEGTransformerFactory::FinalizePivotStatementTrampoline, nullptr},
     {"PivotOn", &PEGTransformerFactory::InitializePlannedTrampoline, &PEGTransformerFactory::FinalizePivotOnTrampoline,
-     &FRAME_PLAN_380},
+     &FRAME_PLAN_379},
     {"PivotUsing", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePivotUsingTrampoline, &FRAME_PLAN_359},
+     &PEGTransformerFactory::FinalizePivotUsingTrampoline, &FRAME_PLAN_358},
     {"PivotColumnList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePivotColumnListTrampoline, &FRAME_PLAN_381},
+     &PEGTransformerFactory::FinalizePivotColumnListTrampoline, &FRAME_PLAN_380},
     {"PivotColumnEntry", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"PivotColumnExpression", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizePivotColumnExpressionTrampoline, &FRAME_PLAN_31},
     {"PivotColumnSubquery", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePivotColumnSubqueryTrampoline, &FRAME_PLAN_382},
+     &PEGTransformerFactory::FinalizePivotColumnSubqueryTrampoline, &FRAME_PLAN_381},
     {"UnpivotStatement", &PEGTransformerFactory::InitializeUnpivotStatementTrampoline,
      &PEGTransformerFactory::FinalizeUnpivotStatementTrampoline, nullptr},
     {"IntoNameValues", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeIntoNameValuesTrampoline, &FRAME_PLAN_383},
+     &PEGTransformerFactory::FinalizeIntoNameValuesTrampoline, &FRAME_PLAN_382},
     {"OptionalParensNameList", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"ParenthesizedNameList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeParenthesizedNameListTrampoline, &FRAME_PLAN_384},
+     &PEGTransformerFactory::FinalizeParenthesizedNameListTrampoline, &FRAME_PLAN_383},
     {"BareNameList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeBareNameListTrampoline, &FRAME_PLAN_385},
+     &PEGTransformerFactory::FinalizeBareNameListTrampoline, &FRAME_PLAN_384},
     {"IncludeOrExcludeNulls", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"IncludeNulls", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8289,41 +8296,41 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"UnpivotHeaderSingle", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeUnpivotHeaderSingleTrampoline, &FRAME_PLAN_38},
     {"UnpivotHeaderList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeUnpivotHeaderListTrampoline, &FRAME_PLAN_384},
+     &PEGTransformerFactory::FinalizeUnpivotHeaderListTrampoline, &FRAME_PLAN_383},
     {"PragmaStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePragmaStatementTrampoline, &FRAME_PLAN_386},
+     &PEGTransformerFactory::FinalizePragmaStatementTrampoline, &FRAME_PLAN_385},
     {"PragmaAssignOrFunction", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"PragmaAssign", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePragmaAssignTrampoline, &FRAME_PLAN_387},
+     &PEGTransformerFactory::FinalizePragmaAssignTrampoline, &FRAME_PLAN_386},
     {"PragmaFunction", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePragmaFunctionTrampoline, &FRAME_PLAN_388},
+     &PEGTransformerFactory::FinalizePragmaFunctionTrampoline, &FRAME_PLAN_387},
     {"PragmaParameters", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizePragmaParametersTrampoline, &FRAME_PLAN_285},
     {"PrepareStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizePrepareStatementTrampoline, &FRAME_PLAN_389},
+     &PEGTransformerFactory::FinalizePrepareStatementTrampoline, &FRAME_PLAN_388},
     {"TypeList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeTypeListTrampoline, &FRAME_PLAN_390},
+     &PEGTransformerFactory::FinalizeTypeListTrampoline, &FRAME_PLAN_389},
     {"SelectStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeSelectStatementTrampoline, &FRAME_PLAN_198},
     {"SelectStatementInternal", &PEGTransformerFactory::InitializeSelectStatementInternalTrampoline,
      &PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline, nullptr},
     {"SelectSetOpChain", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSelectSetOpChainTrampoline, &FRAME_PLAN_391},
+     &PEGTransformerFactory::FinalizeSelectSetOpChainTrampoline, &FRAME_PLAN_390},
     {"SelectSetOpChainTail", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSelectSetOpChainTailTrampoline, &FRAME_PLAN_392},
+     &PEGTransformerFactory::FinalizeSelectSetOpChainTailTrampoline, &FRAME_PLAN_391},
     {"IntersectChain", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeIntersectChainTrampoline, &FRAME_PLAN_393},
+     &PEGTransformerFactory::FinalizeIntersectChainTrampoline, &FRAME_PLAN_392},
     {"IntersectChainTail", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeIntersectChainTailTrampoline, &FRAME_PLAN_394},
+     &PEGTransformerFactory::FinalizeIntersectChainTailTrampoline, &FRAME_PLAN_393},
     {"SetIntersectClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSetIntersectClauseTrampoline, &FRAME_PLAN_395},
+     &PEGTransformerFactory::FinalizeSetIntersectClauseTrampoline, &FRAME_PLAN_394},
     {"SelectAtom", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"SelectParens", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeSelectParensTrampoline, &FRAME_PLAN_286},
     {"SetopClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSetopClauseTrampoline, &FRAME_PLAN_396},
+     &PEGTransformerFactory::FinalizeSetopClauseTrampoline, &FRAME_PLAN_395},
     {"SetopType", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"SetopUnion", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8333,59 +8340,59 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"SelectStatementType", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"ResultModifiers", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeResultModifiersTrampoline, &FRAME_PLAN_397},
+     &PEGTransformerFactory::FinalizeResultModifiersTrampoline, &FRAME_PLAN_396},
     {"LimitOffset", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"LimitOffsetClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeLimitOffsetClauseTrampoline, &FRAME_PLAN_398},
+     &PEGTransformerFactory::FinalizeLimitOffsetClauseTrampoline, &FRAME_PLAN_397},
     {"OffsetLimitClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOffsetLimitClauseTrampoline, &FRAME_PLAN_399},
+     &PEGTransformerFactory::FinalizeOffsetLimitClauseTrampoline, &FRAME_PLAN_398},
     {"OffsetFetchClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeOffsetFetchClauseTrampoline, &FRAME_PLAN_400},
+     &PEGTransformerFactory::FinalizeOffsetFetchClauseTrampoline, &FRAME_PLAN_399},
     {"FetchOffsetClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeFetchOffsetClauseTrampoline, &FRAME_PLAN_401},
+     &PEGTransformerFactory::FinalizeFetchOffsetClauseTrampoline, &FRAME_PLAN_400},
     {"FetchOnlyClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeFetchOnlyClauseTrampoline, &FRAME_PLAN_402},
+     &PEGTransformerFactory::FinalizeFetchOnlyClauseTrampoline, &FRAME_PLAN_401},
     {"TableStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeTableStatementTrampoline, &FRAME_PLAN_403},
+     &PEGTransformerFactory::FinalizeTableStatementTrampoline, &FRAME_PLAN_402},
     {"OptionalParensSimpleSelect", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"SimpleSelectParens", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSimpleSelectParensTrampoline, &FRAME_PLAN_404},
+     &PEGTransformerFactory::FinalizeSimpleSelectParensTrampoline, &FRAME_PLAN_403},
     {"SimpleSelect", &PEGTransformerFactory::InitializeSimpleSelectTrampoline,
      &PEGTransformerFactory::FinalizeSimpleSelectTrampoline, nullptr},
     {"SelectFrom", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"SelectFromClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSelectFromClauseTrampoline, &FRAME_PLAN_405},
+     &PEGTransformerFactory::FinalizeSelectFromClauseTrampoline, &FRAME_PLAN_404},
     {"FromSelectClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeFromSelectClauseTrampoline, &FRAME_PLAN_406},
+     &PEGTransformerFactory::FinalizeFromSelectClauseTrampoline, &FRAME_PLAN_405},
     {"WithStatement", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeWithStatementTrampoline, &FRAME_PLAN_407},
+     &PEGTransformerFactory::FinalizeWithStatementTrampoline, &FRAME_PLAN_406},
     {"CTEBody", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"CTESelectBody", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeCTESelectBodyTrampoline, &FRAME_PLAN_286},
     {"CTEDMLBody", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeCTEDMLBodyTrampoline, &FRAME_PLAN_408},
+     &PEGTransformerFactory::FinalizeCTEDMLBodyTrampoline, &FRAME_PLAN_407},
     {"UsingKey", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeUsingKeyTrampoline, &FRAME_PLAN_409},
+     &PEGTransformerFactory::FinalizeUsingKeyTrampoline, &FRAME_PLAN_408},
     {"Materialized", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeMaterializedTrampoline, &FRAME_PLAN_12},
     {"WithClause", &PEGTransformerFactory::InitializeWithClauseTrampoline,
      &PEGTransformerFactory::FinalizeWithClauseTrampoline, nullptr},
     {"SelectClause", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSelectClauseTrampoline, &FRAME_PLAN_410},
+     &PEGTransformerFactory::FinalizeSelectClauseTrampoline, &FRAME_PLAN_409},
     {"TargetList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeTargetListTrampoline, &FRAME_PLAN_411},
+     &PEGTransformerFactory::FinalizeTargetListTrampoline, &FRAME_PLAN_410},
     {"ColumnAliases", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeColumnAliasesTrampoline, &FRAME_PLAN_384},
+     &PEGTransformerFactory::FinalizeColumnAliasesTrampoline, &FRAME_PLAN_383},
     {"DistinctClause", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"DistinctAll", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDistinctAllTrampoline, &FRAME_PLAN_12},
     {"DistinctOn", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeDistinctOnTrampoline, &FRAME_PLAN_412},
+     &PEGTransformerFactory::FinalizeDistinctOnTrampoline, &FRAME_PLAN_411},
     {"DistinctOnTargets", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeDistinctOnTargetsTrampoline, &FRAME_PLAN_324},
     {"InnerTableRef", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
@@ -8393,15 +8400,19 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"TableRef", &PEGTransformerFactory::InitializeTableRefTrampoline,
      &PEGTransformerFactory::FinalizeTableRefTrampoline, nullptr},
     {"TableSubquery", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeTableSubqueryTrampoline, &FRAME_PLAN_413},
+     &PEGTransformerFactory::FinalizeTableSubqueryTrampoline, &FRAME_PLAN_412},
     {"BaseTableRef", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeBaseTableRefTrampoline, &FRAME_PLAN_414},
+     &PEGTransformerFactory::FinalizeBaseTableRefTrampoline, &FRAME_PLAN_413},
     {"TableAliasColon", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeTableAliasColonTrampoline, &FRAME_PLAN_38},
     {"ValuesRef", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeValuesRefTrampoline, &FRAME_PLAN_415},
+     &PEGTransformerFactory::FinalizeValuesRefTrampoline, &FRAME_PLAN_414},
     {"ParensTableRef", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeParensTableRefTrampoline, &FRAME_PLAN_416},
+     &PEGTransformerFactory::FinalizeParensTableRefTrampoline, &FRAME_PLAN_415},
+    {"JoinedTableRef", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
+     &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
+    {"JoinedTableRefChain", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizeJoinedTableRefChainTrampoline, &FRAME_PLAN_416},
     {"JoinOrPivot", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"TablePivotClause", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8747,7 +8758,7 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"UpdateTarget", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_1},
     {"BaseTableSet", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeBaseTableSetTrampoline, &FRAME_PLAN_178},
+     &PEGTransformerFactory::FinalizeBaseTableSetTrampoline, &FRAME_PLAN_179},
     {"BaseTableAliasSet", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeBaseTableAliasSetTrampoline, &FRAME_PLAN_481},
     {"UpdateAlias", &PEGTransformerFactory::InitializePlannedTrampoline,
@@ -8793,7 +8804,7 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
     {"OptVerbose", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeOptVerboseTrampoline, &FRAME_PLAN_12},
     {"NameList", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeNameListTrampoline, &FRAME_PLAN_384},
+     &PEGTransformerFactory::FinalizeNameListTrampoline, &FRAME_PLAN_383},
 };
 
 static case_insensitive_map_t<const TransformFrameOps *> BuildGeneratedTransformFrameOps() {
@@ -9214,13 +9225,25 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQualifiedSequenceNameTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
 	optional<Identifier> catalog_qualification {};
 	if (process.child_results[0]) {
 		catalog_qualification = process.TakeResult<Identifier>(0);
 	}
-	optional<Identifier> schema_qualification {};
-	if (process.child_results[1]) {
-		schema_qualification = process.TakeResult<Identifier>(1);
+	optional<vector<Identifier>> schema_qualification {};
+	if (dynamic_child_count > 0) {
+		vector<Identifier> schema_qualification_value;
+		schema_qualification_value.reserve(dynamic_child_count);
+		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+			schema_qualification_value.push_back(process.TakeResult<Identifier>(i));
+		}
+		schema_qualification = std::move(schema_qualification_value);
 	}
 	auto sequence_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto result =
@@ -12396,6 +12419,22 @@ PEGTransformerFactory::FinalizeDescribeStatementTrampoline(PEGTransformer &trans
 }
 
 arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeShowExternalResourcesTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto show_rule = process.TakeResult<ShowType>(0);
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	optional<Identifier> show_external_resources_type {};
+	if (process.child_results[1]) {
+		show_external_resources_type = process.TakeResult<Identifier>(1);
+	}
+	auto result = TransformShowExternalResources(transformer, show_rule, has_result, show_external_resources_type);
+	return transformer.MakeResult<unique_ptr<QueryNode>>(std::move(result));
+}
+
+arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeShowDeprecatedSelectTrampoline(PEGTransformer &transformer,
                                                               GeneratedTransformProcess &process) {
 	auto show_rule = process.TakeResult<ShowType>(0);
@@ -12689,8 +12728,15 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCatalogReservedSchemaIndexTrampoline(PEGTransformer &transformer,
                                                                     GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &dynamic_repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto catalog_qualification = process.TakeResult<Identifier>(0);
-	auto reserved_schema_qualification = process.TakeResult<Identifier>(1);
+	vector<Identifier> reserved_schema_qualification;
+	reserved_schema_qualification.reserve(dynamic_child_count);
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+		reserved_schema_qualification.push_back(process.TakeResult<Identifier>(i));
+	}
 	auto reserved_index_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformCatalogReservedSchemaIndex(transformer, catalog_qualification, reserved_schema_qualification,
 	                                                  reserved_index_name);
@@ -15747,24 +15793,6 @@ PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline(PEGTransfor
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer,
-                                                                   GeneratedTransformProcess &process) {
-	optional<bool> show_all_modifier {};
-	if (process.child_results[0]) {
-		show_all_modifier = process.TakeResult<bool>(0);
-	}
-	auto result = TransformShowExternalResourcesStmt(transformer, show_all_modifier);
-	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
-}
-
-arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeShowAllModifierTrampoline(PEGTransformer &transformer,
-                                                         GeneratedTransformProcess &process) {
-	auto result = TransformShowAllModifier(transformer);
-	return transformer.MakeResult<bool>(result);
-}
-
-arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto external_resource_source = process.TakeResult<unique_ptr<ExternalResourceOptions>>(0);
@@ -17071,7 +17099,7 @@ PEGTransformerFactory::FinalizeParensTableRefTrampoline(PEGTransformer &transfor
 	if (process.child_results[0]) {
 		table_alias_colon = process.TakeResult<Identifier>(0);
 	}
-	auto table_ref = process.TakeResult<unique_ptr<TableRef>>(1);
+	auto joined_table_ref = process.TakeResult<unique_ptr<TableRef>>(1);
 	optional<TableAlias> table_alias {};
 	if (process.child_results[2]) {
 		table_alias = process.TakeResult<TableAlias>(2);
@@ -17080,8 +17108,25 @@ PEGTransformerFactory::FinalizeParensTableRefTrampoline(PEGTransformer &transfor
 	if (process.child_results[3]) {
 		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(3);
 	}
-	auto result = TransformParensTableRef(transformer, table_alias_colon, std::move(table_ref), table_alias,
+	auto result = TransformParensTableRef(transformer, table_alias_colon, std::move(joined_table_ref), table_alias,
 	                                      std::move(sample_clause));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeJoinedTableRefChainTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &dynamic_repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+	auto dynamic_child_count = dynamic_repeat_children.size();
+	auto inner_table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
+	vector<unique_ptr<TableRef>> join_or_pivot;
+	join_or_pivot.reserve(dynamic_child_count);
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+		join_or_pivot.push_back(process.TakeResult<unique_ptr<TableRef>>(i));
+	}
+	auto result = TransformJoinedTableRefChain(transformer, std::move(inner_table_ref), std::move(join_or_pivot));
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 
@@ -17591,12 +17636,12 @@ PEGTransformerFactory::FinalizeNearestBaseTableRefTrampoline(PEGTransformer &tra
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeNearestParensTableRefTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
-	auto table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
+	auto joined_table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
 	optional<unique_ptr<SampleOptions>> sample_clause {};
 	if (process.child_results[1]) {
 		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(1);
 	}
-	auto result = TransformNearestParensTableRef(transformer, std::move(table_ref), std::move(sample_clause));
+	auto result = TransformNearestParensTableRef(transformer, std::move(joined_table_ref), std::move(sample_clause));
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 

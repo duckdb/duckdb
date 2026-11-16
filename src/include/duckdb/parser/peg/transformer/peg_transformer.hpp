@@ -1471,6 +1471,8 @@ public:
 	                                                                           GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDescribeStatementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeShowExternalResourcesTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeShowDeprecatedSelectTrampoline(PEGTransformer &transformer,
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDescribeSelectTrampoline(PEGTransformer &transformer,
@@ -2060,10 +2062,6 @@ public:
 	static arena_ptr<TransformResultValue>
 	FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
-	FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeShowAllModifierTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue>
 	FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeConnectToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
@@ -2282,6 +2280,8 @@ public:
 	                                                                   GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeParensTableRefTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeJoinedTableRefChainTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseBodyTrampoline(PEGTransformer &transformer,
@@ -2665,7 +2665,7 @@ public:
 	                                                        unique_ptr<AlterInfo> alter_sequence_options);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &catalog_qualification,
-	                                                    const optional<Identifier> &schema_qualification,
+	                                                    const optional<vector<Identifier>> &schema_qualification,
 	                                                    const Identifier &sequence_name);
 	static unique_ptr<AlterInfo> TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
 	                                                                 unique_ptr<AlterTableInfo> rename_alter);
@@ -3203,6 +3203,9 @@ public:
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
 	                                                              unique_ptr<QueryNode> child);
+	static unique_ptr<QueryNode> TransformShowExternalResources(PEGTransformer &transformer, const ShowType &show_rule,
+	                                                            const bool &has_result,
+	                                                            optional<Identifier> show_external_resources_type);
 	static unique_ptr<QueryNode> TransformShowDeprecatedSelect(PEGTransformer &transformer, const ShowType &show_rule,
 	                                                           unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<QueryNode> TransformDescribeSelect(PEGTransformer &transformer,
@@ -3257,7 +3260,7 @@ public:
 	                                                  const Identifier &reserved_index_name);
 	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
 	                                                         const Identifier &catalog_qualification,
-	                                                         const Identifier &reserved_schema_qualification,
+	                                                         const vector<Identifier> &reserved_schema_qualification,
 	                                                         const Identifier &reserved_index_name);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &qualified_sequence_name);
@@ -3804,9 +3807,6 @@ public:
 	                                                                      unique_ptr<ParsedExpression> expression);
 	static unique_ptr<SQLStatement> TransformDestroyExternalResourceStmt(PEGTransformer &transformer,
 	                                                                     const Identifier &col_id);
-	static unique_ptr<SQLStatement> TransformShowExternalResourcesStmt(PEGTransformer &transformer,
-	                                                                   const optional<bool> &show_all_modifier);
-	static bool TransformShowAllModifier(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformAttachToExternalResource(
 	    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
 	    const Identifier &attach_alias, const optional<vector<GenericCopyOption>> &attach_options);
@@ -4054,6 +4054,9 @@ public:
 	                                                    unique_ptr<TableRef> table_ref,
 	                                                    const optional<TableAlias> &table_alias,
 	                                                    optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TableRef> TransformJoinedTableRefChain(PEGTransformer &transformer,
+	                                                         unique_ptr<TableRef> inner_table_ref,
+	                                                         vector<unique_ptr<TableRef>> join_or_pivot);
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      unique_ptr<TableRef> table_pivot_clause_body,
 	                                                      const optional<TableAlias> &table_alias);
