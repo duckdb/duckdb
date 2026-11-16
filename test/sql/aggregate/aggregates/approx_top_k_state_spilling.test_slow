@@ -1,0 +1,64 @@
+# name: test/sql/aggregate/aggregates/approx_top_k_state_spilling.test_slow
+# description: approx_top_k states are exported and imported when they share a hash table with spillable states
+# group: [aggregates]
+
+require skip_reload
+
+statement ok
+SET threads=4;
+
+statement ok
+SET temp_directory='{TEST_DIR}/approx_top_k_state_spilling';
+
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+CREATE MACRO expected_s() AS (SELECT list_sort(list(md5(j::VARCHAR))) FROM range(4) r(j));
+
+# 15624 groups x ~800 bytes of first() payload plus the approx_top_k states are far above the limit
+statement ok
+SET memory_limit='32MB';
+
+# per group k: i % 4 == k % 4 (15624 is divisible by 4), and i // 15624 takes each of 0..3 once
+query I
+SELECT count(*) FROM (
+	SELECT k, first(wide) w, approx_top_k(i % 4, 2) t, approx_top_k(md5((i // 15624)::VARCHAR), 4) s
+	FROM (SELECT i % 15624 AS k, repeat(md5((i % 15624)::VARCHAR), 25) AS wide, i FROM range(62496) t(i))
+	GROUP BY k
+) WHERE w != repeat(md5(k::VARCHAR), 25) OR t != [k % 4] OR list_sort(s) != expected_s();
+----
+0
+
+query III
+SELECT count(*), count(DISTINCT t), sum(length(w)) FROM (
+	SELECT k, first(wide) w, approx_top_k(i % 4, 2) t
+	FROM (SELECT i % 15624 AS k, repeat(md5((i % 15624)::VARCHAR), 25) AS wide, i FROM range(62496) t(i))
+	GROUP BY k
+);
+----
+15624	4	12499200
+
+# a temp directory that is too small makes the query fail cleanly
+statement ok
+SET max_temp_directory_size='1MB';
+
+statement error
+SELECT count(*) FROM (
+	SELECT k, first(wide) w, approx_top_k(i % 4, 2) t, approx_top_k(md5((i // 15624)::VARCHAR), 4) s
+	FROM (SELECT i % 15624 AS k, repeat(md5((i % 15624)::VARCHAR), 25) AS wide, i FROM range(62496) t(i))
+	GROUP BY k
+) WHERE w != repeat(md5(k::VARCHAR), 25) OR t != [k % 4] OR list_sort(s) != expected_s();
+----
+<REGEX>:.*(Out of Memory Error|failed to offload data block).*
+
+statement ok
+RESET max_temp_directory_size;
+
+statement ok
+SET memory_limit='4GB';
+
+query I
+SELECT approx_top_k(CASE WHEN i < 6 THEN 0 ELSE i END, 1) FROM range(10) r(i);
+----
+[0]
