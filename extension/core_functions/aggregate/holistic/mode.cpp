@@ -395,9 +395,11 @@ struct BaseModeFunction {
 		auto &allocator = aggr_input_data.allocator;
 		if (!target.frequency_map) {
 			target.frequency_map = TYPE_OP::CreateEmpty(allocator);
+			target.frequency_map->reserve(source.frequency_map->size());
 		} else if (&target.frequency_map->get_allocator().GetAllocator() != &allocator) {
 			// Copied states can share a sink arena across partitions being combined in parallel.
 			target.frequency_map = allocator.Make<typename TYPE_OP::MAP_TYPE>(*target.frequency_map, allocator);
+			target.frequency_map->reserve(target.frequency_map->size() + source.frequency_map->size());
 		}
 		for (auto &val : *source.frequency_map) {
 			auto &i = TYPE_OP::GetOrCreate(*target.frequency_map, val.first, aggr_input_data.allocator);
