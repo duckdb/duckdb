@@ -34,7 +34,13 @@
         "description": "If a bulk deallocation larger than this occurs, flush outstanding allocations.",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "512.0 MiB",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "allocator_flush_threshold",
@@ -58,10 +64,10 @@
     },
     {
         "name": "allow_extension_repositories",
-        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from 'allowed' to 'forbidden'.",
+        "description": "Which custom trusted extension repositories can be added, and which are trusted: 'hosts' (the default: a repository named by its host can be added with CREATE EXTENSION REPOSITORY <host>, adding one by prefix needs 'allowed', existing repositories stay trusted), 'allowed' (repositories can be added by host or by prefix), 'hosts_only' (only repositories resolved from their host can be added, and only those are trusted) or 'forbidden' (nothing can be added, and existing repositories are distrusted). While the database is running the setting can only be tightened: 'hosts' -> 'allowed' -> 'hosts_only' -> 'forbidden'.",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": "undecided",
+        "default_value": "hosts",
         "on_callbacks": [
             "set"
         ]
@@ -208,6 +214,16 @@
         "default_value": "true"
     },
     {
+        "name": "buffer_manager_track_eviction_timestamps",
+        "description": "Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "cache_local_files",
         "description": "Whether the external file cache also caches local files. Remote files are always cached.",
         "type": "BOOLEAN",
@@ -229,17 +245,26 @@
         "default_value": "DEFAULT"
     },
     {
+        "name": "checkpoint_on_shutdown",
+        "description": "Whether to run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint, e.g. 1GB.",
         "type": "VARCHAR",
         "scope": "global",
-        "internal_setting": "checkpoint_wal_size",
-        "custom_implementation": [
-            "set",
-            "get"
-        ],
         "aliases": [
             "wal_autocheckpoint"
+        ],
+        "default_value": "16.0 MiB",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -277,9 +302,12 @@
         "description": "HTTP request metadata that can be set by callers/wrappers to tag their own traffic when DuckDB makes a request.",
         "type": "VARCHAR",
         "scope": "global",
+        "default_value": "",
         "custom_implementation": [
-            "set",
-            "reset"
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -287,7 +315,7 @@
         "description": "Whether or not to abort if a serialization exception is thrown during WAL playback.",
         "type": "BOOLEAN",
         "scope": "global",
-        "internal_setting": "abort_on_wal_failure",
+        "default_value": "false",
         "is_debug": true
     },
     {
@@ -326,10 +354,16 @@
         "description": "Enables the Parquet reader to identify a Variant structurally.",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true,
         "is_debug": true,
         "aliases": [
             "__delta_only_variant_encoding_enabled"
+        ],
+        "default_value": "false",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -381,6 +415,14 @@
         "struct": "ForceBitpackingModeSetting"
     },
     {
+        "name": "debug_force_checkpoint",
+        "description": "Force a checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_force_commit_failure",
         "description": "Force transaction commit to fail after the undo buffer has been committed. Can be used for testing commit error recovery.",
         "type": "BOOLEAN",
@@ -413,16 +455,30 @@
         "is_debug": true
     },
     {
+        "name": "debug_force_flush_append_failure",
+        "description": "Force the commit-time flush of transaction-local storage to fail after appending to the table. Can be used for testing commit error recovery.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_force_mbedtls_unsafe",
         "description": "Enable mbedtls for encryption. Unsafe to use.",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true,
         "is_debug": true,
         "aliases": [
             "force_mbedtls_unsafe"
         ],
-        "struct": "ForceMbedtlsUnsafeSetting"
+        "struct": "ForceMbedtlsUnsafeSetting",
+        "default_value": "false",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "debug_force_no_cross_product",
@@ -449,12 +505,18 @@
         "description": "Forces the VARIANT shredding that happens during checkpointing to use the provided schema for the shredding.",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true,
         "is_debug": true,
         "aliases": [
             "force_variant_shredding"
         ],
-        "struct": "ForceVariantShredding"
+        "struct": "ForceVariantShredding",
+        "default_value": "INVALID",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "debug_force_wal_fsync_failure",
@@ -462,6 +524,14 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false",
+        "is_debug": true
+    },
+    {
+        "name": "debug_initialize",
+        "description": "How to initialize blocks in the storage layer when allocating (NO_INITIALIZE, DEBUG_ZERO_INITIALIZE or DEBUG_ONE_INITIALIZE).",
+        "type": "ENUM<DebugInitialize>",
+        "scope": "global",
+        "default_value": "NO_INITIALIZE",
         "is_debug": true
     },
     {
@@ -476,7 +546,8 @@
         "name": "debug_order_verification",
         "description": "Verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT).",
         "type": "ENUM<DebugOrderVerification>",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "NONE",
         "is_debug": true
     },
     {
@@ -498,10 +569,16 @@
     {
         "name": "debug_verification_mode",
         "description": "Toggle the verification mode.",
-        "type": "VARCHAR",
+        "type": "ENUM<DebugVerificationMode>",
         "scope": "global",
-        "custom_implementation": true,
-        "is_debug": true
+        "is_debug": true,
+        "default_value": "NONE",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "debug_verification_projection",
@@ -620,6 +697,13 @@
         ]
     },
     {
+        "name": "default_grammar_extensions",
+        "description": "The grammar extensions sessions parse with when active_grammar_extensions is not set.",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "default_null_order",
         "description": "The NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST).",
         "type": "ENUM<DefaultOrderByNullType>",
@@ -693,7 +777,13 @@
         "description": "Disable a specific, comma-separated set of compression methods.",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "disabled_filesystems",
@@ -715,7 +805,13 @@
         "description": "Disable a specific, comma-separated set of optimizers.",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "duckdb_api",
@@ -827,9 +923,9 @@
         "description": "Enables the progress bar, which prints progress to the terminal during long queries.",
         "type": "BOOLEAN",
         "scope": "local",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -837,7 +933,10 @@
         "description": "Controls the printing of the progress bar and requires 'enable_progress_bar' to be true.",
         "type": "BOOLEAN",
         "scope": "local",
-        "custom_implementation": true
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "enable_view_dependencies",
@@ -890,7 +989,13 @@
         "description": "Set the directories to store extensions in.",
         "type": "VARCHAR[]",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "[]",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "extension_directory",
@@ -1059,6 +1164,22 @@
         "struct": "HTTPProxyUsernameSetting"
     },
     {
+        "name": "http_retry_quota_throttled",
+        "description": "Whether the per-host retry quota can refuse the retry of a throttled request (HTTP 429 or 503). When false, a throttled retry is still charged to the quota but is not refused when the quota is empty.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "struct": "HTTPRetryQuotaThrottledSetting"
+    },
+    {
+        "name": "http_retry_throttled_wait_ms",
+        "description": "Smallest base wait, in milliseconds, of the back-off between retries of a throttled request (HTTP 429 or 503). Throttled retries back off from the larger of this and http_retry_wait_ms.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "0",
+        "struct": "HTTPRetryThrottledWaitMsSetting"
+    },
+    {
         "name": "ieee_floating_point_ops",
         "description": "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.",
         "type": "BOOLEAN",
@@ -1178,12 +1299,21 @@
         "custom_implementation": true
     },
     {
+        "name": "logging_sink",
+        "description": "Set the logging sink, options are 'memory', 'stdout', 'file', '<custom>'.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingSink",
+        "custom_implementation": true
+    },
+    {
         "name": "logging_storage",
-        "description": "Set the logging storage, options are 'memory', 'stdout', 'file', '<custom>'.",
+        "description": "Deprecated setting. Use logging_sink instead.",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingStorage",
-        "custom_implementation": true
+        "custom_implementation": true,
+        "is_deprecated": true
     },
     {
         "name": "match_recognize_max_states",
@@ -1373,9 +1503,15 @@
     {
         "name": "profiling_coverage",
         "description": "The profiling coverage, either SELECT (only SELECT queries) or ALL (all queries are profiled).",
-        "type": "VARCHAR",
+        "type": "ENUM<ProfilingCoverage>",
         "scope": "local",
-        "custom_implementation": true
+        "default_value": "SELECT",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "profiling_mode",
@@ -1390,9 +1526,15 @@
         "description": "The file to which profiler output is written. When empty, the output is printed to the terminal.",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true,
         "aliases": [
             "profile_output"
+        ],
+        "default_value": "",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -1400,14 +1542,20 @@
         "description": "A map of settings passed to the renderer of the profiler output, e.g. {'max_extra_lines': 100}. Settings not recognized by the active renderer are ignored.",
         "type": "MAP(VARCHAR, VARCHAR)",
         "scope": "local",
-        "custom_implementation": true
+        "default_value": "{}",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "progress_bar_time",
         "description": "Configures how long (in milliseconds) a query needs to take before we start printing a progress bar.",
         "type": "BIGINT",
         "scope": "local",
-        "custom_implementation": true
+        "default_value": "2000",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "read_ahead_depth",
@@ -1436,6 +1584,13 @@
             "set"
         ],
         "is_deprecated": true
+    },
+    {
+        "name": "scalar_aggregate_merge_threshold",
+        "description": "The number of rows a table needs for sibling scalar aggregates over it to be computed in one pass. 0 computes them in one pass only over table functions such as read_parquet.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "0"
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
@@ -1549,8 +1704,18 @@
         "name": "tracked_metrics",
         "description": "A list of metric glob patterns to enable for collection, e.g. ['query.*', 'optimizer.*'].",
         "type": "VARCHAR[]",
-        "scope": "local",
-        "custom_implementation": true
+        "default_scope": "local",
+        "default_value": "['*']",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "trim_free_blocks",
+        "description": "Whether to invoke filesystem trim on free blocks after checkpoint. This reclaims space for sparse files, on platforms that support it.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "username",

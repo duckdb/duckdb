@@ -293,9 +293,8 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	// bind table constraints/default values in case these are referenced
 	auto &catalog_name = table.ParentCatalog().GetName();
-	auto &schema_name = table.ParentSchema().name;
 	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
-	                  schema_name.GetIdentifierName());
+	                  table.ParentSchema().GetSchemaPath());
 
 	merge_into->bound_constraints = BindConstraints(table);
 
@@ -380,8 +379,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		auto proj = LogicalProjection::CreateIdentity(new_proj_index, std::move(source));
 
 		// insert the source marker
-		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->SetAlias("source_marker");
+		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42), "source_marker");
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(proj->expressions, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -400,8 +398,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
-		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->SetAlias("source_marker");
+		auto marker_ref = make_uniq<BoundColumnRefExpression>("source_marker", LogicalType::INTEGER, source_marker);
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

@@ -99,7 +99,8 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 	}
 
 	Value value = ExpressionExecutor::EvaluateScalar(context, *bound);
-	if (value.type().id() == LogicalTypeId::LIST) {
+	// a NULL list stays NULL, the quantile binder rejects it
+	if (value.type().id() == LogicalTypeId::LIST && !value.IsNull()) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
 			values.push_back(NegatePercentileValue(element_val, desc));
@@ -107,9 +108,10 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound = make_uniq<BoundConstantExpression>(Value::LIST(values));
+		bound = make_uniq<BoundConstantExpression>(Value::LIST(values), bound->GetAlias(), bound->GetQueryLocation());
 	} else {
-		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc), bound->GetAlias(),
+		                                           bound->GetQueryLocation());
 	}
 }
 
@@ -184,7 +186,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	vector<unique_ptr<Expression>> bound_arguments;
 	for (idx_t i = 0; i < aggr.GetArguments().size(); ++i) {
 		auto &child = aggr.GetArgumentsMutable()[i];
-		bound_arguments.push_back(BindChild(child.GetExpressionMutable(), 0, error));
+		// arguments are aliased by their name, if any (see BindFunction for the rationale)
+		bound_arguments.push_back(BindChild(child.GetExpressionMutable(), 0, error, child.GetName()));
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
 		if (!error.HasError() && ordered_set_agg && i == aggr.GetArguments().size() - 1) {
 			NegatePercentileFractions(context, bound_arguments.back(), negate_fractions);
@@ -248,11 +251,6 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	for (idx_t arg_idx = 0; arg_idx < aggr.GetArgumentsMutable().size(); arg_idx++) {
 		auto &arg = aggr.GetArgumentsMutable()[arg_idx];
 		auto bound_arg = std::move(bound_arguments[arg_idx]);
-		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
-		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(arg.GetName());
-		}
 		if (aggr.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
@@ -290,6 +288,15 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		if (!in_args) {
 			throw BinderException("In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list");
 		}
+	}
+
+	// EXPORT_STATE exports the state of the underlying (non-distinct) aggregate: it does not carry the set of values
+	// seen so far, so combining exported states of a DISTINCT aggregate would count repeated values again
+	if (aggr.Distinct() && aggr.ExportState()) {
+		throw BinderException(aggr,
+		                      "EXPORT_STATE is not supported for DISTINCT aggregates: the exported state does not "
+		                      "retain the set of distinct values, so combining states would produce incorrect "
+		                      "results");
 	}
 
 	// Bind the function

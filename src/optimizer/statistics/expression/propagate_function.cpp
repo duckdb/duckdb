@@ -89,7 +89,7 @@ bool TryInferConstantBounds(const BaseStatistics &stats, Value &constant) {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientContext &context,
                                                                          const BoundFunctionExpression &func,
                                                                          const vector<BaseStatistics> &child_stats) {
-	if (func.Function().GetStability() != FunctionStability::CONSISTENT || func.GetChildren().empty()) {
+	if (func.Function().GetStability() == FunctionStability::VOLATILE || func.GetChildren().empty()) {
 		return nullptr;
 	}
 	// Lambda arguments are placeholders, not SQL values that can be evaluated independently.
@@ -126,7 +126,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 	if (!func.Function().HasArgProperties() || func.GetChildren().empty()) {
 		return nullptr;
 	}
-	if (func.Function().GetStability() != FunctionStability::CONSISTENT) {
+	if (func.Function().GetStability() == FunctionStability::VOLATILE) {
 		return nullptr;
 	}
 	if (BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
@@ -244,13 +244,17 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		return PropagateComparison(func, expr_ptr);
 	}
 	vector<BaseStatistics> stats;
-	stats.reserve(func.GetChildrenMutable().size());
+	stats.reserve(func.GetChildren().size());
 	bool has_invalidated_parameter = false;
 	for (auto &child : func.GetChildrenMutable()) {
 		auto stat = PropagateExpression(child);
 		// an invalidated parameter has no statistics until it is rebound at execution
 		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
 		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			has_invalidated_parameter = true;
+		}
+		// neither does an input whose type depends on an unresolved parameter
+		if (!child->GetReturnType().IsComplete()) {
 			has_invalidated_parameter = true;
 		}
 		if (!stat) {

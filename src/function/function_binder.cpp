@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -391,7 +393,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		}
 		if (!filled) {
 			// This parameter cannot be filled by the call, so this function cannot be a match.
-			mismatch(FunctionMismatch::MissingParameter {i, param.GetName()});
+			mismatch(FunctionMismatch::MissingParameter {i, param.IsNamed() ? param.GetName() : Identifier()});
 		}
 	}
 
@@ -422,7 +424,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		}
 	}
 
-	if (mismatches > 0) {
+	if (reason) {
 		// the wrong shape is further away than arguments that cannot be cast, of which there are at most this many
 		return FunctionMismatch(overload, std::move(function), received_count + mismatches, std::move(*reason));
 	}
@@ -444,26 +446,19 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		}
 	}
 
-	FunctionBinding binding;
-	binding.overload = overload;
-	binding.function = function;
+	auto get_parameter_index = [&](idx_t i) {
+		if (i >= received_positional_count) {
+			auto by_name = sig.GetParameterIndexByName(call.GetArgument(i).name);
+			return by_name.IsValid() ? by_name.GetIndex() : kwargs_idx.GetIndex();
+		}
+		return i < accepted_positional_count ? i : args_idx.GetIndex();
+	};
+
 	idx_t cost = 0;
 	bool has_unknown_argument = false;
-	vector<bool> filled(sig.GetParameterCount(), false);
 	for (idx_t i = 0; i < received_count; i++) {
-		auto &argument = call.GetArgument(i);
-		auto &arg_type = argument.type;
+		auto &arg_type = call.GetArgument(i).type;
 		const bool is_named = i >= received_positional_count;
-		idx_t param_idx;
-		if (is_named) {
-			auto by_name = sig.GetParameterIndexByName(argument.name);
-			param_idx = by_name.IsValid() ? by_name.GetIndex() : kwargs_idx.GetIndex();
-		} else {
-			param_idx = i < accepted_positional_count ? i : args_idx.GetIndex();
-		}
-		binding.argument_to_parameters.push_back(param_idx);
-		filled[param_idx] = true;
-
 		if (!is_named && arg_type.id() == LogicalTypeId::UNKNOWN) {
 			has_unknown_argument = true;
 			continue;
@@ -471,6 +466,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		if (explicit_casts) {
 			continue;
 		}
+		auto param_idx = get_parameter_index(i);
 		int64_t cast_cost = ImplicitCastCost(context, arg_type, sig.GetParameter(param_idx).GetType());
 		if (cast_cost < 0) {
 			mismatch(FunctionMismatch::IncompatibleArgument {i, sig.GetParameter(param_idx).GetType()});
@@ -478,18 +474,31 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		}
 		cost += static_cast<idx_t>(cast_cost);
 	}
-	if (mismatches > 0) {
+	if (reason) {
 		return FunctionMismatch(overload, std::move(function), mismatches, std::move(*reason));
 	}
 
+	// Only candidates whose casts match need a materialized argument-to-parameter mapping.
+	FunctionBinding binding;
+	binding.overload = overload;
+	binding.function = function;
+	binding.argument_to_parameters.reserve(received_count);
+	for (idx_t i = 0; i < received_count; i++) {
+		binding.argument_to_parameters.push_back(get_parameter_index(i));
+	}
 	binding.return_type = sig.GetReturnType();
 	bool is_templated = binding.return_type.IsTemplated();
+	binding.parameter_types.reserve(sig.GetParameterCount());
 	for (auto &param : sig.GetParameters()) {
 		binding.parameter_types.push_back(param.GetType());
 		is_templated = is_templated || param.GetType().IsTemplated();
 	}
 	if (is_templated) {
 		// the shape and the casts match, so a template that cannot be deduced is the closest miss there is
+		vector<bool> filled(sig.GetParameterCount(), false);
+		for (auto param_idx : binding.argument_to_parameters) {
+			filled[param_idx] = true;
+		}
 		auto template_mismatch = DeduceTemplates(context, sig, call, filled, binding);
 		if (template_mismatch) {
 			return FunctionMismatch(overload, std::move(function), 0, std::move(*template_mismatch));
@@ -520,7 +529,10 @@ FunctionBindResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> co
 		auto match = MatchOverload(context, overload, functions.GetSharedOverload(overload), call, explicit_casts);
 		auto binding = std::get_if<FunctionBinding>(&match);
 		if (!binding) {
-			mismatches.push_back(std::move(std::get<FunctionMismatch>(match)));
+			// Once an overload matches, unsuccessful candidates cannot contribute to the result or diagnostics.
+			if (cheapest.empty()) {
+				mismatches.push_back(std::move(std::get<FunctionMismatch>(match)));
+			}
 			continue;
 		}
 
@@ -794,8 +806,7 @@ static ResolvedArguments ResolveArguments(const SimpleFunction &function, const 
 		}
 		if (!param.IsVariadic() && received[param_idx].empty()) {
 			// the call matches the function, so every parameter it leaves out has a default
-			auto default_arg = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
-			default_arg->SetAlias(param.GetName());
+			auto default_arg = make_uniq<BoundConstantExpression>(*param.GetDefaultValue(), param.GetName());
 			result.arguments.push_back(std::move(default_arg));
 			result.types.push_back(param_type);
 		}
@@ -880,6 +891,44 @@ FunctionBinder::BindTableFunction(const TableFunctionSet &functions,
 	                                        std::move(named_parameters));
 }
 
+unique_ptr<ResolvedTableFunction>
+FunctionBinder::BindTableInOutFunction(const TableFunctionSet &functions, const vector<LogicalType> &input_types,
+                                       vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                       ErrorData &error) {
+	VerifyNamedArgumentsAccepted(functions, named_arguments);
+	vector<unique_ptr<Expression>> input_arguments;
+	for (idx_t i = 0; i < input_types.size(); i++) {
+		input_arguments.push_back(make_uniq<BoundReferenceExpression>(input_types[i], storage_t(i)));
+	}
+	auto selection = SelectFunction(context, functions, {input_arguments, named_arguments});
+	if (!selection) {
+		error = selection.GetError();
+		return nullptr;
+	}
+	auto &binding = selection.GetBinding();
+	auto definition = binding.GetFunction<TableFunction>();
+	for (const auto &argument : named_arguments) {
+		auto parameter = definition->GetSignature().GetParameterIndexByName(argument.first);
+		if (parameter.IsValid() && definition->GetSignature().GetParameter(parameter.GetIndex()).AcceptsPosition()) {
+			throw BinderException("Table in-out function input columns must be passed positionally: %s",
+			                      argument.first);
+		}
+	}
+	auto resolved = ResolveArguments(*definition, binding, input_arguments, named_arguments);
+	// Input columns remain in the subquery; only named options are cast and folded here.
+	const auto positional_count =
+	    NumericCast<vector<unique_ptr<Expression>>::difference_type>(resolved.positional_count);
+	resolved.arguments.erase(resolved.arguments.begin(), resolved.arguments.begin() + positional_count);
+	resolved.types.erase(resolved.types.begin(), resolved.types.begin() + positional_count);
+	resolved.positional_count = 0;
+	CastToFunctionArguments(definition->GetName(), resolved.types, resolved.arguments);
+	vector<Value> parameters;
+	named_argument_map_t named_parameters;
+	FoldArguments(context, *definition, resolved, parameters, named_parameters);
+	return make_uniq<ResolvedTableFunction>(BoundTableFunction(definition), std::move(parameters),
+	                                        std::move(named_parameters));
+}
+
 unique_ptr<BoundPragmaInfo> FunctionBinder::BindPragmaFunction(
     const PragmaFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error) {
@@ -957,6 +1006,10 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
 			    function_name);
 		}
+		if (children[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN && !target_type.IsComplete()) {
+			// bind callbacks only see concrete types - an unresolved parameter is bound again at EXECUTE
+			throw ParameterNotResolvedException();
+		}
 		target_type.Verify();
 		// don't cast lambda children, their slot only ever holds a placeholder
 		if (children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
@@ -974,9 +1027,9 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			if (target_has_any && children[i]->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+			if (target_has_any) {
 				// a type that is not concrete cannot be cast to (e.g. a NULL or a VARIANT passed to LIST(ANY)) - the
-				// function has to handle the argument as-is. Unresolved parameters are still assigned the type.
+				// function has to handle the argument as-is
 				continue;
 			}
 			if (IsIncompleteCastTarget(target_type)) {
@@ -991,19 +1044,23 @@ void FunctionBinder::CastToFunctionArguments(const Identifier &function_name, ve
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &schema, const Identifier &name,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
-                                                          bool is_operator, optional_ptr<Binder> binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder,
+                                                          Identifier alias, QueryLocation query_location) {
 	// bind the function
 	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
 	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), schema, name));
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
-	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
+	return BindScalarFunction(function, std::move(children), error, is_operator, binder, std::move(alias),
+	                          query_location);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &schema, const Identifier &name,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
-                                                          optional_ptr<Binder> binder) {
+                                                          optional_ptr<Binder> binder, Identifier alias,
+                                                          QueryLocation query_location) {
 	ErrorData error;
-	auto result = BindScalarFunction(schema, name, std::move(children), error, is_operator, binder);
+	auto result = BindScalarFunction(schema, name, std::move(children), error, is_operator, binder, std::move(alias),
+	                                 query_location);
 	if (!result) {
 		error.Throw();
 	}
@@ -1012,13 +1069,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &sche
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
-                                                          bool is_operator, optional_ptr<Binder> binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder,
+                                                          Identifier alias, QueryLocation query_location) {
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(children.size());
 	for (auto &child : children) {
 		arguments.emplace_back(string(), std::move(child));
 	}
-	return BindScalarFunction(func, std::move(arguments), error, is_operator, binder);
+	return BindScalarFunction(func, std::move(arguments), error, is_operator, binder, std::move(alias), query_location);
 }
 
 //! Returns true if any argument is an untyped NULL, i.e. has type SQLNULL
@@ -1040,13 +1098,17 @@ static bool HasUntypedNullArgument(const vector<unique_ptr<Expression>> &regular
 //! Evaluates a constant argument and returns true if it is NULL. A non-NULL result replaces the argument with a
 //! constant: the argument has been evaluated anyway, and keeping the result means that it is not evaluated again by
 //! every enclosing function call - which made binding nested constant expressions quadratic in their depth.
-static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> &child) {
+static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> &child, optional_ptr<Binder> binder) {
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		return child->Cast<BoundConstantExpression>().GetValue().IsNull();
 	}
 	// a lambda has no value of its own, the function it is passed to executes its body
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
 		return false;
+	}
+	if (binder && child->RequiresRebind()) {
+		// the constant no longer shows that its value can change across queries
+		binder->SetAlwaysRequireRebind();
 	}
 	Value result;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
@@ -1056,24 +1118,22 @@ static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> 
 	if (result.IsNull()) {
 		return true;
 	}
-	auto constant = make_uniq<BoundConstantExpression>(std::move(result));
-	constant->SetAlias(child->GetAlias());
-	constant->SetQueryLocation(child->GetQueryLocation());
-	child = std::move(constant);
+	child = make_uniq<BoundConstantExpression>(std::move(result), child->GetAlias(), child->GetQueryLocation());
 	return false;
 }
 
 //! Returns true if any argument is a constant expression that evaluates to NULL. Arguments that evaluate to a non-NULL
 //! value are folded to constants along the way.
 static bool HasNullConstantArgument(ClientContext &context, vector<unique_ptr<Expression>> &regular_args,
-                                    vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+                                    vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
+                                    optional_ptr<Binder> binder) {
 	for (auto &child : regular_args) {
-		if (FoldConstantArgument(context, child)) {
+		if (FoldConstantArgument(context, child, binder)) {
 			return true;
 		}
 	}
 	for (auto &child : keyword_args) {
-		if (FoldConstantArgument(context, child.second)) {
+		if (FoldConstantArgument(context, child.second, binder)) {
 			return true;
 		}
 	}
@@ -1091,7 +1151,8 @@ static LogicalType NullReturnType(const LogicalType &return_type) {
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
-                                                          optional_ptr<Binder> binder) {
+                                                          optional_ptr<Binder> binder, Identifier alias,
+                                                          QueryLocation query_location) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	vector<unique_ptr<Expression>> regular_args;
@@ -1113,24 +1174,28 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		const auto &return_type = bound_function.GetReturnType();
 		if (HasUntypedNullArgument(regular_args, keyword_args)) {
-			return make_uniq<BoundConstantExpression>(Value(NullReturnType(return_type)));
+			return make_uniq<BoundConstantExpression>(Value(NullReturnType(return_type)), std::move(alias),
+			                                          query_location);
 		}
-		if (HasNullConstantArgument(context, regular_args, keyword_args)) {
+		if (HasNullConstantArgument(context, regular_args, keyword_args, binder)) {
 			if (return_type.IsComplete()) {
 				BoundScalarFunction null_function(std::move(selected_function));
 				for (auto &child : keyword_args) {
 					regular_args.push_back(std::move(child.second));
 				}
 				PropagateReturnCollation(null_function, null_function.GetProperties(), regular_args, string());
-				return make_uniq<BoundConstantExpression>(Value(null_function.GetReturnType()));
+				return make_uniq<BoundConstantExpression>(Value(null_function.GetReturnType()), std::move(alias),
+				                                          query_location);
 			}
 			auto resolved = ResolveScalarFunctionTypes(binding, regular_args, keyword_args);
 			PropagateReturnCollation(resolved.bound_function, resolved.bound_function.GetProperties(), regular_args,
 			                         resolved.pushed_collation);
-			return make_uniq<BoundConstantExpression>(Value(NullReturnType(resolved.bound_function.GetReturnType())));
+			return make_uniq<BoundConstantExpression>(Value(NullReturnType(resolved.bound_function.GetReturnType())),
+			                                          std::move(alias), query_location);
 		}
 	}
-	return BindScalarFunction(binding, std::move(regular_args), std::move(keyword_args), is_operator, binder);
+	return BindScalarFunction(binding, std::move(regular_args), std::move(keyword_args), is_operator, binder,
+	                          std::move(alias), query_location);
 }
 
 static bool RequiresCollationPropagation(const LogicalType &type) {
@@ -1270,7 +1335,7 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 
 //! Pushes the collations of the arguments into the children, returns the collation to propagate to the return type
 static string PushCollations(ClientContext &context, BoundSimpleFunction &bound_function,
-                             vector<unique_ptr<Expression>> &children, CollationType type) {
+                             vector<unique_ptr<Expression>> &children, CollationType type, bool is_index_key) {
 	FunctionCollations collations;
 	auto &argument_types = bound_function.GetArguments();
 	for (idx_t i = 0; i < children.size(); i++) {
@@ -1278,8 +1343,8 @@ static string PushCollations(ClientContext &context, BoundSimpleFunction &bound_
 		auto &target_type = argument_types[i].IsComplete() ? argument_types[i] : source_type;
 		ExtractCollationFromType(source_type, target_type, collations);
 	}
-	if (collations.collation.empty() && collations.fields.empty()) {
-		// no collation to push
+	if (is_index_key && collations.collation.empty() && collations.fields.empty()) {
+		// index keys only use explicit collations, comparison keys and the default collation would change them
 		return string();
 	}
 	// push collations to the children
@@ -1305,13 +1370,14 @@ static string PushCollations(ClientContext &context, BoundSimpleFunction &bound_
 
 //! Pushes collations into the children (if required), returns the collation to propagate to the return type
 static string PushArgumentCollations(ClientContext &context, BoundSimpleFunction &bound_function,
-                                     const FunctionProperties &props, vector<unique_ptr<Expression>> &children) {
+                                     const FunctionProperties &props, vector<unique_ptr<Expression>> &children,
+                                     bool is_index_key) {
 	switch (props.GetCollationHandling()) {
 	case FunctionCollationHandling::IGNORE_COLLATIONS:
 	case FunctionCollationHandling::PROPAGATE_COLLATIONS:
 		return string();
 	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
-		return PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
+		return PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS, is_index_key);
 	case FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS:
 		throw InternalException("PUSH_DISTINCT_COLLATIONS is only supported for aggregate functions");
 	default:
@@ -1422,8 +1488,9 @@ FunctionBinder::ResolveScalarFunctionTypes(const FunctionBinding &binding, vecto
 		bound_function.GetResolveTypesCallback()(input);
 		VerifyArgumentCount(bound_function, arguments.size());
 	}
+	const bool is_index_key = arguments_collated || (binder && binder->IsBindingIndexKey());
 	result.pushed_collation =
-	    PushArgumentCollations(context, bound_function, bound_function.GetProperties(), arguments);
+	    PushArgumentCollations(context, bound_function, bound_function.GetProperties(), arguments, is_index_key);
 	CastToFunctionArguments(bound_function.GetName(), bound_function.GetArguments(), arguments);
 	return result;
 }
@@ -1436,6 +1503,15 @@ FunctionBinder::ResolveScalarFunction(const FunctionBinding &binding, vector<uni
 
 	// The bind callback is called with arguments that are cast to the argument types of the bound function
 	unique_ptr<FunctionData> bind_info;
+	if (binder && (bound_function.HasBindCallback() || bound_function.HasBindExpressionCallback())) {
+		// the callbacks can evaluate constant arguments and drop them, which hides casts that read settings
+		for (auto &argument : arguments) {
+			if (argument->IsFoldable() && argument->RequiresRebind()) {
+				binder->SetAlwaysRequireRebind();
+				break;
+			}
+		}
+	}
 	if (bound_function.HasBindCallback()) {
 		BindScalarFunctionInput input(context, bound_function, arguments, binder);
 		bind_info = bound_function.GetBindCallback()(input);
@@ -1457,39 +1533,46 @@ FunctionBinder::ResolveScalarFunction(const FunctionBinding &binding, vector<uni
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const shared_ptr<const ScalarFunction> &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
-                                                          optional_ptr<Binder> binder) {
-	return BindScalarFunction(function, std::move(children), {}, is_operator, binder);
+                                                          optional_ptr<Binder> binder, Identifier alias,
+                                                          QueryLocation query_location) {
+	return BindScalarFunction(function, std::move(children), {}, is_operator, binder, std::move(alias), query_location);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
-                                                          optional_ptr<Binder> binder) {
-	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), {}, is_operator, binder);
+                                                          optional_ptr<Binder> binder, Identifier alias,
+                                                          QueryLocation query_location) {
+	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), {}, is_operator, binder,
+	                          std::move(alias), query_location);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                                          bool is_operator, optional_ptr<Binder> binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder,
+                                                          Identifier alias, QueryLocation query_location) {
 	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), std::move(keyword_args),
-	                          is_operator, binder);
+	                          is_operator, binder, std::move(alias), query_location);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const shared_ptr<const ScalarFunction> &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                                          bool is_operator, optional_ptr<Binder> binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder,
+                                                          Identifier alias, QueryLocation query_location) {
 	auto binding = MatchFunction(function, children, keyword_args);
-	return BindScalarFunction(binding, std::move(children), std::move(keyword_args), is_operator, binder);
+	return BindScalarFunction(binding, std::move(children), std::move(keyword_args), is_operator, binder,
+	                          std::move(alias), query_location);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const FunctionBinding &binding,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                                          bool is_operator, optional_ptr<Binder> binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder,
+                                                          Identifier alias, QueryLocation query_location) {
 	auto [bound_function, bind_info] = ResolveScalarFunction(binding, children, keyword_args);
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
-	                                                      std::move(bind_info), is_operator);
+	                                                      std::move(bind_info), is_operator, alias, query_location);
 
 	if (binder && result_func->Function().GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 		// the result depends on the query it is bound in, also when the bind_expression callback folds it
@@ -1501,6 +1584,13 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const FunctionBinding 
 		                                  result_func->GetChildrenMutable());
 		auto result = result_func->Function().GetBindExpressionCallback()(input);
 		if (result) {
+			// the callback constructs the expression itself
+			if (!alias.empty()) {
+				result->SetAlias(std::move(alias));
+			}
+			if (query_location.IsValid()) {
+				result->SetQueryLocation(query_location);
+			}
 			return result;
 		}
 	}
