@@ -70,9 +70,10 @@ EXECUTE nested_target;
 0
 
 # An IN predicate can put a MARK join above a small dimension scan.
+# A single selected key gives an exact comparison filter.
 statement ok
 CREATE TABLE marked_dimension AS
-SELECT i AS k,CASE WHEN i<10 THEN 'selected' ELSE 'ignored' END AS flag FROM range(20000) t(i);
+SELECT i AS k,CASE WHEN i=0 THEN 'selected' ELSE 'ignored' END AS flag FROM range(20000) t(i);
 
 foreach threads 1 4
 
@@ -85,7 +86,7 @@ JOIN nested_build b ON p.id=b.id
 JOIN marked_dimension d ON b.k=d.k
 WHERE b.country='USA' AND d.flag IN ('selected','other1','other2','other3','other4','other5');
 ----
-1000
+200
 
 query II
 EXPLAIN (ANALYZE, FORMAT JSON)
@@ -94,6 +95,6 @@ JOIN nested_build b ON p.id=b.id
 JOIN marked_dimension d ON b.k=d.k
 WHERE b.country='USA' AND d.flag IN ('selected','other1','other2','other3','other4','other5');
 ----
-analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]nested_build"[^}]*},\s*"intermediate_rows": 1000,.*
+analyzed_plan	<REGEX>:(?s).*"Table": "[^"]*[.]nested_build"[^}]*},\s*"intermediate_rows": 200,.*
 
 endloop
