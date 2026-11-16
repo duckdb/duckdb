@@ -2155,6 +2155,8 @@ public:
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeFromSourceStringTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeFromSourceNameTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeVersionNumberTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
@@ -2164,7 +2166,14 @@ public:
 	static arena_ptr<TransformResultValue> FinalizeRepositoryPublicKeyTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
+	FinalizeCreateExtensionRepositoryFromHostStmtTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
 	FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryHostNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeTableMatchRecognizeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMatchRecognizeBodyTrampoline(PEGTransformer &transformer,
@@ -2403,6 +2412,8 @@ public:
 	                                                                   GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeParensTableRefTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeJoinedTableRefChainTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseBodyTrampoline(PEGTransformer &transformer,
@@ -4037,9 +4048,15 @@ public:
 	                                        const string &string_literal);
 	static vector<string> TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
 	                                                   const vector<string> &string_literal);
+	static unique_ptr<SQLStatement>
+	TransformCreateExtensionRepositoryFromHostStmt(PEGTransformer &transformer, const optional<bool> &or_replace,
+	                                               const optional<bool> &if_not_exists,
+	                                               const Identifier &extension_repository_name);
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
 	                                                                     const optional<bool> &if_exists,
 	                                                                     const Identifier &col_id_or_string);
+	static Identifier TransformExtensionRepositoryHostName(PEGTransformer &transformer, const Identifier &col_id,
+	                                                       const vector<string> &dot_col_label);
 	static unique_ptr<TableRef> TransformTableMatchRecognizeClause(PEGTransformer &transformer,
 	                                                               unique_ptr<TableRef> match_recognize_body,
 	                                                               const optional<TableAlias> &table_alias);
@@ -4290,6 +4307,9 @@ public:
 	                                                    unique_ptr<TableRef> table_ref,
 	                                                    const optional<TableAlias> &table_alias,
 	                                                    optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TableRef> TransformJoinedTableRefChain(PEGTransformer &transformer,
+	                                                         unique_ptr<TableRef> inner_table_ref,
+	                                                         vector<unique_ptr<TableRef>> join_or_pivot);
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      unique_ptr<TableRef> table_pivot_clause_body,
 	                                                      const optional<TableAlias> &table_alias);

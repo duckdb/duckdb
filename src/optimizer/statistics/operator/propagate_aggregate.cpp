@@ -569,8 +569,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			if (fun_name == "count_star") {
 				// pre_count + count_star_from_scan
 				auto &pre_count_expr = agg_results[i];
-				auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref));
-				add_expr->SetAlias(aggr.expressions[i]->GetAlias());
+				auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref),
+				                                             aggr.expressions[i]->GetAlias());
 				proj_expressions.push_back(std::move(add_expr));
 			} else if (fun_name == "min" || fun_name == "max") {
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
@@ -579,9 +579,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
 				auto coalesce =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
-				coalesce->GetChildrenMutable().push_back(std::move(merged));
-				coalesce->GetChildrenMutable().push_back(pre_val_expr->Copy());
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType(),
+				                                       std::move(merged), pre_val_expr->Copy());
 				coalesce->SetAlias(aggr.expressions[i]->GetAlias());
 				proj_expressions.push_back(std::move(coalesce));
 			}

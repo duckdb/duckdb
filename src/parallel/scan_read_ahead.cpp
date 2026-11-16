@@ -439,6 +439,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireReadyJob(ClientContext &context, Tabl
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
 		if (IsDone() && !HasActiveProducers() && active_jobs.load() == 0) {
+			ReleaseMemoryReservation();
 			return ScanReadAheadAcquire::EXHAUSTED;
 		}
 		context.InterruptCheck();
@@ -495,6 +496,15 @@ bool ScanReadAhead::HasActiveProducers() const {
 	return active_producers.load() > 0;
 }
 
+void ScanReadAhead::ReleaseMemoryReservation() {
+	// a finished scan returns its reservation now, not at query end, so later joins and aggregates can use it
+	if (!memory_governor) {
+		return;
+	}
+	memory_governor->Release();
+	backlog_budget = 0;
+}
+
 unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
 	lock_guard<mutex> guard(lock);
 	if (ready_queue.empty()) {
@@ -544,6 +554,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 					throw InternalException("Read-ahead exhausted with jobs still held back, "
 					                        "batch indexes must be gapless from 0");
 				}
+				ReleaseMemoryReservation();
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 		}
