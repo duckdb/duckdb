@@ -8,6 +8,9 @@
 // over (f JOIN d) x p. As `d SEMI JOIN p ON d.x BETWEEN p.lo AND p.hi` it filters `d` before the join with `f` and
 // repeats nothing.
 //
+// JoinSimplification calls this for every region it reaches in its first phase, with what it knows about the operators
+// above: whether they ignore duplicates and which tables they read.
+//
 // What must hold, in the plan as bound (the rewrite runs before filter pushdown, which then pushes the remaining
 // filters below the new join): a region of filters, cross products and INNER joins below a projection or an
 // aggregate, and in it a relation R such that
@@ -65,18 +68,18 @@
 
 namespace duckdb {
 
-namespace {
-
-class JoinToSemiJoinRewriter {
+class JoinRegionRewriter {
 public:
-	explicit JoinToSemiJoinRewriter(ClientContext &context) : context(context) {
+	using table_set_t = unordered_set<TableIndex>;
+
+	explicit JoinRegionRewriter(ClientContext &context) : context(context) {
 	}
 
-	void Run(unique_ptr<LogicalOperator> &plan) {
+	void Initialize(LogicalOperator &plan) {
 		// the CTEs whose definition holds an expression that is volatile or can throw, directly or through another
 		// CTE: a fixpoint, a definition may read a CTE that is found later
 		vector<reference<LogicalOperator>> ctes;
-		CollectCTEs(*plan, ctes);
+		CollectCTEs(plan, ctes);
 		for (bool changed = true; changed;) {
 			changed = false;
 			for (auto &cte : ctes) {
@@ -93,11 +96,15 @@ public:
 				}
 			}
 		}
-		Walk(plan, false, nullptr, false);
 	}
 
-private:
-	using table_set_t = unordered_set<TableIndex>;
+	//! Notes a materialized CTE whose definition holds at most one row; the traversal calls this before it visits
+	//! the references
+	void VisitMaterializedCTE(const LogicalOperator &op) {
+		if (HoldsAtMostOneRow(*op.children[0])) {
+			single_row_ctes.insert(op.Cast<LogicalMaterializedCTE>().table_index);
+		}
+	}
 
 	//! The largest scan that gets a SEMI join which may be planned as a blockwise nested-loop join
 	static constexpr idx_t MAX_UNFILTERED_SEMI_ROWS = 100000;
@@ -153,7 +160,7 @@ private:
 		vector<idx_t> predicates;
 	};
 
-private:
+public:
 	static void ExpressionTables(const Expression &expr, table_set_t &tables) {
 		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 		    expr, [&](const BoundColumnRefExpression &colref) { tables.insert(colref.Binding().table_index); });
@@ -657,92 +664,7 @@ private:
 		return true;
 	}
 
-	//! `ignores`: the parent gives the same result over the operator's rows with or without repeats; `used`: the
-	//! tables the operators above read through expressions (null: unknown); `in_region`: the parent is a node of the
-	//! same join region
-	void Walk(unique_ptr<LogicalOperator> &op, bool ignores, optional_ptr<const table_set_t> used, bool in_region) {
-		if (!in_region && used) {
-			while (IsRegionNode(*op) && RewriteRegion(op, ignores, *used)) {
-			}
-		}
-		const bool region = IsRegionNode(*op);
-		switch (op->type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-			// everything above reads the columns these compute, not the columns below them
-			table_set_t read;
-			OperatorTables(*op, read);
-			const bool child_ignores =
-			    op->type == LogicalOperatorType::LOGICAL_PROJECTION
-			        ? ignores && !HasVolatileExpression(*op)
-			        : SelfJoinAggregate::AggregateIgnoresDuplicates(op->Cast<LogicalAggregate>());
-			for (auto &child : op->children) {
-				Walk(child, child_ignores, &read, false);
-			}
-			return;
-		}
-		case LogicalOperatorType::LOGICAL_FILTER:
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-			table_set_t tables;
-			if (used) {
-				tables = *used;
-				OperatorTables(*op, tables);
-			}
-			const bool child_ignores = ignores && !HasVolatileExpression(*op);
-			for (auto &child : op->children) {
-				Walk(child, child_ignores, used ? &tables : nullptr, region);
-			}
-			return;
-		}
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-			table_set_t tables;
-			if (used) {
-				tables = *used;
-				OperatorTables(*op, tables);
-			}
-			const bool deterministic = !HasVolatileExpression(*op);
-			bool left = false;
-			bool right = false;
-			switch (op->Cast<LogicalJoin>().join_type) {
-			case JoinType::INNER:
-			case JoinType::LEFT:
-			case JoinType::RIGHT:
-			case JoinType::OUTER:
-				// the rows these emit, as a set, depend on their inputs as sets only
-				left = right = ignores;
-				break;
-			case JoinType::SEMI:
-			case JoinType::ANTI:
-			case JoinType::MARK:
-				left = ignores;
-				right = true;
-				break;
-			case JoinType::RIGHT_SEMI:
-			case JoinType::RIGHT_ANTI:
-				left = true;
-				right = ignores;
-				break;
-			default:
-				break;
-			}
-			Walk(op->children[0], left && deterministic, used ? &tables : nullptr, region);
-			Walk(op->children[1], right && deterministic, used ? &tables : nullptr, region);
-			return;
-		}
-		default:
-			// these read their children's columns by position, or hold references this walk does not follow
-			if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE && HoldsAtMostOneRow(*op->children[0])) {
-				single_row_ctes.insert(op->Cast<LogicalMaterializedCTE>().table_index);
-			}
-			for (auto &child : op->children) {
-				Walk(child, false, nullptr, false);
-			}
-			return;
-		}
-	}
-
-private:
+public:
 	ClientContext &context;
 	//! The materialized CTEs seen so far whose definition holds at most one row
 	table_set_t single_row_ctes;
@@ -750,15 +672,35 @@ private:
 	table_set_t unstable_ctes;
 };
 
-} // namespace
-
-JoinToSemiJoin::JoinToSemiJoin(Optimizer &optimizer) : optimizer(optimizer) {
+JoinToSemiJoin::JoinToSemiJoin(ClientContext &context) : rewriter(make_uniq<JoinRegionRewriter>(context)) {
 }
 
-unique_ptr<LogicalOperator> JoinToSemiJoin::Optimize(unique_ptr<LogicalOperator> op) {
-	JoinToSemiJoinRewriter rewriter(optimizer.GetContext());
-	rewriter.Run(op);
-	return op;
+JoinToSemiJoin::~JoinToSemiJoin() {
+}
+
+void JoinToSemiJoin::Initialize(LogicalOperator &plan) {
+	rewriter->Initialize(plan);
+}
+
+bool JoinToSemiJoin::IsRegionNode(const LogicalOperator &op) {
+	return JoinRegionRewriter::IsRegionNode(op);
+}
+
+bool JoinToSemiJoin::RewriteRegion(unique_ptr<LogicalOperator> &op, bool ignores_duplicates,
+                                   const unordered_set<TableIndex> &read_tables) {
+	return rewriter->RewriteRegion(op, ignores_duplicates, read_tables);
+}
+
+void JoinToSemiJoin::VisitMaterializedCTE(const LogicalOperator &op) {
+	rewriter->VisitMaterializedCTE(op);
+}
+
+void JoinToSemiJoin::AddReadTables(const LogicalOperator &op, unordered_set<TableIndex> &tables) {
+	JoinRegionRewriter::OperatorTables(op, tables);
+}
+
+bool JoinToSemiJoin::HasVolatileExpression(const LogicalOperator &op) {
+	return JoinRegionRewriter::HasVolatileExpression(op);
 }
 
 } // namespace duckdb

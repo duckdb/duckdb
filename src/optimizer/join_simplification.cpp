@@ -1,5 +1,7 @@
-#include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/join_simplification.hpp"
 
+#include "duckdb/optimizer/join_to_semi_join.hpp"
+#include "duckdb/optimizer/self_join_aggregate.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -15,18 +17,68 @@ namespace duckdb {
 // Setup
 //===--------------------------------------------------------------------===//
 
-OuterJoinSimplification::OuterJoinSimplification() {
+JoinSimplification::JoinSimplification(ClientContext &context, JoinSimplificationPhase phase_p) : phase(phase_p) {
+	if (phase == JoinSimplificationPhase::BEFORE_FILTER_PUSHDOWN) {
+		owned_join_to_semi_join = make_uniq<JoinToSemiJoin>(context);
+		join_to_semi_join = owned_join_to_semi_join.get();
+	}
 }
 
-OuterJoinSimplification::OuterJoinSimplification(column_binding_set_t required_columns_p)
-    : required_columns(std::move(required_columns_p)), initialized_required_columns(true) {
+JoinSimplification::JoinSimplification(JoinSimplification &parent_context, column_binding_set_t required_columns_p)
+    : phase(parent_context.phase), join_to_semi_join(parent_context.join_to_semi_join),
+      required_columns(std::move(required_columns_p)), initialized_required_columns(true) {
+}
+
+JoinSimplification::~JoinSimplification() {
+}
+
+void JoinSimplification::Optimize(unique_ptr<LogicalOperator> &plan) {
+	if (join_to_semi_join) {
+		join_to_semi_join->Initialize(*plan);
+	}
+	VisitOperator(plan);
+}
+
+//===--------------------------------------------------------------------===//
+// Parent Info
+//===--------------------------------------------------------------------===//
+
+JoinSimplification::ParentInfo JoinSimplification::UnknownInfo() {
+	return ParentInfo();
+}
+
+JoinSimplification::ParentInfo JoinSimplification::PassThroughInfo(const LogicalOperator &op,
+                                                                   bool ignores_duplicates) const {
+	ParentInfo info;
+	info.ignores_duplicates = ignores_duplicates;
+	info.reads_known = parent.reads_known;
+	if (parent.reads_known) {
+		info.read_tables = parent.read_tables;
+		JoinToSemiJoin::AddReadTables(op, info.read_tables);
+	}
+	info.in_region = JoinToSemiJoin::IsRegionNode(op);
+	return info;
+}
+
+void JoinSimplification::VisitChild(unique_ptr<LogicalOperator> &child, ParentInfo info) {
+	auto saved = std::move(parent);
+	parent = std::move(info);
+	VisitOperator(child);
+	parent = std::move(saved);
+}
+
+void JoinSimplification::VisitChildInNewContext(unique_ptr<LogicalOperator> &child,
+                                                column_binding_set_t child_required_columns, ParentInfo info) {
+	JoinSimplification child_simplification(*this, std::move(child_required_columns));
+	child_simplification.parent = std::move(info);
+	child_simplification.VisitOperator(child);
 }
 
 //===--------------------------------------------------------------------===//
 // Column Binding Helpers
 //===--------------------------------------------------------------------===//
 
-void OuterJoinSimplification::AddColumnReferences(const Expression &expr, column_binding_set_t &bindings) {
+void JoinSimplification::AddColumnReferences(const Expression &expr, column_binding_set_t &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		if (colref.Depth() == 0) {
 			bindings.insert(colref.Binding());
@@ -34,11 +86,11 @@ void OuterJoinSimplification::AddColumnReferences(const Expression &expr, column
 	});
 }
 
-void OuterJoinSimplification::AddRequiredColumns(const Expression &expr) {
+void JoinSimplification::AddRequiredColumns(const Expression &expr) {
 	AddColumnReferences(expr, required_columns);
 }
 
-void OuterJoinSimplification::AddRequiredColumns(const JoinCondition &condition) {
+void JoinSimplification::AddRequiredColumns(const JoinCondition &condition) {
 	if (condition.IsComparison()) {
 		AddRequiredColumns(condition.GetLHS());
 		AddRequiredColumns(condition.GetRHS());
@@ -47,13 +99,13 @@ void OuterJoinSimplification::AddRequiredColumns(const JoinCondition &condition)
 	}
 }
 
-void OuterJoinSimplification::AddRequiredColumns(const vector<JoinCondition> &conditions) {
+void JoinSimplification::AddRequiredColumns(const vector<JoinCondition> &conditions) {
 	for (const auto &condition : conditions) {
 		AddRequiredColumns(condition);
 	}
 }
 
-bool OuterJoinSimplification::GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
+bool JoinSimplification::GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		if (!BoundCastExpression::IsCast(expr)) {
 			return false;
@@ -66,7 +118,7 @@ bool OuterJoinSimplification::GetColumnBinding(const Expression &expr, ColumnBin
 	return true;
 }
 
-bool OuterJoinSimplification::GetNullPreservingColumnBinding(const Expression &expr, ColumnBinding &binding) {
+bool JoinSimplification::GetNullPreservingColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		if (!BoundCastExpression::IsCast(expr)) {
 			return false;
@@ -87,14 +139,14 @@ bool OuterJoinSimplification::GetNullPreservingColumnBinding(const Expression &e
 // NULL Constraint Tracking
 //===--------------------------------------------------------------------===//
 
-void OuterJoinSimplification::HandleExpression(const Expression &expr) {
+void JoinSimplification::HandleExpression(const Expression &expr) {
 	ColumnBinding binding;
 	if (GetColumnBinding(expr, binding)) {
 		null_filtered_columns.insert(binding);
 	}
 }
 
-void OuterJoinSimplification::HandleFilterExpression(const Expression &expr) {
+void JoinSimplification::HandleFilterExpression(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
 		const auto &is_not_null = expr.Cast<BoundOperatorExpression>();
@@ -126,7 +178,7 @@ void OuterJoinSimplification::HandleFilterExpression(const Expression &expr) {
 	HandleExpression(BoundComparisonExpression::Right(comparison));
 }
 
-bool OuterJoinSimplification::HandleIsNullExpression(const Expression &expr) {
+bool JoinSimplification::HandleIsNullExpression(const Expression &expr) {
 	ColumnBinding binding;
 	if (GetNullPreservingColumnBinding(expr, binding)) {
 		null_required_columns.insert(binding);
@@ -135,7 +187,7 @@ bool OuterJoinSimplification::HandleIsNullExpression(const Expression &expr) {
 	return false;
 }
 
-bool OuterJoinSimplification::IsNullFilter(const Expression &expr, ColumnBinding &binding) {
+bool JoinSimplification::IsNullFilter(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
 	    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL) {
 		return false;
@@ -145,7 +197,7 @@ bool OuterJoinSimplification::IsNullFilter(const Expression &expr, ColumnBinding
 	return GetNullPreservingColumnBinding(child, binding);
 }
 
-void OuterJoinSimplification::InitializeRequiredColumns(LogicalOperator &op) {
+void JoinSimplification::InitializeRequiredColumns(LogicalOperator &op) {
 	if (initialized_required_columns) {
 		return;
 	}
@@ -155,7 +207,7 @@ void OuterJoinSimplification::InitializeRequiredColumns(LogicalOperator &op) {
 	initialized_required_columns = true;
 }
 
-bool OuterJoinSimplification::FiltersNulls(ExpressionType comparison_type) {
+bool JoinSimplification::FiltersNulls(ExpressionType comparison_type) {
 	return comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
 	       comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 }
@@ -164,11 +216,11 @@ bool OuterJoinSimplification::FiltersNulls(ExpressionType comparison_type) {
 // Join Rewrite Helpers
 //===--------------------------------------------------------------------===//
 
-vector<ColumnBinding> OuterJoinSimplification::GetRightBindings(LogicalJoin &join) {
+vector<ColumnBinding> JoinSimplification::GetRightBindings(LogicalJoin &join) {
 	return LogicalOperator::MapBindings(join.children[1]->GetColumnBindings(), join.right_projection_map);
 }
 
-bool OuterJoinSimplification::HasNullRequiredColumns(const vector<ColumnBinding> &bindings) {
+bool JoinSimplification::HasNullRequiredColumns(const vector<ColumnBinding> &bindings) {
 	for (const auto &binding : bindings) {
 		if (null_required_columns.find(binding) != null_required_columns.end()) {
 			return true;
@@ -177,7 +229,7 @@ bool OuterJoinSimplification::HasNullRequiredColumns(const vector<ColumnBinding>
 	return false;
 }
 
-bool OuterJoinSimplification::HasRequiredColumns(const vector<ColumnBinding> &bindings) {
+bool JoinSimplification::HasRequiredColumns(const vector<ColumnBinding> &bindings) {
 	for (const auto &binding : bindings) {
 		if (required_columns.find(binding) != required_columns.end()) {
 			return true;
@@ -186,19 +238,19 @@ bool OuterJoinSimplification::HasRequiredColumns(const vector<ColumnBinding> &bi
 	return false;
 }
 
-void OuterJoinSimplification::EraseNullRequiredColumns(LogicalOperator &child) {
+void JoinSimplification::EraseNullRequiredColumns(LogicalOperator &child) {
 	for (const auto &binding : child.GetColumnBindings()) {
 		null_required_columns.erase(binding);
 	}
 }
 
-void OuterJoinSimplification::MarkEliminatedNullColumns(const vector<ColumnBinding> &bindings) {
+void JoinSimplification::MarkEliminatedNullColumns(const vector<ColumnBinding> &bindings) {
 	for (const auto &binding : bindings) {
 		eliminated_null_columns.insert(binding);
 	}
 }
 
-bool OuterJoinSimplification::TryConvertLeftToAntiJoin(LogicalComparisonJoin &join) {
+bool JoinSimplification::TryConvertLeftToAntiJoin(LogicalComparisonJoin &join) {
 	if (join.join_type != JoinType::LEFT) {
 		return false;
 	}
@@ -233,7 +285,7 @@ bool OuterJoinSimplification::TryConvertLeftToAntiJoin(LogicalComparisonJoin &jo
 	return false;
 }
 
-void OuterJoinSimplification::SimplifyOuterJoinType(LogicalComparisonJoin &join) {
+void JoinSimplification::SimplifyOuterJoinType(LogicalComparisonJoin &join) {
 	bool preserves_null_extended_rows[2] = {join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER,
 	                                        join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER};
 	for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
@@ -267,24 +319,78 @@ void OuterJoinSimplification::SimplifyOuterJoinType(LogicalComparisonJoin &join)
 // Operator Visitors
 //===--------------------------------------------------------------------===//
 
-void OuterJoinSimplification::VisitComparisonJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
+//! Which children of a join of this type may see repeated rows of their input without a change of the result of a
+//! parent that ignores duplicates (`ignores`): the rows INNER and outer joins emit, as a set, depend on their inputs
+//! as sets only, and the right side of a SEMI, ANTI or MARK join only says whether a match exists
+static void JoinSidesIgnoreDuplicates(JoinType join_type, bool ignores, bool &left, bool &right) {
+	left = false;
+	right = false;
+	switch (join_type) {
+	case JoinType::INNER:
+	case JoinType::LEFT:
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+		left = right = ignores;
+		break;
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::MARK:
+		left = ignores;
+		right = true;
+		break;
+	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
+		left = true;
+		right = ignores;
+		break;
+	default:
+		break;
+	}
+}
+
+void JoinSimplification::VisitJoinChildren(LogicalOperator &op, bool left_ignores_duplicates,
+                                           bool right_ignores_duplicates, bool keep_context) {
+	const bool deterministic = !JoinToSemiJoin::HasVolatileExpression(op);
+	auto left_info = PassThroughInfo(op, left_ignores_duplicates && deterministic);
+	auto right_info = PassThroughInfo(op, right_ignores_duplicates && deterministic);
+	if (keep_context) {
+		VisitChild(op.children[0], std::move(left_info));
+		VisitChild(op.children[1], std::move(right_info));
+		return;
+	}
+	// the column sets do not pass through this join: each child starts with all of its columns required
+	for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
+		auto &child = op.children[child_idx];
+		column_binding_set_t child_required_columns;
+		for (const auto &binding : child->GetColumnBindings()) {
+			child_required_columns.insert(binding);
+		}
+		VisitChildInNewContext(child, std::move(child_required_columns),
+		                       child_idx == 0 ? std::move(left_info) : std::move(right_info));
+	}
+}
+
+void JoinSimplification::VisitComparisonJoin(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &op_ptr) {
 	switch (join.join_type) {
 	case JoinType::INNER:
 	case JoinType::SEMI:
-		VisitInnerOrSemiJoin(join, op);
+		VisitInnerOrSemiJoin(join, *op_ptr);
 		return;
 	case JoinType::LEFT:
 	case JoinType::RIGHT:
 	case JoinType::OUTER:
-		VisitOuterJoin(join, op);
+		VisitOuterJoin(join, op_ptr);
 		return;
 	default:
 		break;
 	}
-	VisitUnsupportedOperator(op);
+	bool left;
+	bool right;
+	JoinSidesIgnoreDuplicates(join.join_type, parent.ignores_duplicates, left, right);
+	VisitJoinChildren(*op_ptr, left, right, false);
 }
 
-void OuterJoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
+void JoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
 	for (const auto &condition : join.conditions) {
 		if (!condition.IsComparison()) {
 			continue;
@@ -296,24 +402,33 @@ void OuterJoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, 
 		HandleExpression(condition.GetLHS());
 		HandleExpression(condition.GetRHS());
 	}
-	VisitOperatorChildren(op);
+	bool left;
+	bool right;
+	JoinSidesIgnoreDuplicates(join.join_type, parent.ignores_duplicates, left, right);
+	VisitJoinChildren(op, left, right, true);
 }
 
-void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
-	if (TryConvertLeftToAntiJoin(join)) {
+void JoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &op_ptr) {
+	auto &op = *op_ptr;
+	bool left;
+	bool right;
+	if (SimplifiesOuterJoins() && TryConvertLeftToAntiJoin(join)) {
 		auto right_bindings = GetRightBindings(join);
 		AddRequiredColumns(join.conditions);
 		EraseNullRequiredColumns(*join.children[1]);
-		VisitOperatorChildren(op);
+		JoinSidesIgnoreDuplicates(join.join_type, parent.ignores_duplicates, left, right);
+		VisitJoinChildren(op, left, right, true);
 		// only operators above the join see the right side as NULL, not the right child itself
 		MarkEliminatedNullColumns(right_bindings);
 		return;
 	}
 
-	SimplifyOuterJoinType(join);
-	if (join.join_type == JoinType::INNER) {
-		VisitOperator(op);
-		return;
+	if (SimplifiesOuterJoins()) {
+		SimplifyOuterJoinType(join);
+		if (join.join_type == JoinType::INNER) {
+			VisitInnerOrSemiJoin(join, op);
+			return;
+		}
 	}
 
 	AddRequiredColumns(join.conditions);
@@ -325,10 +440,11 @@ void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, Logica
 	if (join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER) {
 		EraseNullRequiredColumns(*join.children[0]);
 	}
-	VisitOperatorChildren(op);
+	JoinSidesIgnoreDuplicates(join.join_type, parent.ignores_duplicates, left, right);
+	VisitJoinChildren(op, left, right, true);
 }
 
-void OuterJoinSimplification::VisitProjection(LogicalProjection &projection, LogicalOperator &op) {
+void JoinSimplification::VisitProjection(LogicalProjection &projection, LogicalOperator &op) {
 	vector<pair<idx_t, ColumnBinding>> direct_projection_map;
 	for (idx_t col_idx = 0; col_idx < projection.expressions.size(); col_idx++) {
 		auto &expr = *projection.expressions[col_idx];
@@ -347,7 +463,12 @@ void OuterJoinSimplification::VisitProjection(LogicalProjection &projection, Log
 			null_required_columns.insert(input_binding);
 		}
 	}
-	VisitOperatorChildren(op);
+	// everything above reads the columns the projection computes, not the columns below it
+	ParentInfo info;
+	info.ignores_duplicates = parent.ignores_duplicates && !JoinToSemiJoin::HasVolatileExpression(op);
+	info.reads_known = true;
+	JoinToSemiJoin::AddReadTables(op, info.read_tables);
+	VisitChild(op.children[0], std::move(info));
 
 	for (const auto &entry : direct_projection_map) {
 		auto col_idx = entry.first;
@@ -362,12 +483,16 @@ void OuterJoinSimplification::VisitProjection(LogicalProjection &projection, Log
 	}
 }
 
-void OuterJoinSimplification::VisitFilter(LogicalFilter &filter, LogicalOperator &op) {
-	filter.SplitPredicates(filter.expressions);
+void JoinSimplification::VisitFilter(LogicalFilter &filter, LogicalOperator &op) {
+	if (SimplifiesOuterJoins()) {
+		// before filter pushdown the filters stay as the region rewrite collected them
+		filter.SplitPredicates(filter.expressions);
+	}
 	for (const auto &expr : filter.expressions) {
 		HandleFilterExpression(*expr);
 	}
-	VisitOperatorChildren(op);
+	VisitChild(op.children[0],
+	           PassThroughInfo(op, parent.ignores_duplicates && !JoinToSemiJoin::HasVolatileExpression(op)));
 
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {
 		ColumnBinding binding;
@@ -382,22 +507,21 @@ void OuterJoinSimplification::VisitFilter(LogicalFilter &filter, LogicalOperator
 	}
 }
 
-void OuterJoinSimplification::VisitOrder(LogicalOrder &order, LogicalOperator &op) {
+void JoinSimplification::VisitOrder(LogicalOrder &order, LogicalOperator &op) {
 	for (const auto &order_node : order.orders) {
 		AddRequiredColumns(*order_node.expression);
 	}
-	VisitOperatorChildren(op);
+	VisitChild(op.children[0], UnknownInfo());
 }
 
-void OuterJoinSimplification::VisitTopN(LogicalTopN &top_n, LogicalOperator &op) {
+void JoinSimplification::VisitTopN(LogicalTopN &top_n, LogicalOperator &op) {
 	for (const auto &order_node : top_n.orders) {
 		AddRequiredColumns(*order_node.expression);
 	}
-	OuterJoinSimplification child_simplification(required_columns);
-	child_simplification.VisitOperator(*op.children[0]);
+	VisitChildInNewContext(op.children[0], required_columns, UnknownInfo());
 }
 
-void OuterJoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op) {
+void JoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op) {
 	column_binding_set_t child_required_columns;
 	for (const auto &expr : aggregate.groups) {
 		AddColumnReferences(*expr, child_required_columns);
@@ -405,28 +529,53 @@ void OuterJoinSimplification::VisitAggregate(LogicalAggregate &aggregate, Logica
 	for (const auto &expr : aggregate.expressions) {
 		AddColumnReferences(*expr, child_required_columns);
 	}
-	OuterJoinSimplification child_simplification(std::move(child_required_columns));
-	child_simplification.VisitOperator(*op.children[0]);
+	// everything above reads the columns the aggregate computes, not the columns below it
+	ParentInfo info;
+	info.ignores_duplicates = SelfJoinAggregate::AggregateIgnoresDuplicates(aggregate);
+	info.reads_known = true;
+	JoinToSemiJoin::AddReadTables(op, info.read_tables);
+	VisitChildInNewContext(op.children[0], std::move(child_required_columns), std::move(info));
 }
 
-void OuterJoinSimplification::VisitUnsupportedOperator(LogicalOperator &op) {
+void JoinSimplification::VisitUnsupportedOperator(LogicalOperator &op) {
+	if (join_to_semi_join && op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		join_to_semi_join->VisitMaterializedCTE(op);
+	}
+	// these read their children's columns by position, or hold references this traversal does not follow
 	for (auto &child : op.children) {
 		column_binding_set_t child_required_columns;
 		for (const auto &binding : child->GetColumnBindings()) {
 			child_required_columns.insert(binding);
 		}
-		OuterJoinSimplification outer_join_simplification(std::move(child_required_columns));
-		outer_join_simplification.VisitOperator(*child);
+		VisitChildInNewContext(child, std::move(child_required_columns), UnknownInfo());
 	}
 }
 
-void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
+void JoinSimplification::VisitOperator(unique_ptr<LogicalOperator> &op_ptr) {
+	if (join_to_semi_join && !parent.in_region && parent.reads_known) {
+		// the root of a region of filters, cross products and INNER joins
+		while (JoinToSemiJoin::IsRegionNode(*op_ptr) &&
+		       join_to_semi_join->RewriteRegion(op_ptr, parent.ignores_duplicates, parent.read_tables)) {
+		}
+	}
+	auto &op = *op_ptr;
 	InitializeRequiredColumns(op);
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
-		VisitComparisonJoin(join, op);
+		VisitComparisonJoin(join, op_ptr);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		// the column sets do not pass through these, the rest does
+		bool left = parent.ignores_duplicates;
+		bool right = parent.ignores_duplicates;
+		if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+			JoinSidesIgnoreDuplicates(op.Cast<LogicalJoin>().join_type, parent.ignores_duplicates, left, right);
+		}
+		VisitJoinChildren(op, left, right, false);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -450,8 +599,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
-		OuterJoinSimplification child_simplification(required_columns);
-		child_simplification.VisitOperator(*op.children[0]);
+		VisitChildInNewContext(op.children[0], required_columns, UnknownInfo());
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {

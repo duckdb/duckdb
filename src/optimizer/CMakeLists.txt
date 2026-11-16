@@ -46,7 +46,7 @@ add_library_unity(
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp
-  outer_join_simplification.cpp
+  join_simplification.cpp
   partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
