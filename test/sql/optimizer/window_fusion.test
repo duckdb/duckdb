@@ -54,7 +54,7 @@ UNION ALL
 statement ok
 RESET threads;
 
-# The later RowNumberRewriter discards the fused limit on base-table scans
+# The later RowNumberRewriter should not discard the fused limit on base-table scans
 statement ok
 CREATE TABLE plain AS FROM range(10_000) tbl(i);
 
@@ -64,5 +64,5 @@ SELECT i
 FROM plain
 QUALIFY row_number() OVER () <= 1;
 ----
-physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*FILTER.*STREAMING_WINDOW.*Limit.*
 
