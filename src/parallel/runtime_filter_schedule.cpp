@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,10 @@ static optional_ptr<PhysicalComparisonJoin> RuntimeFilterProducer(Pipeline &pipe
 }
 
 static bool IsSmallBuild(const PhysicalOperator &op) {
-	if (op.estimated_cardinality > DEFAULT_STANDARD_VECTOR_SIZE || op.IsSink()) {
+	// Hash MARK joins implement IN predicates without expanding the probe side.
+	const auto mark_join =
+	    op.type == PhysicalOperatorType::HASH_JOIN && op.Cast<PhysicalComparisonJoin>().join_type == JoinType::MARK;
+	if (op.estimated_cardinality > DEFAULT_ROW_GROUP_SIZE || (op.IsSink() && !mark_join)) {
 		return false;
 	}
 	for (auto &child : op.children) {

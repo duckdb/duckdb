@@ -15,6 +15,14 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
+	//	If we have window fusion enabled, then we are also filtering on the row number,
+	//	which reduces the number of scanned rows. This is faster than scanning them all
+	//	and discarding most of them.
+	auto &window = op.Cast<LogicalWindow>();
+	if (window.partition_limit.IsValid()) {
+		return false;
+	}
+
 	auto &expression = op.expressions[0];
 	if (expression->GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
 		return false;
