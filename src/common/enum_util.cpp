@@ -170,6 +170,7 @@
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
+#include "duckdb/main/profiler/metric_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
@@ -4295,6 +4296,25 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value) {
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 	return static_cast<MetaPipelineType>(StringUtil::StringToEnum(GetMetaPipelineTypeValues(), 2, "MetaPipelineType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMetricSlotKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MetricSlotKind::NONE), "NONE" },
+		{ static_cast<uint32_t>(MetricSlotKind::COUNTER), "COUNTER" },
+		{ static_cast<uint32_t>(MetricSlotKind::TIMING), "TIMING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MetricSlotKind>(MetricSlotKind value) {
+	return StringUtil::EnumToString(GetMetricSlotKindValues(), 3, "MetricSlotKind", static_cast<uint32_t>(value));
+}
+
+template<>
+MetricSlotKind EnumUtil::FromString<MetricSlotKind>(const char *value) {
+	return static_cast<MetricSlotKind>(StringUtil::StringToEnum(GetMetricSlotKindValues(), 3, "MetricSlotKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

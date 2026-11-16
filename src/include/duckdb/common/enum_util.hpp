@@ -396,6 +396,8 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
+enum class MetricSlotKind : uint8_t;
+
 enum class Monotonicity : uint8_t;
 
 enum class MultiFileClaimResult : uint8_t;
@@ -1252,6 +1254,9 @@ const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
 
 template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
+
+template<>
+const char* EnumUtil::ToChars<MetricSlotKind>(MetricSlotKind value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
@@ -2264,6 +2269,9 @@ MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
 
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
+
+template<>
+MetricSlotKind EnumUtil::FromString<MetricSlotKind>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);

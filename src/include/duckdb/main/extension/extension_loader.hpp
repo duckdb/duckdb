@@ -139,7 +139,7 @@ public:
 	DUCKDB_API void RegisterCombineTypesRule(CombineTypesRule rule);
 
 	//! Registers a custom metric so it appears in duckdb_available_metrics, and so QueryProfiler::SetMetric accepts it.
-	//! Returns its index, the same in every database, to update it through the QueryProfiler without a lock.
+	//! Returns its index in this database; keep it per database, as another database gives the metric another index.
 	DUCKDB_API idx_t RegisterMetric(MetricInfo info);
 
 private:

@@ -27,6 +27,7 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+class MetricsManager;
 struct MetricsTimer;
 
 //! The timing or counter of a metric with an index, which any thread updates with atomics
@@ -37,9 +38,8 @@ struct MetricSlot {
 	atomic<int64_t> start {NumericLimits<int64_t>::Maximum()};
 	atomic<int64_t> end {NumericLimits<int64_t>::Minimum()};
 	atomic<bool> set {false};
-	//! Whether the metric is a "uint64" counter or a "double" timing; set before the slot is published
-	bool is_counter = false;
-	bool is_timing = false;
+	//! How the metric is updated; set before the slot is published
+	MetricSlotKind kind = MetricSlotKind::NONE;
 
 	void Reset() {
 		value.store(0, std::memory_order_relaxed);
@@ -47,15 +47,11 @@ struct MetricSlot {
 		end.store(NumericLimits<int64_t>::Minimum(), std::memory_order_relaxed);
 		set.store(false, std::memory_order_relaxed);
 	}
+	DUCKDB_API void Add(idx_t amount);
+	DUCKDB_API void AddTiming(idx_t elapsed_ns, timestamp_t start_time, timestamp_t end_time);
 	bool HasBounds() const {
 		return start.load(std::memory_order_relaxed) != NumericLimits<int64_t>::Maximum();
 	}
-};
-
-//! The slots of consecutive metric indexes, allocated together so that they never move
-struct MetricSlotChunk {
-	static constexpr idx_t SLOT_COUNT = 64;
-	array<MetricSlot, SLOT_COUNT> slots;
 };
 
 // Top level query metrics
@@ -87,6 +83,9 @@ public:
 	atomic<idx_t> total_memory_allocated;
 
 public:
+	//! The database's metrics, for the metrics extensions register; without it only the profiler's own have an index
+	void SetMetricsManager(const MetricsManager &manager);
+
 	//! Add to a timing or counter by name: one of the profiler's own is updated by its index, without a lock
 	DUCKDB_API void UpdateMetric(const string &key, idx_t addition);
 	DUCKDB_API void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time);
@@ -240,24 +239,31 @@ public:
 	}
 
 private:
-	static constexpr idx_t MAX_SLOT_CHUNKS = MAX_METRIC_COUNT / MetricSlotChunk::SLOT_COUNT;
+	//! Segment s holds the slots of 128 << s consecutive indexes, so the slots never move as more are needed
+	static constexpr idx_t FIRST_SEGMENT_SIZE = 128;
+	static constexpr idx_t SEGMENT_COUNT = 57;
+	MetricSlot &SlotAt(idx_t metric_index) const;
 
-	//! The index of `key` when it is one of the profiler's own timings (or counters)
-	static optional_idx TryGetInternalMetricIndex(const string &key, bool timing);
-	//! The slot of a known metric index, or nullptr for an index the process does not know
+	//! The index of the metric `key`, without a lock; invalid when the database does not know it
+	optional_idx TryGetMetricIndex(const string &key) const;
+	//! The slot of the metric `key` when it has an index and is updated as `kind`
+	optional_ptr<MetricSlot> GetSlotByName(const string &key, MetricSlotKind kind);
+	string GetMetricName(idx_t metric_index) const;
+	//! The slot of a known metric index, or nullptr for an index the database does not know
 	optional_ptr<MetricSlot> GetSlot(idx_t metric_index);
 	optional_ptr<MetricSlot> GrowSlots(idx_t metric_index);
 	optional_ptr<const MetricSlot> TryGetSlot(idx_t metric_index) const;
 	//! Calls `callback(name, slot)` for every slot the query updated
-	template <class CALLBACK>
-	void ForEachSetSlot(CALLBACK &&callback) const;
+	template <class FUNC>
+	void ForEachSetSlot(FUNC &&callback) const;
 	DUCKDB_API void ResetMetricSlots();
 	DUCKDB_API void MergeMetricSlots(const QueryMetrics &other);
 
-	// Chunks below slot_limit never move and live as long as the metrics, so updates need no lock
-	array<unique_ptr<MetricSlotChunk>, MAX_SLOT_CHUNKS> slot_chunks;
+	optional_ptr<const MetricsManager> metrics_manager;
+	// Segments below slot_limit never move and live as long as the metrics, so updates need no lock
+	array<unique_array<MetricSlot>, SEGMENT_COUNT> slot_segments;
 	atomic<idx_t> slot_limit {0};
-	mutex slot_chunks_lock;
+	mutex slot_segments_lock;
 	// Guards the string-keyed metrics below, which extensions update from any thread
 	mutable annotated_mutex string_metrics_lock;
 	unordered_map<string, MetricTiming> string_timings DUCKDB_GUARDED_BY(string_metrics_lock);

@@ -1,4 +1,7 @@
 #include "duckdb/main/profiler/metrics_manager.hpp"
+#ifdef __MVS__
+#include <zos-tls.h>
+#endif
 #include "duckdb/main/profiler/metrics.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -150,7 +153,7 @@ idx_t MetricsManager::OptimizerMetricIndex(OptimizerType type) {
 	if (type_value >= optimizer_indexes.size() || !optimizer_indexes[type_value].IsValid()) {
 		// its timer records nothing
 		D_ASSERT(false);
-		return MAX_METRIC_COUNT;
+		return NumericLimits<idx_t>::Maximum();
 	}
 	return optimizer_indexes[type_value].GetIndex();
 }
@@ -161,74 +164,63 @@ optional_idx MetricsManager::TryGetInternalMetricIndex(const string &name) {
 	return entry == indexes.end() ? optional_idx() : optional_idx(entry->second);
 }
 
-//! The metrics extensions registered in any database of the process, by their index after the internal ones
-struct MetricsManager::RegisteredMetrics {
-	mutex lock;
-	vector<MetricInfo> metrics;
-	unordered_map<string, idx_t> indexes;
-	//! The number of known indexes, internal ones included, read without the lock
-	atomic<idx_t> known_count {InternalMetricCount()};
-};
-
-MetricsManager::RegisteredMetrics &MetricsManager::GetRegisteredMetrics() {
-	// never destroyed, so that a database destroyed at exit can still read it
-	static auto &registered = *new RegisteredMetrics();
-	return registered;
+static MetricSlotKind KindOfType(const string &metric_type) {
+	if (metric_type == "uint64") {
+		return MetricSlotKind::COUNTER;
+	}
+	if (metric_type == "double") {
+		return MetricSlotKind::TIMING;
+	}
+	return MetricSlotKind::NONE;
 }
 
-idx_t MetricsManager::KnownMetricCount() {
-	return GetRegisteredMetrics().known_count.load(std::memory_order_acquire);
-}
+static atomic<idx_t> next_manager_id {1};
 
-MetricInfo MetricsManager::GetMetric(idx_t metric_index) {
-	if (metric_index < InternalMetricCount()) {
-		return GetInternalMetric(metric_index);
-	}
-	auto &registered = GetRegisteredMetrics();
-	lock_guard<mutex> guard(registered.lock);
-	D_ASSERT(metric_index - InternalMetricCount() < registered.metrics.size());
-	return registered.metrics[metric_index - InternalMetricCount()];
-}
-
-vector<string> MetricsManager::GetMetricTypes(idx_t begin, idx_t end) {
-	vector<string> types;
-	for (idx_t i = begin; i < MinValue<idx_t>(end, InternalMetricCount()); i++) {
-		types.push_back(GetInternalMetric(i).metric_type);
-	}
-	if (end > InternalMetricCount()) {
-		auto &registered = GetRegisteredMetrics();
-		lock_guard<mutex> guard(registered.lock);
-		for (idx_t i = MaxValue<idx_t>(begin, InternalMetricCount()); i < end; i++) {
-			types.push_back(registered.metrics[i - InternalMetricCount()].metric_type);
-		}
-	}
-	return types;
-}
-
-optional_idx MetricsManager::TryGetMetricIndex(const string &name) {
-	auto index = TryGetInternalMetricIndex(name);
-	if (index.IsValid()) {
-		return index;
-	}
-	auto &registered = GetRegisteredMetrics();
-	lock_guard<mutex> guard(registered.lock);
-	auto entry = registered.indexes.find(name);
-	return entry == registered.indexes.end() ? optional_idx() : optional_idx(entry->second);
+MetricsManager::MetricsManager() : manager_id(next_manager_id++) {
 }
 
 idx_t MetricsManager::GetMetricCount() const {
-	lock_guard<mutex> guard(registered_metrics_lock);
-	return InternalMetricCount() + registered_here.size();
+	return InternalMetricCount() + registered_count.load(std::memory_order_acquire);
 }
 
 vector<MetricInfo> MetricsManager::GetAllMetrics() const {
 	vector<MetricInfo> result = GetInternalMetrics().metrics;
 	lock_guard<mutex> guard(registered_metrics_lock);
 	// extension-registered metrics
-	for (auto index : registered_here) {
-		result.push_back(GetMetric(index));
+	for (const auto &m : registered_metrics) {
+		result.push_back(m);
 	}
 	return result;
+}
+
+MetricInfo MetricsManager::GetMetric(idx_t metric_index) const {
+	if (metric_index < InternalMetricCount()) {
+		return GetInternalMetric(metric_index);
+	}
+	lock_guard<mutex> guard(registered_metrics_lock);
+	if (metric_index - InternalMetricCount() >= registered_metrics.size()) {
+		throw InvalidInputException("Metric index %llu is not the index of a metric of this database", metric_index);
+	}
+	return registered_metrics[metric_index - InternalMetricCount()];
+}
+
+vector<MetricSlotKind> MetricsManager::GetInternalMetricKinds(idx_t begin, idx_t end) {
+	vector<MetricSlotKind> kinds;
+	for (idx_t i = begin; i < MinValue<idx_t>(end, InternalMetricCount()); i++) {
+		kinds.push_back(KindOfType(GetInternalMetric(i).metric_type));
+	}
+	return kinds;
+}
+
+vector<MetricSlotKind> MetricsManager::GetMetricKinds(idx_t begin, idx_t end) const {
+	auto kinds = GetInternalMetricKinds(begin, end);
+	if (end > InternalMetricCount()) {
+		lock_guard<mutex> guard(registered_metrics_lock);
+		for (idx_t i = MaxValue<idx_t>(begin, InternalMetricCount()); i < end; i++) {
+			kinds.push_back(KindOfType(registered_metrics[i - InternalMetricCount()].metric_type));
+		}
+	}
+	return kinds;
 }
 
 idx_t MetricsManager::RegisterMetric(MetricInfo info) {
@@ -241,39 +233,71 @@ idx_t MetricsManager::RegisterMetric(MetricInfo info) {
 		}
 		return internal_index.GetIndex();
 	}
-	idx_t index;
-	{
-		auto &registered = GetRegisteredMetrics();
-		lock_guard<mutex> guard(registered.lock);
-		auto entry = registered.indexes.find(info.name);
-		if (entry != registered.indexes.end()) {
-			index = entry->second;
-			auto &existing = registered.metrics[index - InternalMetricCount()];
-			if (existing.metric_type != info.metric_type) {
-				throw InvalidInputException("Metric \"%s\" is already registered with type \"%s\"", info.name,
-				                            existing.metric_type);
-			}
-		} else {
-			index = InternalMetricCount() + registered.metrics.size();
-			if (index >= MAX_METRIC_COUNT) {
-				throw InvalidInputException("Cannot register metric \"%s\": a process can know at most %llu metrics",
-				                            info.name, MAX_METRIC_COUNT);
-			}
-			registered.indexes[info.name] = index;
-			registered.metrics.push_back(std::move(info));
-			registered.known_count.store(index + 1, std::memory_order_release);
-		}
-	}
 	lock_guard<mutex> guard(registered_metrics_lock);
-	if (registered_names.insert(GetMetric(index).name).second) {
-		registered_here.push_back(index);
+	auto entry = registered_indexes.find(info.name);
+	if (entry != registered_indexes.end()) {
+		auto &existing = registered_metrics[entry->second - InternalMetricCount()];
+		if (existing.metric_type != info.metric_type) {
+			throw InvalidInputException("Metric \"%s\" is already registered with type \"%s\"", info.name,
+			                            existing.metric_type);
+		}
+		return entry->second;
 	}
+	auto index = InternalMetricCount() + registered_metrics.size();
+	registered_indexes[info.name] = index;
+	registered_metrics.push_back(std::move(info));
+	registered_count.store(registered_metrics.size(), std::memory_order_release);
+	version.fetch_add(1, std::memory_order_release);
 	return index;
 }
 
+#ifndef __MINGW32__
+const CachedMetricIndexes &MetricsManager::GetCachedIndexes() const {
+// a thread's copy of the registered indexes, refreshed after a metric was registered or for another database
+#ifdef __MVS__
+	static __tlssim<CachedMetricIndexes> current_cache_impl;
+#define current_cache (*current_cache_impl.access())
+#else
+	thread_local CachedMetricIndexes current_cache;
+#endif
+	auto current_version = version.load(std::memory_order_acquire);
+	if (current_cache.manager_id != manager_id || current_cache.version != current_version) {
+		lock_guard<mutex> guard(registered_metrics_lock);
+		current_cache.manager_id = manager_id;
+		current_cache.version = version.load(std::memory_order_relaxed);
+		current_cache.indexes = registered_indexes;
+	}
+	return current_cache;
+#ifdef __MVS__
+#undef current_cache
+#endif
+}
+#endif
+
+optional_idx MetricsManager::TryGetMetricIndex(const string &name) const {
+	// the names extensions update are registered ones, so those are looked up first
+	if (registered_count.load(std::memory_order_acquire) > 0) {
+#ifndef __MINGW32__
+		auto &indexes = GetCachedIndexes().indexes;
+		auto entry = indexes.find(name);
+		if (entry != indexes.end()) {
+			return entry->second;
+		}
+#else
+		lock_guard<mutex> guard(registered_metrics_lock);
+		auto entry = registered_indexes.find(name);
+		if (entry != registered_indexes.end()) {
+			return entry->second;
+		}
+#endif
+	}
+	// the profiler's own metrics never change, so they need no cache
+	return TryGetInternalMetricIndex(name);
+}
+
 bool MetricsManager::IsRegisteredMetric(const string &name) const {
-	lock_guard<mutex> guard(registered_metrics_lock);
-	return registered_names.find(name) != registered_names.end();
+	auto index = TryGetMetricIndex(name);
+	return index.IsValid() && index.GetIndex() >= InternalMetricCount();
 }
 
 } // namespace duckdb

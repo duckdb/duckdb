@@ -20,7 +20,7 @@ struct MetricInfo {
 	string unit;
 };
 
-//! The most metric indexes a process can have, the profiler's own included
-static constexpr idx_t MAX_METRIC_COUNT = 16384;
+//! How the profiler updates a metric with an index: a "uint64" counts, a "double" times
+enum class MetricSlotKind : uint8_t { NONE, COUNTER, TIMING };
 
 } // namespace duckdb

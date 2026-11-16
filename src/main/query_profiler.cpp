@@ -77,6 +77,7 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 QueryProfiler::QueryProfiler(ClientContext &context_p)
     : context(context_p), running(false), query_started(false), query_requires_profiling(false),
       is_explain_analyze(false), metrics_finalized(false) {
+	query_metrics.SetMetricsManager(MetricsManager::Get(context));
 }
 
 bool QueryProfiler::IsEnabled() const {

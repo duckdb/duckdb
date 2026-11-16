@@ -344,9 +344,9 @@ TEST_CASE("Merging query metrics adds up the profiler's own timings and counters
 	REQUIRE(timings["planner.total_time"].end_time == end);
 }
 
-TEST_CASE("A timer with an index the process does not know records nothing", "[api]") {
+TEST_CASE("A timer with an index the database does not know records nothing", "[api]") {
 	QueryMetrics query_metrics;
-	auto unknown_index = MetricsManager::KnownMetricCount() + 1000;
+	auto unknown_index = MetricsManager::InternalMetricCount() + 1000;
 	{ MetricsTimer timer(query_metrics, unknown_index); }
 	REQUIRE(query_metrics.GetMetricTimings().empty());
 }

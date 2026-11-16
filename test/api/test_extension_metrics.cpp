@@ -238,7 +238,7 @@ TEST_CASE("Updates by name to the profiler's own metrics land with its own updat
 	REQUIRE(query_metrics.GetStringMetricInSeconds("optimizer.join_order") < 1.0);
 }
 
-TEST_CASE("Registering a metric returns its index, the same in every database", "[api]") {
+TEST_CASE("Registering a metric returns its index in the database", "[api]") {
 	DuckDB db(nullptr);
 	DuckDB other_db(nullptr);
 	auto &metrics_manager = MetricsManager::Get(*db.instance);
@@ -246,22 +246,20 @@ TEST_CASE("Registering a metric returns its index, the same in every database", 
 	auto count = metrics_manager.GetMetricCount();
 	auto first = metrics_manager.RegisterMetric({"test.first", "uint64", "First", "rows"});
 	auto second = metrics_manager.RegisterMetric({"test.second", "double", "Second", "seconds"});
-	REQUIRE(first != second);
-	REQUIRE(first >= MetricsManager::InternalMetricCount());
+	REQUIRE(first == count);
+	REQUIRE(second == count + 1);
 	REQUIRE(metrics_manager.GetMetricCount() == count + 2);
-	REQUIRE(MetricsManager::GetMetric(first).name == "test.first");
-	REQUIRE(MetricsManager::GetMetric(second).name == "test.second");
+	REQUIRE(metrics_manager.GetMetric(first).name == "test.first");
+	REQUIRE(metrics_manager.TryGetMetricIndex("test.second").GetIndex() == second);
 	// registering a name again returns the index it already has, and its type must stay the same
 	REQUIRE(metrics_manager.RegisterMetric({"test.first", "uint64", "First", "rows"}) == first);
 	REQUIRE_THROWS_WITH(metrics_manager.RegisterMetric({"test.first", "double", "First", "seconds"}),
 	                    Catch::Contains("already registered"));
-	// another database gets the same index, and lists the metric once it registered it too
+	// another database has its own metrics and indexes
 	REQUIRE(!other_manager.IsRegisteredMetric("test.second"));
-	REQUIRE(other_manager.RegisterMetric({"test.second", "double", "Second", "seconds"}) == second);
+	REQUIRE(other_manager.RegisterMetric({"test.second", "uint64", "Another type here", "rows"}) == count);
 	REQUIRE(other_manager.IsRegisteredMetric("test.second"));
-	REQUIRE(!other_manager.IsRegisteredMetric("test.first"));
-	REQUIRE_THROWS_WITH(other_manager.RegisterMetric({"test.first", "double", "First", "seconds"}),
-	                    Catch::Contains("already registered"));
+	REQUIRE(!other_manager.TryGetMetricIndex("test.first").IsValid());
 	// the profiler's own metrics are not registered again; they return their own index
 	REQUIRE(metrics_manager.RegisterMetric({"optimizer.join_order", "double", "Not an extension's", "seconds"}) ==
 	        MetricsManager::OptimizerMetricIndex(OptimizerType::JOIN_ORDER));
@@ -390,8 +388,9 @@ TEST_CASE("Updates by index may come from another thread while queries start and
 			profiler.AddToMetricCounter(latest.load(), 1);
 		}
 	});
-	// enough to cross into another chunk of slots
-	for (idx_t i = 0; i < 70; i++) {
+	// enough that the connection allocates another segment of slots, past the first 128 indexes
+	auto registrations = 256 - MetricsManager::InternalMetricCount();
+	for (idx_t i = 0; i < registrations; i++) {
 		// the newest metric has no slot yet, so the updates make the connection allocate more while queries start
 		latest = metrics_manager.RegisterMetric({"test.background_" + to_string(i), "uint64", "Aside", "rows"});
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
@@ -400,11 +399,11 @@ TEST_CASE("Updates by index may come from another thread while queries start and
 	updater.join();
 }
 
-// Updates by an index the process does not know, and by indexes of the wrong type.
+// Updates by an index the database does not know, and by indexes of the wrong type.
 static idx_t ratio_index;
 static void UpdateBadIndexesExec(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &profiler = QueryProfiler::Get(state.GetContext());
-	auto unknown_index = MetricsManager::KnownMetricCount() + 1000;
+	auto unknown_index = MetricsManager::Get(state.GetClientContext()).GetMetricCount() + 1000;
 	profiler.AddToMetricCounter(unknown_index, args.size());
 	profiler.AddToMetricTiming(unknown_index, 1000);
 	{ auto timer = profiler.StartTimer(unknown_index); }
@@ -434,29 +433,36 @@ TEST_CASE("Updates by an index that does not fit are left out", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("SELECT max(update_bad_indexes(i)) FROM numbers"));
 }
 
-// Counts by an index kept in a static, as an extension loaded into several databases would.
-static idx_t shared_index;
-static void CountBySharedIndexExec(DataChunk &args, ExpressionState &state, Vector &result) {
-	QueryProfiler::Get(state.GetContext()).AddToMetricCounter(shared_index, args.size());
+// Counts by name, as an extension loaded into several databases can without keeping an index for each.
+static void CountByNameExec(DataChunk &args, ExpressionState &state, Vector &result) {
+	QueryProfiler::Get(state.GetContext()).AddToMetricCounter("test.shared", args.size());
 	result.Reference(args.data[0]);
 }
 
-TEST_CASE("An index kept in a static counts the same metric in every database", "[api]") {
+TEST_CASE("Updates by name count the metric of each database", "[api][intraquery]") {
 	DuckDB first_db(nullptr);
 	DuckDB second_db(nullptr);
-	// the second database knows another metric first, so a per-database index would differ
+	// the second database registers another metric first, so the two give the metric different indexes
 	MetricsManager::Get(*second_db.instance).RegisterMetric({"test.other_first", "uint64", "Other", "rows"});
-	shared_index = MetricsManager::Get(*first_db.instance).RegisterMetric({"test.shared", "uint64", "Shared", "rows"});
-	REQUIRE(MetricsManager::Get(*second_db.instance).RegisterMetric({"test.shared", "uint64", "Shared", "rows"}) ==
-	        shared_index);
-	for (auto db : {&first_db, &second_db}) {
-		Connection con(*db);
-		ScalarFunction fn("count_by_shared_index", {LogicalType::BIGINT}, LogicalType::BIGINT, CountBySharedIndexExec);
+	auto first_index =
+	    MetricsManager::Get(*first_db.instance).RegisterMetric({"test.shared", "uint64", "Shared", "rows"});
+	auto second_index =
+	    MetricsManager::Get(*second_db.instance).RegisterMetric({"test.shared", "uint64", "Shared", "rows"});
+	REQUIRE(first_index != second_index);
+	// queries on both databases, alternating, so that the threads switch between their caches
+	Connection first_con(first_db);
+	Connection second_con(second_db);
+	for (auto con : {&first_con, &second_con}) {
+		ScalarFunction fn("count_by_name", {LogicalType::BIGINT}, LogicalType::BIGINT, CountByNameExec);
 		fn.SetStability(FunctionStability::VOLATILE);
-		RegisterFunction(con, std::move(fn));
-		SetUpParallelScan(con, "test_shared_index_output.txt");
-		REQUIRE_NO_FAIL(con.Query("SELECT max(count_by_shared_index(i)) FROM numbers"));
-		REQUIRE(GetProfiledMetric(con, "test.shared") == Value::UBIGINT(ROW_COUNT));
-		REQUIRE(GetProfiledMetric(con, "test.other_first").IsNull());
+		RegisterFunction(*con, std::move(fn));
+		SetUpParallelScan(*con, "test_by_name_output.txt");
+	}
+	for (idx_t i = 0; i < 2; i++) {
+		for (auto con : {&first_con, &second_con}) {
+			REQUIRE_NO_FAIL(con->Query("SELECT max(count_by_name(i)) FROM numbers"));
+			REQUIRE(GetProfiledMetric(*con, "test.shared") == Value::UBIGINT(ROW_COUNT));
+			REQUIRE(GetProfiledMetric(*con, "test.other_first").IsNull());
+		}
 	}
 }
