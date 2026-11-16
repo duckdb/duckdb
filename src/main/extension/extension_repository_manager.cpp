@@ -295,6 +295,11 @@ bool ExtensionRepositoryManager::TrustsRepository(DatabaseInstance &db, const Ex
 void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	// modifying the trusted repositories changes the set of keys that are trusted to sign extensions, so it is gated
 	// by the configuration lock: a locked configuration freezes the trust store
+	if (Settings::Get<LockConfigurationSetting>(db)) {
+		throw InvalidInputException("Cannot add or drop extension repositories while the configuration is locked "
+		                            "(lock_configuration is true): they decide which signing keys are trusted, so they "
+		                            "are part of the configuration");
+	}
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
 }
 
@@ -550,10 +555,14 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 		// a policy refusal (verification switched off for the url): not something the host did
 		throw;
 	} catch (std::exception &ex) {
+		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
+		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
 		ErrorData error(ex);
-		throw IOException("Cannot create extension repository '%s': the host does not serve a metadata file (failed to "
-		                  "read '%s': %s)\nUse `WITH PREFIX '<url>'` to name the repository's location directly",
-		                  name, metadata_path, error.RawMessage());
+		throw IOException(
+		    "Cannot create extension repository '%s': %s\nA repository is resolved from its host through "
+		    "https://<host>/.well-known/duckdb-extension-repo.json; use `WITH PREFIX '<url>'` to name the "
+		    "repository's location directly",
+		    name, error.RawMessage());
 	}
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	auto root = ReadVersionedObject(document, metadata_path);
@@ -851,6 +860,10 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(name_p);
+	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
+		// the built-in repositories are not stored files: there is nothing to remove, and no way to distrust them
+		throw NotImplementedException("Extension repository '%s' is built in and cannot be dropped", name);
+	}
 	auto file_path = GetRepositoryPath(db, fs, name);
 	if (!fs.FileExists(file_path)) {
 		if (on_entry_not_found == OnEntryNotFound::RETURN_NULL) {

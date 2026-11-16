@@ -35,6 +35,17 @@ SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PRO
 acme
 other
 
+# the built-in repositories are not stored and cannot be dropped, with or without IF EXISTS
+statement error
+DROP EXTENSION REPOSITORY core
+----
+<REGEX>:Not implemented Error.*'core' is built in and cannot be dropped.*
+
+statement error
+DROP EXTENSION REPOSITORY IF EXISTS core_nightly
+----
+<REGEX>:Not implemented Error.*'core_nightly' is built in and cannot be dropped.*
+
 # a repository with the same name cannot be created twice with another definition: the stored prefix is reported
 statement error
 CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://other.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
