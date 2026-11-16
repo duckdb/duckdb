@@ -287,8 +287,12 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, TableIndex table_index,
                                                           const vector<Identifier> &names,
                                                           const vector<LogicalType> &sql_types,
-                                                          const SelectBindState &bind_state) {
+                                                          const SelectBindState &bind_state, bool extracting_names) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
+	if (extracting_names && constant.GetValue().type().id() != LogicalTypeId::VARCHAR) {
+		// the columns are unknown: an ordinal references none
+		return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+	}
 	switch (constant.GetValue().type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
@@ -325,12 +329,14 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 }
 
 static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<Identifier> &names,
-                             const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
+                             const vector<LogicalType> &sql_types, const SelectBindState &bind_state,
+                             bool extracting_names) {
 	if (!expr) {
 		return;
 	}
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
+		expr =
+		    FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state, extracting_names);
 	}
 	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return;
@@ -347,7 +353,8 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
-				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
+				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state,
+				                                   IsExtractingNames());
 				if (!expr) {
 					throw InternalException("DISTINCT ON ORDER BY ALL not supported");
 				}
@@ -359,8 +366,10 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = bound_mod->Cast<BoundLimitModifier>();
-			AssignReturnType(limit.limit_val.GetExpression(), table_index, names, sql_types, bind_state);
-			AssignReturnType(limit.offset_val.GetExpression(), table_index, names, sql_types, bind_state);
+			AssignReturnType(limit.limit_val.GetExpression(), table_index, names, sql_types, bind_state,
+			                 IsExtractingNames());
+			AssignReturnType(limit.offset_val.GetExpression(), table_index, names, sql_types, bind_state,
+			                 IsExtractingNames());
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -368,7 +377,8 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 			bool order_by_all = false;
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
-				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
+				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state,
+				                                   IsExtractingNames());
 				if (!expr) {
 					order_by_all = true;
 				}
@@ -561,7 +571,10 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		auto &grp = statement.groups.group_expressions[i];
 		ExpressionBinder::QualifyColumnNames(*this, grp);
 
-		GroupBinder::ReplaceSelectRef(statement, bind_state, ProjectionIndex(i), grp);
+		// the columns are unknown while extracting names: an ordinal references none
+		if (!IsExtractingNames() || grp->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			GroupBinder::ReplaceSelectRef(statement, bind_state, ProjectionIndex(i), grp);
+		}
 
 		// set up a mapping of expression -> group index so we can map expressions in the select list / having to groups
 		auto grp_copy = grp->Copy();

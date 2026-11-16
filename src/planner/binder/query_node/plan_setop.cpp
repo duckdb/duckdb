@@ -1,6 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
@@ -8,6 +9,39 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
+
+void Binder::FitColumnCount(BoundStatement &statement, idx_t count) {
+	D_ASSERT(IsExtractingNames());
+	if (statement.types.size() == count) {
+		return;
+	}
+	auto bindings = statement.plan->GetColumnBindings();
+	D_ASSERT(bindings.size() == statement.types.size());
+	vector<unique_ptr<Expression>> select_list;
+	for (idx_t i = 0; i < count; i++) {
+		if (i < statement.types.size()) {
+			select_list.push_back(make_uniq<BoundColumnRefExpression>(statement.types[i], bindings[i]));
+		} else {
+			select_list.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+			statement.types.push_back(LogicalType::SQLNULL);
+			statement.names.push_back(Identifier("__dummy_col" + to_string(i)));
+		}
+	}
+	statement.types.resize(count);
+	statement.names.resize(count);
+	// A fitted statement can be narrower than the statement that produced it. Keep
+	// the original expressions in sync so alias gathering does not index past the
+	// fitted width.
+	if (statement.extra_info.original_expressions.size() > count) {
+		statement.extra_info.original_expressions.resize(count);
+	}
+	// The child binders and bound children are still needed to construct the plan,
+	// but the fitted statement must be treated as a leaf by alias gathering.
+	statement.extra_info.setop_type = SetOperationType::NONE;
+	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+	projection->AddChild(std::move(statement.plan));
+	statement.plan = std::move(projection);
+}
 
 // Optionally push a PROJECTION operator
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<LogicalType> &source_types,

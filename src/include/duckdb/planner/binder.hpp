@@ -384,6 +384,8 @@ public:
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
+	//! Whether the binder only extracts table names: a table binds as one dummy column, so column checks cannot hold
+	bool IsExtractingNames();
 	void AddTableName(string table_name);
 	void AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
@@ -633,6 +635,8 @@ private:
 	                                            JoinType join_type = JoinType::INNER,
 	                                            unique_ptr<Expression> condition = nullptr);
 
+	//! Fits a statement bound while extracting names to `count` columns: drops its last ones or adds NULLs
+	void FitColumnCount(BoundStatement &statement, idx_t count);
 	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(const vector<LogicalType> &source_types,
 	                                                       const vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);

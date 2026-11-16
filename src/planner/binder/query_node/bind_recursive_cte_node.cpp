@@ -240,6 +240,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	MoveCorrelatedExpressions(*right_binder);
 
 	// now both sides have been bound we can resolve types
+	if (IsExtractingNames()) {
+		FitColumnCount(right, left.types.size());
+	}
 	if (left.types.size() != right.types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
 		                      "same number of result columns");

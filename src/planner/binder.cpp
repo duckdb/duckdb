@@ -389,6 +389,11 @@ BindingMode Binder::GetBindingMode() {
 	return global_binder_state->mode;
 }
 
+bool Binder::IsExtractingNames() {
+	return global_binder_state->mode == BindingMode::EXTRACT_NAMES ||
+	       global_binder_state->mode == BindingMode::EXTRACT_QUALIFIED_NAMES;
+}
+
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 	legacy_can_contain_nulls = can_contain_nulls_p;
 }

@@ -911,6 +911,11 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 	if (!handled_columns.empty()) {
 		for (auto &entry : handled_columns) {
+			if (IsExtractingNames()) {
+				// the columns are unknown: take the column as named
+				name_map[entry] = entry;
+				continue;
+			}
 			throw BinderException(
 			    ref, "Column \"%s\" referenced in UNPIVOT but no matching entry was found in the table", entry);
 		}

@@ -157,7 +157,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto index = GenerateTableIndex();
 
 		auto alias = ref.alias.empty() ? ref.Table() : ref.alias;
-		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
+		auto names = bind_context.AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
@@ -181,7 +181,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto table_or_view =
 	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
-	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+	if (IsExtractingNames()) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
 			// if we are in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES, we create a dummy table ref
 			if (GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
@@ -274,7 +274,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			return_types.push_back(col.Type());
 			return_names.emplace_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		table_names = bind_context.AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {
@@ -342,8 +342,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
-		// update the view binding with the bound view information
-		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		// update the view binding with the bound view information, unless it bound unknown columns
+		if (!IsExtractingNames()) {
+			view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
+		}
 		auto root_index = bound_child.plan->GetRootIndex();
 		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
 			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view

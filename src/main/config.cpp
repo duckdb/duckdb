@@ -136,6 +136,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DebugVerifyProgressSetting),
     DUCKDB_SETTING(DebugVerifyProgressIgnoreSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
+    DUCKDB_SETTING(DebugVerifyTableNamesSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyStatementSetting),
     DUCKDB_SETTING(DebugVerifyStatsSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),

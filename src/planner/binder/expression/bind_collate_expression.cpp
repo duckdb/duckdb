@@ -15,6 +15,9 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
+	if (binder.IsExtractingNames()) {
+		return BindResult(std::move(child));
+	}
 	if (child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException(child->GetQueryLocation(), "collations are only supported for type varchar");
 	}

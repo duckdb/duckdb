@@ -1,0 +1,6 @@
+{
+  "description": "Run with SET debug_verify_table_names=true to test names-only set-operation binding",
+  "on_init": "SET debug_verify_table_names=true",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/stats_dependent_tests.json"
+}

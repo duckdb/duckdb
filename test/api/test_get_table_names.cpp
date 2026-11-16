@@ -293,3 +293,60 @@ TEST_CASE("Test GetTableNames", "[api]") {
 		REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=0)"));
 	}
 }
+
+TEST_CASE("GetTableNames binds valid queries whatever their tables' columns", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(id INTEGER, x VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b(id INTEGER, y VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE s(st STRUCT(f INTEGER))"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v(c1, c2) AS SELECT * FROM a"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW vu AS SELECT * FROM a JOIN b USING (id)"));
+
+	const vector<pair<string, unordered_set<string>>> queries {
+	    {"SELECT * FROM a JOIN b USING (id)", {"a", "b"}},
+	    {"SELECT * FROM a ASOF LEFT JOIN b USING (id)", {"a", "b"}},
+	    {"SELECT * FROM a NATURAL JOIN b", {"a", "b"}},
+	    {"SELECT * FROM vu", {"a", "b"}},
+	    {"SELECT * FROM v", {"a"}},
+	    {"SELECT * FROM (SELECT * FROM a) t(c1, c2)", {"a"}},
+	    {"SELECT * FROM a UNION SELECT id, y FROM b", {"a", "b"}},
+	    {"SELECT * FROM a EXCEPT SELECT id, y FROM b", {"a", "b"}},
+	    {"SELECT * FROM a INTERSECT SELECT id, y FROM b", {"a", "b"}},
+	    {"SELECT * FROM a UNION ALL SELECT id, y FROM b ORDER BY 1", {"a", "b"}},
+	    {"SELECT * FROM a UNION ALL (SELECT id, y FROM b UNION SELECT * FROM a)", {"a", "b"}},
+	    {"SELECT * FROM (SELECT * FROM a UNION SELECT id, y FROM b) t", {"a", "b"}},
+	    {"SELECT id, y FROM b EXCEPT SELECT * FROM a ORDER BY 2", {"a", "b"}},
+	    {"WITH RECURSIVE t AS (SELECT * FROM a UNION ALL SELECT id + 1, x FROM t WHERE id < 3) SELECT * FROM t", {"a"}},
+	    {"SELECT * FROM a ORDER BY 2", {"a"}},
+	    {"SELECT x FROM a ORDER BY 1 COLLATE nocase", {"a"}},
+	    {"SELECT DISTINCT ON (2) * FROM a", {"a"}},
+	    {"SELECT *, count(*) FROM a GROUP BY 1, 2", {"a"}},
+	    {"SELECT COLUMNS('(i)(.*)') AS \"\\2\" FROM a", {"a"}},
+	    {"SELECT * LIKE 'i%' FROM a", {"a"}},
+	    {"SELECT COLUMNS(['id']) FROM a", {"a"}},
+	    {"SELECT st.* FROM s", {"s"}},
+	    {"SELECT x.* FROM (SELECT st AS x FROM s)", {"s"}},
+	    {"SELECT * FROM a WHERE (id, x) IN (SELECT id, y FROM b)", {"a", "b"}},
+	    {"UNPIVOT a ON x INTO NAME k VALUE w", {"a"}},
+	};
+	for (auto &query : queries) {
+		INFO(query.first);
+		REQUIRE_NO_FAIL(con.Query(query.first));
+		REQUIRE(con.GetTableNames(query.first) == query.second);
+		REQUIRE(con.GetTableNames(query.first, true).size() == query.second.size());
+	}
+}
+
+TEST_CASE("GetTableNames leaves the catalog as it was", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(id INTEGER, x VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v AS SELECT * FROM a"));
+	auto columns = "SELECT column_name, data_type FROM duckdb_columns() WHERE table_name = 'v' ORDER BY ALL";
+	auto before = con.Query(columns)->ToString();
+
+	REQUIRE(con.GetTableNames("SELECT * FROM v") == unordered_set<string> {"a"});
+
+	REQUIRE(con.Query(columns)->ToString() == before);
+}

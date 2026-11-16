@@ -348,6 +348,9 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 		result.names = result.bound_children[0].names;
 		auto result_columns = result.bound_children[0].types.size();
 		for (idx_t i = 1; i < result.bound_children.size(); ++i) {
+			if (IsExtractingNames()) {
+				FitColumnCount(result.bound_children[i], result_columns);
+			}
 			if (result.bound_children[i].types.size() != result_columns) {
 				throw BinderException("Set operations can only apply to expressions with the "
 				                      "same number of result columns");
@@ -379,7 +382,8 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 	}
 
 	SelectBindState bind_state;
-	if (!statement.modifiers.empty()) {
+	// Set-operation modifiers affect execution, not table-name discovery.
+	if (!statement.modifiers.empty() && !IsExtractingNames()) {
 		// handle the ORDER BY/DISTINCT clauses
 		vector<reference<Binder>> binders;
 		GatherSetOpBinders(result.bound_children, result.child_binders, binders);

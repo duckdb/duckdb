@@ -188,11 +188,26 @@ static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundS
 	}
 }
 
+static void VerifyTableNames(ClientContext &context, SQLStatement &statement, BoundParameterMap &parameters) {
+	auto names_only_binder = Binder::CreateBinder(context);
+	names_only_binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+	names_only_binder->SetParameters(parameters);
+	try {
+		names_only_binder->Bind(statement);
+	} catch (std::exception &ex) {
+		throw InternalException("Names-only binding failed for query \"%s\": %s", statement.query, ex.what());
+	}
+}
+
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.named_param_map.size();
 
 	BoundParameterMap bound_parameters(parameter_data);
+	unique_ptr<SQLStatement> names_only_statement;
+	if (Settings::Get<DebugVerifyTableNamesSetting>(context)) {
+		names_only_statement = statement.Copy();
+	}
 
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
@@ -201,6 +216,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();
+		if (names_only_statement && statement.type == StatementType::SELECT_STATEMENT) {
+			BoundParameterMap names_only_parameters(parameter_data);
+			VerifyTableNames(context, *names_only_statement, names_only_parameters);
+		}
 
 		RunPostBindExtensions(context, *binder, bound_statement);
 

@@ -119,6 +119,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 				expected_columns = struct_child_count;
 			}
 		}
+		if (binder.IsExtractingNames()) {
+			subquery_binder->FitColumnCount(bound_node, expected_columns);
+		}
 		if (bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d", bound_node.types.size(),
 			                      expected_columns);

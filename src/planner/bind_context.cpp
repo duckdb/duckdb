@@ -5,6 +5,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -640,6 +641,11 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (bindings_list.empty()) {
 					throw BinderException("* expression without FROM clause!");
 				}
+				if (binder.IsExtractingNames()) {
+					// a struct column of a table whose columns are unknown
+					new_select_list.push_back(ConstantExpression::Null());
+					return;
+				}
 				error.Throw();
 			}
 			is_struct_ref = true;
@@ -651,6 +657,11 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		if (is_struct_ref) {
 			auto col_idx = binding->GetBindingIndex(expr.RelationName());
 			auto col_type = column_types[col_idx];
+			if (col_type.id() != LogicalTypeId::STRUCT && binder.IsExtractingNames()) {
+				// its type is unknown
+				new_select_list.push_back(ConstantExpression::Null());
+				return;
+			}
 			if (col_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException(StringUtil::Format(
 				    "Cannot extract field from expression \"%s\" because it is not a struct", expr.ToString()));
@@ -687,8 +698,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	}
 
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
-	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+	if (binder.IsExtractingNames()) {
 		//! We only care about extracting the names of the referenced columns
 		//! remove the exclude + replace lists
 		expr.ExcludeListMutable().clear();
@@ -779,13 +789,13 @@ static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier
 vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, const vector<Identifier> &names,
                                                  const vector<Identifier> &column_aliases) {
 	vector<Identifier> result;
-	if (column_aliases.size() > names.size()) {
+	if (column_aliases.size() > names.size() && !binder.IsExtractingNames()) {
 		throw BinderException("table %s has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
 	identifier_set_t current_names;
 	// use any provided column aliases first
-	for (idx_t i = 0; i < column_aliases.size(); i++) {
+	for (idx_t i = 0; i < MinValue(column_aliases.size(), names.size()); i++) {
 		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns

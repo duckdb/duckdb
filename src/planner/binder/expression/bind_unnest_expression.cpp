@@ -203,6 +203,9 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 		return BindResult(std::move(error));
 	}
 	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
+	if (binder.IsExtractingNames()) {
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
 	auto &child_type = child->GetReturnType();
 
 	if (outer_unnest_level > 0) {

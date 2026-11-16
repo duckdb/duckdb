@@ -365,8 +365,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
-	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+	if (binder.IsExtractingNames()) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
@@ -514,7 +513,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	bound_children[lambda_expr_idx] = std::move(bind_lambda_result.expression);
 
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (binder.IsExtractingNames()) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 

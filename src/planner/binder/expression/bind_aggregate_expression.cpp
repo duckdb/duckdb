@@ -214,6 +214,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		// the arguments decided that this level owns the aggregate, so a child that does not bind here is an error
 		return BindResult(std::move(error));
 	}
+	if (binder.IsExtractingNames()) {
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
 
 	if (aggr.Filter()) {
 		bound_filter = BoundCastExpression::AddCastToType(context, std::move(bound_filter_child), LogicalType::BOOLEAN);

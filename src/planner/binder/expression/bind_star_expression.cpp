@@ -469,7 +469,8 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 					continue;
 				}
 				auto &colref = child_expr->Cast<ColumnRefExpression>();
-				if (!RE2::PartialMatch(colref.GetColumnName().GetIdentifierName(), *regex)) {
+				// the columns are unknown while extracting names: the regex selects them all
+				if (!RE2::PartialMatch(colref.GetColumnName().GetIdentifierName(), *regex) && !IsExtractingNames()) {
 					continue;
 				}
 				new_list.push_back(std::move(expanded_expr));
@@ -493,6 +494,8 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				throw BinderException(*star, err);
 			}
 			star_list = std::move(new_list);
+		} else if (IsExtractingNames()) {
+			// the columns are unknown: COLUMNS selects them all
 		} else if (val.type().id() == LogicalTypeId::LIST &&
 		           ListType::GetChildType(val.type()).id() == LogicalTypeId::VARCHAR) {
 			// list of varchar columns
