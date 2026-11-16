@@ -45,15 +45,15 @@ static bool PlainColumn(const Expression &expr, ColumnBinding &binding) {
 }
 
 //! Points every column reference the map knows at its new binding
-static void Rebind(Expression &expr, const column_binding_map_t<ColumnBinding> &map) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		auto &column_ref = expr.Cast<BoundColumnRefExpression>();
+static void Rebind(unique_ptr<Expression> &expr, const column_binding_map_t<ColumnBinding> &map) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &column_ref = expr->Cast<BoundColumnRefExpression>();
 		auto entry = map.find(column_ref.Binding());
 		if (entry != map.end()) {
-			column_ref.BindingMutable() = entry->second;
+			expr = column_ref.WithBinding(entry->second);
 		}
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { Rebind(child, map); });
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) { Rebind(child, map); });
 }
 
 //! Collects the bindings the expression reads; false when one of them is correlated
@@ -333,7 +333,7 @@ bool LateralRowFunction::MatchDomain(LogicalOperator &op, TableIndex cte_index, 
 				map[binding] = ColumnBinding(domain.table_index, ProjectionIndex(column));
 			}
 			auto filter = expr->Copy();
-			Rebind(*filter, map);
+			Rebind(filter, map);
 			domain.filters.push_back(std::move(filter));
 		}
 	}
@@ -539,7 +539,7 @@ void LateralRowFunction::Rewrite(unique_ptr<LogicalOperator> &cte_op, Candidate 
 		domain_map[ColumnBinding(domain.table_index, ProjectionIndex(column))] = producer_bindings[column];
 	}
 	for (auto &filter : domain.filters) {
-		Rebind(*filter, domain_map);
+		Rebind(filter, domain_map);
 		conjuncts.push_back(std::move(filter));
 	}
 	if (!conjuncts.empty()) {
@@ -562,7 +562,7 @@ void LateralRowFunction::Rewrite(unique_ptr<LogicalOperator> &cte_op, Candidate 
 	for (idx_t i = candidate.chain.size(); i > 0; i--) {
 		auto &op = candidate.chain[i - 1].get();
 		LogicalOperatorVisitor::EnumerateExpressions(*op,
-		                                             [&](unique_ptr<Expression> *expr) { Rebind(**expr, group_map); });
+		                                             [&](unique_ptr<Expression> *expr) { Rebind(*expr, group_map); });
 		if (op->type == LogicalOperatorType::LOGICAL_GET) {
 			ConvertUnnestFunction(optimizer.context, op);
 		}
