@@ -109,6 +109,7 @@ public:
 	}
 
 private:
+	//! Affinity waiters need a scan-progress wake-up before the executor counts this read as complete.
 	class RunningRead {
 	public:
 		explicit RunningRead(optional_ptr<ScanReadAhead> read_ahead) : read_ahead(read_ahead) {
@@ -131,7 +132,7 @@ private:
 		if (!completion) {
 			return;
 		}
-		// Publication must finish before the executor counts this task as completed.
+		// Publish before returning to executor completion accounting, including cancellation.
 		task.reset();
 		auto finished = std::move(completion);
 		finished->FinishIOTask();

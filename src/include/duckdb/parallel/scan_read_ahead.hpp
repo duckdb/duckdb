@@ -52,7 +52,7 @@ public:
 
 private:
 	friend class ScanReadAhead;
-	//! Own an unordered job until its reads finish; the job must not own this completion.
+	//! Affinity completion owns the job until publication; the job must not own this completion and form a cycle.
 	void OwnJob(ScanReadAhead &read_ahead, unique_ptr<ScanReadAheadJob> job);
 
 private:
@@ -160,8 +160,9 @@ enum class ScanReadAheadAcquire : uint8_t {
 	PARKED     //! the scan task parked until work becomes ready, the caller must yield
 };
 
-//! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
-//! Jobs retain reader-owned state while scheduled.
+//! Shares the I/O executor, budget and cancellation lifecycle between ordered and affinity scans.
+//! Ordered consumers claim jobs before I/O completes and may park on the job's completion.
+//! Affinity completions own unfinished jobs; consumers claim only ready jobs and park on scan progress.
 class ScanReadAhead {
 public:
 	ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
@@ -224,6 +225,7 @@ private:
 				}
 			}
 			--read_ahead.active_producers;
+			// Ready jobs can be consumed before their producer exits; its exit can then finish an affinity scan.
 			if (remaining || read_ahead.IsDone() || read_ahead.affinity) {
 				read_ahead.SignalProgress(read_ahead.IsDone());
 			}
@@ -287,12 +289,13 @@ private:
 	idx_t ProgressEpoch() const;
 
 private:
-	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
+	//! Ordered jobs retain reader/decode state; charge at least this much, or their I/O size if larger.
 	static constexpr idx_t MINIMUM_ORDERED_JOB_CHARGE = 16ULL * 1024 * 1024;
 	//! How long a thread yields for another thread to push a job before it waits for it
 	static constexpr idx_t PRODUCER_YIELD_MICROS = 1000;
 	static constexpr idx_t AFFINITY_WINDOW = 256;
 	static constexpr idx_t PRODUCE_BATCH = 8;
+	//! Managed affinity jobs charge metadata plus I/O; cached work without a governor uses only the fixed window.
 	static constexpr idx_t MINIMUM_AFFINITY_JOB_CHARGE = 4096;
 
 private:
