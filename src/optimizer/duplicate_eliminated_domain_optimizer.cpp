@@ -1198,27 +1198,39 @@ static bool TraceSourceColumn(LogicalOperator &op, idx_t column,
 	}
 }
 
-//! The number of references below `op` that read the materialized CTE `source`, directly or through a visible CTE
-//! whose definition does.
+//! `depends` caches, for one walk, whether the definition of a visible CTE reads the source: every reference of such a
+//! CTE counts, but its definition is walked once.
 static idx_t CountSourceReaders(LogicalOperator &op, TableIndex source,
-                                const vector<reference<LogicalMaterializedCTE>> &cte_scopes) {
+                                const vector<reference<LogicalMaterializedCTE>> &cte_scopes,
+                                unordered_map<TableIndex, bool> &depends) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &reference = op.Cast<LogicalCTERef>();
 		if (reference.cte_index == source) {
 			return 1;
 		}
+		auto known = depends.find(reference.cte_index);
+		if (known != depends.end()) {
+			return known->second ? 1 : 0;
+		}
 		// The owner is an ancestor of `op`: its definition cannot contain `op`.
 		auto owner = FindVisibleOwner(reference.cte_index, cte_scopes);
-		if (!owner || owner->table_index == source) {
-			return 0;
-		}
-		return CountSourceReaders(*owner->children[0], source, cte_scopes) > 0 ? 1 : 0;
+		bool reads_source = owner && CountSourceReaders(*owner->children[0], source, cte_scopes, depends) > 0;
+		depends[reference.cte_index] = reads_source;
+		return reads_source ? 1 : 0;
 	}
 	idx_t count = 0;
 	for (auto &child : op.children) {
-		count += CountSourceReaders(*child, source, cte_scopes);
+		count += CountSourceReaders(*child, source, cte_scopes, depends);
 	}
 	return count;
+}
+
+//! The number of references below `op` that read the materialized CTE `source`, directly or through a visible CTE
+//! whose definition does.
+static idx_t CountSourceReaders(LogicalOperator &op, TableIndex source,
+                                const vector<reference<LogicalMaterializedCTE>> &cte_scopes) {
+	unordered_map<TableIndex, bool> depends;
+	return CountSourceReaders(op, source, cte_scopes, depends);
 }
 
 //! An aggregate without groups below plain projections.
