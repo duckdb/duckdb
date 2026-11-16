@@ -118,6 +118,12 @@ FROM s
 ----
 0	NULL	0	0	NULL	0
 
+# the user-written form of the last column: no row passes the filter, so that the constant is not counted
+query II
+SELECT count(DISTINCT 1) FILTER (WHERE x > 100), count(DISTINCT 'k') FILTER (WHERE c AND x > 100) FROM s
+----
+0	0
+
 # 5. ROLLUP and grouping sets, also over an empty input
 query IIIIII
 SELECT g, c, count(DISTINCT CASE WHEN c THEN x END), sum(CASE WHEN c THEN x END) FILTER (WHERE p),
