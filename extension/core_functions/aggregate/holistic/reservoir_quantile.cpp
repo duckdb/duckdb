@@ -1,4 +1,5 @@
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -323,7 +324,8 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input) {
 	Value quantile_val = input.GetConstant(1);
 	vector<double> quantiles;
-	if (quantile_val.type().id() != LogicalTypeId::LIST) {
+	// a NULL list is rejected like a NULL quantile
+	if (quantile_val.IsNull() || quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckReservoirQuantile(quantile_val));
 	} else {
 		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
@@ -369,8 +371,11 @@ static void SetDecimalImplementation(BoundAggregateFunction &function, const Log
 			    AggregateFunction::UnaryAggregate<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
 			                                      ReservoirQuantileScalarOperation>(decimal_type, decimal_type));
 			break;
+		case PhysicalType::DOUBLE:
+			function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(PhysicalType::DOUBLE));
+			break;
 		default:
-			throw InternalException("Invalid physical type for decimal reservoir quantile");
+			throw NotImplementedException("Invalid physical type for decimal reservoir quantile");
 		}
 	}
 	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
@@ -404,7 +409,11 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
+	// wide decimals have no reservoir quantile of their own, they are aggregated as DOUBLE
 	auto decimal_type = arguments[0]->GetReturnType();
+	if (Decimal::IsWide(DecimalType::GetWidth(decimal_type))) {
+		decimal_type = LogicalType::DOUBLE;
+	}
 	bool is_list = arguments[1]->GetReturnType().id() == LogicalTypeId::LIST;
 
 	auto bind_data_ptr = BindReservoirQuantile(input);

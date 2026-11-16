@@ -31,7 +31,10 @@
         "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
-        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+        "test/sql/optimizer/statistics/list_length_stats_propagation.test",
+        "test/sql/storage/list_length_stats_checkpoint.test",
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/sql/optimizer/test_rowid_vector_pruning.test"
       ]
     },
     {
@@ -129,6 +132,18 @@
       "reason": "FIXME: name-bound sum_no_overflow delegates its binding to sum, so the rendered SQL rebinds the checked HUGEINT sum and no longer raises",
       "paths": [
         "test/sql/aggregate/aggregates/sum_no_overflow_fallible.test"
+      ]
+    },
+    {
+      "reason": "The cast inversion moves the VARCHAR cast onto the constant, so the rendered SQL spells out its DECIMAL(300,100) type, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
+      "paths": [
+        "test/sql/settings/max_decimal_width.test"
+      ]
+    },
+    {
+      "reason": "The rendered SQL spells out the DECIMAL(40,0) type of the stored column a constant is compared with, which the lowered max_decimal_width refuses to bind; the native plan reuses the column's type",
+      "paths": [
+        "test/sql/index/art/storage/test_art_decimal_key_width.test"
       ]
     }
   ]

@@ -136,8 +136,8 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		                            input_type.ToString());
 	}
 
-	uint8_t width = DecimalType::GetWidth(input_type);
-	uint8_t scale = DecimalType::GetScale(input_type);
+	uint32_t width = DecimalType::GetWidth(input_type);
+	uint32_t scale = DecimalType::GetScale(input_type);
 	auto return_type = LogicalType::DECIMAL(width, scale);
 
 	auto name = function.GetName();
@@ -156,8 +156,11 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		break;
 	case PhysicalType::INT128:
 		function.ReplaceImplementation(
-		    MakeDecimalAvgFunction<hugeint_t>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, scale), return_type));
+		    MakeDecimalAvgFunction<hugeint_t>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, scale), return_type));
 		break;
+	case PhysicalType::VARCHAR:
+		throw NotImplementedException("decimal_average over DECIMAL types wider than %d digits is not supported yet",
+		                              Decimal::MAX_WIDTH_INT128);
 	default:
 		throw InternalException("decimal_average: unexpected physical type");
 	}

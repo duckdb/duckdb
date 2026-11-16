@@ -15,7 +15,7 @@ INSERT INTO g1 VALUES
 	(4, NULL);
 
 statement ok
-COPY g1 TO '{TEST_DIR}/geography.parquet' (FORMAT 'parquet');
+COPY g1 TO '{TEST_DIR}/geography.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE');
 
 # The column reads back as GEOGRAPHY (native Parquet GEOGRAPHY logical type)
 query I
@@ -41,7 +41,7 @@ statement ok
 INSERT INTO g2 VALUES ('LINESTRING(170 0, -170 0)');
 
 statement ok
-COPY g2 TO '{TEST_DIR}/geography_am.parquet' (FORMAT 'parquet');
+COPY g2 TO '{TEST_DIR}/geography_am.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE');
 
 query I
 SELECT g && 'POINT(179 0)'::GEOGRAPHY FROM '{TEST_DIR}/geography_am.parquet';
@@ -63,7 +63,7 @@ SELECT ('POINT(' || CASE WHEN i < 3000 THEN 170 + i % 10 ELSE -179 + i % 10 END 
 FROM range(6000) t(i);
 
 statement ok
-COPY g_pages TO '{TEST_DIR}/geography_pages.parquet' (FORMAT 'parquet', DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
+COPY g_pages TO '{TEST_DIR}/geography_pages.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE', DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 query I
 SELECT count(*) > 1 FROM parquet_page_index('{TEST_DIR}/geography_pages.parquet');
@@ -94,7 +94,7 @@ COPY (
 		-80.0 + (i // 64) * 2.5
 	)::GEOGRAPHY AS g
 	FROM (SELECT i, 178.0 + (i % 64) * 0.0625 AS x FROM range(4096) t(i))
-) TO '{TEST_DIR}/geography_grid.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 1000);
+) TO '{TEST_DIR}/geography_grid.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE', ROW_GROUP_SIZE 1000);
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(178.000000 -80.000000)'::GEOGRAPHY;
@@ -129,7 +129,7 @@ COPY (
 	SELECT 'LINESTRING(0 45, 90 45)'::GEOGRAPHY AS g
 	UNION ALL
 	SELECT printf('POINT(%.6f -45.000000)', -170.0 + i * 0.01)::GEOGRAPHY FROM range(2000) t(i)
-) TO '{TEST_DIR}/geography_bulge.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 500);
+) TO '{TEST_DIR}/geography_bulge.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE', ROW_GROUP_SIZE 500);
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/geography_bulge.parquet' WHERE g && 'POINT(45 54)'::GEOGRAPHY;

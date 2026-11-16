@@ -26,8 +26,8 @@
 namespace duckdb {
 
 static unique_ptr<Expression> WrapInTry(unique_ptr<Expression> child) {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_TRY, child->GetReturnType());
-	result->GetChildrenMutable().push_back(std::move(child));
+	auto result =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_TRY, child->GetReturnType(), std::move(child));
 	return std::move(result);
 }
 
@@ -150,8 +150,8 @@ bool ExpressionBinder::GateTryAggregates(const ParsedExpression &location, Logic
 	for (auto position : aggregate_positions) {
 		auto &aggr_expr = aggregate.expressions[position]->Cast<BoundAggregateExpression>();
 		for (auto &child : aggr_expr.GetChildrenMutable()) {
-			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN);
-			probe->GetChildrenMutable().push_back(child->Copy());
+			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN,
+			                                                child->Copy());
 			gate = OrErrorFlags(std::move(gate), std::move(probe));
 			child = WrapInTry(std::move(child));
 		}
@@ -195,7 +195,6 @@ optional<LogicalType> ExpressionBinder::LowerTrySubquery(const ParsedExpression 
 		switch (current_op.type) {
 		case LogicalOperatorType::LOGICAL_ORDER_BY:
 		case LogicalOperatorType::LOGICAL_TOP_N:
-		case LogicalOperatorType::LOGICAL_DISTINCT:
 			if (expose_error_flag) {
 				// these modifiers reference or deduplicate the select list column; a struct transport
 				// would leave their references scalar or change DISTINCT semantics (an error-masked
@@ -233,6 +232,31 @@ optional<LogicalType> ExpressionBinder::LowerTrySubquery(const ParsedExpression 
 				// the prune projection forwards the select list columns
 				binding = projection.expressions[binding.column_index]->Cast<BoundColumnRefExpression>().Binding();
 				current = *projection.children[0];
+				continue;
+			}
+			if (indexes.distinct_index.IsValid() && projection.table_index == indexes.distinct_index) {
+				// DISTINCT: a projection over the aggregate that deduplicates the select list
+				if (expose_error_flag) {
+					// a struct transport would change DISTINCT semantics (an error-masked NULL must not be
+					// distinguishable from a plain NULL)
+					if (strict) {
+						throw BinderException(location, "TRY over a subquery with result modifiers is only supported "
+						                                "when the subquery is the direct argument of TRY");
+					}
+					return optional<LogicalType>();
+				}
+				// look through the DISTINCT to the select list column it forwards
+				auto &distinct_aggregate = projection.children[0]->Cast<LogicalAggregate>();
+				auto distinct_binding =
+				    projection.expressions[binding.column_index]->Cast<BoundColumnRefExpression>().Binding();
+				reference<Expression> source(distinct_binding.table_index == distinct_aggregate.group_index
+				                                 ? *distinct_aggregate.groups[distinct_binding.column_index]
+				                                 : *distinct_aggregate.expressions[distinct_binding.column_index]);
+				if (source.get().GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+					source = *source.get().Cast<BoundAggregateExpression>().GetChildren()[0];
+				}
+				binding = source.get().Cast<BoundColumnRefExpression>().Binding();
+				current = *distinct_aggregate.children[0];
 				continue;
 			}
 			if (projection.table_index != indexes.projection_index) {
@@ -328,8 +352,8 @@ optional<LogicalType> ExpressionBinder::LowerTrySubquery(const ParsedExpression 
 			return optional<LogicalType>();
 		}
 		if (expose_error_flag) {
-			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN);
-			probe->GetChildrenMutable().push_back(expr->Copy());
+			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN,
+			                                                expr->Copy());
 			error_flag = std::move(probe);
 		}
 		expr = WrapInTry(std::move(expr));
@@ -406,7 +430,7 @@ static void PushTryIntoBareSubqueryItem(SubqueryExpression &subquery_expr) {
 //! flattened subplan and referenced as a column, so the TRY input and its HAS_ERROR probe observe one
 //! consistent value.
 BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth) {
-	D_ASSERT(op.GetChildrenMutable().size() == 1);
+	D_ASSERT(op.GetChildren().size() == 1);
 	auto &subquery_expr = op.GetChildrenMutable()[0]->Cast<SubqueryExpression>();
 	D_ASSERT(subquery_expr.GetSubqueryType() == SubqueryType::SCALAR);
 	CheckTrySubqueryNode(subquery_expr, op);
@@ -423,12 +447,12 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 		return result;
 	}
 	auto &bound_subquery = result.expression->Cast<BoundSubqueryExpression>();
-	if (bound_subquery.SubqueryMutable().plan) {
+	if (bound_subquery.Subquery().plan) {
 		auto &indexes = bound_subquery.GetBinder()->GetTrySubqueryPlanIndexes();
 		if (!indexes.recorded) {
 			throw InternalException("TRY subquery: no plan indexes were recorded for the top select node");
 		}
-		LowerTrySubquery(op, indexes, *bound_subquery.SubqueryMutable().plan, false, false);
+		LowerTrySubquery(op, indexes, *bound_subquery.Subquery().plan, false, false);
 	}
 	return result;
 }

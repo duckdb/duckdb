@@ -1,0 +1,131 @@
+# name: test/sql/index/art/insert_update_delete/test_art_delete_empties_buffers.test
+# description: Bulk deletes on the Delete paths that free the node storing a pinned NodePtr
+# group: [insert_update_delete]
+
+# Each scenario allocates its nodes across many 16 KiB buffers, then deletes keys in allocation order, so whole
+# buffers become empty and are destroyed while other buffers still have free space. Destroying a buffer while a
+# pin on one of its (freed) nodes is alive fails ~FixedSizeBuffer's readers == 0 assertion in debug builds, so each
+# scenario fails if the Delete path keeps the pin on the node it frees.
+
+statement ok
+ATTACH '{TEST_DIR}/art_delete_empties_buffers.db' AS db (BLOCK_SIZE 16384);
+
+statement ok
+USE db;
+
+# The gate scenarios rely on row IDs following the insertion order.
+statement ok
+SET threads = 1;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 100000;
+
+# The range checks use k >= 1: statistics would drop a k >= 0 filter, so the scan would not use the index.
+
+# PREFIX -> Node4 -> INLINED_LEAF x2: deleting one key compresses the Node4 into the prefix (the Node4 is freed).
+statement ok
+CREATE TABLE node4_under_prefix (k INTEGER);
+
+statement ok
+CREATE INDEX node4_under_prefix_idx ON node4_under_prefix(k);
+
+statement ok
+INSERT INTO node4_under_prefix SELECT (i << 16) | j FROM range(5000) r(i), range(2) s(j) ORDER BY i, j;
+
+statement ok
+DELETE FROM node4_under_prefix WHERE (k & 1) = 1;
+
+query I
+SELECT count(*) FROM node4_under_prefix WHERE k = (4321 << 16);
+----
+1
+
+query II
+SELECT count(*), sum(k) FROM node4_under_prefix WHERE k >= 1;
+----
+4999	819036160000
+
+# Node4 -> PREFIX -> INLINED_LEAF x2: deleting one key frees the child's prefix chain and compresses the Node4.
+statement ok
+CREATE TABLE prefix_under_node4 (k INTEGER);
+
+statement ok
+CREATE INDEX prefix_under_node4_idx ON prefix_under_node4(k);
+
+statement ok
+INSERT INTO prefix_under_node4 SELECT (i << 16) | (j << 8) FROM range(5000) r(i), range(2) s(j) ORDER BY i, j;
+
+statement ok
+DELETE FROM prefix_under_node4 WHERE ((k >> 8) & 1) = 1;
+
+query I
+SELECT count(*) FROM prefix_under_node4 WHERE k = (4321 << 16);
+----
+1
+
+query II
+SELECT count(*), sum(k) FROM prefix_under_node4 WHERE k >= 1;
+----
+4999	819036160000
+
+# Gate PREFIX -> Node7Leaf with two row IDs: deleting one frees the gate's prefix and the Node7Leaf.
+statement ok
+CREATE TABLE node7_under_gate (k INTEGER);
+
+statement ok
+CREATE INDEX node7_under_gate_idx ON node7_under_gate(k);
+
+statement ok
+INSERT INTO node7_under_gate SELECT i // 2 FROM range(10000) r(i) ORDER BY i;
+
+statement ok
+DELETE FROM node7_under_gate WHERE rowid % 2 = 1;
+
+query I
+SELECT count(*) FROM node7_under_gate WHERE k = 4321;
+----
+1
+
+query II
+SELECT count(*), sum(k) FROM node7_under_gate WHERE k >= 1;
+----
+4999	12497500
+
+# Gate PREFIX -> Node4 -> INLINED_LEAF x2: deleting one row ID replaces the gate with the other row ID.
+statement ok
+CREATE TABLE node4_under_gate (k INTEGER);
+
+statement ok
+CREATE INDEX node4_under_gate_idx ON node4_under_gate(k);
+
+statement ok
+INSERT INTO node4_under_gate SELECT i % 5000 FROM range(10000) r(i) ORDER BY i;
+
+statement ok
+DELETE FROM node4_under_gate WHERE rowid >= 5000;
+
+query I
+SELECT count(*) FROM node4_under_gate WHERE k = 4321;
+----
+1
+
+query II
+SELECT count(*), sum(k) FROM node4_under_gate WHERE k >= 1;
+----
+4999	12497500
+
+# Empty all indexes, which verifies in debug builds that no node is leaked.
+statement ok
+DELETE FROM node4_under_prefix;
+
+statement ok
+DELETE FROM prefix_under_node4;
+
+statement ok
+DELETE FROM node7_under_gate;
+
+statement ok
+DELETE FROM node4_under_gate;

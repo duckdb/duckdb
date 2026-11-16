@@ -9,6 +9,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -36,16 +37,19 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
 }
 
 //! Forward declaration for recursion
-static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context);
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context,
+                                         const DecimalWidthLimit &decimal_width_limit);
 
-static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context) {
+static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context,
+                                              const DecimalWidthLimit &decimal_width_limit) {
 	if (yyjson_arr_size(arr) != 1) {
 		throw BinderException("Too many values in array of JSON structure");
 	}
-	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context));
+	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context, decimal_width_limit));
 }
 
-static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
+static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context,
+                                         const DecimalWidthLimit &decimal_width_limit) {
 	// STRUCT field names are case-insensitive
 	identifier_set_t names;
 	child_list_t<LogicalType> child_types;
@@ -60,7 +64,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 		if (!names.insert(Identifier(key_str)).second) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
-		child_types.emplace_back(key_str, StructureStringToType(val, context));
+		child_types.emplace_back(key_str, StructureStringToType(val, context, decimal_width_limit));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	if (child_types.empty()) {
@@ -69,15 +73,17 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context) {
+// the type names of the structure are bound within the decimal width limit of the bind
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context,
+                                         const DecimalWidthLimit &decimal_width_limit) {
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return StructureStringToTypeArray(val, context);
+		return StructureStringToTypeArray(val, context, decimal_width_limit);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		return StructureToTypeObject(val, context);
+		return StructureToTypeObject(val, context, decimal_width_limit);
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
+		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context, &decimal_width_limit);
 	default:
 		throw BinderException("invalid JSON structure");
 	}
@@ -92,14 +98,15 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	if (structure_val.IsNull() || arguments[1]->GetReturnType() == LogicalTypeId::SQLNULL) {
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {
-		auto json_structure_val = structure_val.DefaultTryCastAs(LogicalType::JSON());
+		auto json_structure_val = structure_val.TryCastAs(input.GetClientContext(), LogicalType::JSON());
 		if (!json_structure_val) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = json_structure_val->GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
-		bound_function.SetReturnType(StructureStringToType(doc->root, context));
+		const auto decimal_width_limit = input.GetDecimalWidthLimit();
+		bound_function.SetReturnType(StructureStringToType(doc->root, context, decimal_width_limit));
 	}
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
@@ -154,14 +161,16 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 }
 
 template <class T, class OP = TryCastToDecimal>
-static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_t s, JSONTransformOptions &options) {
+static inline bool GetValueDecimal(yyjson_val *val, T &result, Vector &vector, uint32_t w, uint32_t s,
+                                   JSONTransformOptions &options) {
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
-		success = OP::template Operation<string_t, T>(GetString(val), result, options.parameters, w, s);
+		success =
+		    VectorDecimalCast::Operation<OP, string_t, T>(GetString(val), result, vector, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
@@ -169,16 +178,20 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		break;
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
-		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, options.parameters, w, s);
+		success = VectorDecimalCast::Operation<OP, bool, T>(unsafe_yyjson_get_bool(val), result, vector,
+		                                                    options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-		success = OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, options.parameters, w, s);
+		success = VectorDecimalCast::Operation<OP, uint64_t, T>(unsafe_yyjson_get_uint(val), result, vector,
+		                                                        options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, options.parameters, w, s);
+		success = VectorDecimalCast::Operation<OP, int64_t, T>(unsafe_yyjson_get_sint(val), result, vector,
+		                                                       options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-		success = OP::template Operation<double, T>(unsafe_yyjson_get_real(val), result, options.parameters, w, s);
+		success = VectorDecimalCast::Operation<OP, double, T>(unsafe_yyjson_get_real(val), result, vector,
+		                                                      options.parameters, w, s);
 		break;
 	default:
 		throw InternalException("Unknown yyjson tag in GetValueString");
@@ -251,7 +264,7 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 }
 
 template <class T>
-static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint8_t width, uint8_t scale,
+static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint32_t width, uint32_t scale,
                              JSONTransformOptions &options) {
 	auto data = FlatVector::GetDataMutable<T>(result);
 	auto &validity = FlatVector::ValidityMutable(result);
@@ -261,7 +274,7 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 		const auto &val = vals[i];
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
-		} else if (!GetValueDecimal<T>(val, data[i], width, scale, options)) {
+		} else if (!GetValueDecimal<T>(val, data[i], result, width, scale, options)) {
 			validity.SetInvalid(i);
 			if (success && options.strict_cast) {
 				options.object_index = i;
@@ -319,6 +332,36 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		options.error_message +=
 		    "\n If this error occurred during read_json, line/object number information is approximate";
 		success = false;
+	}
+	return success;
+}
+
+//! BLOB reads as the existing VARCHAR rendering, except JSON strings go through the VARCHAR -> BLOB cast so their
+//! \xNN escapes decode into bytes. Rendering non-strings through that cast would misread ordinary JSON escapes
+//! (e.g. \n is not a valid BLOB escape), so their rendered text is written directly as bytes instead.
+static bool TransformToBlob(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+                            JSONTransformOptions &options) {
+	auto data = FlatVector::GetDataMutable<string_t>(result);
+	auto &validity = FlatVector::ValidityMutable(result);
+	JSONRawNumberWriter raw_writer(alc);
+
+	CastParameters parameters(options.strict_cast, &options.error_message);
+	bool success = true;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || unsafe_yyjson_is_null(val)) {
+			validity.SetInvalid(i);
+		} else if (unsafe_yyjson_is_str(val)) {
+			if (!TryCastToBlob::Operation(GetString(val), data[i], result, parameters)) {
+				validity.SetInvalid(i);
+				if (success && options.strict_cast) {
+					options.object_index = i;
+					success = false;
+				}
+			}
+		} else if (!GetValueString(val, alc, data[i], result, options.numbers_as_raw ? &raw_writer : nullptr)) {
+			validity.SetInvalid(i);
+		}
 	}
 	return success;
 }
@@ -953,8 +996,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
-		throw ConversionException(
-		    StringUtil::Format("%s. Cannot default to NULL, because map keys cannot be NULL", options.error_message));
+		success = false;
 	}
 
 	// Transform values
@@ -1146,6 +1188,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			return TransformDecimal<int64_t>(vals, result, count, width, scale, options);
 		case PhysicalType::INT128:
 			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, options);
+		case PhysicalType::VARCHAR:
+			return TransformDecimal<bignum_t>(vals, result, count, width, scale, options);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}
@@ -1168,8 +1212,9 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::GEOMETRY:
 		return TransformGeometry(vals, result, count, options);
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count, options);
+	case LogicalTypeId::BLOB:
+		return TransformToBlob(vals, alc, result, count, options);
 	case LogicalTypeId::STRUCT:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
 	case LogicalTypeId::TUPLE:
@@ -1298,6 +1343,8 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) 
 		case LogicalTypeId::ARRAY:
 			target_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
+		case LogicalTypeId::VARIANT:
+			continue;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
 			continue;

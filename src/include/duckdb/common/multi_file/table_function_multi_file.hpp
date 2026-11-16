@@ -233,7 +233,7 @@ public:
 	//! kept afterwards so that the bind that reads the file can reuse what this one read from it
 	shared_ptr<FunctionData> bind_data;
 	//! The statistics callback of the wrapped function, which reads the statistics of this file from its bind data
-	table_statistics_t statistics = nullptr;
+	table_statistics_extended_t statistics = nullptr;
 
 	optional_idx TryGetCardinalityEstimate() const override {
 		return cardinality;
@@ -416,6 +416,7 @@ public:
 	                MultiFileBindData &bind_data) override;
 	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
+	void ReadFilesForStatistics(ClientContext &context, MultiFileBindData &bind_data) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,

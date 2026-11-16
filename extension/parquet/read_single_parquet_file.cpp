@@ -5,6 +5,7 @@
 #include "parquet_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/once_flag.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -114,14 +115,14 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// the named parameters of this function are those of the multi-file parquet reader
-	ParquetMultiFileInfo interface;
+	ParquetMultiFileInfo file_info;
 	MultiFileOptions file_options;
 	if (file_input.multi_file_options) {
 		file_options = *file_input.multi_file_options;
 	}
 	ParquetFileReaderOptions options(context);
 	for (auto &kv : input.named_parameters) {
-		interface.ParseOption(context, kv.first, kv.second, file_options, options);
+		file_info.ParseOption(context, kv.first, kv.second, file_options, options);
 	}
 	result->options = std::move(options.options);
 
@@ -397,7 +398,20 @@ static unique_ptr<NodeStatistics> ReadSingleParquetFileCardinality(ClientContext
 	if (!parquet_data.cardinality.IsValid()) {
 		return nullptr;
 	}
-	return make_uniq<NodeStatistics>(parquet_data.cardinality.GetIndex());
+	auto result = make_uniq<NodeStatistics>(parquet_data.cardinality.GetIndex());
+	if (!parquet_data.metadata) {
+		return result;
+	}
+	// Execution reuses these row groups; the footer's total is not validated against their population.
+	idx_t maximum = 0;
+	for (auto &group : parquet_data.metadata->metadata->file_metadata.row_groups) {
+		if (group.num_rows < 0 || !TryAddOperator::Operation(maximum, static_cast<idx_t>(group.num_rows), maximum)) {
+			return result;
+		}
+	}
+	result->has_max_cardinality = true;
+	result->max_cardinality = maximum;
+	return result;
 }
 
 //! The virtual columns the parquet reader can produce for a file
@@ -418,9 +432,13 @@ static vector<column_t> ReadSingleParquetFileRowIdColumns(ClientContext &context
 }
 
 //! The statistics of a column of this file, read from its metadata
-static unique_ptr<BaseStatistics>
-ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index) {
-	auto &parquet_data = bind_data_p->Cast<ReadSingleParquetFileData>();
+static unique_ptr<BaseStatistics> ReadSingleParquetFileStatistics(ClientContext &context,
+                                                                  TableFunctionGetStatisticsInput &input) {
+	auto &parquet_data = input.bind_data->Cast<ReadSingleParquetFileData>();
+	if (!input.column_index.HasPrimaryIndex() || input.column_index.HasChildren()) {
+		return nullptr;
+	}
+	const auto column_index = input.column_index.GetPrimaryIndex();
 	if (IsVirtualColumn(column_index)) {
 		return ParquetReader::ReadVirtualColumnStatistics(context, parquet_data.options, parquet_data.metadata,
 		                                                  column_index);
@@ -552,7 +570,7 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	                           ReadSingleParquetFileInitGlobal, ReadSingleParquetFileInitLocal);
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;
 	read_parquet.cardinality = ReadSingleParquetFileCardinality;
-	read_parquet.statistics = ReadSingleParquetFileStatistics;
+	read_parquet.statistics_extended = ReadSingleParquetFileStatistics;
 	read_parquet.get_virtual_columns = ReadSingleParquetFileVirtualColumns;
 	read_parquet.get_partition_stats = ReadSingleParquetFilePartitionStats;
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;

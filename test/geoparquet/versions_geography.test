@@ -1,0 +1,214 @@
+# name: test/geoparquet/versions_geography.test
+# description: GEOGRAPHY is written like GEOMETRY for every GeoParquet version, with spherical edges
+# group: [geoparquet]
+
+require parquet
+
+# DEFAULT (V1)
+
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOGRAPHY as geography)
+TO '{TEST_DIR}/test_geography_default.parquet' (FORMAT PARQUET);
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_default.parquet');
+----
+{"version":"1.0.0","primary_column":"geography","columns":{"geography":{"encoding":"WKB","geometry_types":["Point"],"edges":"spherical","bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('{TEST_DIR}/test_geography_default.parquet');
+----
+NULL
+
+query I
+SELECT logical_type FROM parquet_schema('{TEST_DIR}/test_geography_default.parquet') WHERE name = 'geography';
+----
+NULL
+
+query II
+SELECT typeof(geography), ST_AsText(geography) FROM '{TEST_DIR}/test_geography_default.parquet';
+----
+GEOGRAPHY('OGC:CRS84')	POINT (1 2)
+
+# V1
+
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOGRAPHY as geography)
+TO '{TEST_DIR}/test_geography_v1.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V1');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_v1.parquet');
+----
+{"version":"1.0.0","primary_column":"geography","columns":{"geography":{"encoding":"WKB","geometry_types":["Point"],"edges":"spherical","bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('{TEST_DIR}/test_geography_v1.parquet');
+----
+NULL
+
+query I
+SELECT logical_type FROM parquet_schema('{TEST_DIR}/test_geography_v1.parquet') WHERE name = 'geography';
+----
+NULL
+
+query II
+SELECT typeof(geography), ST_AsText(geography) FROM '{TEST_DIR}/test_geography_v1.parquet';
+----
+GEOGRAPHY('OGC:CRS84')	POINT (1 2)
+
+# NONE
+
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOGRAPHY as geography)
+TO '{TEST_DIR}/test_geography_none.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'NONE');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_none.parquet');
+----
+
+query I
+SELECT geo_types from parquet_metadata('{TEST_DIR}/test_geography_none.parquet');
+----
+[point]
+
+query I
+SELECT logical_type FROM parquet_schema('{TEST_DIR}/test_geography_none.parquet') WHERE name = 'geography';
+----
+GeographyType(crs=<null>, algorithm=SPHERICAL)
+
+query II
+SELECT typeof(geography), ST_AsText(geography) FROM '{TEST_DIR}/test_geography_none.parquet';
+----
+GEOGRAPHY	POINT (1 2)
+
+# BOTH
+
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOGRAPHY as geography)
+TO '{TEST_DIR}/test_geography_both.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'BOTH');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_both.parquet');
+----
+{"version":"1.0.0","primary_column":"geography","columns":{"geography":{"encoding":"WKB","geometry_types":["Point"],"edges":"spherical","bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('{TEST_DIR}/test_geography_both.parquet');
+----
+[point]
+
+query I
+SELECT logical_type FROM parquet_schema('{TEST_DIR}/test_geography_both.parquet') WHERE name = 'geography';
+----
+GeographyType(crs=<null>, algorithm=SPHERICAL)
+
+query II
+SELECT typeof(geography), ST_AsText(geography) FROM '{TEST_DIR}/test_geography_both.parquet';
+----
+GEOGRAPHY	POINT (1 2)
+
+
+# V2
+statement ok
+COPY (SELECT 'POINT(1 2)'::GEOGRAPHY as geography)
+TO '{TEST_DIR}/test_geography_v2.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_v2.parquet');
+----
+{"version":"2.0.0","primary_column":"geography","columns":{"geography":{"encoding":"WKB","geometry_types":["Point"],"edges":"spherical","bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('{TEST_DIR}/test_geography_v2.parquet');
+----
+[point]
+
+query I
+SELECT logical_type FROM parquet_schema('{TEST_DIR}/test_geography_v2.parquet') WHERE name = 'geography';
+----
+GeographyType(crs=<null>, algorithm=SPHERICAL)
+
+query II
+SELECT typeof(geography), ST_AsText(geography) FROM '{TEST_DIR}/test_geography_v2.parquet';
+----
+GEOGRAPHY	POINT (1 2)
+
+# An antimeridian-spanning GEOGRAPHY writes a wrapped (xmin > xmax) bbox to the GeoParquet metadata
+statement ok
+COPY (SELECT 'LINESTRING(170 0, -170 0)'::GEOGRAPHY as geography, 'POINT(1 2)'::GEOMETRY as geometry)
+TO '{TEST_DIR}/test_geography_mixed.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V1');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_mixed.parquet');
+----
+<REGEX>:.*"geography":\{"encoding":"WKB","geometry_types":\["LineString"\],"edges":"spherical","bbox":\[170.0,0.0,-170.0,0.0\]\}.*
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('{TEST_DIR}/test_geography_mixed.parquet');
+----
+<REGEX>:.*"geometry":\{"encoding":"WKB","geometry_types":\["Point"\],"bbox":\[1.0,2.0,1.0,2.0\]\}.*
+
+query IIII
+SELECT typeof(geography), typeof(geometry), ST_AsText(geography), geography && 'POINT(179 0)'::GEOGRAPHY
+FROM '{TEST_DIR}/test_geography_mixed.parquet';
+----
+GEOGRAPHY('OGC:CRS84')	GEOMETRY('OGC:CRS84')	LINESTRING (170 0, -170 0)	true
+
+# Without GeoParquet conversion a V1 file holds plain blobs, the native type is still recognized
+statement ok
+SET enable_geoparquet_conversion = false;
+
+query II
+SELECT typeof(geography), typeof(geometry) FROM '{TEST_DIR}/test_geography_mixed.parquet';
+----
+BLOB	BLOB
+
+query I
+SELECT typeof(geography) FROM '{TEST_DIR}/test_geography_v2.parquet';
+----
+GEOGRAPHY
+
+statement ok
+SET enable_geoparquet_conversion = true;
+
+# Reading: "edges" decides between GEOGRAPHY and GEOMETRY, planar being the default
+statement ok
+COPY (
+	SELECT ST_AsWKB('POINT(1 2)'::GEOMETRY) AS a, ST_AsWKB('POINT(3 4)'::GEOMETRY) AS b,
+	       ST_AsWKB('POINT(5 6)'::GEOMETRY) AS c, ST_AsWKB('POINT(200 6)'::GEOMETRY) AS d
+) TO '{TEST_DIR}/test_geography_edges.parquet' (FORMAT PARQUET, KV_METADATA {
+	geo: '{"version":"1.1.0","primary_column":"a","columns":{"a":{"encoding":"WKB","geometry_types":[],"edges":"spherical"},"b":{"encoding":"WKB","geometry_types":[],"edges":"planar"},"c":{"encoding":"WKB","geometry_types":[]},"d":{"encoding":"WKB","geometry_types":[],"edges":"spherical"}}}'
+});
+
+query IIII
+SELECT typeof(a), typeof(b), typeof(c), typeof(d) FROM '{TEST_DIR}/test_geography_edges.parquet';
+----
+GEOGRAPHY('OGC:CRS84')	GEOMETRY('OGC:CRS84')	GEOMETRY('OGC:CRS84')	GEOGRAPHY('OGC:CRS84')
+
+query III
+SELECT ST_AsText(a), b, c FROM '{TEST_DIR}/test_geography_edges.parquet';
+----
+POINT (1 2)	POINT (3 4)	POINT (5 6)
+
+# spherical columns are validated against the canonical GEOGRAPHY ranges
+statement error
+SELECT d FROM '{TEST_DIR}/test_geography_edges.parquet';
+----
+coordinates are outside the canonical GEOGRAPHY ranges
+
+statement ok
+COPY (SELECT ST_AsWKB('POINT(1 2)'::GEOMETRY) AS a) TO '{TEST_DIR}/test_geography_bad_edges.parquet' (FORMAT PARQUET, KV_METADATA {
+	geo: '{"version":"1.1.0","primary_column":"a","columns":{"a":{"encoding":"WKB","geometry_types":[],"edges":42}}}'
+});
+
+statement error
+SELECT a FROM '{TEST_DIR}/test_geography_bad_edges.parquet';
+----
+Geoparquet column 'a' has invalid edges

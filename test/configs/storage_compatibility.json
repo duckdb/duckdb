@@ -13,6 +13,7 @@
     "TUPLE columns are not supported in storage versions prior to v2.0.0",
     "VARIANT columns are not supported in storage versions prior to v1.5.0",
     "GEOGRAPHY columns are not supported in storage versions prior to v2.1.0",
+    "DECIMAL columns wider than 38 digits are not supported in storage versions prior to v2.1.0",
     "Typed macro parameters are only supported for storage versions v1.4.0 and higher",
     "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
@@ -64,7 +65,10 @@
     {
       "reason": "Time (NS) not supported (new type).",
       "paths": [
+        "test/sql/copy/parquet/bloom_filter_fallback_types.test",
+        "test/sql/aggregate/aggregates/summarize_nanosecond_types.test",
         "test/sql/optimizer/expression/test_time_ns_cast_comparison.test",
+        "test/optimizer/comparison_simplification_equality_casts.test",
         "test/fuzzer/duckfuzz/arg_minmax_by_decimal.test",
         "test/fuzzer/duckfuzz/array_distance.test",
         "test/fuzzer/duckfuzz/array_hash.test",
@@ -111,7 +115,8 @@
         "test/sql/types/time/test_time_ns.test",
         "test/sql/copy/parquet/int96_as.test",
         "test/sql/copy/parquet/byte_stream_split_flba.test",
-        "test/sql/function/timestamp/test_icu_time_bucket_timestamptz_ns.test"
+        "test/sql/function/timestamp/test_icu_time_bucket_timestamptz_ns.test",
+        "test/sql/types/timestamp/timestamptz_ns_timestamptz_comparison.test"
       ]
     },
     {
@@ -256,6 +261,12 @@
       ]
     },
     {
+      "reason": "Checkpoint vacuum of indexed tables requires storage version v2.0.0.",
+      "paths": [
+        "test/sql/storage/checkpoint_vacuum_unbound_index.test"
+      ]
+    },
+    {
       "reason": "Triggers are a new catalog type not present in old storage files.",
       "paths": [
         "test/sql/trigger/create_trigger_catalog.test",
@@ -295,6 +306,12 @@
         "test/sql/types/list/list_extract_types.test_slow",
         "test/sql/types/test_all_types.test_slow",
         "test/sql/window/test_streaming_lead_lag.test_slow"
+      ]
+    },
+    {
+      "reason": "The synchronous task batch does not always reach the scheduler log: timing-dependent assertion (flaky under this config).",
+      "paths": [
+        "test/sql/parallelism/async_task_synchronous_batch.test"
       ]
     }
   ]

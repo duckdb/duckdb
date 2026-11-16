@@ -14,6 +14,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
@@ -102,8 +103,7 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 		return metrics->MetricIsTracked("optimizer.join_order");
 	}
 	// Fall back to checking tracked_metrics patterns directly
-	auto &config = ClientConfig::GetConfig(context);
-	for (const auto &pattern : config.tracked_metrics) {
+	for (const auto &pattern : Settings::Get<TrackedMetricsSetting>(context)) {
 		if (pattern == "*" || StringUtil::StartsWith(pattern, "optimizer")) {
 			return true;
 		}
@@ -112,16 +112,20 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 }
 
 string QueryProfiler::GetSaveLocation() const {
-	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location;
+	return is_explain_analyze ? string() : Settings::Get<ProfilingOutputSetting>(context);
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
-	return *ClientData::Get(context).profiler;
+	return Get(context.GetContext());
+}
+
+QueryProfiler &QueryProfiler::Get(Context &context) {
+	return context.GetQueryProfiler();
 }
 
 void QueryProfiler::Start(const string &query) {
 	Reset();
-	tracked_metric_patterns = make_uniq<GatheredMetrics>(ClientConfig::GetConfig(context).tracked_metrics);
+	tracked_metric_patterns = make_uniq<GatheredMetrics>(Settings::Get<TrackedMetricsSetting>(context));
 	running = true;
 	query_metrics.query_sql = query;
 	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTotalTime>());
@@ -178,8 +182,7 @@ void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t star
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
-	const auto &config = ClientConfig::GetConfig(context);
-	if (config.profiling_coverage == ProfilingCoverage::ALL) {
+	if (Settings::Get<ProfilingCoverageSetting>(context) == ProfilingCoverage::ALL) {
 		return true;
 	}
 
@@ -697,7 +700,7 @@ void QueryProfiler::RenderQueryTree(BaseTreeRenderer &ss) const {
 
 	// the registered states write profiling info through an ostream - capture it and emit as layout text
 	duckdb::stringstream state_info;
-	for (auto &state : context.registered_state->States()) {
+	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->WriteProfilingInformation(state_info);
 	}
 	ss << state_info.str();
@@ -1154,14 +1157,13 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		tree_map.clear();
 		root = nullptr;
 	} else {
-		auto &client_config = ClientConfig::GetConfig(context);
-		metrics = make_uniq<GatheredMetrics>(client_config.tracked_metrics);
+		metrics = make_uniq<GatheredMetrics>(Settings::Get<TrackedMetricsSetting>(context));
 	}
 }
 
 void QueryProfiler::Render(const ProfilingNode &node, BaseTreeRenderer &ss) const {
 	TextTreeRenderer renderer;
-	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
+	renderer.Configure(TreeRenderer::GetRendererSettings(context));
 	renderer.Render(node, ss);
 }
 

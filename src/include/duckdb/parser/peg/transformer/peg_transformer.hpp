@@ -90,6 +90,7 @@ struct GroupByExpressionInfo {
 //===--------------------------------------------------------------------===//
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.AddColumnEntry", AddColumnEntry);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.AnalyzeTarget", AnalyzeTarget);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ArrowBody", ArrowBody);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.BetweenInLikeOperator", BetweenInLikeOperator);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.BinaryExpressionTail", BinaryExpressionTail);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CaseCheck", CaseCheck);
@@ -371,6 +372,9 @@ struct TransformInput {
 		}
 		return rule ? rule : parse_result.GetRule();
 	}
+
+	//! Unwrap rule-less wrapper nodes (choice, present optional, unnamed single-child group); throws when none is left
+	TransformInput Unwrap() const;
 
 	optional_ptr<const CompiledGrammarRule> rule;
 	ParseResult &parse_result;
@@ -1487,6 +1491,8 @@ public:
 	                                                                           GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDescribeStatementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeShowExternalResourcesTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeShowDeprecatedSelectTrampoline(PEGTransformer &transformer,
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDescribeSelectTrampoline(PEGTransformer &transformer,
@@ -1523,6 +1529,12 @@ public:
 	                                                                         GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropStatementTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropMemberStatementTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeDropTableFunctionMemberTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropFunctionMemberTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropTriggerTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropTableTrampoline(PEGTransformer &transformer,
@@ -1531,6 +1543,10 @@ public:
 	                                                                           GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropFunctionTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropFunctionSignatureTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDropSignatureAnyTypeTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropSchemaTrampoline(PEGTransformer &transformer,
 	                                                                    GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeDropIndexTrampoline(PEGTransformer &transformer,
@@ -1791,10 +1807,6 @@ public:
 	FinalizeMeasureSemanticsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeColumnDefaultExprTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeLambdaArrowExpressionTrampoline(PEGTransformer &transformer,
-	                                                                               GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeSingleArrowPairTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeLogicalOrExpressionTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
@@ -1911,8 +1923,18 @@ public:
 	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeOtherOperatorTailTrampoline(PEGTransformer &transformer,
-	                                                                           GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeAnyAllSubqueryTailTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeOtherOperatorExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeSingleArrowTailTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeArrowChainBodyTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeDoubleArrowTailTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeArrowFullBodyTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeAnyAllParsedOperatorTrampoline(PEGTransformer &transformer,
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeNamedOtherOperatorTrampoline(PEGTransformer &transformer,
@@ -2078,10 +2100,6 @@ public:
 	static arena_ptr<TransformResultValue>
 	FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
-	FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeShowAllModifierTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue>
 	FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeConnectToExternalResourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
@@ -2137,6 +2155,8 @@ public:
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeFromSourceStringTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeFromSourceNameTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeVersionNumberTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
@@ -2146,7 +2166,14 @@ public:
 	static arena_ptr<TransformResultValue> FinalizeRepositoryPublicKeyTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
+	FinalizeCreateExtensionRepositoryFromHostStmtTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
 	FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryHostNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeTableMatchRecognizeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMatchRecognizeBodyTrampoline(PEGTransformer &transformer,
@@ -2385,6 +2412,8 @@ public:
 	                                                                   GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeParensTableRefTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeJoinedTableRefChainTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTablePivotClauseBodyTrampoline(PEGTransformer &transformer,
@@ -2423,8 +2452,11 @@ public:
 	FinalizeTableFunctionAliasColonTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeWithOrdinalityTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeQualifiedTableFunctionTrampoline(PEGTransformer &transformer,
-	                                                                                GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeCatalogReservedSchemaTableFunctionNameTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeTableFunctionNameAsQualifiedNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTableFunctionArgumentsTrampoline(PEGTransformer &transformer,
 	                                                                                GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeNamedFunctionArgumentTrampoline(PEGTransformer &transformer,
@@ -2767,7 +2799,7 @@ public:
 	                                                        unique_ptr<AlterInfo> alter_sequence_options);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &catalog_qualification,
-	                                                    const optional<Identifier> &schema_qualification,
+	                                                    const optional<vector<Identifier>> &schema_qualification,
 	                                                    const Identifier &sequence_name);
 	static unique_ptr<AlterInfo> TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
 	                                                                 unique_ptr<AlterTableInfo> rename_alter);
@@ -3312,6 +3344,9 @@ public:
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
 	                                                              unique_ptr<QueryNode> child);
+	static unique_ptr<QueryNode> TransformShowExternalResources(PEGTransformer &transformer, const ShowType &show_rule,
+	                                                            const bool &has_result,
+	                                                            optional<Identifier> show_external_resources_type);
 	static unique_ptr<QueryNode> TransformShowDeprecatedSelect(PEGTransformer &transformer, const ShowType &show_rule,
 	                                                           unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<QueryNode> TransformDescribeSelect(PEGTransformer &transformer,
@@ -3343,6 +3378,19 @@ public:
 	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer,
 	                                                       unique_ptr<DropStatement> drop_entries,
 	                                                       const optional<bool> &drop_behavior);
+	static unique_ptr<SQLStatement> TransformDropMemberStatement(PEGTransformer &transformer,
+	                                                             unique_ptr<AlterInfo> drop_member,
+	                                                             const optional<bool> &drop_behavior);
+	static unique_ptr<AlterInfo> TransformDropTableFunctionMember(PEGTransformer &transformer,
+	                                                              const CatalogType &comment_macro_table,
+	                                                              const optional<bool> &if_exists,
+	                                                              const QualifiedName &qualified_table_function,
+	                                                              const vector<LogicalType> &drop_function_signature);
+	static unique_ptr<AlterInfo> TransformDropFunctionMember(PEGTransformer &transformer,
+	                                                         const bool &function_type_macro,
+	                                                         const optional<bool> &if_exists,
+	                                                         const QualifiedName &function_identifier,
+	                                                         const vector<LogicalType> &drop_function_signature);
 	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                      const Identifier &trigger_name,
 	                                                      unique_ptr<BaseTableRef> base_table_name);
@@ -3356,6 +3404,9 @@ public:
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
 	                                                       const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &function_identifier);
+	static vector<LogicalType> TransformDropFunctionSignature(PEGTransformer &transformer,
+	                                                          const optional<vector<LogicalType>> &type);
+	static LogicalType TransformDropSignatureAnyType(PEGTransformer &transformer);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                     const vector<QualifiedName> &qualified_name);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const optional<bool> &if_exists,
@@ -3366,7 +3417,7 @@ public:
 	                                                  const Identifier &reserved_index_name);
 	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
 	                                                         const Identifier &catalog_qualification,
-	                                                         const Identifier &reserved_schema_qualification,
+	                                                         const vector<Identifier> &reserved_schema_qualification,
 	                                                         const Identifier &reserved_index_name);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &qualified_sequence_name);
@@ -3637,11 +3688,6 @@ public:
 	static unique_ptr<ParsedExpression> TransformColumnDefaultExpr(PEGTransformer &transformer,
 	                                                               unique_ptr<ParsedExpression> col_def_or_expr);
 	static unique_ptr<ParsedExpression>
-	TransformLambdaArrowExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_or_expression,
-	                               optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair);
-	static unique_ptr<ParsedExpression> TransformSingleArrowPair(PEGTransformer &transformer,
-	                                                             unique_ptr<ParsedExpression> logical_or_expression);
-	static unique_ptr<ParsedExpression>
 	TransformLogicalOrExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_and_expression,
 	                             optional<vector<unique_ptr<ParsedExpression>>> logical_or_expression_tail);
 	static unique_ptr<ParsedExpression>
@@ -3750,8 +3796,20 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
 	                                      optional<vector<OtherOperatorTail>> other_operator_tail);
-	static OtherOperatorTail TransformOtherOperatorTail(PEGTransformer &transformer, ParsedOperator other_operator,
-	                                                    unique_ptr<ParsedExpression> bitwise_expression);
+	static OtherOperatorTail TransformAnyAllSubqueryTail(PEGTransformer &transformer,
+	                                                     ParsedOperator any_all_parsed_operator,
+	                                                     unique_ptr<TableRef> subquery_reference);
+	static OtherOperatorTail TransformOtherOperatorExpressionTail(PEGTransformer &transformer,
+	                                                              ParsedOperator other_operator,
+	                                                              unique_ptr<ParsedExpression> bitwise_expression);
+	static OtherOperatorTail TransformSingleArrowTail(PEGTransformer &transformer, ArrowBody single_arrow_body);
+	static ArrowBody TransformArrowChainBody(PEGTransformer &transformer,
+	                                         unique_ptr<ParsedExpression> bitwise_expression,
+	                                         vector<OtherOperatorTail> arrow_chain_tail);
+	static OtherOperatorTail TransformDoubleArrowTail(PEGTransformer &transformer,
+	                                                  unique_ptr<ParsedExpression> bitwise_expression);
+	static ArrowBody TransformArrowFullBody(PEGTransformer &transformer,
+	                                        unique_ptr<ParsedExpression> logical_or_expression);
 	static ParsedOperator TransformAnyAllParsedOperator(PEGTransformer &transformer,
 	                                                    const pair<string, bool> &any_all_operator);
 	static ParsedOperator TransformNamedOtherOperator(PEGTransformer &transformer, const string &child);
@@ -3917,9 +3975,6 @@ public:
 	                                                                      unique_ptr<ParsedExpression> expression);
 	static unique_ptr<SQLStatement> TransformDestroyExternalResourceStmt(PEGTransformer &transformer,
 	                                                                     const Identifier &col_id);
-	static unique_ptr<SQLStatement> TransformShowExternalResourcesStmt(PEGTransformer &transformer,
-	                                                                   const optional<bool> &show_all_modifier);
-	static bool TransformShowAllModifier(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformAttachToExternalResource(
 	    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
 	    const Identifier &attach_alias, const optional<vector<GenericCopyOption>> &attach_options);
@@ -3993,9 +4048,15 @@ public:
 	                                        const string &string_literal);
 	static vector<string> TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
 	                                                   const vector<string> &string_literal);
+	static unique_ptr<SQLStatement>
+	TransformCreateExtensionRepositoryFromHostStmt(PEGTransformer &transformer, const optional<bool> &or_replace,
+	                                               const optional<bool> &if_not_exists,
+	                                               const Identifier &extension_repository_name);
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
 	                                                                     const optional<bool> &if_exists,
 	                                                                     const Identifier &col_id_or_string);
+	static Identifier TransformExtensionRepositoryHostName(PEGTransformer &transformer, const Identifier &col_id,
+	                                                       const vector<string> &dot_col_label);
 	static unique_ptr<TableRef> TransformTableMatchRecognizeClause(PEGTransformer &transformer,
 	                                                               unique_ptr<TableRef> match_recognize_body,
 	                                                               const optional<TableAlias> &table_alias);
@@ -4246,6 +4307,9 @@ public:
 	                                                    unique_ptr<TableRef> table_ref,
 	                                                    const optional<TableAlias> &table_alias,
 	                                                    optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TableRef> TransformJoinedTableRefChain(PEGTransformer &transformer,
+	                                                         unique_ptr<TableRef> inner_table_ref,
+	                                                         vector<unique_ptr<TableRef>> join_or_pivot);
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      unique_ptr<TableRef> table_pivot_clause_body,
 	                                                      const optional<TableAlias> &table_alias);
@@ -4296,10 +4360,11 @@ public:
 	                                                             const optional<bool> &with_ordinality,
 	                                                             optional<unique_ptr<SampleOptions>> sample_clause);
 	static bool TransformWithOrdinality(PEGTransformer &transformer);
-	static QualifiedName TransformQualifiedTableFunction(PEGTransformer &transformer,
-	                                                     const optional<Identifier> &catalog_qualification,
-	                                                     const optional<vector<Identifier>> &schema_qualification,
-	                                                     const Identifier &table_function_name);
+	static QualifiedName TransformCatalogReservedSchemaTableFunctionName(
+	    PEGTransformer &transformer, const Identifier &catalog_qualification,
+	    const optional<vector<Identifier>> &schema_qualification, const Identifier &reserved_table_function_name);
+	static QualifiedName TransformTableFunctionNameAsQualifiedName(PEGTransformer &transformer,
+	                                                               const Identifier &table_function_name);
 	static vector<FunctionArgument>
 	TransformTableFunctionArguments(PEGTransformer &transformer, optional<vector<FunctionArgument>> function_argument);
 	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer,

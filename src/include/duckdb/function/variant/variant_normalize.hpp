@@ -1,14 +1,17 @@
 #pragma once
 
-#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
 struct VariantNormalizerState {
 public:
 	VariantNormalizerState(idx_t result_row, VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
-	                       SelectionVector &keys_selvec);
+	                       ArenaAllocator &keys_arena, SelectionVector &keys_selvec);
 
 public:
 	data_ptr_t GetDestination();
@@ -22,6 +25,7 @@ public:
 
 	VariantVectorData &source;
 	OrderedOwningStringMap<uint32_t> &dictionary;
+	ArenaAllocator &keys_arena;
 	SelectionVector &keys_selvec;
 
 	uint64_t keys_offset;
@@ -73,8 +77,13 @@ struct VariantNormalizer {
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantNormalizerState &state) {
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
-		Store<T>(val, state.GetDestination());
-		state.blob_size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			VisitString(val.data, state);
+		} else {
+			Store<T>(val, state.GetDestination());
+			state.blob_size += sizeof(T);
+		}
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,

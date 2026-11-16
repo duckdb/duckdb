@@ -19,7 +19,6 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -219,9 +218,10 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 	} else {
 		//! No pushdown extract, just rewrite the existing bindings
 		for (auto &colref_p : col.bindings) {
-			auto &colref = colref_p.get();
+			auto &colref_slot = colref_p.get();
+			auto &colref = colref_slot->Cast<BoundColumnRefExpression>();
 			D_ASSERT(colref.Binding() == current_binding);
-			colref.BindingMutable() = new_binding;
+			colref_slot = colref.WithBinding(new_binding);
 		}
 		created_bindings = 1;
 	}
@@ -492,6 +492,27 @@ void RemoveUnusedColumns::VisitSecureView(LogicalSecureView &view) {
 	view.output_expressions = std::move(new_expressions);
 }
 
+static bool IsDuplicateCondition(const vector<JoinCondition> &conditions, const JoinCondition &cond) {
+	// two equal volatile conditions are two evaluations, so neither is a duplicate of the other
+	if (cond.IsComparison() ? (cond.GetLHS().IsVolatile() || cond.GetRHS().IsVolatile())
+	                        : cond.GetJoinExpression().IsVolatile()) {
+		return false;
+	}
+	for (auto &other : conditions) {
+		if (cond.IsComparison() && other.IsComparison()) {
+			if (cond.GetComparisonType() == other.GetComparisonType() && cond.GetLHS().Equals(other.GetLHS()) &&
+			    cond.GetRHS().Equals(other.GetRHS())) {
+				return true;
+			}
+		} else if (!cond.IsComparison() && !other.IsComparison()) {
+			if (cond.GetJoinExpression().Equals(other.GetJoinExpression())) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	const bool analyze = mode == RemoveUnusedColumnsMode::ANALYZE;
 	auto &op = *op_ref;
@@ -622,10 +643,11 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			if (colrefs == column_references.end()) {
 				continue;
 			}
+			auto lhs_binding = lhs_col.Binding();
 			for (auto &entry : colrefs->second.bindings) {
-				auto &colref = entry.get();
-				colref.BindingMutable() = lhs_col.Binding();
-				AddBinding(colref);
+				auto &colref_slot = entry.get();
+				colref_slot = colref_slot->Cast<BoundColumnRefExpression>().WithBinding(lhs_binding);
+				AddBinding(colref_slot);
 			}
 			column_references.erase(rhs_col.Binding());
 		}
@@ -808,21 +830,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			auto &get = op.Cast<LogicalColumnDataGet>();
 			RemoveColumnsFromLogicalColumnDataGet(get);
 		}
-		return;
-	}
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = op.Cast<LogicalDistinct>();
-		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
-			// distinct type references columns that need to be distinct on, so no
-			// need to implicitly reference everything.
-			break;
-		}
-		// Preserve all DISTINCT inputs without affecting sibling branches.
-		const auto previous_everything_referenced = everything_referenced;
-		everything_referenced = true;
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		VisitPrunableChildren(op);
-		everything_referenced = previous_everything_referenced;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
@@ -1010,22 +1017,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// after removing duplicate columns we may have duplicate join conditions (if the join graph is cyclical)
 		vector<JoinCondition> unique_conditions;
 		for (auto &cond : comp_join.conditions) {
-			bool found = false;
-			for (auto &unique_cond : unique_conditions) {
-				if (cond.IsComparison() && unique_cond.IsComparison()) {
-					if (cond.GetComparisonType() == unique_cond.GetComparisonType() &&
-					    cond.GetLHS().Equals(unique_cond.GetLHS()) && cond.GetRHS().Equals(unique_cond.GetRHS())) {
-						found = true;
-						break;
-					}
-				} else if (!cond.IsComparison() && !unique_cond.IsComparison()) {
-					if (cond.GetJoinExpression().Equals(unique_cond.GetJoinExpression())) {
-						found = true;
-						break;
-					}
-				}
-			}
-			if (!found) {
+			if (!IsDuplicateCondition(unique_conditions, cond)) {
 				unique_conditions.push_back(std::move(cond));
 			}
 		}
@@ -1099,17 +1091,15 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 
 		auto return_type = expr->GetReturnType();
 
-		auto &colref = col.bindings[struct_extract.bindings_idx];
-		auto old_binding = colref.get().Binding();
+		auto &colref = col.bindings[struct_extract.bindings_idx].get()->Cast<BoundColumnRefExpression>();
+		auto old_binding = colref.Binding();
 		auto source = root.active_secure_views.empty() ? nullptr : expr->Copy();
-		auto colref_copy = colref.get().Copy();
-		expr = std::move(colref_copy);
-		auto &new_expr = expr->Cast<BoundColumnRefExpression>();
-		new_expr.SetReturnType(return_type);
 
 		auto column_index = callback(*entry, component.cast ? &(*component.cast)->GetReturnType() : nullptr);
-		new_expr.BindingMutable().column_index = column_index;
-		RecordSecureViewReplacement(old_binding, new_expr.Binding(), std::move(source));
+		auto new_binding = ColumnBinding(old_binding.table_index, column_index);
+		expr = make_uniq<BoundColumnRefExpression>(colref.GetAlias(), return_type, new_binding, colref.Depth(),
+		                                           colref.GetQueryLocation());
+		RecordSecureViewReplacement(old_binding, new_binding, std::move(source));
 	}
 }
 
@@ -1186,8 +1176,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 				    return new_binding_entry->second;
 			    }
 			    // binding does not exist - create it
-			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
-			    target->SetAlias(expr.GetAlias());
+			    auto target = make_uniq<BoundColumnRefExpression>(expr.GetAlias(), column_type, original_binding);
 			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
 			    if (cast_type) {
 				    auto cast = BoundCastExpression::AddCastToType(context, std::move(new_extract), *cast_type);
@@ -1569,8 +1558,7 @@ BaseColumnPrunerMode BaseColumnPruner::GetMode() const {
 	return mode;
 }
 
-bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
-                                           optional_ptr<BoundColumnRefExpression> &colref,
+bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p, optional_ptr<unique_ptr<Expression>> &colref,
                                            reference<ColumnIndex> &path_ref,
                                            vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
@@ -1584,7 +1572,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
 		if (ref.GetReturnType().id() != LogicalTypeId::STRUCT) {
 			return false;
 		}
-		colref = &ref;
+		colref = &child;
 		auto &path = path_ref.get();
 		path.AddChildIndex(ColumnIndex(bind_data.index));
 		path_ref = path.GetChildIndex(0);
@@ -1604,7 +1592,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
 }
 
 bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
-                                            optional_ptr<BoundColumnRefExpression> &colref,
+                                            optional_ptr<unique_ptr<Expression>> &colref,
                                             reference<ColumnIndex> &path_ref,
                                             vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
@@ -1622,7 +1610,7 @@ bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
 		if (ref.GetReturnType().id() != LogicalTypeId::VARIANT) {
 			return false;
 		}
-		colref = &ref;
+		colref = &child;
 
 		auto &path = path_ref.get();
 		path.AddChildIndex(ColumnIndex(bind_data.component.key));
@@ -1645,7 +1633,7 @@ bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
 }
 
 bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
-                                              optional_ptr<BoundColumnRefExpression> &colref,
+                                              optional_ptr<unique_ptr<Expression>> &colref,
                                               reference<ColumnIndex> &path_ref,
                                               vector<ReferencedExtractComponent> &expressions) {
 	auto &expr = *expr_p;
@@ -1683,7 +1671,7 @@ static bool ExtractCastCanBePushedDown(const BoundColumnRefExpression &colref, c
 
 bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expression,
                                                optional_ptr<unique_ptr<Expression>> cast_expression) {
-	optional_ptr<BoundColumnRefExpression> colref;
+	optional_ptr<unique_ptr<Expression>> colref;
 	vector<ReferencedExtractComponent> expressions;
 
 	ColumnIndex path(0);
@@ -1691,7 +1679,8 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 	if (!HandleExtractRecursive(*expression, colref, path_ref, expressions)) {
 		return false;
 	}
-	if (cast_expression && !ExtractCastCanBePushedDown(*colref, **cast_expression)) {
+	if (cast_expression &&
+	    !ExtractCastCanBePushedDown((*colref)->Cast<BoundColumnRefExpression>(), **cast_expression)) {
 		// the cast stays on top of the pushed-down extract
 		cast_expression = nullptr;
 	}
@@ -1703,6 +1692,10 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 
 	AddBinding(*colref, path.GetChildIndex(0), expressions);
 	return true;
+}
+
+static ColumnBinding ColRefBinding(const unique_ptr<Expression> &col) {
+	return col->Cast<BoundColumnRefExpression>().Binding();
 }
 
 void BaseColumnPruner::MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
@@ -1745,14 +1738,14 @@ void BaseColumnPruner::MergeChildColumns(vector<ColumnIndex> &current_child_colu
 	current_child_columns.push_back(std::move(new_child_column));
 }
 
-void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
-	auto entry = column_references.find(col.Binding());
+void BaseColumnPruner::AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column) {
+	auto entry = column_references.find(ColRefBinding(col));
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
 		ReferencedColumn column;
 		column.bindings.push_back(col);
 		column.child_columns.push_back(std::move(child_column));
-		entry = column_references.emplace(make_pair(col.Binding(), std::move(column))).first;
+		entry = column_references.emplace(make_pair(ColRefBinding(col), std::move(column))).first;
 	} else {
 		// column reference already exists - check add the binding
 		auto &column = entry->second;
@@ -1800,10 +1793,10 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	unique_paths.emplace(path);
 }
 
-void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+void BaseColumnPruner::AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column,
                                   const vector<ReferencedExtractComponent> &parent) {
 	AddBinding(col, child_column);
-	auto entry = column_references.find(col.Binding());
+	auto entry = column_references.find(ColRefBinding(col));
 	if (entry == column_references.end()) {
 		throw InternalException("ColumnBinding for the col was somehow not added by the previous step?");
 	}
@@ -1818,11 +1811,11 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	                                               std::move(child_column));
 }
 
-void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
-	auto entry = column_references.find(col.Binding());
+void BaseColumnPruner::AddBinding(unique_ptr<Expression> &col) {
+	auto entry = column_references.find(ColRefBinding(col));
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
-		column_references[col.Binding()].bindings.push_back(col);
+		column_references[ColRefBinding(col)].bindings.push_back(col);
 	} else {
 		// column reference already exists - add the binding and clear any sub-references
 		auto &column = entry->second;
@@ -1837,7 +1830,8 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	}
 	D_ASSERT(BoundCastExpression::IsCast(*expr));
 	auto &cast = expr->Cast<BoundFunctionExpression>();
-	if (BoundCastExpression::IsTryCast(cast)) {
+	//! A pushed-down cast runs on every row of the child, including rows that are later filtered out
+	if (BoundCastExpression::IsTryCast(cast) || cast.CanThrow()) {
 		return false;
 	}
 	child = BoundCastExpression::ChildMutable(cast);
@@ -1845,21 +1839,9 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 }
 
 void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
-	if ((*expression)->GetExpressionType() == ExpressionType::OPERATOR_TRY ||
-	    (*expression)->GetExpressionType() == ExpressionType::OPERATOR_HAS_ERROR) {
-		const auto was_inside_try = inside_try;
-		inside_try = true;
-		LogicalOperatorVisitor::VisitExpression(expression);
-		inside_try = was_inside_try;
-		return;
-	}
-
-	//! Check if this is a struct extract wrapped in a cast. TRY_CAST is already
-	//! skipped by TryGetCastChild. A throwing CAST under TRY must also stay put:
-	//! unused-columns would otherwise emit CAST(struct_extract) in a child
-	//! projection and leave TRY wrapping only the already-cast column (#25236).
+	//! Check if this is a struct extract wrapped in a cast
 	optional_ptr<unique_ptr<Expression>> cast_child;
-	if (!inside_try && TryGetCastChild(*expression, cast_child)) {
+	if (TryGetCastChild(*expression, cast_child)) {
 		if (HandleExtractExpression(cast_child.get(), expression)) {
 			// already handled
 			return;
@@ -1878,7 +1860,7 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
                                                       unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
-	AddBinding(expr);
+	AddBinding(*expr_ptr);
 	return nullptr;
 }
 

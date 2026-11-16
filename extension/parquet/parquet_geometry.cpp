@@ -1,5 +1,6 @@
 
 #include "parquet_geometry.hpp"
+#include "duckdb/main/context.hpp"
 
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,7 @@ using namespace duckdb_yyjson; // NOLINT
 unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
                                                                    ClientContext &context) {
 	// Conversion not enabled, or spatial is not loaded!
-	if (!IsGeoParquetConversionEnabled(context)) {
+	if (!IsGeoParquetConversionEnabled(context.GetContext())) {
 		return nullptr;
 	}
 
@@ -122,6 +123,17 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					const auto geometry_types_val = yyjson_obj_get(column_val, "geometry_types");
 					if (!yyjson_is_arr(geometry_types_val)) {
 						throw InvalidInputException("Geoparquet column '%s' does not have geometry types", column_name);
+					}
+
+					// Parse the edges: anything but (the default) planar edges is a GEOGRAPHY column
+					const auto edges_val = yyjson_obj_get(column_val, "edges");
+					if (edges_val && !yyjson_is_null(edges_val)) {
+						if (!yyjson_is_str(edges_val)) {
+							throw InvalidInputException("Geoparquet column '%s' has invalid edges", column_name);
+						}
+						if (strcmp(yyjson_get_str(edges_val), "planar") != 0) {
+							column.geometry_model = GeometryModel::GEODETIC;
+						}
 					}
 
 					// Parse the CRS
@@ -207,14 +219,14 @@ void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const st
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
 
-	// GeoParquet only describes planar GEOMETRY columns (GEOGRAPHY is never added to this metadata),
-	// but derive the extent math from the type explicitly regardless.
+	// GEOGRAPHY columns are described with spherical edges, and merge their extents accordingly
 	const auto geometry_model = Geometry::GetModel(type);
 
 	const auto it = geometry_columns.find(column_name);
 	if (it == geometry_columns.end()) {
 		// Add a new column to the metadata
 		auto &column = geometry_columns[column_name];
+		column.geometry_model = geometry_model;
 
 		// Attempt to convert the CRS to PROJJSON
 		if (GeoType::HasCRS(type)) {
@@ -294,6 +306,10 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 			yyjson_mut_arr_add_strcpy(doc, geometry_types, type_name.c_str());
 		}
 
+		if (column.second.geometry_model == GeometryModel::GEODETIC) {
+			yyjson_mut_obj_add_str(doc, column_json, "edges", "spherical");
+		}
+
 		const auto &bbox = column.second.stats.extent;
 
 		if (bbox.HasXY()) {
@@ -358,7 +374,7 @@ bool GeoParquetFileMetadata::IsGeometryColumn(const string &column_name) const {
 	return geometry_columns.find(column_name) != geometry_columns.end();
 }
 
-bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
+bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const Context &context) {
 	bool geoparquet_enabled = false;
 	context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled);
 	return geoparquet_enabled;
@@ -395,7 +411,7 @@ unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reade
 	auto func = is_geography ? StGeogfromwkbFun::GetFunction() : StGeomfromwkbFun::GetFunction();
 	func.SetName(is_geography ? "ST_GeogFromWKB" : "ST_GeomFromWKB");
 	auto read_expr = func.Bind(context, std::move(args));
-	auto type_expr = BoundCastExpression::AddDefaultCastToType(std::move(read_expr), schema.type);
+	auto type_expr = BoundCastExpression::AddCastToType(context, std::move(read_expr), schema.type);
 	vector<unique_ptr<ColumnReader>> expression_children;
 	expression_children.push_back(std::move(string_reader));
 	return make_uniq<ExpressionColumnReader>(context, std::move(expression_children), std::move(type_expr), schema);

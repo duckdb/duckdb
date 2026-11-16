@@ -17,6 +17,10 @@
 
 namespace duckdb {
 
+struct bignum_t;
+class StringHeap;
+struct BignumArithmeticState;
+
 struct interval_t;
 struct date_t;
 
@@ -25,6 +29,8 @@ struct SubtractOperator {
 	static inline TR Operation(TA left, TB right) {
 		return left - right;
 	}
+	//! BIGNUM-backed values allocate their result in the heap
+	DUCKDB_API static bignum_t Operation(bignum_t left, bignum_t right, StringHeap &heap, BignumArithmeticState &state);
 };
 
 template <>
@@ -41,6 +47,12 @@ template <>
 timestamp_t SubtractOperator::Operation(date_t left, interval_t right);
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right);
+template <>
+timestamp_t SubtractOperator::Operation(timestamp_ms_t left, interval_t right);
+template <>
+timestamp_t SubtractOperator::Operation(timestamp_sec_t left, interval_t right);
+template <>
+timestamp_ns_t SubtractOperator::Operation(timestamp_ns_t left, interval_t right);
 template <>
 interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right);
 template <>

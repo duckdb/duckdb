@@ -435,13 +435,13 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		// this code is not going to win any beauty contests, but well
 		auto min = state.stats_state->GetMin();
 		if (!min.empty()) {
-			column_chunk.meta_data.statistics.min = std::move(min);
+			column_chunk.meta_data.statistics.min = min;
 			column_chunk.meta_data.statistics.__isset.min = true;
 			column_chunk.meta_data.__isset.statistics = true;
 		}
 		auto max = state.stats_state->GetMax();
 		if (!max.empty()) {
-			column_chunk.meta_data.statistics.max = std::move(max);
+			column_chunk.meta_data.statistics.max = max;
 			column_chunk.meta_data.statistics.__isset.max = true;
 			column_chunk.meta_data.__isset.statistics = true;
 		}
@@ -469,15 +469,10 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (state.stats_state->HasGeoStats()) {
 		auto gpq_version = writer.GetGeoParquetVersion();
 
-		// GEOGRAPHY is not representable in GeoParquet (which assumes planar edges): it always writes the native
-		// Parquet geospatial statistics and is never added to the GeoParquet JSON metadata.
-		const auto is_geography = column_schema.type.id() == LogicalTypeId::GEOGRAPHY;
-
-		const auto has_real_stats = is_geography || gpq_version == GeoParquetVersion::NONE ||
-		                            gpq_version == GeoParquetVersion::BOTH || gpq_version == GeoParquetVersion::V2;
-		const auto has_json_stats =
-		    !is_geography && (gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
-		                      gpq_version == GeoParquetVersion::V2);
+		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
 
 		if (has_real_stats) {
 			// Write the parquet native geospatial statistics
@@ -564,6 +559,11 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (write_page_index && state.pages_start_at_rows && page_index.offset_index.page_locations.size() > 1) {
 		FinalizePageIndex(state, page_index);
 		writer.BufferPageIndex(state.col_idx, std::move(page_index));
+	}
+	if (state.bloom_filter && !HasDictionary(state) &&
+	    state.bloom_filter->Get()->GetLength() * MIN_COMPRESSED_TO_FILTER_RATIO >
+	        NumericCast<idx_t>(column_chunk.meta_data.total_compressed_size)) {
+		state.bloom_filter.reset();
 	}
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));

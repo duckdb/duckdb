@@ -129,6 +129,25 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const Logic
 	return result;
 }
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantReferenceInternal(const LogicalType &type, idx_t index,
+                                                                         count_t count) const {
+	// copy the entry, which for a string or a list shares the heap or the child of this buffer through CreateBuffer
+	auto stored_allocator = GetAllocator();
+	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
+	auto new_data = allocator.Allocate(type_size);
+	const auto is_valid = validity.RowIsValid(index);
+	if (is_valid) {
+		memcpy(new_data.get(), data_ptr + index * type_size, type_size);
+	}
+	auto result = CreateBuffer(std::move(new_data), count_t(1ULL));
+	if (!is_valid) {
+		result->GetValidityMask().SetInvalid(0);
+	}
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
+	return result;
+}
+
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                              idx_t count) {
 	if (!sel.IsSet()) {
@@ -424,8 +443,11 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::DECIMAL(reinterpret_cast<const int64_t *>(data_ptr)[index], width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::VARCHAR:
+			// the unscaled value of a wide decimal is a BIGNUM blob
+			return Value::DECIMAL(reinterpret_cast<const bignum_t *>(data_ptr)[index], width, scale);
 		default:
-			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			throw InternalException("Unimplemented physical type '%s' for DECIMAL",
 			                        TypeIdToString(type.InternalType()));
 		}
 	}

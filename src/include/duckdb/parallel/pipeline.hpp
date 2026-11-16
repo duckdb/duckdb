@@ -15,6 +15,9 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+// Complete type required: the unique_ptr<PipelineSchedule> in ResolveExternalInputs' signature instantiates the
+// deleter in sanitizer builds of every includer, which rejects a forward declaration.
+#include "duckdb/parallel/pipeline_schedule.hpp"
 
 namespace duckdb {
 
@@ -46,9 +49,21 @@ enum class ExternalInputEventState : uint8_t {
 };
 
 class PipelineTask : public ExecutorTask {
+public:
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
 
-public:
+	//! Bounds the chunks per PROCESS_PARTIAL slice of the result collector pipeline tasks the constructing thread
+	//! executes, for the lifetime of the scope. Other pipelines, and any thread outside a scope, process
+	//! PARTIAL_CHUNK_COUNT chunks per slice
+	class PartialChunkBound {
+	public:
+		explicit PartialChunkBound(idx_t chunk_count);
+		~PartialChunkBound();
+
+	private:
+		idx_t previous;
+	};
+
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p);
 
 	Pipeline &pipeline;
@@ -61,6 +76,10 @@ public:
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+private:
+	//! The chunks this task's PROCESS_PARTIAL slice processes on the current thread
+	idx_t PartialChunkCount() const;
 };
 
 class PipelineBuildState {
@@ -91,9 +110,16 @@ public:
 	void AddExternalInputCandidate(Pipeline &pipeline, PhysicalOperator &materialized_source,
 	                               PhysicalOperator &external_source, shared_ptr<Pipeline> cte_dependency,
 	                               PhysicalCTE &cte, idx_t consumer_idx);
+	void AddBufferedConsumer(Pipeline &pipeline, PhysicalOperator &materialized_source,
+	                         shared_ptr<Pipeline> cte_dependency, PhysicalCTE &cte, idx_t consumer_idx);
 	void AddCTEPipelineSelection(PhysicalCTE &cte, Pipeline &pipeline, shared_ptr<Pipeline> cte_dependency,
 	                             bool dependency_added);
-	void ResolveExternalInputs(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
+	//! model_runtime_filter_edges must mirror the executor's runtime-filter scheduling condition (initial
+	//! schedule without recursive CTEs), so the analysis sees the edges the executor will add.
+	//! Returns the validated schedule (with runtime-filter edges modeled when requested) so the executor can
+	//! reuse it instead of rebuilding and re-deriving the edges, or nullptr when nothing needed resolution.
+	unique_ptr<PipelineSchedule> ResolveExternalInputs(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
+	                                                   bool model_runtime_filter_edges);
 
 private:
 	unique_ptr<PipelineBuildStateData> data;
@@ -126,6 +152,7 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
+	void RemoveDataflowDependency(const shared_ptr<Pipeline> &pipeline);
 	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
 	//! The dependencies of this pipeline on pipelines of the same MetaPipeline

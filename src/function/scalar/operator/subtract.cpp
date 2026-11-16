@@ -1,6 +1,9 @@
 #include "duckdb/common/operator/subtract.hpp"
 
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -70,6 +73,21 @@ timestamp_t SubtractOperator::Operation(date_t left, interval_t right) {
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, Interval::Invert(right));
+}
+
+template <>
+timestamp_t SubtractOperator::Operation(timestamp_ms_t left, interval_t right) {
+	return AddOperator::Operation<timestamp_ms_t, interval_t, timestamp_t>(left, Interval::Invert(right));
+}
+
+template <>
+timestamp_t SubtractOperator::Operation(timestamp_sec_t left, interval_t right) {
+	return AddOperator::Operation<timestamp_sec_t, interval_t, timestamp_t>(left, Interval::Invert(right));
+}
+
+template <>
+timestamp_ns_t SubtractOperator::Operation(timestamp_ns_t left, interval_t right) {
+	return AddOperator::Operation<timestamp_ns_t, interval_t, timestamp_ns_t>(left, Interval::Invert(right));
 }
 
 template <>
@@ -234,6 +252,15 @@ hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t righ
 		throw OutOfRangeException("Overflow in subtract of DECIMAL(38) (%s - %s);", left.ToString(), right.ToString());
 	}
 	return result;
+}
+
+bignum_t SubtractOperator::Operation(bignum_t left, bignum_t right, StringHeap &heap, BignumArithmeticState &state) {
+	const BignumIntermediate lhs(left);
+	// the right operand is negated on a copy, its bytes can be shared with the left operand and other rows
+	const BignumIntermediate rhs_value(right);
+	const bignum_t negated_rhs(rhs_value.Negate(heap));
+	const BignumIntermediate rhs(negated_rhs);
+	return bignum_t(BignumIntermediate::Add(heap, lhs, rhs));
 }
 
 //===--------------------------------------------------------------------===//

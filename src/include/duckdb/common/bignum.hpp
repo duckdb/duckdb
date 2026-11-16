@@ -13,12 +13,15 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include <stdint.h>
+#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/bignum_limbs.hpp"
 
 namespace duckdb {
 class StringHeap;
 class ArenaAllocator;
 class ClientContext;
+class Context;
 
 struct bignum_t {
 	string_t data;
@@ -37,6 +40,11 @@ struct bignum_t {
 	void Print() const;
 };
 
+template <>
+inline bignum_t NullValue() {
+	return bignum_t(NullValue<string_t>());
+}
+
 enum AbsoluteNumberComparison : uint8_t {
 	// If number is equal
 	EQUAL = 0,
@@ -46,24 +54,27 @@ enum AbsoluteNumberComparison : uint8_t {
 	SMALLER = 2,
 };
 
-//! A bignum magnitude is handled as base 2^32 digits
-using digit_t = uint32_t;
-using twodigit_t = uint64_t;
-
 //! Per-vector scratch digit buffers and interrupt-check state for BIGNUM multiplication and division
 struct BignumArithmeticState {
-	explicit BignumArithmeticState(optional_ptr<ClientContext> context = nullptr) : context(context) {
+	//! The context, if any, lets long operations check for interrupts
+	DUCKDB_API explicit BignumArithmeticState(optional_ptr<ClientContext> client_context = nullptr);
+	explicit BignumArithmeticState(Context &context_p) : context(context_p) {
 	}
 
-	optional_ptr<ClientContext> context;
+	//! Counts digit operations and checks for an interrupt about once a millisecond, when a context is set
+	DUCKDB_API void AccountWork(idx_t work);
+
+	optional_ptr<Context> context;
 	//! Digit operations performed since the last interrupt check
 	idx_t work_since_interrupt_check = 0;
-	unsafe_vector<digit_t> lhs_digits;
-	unsafe_vector<digit_t> rhs_digits;
-	unsafe_vector<digit_t> result_digits;
-	unsafe_vector<digit_t> remainder_digits;
-	unsafe_vector<digit_t> normalized_dividend;
-	unsafe_vector<digit_t> normalized_divisor;
+	unsafe_vector<bignum_digit_t> lhs_digits;
+	unsafe_vector<bignum_digit_t> rhs_digits;
+	unsafe_vector<bignum_digit_t> result_digits;
+	//! Scratch digits of the Karatsuba multiplication, sized once per vector for the largest product so far
+	unsafe_vector<bignum_digit_t> karatsuba_scratch;
+	unsafe_vector<bignum_digit_t> remainder_digits;
+	unsafe_vector<bignum_digit_t> normalized_dividend;
+	unsafe_vector<bignum_digit_t> normalized_divisor;
 };
 
 struct BignumIntermediate {
@@ -92,17 +103,26 @@ struct BignumIntermediate {
 	//! In case we have unnecessary extra 0's or 1's in our bignum we trim them
 	static idx_t Trim(data_ptr_t data, uint32_t &size, bool is_negative);
 	void Trim();
-	//! Add a BignumIntermediate to another BignumIntermediate, equivalent of a +=
-	void AddInPlace(ArenaAllocator &allocator, const BignumIntermediate &rhs);
-	//! Adds two BignumIntermediates and returns a string_t result, equivalent of a +
-	static string_t Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	//! Add a BignumIntermediate to another BignumIntermediate, equivalent of a += (or a -= with negate_rhs)
+	void AddInPlace(ArenaAllocator &allocator, const BignumIntermediate &rhs, bool negate_rhs = false);
+	//! Adds two BignumIntermediates and returns a string_t result, equivalent of a + (or a - with negate_rhs: the
+	//! right operand takes part with its sign flipped, without being modified or copied)
+	static string_t Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs,
+	                    bool negate_rhs = false);
 	//! Multiplies two BignumIntermediates and returns a string_t result, equivalent of a *
 	static string_t Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                         const BignumIntermediate &rhs);
+	//! Multiplies two magnitudes given as little-endian bignum_digit_t digits, result = lhs * rhs without leading zeros
+	DUCKDB_API static void MultiplyMagnitudes(BignumArithmeticState &state, const unsafe_vector<bignum_digit_t> &lhs,
+	                                          const unsafe_vector<bignum_digit_t> &rhs,
+	                                          unsafe_vector<bignum_digit_t> &result);
 	//! Truncating division (a // b) or, with want_remainder, the remainder with the sign of the dividend (a % b)
 	//! Returns false without writing a result when the divisor is zero
 	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                      const BignumIntermediate &rhs, bool want_remainder, string_t &result);
+	//! Truncating division and remainder in one go, see TryDivMod
+	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+	                      const BignumIntermediate &rhs, string_t &quotient, string_t &remainder);
 	//! Negates a value, e.g., -x
 	string_t Negate(StringHeap &heap) const;
 	void NegateInPlace();

@@ -278,6 +278,14 @@ void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
 }
 
+void Binder::SetStatementParameters(const identifier_map_t<idx_t> &statement_parameters) {
+	global_binder_state->statement_parameters = statement_parameters;
+}
+
+bool Binder::StatementHasParameter(const Identifier &identifier) const {
+	return global_binder_state->statement_parameters.count(identifier) > 0;
+}
+
 void Binder::SetInsideSubquery() {
 	inside_subquery = true;
 }
@@ -292,6 +300,21 @@ void Binder::SetBindingIndexKey(bool binding_index_key_p) {
 
 bool Binder::IsBindingIndexKey() const {
 	return binding_index_key;
+}
+
+DecimalWidthLimit Binder::GetDecimalWidthLimit() const {
+	if (decimal_width_limit) {
+		return *decimal_width_limit;
+	}
+	return DecimalWidthLimit::FromSetting(context);
+}
+
+optional_ptr<const DecimalWidthLimit> Binder::GetFixedDecimalWidthLimit() const {
+	return decimal_width_limit;
+}
+
+void Binder::SetDecimalWidthLimit(optional_ptr<const DecimalWidthLimit> limit) {
+	decimal_width_limit = limit;
 }
 
 void Binder::SetBindingTrySubquery() {
