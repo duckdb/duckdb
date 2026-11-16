@@ -70,8 +70,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 unique_ptr<LogicalOperator> FilterPullup::PullupSemiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::SEMI);
-	FilterPullup left_pullup(true, can_add_column);
-	FilterPullup right_pullup(true, can_add_column);
+	FilterPullup left_pullup(context, true, can_add_column);
+	FilterPullup right_pullup(context, true, can_add_column);
 	op->children[0] = left_pullup.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(std::move(op->children[1]));
 
@@ -193,7 +193,7 @@ unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<Logica
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
-		FilterPullup pullup;
+		FilterPullup pullup(context);
 		op->children[i] = pullup.Rewrite(std::move(op->children[i]));
 	}
 	// now pull up any existing filters

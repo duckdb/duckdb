@@ -9,8 +9,10 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
+class Binder;
 
 class LogicalSetOperation : public LogicalOperator {
 	LogicalSetOperation(TableIndex table_index, idx_t column_count, LogicalOperatorType type, bool setop_all,
@@ -39,6 +41,18 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}
+
+	//! The types the columns of an EXCEPT / INTERSECT are compared with: a collation of either child applies
+	vector<LogicalType> GetComparisonTypes(ClientContext &context);
+	//! How an EXCEPT / INTERSECT compares the columns of its children: IS NOT DISTINCT FROM (NULLs are equal) on every
+	//! column, under its collation. These are the conditions of the join CreateJoin builds, without the row numbers.
+	vector<JoinCondition> GetComparisons(ClientContext &context);
+	//! Plans EXCEPT as an ANTI join and INTERSECT as a SEMI join on all columns. With setop_all both children get a
+	//! row_number() over all columns that is compared as well, so that the n-th copies of a row match each other.
+	//! The result is a projection of the left columns with the table index of the set operation.
+	static unique_ptr<LogicalOperator> CreateJoin(Binder &binder, const vector<LogicalType> &types,
+	                                              TableIndex setop_index, LogicalOperatorType type, bool setop_all,
+	                                              unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

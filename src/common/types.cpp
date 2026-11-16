@@ -906,6 +906,51 @@ bool LogicalType::IsTemplated() const {
 	return TypeVisitor::Contains(*this, LogicalTypeId::TEMPLATE);
 }
 
+bool LogicalType::EqualValuesAreIdentical() const {
+	switch (id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::ENUM:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return StringType::GetCollation(*this).empty();
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructType::GetChildTypes(*this)) {
+			if (!child.second.EqualValuesAreIdentical()) {
+				return false;
+			}
+		}
+		return true;
+	case LogicalTypeId::LIST:
+		return ListType::GetChildType(*this).EqualValuesAreIdentical();
+	case LogicalTypeId::ARRAY:
+		return ArrayType::GetChildType(*this).EqualValuesAreIdentical();
+	default:
+		return false;
+	}
+}
+
 bool LogicalType::SupportsRegularUpdate() const {
 	switch (id()) {
 	case LogicalTypeId::LIST:

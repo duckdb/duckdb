@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -36,23 +35,6 @@ bool CollectColumnRefBindings(const Expression &expr, column_binding_set_t &resu
 		}
 	});
 	return ok;
-}
-
-// Bases where SQL `=` doesn't imply bit-equality are unsafe: 0e0 == -0e0 (signbit distinguishes),
-// '1 day' == '24 hour' (datepart distinguishes). INTERVAL today gets wrapped in
-// normalized_interval(...) by the binder, so it shouldn't reach here, but we exclude it
-// defensively in case that wrapping ever changes.
-bool BaseTypeAllowsCollapse(const LogicalType &type) {
-	return !TypeVisitor::Contains(type, [](const LogicalType &t) {
-		switch (t.id()) {
-		case LogicalTypeId::FLOAT:
-		case LogicalTypeId::DOUBLE:
-		case LogicalTypeId::INTERVAL:
-			return true;
-		default:
-			return false;
-		}
-	});
 }
 
 // Derived groups must reference a single bare column-ref base; non-colref bases would need a
@@ -91,7 +73,9 @@ void CollectGroupRemovals(const LogicalAggregate &aggr, vector<GroupRemoval> &re
 		if (base_it == first_occurrence.end()) {
 			continue;
 		}
-		if (!BaseTypeAllowsCollapse(groups[base_it->second.GetIndex()]->GetReturnType())) {
+		// a derived group is only a function of its base if the values of an equal base are identical: 0e0 = -0e0
+		// (the sign bit distinguishes them), '1 day' = '24 hours' (datepart distinguishes them)
+		if (!groups[base_it->second.GetIndex()]->GetReturnType().EqualValuesAreIdentical()) {
 			continue;
 		}
 		removals.push_back({group_idx, base_it->second, nullptr});

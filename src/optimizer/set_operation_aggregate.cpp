@@ -1,8 +1,11 @@
-// `l EXCEPT ALL r` is planned as row_number() OVER (PARTITION BY <all columns>) on both inputs and an ANTI join on all
-// columns and the row number (INTERSECT ALL: a SEMI join), see CreateSetOperationJoin in plan_setop.cpp: two windows
-// that partition by every column, and a hash join on every column. A row that occurs n times in l and m times in r
-// occurs max(n - m, 0) times in the result (min(n, m) times for INTERSECT ALL), so counting the rows of every group
-// per side is enough:
+// EXCEPT ALL and INTERSECT ALL reach the optimizer as a LogicalSetOperation. Once the filters have been moved around it
+// (FilterPullup / FilterPushdown: a filter on the result goes into the left child, what it implies for the other
+// child goes there, see PushdownSetOperation and PullupSetOperation), this pass chooses how to run it.
+//
+// The general plan numbers the rows that are equal in all columns on both sides and joins on the columns and the
+// number (LogicalSetOperation::CreateJoin): two windows that partition by every column, and a hash join on every
+// column. But a row that occurs n times in l and m times in r occurs max(n - m, 0) times in l EXCEPT ALL r and
+// min(n, m) times in l INTERSECT ALL r, so counting the rows of every group per side is enough:
 //
 //     PROJECTION <the columns>
 //       UNNEST <list of block_size entries>         -- one row per copy
@@ -19,19 +22,13 @@
 // constant list, which like every function used here is part of the core library; a group with a single copy, the
 // common case, unnests the constant list itself in both steps.
 //
-// The rewrite runs after filter pushdown and matches the plan as the binder built it. By then a filter above the set
-// operation and a filter inside one input have reached the other input through the join conditions, which a plan
-// that never had the join could not do for them, and a set operation with a provably empty input is gone.
+// The aggregate returns one row of a group where the join returns the left rows, so it is only used if rows that
+// compare equal are identical: no column is compared under a collation, none is floating point (0.0 and -0.0) or of
+// a type whose comparison normalizes (INTERVAL, TIME WITH TIME ZONE), also not nested. Every other EXCEPT ALL /
+// INTERSECT ALL becomes the join.
 //
-// What must hold:
-// - a projection of plain left columns over a SEMI or ANTI comparison join whose children are windows with the single
-//   expression row_number() OVER (PARTITION BY <every column of the child>);
-// - the join conditions are IS NOT DISTINCT FROM between plain columns and pair every left column with one right
-//   column, and the two row numbers with each other. A collated column is compared through its collation, not as a
-//   plain column, so it does not match;
-// - rows that compare equal are identical, because the aggregate yields one row of a group where the join yields the
-//   left rows: no floating point column (0.0 and -0.0), no type whose comparison normalizes (INTERVAL, TIME WITH TIME
-//   ZONE), also not nested.
+// The pass runs before the join order, statistics propagation and compressed materialization, which then see an
+// ordinary aggregate or join.
 #include "duckdb/optimizer/set_operation_aggregate.hpp"
 
 #include "duckdb/function/builtin_function_lookup.hpp"
@@ -44,14 +41,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -60,197 +54,36 @@ namespace {
 //! The copies of a group are generated in blocks of this many rows
 constexpr int64_t COPY_BLOCK_SIZE = STANDARD_VECTOR_SIZE;
 
-//! Whether two values of the type that compare equal are the same value
-bool EqualValuesAreIdentical(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_NS:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::ENUM:
-		return true;
-	case LogicalTypeId::STRUCT:
-		for (auto &child : StructType::GetChildTypes(type)) {
-			if (!EqualValuesAreIdentical(child.second)) {
-				return false;
-			}
-		}
-		return true;
-	case LogicalTypeId::LIST:
-		return EqualValuesAreIdentical(ListType::GetChildType(type));
-	case LogicalTypeId::ARRAY:
-		return EqualValuesAreIdentical(ArrayType::GetChildType(type));
-	default:
-		return false;
-	}
-}
-
-//! The binding of a plain column reference of this query
-bool PlainColumn(const Expression &expr, ColumnBinding &binding) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		return false;
-	}
-	auto &colref = expr.Cast<BoundColumnRefExpression>();
-	if (colref.Depth() != 0) {
-		return false;
-	}
-	binding = colref.Binding();
-	return true;
-}
-
-optional_idx Position(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (bindings[i] == binding) {
-			return i;
-		}
-	}
-	return optional_idx();
-}
-
-//! The binding of the row number, if op is a window with the single expression
-//! row_number() OVER (PARTITION BY <every column of its child>)
-bool AllColumnRowNumber(LogicalOperator &op, ColumnBinding &row_number_binding) {
-	if (op.type != LogicalOperatorType::LOGICAL_WINDOW || op.children.size() != 1 || op.expressions.size() != 1) {
-		return false;
-	}
-	auto &expr = *op.expressions[0];
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_WINDOW ||
-	    expr.GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
-		return false;
-	}
-	auto &row_number = expr.Cast<BoundWindowExpression>();
-	if (!row_number.OrderBy().empty() || !row_number.ArgOrders().empty() || row_number.Filter()) {
-		return false;
-	}
-	auto child_bindings = op.children[0]->GetColumnBindings();
-	if (row_number.Partitions().size() != child_bindings.size()) {
-		return false;
-	}
-	vector<bool> partitioned(child_bindings.size(), false);
-	for (auto &partition : row_number.Partitions()) {
-		ColumnBinding binding;
-		if (!PlainColumn(*partition, binding)) {
-			return false;
-		}
-		auto position = Position(child_bindings, binding);
-		if (!position.IsValid() || partitioned[position.GetIndex()]) {
-			return false;
-		}
-		partitioned[position.GetIndex()] = true;
-	}
-	row_number_binding = ColumnBinding(op.Cast<LogicalWindow>().window_index, ProjectionIndex(0));
-	return true;
-}
-
 } // namespace
 
-SetOperationAggregate::SetOperationAggregate(Optimizer &optimizer) : optimizer(optimizer) {
+SetOperationAggregate::SetOperationAggregate(Optimizer &optimizer, bool use_aggregate)
+    : optimizer(optimizer), use_aggregate(use_aggregate) {
 }
 
-//! The columns of the set operation in the order of the left input, if op is the projection over the join of the two
-//! row number windows and the rows of a group are identical
-bool SetOperationAggregate::Match(LogicalOperator &op, vector<SetOperationColumn> &columns, bool &is_except) const {
-	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION || op.children.size() != 1 ||
-	    op.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+bool SetOperationAggregate::CanUseAggregate(LogicalSetOperation &setop) {
+	if (!use_aggregate || !setop.setop_all) {
 		return false;
 	}
-	auto &join = op.children[0]->Cast<LogicalComparisonJoin>();
-	if (join.join_type != JoinType::ANTI && join.join_type != JoinType::SEMI) {
-		return false;
-	}
-	is_except = join.join_type == JoinType::ANTI;
-	if (join.HasProjectionMap() || !join.duplicate_eliminated_columns.empty() || join.filter_pushdown ||
-	    join.children.size() != 2 || !join.expressions.empty()) {
-		return false;
-	}
-	ColumnBinding left_row_number;
-	ColumnBinding right_row_number;
-	if (!AllColumnRowNumber(*join.children[0], left_row_number) ||
-	    !AllColumnRowNumber(*join.children[1], right_row_number)) {
-		return false;
-	}
-	auto left_bindings = join.children[0]->children[0]->GetColumnBindings();
-	auto right_bindings = join.children[1]->children[0]->GetColumnBindings();
-	if (left_bindings.size() != right_bindings.size() || join.conditions.size() != left_bindings.size() + 1) {
-		return false;
-	}
-
-	// every left column is compared with one right column, and the row numbers with each other
-	columns.clear();
-	columns.resize(left_bindings.size());
-	vector<bool> left_seen(left_bindings.size(), false);
-	vector<bool> right_seen(right_bindings.size(), false);
-	bool row_numbers_compared = false;
-	for (auto &condition : join.conditions) {
-		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			return false;
-		}
-		ColumnBinding left;
-		ColumnBinding right;
-		if (!PlainColumn(condition.GetLHS(), left) || !PlainColumn(condition.GetRHS(), right)) {
-			return false;
-		}
-		if (left == left_row_number && right == right_row_number && !row_numbers_compared) {
-			row_numbers_compared = true;
-			continue;
-		}
-		auto left_position = Position(left_bindings, left);
-		auto right_position = Position(right_bindings, right);
-		if (!left_position.IsValid() || !right_position.IsValid()) {
-			return false;
-		}
-		auto &type = condition.GetLHS().GetReturnType();
-		if (left_seen[left_position.GetIndex()] || right_seen[right_position.GetIndex()] ||
-		    type != condition.GetRHS().GetReturnType() || !EqualValuesAreIdentical(type)) {
-			return false;
-		}
-		left_seen[left_position.GetIndex()] = true;
-		right_seen[right_position.GetIndex()] = true;
-		columns[left_position.GetIndex()] = SetOperationColumn {type, left, right};
-	}
-	if (!row_numbers_compared) {
-		return false;
-	}
-	// with one condition per left column, none compared twice, and the row numbers, every column is compared
-
-	// the projection reads columns of the left input only, never the row number
-	for (auto &expr : op.expressions) {
-		ColumnBinding binding;
-		if (!PlainColumn(*expr, binding) || !Position(left_bindings, binding).IsValid()) {
+	for (auto &comparison : setop.GetComparisons(optimizer.context)) {
+		// a column that is compared under a collation is not compared as a plain column
+		if (comparison.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    comparison.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    comparison.GetLHS().GetReturnType() != comparison.GetRHS().GetReturnType() ||
+		    !comparison.GetLHS().GetReturnType().EqualValuesAreIdentical()) {
 			return false;
 		}
 	}
 	return true;
 }
 
-//! The columns of an input followed by its side markers: in_left is TRUE for the rows of the left input and NULL for
+//! The columns of a child followed by its side markers: in_left is TRUE for the rows of the left child and NULL for
 //! the rows of the right one, in_right the reverse
-unique_ptr<LogicalOperator> SetOperationAggregate::AddSideMarkers(unique_ptr<LogicalOperator> child,
-                                                                  const vector<SetOperationColumn> &columns,
-                                                                  bool is_left) {
+unique_ptr<LogicalOperator> SetOperationAggregate::AddSideMarkers(unique_ptr<LogicalOperator> child, bool is_left) {
+	child->ResolveOperatorTypes();
+	auto bindings = child->GetColumnBindings();
 	vector<unique_ptr<Expression>> select_list;
-	for (auto &column : columns) {
-		select_list.push_back(make_uniq<BoundColumnRefExpression>(column.type, is_left ? column.left : column.right));
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		select_list.push_back(make_uniq<BoundColumnRefExpression>(child->types[i], bindings[i]));
 	}
 	for (auto set : {is_left, !is_left}) {
 		select_list.push_back(
@@ -261,15 +94,16 @@ unique_ptr<LogicalOperator> SetOperationAggregate::AddSideMarkers(unique_ptr<Log
 	return std::move(projection);
 }
 
-//! Replaces the join below the projection op by the aggregate over the union of the inputs of the two windows
-void SetOperationAggregate::Rewrite(LogicalOperator &op, const vector<SetOperationColumn> &columns, bool is_except) {
+//! The aggregate over the union of the children of an EXCEPT ALL / INTERSECT ALL
+unique_ptr<LogicalOperator> SetOperationAggregate::CreateAggregate(LogicalSetOperation &setop) {
 	auto &context = optimizer.context;
 	auto &binder = optimizer.binder;
-	auto &join = *op.children[0];
-	auto left = AddSideMarkers(std::move(join.children[0]->children[0]), columns, true);
-	auto right = AddSideMarkers(std::move(join.children[1]->children[0]), columns, false);
+	bool is_except = setop.type == LogicalOperatorType::LOGICAL_EXCEPT;
+	auto types = setop.GetComparisonTypes(context);
+	auto left = AddSideMarkers(std::move(setop.children[0]), true);
+	auto right = AddSideMarkers(std::move(setop.children[1]), false);
 
-	auto column_count = columns.size();
+	auto column_count = types.size();
 	auto union_index = binder.GenerateTableIndex();
 	auto union_all = make_uniq<LogicalSetOperation>(union_index, column_count + 2, std::move(left), std::move(right),
 	                                                LogicalOperatorType::LOGICAL_UNION, true);
@@ -291,7 +125,7 @@ void SetOperationAggregate::Rewrite(LogicalOperator &op, const vector<SetOperati
 	GroupingSet every_column;
 	for (idx_t i = 0; i < column_count; i++) {
 		aggregate->groups.push_back(
-		    make_uniq<BoundColumnRefExpression>(columns[i].type, ColumnBinding(union_index, ProjectionIndex(i))));
+		    make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(union_index, ProjectionIndex(i))));
 		every_column.insert(ProjectionIndex(i));
 	}
 	aggregate->grouping_sets.push_back(std::move(every_column));
@@ -370,37 +204,36 @@ void SetOperationAggregate::Rewrite(LogicalOperator &op, const vector<SetOperati
 	unnest->expressions.push_back(unnest_of(std::move(copy_list)));
 	unnest->AddChild(std::move(blocks));
 
-	// the projection reads the groups instead of the left input
-	for (auto &expr : op.expressions) {
-		auto &colref = expr->Cast<BoundColumnRefExpression>();
-		optional_idx position;
-		for (idx_t i = 0; i < column_count; i++) {
-			if (columns[i].left == colref.Binding()) {
-				position = i;
-				break;
-			}
-		}
-		if (!position.IsValid()) {
-			throw InternalException("Set operation projection reads a column that is not compared");
-		}
-		expr = make_uniq<BoundColumnRefExpression>(expr->GetAlias(), expr->GetReturnType(),
-		                                           ColumnBinding(group_index, ProjectionIndex(position.GetIndex())));
+	// the columns of the set operation, under its table index
+	vector<unique_ptr<Expression>> select_list;
+	for (idx_t i = 0; i < column_count; i++) {
+		select_list.push_back(
+		    make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(group_index, ProjectionIndex(i))));
 	}
-	// drops the join and the windows
-	op.children[0] = std::move(unnest);
-	op.ResolveOperatorTypes();
+	auto projection = make_uniq<LogicalProjection>(setop.table_index, std::move(select_list));
+	projection->AddChild(std::move(unnest));
+	return std::move(projection);
 }
 
 unique_ptr<LogicalOperator> SetOperationAggregate::Optimize(unique_ptr<LogicalOperator> op) {
 	for (auto &child : op->children) {
 		child = Optimize(std::move(child));
 	}
-	vector<SetOperationColumn> columns;
-	bool is_except = false;
-	if (Match(*op, columns, is_except)) {
-		Rewrite(*op, columns, is_except);
+	if (op->type != LogicalOperatorType::LOGICAL_EXCEPT && op->type != LogicalOperatorType::LOGICAL_INTERSECT) {
+		return op;
 	}
-	return op;
+	auto &setop = op->Cast<LogicalSetOperation>();
+	unique_ptr<LogicalOperator> result;
+	if (CanUseAggregate(setop)) {
+		result = CreateAggregate(setop);
+	} else {
+		auto types = setop.GetComparisonTypes(optimizer.context);
+		result =
+		    LogicalSetOperation::CreateJoin(optimizer.binder, types, setop.table_index, setop.type, setop.setop_all,
+		                                    std::move(setop.children[0]), std::move(setop.children[1]));
+	}
+	result->ResolveOperatorTypes();
+	return result;
 }
 
 } // namespace duckdb

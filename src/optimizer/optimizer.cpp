@@ -250,7 +250,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
-		FilterPullup filter_pullup;
+		FilterPullup filter_pullup(context);
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
@@ -323,12 +323,20 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
-	// Rewrites EXCEPT ALL / INTERSECT ALL into one aggregate over the UNION ALL of both inputs. Runs after filter
-	// pushdown, which moves filters from one input to the other through the conditions of the join this replaces
-	RunOptimizer(OptimizerType::SET_OPERATION_AGGREGATE, [&]() {
-		SetOperationAggregate set_operation_aggregate(*this);
+	// Chooses how EXCEPT ALL / INTERSECT ALL run, which are set operations until here so that the filters could be
+	// moved around them: one aggregate over the UNION ALL of both children, or a join of the numbered rows. The join
+	// order, statistics propagation and compressed materialization then see that aggregate or join. Disabling the
+	// optimizer type only takes the aggregate away
+	const bool use_set_operation_aggregate = !OptimizerDisabled(OptimizerType::SET_OPERATION_AGGREGATE);
+	const auto lower_set_operations = [&]() {
+		SetOperationAggregate set_operation_aggregate(*this, use_set_operation_aggregate);
 		plan = set_operation_aggregate.Optimize(std::move(plan));
-	});
+	};
+	if (use_set_operation_aggregate) {
+		RunOptimizer(OptimizerType::SET_OPERATION_AGGREGATE, lower_set_operations);
+	} else {
+		lower_set_operations();
+	}
 
 	// Replaces some window computations with self-joins
 	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {

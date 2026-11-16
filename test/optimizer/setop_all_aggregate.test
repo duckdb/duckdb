@@ -1,5 +1,5 @@
 # name: test/optimizer/setop_all_aggregate.test
-# description: EXCEPT ALL / INTERSECT ALL as one aggregate over the UNION ALL of both inputs, where equal rows are identical
+# description: EXCEPT ALL / INTERSECT ALL as one aggregate over the UNION ALL of both inputs, where equal rows are identical, and the filters that move around the set operation
 # group: [optimizer]
 
 statement ok
@@ -69,29 +69,81 @@ EXPLAIN (SELECT * FROM l EXCEPT ALL SELECT * FROM r) INTERSECT ALL SELECT * FROM
 ----
 physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Unnest.*Group By.*Union.*
 
-# a filter inside one input reaches the other input before the set operation becomes an aggregate
-statement ok
-CREATE TABLE ints_a AS SELECT range AS i FROM range(100);
+# ---- Filters move around the set operation before it becomes an aggregate or a join ---------------------------------
 
 statement ok
-CREATE TABLE ints_b AS SELECT range AS i FROM range(50);
+CREATE TABLE ints_a AS SELECT range AS i, range % 7 AS j FROM range(100);
 
+statement ok
+CREATE TABLE ints_b AS SELECT range AS i, range % 5 AS j FROM range(50);
+
+# a filter above the set operation reaches both inputs
+query II
+EXPLAIN SELECT * FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b) WHERE i = 7
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT i FROM ints_a INTERSECT ALL SELECT i FROM ints_b) WHERE i = 7
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT i, j FROM ints_a EXCEPT ALL SELECT i, j FROM ints_b) WHERE i BETWEEN 3 AND 5 AND j IN (1, 2)
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: \(i >= 3\) AND \(i <= 5\).*Filters: \(i >= 3\) AND \(i <= 5\).*
+
+# a filter inside the left input reaches the right input
 query II
 EXPLAIN SELECT i FROM ints_a WHERE i = 7 EXCEPT ALL SELECT i FROM ints_b
 ----
 physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
 
 query II
+EXPLAIN SELECT i FROM ints_a WHERE i = 7 INTERSECT ALL SELECT i FROM ints_b
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+# a filter inside the right input reaches the left input of INTERSECT ALL, whose rows all have an equal row there ..
+query II
 EXPLAIN SELECT i FROM ints_a INTERSECT ALL SELECT i FROM ints_b WHERE i = 7
 ----
 physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
 
+# .. but not the left input of EXCEPT ALL, which keeps the rows without an equal row
 query II
-EXPLAIN SELECT * FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b) WHERE i = 7
+EXPLAIN SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b WHERE i = 7
 ----
-physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+physical_plan	<!REGEX>:.*Filters: i = 7.*Filters: i = 7.*
 
-# ---- Must not fire -------------------------------------------------------------------------------------------------
+# the same for a set operation that becomes the join: a DOUBLE column
+statement ok
+CREATE TABLE dbl_a AS SELECT range::DOUBLE AS d FROM range(100);
+
+statement ok
+CREATE TABLE dbl_b AS SELECT range::DOUBLE AS d FROM range(50);
+
+query II
+EXPLAIN SELECT * FROM (SELECT d FROM dbl_a EXCEPT ALL SELECT d FROM dbl_b) WHERE d = 7
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a WHERE d = 7 INTERSECT ALL SELECT d FROM dbl_b
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a INTERSECT ALL SELECT d FROM dbl_b WHERE d = 7
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a EXCEPT ALL SELECT d FROM dbl_b WHERE d = 7
+----
+physical_plan	<!REGEX>:.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+# ---- Set operations that become the join -------------------------------------------------------------------------
 
 # without ALL
 query II
@@ -131,6 +183,28 @@ query II
 EXPLAIN SELECT s COLLATE NOCASE FROM l INTERSECT ALL SELECT s FROM r
 ----
 physical_plan	<!REGEX>:.*Unnest.*
+
+# a filter that compares the collated column reaches both inputs, in either direction for INTERSECT ALL
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM lc EXCEPT ALL SELECT * FROM rc) WHERE s = 'b'
+----
+physical_plan	<REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+
+query II
+EXPLAIN SELECT * FROM lc INTERSECT ALL SELECT * FROM rc WHERE s = 'b'
+----
+physical_plan	<REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+
+query II
+EXPLAIN SELECT * FROM lc EXCEPT ALL SELECT * FROM rc WHERE s = 'b'
+----
+physical_plan	<!REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+
+# a filter that tells 'a' and 'A' apart, which the set operation treats as equal, runs after it has chosen its rows
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM lc INTERSECT ALL SELECT * FROM rc) WHERE ascii(s) = 97
+----
+physical_plan	<!REGEX>:.*Filters:.*
 
 # floating point columns: 0.0 = -0.0
 statement ok
@@ -188,8 +262,8 @@ EXPLAIN SELECT MAP {k: s} FROM l EXCEPT ALL SELECT MAP {k: s} FROM r
 ----
 physical_plan	<!REGEX>:.*Unnest.*
 
-# hand-written queries of the same form (numbered rows, SEMI / ANTI join on the columns and the number) are not what
-# the pass matches: their numbering is a projection below the join, and they keep their plan
+# hand-written queries of the form of the join plan (numbered rows, SEMI / ANTI join on the columns and the number)
+# are not set operations: no plan is recognized, and they keep theirs
 query II
 EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
 ----
@@ -566,6 +640,17 @@ SELECT * FROM lc INTERSECT ALL SELECT * FROM rc
 ----
 b
 
+query T rowsort
+SELECT * FROM (SELECT * FROM lc INTERSECT ALL SELECT s FROM (VALUES ('A'), ('a'), ('A')) t(s)) WHERE ascii(s) = 97
+----
+a
+
+query T rowsort
+SELECT * FROM (SELECT * FROM lc EXCEPT ALL SELECT * FROM rc) WHERE s = 'A'
+----
+A
+a
+
 query RR rowsort
 SELECT * FROM ld EXCEPT ALL SELECT * FROM rd
 ----
@@ -594,8 +679,7 @@ SELECT count(*) FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b WHERE
 ----
 99
 
-# hand-written queries of the form the set operations are planned as, and variants that differ from it in one
-# property each
+# hand-written queries of the form of the join plan, and variants that differ from it in one property each
 query IT rowsort
 SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
 ----
