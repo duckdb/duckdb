@@ -346,6 +346,13 @@ void Optimizer::RunBuiltInOptimizers() {
 		outer_join_simplification.VisitOperator(*plan);
 	});
 
+	// removes the outer joins that can be removed before the join order is chosen, so that the join order sees the
+	// plan without them; a second run after UNUSED_COLUMNS removes the ones only column pruning exposes
+	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
+		JoinElimination join_elimination;
+		plan = join_elimination.Optimize(std::move(plan));
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -366,11 +373,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
 		PartialAggregatePushdown partial_aggregate_pushdown(*this);
 		partial_aggregate_pushdown.VisitOperator(plan);
-	});
-
-	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
-		JoinElimination join_elimination;
-		plan = join_elimination.Optimize(std::move(plan));
 	});
 
 	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
