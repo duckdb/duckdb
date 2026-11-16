@@ -32,7 +32,6 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
