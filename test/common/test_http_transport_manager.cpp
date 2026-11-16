@@ -1243,6 +1243,65 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	TestDeleteDirectory(extension_directory);
 }
 
+TEST_CASE("UPDATE EXTENSIONS does not send an etag to a moved repository", "[http_transport_manager]") {
+	static constexpr const char *PUBLIC_KEY =
+	    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8"
+	    "vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnH"
+	    "AHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmox"
+	    "kTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB";
+	auto extension_directory = TestCreatePath("upd_etag_ext");
+	auto repository_directory = TestCreatePath("upd_etag_repos");
+	TestDeleteDirectory(extension_directory);
+	TestDeleteDirectory(repository_directory);
+	DBConfig config;
+	config.SetOptionByName("allow_unsigned_extensions", true);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
+	config.SetOptionByName("extension_directories", Value::LIST({Value(extension_directory)}));
+	config.SetOptionByName("extension_repository_directory", repository_directory);
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	auto build_directory = TestConfiguration::Get().GetTestEnv("BUILD_DIR", "build/reldebug");
+	auto extension_body =
+	    ReadExtensionBinary(build_directory + "/test/extension/loadable_extension_demo.duckdb_extension");
+
+	// the mock serves every url under the same etag
+	auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
+	provider->state->response_body = extension_body;
+	db.instance->config.SetHTTPUtil(provider);
+	auto create_repository = [&](const string &prefix) {
+		REQUIRE_NO_FAIL(connection.Query(
+		    StringUtil::Format("CREATE OR REPLACE EXTENSION REPOSITORY my_repo WITH PREFIX '%s' USING PUBLIC KEY '%s'",
+		                       prefix, PUBLIC_KEY)));
+	};
+	auto update = [&]() {
+		provider->state->observed_if_none_match.clear();
+		REQUIRE_NO_FAIL(connection.Query("UPDATE EXTENSIONS"));
+		REQUIRE(!provider->state->request_urls.empty());
+		return provider->state->request_urls.back();
+	};
+	create_repository("http://old.test/repo");
+	REQUIRE_NO_FAIL(connection.Query("INSTALL loadable_extension_demo FROM my_repo"));
+
+	// the repository still points where the extension came from: the etag is sent
+	auto url = update();
+	CHECK(StringUtil::StartsWith(url, "http://old.test/repo/"));
+	CHECK(provider->state->observed_if_none_match == "mock-etag");
+
+	// the repository moved: the etag of the old url is not sent, so the new binary is downloaded
+	create_repository("http://new.test/repo");
+	url = update();
+	CHECK(StringUtil::StartsWith(url, "http://new.test/repo/"));
+	CHECK(provider->state->observed_if_none_match.empty());
+
+	// the install info now records the new url, so the etag is sent again
+	url = update();
+	CHECK(StringUtil::StartsWith(url, "http://new.test/repo/"));
+	CHECK(provider->state->observed_if_none_match == "mock-etag");
+
+	TestDeleteDirectory(extension_directory);
+	TestDeleteDirectory(repository_directory);
+}
+
 TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transport_manager]") {
 	// statically linked extensions, such as httpfs, may replace the provider when they load
 	DBConfig config;

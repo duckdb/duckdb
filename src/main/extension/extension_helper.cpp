@@ -328,11 +328,11 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 		repository_from_info = user_repository;
 	}
 
-	// Force install the full url found in this file, enabling etags to ensure efficient updating
+	// Force install from the repository
 	ExtensionInstallOptions options;
 	options.repository = repository_from_info;
 	options.force_install = true;
-	options.use_etags = true;
+	options.use_etags = repository_from_info.path == extension_install_info->repository_url;
 	options.extension_directory = extension_directory;
 
 	unique_ptr<ExtensionInstallInfo> install_result;
