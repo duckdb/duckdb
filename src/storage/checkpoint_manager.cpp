@@ -94,8 +94,7 @@ void ActiveCheckpointWrapper::Commit() {
 
 CheckpointWriter::CheckpointWriter(AttachedDatabase &db_p, QueryContext query_context,
                                    optional_ptr<ClientContext> checkpoint_context_p)
-    : db(db_p), owned_context(query_context.Valid() ? nullptr : db_p.GetDatabase().Services()),
-      context(query_context.Valid() ? *query_context.GetContext() : *owned_context),
+    : db(db_p), context(query_context.Valid() ? *query_context.GetContext() : db_p.GetDatabase().GetContext()),
       checkpoint_context(checkpoint_context_p) {
 }
 
@@ -258,7 +257,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 
 	// If there is a checkpoint context (non shutdown path), WALStartCheckpoint creates the checkpoint transaction.
-	ActiveCheckpointWrapper active_checkpoint(GetCheckpointContext(), db, transaction_manager);
+	ActiveCheckpointWrapper active_checkpoint(checkpoint_context, db, transaction_manager);
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
@@ -324,12 +323,18 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		throw IOException("Checkpoint aborted before header write (non-fatal) because of PRAGMA checkpoint_abort flag");
 	}
 
+	// a concurrent commit may have invalidated the database: do not publish the checkpoint
+	auto invalidation_error = db.InvalidationError("checkpoint");
+	if (invalidation_error.HasError()) {
+		invalidation_error.Throw();
+	}
+
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(QueryContext(GetContext()), header);
+	block_manager.WriteHeader(QueryContext(GetContext()), header, options.visibility_bound);
 
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());
 	if (debug_verify_blocks) {

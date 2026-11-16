@@ -126,8 +126,8 @@ static void CastDecimalLambdaToAccumulatorType(ClientContext &context, BindResul
 	rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
 }
 
-ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t depth,
-                                                   const vector<LogicalType> &function_child_types,
+ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, const DecimalWidthLimit &decimal_width_limit,
+                                                   idx_t depth, const vector<LogicalType> &function_child_types,
                                                    bind_lambda_function_t bind_lambda_function,
                                                    BindResult &bind_lambda_result,
                                                    const bind_lambda_expression_t &bind_lambda_expression,
@@ -154,12 +154,14 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 	LogicalType accumulator_type;
 	if (has_initial) {
 		const auto &initial_type = function_child_types[2];
-		if (!LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, accumulator_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, accumulator_type,
+		                                       decimal_width_limit)) {
 			throw BinderException("No common super type between initial value type %s and lambda return type %s",
 			                      initial_type.ToString(), lambda_return_type.ToString());
 		}
 	} else {
-		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type,
+		                                       decimal_width_limit)) {
 			throw BinderException("No common super type between list element type %s and lambda return type %s",
 			                      list_child_type.ToString(), lambda_return_type.ToString());
 		}
@@ -266,9 +268,9 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	ColumnQualifier qualifier(binder, lambda_bindings);
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
+		auto bound_name = Binder::BindTableName(binder.EntryRetriever(), function.GetQualifiedName());
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.GetQualifiedName(),
-		                                      error_context);
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, bound_name, error_context);
 		auto table_func = GetCatalogEntry(table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
@@ -277,7 +279,7 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.GetQualifiedName(), error_context);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, bound_name, error_context);
 		func = GetCatalogEntry(function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
@@ -402,7 +404,11 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// bind each child
 	vector<unique_ptr<Expression>> bound_children;
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
-		bound_children.push_back(BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error));
+		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
+		// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
+		auto &arg = function.GetArgumentsMutable()[i];
+		bound_children.push_back(BindChild(arg.GetExpressionMutable(), depth, error, arg.GetName()));
 	}
 
 	if (error.HasError()) {
@@ -421,15 +427,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
 		auto &arg = function.GetArgumentsMutable()[i];
 		auto bound_arg = std::move(bound_children[i]);
-
-		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
-		// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
-		// Only override the alias when the argument actually carries a name, otherwise we would clobber the
-		// display alias the binding assigned (e.g. clearing a column reference's name to its raw binding).
-		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(arg.GetName());
-		}
 		if (function.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
@@ -444,12 +441,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		ErrorData named_error;
 		vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 		for (auto &arg : named_fallback) {
-			auto bound_arg = BindChild(arg.GetExpressionMutable(), depth, named_error);
+			auto bound_arg = BindChild(arg.GetExpressionMutable(), depth, named_error, arg.GetName());
 			if (named_error.HasError()) {
 				break;
-			}
-			if (!arg.GetName().empty()) {
-				bound_arg->SetAlias(arg.GetName());
 			}
 			named_arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
@@ -555,9 +549,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		// list_reduce requires binding the lambda function a second time as there is a cyclical dependency between its
 		// acc parameter type and its return type. This is resolved by initially binding it with acc = initial, and then
 		// rebinding it with acc = return type
-		auto rebind_result =
-		    MaybeRebindListReduceLambda(context, depth, function_child_types, bind_lambda_function, bind_lambda_result,
-		                                bind_lambda_expression, nullptr, lambda_expr_copy);
+		auto rebind_result = MaybeRebindListReduceLambda(context, binder.GetDecimalWidthLimit(), depth,
+		                                                 function_child_types, bind_lambda_function, bind_lambda_result,
+		                                                 bind_lambda_expression, nullptr, lambda_expr_copy);
 		if (rebind_result.did_rebind) {
 			capture_child_types = std::move(rebind_result.capture_child_types);
 			override_bind_lambda_context = std::move(rebind_result.override_bind_lambda_context);

@@ -22,7 +22,7 @@ static BoundCastInfo BindCastScalarFunction(ClientContext &context, const Logica
 
 static BoundCastInfo BindDefaultCastScalarFunction(const LogicalType &source, const LogicalType &target) {
 	CastFunctionSet cast_functions;
-	GetCastFunctionInput input;
+	auto input = GetCastFunctionInput::Default();
 	return cast_functions.GetCastFunction(source, target, input);
 }
 
@@ -100,7 +100,7 @@ static unique_ptr<FunctionLocalState> CastInitLocalState(ExpressionState &state,
 	if (!cast_data.bound_cast.HasInitLocalState()) {
 		return nullptr;
 	}
-	auto context_ptr = state.root.executor->HasContext() ? &state.root.executor->GetContext() : nullptr;
+	auto context_ptr = state.root.executor->TryGetClientContext();
 	CastLocalStateParameters parameters(context_ptr, cast_data.bound_cast.GetCastData());
 	return cast_data.bound_cast.InitLocalState(parameters);
 }
@@ -196,10 +196,8 @@ static unique_ptr<Expression> CreateCastExpression(unique_ptr<Expression> child,
 	BoundScalarFunction bound_function(scalar_function);
 	bound_function.GetArguments() = {source_type};
 
-	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
-	                                                 std::move(function_data), true);
-	result->SetQueryLocation(query_location);
-	return std::move(result);
+	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children), std::move(function_data),
+	                                          true, Identifier(), query_location);
 }
 
 unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, const LogicalType &target_type,
@@ -255,7 +253,7 @@ const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpres
 }
 
 BoundCastInfo &BoundCastExpression::GetBoundCastMutable(BoundFunctionExpression &cast_expr) {
-	return cast_expr.BindInfoMutable()->Cast<CastFunctionData>().bound_cast;
+	return cast_expr.BindInfo()->Cast<CastFunctionData>().bound_cast;
 }
 
 unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctionExpression &cast_expr,

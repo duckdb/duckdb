@@ -8,11 +8,14 @@
 
 #pragma once
 
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -21,6 +24,57 @@
 #include <utility>
 
 namespace duckdb {
+
+//! The BIGNUM accumulators of aggregate states: exported as (trimmed) BIGNUM blobs, imported as copies in the arena
+struct BignumAggregates {
+	//! Writes the value as a BIGNUM blob in the heap of the result vector
+	static string_t WriteBignum(const BignumIntermediate &value, Vector &result) {
+		// trimmed like BignumIntermediate::ToBignum, the intermediate itself is only read
+		auto start = value.GetStartDataPos();
+		uint32_t size = value.size - start;
+		if (size == 0) {
+			// the value is all sign-extension bytes: keep one of them
+			start = 0;
+			size = 1;
+		}
+		auto blob = StringVector::EmptyString(result, Bignum::BIGNUM_HEADER_SIZE + size);
+		auto ptr = blob.GetDataWriteable();
+		Bignum::SetHeader(ptr, size, value.is_negative);
+		memcpy(ptr + Bignum::BIGNUM_HEADER_SIZE, value.data + start, size);
+		blob.Finalize();
+		return blob;
+	}
+
+	//! Copies an imported BIGNUM blob into the arena and returns the intermediate over the copy
+	static BignumIntermediate ImportBignum(string_t blob, ArenaAllocator &allocator) {
+		const auto size = blob.GetSize();
+		auto header = const_data_ptr_cast(blob.GetData());
+		if (size < Bignum::BIGNUM_HEADER_SIZE + 1) {
+			throw InvalidInputException("Invalid BIGNUM state - the blob is shorter than a header and a byte");
+		}
+		// the header holds the data size, inverted for negative values (see Bignum::SetHeader)
+		uint32_t data_size = (uint32_t(header[0]) << 16) | (uint32_t(header[1]) << 8) | uint32_t(header[2]);
+		if ((header[0] & 0x80) == 0) {
+			data_size = ~data_size;
+		}
+		data_size &= 0x7FFFFF;
+		if (size != data_size + Bignum::BIGNUM_HEADER_SIZE) {
+			throw InvalidInputException("Invalid BIGNUM state - the header does not match the size of the blob");
+		}
+		auto ptr = allocator.Allocate(size);
+		memcpy(ptr, blob.GetData(), size);
+		return BignumIntermediate(ptr, size);
+	}
+};
+
+struct AggregateStatisticsInput;
+
+struct SumAccumulatorBounds {
+	hugeint_t min;
+	hugeint_t max;
+
+	static optional<SumAccumulatorBounds> TryGet(const AggregateStatisticsInput &input);
+};
 
 struct RepeatedStateValue {
 	template <class T>
@@ -171,14 +225,9 @@ struct AddToHugeint {
 		result.lower += value;
 		// now handle overflows
 		int overflow = result.lower < value;
-		// we consider two situations:
-		// (1) input[idx] is positive, and current value is lower than value: overflow
-		// (2) input[idx] is negative, and current value is higher than value: underflow
-		if (!(overflow ^ positive)) {
-			// in the case of an overflow or underflow we either increment or decrement the upper base
-			// positive: +1, negative: -1
-			result.upper += -1 + 2 * positive;
-		}
+		D_ASSERT(positive == 0 || positive == 1);
+		// Add the unsigned carry and the sign extension of the input.
+		result.upper += overflow + positive - 1;
 	}
 
 	template <class STATE, class T>

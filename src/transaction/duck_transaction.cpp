@@ -302,7 +302,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			// transaction there is nothing to share the sync with, so sync now under the transaction lock;
 			// otherwise only write the marker and sync once the locks are released
 			bool sync_now = commit_info.active_transactions == ActiveTransactionState::NO_OTHER_TRANSACTIONS;
-			commit_info.wal_sync_offset = commit_state->FlushCommit(sync_now);
+			commit_info.wal_sync_offset = commit_state->FlushCommit(commit_info.commit_id, sync_now);
 		}
 		drop_state.FinalizeCommit();
 		return ErrorData();
@@ -326,16 +326,13 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	} catch (std::exception &ex) {
 		// If we fail to revert the commit, the database is left in an undefined state - invalidate it.
 		// Record both the original commit error and the revert error so the root cause stays visible.
-		ValidChecker::Invalidate(db.GetDatabase(),
-		                         "Failed to revert transaction commit, database is in an undefined state. "
-		                         "Original commit error: " +
-		                             error_data.RawMessage() + ". RevertCommit error: " + ErrorData(ex).RawMessage());
+		db.Invalidate("reverting a failed commit failed, leaving it in an undefined state",
+		              "commit error: " + error_data.RawMessage() +
+		                  ". RevertCommit error: " + ErrorData(ex).RawMessage());
 	} catch (...) {
 		// last line of defense: this is a noexcept function, nothing may escape
-		ValidChecker::Invalidate(db.GetDatabase(),
-		                         "Failed to revert transaction commit (unknown error), database is in an "
-		                         "undefined state. Original commit error: " +
-		                             error_data.RawMessage());
+		db.Invalidate("reverting a failed commit failed, leaving it in an undefined state",
+		              "commit error: " + error_data.RawMessage() + ". RevertCommit error: unknown error");
 	}
 	return error_data;
 }
