@@ -69,3 +69,34 @@ SELECT g FROM geoms;
 ----
 POINT (1 2)
 POINT (3 4)
+
+# malformed WKT is also a cast error for GEOGRAPHY
+query IIIII
+SELECT TRY_CAST('garbage' AS GEOGRAPHY), TRY_CAST('POINT(1 2' AS GEOGRAPHY), TRY_CAST('POINT(1 2) x' AS GEOGRAPHY),
+       TRY_CAST('POINT(181 0)' AS GEOGRAPHY), ST_AsText(TRY_CAST('POINT(1 2)' AS GEOGRAPHY));
+----
+NULL	NULL	NULL	NULL	POINT (1 2)
+
+query I
+SELECT ST_AsText(TRY_CAST(g AS GEOGRAPHY)) FROM (VALUES ('POINT(1 2)'), ('LINESTRING(0 0'), (NULL), ('POINT(0 91)')) t(g);
+----
+POINT (1 2)
+NULL
+NULL
+NULL
+
+statement error
+SELECT CAST('POINT(1 2' AS GEOGRAPHY);
+----
+Failed to parse geometry: Expected ')' but got end of input at offset 9
+
+statement error
+SELECT CAST('POINT(1 2) x' AS GEOGRAPHY);
+----
+Could not convert string
+
+query I
+SELECT ST_AsText(g) FROM read_csv('{TEMP_DIR}/malformed_wkt.csv', columns={'g': 'GEOGRAPHY'}, header=true, ignore_errors=true);
+----
+POINT (1 2)
+POINT (3 4)
