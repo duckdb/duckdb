@@ -110,6 +110,10 @@ bool LogicalAggregate::IgnoresDuplicates() const {
 			return false;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			// an exported state may hold more than the finalized value: an ordered aggregate buffers every input row
+			return false;
+		}
 		if (aggregate.IsDistinct()) {
 			continue;
 		}

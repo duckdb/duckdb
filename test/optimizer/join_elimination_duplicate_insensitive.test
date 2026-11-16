@@ -1007,3 +1007,53 @@ query II
 explain select max(n1.i) from n1 left join n2 on n1.i = n2.i left join n3 on n2.i = n3.i;
 ----
 physical_plan	<!REGEX>:.*JOIN.*
+
+# must not fire: an exported aggregate state may depend on the repeated rows although the finalized value does not
+# (an ordered aggregate buffers every input row)
+statement ok
+create table outer_rows(i integer);
+
+statement ok
+create table matches(i integer);
+
+statement ok
+insert into outer_rows values (1);
+
+statement ok
+insert into matches values (1), (1);
+
+loop i 0 2
+
+statement ok
+SET disabled_optimizers = CASE WHEN {i} = 0 THEN 'join_elimination' ELSE '' END;
+
+query I
+select (min(outer_rows.i order by outer_rows.i) export_state)::varchar from outer_rows left join matches using (i);
+----
+[{'v0': 1}, {'v0': 1}]
+
+query I
+select (bool_and(outer_rows.i > 0 order by outer_rows.i > 0) export_state)::varchar from outer_rows left join matches using (i);
+----
+[{'v0': true}, {'v0': true}]
+
+query II
+select finalize(min(outer_rows.i order by outer_rows.i) export_state), (max(outer_rows.i) filter (where outer_rows.i > 0) export_state)::varchar from outer_rows left join matches using (i);
+----
+1	1
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';
+
+query II
+explain select (min(outer_rows.i) export_state)::varchar from outer_rows left join matches using (i);
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select min(outer_rows.i order by outer_rows.i) from outer_rows left join matches using (i);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
