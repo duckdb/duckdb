@@ -845,6 +845,26 @@ idx_t BlockAllocator::GetLocalPoolShard() const {
 	return AllocatorLocalShard(touched->queues.Count());
 }
 
+idx_t BlockAllocator::GetPoolShardCount() const {
+	return touched->queues.Count();
+}
+
+optional_idx BlockAllocator::GetAllocationShard(const_data_ptr_t pointer) const {
+	if (!IsInitialized()) {
+		return optional_idx();
+	}
+	const auto address = reinterpret_cast<uintptr_t>(pointer);
+	const auto base = reinterpret_cast<uintptr_t>(pool_base);
+	if (address < base || address - base >= pool_size) {
+		return optional_idx();
+	}
+	const auto block_id = NumericCast<uint32_t>(DivBlockSize(address - base));
+	if (IsGuardBlock(block_id)) {
+		return optional_idx();
+	}
+	return touched->Home(block_id);
+}
+
 uint32_t BlockAllocator::GetBlockID(const data_ptr_t pointer) const {
 	D_ASSERT(IsInPool(pointer));
 	const auto offset = NumericCast<idx_t>(pointer - pool_base);

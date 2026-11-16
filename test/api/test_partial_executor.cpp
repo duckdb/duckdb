@@ -1,5 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 
 #include <atomic>
@@ -151,6 +154,34 @@ struct FailingBatchTask : BatchTask {
 	}
 };
 
+struct FailingCancellationTask : BatchTask {
+	using BatchTask::BatchTask;
+
+	void Cancel() override {
+		counts->cancelled++;
+		throw std::runtime_error("injected cancellation failure");
+	}
+};
+
+struct FailingTaskStartState : ClientContextState {
+	FailingTaskStartState(idx_t fail_at, bool non_std_error) : fail_at(fail_at), non_std_error(non_std_error) {
+	}
+
+	void OnTaskStart(Context &) override {
+		if (++starts != fail_at) {
+			return;
+		}
+		if (non_std_error) {
+			throw idx_t(42);
+		}
+		throw InvalidInputException("injected task-start failure");
+	}
+
+	idx_t starts = 0;
+	idx_t fail_at;
+	bool non_std_error;
+};
+
 } // namespace
 
 TEST_CASE("TaskExecutor drains empty, single and multi-task batches", "[api][task_batch]") {
@@ -207,6 +238,51 @@ TEST_CASE("TaskExecutor drains batch execution and cancellation failures", "[api
 	}
 	REQUIRE(executor.HasError());
 	REQUIRE(counts->destroyed == 64);
+}
+
+TEST_CASE("TaskExecutor retires work before counting a failed task-start notification", "[api][task_batch]") {
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	auto &registered_state = con.context->GetContext().GetRegisteredState();
+	for (idx_t failed_start : {1, 2}) {
+		for (bool non_std_error : {false, true}) {
+			for (bool cancel_throws : {false, true}) {
+				CAPTURE(failed_start, non_std_error, cancel_throws);
+				auto counts = make_shared_ptr<BatchTaskCounts>();
+				auto listener = make_shared_ptr<FailingTaskStartState>(failed_start, non_std_error);
+				registered_state.Insert("failing-task-start", listener);
+				TaskExecutor executor(*con.context);
+				if (cancel_throws) {
+					executor.ScheduleTask(make_uniq<FailingCancellationTask>(executor, counts, 3));
+				} else {
+					executor.ScheduleTask(make_uniq<BatchTask>(executor, counts, 3));
+				}
+				shared_ptr<Task> task;
+				REQUIRE(executor.GetTask(task));
+				if (failed_start == 2) {
+					REQUIRE(task->Execute(TaskExecutionMode::PROCESS_PARTIAL) ==
+					        TaskExecutionResult::TASK_NOT_FINISHED);
+				}
+				REQUIRE(task->Execute(TaskExecutionMode::PROCESS_PARTIAL) == TaskExecutionResult::TASK_ERROR);
+				REQUIRE(listener->starts == failed_start);
+				REQUIRE(counts->steps == failed_start - 1);
+				REQUIRE(counts->executed == 0);
+				REQUIRE(counts->cancelled == 1);
+				REQUIRE(executor.HasError());
+				const auto expected_error =
+				    non_std_error ? "Unknown exception during task execution" : "injected task-start failure";
+				REQUIRE(executor.GetError().RawMessage() == expected_error);
+				REQUIRE_NOTHROW(executor.CancelAndDrain());
+				// Draining must observe retirement even while another thread still holds the wrapper.
+				REQUIRE(counts->destroyed == 0);
+				task.reset();
+				REQUIRE(counts->destroyed == 1);
+				REQUIRE(counts->cancelled == 1);
+				registered_state.Remove("failing-task-start");
+			}
+		}
+	}
 }
 
 #ifndef DUCKDB_NO_THREADS
