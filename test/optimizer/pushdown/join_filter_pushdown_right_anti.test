@@ -230,3 +230,171 @@ analyzed_plan	<!REGEX>:(?s).*Dynamic Filters.*
 
 statement ok
 RESET disabled_optimizers;
+
+# several equality keys: every key column gets its own bloom or prefix-range filter, as for a RIGHT SEMI join.
+# both key columns have NULLs on both sides, and the build side has rows that match in one key column only
+statement ok
+CREATE TABLE fact AS
+SELECT i AS v,
+       CASE WHEN i % 13 = 0 THEN NULL ELSE (i % 3000)::INTEGER END AS item,
+       CASE WHEN i % 17 = 0 THEN NULL ELSE ((i // 12) * 1000003)::BIGINT END AS ticket
+FROM range(200000) t(i);
+
+# 2% of the fact rows, 50 rows whose item occurs in fact but whose ticket does not, and 50 rows the other way around
+statement ok
+CREATE TABLE dim AS
+SELECT v, item, ticket FROM fact WHERE (v // 12) % 50 = 0
+UNION ALL
+SELECT -1 - i, (i % 3000)::INTEGER, -7 - i FROM range(50) t(i)
+UNION ALL
+SELECT -101 - i, (5000 + i)::INTEGER, ((i * 600) * 1000003)::BIGINT FROM range(50) t(i);
+
+# 20% of the fact rows
+statement ok
+CREATE TABLE dim_large AS SELECT v, item, ticket FROM fact WHERE (v // 12) % 5 = 0;
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+analyzed_plan	<REGEX>:(?s).*Join Type: RIGHT_ANTI.*item IN PRF\(item\).*ticket IN BF\(ticket\).*
+
+# the same filters as for the RIGHT SEMI join
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim d SEMI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+analyzed_plan	<REGEX>:(?s).*Join Type: RIGHT_SEMI.*item IN PRF\(item\).*ticket IN BF\(ticket\).*
+
+# a build row with a NULL in either key column has no match and is returned; a probe row with a NULL in either key
+# column cannot match, so the filter of that column may drop it
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+631	53038974
+
+query II
+SELECT count(*), sum(v) FROM dim WHERE v NOT IN (SELECT d.v FROM dim d JOIN fact f ON d.item = f.item AND d.ticket = f.ticket);
+----
+631	53038974
+
+# the anti join and the semi join partition the build side
+query I
+SELECT count(*) FROM dim d SEMI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+3477
+
+# IS NOT DISTINCT FROM: NULL matches NULL, the filters keep the probe rows with a NULL key
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item IS NOT DISTINCT FROM f.item AND d.ticket IS NOT DISTINCT FROM f.ticket;
+----
+analyzed_plan	<REGEX>:(?s).*Join Type: RIGHT_ANTI.*item IN PRF\(item\).*ticket IN BF\(ticket\).*
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item IS NOT DISTINCT FROM f.item AND d.ticket IS NOT DISTINCT FROM f.ticket;
+----
+100	-7550
+
+# one key of each kind
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket IS NOT DISTINCT FROM f.ticket;
+----
+408	30716546
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item IS NOT DISTINCT FROM f.item AND d.ticket = f.ticket;
+----
+336	23628944
+
+# a build side above 5% of the probe side only gets the min/max filters, again as for a RIGHT SEMI join
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim_large d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+analyzed_plan	<REGEX>:(?s).*Join Type: RIGHT_ANTI.*Dynamic Filters:.*ticket <= .*
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim_large d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+analyzed_plan	<!REGEX>:(?s).* IN (PRF|BF)\(.*
+
+query II
+SELECT count(*), sum(d.v) FROM dim_large d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+5249	525092951
+
+# an empty build side with several keys
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket WHERE d.v % 1000 = 999;
+----
+0	NULL
+
+# the same results without the filters
+statement ok
+SET disabled_optimizers = 'join_filter_right_anti';
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+analyzed_plan	<!REGEX>:(?s).*Dynamic Filters.*
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+631	53038974
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item IS NOT DISTINCT FROM f.item AND d.ticket IS NOT DISTINCT FROM f.ticket;
+----
+100	-7550
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item = f.item AND d.ticket IS NOT DISTINCT FROM f.ticket;
+----
+408	30716546
+
+query II
+SELECT count(*), sum(d.v) FROM dim d ANTI JOIN fact f ON d.item IS NOT DISTINCT FROM f.item AND d.ticket = f.ticket;
+----
+336	23628944
+
+query II
+SELECT count(*), sum(d.v) FROM dim_large d ANTI JOIN fact f ON d.item = f.item AND d.ticket = f.ticket;
+----
+5249	525092951
+
+statement ok
+RESET disabled_optimizers;
+
+# the probe side is an aggregate over a scan in a pipeline of its own: that scan waits for the filter of the
+# RIGHT ANTI join like it does for a RIGHT SEMI join, also if the build side turns out to be empty
+statement ok
+CREATE TABLE keys(k BIGINT);
+
+statement ok
+INSERT INTO keys VALUES (42), (-1), (NULL);
+
+foreach threads 1 4
+
+statement ok
+SET threads={threads};
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT b.k FROM keys b ANTI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_ANTI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": 40,.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT b.k FROM keys b SEMI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k;
+----
+analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_SEMI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": 40,.*
+
+query I
+SELECT b.k FROM keys b ANTI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k ORDER BY ALL;
+----
+-1
+NULL
+
+query I
+SELECT count(*) FROM keys b ANTI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k WHERE b.k % 1000 = 999;
+----
+0
+
+endloop
