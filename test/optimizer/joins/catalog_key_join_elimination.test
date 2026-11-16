@@ -1,0 +1,276 @@
+# name: test/optimizer/joins/catalog_key_join_elimination.test
+# description: Unused outer join sides are eliminated using strict catalog keys
+# group: [joins]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE fact(id INTEGER PRIMARY KEY, k INTEGER, k2 INTEGER, payload INTEGER);
+
+statement ok
+INSERT INTO fact VALUES (10, 1, 1, 100), (11, 1, 2, 200), (12, 2, 1, 300), (13, NULL, 1, 400), (14, 99, 1, 500);
+
+statement ok
+CREATE TABLE dim(k INTEGER PRIMARY KEY, payload INTEGER);
+
+statement ok
+INSERT INTO dim VALUES (1, 7), (2, 8);
+
+# Neither a foreign key nor a matching inner row is required.
+query II
+EXPLAIN SELECT f.id, f.payload FROM fact f LEFT JOIN dim d ON f.k = d.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II rowsort
+SELECT f.id, f.payload FROM fact f LEFT JOIN dim d ON f.k = d.k;
+----
+10	100
+11	200
+12	300
+13	400
+14	500
+
+# RIGHT joins preserve the other child and its column layout.
+query II
+EXPLAIN SELECT f.payload, f.id FROM dim d RIGHT JOIN fact f ON d.k = f.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II rowsort
+SELECT f.payload, f.id FROM dim d RIGHT JOIN fact f ON d.k = f.k;
+----
+100	10
+200	11
+300	12
+400	13
+500	14
+
+statement ok
+CREATE TABLE composite(a INTEGER, b INTEGER, PRIMARY KEY(a, b));
+
+statement ok
+INSERT INTO composite VALUES (1, 1), (1, 2), (2, 1);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN composite c ON f.k = c.a AND f.k2 = c.b;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I rowsort
+SELECT f.id FROM fact f LEFT JOIN composite c ON f.k = c.a AND f.k2 = c.b;
+----
+10
+11
+12
+13
+14
+
+# A prefix of a composite key can still multiply rows.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN composite c ON f.k = c.a;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I rowsort
+SELECT f.id FROM fact f LEFT JOIN composite c ON f.k = c.a;
+----
+10
+10
+11
+11
+12
+13
+14
+
+# Every strict alternative key is eligible, including keys not in catalog column order.
+statement ok
+CREATE TABLE alternatives(unused INTEGER UNIQUE NOT NULL, k INTEGER UNIQUE NOT NULL);
+
+statement ok
+INSERT INTO alternatives VALUES (100, 1), (200, 2);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN alternatives d ON f.k = d.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# A projection can forward the complete key.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN (SELECT k AS renamed FROM dim) d ON f.k = d.renamed;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# The key remains usable after a non-key column is dropped.
+statement ok
+CREATE TABLE altered(k INTEGER PRIMARY KEY, unused INTEGER);
+
+statement ok
+INSERT INTO altered VALUES (1, 123), (2, 456);
+
+statement ok
+ALTER TABLE altered DROP COLUMN unused;
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN altered d ON f.k = d.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# A scan after an ALTER that removes its constraint must retain the join.
+statement ok
+CREATE TABLE changed(k INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO changed VALUES (1, 1), (2, 2);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN changed d ON f.k = d.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+statement ok
+CREATE OR REPLACE TABLE changed AS SELECT * FROM changed;
+
+statement ok
+INSERT INTO changed VALUES (1, 3);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN changed d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN changed d ON f.k = d.k;
+----
+7
+
+# A nullable UNIQUE key is not a strict unique-column combination.
+statement ok
+CREATE TABLE nullable_key(k INTEGER UNIQUE);
+
+statement ok
+INSERT INTO nullable_key VALUES (1), (2), (NULL), (NULL);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN nullable_key d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN nullable_key d ON f.k IS NOT DISTINCT FROM d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN nullable_key d ON f.k IS NOT DISTINCT FROM d.k;
+----
+6
+
+# Deferred constraints allow duplicates until commit.
+statement ok
+CREATE TABLE deferred_key(k INTEGER PRIMARY KEY DEFERRED);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO deferred_key VALUES (1), (1);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
+----
+7
+
+statement ok
+ROLLBACK;
+
+# A referenced inner column prevents removal even when the key is complete.
+query II
+EXPLAIN SELECT f.id, d.payload FROM fact f LEFT JOIN dim d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II rowsort
+SELECT f.id, d.payload FROM fact f LEFT JOIN dim d ON f.k = d.k;
+----
+10	7
+11	7
+12	8
+13	NULL
+14	NULL
+
+# Casts/expressions and non-equality conditions do not establish this proof.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN dim d ON f.k = d.k % 2;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN dim d ON f.k <= d.k;
+----
+7
+
+# A unique base key is not unique after join fanout.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN (fact x LEFT JOIN dim d ON x.k = d.k) ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN (fact x LEFT JOIN dim d ON x.k = d.k) ON f.k = d.k;
+----
+7
+
+# UNION ALL duplicates and UNNEST fanout invalidate the child key.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN (SELECT k FROM dim UNION ALL SELECT k FROM dim) d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN (SELECT k FROM dim UNION ALL SELECT k FROM dim) d ON f.k = d.k;
+----
+8
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN (SELECT k, unnest([1, 2]) AS x FROM dim) d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN (SELECT k, unnest([1, 2]) AS x FROM dim) d ON f.k = d.k;
+----
+8
+
+# A later join condition must keep the inner side it reads.
+query I
+SELECT count(*) FROM fact f LEFT JOIN dim d ON f.k = d.k LEFT JOIN fact g ON d.k = g.k;
+----
+7
+
+# Existing filtered-side and join-kind guards remain conservative.
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN (SELECT * FROM dim WHERE payload > 7) d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+EXPLAIN SELECT a.k, b.payload FROM dim a JOIN dim b ON a.k = b.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+EXPLAIN SELECT id FROM fact WHERE k IN (SELECT k FROM dim WHERE payload > 7);
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT id FROM fact WHERE k IN (SELECT k FROM dim WHERE payload > 7);
+----
+12
