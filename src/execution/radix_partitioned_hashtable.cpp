@@ -315,6 +315,10 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 	} else {
 		bits = MAXIMUM_FINAL_SINK_RADIX_BITS;
 	}
+	if (sink.radix_ht.GetLayout().AllConstant()) {
+		// Allow enough fixed-width partitions to keep the available workers busy.
+		bits = MaxValue(bits, RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(sink.number_of_threads)));
+	}
 	// Capped by external radix bits
 	return MinValue(bits, ExternalRadixBits(false));
 }
