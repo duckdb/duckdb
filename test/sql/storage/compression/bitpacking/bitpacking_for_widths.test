@@ -1,0 +1,82 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_for_widths.test
+# description: FOR decoding across residual widths, nonzero frames, NULLs and tails
+# group: [bitpacking]
+
+require block_size 262144
+
+require vector_size 2048
+
+statement ok
+ATTACH '{TEST_DIR}/bitpacking_for_widths.db' AS db;
+
+statement ok
+SET threads=1;
+
+statement ok
+SET force_bitpacking_mode='for';
+
+# Frequent NULLs keep validity uncompressed so storage selection remains available.
+foreach bits 32 64
+
+foreach type INT UINT
+
+statement ok
+CREATE OR REPLACE MACRO max_width() AS {bits} - CASE WHEN '{type}'='INT' THEN 1 ELSE 0 END;
+
+statement ok
+CREATE OR REPLACE MACRO bit_width(i) AS least(i//2048, max_width());
+
+statement ok
+CREATE OR REPLACE MACRO frame(i) AS CASE WHEN '{type}'='INT' THEN -(1::HUGEINT << ({bits}-1)) ELSE CASE WHEN bit_width(i)={bits} THEN 0 ELSE 17 END END;
+
+statement ok
+CREATE OR REPLACE MACRO residual_mask(i) AS (1::HUGEINT << bit_width(i))-1;
+
+statement ok
+CREATE OR REPLACE MACRO expected(i) AS frame(i) + CASE WHEN i%2048=1 THEN 0 WHEN i%2048=2 THEN residual_mask(i) WHEN i%3=0 THEN NULL ELSE hash(i)::HUGEINT & residual_mask(i) END;
+
+statement ok
+CREATE TABLE db.t(id BIGINT, v {type}{bits} USING COMPRESSION bitpacking);
+
+statement ok
+INSERT INTO db.t SELECT i, expected(i)::{type}{bits} FROM range(2048*(max_width()+1)+5) r(i);
+
+statement ok
+CHECKPOINT db;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/bitpacking_for_widths.db' AS db;
+
+query I
+SELECT count(*)>0 FROM pragma_storage_info('db.t') WHERE compression='BitPacking' AND column_name='v';
+----
+true
+
+query I
+SELECT bool_and(compression='Uncompressed') FROM pragma_storage_info('db.t') WHERE column_name='v' AND segment_type='VALIDITY';
+----
+true
+
+query I
+SELECT bool_and(v::HUGEINT IS NOT DISTINCT FROM expected(id)) FROM db.t;
+----
+true
+
+foreach predicate id%97<>0 id%97=0 id%1024<16
+
+query I
+SELECT count(*)>0 AND bool_and(v::HUGEINT IS NOT DISTINCT FROM expected(id)) FROM db.t WHERE {predicate};
+----
+true
+
+endloop
+
+statement ok
+DROP TABLE db.t;
+
+endloop
+
+endloop
