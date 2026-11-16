@@ -864,6 +864,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
                                                     const string &repository_name, bool core_only,
                                                     ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
 	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
+	auto loaded_path = fs.CanonicalizePath(extension_init_result.filename);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
@@ -887,7 +888,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info.FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info, loaded_path);
 		return;
 	}
 
@@ -911,7 +912,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info.FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info, loaded_path);
 		return;
 	}
 
@@ -950,7 +951,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info.FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info, loaded_path);
 		return;
 	}
 
