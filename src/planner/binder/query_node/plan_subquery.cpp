@@ -965,6 +965,13 @@ static BindingReplacementGraph PlanLateralUnnest(Binder &binder, unique_ptr<Logi
 		// them for the left rows that pass it. Such a filter does not always move below a projection
 		return replacements;
 	}
+	if (join.condition &&
+	    (join.condition->IsVolatile() || join.condition->CanThrow() || join.condition->HasSubquery())) {
+		// the ON condition becomes a filter over the joined rows. The join does not evaluate its condition once for
+		// every one of them, so only a condition that gives the same result however often and on whichever of these
+		// rows it is evaluated can move there
+		return replacements;
+	}
 
 	vector<unique_ptr<LogicalOperator>> operators;
 	auto right = std::move(join.children[1]);

@@ -884,6 +884,47 @@ SELECT id, v FROM guarded, LATERAL (SELECT v FROM (SELECT unnest(CAST(s AS INTEG
 1	2
 3	3
 
+# 39: an ON condition that is volatile or can raise an error stays with the join, which does not evaluate it once for
+# every joined row
+statement ok
+CREATE TABLE dup(a INTEGER);
+
+statement ok
+INSERT INTO dup VALUES (1), (1);
+
+statement ok
+CREATE SEQUENCE on_seq;
+
+query I
+SELECT count(*) FROM dup JOIN UNNEST([a]) AS u(v) ON nextval('on_seq') > v
+----
+0
+
+query I
+SELECT nextval('on_seq')
+----
+2
+
+query II
+SELECT id, v FROM guarded JOIN UNNEST([id, id + 1]) AS u(v) ON CAST(s AS INTEGER[])[1] = v WHERE s LIKE '[%' ORDER BY ALL
+----
+1	1
+3	3
+
+query II
+SELECT id, v FROM t JOIN UNNEST([a, b, c]) AS u(v) ON v + 1 > b ORDER BY ALL
+----
+1	20
+1	30
+2	20
+2	30
+3	5
+5	7
+5	7
+5	7
+6	2
+6	3
+
 # Plans: the general decorrelation materializes the left rows in a CTE and joins the unnested rows back to them; the
 # UNNEST over the left rows needs neither
 
@@ -1049,6 +1090,17 @@ logical_opt	<REGEX>:(?s).*CTE Name.*Join Type: INNER.*
 
 query II
 EXPLAIN SELECT id, v FROM guarded, LATERAL (SELECT unnest(CAST(s AS INTEGER[])) AS v) WHERE s LIKE '[%' AND CAST(CAST(v AS VARCHAR) AS INTEGER) > 1;
+----
+logical_opt	<REGEX>:(?s).*CTE Name.*Join Type: INNER.*
+
+# 39 a volatile ON condition and an ON condition that can raise an error
+query II
+EXPLAIN SELECT count(*) FROM dup JOIN UNNEST([a]) AS u(v) ON nextval('on_seq') > v;
+----
+logical_opt	<REGEX>:(?s).*CTE Name.*Join Type: INNER.*
+
+query II
+EXPLAIN SELECT id, v FROM t JOIN UNNEST([a, b, c]) AS u(v) ON v + 1 > b;
 ----
 logical_opt	<REGEX>:(?s).*CTE Name.*Join Type: INNER.*
 
