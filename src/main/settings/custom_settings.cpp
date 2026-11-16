@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -1462,8 +1463,7 @@ void ProfilingOutputSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 // Profiler Renderer Settings
 //===----------------------------------------------------------------------===//
-void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
+void ProfilingRendererSettingsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull() || input.type().id() != LogicalTypeId::MAP) {
 		throw InvalidInputException("Invalid profiling_renderer_settings type \"%s\", expected a map of settings "
 		                            "(e.g. {'maximum_render_width': 300})",
@@ -1476,35 +1476,19 @@ void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Va
 			throw InvalidInputException("profiling_renderer_settings: the value of \"%s\" cannot be NULL",
 			                            key_value[0].ToString());
 		}
-		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1];
+		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1].DefaultCastAs(LogicalType::VARCHAR);
 	}
-	// eagerly configure the renderer of the current profiler format to validate the setting values
-	auto renderer = QueryProfiler::Get(context).GetRenderer();
-	if (renderer) {
-		renderer->Configure(new_settings);
+	input = TreeRenderer::RendererSettingsToValue(new_settings);
+	if (info.is_reset) {
+		return;
 	}
-	config.profiling_renderer_settings = std::move(new_settings);
-}
-
-void ProfilingRendererSettingsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).profiling_renderer_settings.clear();
-}
-
-Value ProfilingRendererSettingsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	// sort the settings by name so that the rendered value is deterministic
-	vector<string> setting_names;
-	for (auto &entry : config.profiling_renderer_settings) {
-		setting_names.push_back(entry.first);
+	if (!info.context) {
+		throw InvalidInputException("Could not set option \"%s\" as a global option",
+		                            ProfilingRendererSettingsSetting::Name);
 	}
-	std::sort(setting_names.begin(), setting_names.end());
-	vector<Value> keys;
-	vector<Value> values;
-	for (auto &name : setting_names) {
-		keys.emplace_back(name);
-		values.push_back(config.profiling_renderer_settings.at(name).DefaultCastAs(LogicalType::VARCHAR));
-	}
-	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
+	// validate the new values against the renderer of the current profiler format, ignoring the stored ones
+	auto format = ClientConfig::GetConfig(*info.context).profiler_print_format;
+	TreeRenderer::CreateRenderer(*info.context, format == "no_output" ? "query_tree" : format, new_settings);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1586,7 +1570,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 
 Value SchemaSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	return client_data.catalog_search_path->GetDefault().GetSchema();
+	return Value(client_data.catalog_search_path->GetDefault().GetSchemaName());
 }
 
 //===----------------------------------------------------------------------===//
