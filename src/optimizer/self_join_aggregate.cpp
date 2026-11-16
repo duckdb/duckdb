@@ -313,7 +313,7 @@ private:
 			return;
 		}
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			Walk(op.children[0], SelfJoinAggregate::AggregateIgnoresDuplicates(op.Cast<LogicalAggregate>()));
+			Walk(op.children[0], op.Cast<LogicalAggregate>().IgnoresDuplicates());
 			return;
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 			// its references are all below its second child, so they are all seen before its definition is
@@ -541,26 +541,6 @@ private:
 };
 
 } // namespace
-
-bool SelfJoinAggregate::AggregateIgnoresDuplicates(const LogicalAggregate &aggregate) {
-	if (AnyVolatile(aggregate.groups)) {
-		return false;
-	}
-	for (auto &expr : aggregate.expressions) {
-		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE || expr->IsVolatile()) {
-			return false;
-		}
-		auto &bound = expr->Cast<BoundAggregateExpression>();
-		if (bound.IsDistinct()) {
-			continue;
-		}
-		auto &name = bound.Function().GetName().GetIdentifierName();
-		if ((name != "min" && name != "max") || bound.GetChildren().size() != 1) {
-			return false;
-		}
-	}
-	return true;
-}
 
 SelfJoinAggregate::SelfJoinAggregate(Optimizer &optimizer) : optimizer(optimizer) {
 }

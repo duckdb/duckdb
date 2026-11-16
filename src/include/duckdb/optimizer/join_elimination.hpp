@@ -62,8 +62,9 @@ public:
 	// 3. must ensure each outer row can match at most one inner table row, such as:
 	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table
 	//  join condition columns contains a whole distinct group) 2) join result columns contains a whole distinct group
-	// condition 3 is not needed when the operators above the join ignore duplicates (a GROUP BY with only min, max
-	// and DISTINCT aggregates, the right side of a SEMI or ANTI join): the join then only repeats outer rows.
+	// condition 3 is not needed when the operators above the join ignore duplicates (a GROUP BY for which
+	// LogicalAggregate::IgnoresDuplicates holds, the right side of a SEMI or ANTI join): the join then only repeats
+	// outer rows.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Whether Optimize removed a join
 	bool RemovedJoin() const;

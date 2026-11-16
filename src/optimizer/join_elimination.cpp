@@ -8,7 +8,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/optimizer/self_join_aggregate.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -120,7 +119,7 @@ void JoinElimination::OptimizeOperator(unique_ptr<LogicalOperator> &op_ptr, bool
 	// whether the operators above return the same result when rows of their input are repeated
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		pipe_info.ignores_duplicates = SelfJoinAggregate::AggregateIgnoresDuplicates(op.Cast<LogicalAggregate>());
+		pipe_info.ignores_duplicates = op.Cast<LogicalAggregate>().IgnoresDuplicates();
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:

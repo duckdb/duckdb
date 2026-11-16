@@ -944,3 +944,20 @@ Conversion Error
 
 statement ok
 SET disabled_optimizers = '';
+
+# aggregate functions that advertise that they depend neither on duplicates nor on the order of their input
+query II
+explain select b.idb, bool_and(b.valueb > 1), bool_or(b.valueb > 1) from b left join a on b.idb = a.ida group by b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# must not fire: first and last do not depend on duplicates, but on the order of their input
+query II
+explain select b.idb, first(b.valueb), max(b.valueb) from b left join a on b.idb = a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.idb, last(b.valueb) from b left join a on b.idb = a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
