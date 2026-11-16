@@ -6,8 +6,11 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/table/native_scan_job.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 #include <chrono>
@@ -2574,5 +2577,74 @@ TEST_CASE("BlockAllocator guard slots separate writable shard mappings", "[api][
 	for (auto pointer : blocks) {
 		allocator.FreeData(pointer, block_size);
 	}
+}
+
+TEST_CASE("Native scan affinity routes jobs by distinct loaded pool blocks", "[api][block_allocator][storage]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Allocator fallback;
+	const idx_t block_size = 65536;
+	auto allocator = BlockAllocatorTestHelper::CreateWithShards(fallback, block_size, 16 * block_size, 2);
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &block_manager = buffer_manager.GetTemporaryBlockManager();
+	vector<vector<shared_ptr<BlockHandle>>> shards(2);
+	shared_ptr<BlockHandle> outside_pool;
+	block_id_t next_id = MAXIMUM_BLOCK;
+	const auto pool_blocks = BlockAllocatorTestHelper::UsableBlocks(allocator);
+	for (idx_t i = 0; i <= pool_blocks; i++) {
+		auto buffer = make_uniq<FileBuffer>(allocator, FileBufferType::BLOCK, block_size - 8, 8);
+		auto shard = allocator.GetAllocationShard(buffer->InternalBuffer());
+		TempBufferPoolReservation reservation(MemoryTag::BASE_TABLE, buffer_manager.GetBufferPool(), block_size);
+		auto block = make_shared_ptr<BlockHandle>(block_manager, next_id++, MemoryTag::BASE_TABLE, std::move(buffer),
+		                                          DestroyBufferUpon::BLOCK, block_size, std::move(reservation));
+		if (i < pool_blocks) {
+			REQUIRE(shard.IsValid());
+			REQUIRE(shard.GetIndex() < shards.size());
+			shards[shard.GetIndex()].push_back(std::move(block));
+		} else {
+			REQUIRE_FALSE(shard.IsValid());
+			outside_pool = std::move(block);
+		}
+	}
+	REQUIRE(shards[0].size() >= 2);
+	REQUIRE(shards[1].size() >= 2);
+	auto unloaded = make_shared_ptr<BlockHandle>(block_manager, next_id++, MemoryTag::BASE_TABLE);
+	PrefetchState unknown;
+	unknown.blocks = {unloaded, outside_pool};
+	REQUIRE_FALSE(unknown.GetCachedShard(allocator).IsValid());
+	PrefetchState cached;
+	cached.blocks = {shards[0][0], shards[0][0], shards[0][0], shards[1][0], shards[1][1], unloaded, outside_pool};
+	REQUIRE(cached.GetCachedShard(allocator) == optional_idx(1));
+
+	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	idx_t produced = 0;
+	auto produce = [&](vector<unique_ptr<AsyncTask>> &) -> unique_ptr<ScanReadAheadJob> {
+		if (produced == 3) {
+			return nullptr;
+		}
+		auto job = make_uniq<NativeScanJob>(allocator);
+		job->batch_index = produced++;
+		if (job->batch_index == 0) {
+			job->blocks.blocks = unknown.blocks;
+		} else if (job->batch_index == 1) {
+			job->blocks.blocks = {shards[0][0]};
+		} else {
+			job->blocks.blocks = cached.blocks;
+		}
+		return std::move(job);
+	};
+	TableFunctionInput input(nullptr, nullptr, nullptr);
+	unique_ptr<ScanReadAheadJob> job;
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 1) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 2);
+	REQUIRE(static_cast<NativeScanJob &>(*job).blocks.blocks.empty());
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 1);
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 0);
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::EXHAUSTED);
 }
 #endif

@@ -372,6 +372,7 @@ TEST_CASE("Scan affinity preserves worker demand with shallow read-ahead", "[api
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=8"));
+	REQUIRE_NO_FAIL(con.Query("SET external_threads=8"));
 	REQUIRE_NO_FAIL(con.Query("SET async_threads=0"));
 	const auto depth = GENERATE(idx_t(1), idx_t(2));
 	idx_t produced = 0;

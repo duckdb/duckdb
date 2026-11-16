@@ -442,8 +442,13 @@ TEST_CASE("Native scan progress counts consumed assignments and survives "
 
 	auto progress = [&]() {
 		ProgressData data;
-		REQUIRE_FALSE(con.context->GetExecutor().GetPipelinesProgress(data));
+		auto &executor = con.context->GetExecutor();
+		REQUIRE_FALSE(executor.GetPipelinesProgress(data));
 		REQUIRE(data.IsValid());
+		if (data.total == 0) {
+			REQUIRE(executor.ExecutionIsFinished());
+			return 100.0;
+		}
 		return data.ProgressDone() * 100;
 	};
 

@@ -1,4 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/function/table/native_scan_job.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -59,27 +60,6 @@ struct TableScanJobState {
 	unique_ptr<TableScanState> scan_state;
 };
 using TableScanJob = ScanReadAheadJobWrapper<TableScanJobState>;
-
-//! Unordered read-ahead carries storage ranges, leaving decoding state with its worker.
-struct NativeScanJob : public ScanReadAheadJob {
-	explicit NativeScanJob(BlockAllocator &allocator) : allocator(allocator) {
-	}
-	~NativeScanJob() override {
-		SettleIO();
-	}
-	optional_idx ResolveAffinity() override {
-		auto hint = blocks.GetCachedShard(allocator);
-		blocks.blocks.clear();
-		return hint;
-	}
-	idx_t GetMemoryUsage() const override {
-		return sizeof(*this) + blocks.blocks.capacity() * sizeof(shared_ptr<BlockHandle>);
-	}
-
-	TableScanAssignment assignment;
-	PrefetchState blocks;
-	BlockAllocator &allocator;
-};
 
 //! Create the read-ahead driver, returns null when read-ahead is disabled or prefetching is not beneficial
 static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context, DataTable &storage) {
@@ -428,9 +408,8 @@ private:
 		idx_t affinity_shards = 0;
 		if (unordered) {
 			auto &blocks = storage.GetTableIOManager().GetBlockManagerForRowData();
-			const bool supported_scan = MaxThreads() > 1 && context.client.db->NumberOfThreads() > 1 &&
-			                            !blocks.InMemory() && !bind_data.is_create_index && !bind_data.order_options &&
-			                            !sample_options;
+			const bool supported_scan = pipeline->GetMaxThreads() > 1 && !blocks.InMemory() &&
+			                            !bind_data.is_create_index && !bind_data.order_options && !sample_options;
 			if (supported_scan &&
 			    CollectionScanState::SupportsAssignmentBlockDiscovery(storage_ids, storage.GetTypes())) {
 				const auto shard_count = BlockAllocator::Get(storage.GetAttached()).GetPoolShardCount();
