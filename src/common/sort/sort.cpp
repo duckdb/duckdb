@@ -158,12 +158,21 @@ private:
 };
 
 class SortGlobalSinkState : public GlobalSinkState {
+private:
+	//! Small sorts grow on demand; forced external sorts retain their fixed run budget.
+	static constexpr idx_t INITIAL_RESERVATION = 4 * DEFAULT_BLOCK_ALLOC_SIZE;
+
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context.GetContext()).Register(context.GetContext())),
 	      sorted_tuples(0), sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0),
 	      partition_size(0) {
+		if (!external) {
+			temporary_memory_state->SetRemainingSize(
+			    MinValue(INITIAL_RESERVATION, temporary_memory_state->GetMinimumReservation()));
+			temporary_memory_state->UpdateReservation(context.GetContext());
+		}
 	}
 
 public:
@@ -187,7 +196,7 @@ public:
 		if (is_index_sort) {
 			required *= 4; // Index creation is pretty intense, so we are very conservative here
 		}
-		auto request = temporary_memory_state->GetRemainingSize() * 2;
+		auto request = MaxValue<idx_t>(temporary_memory_state->GetRemainingSize(), 1) * 2;
 		while (request < required) {
 			request *= 2;
 		}
@@ -374,6 +383,7 @@ static bool CanUseLargerPartitions(const SortGlobalSinkState &gstate, idx_t part
 SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	if (gstate.sorted_runs.empty()) {
+		gstate.temporary_memory_state->SetZero();
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
@@ -607,7 +617,23 @@ unique_ptr<SortedRun> Sort::GetSortedRun(GlobalSourceState &global_state) {
 	if (gstate.merger.total_count == 0) {
 		return nullptr;
 	}
-	return gstate.merger.GetSortedRun(*gstate.merger_global_state);
+	auto result = gstate.merger.GetSortedRun(*gstate.merger_global_state);
+	if (result) {
+		result->temporary_memory_state = std::move(gstate.sink.temporary_memory_state);
+		// The materialized blocks are spillable; they no longer need the sort's workspace minimum.
+		auto &memory_state = *result->temporary_memory_state;
+		memory_state.SetMinimumReservation(0);
+		auto size = result->key_data->GetBlockAllocationSize();
+		if (result->payload_data) {
+			size += result->payload_data->GetBlockAllocationSize();
+		}
+		if (size == 0) {
+			memory_state.SetZero();
+		} else {
+			memory_state.SetRemainingSizeAndUpdateReservation(client_context.GetContext(), size);
+		}
+	}
+	return result;
 }
 
 } // namespace duckdb

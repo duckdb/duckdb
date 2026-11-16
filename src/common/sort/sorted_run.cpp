@@ -10,6 +10,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 #include "vergesort.h"
 #include "ska_sort.hpp"
