@@ -13,8 +13,14 @@
 // aggregate, and in it a relation R such that
 // - no operator above the region reads a column of R: its columns occur in predicates of the region only;
 // - every predicate that reads R reads, besides R, columns of one other relation L of the region, and at least one
-//   does; none of them is volatile and none holds an equality (an equality join is a hash join the join order places
-//   well, and its build side feeds runtime filters; an OR of equalities is the disjunctive join rewrite's);
+//   does; none of them holds an equality (an equality join is a hash join the join order places well, and its build
+//   side feeds runtime filters; an OR of equalities is the disjunctive join rewrite's);
+// - no expression of the region is volatile or can throw, neither a predicate nor an expression inside one of its
+//   relations (or the definition of a CTE read there): a volatile one would be evaluated on fewer rows, and one
+//   that can throw (a cast that can fail, arithmetic that can overflow) on other rows than before, because the
+//   SEMI join changes which joins of the region run first and which relations are read to the end. That is within
+//   what the join order may do anyway, but a query that ran must not start to fail because of this rewrite, nor
+//   the other way round;
 // - repeats of the region's rows do not matter: the parent chain ignores duplicates (a GROUP BY whose aggregates are
 //   min, max or DISTINCT ones, a DISTINCT, the right side of a SEMI / ANTI / MARK join, through projections, filters
 //   and joins without volatile expressions), or R holds exactly one row (a projection over a dummy scan) and the
@@ -49,6 +55,7 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -66,6 +73,26 @@ public:
 	}
 
 	void Run(unique_ptr<LogicalOperator> &plan) {
+		// the CTEs whose definition holds an expression that is volatile or can throw, directly or through another
+		// CTE: a fixpoint, a definition may read a CTE that is found later
+		vector<reference<LogicalOperator>> ctes;
+		CollectCTEs(*plan, ctes);
+		for (bool changed = true; changed;) {
+			changed = false;
+			for (auto &cte : ctes) {
+				auto &op = cte.get();
+				auto index = op.Cast<LogicalCTE>().table_index;
+				if (unstable_ctes.count(index) > 0) {
+					continue;
+				}
+				// a recursive CTE runs both of its children once per iteration
+				const bool recursive = op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
+				if (IsUnstable(*op.children[0]) || (recursive && IsUnstable(*op.children[1]))) {
+					unstable_ctes.insert(index);
+					changed = true;
+				}
+			}
+		}
 		Walk(plan, false, nullptr, false);
 	}
 
@@ -84,6 +111,8 @@ private:
 		bool at_most_one_row;
 		//! The rows of the scan the relation reads, when it is a scan below projections and filters
 		optional_idx scan_cardinality;
+		//! Whether an expression below the relation is volatile or can throw
+		bool unstable;
 	};
 
 	//! Where a predicate of the region lives in its operator
@@ -98,6 +127,7 @@ private:
 		idx_t index;
 		table_set_t tables;
 		bool is_volatile;
+		bool can_throw;
 		bool equality;
 		//! The predicate, or for a comparison condition of a join its two sides
 		optional_ptr<const Expression> expression;
@@ -301,6 +331,32 @@ private:
 		}
 	}
 
+	static void CollectCTEs(LogicalOperator &op, vector<reference<LogicalOperator>> &ctes) {
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+		    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			ctes.push_back(op);
+		}
+		for (auto &child : op.children) {
+			CollectCTEs(*child, ctes);
+		}
+	}
+
+	//! Whether an expression of `op` or below it, or of the definition of a CTE read there, is volatile or can throw
+	bool IsUnstable(const LogicalOperator &op) const {
+		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF &&
+		    unstable_ctes.count(op.Cast<LogicalCTERef>().cte_index) > 0) {
+			return true;
+		}
+		bool result = false;
+		LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expr) {
+			result = result || (*expr)->IsVolatile() || (*expr)->CanThrow();
+		});
+		for (idx_t i = 0; i < op.children.size() && !result; i++) {
+			result = IsUnstable(*op.children[i]);
+		}
+		return result;
+	}
+
 	//! The rows of the scan below projections and filters, when the scan says how many it reads
 	optional_idx ScanCardinality(const LogicalOperator &op) const {
 		switch (op.type) {
@@ -342,6 +398,7 @@ private:
 			leaf.one_row = HoldsOneRow(op);
 			leaf.at_most_one_row = HoldsAtMostOneRow(op);
 			leaf.scan_cardinality = ScanCardinality(op);
+			leaf.unstable = IsUnstable(op);
 			leaves.push_back(std::move(leaf));
 			return;
 		}
@@ -352,6 +409,7 @@ private:
 			predicate.index = index;
 			ExpressionTables(expr, predicate.tables);
 			predicate.is_volatile = expr.IsVolatile();
+			predicate.can_throw = expr.CanThrow();
 			predicate.equality = HasEquality(expr);
 			predicate.expression = expr;
 			predicates.push_back(std::move(predicate));
@@ -377,6 +435,7 @@ private:
 				ExpressionTables(condition.GetLHS(), predicate.tables);
 				ExpressionTables(condition.GetRHS(), predicate.tables);
 				predicate.is_volatile = condition.GetLHS().IsVolatile() || condition.GetRHS().IsVolatile();
+				predicate.can_throw = condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow();
 				predicate.equality = IsEquality(condition.GetComparisonType()) || HasEquality(condition.GetLHS()) ||
 				                     HasEquality(condition.GetRHS());
 				predicate.lhs = condition.GetLHS();
@@ -406,6 +465,21 @@ private:
 		if (leaves.size() < 2) {
 			return false;
 		}
+		for (auto &predicate : predicates) {
+			// a volatile predicate anywhere in the region is evaluated once per row of the region: fewer rows, fewer
+			// evaluations. One that can throw is evaluated on the rows the join order leaves it, and the SEMI join
+			// changes that order: for the predicates it takes with it and for the ones that stay
+			if (predicate.is_volatile || predicate.can_throw) {
+				return false;
+			}
+		}
+		for (auto &leaf : leaves) {
+			// the same for the expressions inside the relations: which of them run to the end, and which stop
+			// early because another one turned out empty, depends on how the region is joined
+			if (leaf.unstable) {
+				return false;
+			}
+		}
 		for (idx_t r = 0; r < leaves.size(); r++) {
 			auto &removed = leaves[r];
 			if (!(ignores || (removed.one_row && leaves.size() >= 3)) || Intersects(removed.tables, used)) {
@@ -429,10 +503,6 @@ private:
 					// a condition of the parent that does not read the relation would lose its join
 					valid = predicate.path != parent_path;
 					continue;
-				}
-				if (predicate.is_volatile) {
-					valid = false;
-					break;
 				}
 				reading.push_back(p);
 				bool reads_other = false;
@@ -676,6 +746,8 @@ private:
 	ClientContext &context;
 	//! The materialized CTEs seen so far whose definition holds at most one row
 	table_set_t single_row_ctes;
+	//! The CTEs whose definition holds an expression that is volatile or can throw
+	table_set_t unstable_ctes;
 };
 
 } // namespace

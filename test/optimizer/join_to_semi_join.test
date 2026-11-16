@@ -139,18 +139,17 @@ select distinct a.x, p.lo from a, p where a.y between p.lo and p.hi order by all
 
 # must not fire: an equality join is a hash join
 query II
-explain select distinct a.x from a, p where a.y + 5 = p.lo;
+explain select distinct a.x from a, p where a.y = p.hi;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query I
-select distinct a.x from a, p where a.y + 5 = p.lo order by all;
+select distinct a.x from a, p where a.y = p.hi order by all;
 ----
-1
-2
+5
 
 query II
-explain select distinct a.x from a, p where a.y = p.lo + 5 or a.y = p.hi + 5;
+explain select distinct a.x from a, p where a.y = p.lo or a.y = p.hi;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
@@ -170,15 +169,23 @@ select a.x, count(*) from a cross join r where a.y >= r.lo and a.y < r.hi group 
 
 # must not fire: the predicates on p read two other relations
 query II
-explain select distinct a.x from a, b, p where a.x = b.x and a.y < p.hi and b.z * 20 > p.lo;
+explain select distinct a.x from a, b, p where a.x = b.x and a.y < p.hi and b.z < p.lo;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query I
-select distinct a.x from a, b, p where a.x = b.x and a.y < p.hi and b.z * 20 > p.lo order by all;
+select distinct a.x from a, b, p where a.x = b.x and a.y < p.hi and b.z < p.lo order by all;
 ----
+0
 1
 2
+3
+4
+5
+6
+7
+8
+9
 
 # must not fire: three comparisons would be a blockwise nested-loop SEMI join without runtime filters
 query II
@@ -198,6 +205,17 @@ query II
 explain select distinct a.x from a, p where a.y < p.hi + random();
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# must not fire: a volatile predicate that does not read p either: every pair of rows gets its own chance to pass
+query II
+explain select distinct a.x from a, p where a.y > p.lo and random() < 0.5;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query II
+explain select distinct a.x from a, p where a.y > p.lo and a.y < 50;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
 
 query II
 explain select distinct x from (select a.x from a, p where a.y < p.hi limit 5);
@@ -263,14 +281,14 @@ select count(*) from (select distinct big.x from big, q where big.y between q.lo
 
 # must not fire: a comparison next to another predicate would trade a range join for a nested-loop SEMI join
 query II
-explain select distinct big.x from big, p where big.y >= p.lo and (big.y <= p.hi or big.x < p.lo - 100);
+explain select distinct big.x from big, p where big.y >= p.lo and (big.y <= p.hi or big.x < p.lo);
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query I
-select count(*) from (select distinct big.x from big, p where big.y >= p.lo and (big.y <= p.hi or big.x < p.lo - 100));
+select count(*) from (select distinct big.x from big, p where big.y >= p.lo and (big.y <= p.hi or big.x < p.lo));
 ----
-83
+198
 
 # fires: a is small, the SEMI join reduces it before it joins big
 query II
@@ -312,7 +330,7 @@ query II
 explain with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t), nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i)
+	(with tmp as (select i from t), nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
@@ -322,53 +340,53 @@ query III
 with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t), nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i)
+	(with tmp as (select i from t), nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
 25	29	381
 
-# two comparisons: a blockwise nested-loop SEMI join (no IE join in a recursive CTE)
+# must not fire: the recursive member computes i + 3, which can throw, and runs once per iteration
 query II
 explain with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t),
-	      nextfree as (select max(f.ofs) as nf from free f, tmp where f.ofs > tmp.i and f.ofs <= tmp.i + 3)
+	(with tmp as (select i, i + 3 as i3, i + 1 as i1, i - 1000 as im from t),
+	      nextfree as (select max(f.ofs) as nf from free f, tmp where f.ofs > tmp.i and f.ofs <= tmp.i3)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query III
 with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t),
-	      nextfree as (select max(f.ofs) as nf from free f, tmp where f.ofs > tmp.i and f.ofs <= tmp.i + 3)
+	(with tmp as (select i, i + 3 as i3, i + 1 as i1, i - 1000 as im from t),
+	      nextfree as (select max(f.ofs) as nf from free f, tmp where f.ofs > tmp.i and f.ofs <= tmp.i3)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
 11	29	165
 
-# no comparison: a blockwise nested-loop join either way
+# must not fire: the same with an OR
 query II
 explain with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t),
-	      nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i + 1 or f.ofs < tmp.i - 1000)
+	(with tmp as (select i, i + 3 as i3, i + 1 as i1, i - 1000 as im from t),
+	      nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i1 or f.ofs < tmp.im)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query III
 with recursive t(i) as (
 	select 1::bigint
 	union all
-	(with tmp as (select * from t),
-	      nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i + 1 or f.ofs < tmp.i - 1000)
+	(with tmp as (select i, i + 3 as i3, i + 1 as i1, i - 1000 as im from t),
+	      nextfree as (select min(f.ofs) as nf from free f, tmp where f.ofs > tmp.i1 or f.ofs < tmp.im)
 	 select nf from nextfree where nf < 30)
 ) select count(*), max(i), sum(i) from t;
 ----
@@ -380,11 +398,11 @@ with recursive t(i, n) as (
 	select * from (values (1::bigint, 0), (null, 0))
 	union all
 	(select nf, (select max(n) + 1 from t)
-	 from (select distinct f.ofs as nf from free f, t where f.ofs > t.i or f.ofs < t.i - 1000) s
+	 from (select distinct f.ofs as nf from free f, t where f.ofs > t.i or f.ofs < t.n) s
 	 where nf < 6 and (select max(n) from t) < 4)
 ) select count(*), max(i), sum(i), count(i) from t;
 ----
-8	5	26	7
+18	5	45	17
 
 endloop
 
