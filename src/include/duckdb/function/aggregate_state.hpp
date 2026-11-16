@@ -89,6 +89,11 @@ struct AggregateFinalizeInputData : public AggregateInputData {
 	//! The local state of the finalize (set if the function defines an "init_local_state_finalize" callback)
 	optional_ptr<FunctionLocalState> local_state;
 
+	//! Whether the local state is owned by this input (and so does not outlive the finalize call)
+	bool OwnsLocalState() const {
+		return owned_state != nullptr;
+	}
+
 private:
 	//! Initializes the local state when the caller did not pass in an external one
 	void InitializeLocalState();

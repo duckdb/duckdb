@@ -30,7 +30,7 @@ void WindowAggregateStates::Initialize(idx_t count_p) {
 }
 
 void WindowAggregateStates::Combine(WindowAggregateStates &target) {
-	AggregateInputData aggr_input_data(aggr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	AggregateInputData aggr_input_data(aggr, target.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 	aggr.function.GetStateCombineCallback()(*statef, *target.statef, aggr_input_data, GetCount());
 }
 

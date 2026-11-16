@@ -243,6 +243,10 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	auto pdata = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	D_ASSERT(live_count == 0);
+	allocator.Reset();
+
 	HashRow hash_row(*this);
 	EqualRow equal_row(*this);
 	RowSet row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row);

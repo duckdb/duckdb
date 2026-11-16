@@ -149,12 +149,15 @@ public:
 
 class WindowSegmentTreeLocalState : public WindowAggregatorLocalState {
 public:
-	explicit WindowSegmentTreeLocalState(ExecutionContext &context) : WindowAggregatorLocalState(context) {
+	explicit WindowSegmentTreeLocalState(ExecutionContext &context)
+	    : WindowAggregatorLocalState(context), result_arena(BufferAllocator::Get(context.client)) {
 	}
 
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 	void Evaluate(ExecutionContext &context, const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds,
 	              Vector &result, idx_t count, idx_t row_idx);
+	//! The arena of the result parts, reset per batch
+	ArenaAllocator result_arena;
 	//! The left (default) segment tree part
 	unique_ptr<WindowSegmentTreePart> part;
 	//! The right segment tree part (for EXCLUDE)
@@ -496,8 +499,10 @@ void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const Wind
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
 	if (!part) {
-		part = make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggr, cursor->Copy(), gtstate.filter_mask);
+		part = make_uniq<WindowSegmentTreePart>(result_arena, gtstate.aggr, cursor->Copy(), gtstate.filter_mask);
 	}
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	result_arena.Reset();
 
 	if (gtstate.aggregator.exclude_mode != WindowExcludeMode::NO_OTHER) {
 		// If we exclude the current row, then both left and right need to contain it.
