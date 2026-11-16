@@ -13,6 +13,8 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/arena_stl_allocator.hpp"
+#include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include <cstring>
 
@@ -30,9 +32,19 @@ public:
 	using value_type = typename STRING_MAP_TYPE::value_type;
 	using iterator = typename STRING_MAP_TYPE::iterator;
 	using const_iterator = typename STRING_MAP_TYPE::const_iterator;
+	using allocator_type = typename STRING_MAP_TYPE::allocator_type;
 
 public:
 	OwningStringMap() : free_type(AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	}
+	//! For maps whose nodes are allocated from an arena as well
+	explicit OwningStringMap(ArenaAllocator &arena)
+	    : map(allocator_type(arena)), free_type(AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	}
+	//! Copies an arena-backed map into another arena, the keys are not copied
+	OwningStringMap(const OwningStringMap &other, ArenaAllocator &arena)
+	    : map(other.map, allocator_type(arena)), free_type(AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		D_ASSERT(!other.allocator);
 	}
 	explicit OwningStringMap(Allocator &allocator)
 	    : allocator(&allocator), free_type(AllocatorFreeType::REQUIRES_FREE) {
@@ -88,6 +100,14 @@ public:
 
 	size_type size() const noexcept { // NOLINT: match std style
 		return map.size();
+	}
+
+	void reserve(size_type n) { // NOLINT: match std style
+		map.reserve(n);
+	}
+
+	allocator_type get_allocator() const noexcept { // NOLINT: match std style
+		return map.get_allocator();
 	}
 
 	bool empty() const noexcept { // NOLINT: match std style
@@ -163,5 +183,13 @@ private:
 
 template <class T>
 using OrderedOwningStringMap = OwningStringMap<T, map<string_t, T>>;
+
+//! Owning string maps whose nodes are allocated from an arena as well
+template <class T>
+using ArenaOwningStringMap = OwningStringMap<T, arena_unordered_map<string_t, T, StringHash, StringEquality>>;
+
+template <class T>
+using ArenaOrderedOwningStringMap =
+    OwningStringMap<T, map<string_t, T, std::less<string_t>, arena_stl_allocator<std::pair<const string_t, T>>>>;
 
 } // namespace duckdb
