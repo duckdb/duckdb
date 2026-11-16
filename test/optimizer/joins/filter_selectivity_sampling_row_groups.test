@@ -1,0 +1,69 @@
+# name: test/optimizer/joins/filter_selectivity_sampling_row_groups.test
+# description: Bound native sampling by the number of physical row groups
+# group: [joins]
+
+statement ok
+ATTACH '{TEST_DIR}/filter_selectivity_sampling_row_groups.db' AS small_groups (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE small_groups;
+
+statement ok
+SET explain_output = 'optimized_only';
+
+statement ok
+SET filter_selectivity_sample_size = 2048;
+
+statement ok
+CREATE TABLE at_limit AS SELECT i FROM range(1048576) r(i);
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('at_limit');
+----
+512
+
+# At the limit, sampling improves on the 20% fallback for this 1/7 filter.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM at_limit WHERE i % 7 = 3;
+----
+logical_opt	<REGEX>:.*"Table":\s*"small_groups.main.at_limit",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"1[2-8][0-9]{4}".*
+
+statement ok
+CREATE TABLE above_limit AS SELECT i FROM range(1050624) r(i);
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('above_limit');
+----
+513
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM above_limit WHERE i % 7 = 3;
+----
+logical_opt	<REGEX>:.*"Table":\s*"small_groups.main.above_limit",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"210124".*
+
+# Bulk appends can leave partial groups without row-ID gaps: 512 groups by row count, 513 in storage.
+statement ok
+CREATE TABLE partial_groups AS SELECT i FROM range(1024) r(i);
+
+statement ok
+INSERT INTO partial_groups SELECT i FROM range(1024, 1048576) r(i);
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('partial_groups');
+----
+513
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM partial_groups;
+----
+0	1048575	1048576
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM partial_groups WHERE i % 7 = 3;
+----
+logical_opt	<REGEX>:.*"Table":\s*"small_groups.main.partial_groups",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"209715".*
+
+query I
+SELECT count(*) FROM partial_groups WHERE i % 7 = 3;
+----
+149797

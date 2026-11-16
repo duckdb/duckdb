@@ -310,6 +310,26 @@ struct RLEScanState : public SegmentScanState {
 			return entry_capacity;
 		}
 
+		//! Skip a batch only when all runs fit in the requested row count.
+		bool TrySkipRuns(idx_t &entry_index, idx_t &skip_count) const {
+			static constexpr idx_t SKIP_RUN_COUNT = 32;
+			if (skip_count < SKIP_RUN_COUNT || entry_index > validated_entry_count ||
+			    validated_entry_count - entry_index < SKIP_RUN_COUNT || skip_count <= run_counts[entry_index]) {
+				return false;
+			}
+			auto counts = run_counts.SubArray(entry_index, SKIP_RUN_COUNT);
+			uint32_t row_count = 0;
+			for (idx_t i = 0; i < SKIP_RUN_COUNT; i++) {
+				row_count += counts[i];
+			}
+			if (row_count > skip_count) {
+				return false;
+			}
+			entry_index += SKIP_RUN_COUNT;
+			skip_count -= row_count;
+			return true;
+		}
+
 		//! Validate through the requested remaining-row count before decoding.
 		void ValidateUntil(idx_t remaining) {
 			static constexpr idx_t BATCH_SIZE = 32;
@@ -390,7 +410,14 @@ struct RLEScanState : public SegmentScanState {
 	}
 
 	inline void SkipInternal(idx_t skip_count) {
+		bool skip_runs = true;
 		while (skip_count > 0) {
+			if (position_in_entry == 0 && skip_runs) {
+				skip_runs = layout.TrySkipRuns(entry_pos, skip_count);
+				if (skip_runs) {
+					continue;
+				}
+			}
 			auto run_count = GetCurrentRun().length;
 			D_ASSERT(position_in_entry < run_count);
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_count - position_in_entry);

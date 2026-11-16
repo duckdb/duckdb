@@ -2,6 +2,13 @@
 #include "test_helpers.hpp"
 
 #include "duckdb.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
@@ -38,6 +45,7 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
@@ -1355,6 +1363,58 @@ TEST_CASE("Shared key filters restrict domains only with supported input statist
 	}
 }
 
+TEST_CASE("Conditional factors preserve restricted and multi-source domains", "[optimizer][relation_statistics]") {
+	for (bool restricted : {false, true}) {
+		for (bool third_source : {false, true}) {
+			CAPTURE(restricted, third_source);
+			JoinRelationSetManager sets;
+			auto &left = sets.GetJoinRelation(RelationIndex(0));
+			auto &right = sets.GetJoinRelation(RelationIndex(1));
+			auto &joined = sets.Union(left, right);
+			auto a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+			auto b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+			FilterInfo filter(CreateJoinComparison(a, b, ExpressionType::COMPARE_EQUAL), joined, 0);
+			filter.SetLeftSet(left);
+			filter.SetRightSet(right);
+			filter.left_binding = a;
+			filter.right_binding = b;
+			JoinPredicateModel model;
+			auto &predicate = model.RegisterPredicate(filter, JoinPredicateClass::INNER_EQUALITY, a, b);
+			predicate.SetEqualityClassIndex(optional_idx(0));
+			JoinEqualityClass equality;
+			equality.index = 0;
+			equality.columns = {a, b};
+			equality.relations = {RelationIndex(0), RelationIndex(1)};
+			equality.edges.emplace_back(predicate, RelationIndex(0), RelationIndex(1), a, b);
+			model.AddEqualityClass(std::move(equality));
+			vector<RelationStats> stats {CreateStats({a}, {100}, 100), CreateStats({b}, {100}, 100)};
+			join_column_sources_t sources;
+			for (auto binding : {a, b}) {
+				sources.emplace(binding, JoinColumnSources({binding, 100, 100, {100, DistinctCountSource::EXACT}}));
+			}
+			if (restricted) {
+				for (auto &relation : stats) {
+					relation.columns[0].semi_anti_join_domain_evidence.TightenDomainBound(10);
+				}
+			}
+			if (third_source) {
+				sources.at(a).equivalents.push_back(
+				    {ColumnBinding(TableIndex(2), ProjectionIndex(0)), 100, 100, {100, DistinctCountSource::EXACT}});
+			}
+			CardinalityEstimator baseline(sets, model);
+			baseline.Initialize(stats, {}, sources);
+			auto expected = baseline.EstimateCardinality(joined).GetDouble();
+			sources.at(a).filter_factors.emplace(b, 0.505);
+			CardinalityEstimator conditional(sets, model);
+			conditional.Initialize(stats, {}, sources);
+			if (!restricted && !third_source) {
+				expected /= 0.505;
+			}
+			REQUIRE(conditional.EstimateCardinality(joined).GetDouble() == Approx(expected));
+		}
+	}
+}
+
 TEST_CASE("Large cardinality estimates saturate and preserve integer bounds", "[optimizer][relation_statistics]") {
 	auto maximum = NumericLimits<idx_t>::Maximum();
 	REQUIRE(RelationStatisticsHelper::CardinalityFromDouble(0) == 0);
@@ -1429,6 +1489,8 @@ struct CardinalityProviderData : public TableFunctionData {
 	vector<reference<LogicalGet>> observed_scans;
 	shared_ptr<bool> captured_before_mutation = make_shared_ptr<bool>(true);
 	DistinctCount domain {0, DistinctCountSource::CARDINALITY};
+	vector<PartitionStatistics> partitions;
+	shared_ptr<idx_t> partition_calls = make_shared_ptr<idx_t>(0);
 };
 
 static unique_ptr<LogicalGet> CreateCardinalityProvider(optional_idx estimate, optional_idx maximum) {
@@ -1456,6 +1518,352 @@ static unique_ptr<LogicalGet> CreateCardinalityProvider(optional_idx estimate, o
 	                                 vector<LogicalType> {LogicalType::INTEGER}, vector<Identifier> {"i"});
 	get->AddColumnId(0);
 	return get;
+}
+
+static unique_ptr<LogicalGet> CreateNativeSampleScan(Connection &connection, TableIndex index, const string &name) {
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(*connection.context, QualifiedName::Parse(name));
+	unique_ptr<FunctionData> bind_data;
+	auto function = table.GetScanFunction(*connection.context, bind_data);
+	vector<Identifier> names;
+	for (auto &name : table.GetColumns().GetColumnNames()) {
+		names.emplace_back(name);
+	}
+	auto scan = make_uniq<LogicalGet>(index, BoundTableFunction(function), std::move(bind_data), table.GetTypes(),
+	                                  std::move(names));
+	for (idx_t i = 0; i < scan->returned_types.size(); i++) {
+		scan->AddColumnId(i);
+	}
+	return scan;
+}
+
+static void CreateConditionalSampleTables(Connection &connection) {
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE filtered AS SELECT i::INTEGER key, (100-i)::INTEGER value "
+	                                 "FROM range(100) t(i)"));
+	for (idx_t keys : {10, 50, 51, 100}) {
+		REQUIRE_NO_FAIL(connection.Query("CREATE TABLE population" + to_string(keys) + " AS SELECT (i % " +
+		                                 to_string(keys) + ")::INTEGER key FROM range(1000) t(i)"));
+	}
+	REQUIRE_NO_FAIL(connection.Query("ANALYZE"));
+	connection.BeginTransaction();
+}
+
+static shared_ptr<idx_t> AddCountedSampleFilter(LogicalGet &scan) {
+	auto rows = make_shared_ptr<idx_t>(0);
+	ScalarFunction function("count_sample_rows", {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                        [rows](DataChunk &args, ExpressionState &, Vector &result) {
+		                        *rows += args.size();
+		                        result.Reference(args.data[0]);
+	                        });
+	vector<unique_ptr<Expression>> children;
+	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0));
+	auto counted =
+	    make_uniq<BoundFunctionExpression>(BoundScalarFunction(std::move(function)), std::move(children), nullptr);
+	auto expression =
+	    BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(counted),
+	                                      make_uniq<BoundConstantExpression>(Value::INTEGER(95)));
+	scan.table_filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(std::move(expression)));
+	return rows;
+}
+
+class TestPartitionRowGroup : public PartitionRowGroup {
+public:
+	TestPartitionRowGroup(int32_t minimum, int32_t maximum)
+	    : statistics(BaseStatistics::CreateUnknown(LogicalType::INTEGER)) {
+		NumericStats::SetMin(statistics, Value::INTEGER(minimum));
+		NumericStats::SetMax(statistics, Value::INTEGER(maximum));
+	}
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &column) override {
+		REQUIRE(column.GetPrimaryIndex() == 0);
+		return statistics.ToUnique();
+	}
+	bool MinMaxIsExact(const StorageIndex &) override {
+		return false;
+	}
+	bool HasPendingWrites() override {
+		return false;
+	}
+
+	BaseStatistics statistics;
+};
+
+static unique_ptr<LogicalGet> CreatePartitionStatisticsProvider() {
+	auto scan = CreateCardinalityProvider(100, 100);
+	auto &data = scan->bind_data->Cast<CardinalityProviderData>();
+	data.partitions.resize(2);
+	for (auto &partition : data.partitions) {
+		partition.count_type = CountType::COUNT_EXACT;
+	}
+	data.partitions[0].count = 95;
+	data.partitions[0].partition_row_group = make_shared_ptr<TestPartitionRowGroup>(0, 9);
+	data.partitions[1].count = 5;
+	data.partitions[1].partition_row_group = make_shared_ptr<TestPartitionRowGroup>(20, 29);
+	scan->function.get_partition_stats = [](ClientContext &, GetPartitionStatsInput &input) {
+		auto &data = input.bind_data->Cast<CardinalityProviderData>();
+		(*data.partition_calls)++;
+		return data.partitions;
+	};
+	scan->table_filters.PushFilter(ProjectionIndex(0), ExpressionFilter::CreateComparisonFilter(
+	                                                       ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(20)));
+	return scan;
+}
+
+TEST_CASE("Partition statistics cap scan rows without applying selectivity twice", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	auto scan = CreatePartitionStatisticsProvider();
+	auto &data = scan->bind_data->Cast<CardinalityProviderData>();
+	auto stats = RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context);
+	REQUIRE(stats.cardinality == 5);
+	REQUIRE(stats.row_retention == Approx(0.05));
+	REQUIRE(*data.partition_calls == 1);
+
+	// Unknown survivor statistics still contribute the entire partition.
+	data.partitions[1].partition_row_group.reset();
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 5);
+
+	// Missing accessors and approximate counts cannot establish a tighter bound.
+	data.partitions[0].partition_row_group.reset();
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 20);
+	data.partitions[0].partition_row_group = make_shared_ptr<TestPartitionRowGroup>(0, 9);
+	data.partitions[0].count_type = CountType::COUNT_APPROXIMATE;
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 20);
+	data.partitions[0].count_type = CountType::COUNT_EXACT;
+	auto unknown = make_shared_ptr<TestPartitionRowGroup>(0, 9);
+	unknown->statistics = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
+	data.partitions[0].partition_row_group = unknown;
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 20);
+	unknown->statistics = BaseStatistics::FromConstant(Value::SMALLINT(0));
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 20);
+	data.partitions[0].partition_row_group = make_shared_ptr<TestPartitionRowGroup>(0, 9);
+	data.partitions[1].partition_row_group = make_shared_ptr<TestPartitionRowGroup>(0, 9);
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 0);
+	data.partitions.clear();
+	REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 20);
+}
+
+TEST_CASE("Partition statistics do not count optional scan filters", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool selectivity_optional : {false, true}) {
+		auto scan = CreatePartitionStatisticsProvider();
+		auto expression = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(50));
+		auto optional =
+		    selectivity_optional
+		        ? CreateSelectivityOptionalFilterExpression(std::move(expression->expr), LogicalType::INTEGER, 0.5, 1)
+		        : CreateOptionalFilterExpression(std::move(expression->expr), LogicalType::INTEGER);
+		scan->table_filters.SetFilterByColumnIndex(ProjectionIndex(0),
+		                                           make_uniq<ExpressionFilter>(std::move(optional)));
+		REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 100);
+		REQUIRE(*scan->bind_data->Cast<CardinalityProviderData>().partition_calls == 0);
+	}
+}
+
+TEST_CASE("Mixed scan conjunctions ignore optional terms in partition and sample estimates",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(
+	    connection.Query("CREATE TABLE mixed AS SELECT i::INTEGER i FROM (VALUES (0), (9), (20), (21), (29)) t(i)"));
+	connection.BeginTransaction();
+	for (bool selectivity_optional : {false, true}) {
+		auto scan = CreatePartitionStatisticsProvider();
+		auto expression = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::INTEGER(50));
+		auto optional =
+		    selectivity_optional
+		        ? CreateSelectivityOptionalFilterExpression(std::move(expression->expr), LogicalType::INTEGER, 0.5, 1)
+		        : CreateOptionalFilterExpression(std::move(expression->expr), LogicalType::INTEGER);
+		scan->table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(optional)));
+		REQUIRE(RelationStatisticsHelper::ExtractGetStats(*scan, *connection.context).cardinality == 5);
+		auto native = CreateNativeSampleScan(connection, TableIndex(10), "mixed");
+		native->table_filters = std::move(*scan->table_filters.Copy());
+		auto counts = RelationStatisticsHelper::SampleFilterPassCounts(*connection.context, *native, {});
+		REQUIRE(counts.evaluated_count == 5);
+		REQUIRE(counts.passing_count == 2);
+	}
+}
+
+TEST_CASE("Conditioned samples keep population counts separate from filter stages",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	const idx_t copies = STANDARD_VECTOR_SIZE / 100 + 1;
+	REQUIRE_NO_FAIL(connection.Query("SET filter_selectivity_sample_size=" + to_string(100 * copies)));
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE conditioned AS SELECT CASE WHEN i % 100 = 4 THEN NULL "
+	                                 "ELSE (i % 100)::INTEGER END key, (100 - i % 100)::INTEGER value FROM range(" +
+	                                 to_string(100 * copies) + ") t(i)"));
+	connection.BeginTransaction();
+	auto scan = CreateNativeSampleScan(connection, TableIndex(10), "conditioned");
+	scan->table_filters.PushFilter(
+	    ProjectionIndex(1),
+	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::INTEGER(95)));
+	auto key =
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(TableIndex(10), ProjectionIndex(0)));
+	auto condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, key->Copy(),
+	                                                   make_uniq<BoundConstantExpression>(Value::INTEGER(10)));
+	auto first = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO, key->Copy(),
+	                                               make_uniq<BoundConstantExpression>(Value::INTEGER(2)));
+	auto second = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, key->Copy(),
+	                                                make_uniq<BoundConstantExpression>(Value::INTEGER(4)));
+	vector<vector<reference<const Expression>>> stages {{*first}, {*second}};
+	auto counts = RelationStatisticsHelper::SampleFilterPassCounts(*connection.context, *scan, stages, *condition);
+	REQUIRE(counts.evaluated_count == 3 * copies);
+	REQUIRE(counts.passing_count == 2 * copies);
+	REQUIRE(counts.condition_count == 9 * copies);
+	REQUIRE(counts.filtered_condition_count == 2 * copies);
+	auto unconditioned = RelationStatisticsHelper::SampleFilterPassCounts(*connection.context, *scan, stages);
+	REQUIRE(unconditioned.evaluated_count == counts.evaluated_count);
+	REQUIRE(unconditioned.passing_count == counts.passing_count);
+	REQUIRE(unconditioned.condition_count == 0);
+	REQUIRE(unconditioned.filtered_condition_count == 0);
+}
+
+TEST_CASE("Native sampling observes cancellation before evaluating filters", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	auto scan = CreateNativeSampleScan(connection, TableIndex(10), "filtered");
+	auto evaluated = AddCountedSampleFilter(*scan);
+	connection.Interrupt();
+	REQUIRE_THROWS_AS(RelationStatisticsHelper::SampleFilterPassCounts(*connection.context, *scan, {}),
+	                  InterruptException);
+	connection.context->ClearInterrupt();
+	REQUIRE(*evaluated == 0);
+}
+
+TEST_CASE("Sample evaluation preserves severe error types after an ErrorData round-trip",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	for (auto error : {ExceptionType::INTERRUPT, ExceptionType::DATA_CORRUPTION, ExceptionType::INTERNAL,
+	                   ExceptionType::FATAL, ExceptionType::INVALID_INPUT, ExceptionType::OUT_OF_MEMORY}) {
+		auto scan = CreateNativeSampleScan(connection, TableIndex(10), "filtered");
+		ScalarFunction function(
+		    "sample_error", {LogicalType::INTEGER}, LogicalType::BOOLEAN,
+		    [error](DataChunk &, ExpressionState &, Vector &) { ErrorData(error, "sample test").Throw(); });
+		function.SetFallible();
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::INTEGER, 0));
+		auto expression =
+		    make_uniq<BoundFunctionExpression>(BoundScalarFunction(std::move(function)), std::move(children), nullptr);
+		scan->table_filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(expression)));
+		ErrorData result_error;
+		FilterSampleCounts counts;
+		try {
+			counts = RelationStatisticsHelper::SampleFilterPassCounts(*connection.context, *scan, {});
+		} catch (std::exception &ex) {
+			result_error = ErrorData(ex);
+		}
+		if (error != ExceptionType::INVALID_INPUT && error != ExceptionType::OUT_OF_MEMORY) {
+			REQUIRE(result_error.HasError());
+			REQUIRE(result_error.Type() == error);
+		} else {
+			REQUIRE_FALSE(result_error.HasError());
+			REQUIRE(counts.evaluated_count == 0);
+			REQUIRE(counts.passing_count == 0);
+		}
+	}
+}
+
+TEST_CASE("Conditional population estimates skip wide ranges before fetching rows",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	auto filtered = CreateNativeSampleScan(connection, TableIndex(10), "filtered");
+	auto calls = AddCountedSampleFilter(*filtered);
+	for (idx_t keys : {10, 50, 51, 100}) {
+		auto population = CreateNativeSampleScan(connection, TableIndex(20), "population" + to_string(keys));
+		auto before = *calls;
+		auto factor = RelationStatisticsHelper::ConditionalFilterFactor(
+		    *connection.context, *filtered, ProjectionIndex(0), *population, ProjectionIndex(0));
+		if (keys <= 50) {
+			REQUIRE(factor);
+			REQUIRE(*factor == Approx(double(keys) / 100));
+			REQUIRE(*calls == before + 100);
+		} else {
+			REQUIRE_FALSE(factor);
+			REQUIRE(*calls == before);
+		}
+	}
+}
+
+TEST_CASE("Conditional sampling skips non-native scans before requesting column statistics",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	auto filtered = CreateCardinalityProvider(100, 100);
+	filtered->table_filters.PushFilter(
+	    ProjectionIndex(0),
+	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHAN, Value::INTEGER(90)));
+	filtered->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
+		(*bind_data->template Cast<CardinalityProviderData>().column_calls)++;
+		return nullptr;
+	};
+	auto population = CreateNativeSampleScan(connection, TableIndex(20), "population10");
+	REQUIRE_FALSE(RelationStatisticsHelper::ConditionalFilterFactor(*connection.context, *filtered, ProjectionIndex(0),
+	                                                                *population, ProjectionIndex(0)));
+	REQUIRE(*filtered->bind_data->Cast<CardinalityProviderData>().column_calls == 0);
+}
+
+static unique_ptr<LogicalComparisonJoin> CreateConditionalSampleJoin(Connection &connection,
+                                                                     unique_ptr<LogicalOperator> left) {
+	auto right = CreateNativeSampleScan(connection, TableIndex(20), "population10");
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	join->conditions.emplace_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, left->GetColumnBindings()[0]),
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right->GetColumnBindings()[0]),
+	    ExpressionType::COMPARE_EQUAL);
+	join->children.push_back(std::move(left));
+	join->children.push_back(std::move(right));
+	return join;
+}
+
+TEST_CASE("Conditional join evidence follows direct aliases and remains immutable",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	for (bool projected : {false, true}) {
+		auto filtered = CreateNativeSampleScan(connection, TableIndex(10), "filtered");
+		auto calls = AddCountedSampleFilter(*filtered);
+		unique_ptr<LogicalOperator> left = std::move(filtered);
+		if (projected) {
+			left = LogicalProjection::CreateIdentity(TableIndex(30), std::move(left));
+		}
+		auto join = CreateConditionalSampleJoin(connection, std::move(left));
+		JoinOrderSourceStats snapshot(*connection.context, *join);
+		auto sources = snapshot.Resolve(*join);
+		auto &evidence = sources.at(join->GetColumnBindings()[0]);
+		REQUIRE(evidence.direct.binding == ColumnBinding(TableIndex(10), ProjectionIndex(0)));
+		REQUIRE(evidence.filter_factors.at(ColumnBinding(TableIndex(20), ProjectionIndex(0))) == Approx(0.1));
+		auto captured_calls = *calls;
+		snapshot.AddPlan(*connection.context, *join);
+		REQUIRE(*calls == captured_calls);
+		RelationStatsExtractor extractor(*connection.context);
+		auto stats = extractor.Extract(*join);
+		REQUIRE(stats);
+		// Native ANALYZE estimates 98 distinct keys in the filtered table.
+		REQUIRE(stats->cardinality == 612);
+	}
+}
+
+TEST_CASE("Previously captured scans are not resampled for newly appended join evidence",
+          "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	CreateConditionalSampleTables(connection);
+	auto filtered = CreateNativeSampleScan(connection, TableIndex(10), "filtered");
+	auto calls = AddCountedSampleFilter(*filtered);
+	JoinOrderSourceStats snapshot(*connection.context, *filtered);
+	auto captured_calls = *calls;
+	auto join = CreateConditionalSampleJoin(connection, std::move(filtered));
+	snapshot.AddPlan(*connection.context, *join);
+	REQUIRE(*calls == captured_calls);
+	auto sources = snapshot.Resolve(*join);
+	REQUIRE(sources.at(join->GetColumnBindings()[0]).filter_factors.empty());
 }
 
 TEST_CASE("Scan filters acquire hidden input columns once and apply conjunction rows once",
@@ -2240,6 +2648,8 @@ TEST_CASE("Group estimates without a UNION do not extract their input again", "[
 TEST_CASE("Standalone join statistics share estimation without mutating the plan", "[optimizer][relation_statistics]") {
 	DuckDB db;
 	Connection connection(db);
+	// the cardinality bounds below are those without filter sampling
+	REQUIRE_NO_FAIL(connection.Query("SET filter_selectivity_sample_size = 0"));
 	CreateStatisticsJoinTables(connection);
 	connection.BeginTransaction();
 	for (auto query : {"SELECT a.x,b.y FROM stats_a a JOIN stats_b b USING(k)",

@@ -1,0 +1,46 @@
+# name: test/optimizer/joins/filter_selectivity_sampling_rowid_gaps.test
+# description: Fall back when physical row IDs do not cover the scan population densely
+# group: [joins]
+
+statement ok
+ATTACH '{TEST_DIR}/filter_sample_rowid_gap.db' AS gaps (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE gaps.t AS SELECT i, CASE WHEN i < 4096 THEN 'lower' ELSE 'upper' END AS s FROM range(6144) r(i);
+
+statement ok
+CHECKPOINT gaps;
+
+statement ok
+CREATE INDEX i_idx ON gaps.t(i);
+
+statement ok
+DELETE FROM gaps.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT gaps;
+
+statement ok
+DETACH gaps;
+
+statement ok
+ATTACH '{TEST_DIR}/filter_sample_rowid_gap.db' AS gaps;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM gaps.t;
+----
+0	6143	4096
+
+statement ok
+SET explain_output = 'optimized_only';
+
+# Sampling [0, row_count) would never see the upper half of the live rows.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM gaps.t WHERE s LIKE '%upper%';
+----
+logical_opt	<REGEX>:.*"Table":\s*"gaps.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"819".*
+
+query I
+SELECT count(*) FROM gaps.t WHERE s LIKE '%upper%';
+----
+2048

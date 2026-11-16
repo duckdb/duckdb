@@ -1,0 +1,54 @@
+# name: test/sql/storage/compression/rle/rle_skip_batches.test
+# description: Fetching after RLE skips preserves values and NULLs across short and long runs
+# group: [rle]
+
+require vector_size 2048
+
+statement ok
+SET threads=1;
+
+statement ok
+ATTACH '{TEST_DIR}/rle_skip_batches.db' AS db (BLOCK_SIZE 16384);
+
+foreach type SMALLINT INTEGER BIGINT FLOAT DOUBLE
+
+statement ok
+CREATE TABLE db.t_{type}(id INTEGER, short_run {type} USING COMPRESSION rle, long_run {type} USING COMPRESSION rle);
+
+statement ok
+INSERT INTO db.t_{type} SELECT i, i%97, CASE WHEN i%13=0 THEN NULL ELSE (i//7)%97 END FROM range(20000) t(i);
+
+endloop
+
+statement ok
+CHECKPOINT db;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/rle_skip_batches.db' AS db;
+
+statement ok
+SET debug_force_fetch_row=true;
+
+foreach type SMALLINT INTEGER BIGINT FLOAT DOUBLE
+
+query I
+SELECT bool_and(compression='RLE') FROM pragma_storage_info('db.t_{type}') WHERE column_name IN ('short_run', 'long_run') AND segment_type != 'VALIDITY';
+----
+true
+
+foreach start 31 32 33 1024 4096 8191 19989
+
+query III
+SELECT count(*), bool_and(short_run=id%97), bool_and(long_run IS NOT DISTINCT FROM CASE WHEN id%13=0 THEN NULL ELSE (id//7)%97 END) FROM db.t_{type} WHERE id BETWEEN {start} AND {start}+10;
+----
+11	true	true
+
+endloop
+
+endloop
+
+statement ok
+DETACH db;

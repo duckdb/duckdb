@@ -142,7 +142,7 @@ public:
 public:
 	reference<JoinPredicate> predicate;
 	reference<const DomainEstimate> domain_estimate;
-	idx_t distinct_count;
+	double distinct_count;
 };
 
 struct SelectivitySubgraph {
@@ -214,7 +214,7 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	return static_cast<double>(distinct_count);
+	return distinct_count;
 }
 
 bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
@@ -952,6 +952,48 @@ static bool SortEdges(const FilterInfoWithTotalDomains &a, const FilterInfoWithT
 	return a.GetDistinctCount() > b.GetDistinctCount();
 }
 
+static bool RestrictFilterDomain(RelationsSetToStats &equivalence, const vector<RelationStats> &relation_stats) {
+	bool all_filtered = !equivalence.predicates.empty();
+	for (auto &predicate : equivalence.predicates) {
+		all_filtered &= predicate.get().IsEquivalencePredicate();
+	}
+	idx_t retained_domain = 0;
+	for (auto &binding : equivalence.equivalent_relations) {
+		if (!all_filtered || binding.table_index.index >= relation_stats.size() ||
+		    binding.column_index.GetIndex() >= relation_stats[binding.table_index.index].columns.size()) {
+			all_filtered = false;
+			break;
+		}
+		auto &column = relation_stats[binding.table_index.index].columns[binding.column_index.GetIndex()];
+		auto bound = column.semi_anti_join_domain_evidence.GetDomainBound();
+		// Unknown-NDV filters need their scan selectivities refined before shrinking the join domain.
+		if (!bound.IsValid() || column.total_domain.source == DistinctCountSource::CARDINALITY) {
+			all_filtered = false;
+			break;
+		}
+		retained_domain = MaxValue(retained_domain, bound.GetIndex());
+	}
+	if (all_filtered) {
+		equivalence.domain_estimate.Restrict(retained_domain);
+	}
+	return all_filtered;
+}
+
+static bool HasTwoKnownSources(const RelationsSetToStats &domain, const join_column_sources_t &sources) {
+	column_binding_set_t physical_sources;
+	for (auto &binding : domain.equivalent_relations) {
+		auto source = sources.find(binding);
+		if (source == sources.end()) {
+			return false;
+		}
+		physical_sources.insert(source->second.direct.binding);
+		for (auto &equivalent : source->second.equivalents) {
+			physical_sources.insert(equivalent.binding);
+		}
+	}
+	return physical_sources.size() == 2;
+}
+
 void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
                                       const vector<unique_ptr<JoinOrderOperator>> &operators,
                                       const join_column_sources_t &sources) {
@@ -966,10 +1008,29 @@ void CardinalityEstimator::Initialize(const vector<RelationStats> &relations,
 		state->cardinalities.emplace(set_manager.GetJoinRelation(RelationIndex(i)), cardinality);
 		UpdateTotalDomains(RelationIndex(i), stats, sources);
 	}
-	RestrictFilterDomains(relations);
 	for (auto &domain : state->relation_set_stats) {
+		auto filter_restricted = RestrictFilterDomain(domain, relations);
 		for (auto &predicate : domain.predicates) {
 			state->edges.emplace_back(predicate, domain);
+			auto &edge = state->edges.back();
+			if (filter_restricted || predicate.get().GetPredicateClass() != JoinPredicateClass::INNER_EQUALITY ||
+			    predicate.get().GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+				continue;
+			}
+			auto left = sources.find(predicate.get().GetStatsBinding(true));
+			auto right = sources.find(predicate.get().GetStatsBinding(false));
+			if (left == sources.end() || right == sources.end()) {
+				continue;
+			}
+			for (bool reverse : {false, true}) {
+				auto &filtered = reverse ? right->second : left->second;
+				auto &population = reverse ? left->second.direct : right->second.direct;
+				auto factor = filtered.filter_factors.find(population.binding);
+				if (factor != filtered.filter_factors.end() && HasTwoKnownSources(domain, sources)) {
+					edge.distinct_count = MaxValue(1.0, edge.distinct_count * factor->second);
+					break;
+				}
+			}
 		}
 	}
 	std::stable_sort(state->edges.begin(), state->edges.end(), SortEdges);
@@ -1000,34 +1061,6 @@ void CardinalityEstimator::UpdateTotalDomains(RelationIndex relation_id, const R
 			}
 			relation_to_tdom.domain_estimate.Update(key, stats.columns[i].total_domain,
 			                                        entry == sources.end() ? nullptr : &entry->second);
-		}
-	}
-}
-
-void CardinalityEstimator::RestrictFilterDomains(const vector<RelationStats> &relation_stats) {
-	for (auto &equivalence : state->relation_set_stats) {
-		bool all_filtered = !equivalence.predicates.empty();
-		for (auto &predicate : equivalence.predicates) {
-			all_filtered &= predicate.get().IsEquivalencePredicate();
-		}
-		idx_t retained_domain = 0;
-		for (auto &binding : equivalence.equivalent_relations) {
-			if (!all_filtered || binding.table_index.index >= relation_stats.size() ||
-			    binding.column_index.GetIndex() >= relation_stats[binding.table_index.index].columns.size()) {
-				all_filtered = false;
-				break;
-			}
-			auto &column = relation_stats[binding.table_index.index].columns[binding.column_index.GetIndex()];
-			auto bound = column.semi_anti_join_domain_evidence.GetDomainBound();
-			// Unknown-NDV filters need their scan selectivities refined before shrinking the join domain.
-			if (!bound.IsValid() || column.total_domain.source == DistinctCountSource::CARDINALITY) {
-				all_filtered = false;
-				break;
-			}
-			retained_domain = MaxValue(retained_domain, bound.GetIndex());
-		}
-		if (all_filtered) {
-			equivalence.domain_estimate.Restrict(retained_domain);
 		}
 	}
 }

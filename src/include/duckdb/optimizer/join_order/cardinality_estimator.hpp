@@ -39,7 +39,6 @@ public:
 private:
 	void InitEquivalentRelations();
 	void UpdateTotalDomains(RelationIndex relation, const RelationStats &stats, const join_column_sources_t &sources);
-	void RestrictFilterDomains(const vector<RelationStats> &relation_stats);
 	bool IsFilterApplicable(const FilterInfo &filter, JoinRelationSet &set) const;
 	CardinalityValue GetNumerator(JoinRelationSet &set);
 	CardinalityValue GetInnerSelectivity(JoinRelationSet &set);

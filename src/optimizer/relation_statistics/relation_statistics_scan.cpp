@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -348,13 +349,80 @@ static FilterEstimate EstimateFilterRows(idx_t cardinality, const Expression &ex
 	return {cardinality, false};
 }
 
-static void ApplyFilterEstimate(RelationStats &stats, FilterEstimate estimate) {
+static idx_t ResolveFilterEstimate(idx_t cardinality, FilterEstimate estimate) {
 	if (!estimate.supported) {
 		// An unsupported conjunct retains its fallback even when another conjunct has a weaker estimate.
-		estimate.cardinality = MinValue(
-		    estimate.cardinality, FilterFraction(stats.cardinality, RelationStatisticsHelper::DEFAULT_SELECTIVITY));
+		return MinValue(estimate.cardinality,
+		                FilterFraction(cardinality, RelationStatisticsHelper::DEFAULT_SELECTIVITY));
 	}
-	RelationStatisticsHelper::ApplyCardinality(stats, estimate.cardinality);
+	return estimate.cardinality;
+}
+
+static idx_t CapByPartitionStatistics(ClientContext &context, LogicalGet &get, idx_t cardinality) {
+	if (cardinality == 0 || !get.function.get_partition_stats || !get.bind_data || !get.children.empty()) {
+		return cardinality;
+	}
+	struct PartitionFilter {
+		StorageIndex storage_index;
+		LogicalType type;
+		unique_ptr<Expression> expression;
+	};
+	vector<PartitionFilter> filters;
+	for (auto &entry : get.table_filters) {
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			continue;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "CapByPartitionStatistics");
+		if (filter.column_indexes.size() > 1 || filter.expr->HasParameter() || filter.expr->IsVolatile()) {
+			continue;
+		}
+		auto projection = filter.column_indexes.empty() ? entry.GetIndex() : filter.column_indexes[0];
+		auto &column_index = get.GetColumnIndex(projection);
+		StorageIndex storage_index;
+		if (get.TryGetStorageIndex(column_index, storage_index)) {
+			filters.push_back({storage_index, get.GetColumnType(column_index),
+			                   RelationStatisticsHelper::CopyMandatoryFilter(*filter.expr)});
+		}
+	}
+	if (filters.empty()) {
+		return cardinality;
+	}
+	GetPartitionStatsInput input(get.function, get.bind_data.get());
+	auto partitions = get.function.get_partition_stats(context, input);
+	if (partitions.empty()) {
+		return cardinality;
+	}
+	for (auto &partition : partitions) {
+		if (partition.count_type != CountType::COUNT_EXACT) {
+			return cardinality;
+		}
+	}
+	idx_t remaining = 0;
+	for (auto &partition : partitions) {
+		bool pruned = false;
+		if (partition.partition_row_group) {
+			for (auto &filter : filters) {
+				auto statistics = partition.partition_row_group->GetColumnStatistics(filter.storage_index);
+				if (!statistics || !statistics->GetType().EqualsIncludingCollation(filter.type)) {
+					continue;
+				}
+				auto result = ExpressionFilter::CheckExpressionStatistics(context, *filter.expression, *statistics);
+				if (result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+				    result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+					pruned = true;
+					break;
+				}
+			}
+		}
+		if (!pruned) {
+			// Count whole surviving partitions; stop once they cannot improve the estimate.
+			if (partition.count >= cardinality - remaining) {
+				return cardinality;
+			}
+			remaining += partition.count;
+		}
+	}
+	return remaining;
 }
 
 static void ApplyFilterDomainCap(RelationColumnStats &column, optional_idx cap) {
@@ -433,7 +501,30 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			estimate.Combine({range_cardinality, true});
 		}
 	}
-	ApplyFilterEstimate(result, estimate);
+	// a sampled selectivity replaces the estimate of the table filters, unless no filter can remove rows
+	bool has_non_optional_filters = false;
+	for (auto &entry : get.table_filters) {
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			continue;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ExtractGetStats");
+		auto &statistics = scan_statistics[entry.GetIndex().GetIndex()];
+		if (filter.column_indexes.size() <= 1 &&
+		    filter.CheckStatistics(context, statistics) == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			continue;
+		}
+		has_non_optional_filters = true;
+	}
+	auto cardinality = ResolveFilterEstimate(base_table_cardinality, estimate);
+	if (has_non_optional_filters && cardinality > 0) {
+		auto sample_counts = SampleFilterPassCounts(context, get, {});
+		if (sample_counts.evaluated_count > 0) {
+			auto selectivity = SampledSelectivity(sample_counts.passing_count, sample_counts.evaluated_count,
+			                                      double(cardinality) / double(base_table_cardinality));
+			cardinality = FilterFraction(base_table_cardinality, selectivity);
+		}
+	}
+	ApplyCardinality(result, CapByPartitionStatistics(context, get, cardinality));
 	for (auto &column : result.columns) {
 		for (auto &entry : get.table_filters) {
 			if (ExpressionFilter::IsOptionalFilter(entry.Filter()) || entry.GetIndex() != column.binding.column_index) {
@@ -456,7 +547,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 }
 
 optional<RelationStats> RelationStatisticsHelper::ExtractFilterStats(LogicalFilter &filter,
-                                                                     const RelationStats &child_stats) {
+                                                                     const RelationStats &child_stats,
+                                                                     ClientContext &context) {
 	auto result = ProjectOutputStats(child_stats, filter);
 	if (!result) {
 		return {};
@@ -467,7 +559,15 @@ optional<RelationStats> RelationStatisticsHelper::ExtractFilterStats(LogicalFilt
 	for (auto &expression : filter.expressions) {
 		estimate.Combine(EstimateFilterRows(child_stats.cardinality, *expression, columns, bindings));
 	}
-	ApplyFilterEstimate(*result, estimate);
+	auto cardinality = ResolveFilterEstimate(child_stats.cardinality, estimate);
+	if (cardinality > 0) {
+		auto selectivity =
+		    SampleFilterSelectivity(context, filter, double(cardinality) / double(child_stats.cardinality));
+		if (selectivity) {
+			cardinality = FilterFraction(child_stats.cardinality, *selectivity);
+		}
+	}
+	ApplyCardinality(*result, cardinality);
 	for (auto &column : result->columns) {
 		for (auto &expression : filter.expressions) {
 			ApplyDirectFilterDomain(column, *expression, column.binding);

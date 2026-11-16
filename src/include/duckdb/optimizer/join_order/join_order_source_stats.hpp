@@ -30,6 +30,7 @@ struct JoinColumnSources {
 
 	JoinColumnSource direct;
 	vector<JoinColumnSource> equivalents;
+	column_binding_map_t<double> filter_factors;
 };
 
 using join_column_sources_t = column_binding_map_t<JoinColumnSources>;
@@ -47,9 +48,14 @@ public:
 	join_column_sources_t Resolve(LogicalOperator &root) const;
 
 private:
+	join_column_sources_t ResolveInternal(LogicalOperator &root,
+	                                      optional_ptr<vector<pair<ColumnBinding, ColumnBinding>>> join_pairs) const;
+
+private:
 	struct ScanStats {
 		idx_t cardinality;
 		RelationStats stats;
+		column_binding_map_t<column_binding_map_t<double>> filter_factors;
 	};
 
 	unordered_map<TableIndex, ScanStats> scans;
