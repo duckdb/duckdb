@@ -10,17 +10,17 @@ SET memory_limit='100MB';
 
 # the window self-join turns these into grouped aggregates over the raw states
 statement error
-SELECT count(*) FROM (SELECT histogram(i) OVER (PARTITION BY i % 100) x FROM range(1000000) r(i)) WHERE x IS NOT NULL;
+SELECT count(*) FROM (SELECT histogram(i) OVER (PARTITION BY i % 100) x FROM range(2000000) r(i)) WHERE x IS NOT NULL;
 ----
 Out of Memory Error
 
 statement error
-SELECT count(*) FROM (SELECT mode(i) OVER (PARTITION BY i % 100) x FROM range(1000000) r(i)) WHERE x IS NOT NULL;
+SELECT count(*) FROM (SELECT mode(i) OVER (PARTITION BY i % 100) x FROM range(2000000) r(i)) WHERE x IS NOT NULL;
 ----
 Out of Memory Error
 
 statement error
-SELECT count(*) FROM (SELECT i % 20000 g, histogram(i, range(0, 100000, 200)) x FROM range(200000) r(i) GROUP BY g) WHERE cardinality(x) > 0;
+SELECT count(*) FROM (SELECT i % 30000 g, histogram(i, range(0, 100000, 200)) x FROM range(300000) r(i) GROUP BY g) WHERE cardinality(x) > 0;
 ----
 Out of Memory Error
 
