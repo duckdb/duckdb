@@ -34,10 +34,7 @@ namespace duckdb {
 
 Executor::Executor(ClientContext &context, bool caller_completes_query)
     : context(context), executor_tasks(0), caller_completes_query(caller_completes_query),
-#ifndef DUCKDB_NO_THREADS
-      caller_thread(std::this_thread::get_id()),
-#endif
-      blocked_thread_time(0) {
+      caller_thread(ThreadUtil::GetThreadId()), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -411,14 +408,7 @@ void Executor::ScheduleTasks(vector<shared_ptr<Task>> &tasks) {
 }
 
 bool Executor::OnCompletingThread() const {
-	if (!caller_completes_query) {
-		return false;
-	}
-#ifndef DUCKDB_NO_THREADS
-	return std::this_thread::get_id() == caller_thread;
-#else
-	return true;
-#endif
+	return caller_completes_query && ThreadUtil::GetThreadId() == caller_thread;
 }
 
 void Executor::WaitForTask() {

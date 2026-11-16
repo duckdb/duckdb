@@ -13,15 +13,13 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 #include <condition_variable>
-#ifndef DUCKDB_NO_THREADS
-#include <thread>
-#endif
 
 namespace duckdb {
 class BufferedData;
@@ -237,10 +235,8 @@ private:
 	atomic<idx_t> executor_tasks;
 	//! Whether the submitting call executes tasks until the query completes before it returns
 	const bool caller_completes_query;
-#ifndef DUCKDB_NO_THREADS
 	//! The thread that submitted the query
-	const std::thread::id caller_thread;
-#endif
+	const thread_id caller_thread;
 	//! Leaf lock for the result buffer slot. It must not share executor_lock, which is held while
 	//! readiness is checked
 	mutex result_buffer_lock;
