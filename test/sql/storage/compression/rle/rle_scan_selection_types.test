@@ -54,17 +54,25 @@ SELECT count(*) FROM (
 ----
 0
 
+foreach filtered v n
+
 query I
+WITH expected_rows AS (
+    SELECT i AS id, expected(i) AS v,
+           CASE WHEN i % 13 = 0 THEN NULL ELSE expected(i) END AS n
+    FROM range(12291) t(i))
 SELECT count(*) FROM (
-    (SELECT id, v, n FROM db.runs WHERE f < {selected} AND n < 85
+    (SELECT id, v, n FROM db.runs WHERE f < {selected} AND {filtered} < 85
      EXCEPT ALL
-     SELECT i, expected(i), expected(i) FROM range(12291) t(i) WHERE i % 1000 < {selected} AND i % 13 <> 0 AND expected(i) < 85)
+     SELECT * FROM expected_rows WHERE id % 1000 < {selected} AND {filtered} < 85)
     UNION ALL
-    (SELECT i, expected(i), expected(i) FROM range(12291) t(i) WHERE i % 1000 < {selected} AND i % 13 <> 0 AND expected(i) < 85
+    (SELECT * FROM expected_rows WHERE id % 1000 < {selected} AND {filtered} < 85
      EXCEPT ALL
-     SELECT id, v, n FROM db.runs WHERE f < {selected} AND n < 85))
+     SELECT id, v, n FROM db.runs WHERE f < {selected} AND {filtered} < 85))
 ----
 0
+
+endloop
 
 endloop
 
