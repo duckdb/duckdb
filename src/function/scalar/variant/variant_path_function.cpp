@@ -6,6 +6,18 @@ namespace duckdb {
 
 namespace {
 
+//! Emits a primitive directly, only containers need the traversal of EmitIterator
+void EmitSelectedNode(const VariantNode &node, VariantBuilder &builder) {
+	if (!node.IsNull() && !node.IsMissing()) {
+		const auto type = node.GetTypeId();
+		if (type != VariantLogicalType::OBJECT && type != VariantLogicalType::ARRAY) {
+			builder.EmitPrimitiveNode(node, type);
+			return;
+		}
+	}
+	EmitIterator(node, builder);
+}
+
 //! Emits the value selected for each row, or a NULL if it is missing or not kept
 template <class SELECT_FUNCTION>
 struct SelectedVariantSource {
@@ -14,7 +26,7 @@ struct SelectedVariantSource {
 		if (!node || !keep(*node)) {
 			return true;
 		}
-		EmitIterator(*node, builder);
+		EmitSelectedNode(*node, builder);
 		return false;
 	}
 
@@ -68,10 +80,23 @@ void VariantPathFunction::ExecuteVariantUnary(const Vector &input, const vector<
 void VariantPathFunction::ExecuteVariantMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths,
                                              Vector &result, idx_t count, variant_node_filter_t keep) {
 	const VectorIterator<VectorVariantType> variants(input);
+	const auto path_count = paths.size();
+
+	//! The key of each single key path, these are resolved in one pass over the children of the object
+	vector<optional<string_t>> keys(path_count);
+	idx_t key_count = 0;
+	for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
+		const auto &path = paths[path_idx];
+		if (path.size() == 1 && path[0].lookup_mode == VariantChildLookupMode::BY_KEY) {
+			keys[path_idx] = string_t(path[0].key.c_str(), NumericCast<uint32_t>(path[0].key.size()));
+			key_count++;
+		}
+	}
 
 	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	//! The row of each list element, the elements of a row hold its value at each of the paths in order
-	vector<idx_t> element_rows;
+	//! The elements of a row hold its value at each of the paths in order
+	vector<optional<VariantNode>> selected;
+	selected.reserve(count * path_count);
 	{
 		auto list_writer = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t row = 0; row < count; row++) {
@@ -79,18 +104,40 @@ void VariantPathFunction::ExecuteVariantMany(const Vector &input, const vector<v
 				list_writer.WriteNull();
 				continue;
 			}
-			list_writer.WriteValue(list_entry_t(element_rows.size(), paths.size()));
-			element_rows.insert(element_rows.end(), paths.size(), row);
+			const auto offset = selected.size();
+			list_writer.WriteValue(list_entry_t(offset, path_count));
+			selected.resize(offset + path_count);
+			const auto root = variants[row];
+			for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
+				if (!keys[path_idx]) {
+					selected[offset + path_idx] = ResolvePath(root, paths[path_idx]);
+				}
+			}
+			if (key_count == 0 || root.IsNull() || root.IsMissing() || root.GetTypeId() != VariantLogicalType::OBJECT) {
+				continue;
+			}
+			auto pending = key_count;
+			for (const auto &entry : root.GetObjectChildren()) {
+				for (idx_t path_idx = 0; path_idx < path_count; path_idx++) {
+					auto &value = selected[offset + path_idx];
+					if (keys[path_idx] && !value && *keys[path_idx] == entry.key) {
+						value = entry.value;
+						pending--;
+					}
+				}
+				if (pending == 0) {
+					break;
+				}
+			}
 		}
 	}
-	const auto element_count = element_rows.size();
+	const auto element_count = selected.size();
 	if (element_count == 0) {
 		return;
 	}
 	Vector elements(LogicalType::VARIANT(), element_count);
-	BuildSelectedVariants(element_count, elements, keep, [&](idx_t element_idx) {
-		return ResolvePath(variants[element_rows[element_idx]], paths[element_idx % paths.size()]);
-	});
+	BuildSelectedVariants(element_count, elements, keep,
+	                      [&](idx_t element_idx) -> const optional<VariantNode> & { return selected[element_idx]; });
 	ListVector::Append(result, elements, element_count);
 }
 

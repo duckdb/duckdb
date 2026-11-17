@@ -71,7 +71,7 @@ struct VariantValueIndexSource {
 		if (!node || !IsScalarValue(*node)) {
 			return true;
 		}
-		EmitIterator(*node, builder);
+		builder.EmitPrimitiveNode(*node, node->GetTypeId());
 		return false;
 	}
 
