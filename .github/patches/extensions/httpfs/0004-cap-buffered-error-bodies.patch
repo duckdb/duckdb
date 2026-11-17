@@ -1,0 +1,55 @@
+diff --git a/src/http/httpfs_curl_client.cpp b/src/http/httpfs_curl_client.cpp
+index 592e857..7325d58 100644
+--- a/src/http/httpfs_curl_client.cpp
++++ b/src/http/httpfs_curl_client.cpp
+@@ -382,8 +382,16 @@ private:
+ 			if (!response_started && !StartResponse()) {
+ 				return stopped ? 0 : size;
+ 			}
+-			if (!stream_content || client.request_info->response_code >= 400) {
++			if (!stream_content) {
+ 				client.request_info->body.append(char_ptr_cast(contents), size);
++			} else if (client.request_info->response_code >= 400) {
++				// an error body is buffered for the message, not streamed: cap it, the content handler's own limit does
++				// not apply to it
++				auto &body = client.request_info->body;
++				if (body.size() < HTTPFSParams::MAX_BUFFERED_ERROR_BODY) {
++					body.append(char_ptr_cast(contents),
++					            MinValue<idx_t>(size, HTTPFSParams::MAX_BUFFERED_ERROR_BODY - body.size()));
++				}
+ 			} else if (!request.content_handler(const_data_ptr_cast(contents), size)) {
+ 				stopped = true;
+ 				return 0;
+diff --git a/src/http/httpfs_httplib_client.cpp b/src/http/httpfs_httplib_client.cpp
+index da857b0..130cef6 100644
+--- a/src/http/httpfs_httplib_client.cpp
++++ b/src/http/httpfs_httplib_client.cpp
+@@ -37,7 +37,12 @@ private:
+ 				client.state->RecordBytesReceived(chunk_size);
+ 			}
+ 			if (deferred_response) {
+-				deferred_response->body.append(data, data_length);
++				// an error body is buffered for the message, not streamed: cap it, the content handler's own limit does
++				// not apply to it
++				auto &body = deferred_response->body;
++				if (body.size() < HTTPFSParams::MAX_BUFFERED_ERROR_BODY) {
++					body.append(data, MinValue<idx_t>(chunk_size, HTTPFSParams::MAX_BUFFERED_ERROR_BODY - body.size()));
++				}
+ 				return true;
+ 			}
+ 			return !request.content_handler || request.content_handler(const_data_ptr_cast(data), chunk_size);
+diff --git a/src/include/http/httpfs_client.hpp b/src/include/http/httpfs_client.hpp
+index 5213df3..19e48e6 100644
+--- a/src/include/http/httpfs_client.hpp
++++ b/src/include/http/httpfs_client.hpp
+@@ -61,6 +61,10 @@ public:
+ 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
+ 	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
+ 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
++	//! When a GET streams its content through a content handler, the body of an error response (status 400 and up) is
++	//! not streamed but buffered for the error message. It is buffered up to this size and cut there: an error body
++	//! is read for what it says, which is at its start, and the content handler's own size limit cannot see it
++	static constexpr idx_t MAX_BUFFERED_ERROR_BODY = 65536;
+ 	static constexpr bool AUTO_FALLBACK_TO_FULL_DOWNLOAD = true;
+ 
+ 	//! Runtime parameters owned by HTTPFS; browser clients consume only the HTTPParams base.
