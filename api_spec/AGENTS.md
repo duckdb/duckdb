@@ -31,12 +31,15 @@ in line in the same change:
 3. the implementation under `src/main/capi/v1/` or `src/main/capi/v2/`;
 4. for V2, the C++ API in `tools/cpp/` when it exposes the function;
 5. the tests: C tests for the function, and C++ tests when `tools/cpp/` changed. A new test file
-   is added by name to `test/api/capi/v2/CMakeLists.txt` or `test/api/cpp/CMakeLists.txt`.
+   is added by name to `test/api/capi/v1/CMakeLists.txt`, `test/api/capi/v2/CMakeLists.txt` or
+   `test/api/cpp/CMakeLists.txt`, whichever builds the tests it joins.
 
 Before you finish, regenerate once more: it must leave no difference. CI fails when the committed
 V1 headers do not match the specification. Each regeneration script ends by formatting what it
 generated. When only that last step fails, the generation itself has completed: check that the
-generated files changed as you expect, and format them before you commit.
+generated files changed as you expect, and format them before you commit. For V2 that takes two
+passes of `scripts/format.py`, as the script runs them: one pass does not settle the generated
+struct members.
 
 ## Lifecycle of an entry
 
@@ -66,16 +69,18 @@ adds a V2 entry in any other state than `unstable`, says so in its description a
   says are set on that failure: the functions that write text into a caller's buffer report the
   required length this way. A successful call leaves the slot behind `err` untouched, so an
   error info from an earlier failure can still be there: read success from the returned code,
-  never from the slot. A callback that receives an `err` slot fills it and never destroys it.
+  never from the slot. A callback that receives an `err` slot fills it only to signal a failure,
+  and never destroys it.
 - **Out parameters follow one pattern.** A handle out parameter is set to null before the work.
   Any other out parameter follows the function's documentation. `err` and a caller's buffer are
   never cleared: a caller may pass an error info handle for reuse, and a buffer is documented as
   left untouched on failure.
-- **An exposed enum value is pinned to the engine's.** Where the API exposes values of an engine
-  enum, each exposed value has a `static_assert` beside the conversion, as in
-  `src/main/capi/v2/capi_v2_expression.cpp`. A new engine value enters V2 only when the
-  specification is meant to expose it. The log level, log scope and logical type id enums are
-  converted with a plain cast and have no such assertion in `src/main/capi/v2/` yet.
+- **An enum converted by a cast is pinned to the engine's.** Where a V2 enum is converted to or
+  from an engine enum by a cast, each exposed value has a `static_assert` beside the cast, as in
+  `src/main/capi/v2/capi_v2_expression.cpp`. A conversion through a `switch` needs none, and its
+  numbers may differ from the engine's. A new engine value enters V2 only when the specification
+  is meant to expose it. Three casts have no assertion yet: the log level and the log scope in
+  `capi_v2_log_sink.cpp`, and the logical type id in `capi_v2_logical_type.cpp`.
 
 ## Tests for V2
 
@@ -96,6 +101,7 @@ anything that renames, deprecates or removes a function.
   or none. Also run the test files that cover what you changed by file name. The runner's `-#`
   option adds a tag per source file: `unittest -# "[#test_capi_appender]"`.
 - After a change to `api_spec/v1/`, also run `python3 scripts/check_extension_abi.py`. It compares
-  the generated extension struct with the releases in its `RELEASES` list. A pass prints one
-  `pin ...: prefix-compatible` line per release. A run that prints `skipping` checked nothing:
-  a release tag is missing from the clone.
+  the generated extension struct with the releases in its `RELEASES` list. A pass exits with
+  status 0 and ends with the line "all pinned builds are valid prefixes of every engine that
+  accepts them". A run that prints `skipping` checked nothing: a release tag is missing from the
+  clone.
