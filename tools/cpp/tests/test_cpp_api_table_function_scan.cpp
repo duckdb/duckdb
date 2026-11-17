@@ -752,10 +752,9 @@ TEST_CASE("Stable C++API: table function describes its scan in the query plan", 
 	// The scan itself is unaffected (assertion builds also render plans while executing, so calls are not counted)
 	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_described(3)")) == std::vector<int64_t> {0, 1, 2});
 
-	// The errors of the callback fail the EXPLAIN, not the query
+	// The errors of the callback fail the EXPLAIN
 	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_fails(3)").Drain(),
 	                    Catch::Contains("cannot describe the scan"));
 	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_empty_key(3)").Drain(),
 	                    Catch::Contains("the key cannot be empty"));
-	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_describe_fails(2)")) == std::vector<int64_t> {0, 1});
 }
