@@ -33,6 +33,44 @@ GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar,
 	for (auto &entry : keywords) {
 		Register(entry.first, entry.second.CategoryFlags());
 	}
+	Index();
+}
+
+void GrammarLiteralTable::Index() {
+	texts.clear();
+	infos.clear();
+	idx_t slot_count = 16;
+	while (slot_count < literals.size() * 2) {
+		slot_count *= 2;
+	}
+	slots.assign(slot_count, Slot());
+	slot_mask = static_cast<uint32_t>(slot_count - 1);
+	for (auto &entry : literals) {
+		texts.push_back(entry.first);
+		infos.push_back(entry.second);
+		auto hash = static_cast<uint32_t>(StringUtil::CIHash(entry.first));
+		auto index = hash & slot_mask;
+		while (slots[index].entry) {
+			index = (index + 1) & slot_mask;
+		}
+		slots[index].hash = hash;
+		slots[index].entry = static_cast<uint32_t>(texts.size());
+	}
+	for (auto &entry : literals) {
+		auto &text = entry.first;
+		auto first = static_cast<uint8_t>(text[0]);
+		first_bytes[first] = true;
+		first_bytes[static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(first)))] = true;
+		first_bytes[static_cast<uint8_t>(StringUtil::CharacterToUpper(static_cast<char>(first)))] = true;
+		if (text.size() > 1) {
+			prefix_lengths[PrefixIndex(text[0], text[1])] |= 1U << LengthBit(text.size());
+		}
+		if (text.size() == 1) {
+			single_byte[first] = entry.second;
+			single_byte[static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(first)))] = entry.second;
+			single_byte[static_cast<uint8_t>(StringUtil::CharacterToUpper(static_cast<char>(first)))] = entry.second;
+		}
+	}
 }
 
 void GrammarLiteralTable::Register(const string &text, keyword_categories_t categories) {

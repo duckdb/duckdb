@@ -155,10 +155,9 @@ StringColumnReader::Utf8ValidationOption
 EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value);
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
+	ParquetScanFilter(ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
-	void Initialize(ClientContext &context);
 
 	ProjectionIndex filter_idx;
 	TableFilter &filter;

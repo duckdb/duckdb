@@ -138,6 +138,8 @@ VariantLogicalType ResolveShreddedTypeId(const LogicalType &type, bool &resolved
 		return VariantLogicalType::BITSTRING;
 	case LogicalTypeId::GEOMETRY:
 		return VariantLogicalType::GEOMETRY;
+	case LogicalTypeId::GEOGRAPHY:
+		return VariantLogicalType::GEOGRAPHY;
 	case LogicalTypeId::STRUCT:
 		return VariantLogicalType::OBJECT;
 	case LogicalTypeId::LIST:

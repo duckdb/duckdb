@@ -114,7 +114,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 			if (lookup_result) {
 				scope = lookup_result.GetScope();
 			} else {
-				value.value = option->default_value;
+				value.value = Value(option->GetDefaultValue(DBConfig::GetConfig(context)).ToString());
 			}
 		}
 		if (option->scope == SettingScopeTarget::LOCAL_ONLY) {

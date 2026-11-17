@@ -1,0 +1,29 @@
+# name: test/sql/copy/csv/batched_write/batch_csv_row_group_size_bytes.test
+# description: Batched COPY with ROW_GROUP_SIZE_BYTES but no ROW_GROUP_SIZE has no row target to compare against
+# group: [batched_write]
+
+# two threads keep a merged tail batch pending across repartitions, which is what consults the row target
+statement ok
+SET threads=2
+
+statement ok
+CREATE TABLE integers AS FROM range(1000000) t(i)
+
+statement ok
+COPY integers TO '{TEST_DIR}/batched_bytes_only.csv' (ROW_GROUP_SIZE_BYTES '256KB')
+
+statement ok
+CREATE TABLE integers_copied AS FROM '{TEST_DIR}/batched_bytes_only.csv'
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers_copied
+----
+1000000	499999500000
+
+# the batched copy keeps insertion order
+query I
+SELECT * FROM integers_copied LIMIT 3 OFFSET 500000
+----
+500000
+500001
+500002

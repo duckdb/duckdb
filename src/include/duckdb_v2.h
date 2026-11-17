@@ -9608,6 +9608,9 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
 
 	//! Geometry (spatial extension).
 	DUCKDB_V2_LOGICAL_TYPE_ID_GEOMETRY = 60,
+
+	//! Geography (spatial extension); like GEOMETRY, but with spherical edges.
+	DUCKDB_V2_LOGICAL_TYPE_ID_GEOGRAPHY = 61,
 	DUCKDB_V2_LOGICAL_TYPE_ID_STRUCT = 100,
 	DUCKDB_V2_LOGICAL_TYPE_ID_LIST = 101,
 	DUCKDB_V2_LOGICAL_TYPE_ID_MAP = 102,
@@ -9651,8 +9654,8 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for factory_create_type_from_name.
  *
  * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
- * factory_create_type_from_text — and for INVALID.
+ * ARRAY, UNION, ENUM, VARIANT, GEOMETRY, GEOGRAPHY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE —
+ * construct that via factory_create_type_from_text — and for INVALID.
  *
  * history:
  * - unstable: v2.0.0
@@ -9898,8 +9901,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_to_text(duckdb_v2_logical_ty
  * The inspection dual of create_type_from_name: these are the parameters that reconstruct the type through it. Per
  * kind: DECIMAL 2 (width, scale); LIST 1 (element type); ARRAY 2 (element type, size); MAP 2 (key type, value type);
  * STRUCT and TUPLE one per field; UNION one per member; ENUM one per dictionary entry; VARCHAR 1 when a collation is
- * set, else 0; GEOMETRY 1 when a coordinate system is set, else 0; everything else 0. A bound type reports only what it
- * actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say — does not reappear.
+ * set, else 0; GEOMETRY and GEOGRAPHY 1 when a coordinate system is set, else 0; everything else 0. A bound type
+ * reports only what it actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say
+ * — does not reappear.
  *
  * history:
  * - unstable: v2.0.0
@@ -16678,10 +16682,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_h
  *
  * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..255, the
  * range of the uint8_t parameter; scale is the number of digits after the point and must not exceed width. Violating
- * either returns ERROR_INPUT_INVALID, as does a value too wide for the storage tier the width selects. Widths above 38
- * build a wide decimal stored as BIGNUM, for which the 128-bit backing integer always fits. The value itself is not
- * range-checked against the width; value_cast is the validating path, and the one that reaches decimals wider than 255
- * digits.
+ * either returns ERROR_INPUT_INVALID, as does a value that does not fit in width digits. Widths above 38 build a wide
+ * decimal stored as BIGNUM, for which the 128-bit backing integer always fits. value_cast reaches decimals wider than
+ * 255 digits.
  *
  * history:
  * - unstable: v2.0.0

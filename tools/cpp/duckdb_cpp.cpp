@@ -586,6 +586,7 @@ auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<
 	if (options.custom_user_agent) {
 		result.emplace_back("custom_user_agent", *options.custom_user_agent);
 	}
+	result.insert(result.end(), options.options.begin(), options.options.end());
 	return result;
 }
 
@@ -2109,6 +2110,14 @@ void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
 		                            std::to_string(scale) + ")");
 	}
 	out = FromC(payload);
+}
+
+auto Value::GetDecimal() const -> RuntimeDecimal {
+	duckdb_v2_hugeint_t payload {};
+	RuntimeDecimal result {};
+	CheckedAPICall(duckdb_v2_value_get_decimal, handle(), &payload, &result.width, &result.scale);
+	result.value = FromC(payload);
+	return result;
 }
 
 auto Value::CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value {
