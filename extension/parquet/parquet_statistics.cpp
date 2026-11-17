@@ -406,6 +406,9 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}

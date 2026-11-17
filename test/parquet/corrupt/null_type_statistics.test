@@ -1,0 +1,14 @@
+# name: test/parquet/corrupt/null_type_statistics.test
+# description: parquet_metadata of a column of the NULL type whose column chunk has min/max statistics
+# group: [corrupt]
+
+require parquet
+
+# the statistics of a column without values are NULL
+query IIIII
+SELECT row_group_id, type, stats_min, stats_max, stats_min_value
+FROM parquet_metadata('{DATA_DIR}/parquet-testing/corrupt/null_type_statistics.parquet')
+ORDER BY row_group_id;
+----
+0	INT32	NULL	NULL	NULL
+1	BOOLEAN	NULL	NULL	NULL
