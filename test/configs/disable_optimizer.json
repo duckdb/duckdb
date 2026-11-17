@@ -182,6 +182,12 @@
       ]
     },
     {
+      "reason": "Without the window self-join the window operator evaluates the aggregates, which fit in the memory limit.",
+      "paths": [
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
+      ]
+    },
+    {
       "reason": "Parquet prefetch strategies and I/O metrics require optimizer rewrites.",
       "paths": [
         "test/sql/copy/parquet/bloom_filter_coalesced_memory.test_slow",
