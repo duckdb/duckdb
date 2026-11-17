@@ -1,0 +1,88 @@
+# name: test/sql/types/enum/enum_corrupt_value.test
+# description: A stored ENUM value that is not a position in the dictionary of its type must error, not read past the dictionary
+# group: [enum]
+
+require vector_size 2048
+
+# t0 (a INTEGER, b VARCHAR, m ENUM('a', 'b'), c DOUBLE, g INTEGER) holds 15 rows
+# the stored value of m in the row a = 6 is 86, m is NULL in the row a = 11
+unzip data/storage/corrupt/enum_corrupt_value.db.gz {TEST_DIR}/enum_corrupt_value.db
+
+load {TEST_DIR}/enum_corrupt_value.db readonly
+
+statement ok
+USE enum_corrupt_value
+
+# ENUM -> VARCHAR
+statement error
+SELECT m::VARCHAR FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT COLUMNS(*)::VARCHAR FROM t0 WHERE a = 6
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT [m]::VARCHAR, {'m': m}::VARCHAR FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# ENUM -> ENUM
+statement error
+SELECT m::ENUM('b', 'a', 'c') FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT TRY_CAST(m AS ENUM('b', 'a', 'c')) FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# ENUM -> other types goes through VARCHAR
+statement error
+SELECT m::BLOB FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# ENUM -> VARIANT
+statement error
+SELECT m::VARIANT FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# enum_range_boundary
+statement error
+SELECT enum_range_boundary(NULL, m) FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+statement error
+SELECT enum_range_boundary(m, NULL) FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# statements that do not need the string of the value are unaffected
+query II
+SELECT a, enum_code(m) FROM t0 WHERE a BETWEEN 5 AND 7 ORDER BY a
+----
+5	1
+6	86
+7	1
+
+# the other rows can be read
+query IT
+SELECT a, m::VARCHAR FROM t0 WHERE a <> 6 AND a > 8 ORDER BY a
+----
+9	b
+10	a
+11	NULL
+12	a
+13	a
+14	b
+
+query I
+SELECT 42
+----
+42

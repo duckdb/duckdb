@@ -5,11 +5,45 @@
 
 namespace duckdb {
 
+//! Verifies that the values of an ENUM vector are positions in the dictionary of its type.
+//! The values are not checked against the type when they are read from storage, so this is what stands between
+//! corrupt data and a read past the dictionary. This is done once per vector to keep the check out of the cast loops.
+template <class T>
+static void VerifyEnumValues(Vector &source, idx_t count, idx_t dictionary_size) {
+	if (dictionary_size > NumericLimits<T>::Maximum()) {
+		// every value of the physical type is a position in the dictionary
+		return;
+	}
+	UnifiedVectorFormat format;
+	source.ToUnifiedFormat(format);
+	auto data = UnifiedVectorFormat::GetData<T>(format);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	if (!format.sel->IsSet() && format.validity.AllValid()) {
+		T max_value = 0;
+		for (idx_t i = 0; i < count; i++) {
+			max_value = MaxValue<T>(max_value, data[i]);
+		}
+		if (max_value >= dictionary_size) {
+			EnumType::ThrowValueOutOfRange(max_value, dictionary_size);
+		}
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = format.sel->get_index(i);
+		if (format.validity.RowIsValid(idx) && data[idx] >= dictionary_size) {
+			EnumType::ThrowValueOutOfRange(data[idx], dictionary_size);
+		}
+	}
+}
+
 template <class SRC_TYPE, class RES_TYPE>
 static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
 	auto res_enum_type = result.GetType();
+	VerifyEnumValues<SRC_TYPE>(source, count, EnumType::GetSize(source.GetType()));
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	UnaryExecutor::Execute<SRC_TYPE, RES_TYPE>(source, result, count, [&](SRC_TYPE value) -> optional<RES_TYPE> {
@@ -45,6 +79,7 @@ template <class SRC>
 static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
+	VerifyEnumValues<SRC>(source, count, EnumType::GetSize(source.GetType()));
 
 	UnaryExecutor::Execute<SRC, string_t>(source, result, count,
 	                                      [&](SRC enum_idx) { return dictionary_data[enum_idx]; });

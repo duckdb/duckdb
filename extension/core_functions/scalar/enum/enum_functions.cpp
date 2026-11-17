@@ -47,6 +47,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	auto &enum_type = types[0].id() == LogicalTypeId::ENUM ? types[0] : types[1];
 	auto &enum_vector = EnumType::GetValuesInsertOrder(enum_type);
 	auto enum_strings = enum_vector.Values<string_t>();
+	const auto enum_size = EnumType::GetSize(enum_type);
 
 	const auto count = input.size();
 	auto writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
@@ -55,7 +56,13 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 		auto first_param = input.GetValue(0, row);
 		auto second_param = input.GetValue(1, row);
 		idx_t start = first_param.IsNull() ? 0 : first_param.GetValue<uint32_t>();
-		idx_t end = second_param.IsNull() ? EnumType::GetSize(enum_type) : second_param.GetValue<uint32_t>() + 1;
+		idx_t end = second_param.IsNull() ? enum_size : idx_t(second_param.GetValue<uint32_t>()) + 1;
+		if (start >= enum_size && !first_param.IsNull()) {
+			EnumType::ThrowValueOutOfRange(start, enum_size);
+		}
+		if (end > enum_size) {
+			EnumType::ThrowValueOutOfRange(end - 1, enum_size);
+		}
 		idx_t enum_idx = start;
 		for (auto &child_writer : writer.WriteList(end > start ? end - start : 0)) {
 			child_writer.WriteValue(enum_strings[enum_idx++].GetValue());

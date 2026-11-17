@@ -650,6 +650,8 @@ struct EnumType {
 	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
 	DUCKDB_API static string_t GetString(const LogicalType &type, idx_t pos);
+	//! Throws an error for an ENUM value that is not a position in the dictionary of its type
+	[[noreturn]] DUCKDB_API static void ThrowValueOutOfRange(idx_t value, idx_t enum_size);
 };
 
 struct StructType {
