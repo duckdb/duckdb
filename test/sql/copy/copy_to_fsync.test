@@ -143,6 +143,40 @@ true	true
 statement ok
 CALL truncate_duckdb_logs()
 
+# the batch writer of a sorted source rotates files too, finalizing the first file last
+statement ok
+SET threads = 8
+
+query II
+EXPLAIN COPY (SELECT i FROM range(10000) t(i) ORDER BY i) TO '{TEST_DIR}/fsync_rotate_sorted'
+	(FORMAT parquet, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kB', FSYNC)
+----
+physical_plan	<REGEX>:.*Batch Copy To File.*
+
+statement ok
+COPY (SELECT i FROM range(10000) t(i) ORDER BY i) TO '{TEST_DIR}/fsync_rotate_sorted'
+	(FORMAT parquet, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kB', FSYNC)
+
+# every file is synced before the directory holding them and the directory it was created in
+query III
+SELECT count(*) FILTER (WHERE path LIKE '%.parquet') > 1,
+	list(path ORDER BY path) FILTER (WHERE path LIKE '%.parquet') =
+		(SELECT list(file ORDER BY file) FROM glob('{TEST_DIR}/fsync_rotate_sorted/*.parquet')),
+	max(timestamp) FILTER (WHERE path LIKE '%.parquet') < min(timestamp) FILTER (WHERE path NOT LIKE '%.parquet')
+FROM duckdb_logs_parsed('FileSystem') WHERE op = 'SYNC'
+----
+true	true	true
+
+query I
+SELECT replace(path, '{TEST_DIR}', 'TEST_DIR') FROM duckdb_logs_parsed('FileSystem')
+WHERE op = 'SYNC' AND path NOT LIKE '%.parquet' ORDER BY ALL
+----
+TEST_DIR
+TEST_DIR/fsync_rotate_sorted
+
+statement ok
+CALL truncate_duckdb_logs()
+
 # a device has no stable storage to sync to
 statement ok
 COPY (SELECT 42 AS i) TO '/dev/null' (FORMAT csv, FSYNC)
