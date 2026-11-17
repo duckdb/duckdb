@@ -73,12 +73,14 @@ public:
 //! decimal
 struct DecimalConversionPayloadFromVariant {
 public:
-	DecimalConversionPayloadFromVariant(idx_t width, idx_t scale) : width(width), scale(scale) {
+	DecimalConversionPayloadFromVariant(idx_t width, idx_t scale, Vector &vec) : width(width), scale(scale), vec(vec) {
 	}
 
 public:
 	idx_t width;
 	idx_t scale;
+	//! The result vector that owns the BIGNUM blobs of decimals wider than 38 digits
+	Vector &vec;
 };
 
 struct ToVariantCastData : public BoundCastData {
@@ -184,8 +186,16 @@ struct VariantDecimalConversion {
 			error = StringUtil::Format("Can't convert from VARIANT(DECIMAL(%d, %d))", width, scale);
 			return false;
 		}
-		VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), sizeof(T));
-		ret = Load<T>(ptr);
+		if constexpr (std::is_same<T, string_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), 1);
+			auto length = VarintDecode<idx_t>(ptr);
+			VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), length);
+			ret = StringVector::AddStringOrBlob(payload.vec, reinterpret_cast<const char *>(ptr), length);
+		} else {
+			VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), sizeof(T));
+			ret = Load<T>(ptr);
+		}
 		return true;
 	}
 };
@@ -510,6 +520,9 @@ public:
 		return false;
 	}
 	static bool VisitGeometry(const string_t &, VariantVarcharSerializer &, bool) {
+		return false;
+	}
+	static bool VisitGeography(const string_t &, VariantVarcharSerializer &, bool) {
 		return false;
 	}
 	static bool VisitBitstring(const string_t &, VariantVarcharSerializer &, bool) {
@@ -1181,6 +1194,11 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::GEOMETRY>>(
 			    conversion_data, result, sel, offset, count, row, string_payload);
 		}
+		case LogicalTypeId::GEOGRAPHY: {
+			StringConversionPayload string_payload(result);
+			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::GEOGRAPHY>>(
+			    conversion_data, result, sel, offset, count, row, string_payload);
+		}
 		case LogicalTypeId::VARCHAR: {
 			if (target_type.IsJSONType()) {
 				return CastVariantToJSON(conversion_data, result, sel, offset, count, row);
@@ -1195,7 +1213,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t width;
 			uint32_t scale;
 			target_type.GetDecimalProperties(width, scale);
-			DecimalConversionPayloadFromVariant decimal_payload(width, scale);
+			DecimalConversionPayloadFromVariant decimal_payload(width, scale, result);
 
 			switch (physical_type) {
 			case PhysicalType::INT16:
@@ -1210,6 +1228,10 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			case PhysicalType::INT128:
 				return CastVariantToPrimitive<VariantDecimalConversion<hugeint_t>>(conversion_data, result, sel, offset,
 				                                                                   count, row, decimal_payload);
+			case PhysicalType::VARCHAR:
+				// decimals wider than 38 digits are BIGNUM blobs
+				return CastVariantToPrimitive<VariantDecimalConversion<string_t>>(conversion_data, result, sel, offset,
+				                                                                  count, row, decimal_payload);
 			default:
 				throw NotImplementedException("Can't convert VARIANT to DECIMAL value of physical type: %s",
 				                              EnumUtil::ToString(physical_type));
@@ -1361,6 +1383,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::ARRAY:
 		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::VARCHAR: {
 		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));

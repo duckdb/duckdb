@@ -69,10 +69,11 @@ void Node7Leaf::InsertByte(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 	Node15Leaf::InsertByte(art, node_ptr, byte);
 }
 
-void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte, const ARTKey &row_id) {
+void Node7Leaf::DeleteByte(ART &art, NodePtrHandle node_ptr_handle, NodePtr &parent_ptr, const uint8_t byte,
+                           const ARTKey &row_id) {
 	idx_t remainder;
 	{
-		auto n7_handle = DeleteByteInternal(art, node_ptr, byte);
+		auto n7_handle = DeleteByteInternal(art, node_ptr_handle.Get(), byte);
 		auto &n7 = n7_handle.Get<Node7Leaf>();
 
 		if (n7.count != 1) {
@@ -80,7 +81,7 @@ void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, con
 		}
 
 		// Compress one-way nodes.
-		D_ASSERT(node_ptr.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		D_ASSERT(node_ptr_handle.Get().GetGateStatus() == GateStatus::GATE_NOT_SET);
 
 		// Get the remaining row ID.
 		remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
@@ -88,13 +89,15 @@ void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, con
 	}
 	// Free the prefix (nodes) and inline the remainder.
 	if (parent_ptr.GetType() == NType::PREFIX) {
+		// The freed prefix chain stores the node's NodePtr: release its pin first.
+		node_ptr_handle.Release();
 		NodePtr::FreeTree(art, parent_ptr);
 		Leaf::New(parent_ptr, UnsafeNumericCast<row_t>(remainder));
 		return;
 	}
 	// Free the Node7Leaf and inline the remainder.
-	NodePtr::FreeNode(art, node_ptr);
-	Leaf::New(node_ptr, UnsafeNumericCast<row_t>(remainder));
+	NodePtr::FreeNode(art, node_ptr_handle.Get());
+	Leaf::New(node_ptr_handle.Get(), UnsafeNumericCast<row_t>(remainder));
 }
 
 void Node7Leaf::ShrinkNode15Leaf(ART &art, NodePtr &node7_leaf_ptr, NodePtr &node15_leaf_ptr) {
