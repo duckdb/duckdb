@@ -314,12 +314,8 @@ SET max_memory='not a memory limit'
 ----
 Memory must have a number
 
-# storage_compatibility_version is validated and restored
-query I
-SELECT current_setting('storage_compatibility_version')
-----
-latest
-
+# storage_compatibility_version is validated and reset to its default
+# (its value before the SET depends on the test config, e.g. v1_storage starts at v1.5.2)
 statement ok
 SET storage_compatibility_version='v1.2.0'
 

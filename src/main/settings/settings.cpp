@@ -70,7 +70,7 @@ const DBConfig &Settings::GetConfigInternal(const DatabaseInstance &db) {
 }
 
 const DBConfig &Settings::GetConfigInternal(const DBConfig &config) {
-	return config;
+	return config; // NOLINT(bugprone-return-const-ref-from-parameter)
 }
 
 const DBConfig &Settings::GetConfigInternal(const ClientContext &context) {
