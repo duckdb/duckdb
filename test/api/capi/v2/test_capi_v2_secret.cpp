@@ -390,4 +390,100 @@ TEST_CASE("V2 secret: a callback creates transaction secrets, which end with the
 	REQUIRE(RunSql(fx.conn, "CREATE SECRET t IN transaction (TYPE demo)") != DUCKDB_V2_ERROR_NONE);
 }
 
+TEST_CASE("V2 secret: a connection looks up and creates secrets without a callback", "[capi_v2][secret]") {
+	EnvFixture fx;
+	idx_t demo_calls = 0;
+	ProbeLog log;
+	RegisterProviders(fx, demo_calls, log);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET s1 (TYPE demo, region 'eu', token 'shh')") == DUCKDB_V2_ERROR_NONE);
+
+	// By path, with a score, and by name.
+	duckdb_v2_secret_handle secret = nullptr;
+	int64_t score = 0;
+	REQUIRE(duckdb_v2_connection_lookup_secret(fx.conn, "demo://x", 8, "demo", 4, &secret, &score, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret != nullptr);
+	RecordSecret(log, secret);
+	REQUIRE(log.name == "s1");
+	REQUIRE(log.values["region"] == "eu");
+	REQUIRE(log.token_redacted);
+	duckdb_v2_secret_destroy(&secret);
+	REQUIRE(duckdb_v2_connection_lookup_secret(fx.conn, "other://x", 9, "demo", 4, &secret, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret == nullptr);
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "s1", 2, &secret, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret != nullptr);
+	duckdb_v2_secret_destroy(&secret);
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "nope", 4, &secret, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret == nullptr);
+
+	// Create one from a built secret, through the provider: the keys are the provider's named parameters.
+	duckdb_v2_secret_handle request = nullptr;
+	REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo", 4, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_NAME, "s2", 2, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_add_scope(request, "made://", 7, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto port = MakeInt32Value(fx.factory, 7);
+	REQUIRE(duckdb_v2_secret_set_value(request, "port", 4, port, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&port);
+	duckdb_v2_secret_handle created = nullptr;
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, &created,
+	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(demo_calls == 2);
+	RecordSecret(log, created);
+	REQUIRE(log.name == "s2");
+	REQUIRE(log.provider == "config");
+	REQUIRE(log.values["port"] == "7");
+	duckdb_v2_secret_destroy(&created);
+	// The same name again: the conflict behavior decides.
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
+	                                           nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, &created,
+	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(created != nullptr);
+	duckdb_v2_secret_destroy(&created);
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, nullptr,
+	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	// A request needs a type.
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "", 0, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, nullptr,
+	                                           nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&request);
+	REQUIRE(duckdb_v2_connection_lookup_secret(fx.conn, "made://x", 8, "demo", 4, &secret, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret != nullptr);
+	duckdb_v2_secret_destroy(&secret);
+
+	// A transaction secret lives in the connection's explicit transaction, and not past it.
+	auto make_transaction_secret = [&]() {
+		duckdb_v2_secret_handle txn = nullptr;
+		REQUIRE(duckdb_v2_secret_create(fx.factory, &txn, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_secret_set_property(txn, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo", 4, nullptr);
+		duckdb_v2_secret_set_property(txn, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "transaction", 11, nullptr);
+		duckdb_v2_secret_add_scope(txn, "txn://", 6, nullptr);
+		REQUIRE(duckdb_v2_connection_create_secret(fx.conn, txn, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
+		                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_secret_destroy(&txn);
+	};
+	auto txn_visible = [&]() {
+		duckdb_v2_secret_handle found = nullptr;
+		REQUIRE(duckdb_v2_connection_lookup_secret(fx.conn, "txn://x", 7, "demo", 4, &found, nullptr, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		bool visible = found != nullptr;
+		duckdb_v2_secret_destroy(&found);
+		return visible;
+	};
+	REQUIRE(RunSql(fx.conn, "BEGIN") == DUCKDB_V2_ERROR_NONE);
+	make_transaction_secret();
+	REQUIRE(txn_visible());
+	REQUIRE(RunSql(fx.conn, "COMMIT") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE_FALSE(txn_visible());
+	// Outside an explicit transaction it ends with the implicit one.
+	make_transaction_secret();
+	REQUIRE_FALSE(txn_visible());
+}
+
 } // namespace test_capi_v2

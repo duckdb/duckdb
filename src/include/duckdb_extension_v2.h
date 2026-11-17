@@ -1599,6 +1599,15 @@ typedef struct {
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_stats_set_value)
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_secret)
+	(duckdb_v2_connection_handle conn, duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+	 duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_secret_by_name)
+	(duckdb_v2_connection_handle conn, const char *name, idx_t name_length, duckdb_v2_secret_handle *secret,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_lookup_secret)
+	(duckdb_v2_connection_handle conn, const char *path, idx_t path_length, const char *type, idx_t type_length,
+	 duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_secret_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_secret_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_create_secret)
@@ -3715,6 +3724,15 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_stats_set_value duckdb_ext_api.duckdb_v2_stats_set_value
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_create_secret duckdb_ext_api.duckdb_v2_connection_create_secret
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_get_secret_by_name duckdb_ext_api.duckdb_v2_connection_get_secret_by_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_lookup_secret duckdb_ext_api.duckdb_v2_connection_lookup_secret
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_register_secret_function duckdb_ext_api.duckdb_v2_connection_register_secret_function

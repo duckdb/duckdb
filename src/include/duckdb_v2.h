@@ -5429,13 +5429,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_is_key_redacted(duckdb_v2_secret_h
  * Looks up the secret of a type that applies best to a path, the way DuckDB resolves the credentials of a file it
  * opens.
  *
- * Of the secrets of the type visible to the context, the one whose scope is the longest prefix of the path wins; a
- * secret without scope matches every path with the lowest score. When no secret matches, `secret` receives a null
- * handle and the call still succeeds. The returned secret is a copy owned by the caller, to destroy via
+ * Of the secrets of the type visible to the context's transaction, the one whose scope is the longest prefix of the
+ * path wins; a secret without scope matches every path with the lowest score. When no secret matches, `secret` receives
+ * a null handle and the call still succeeds. The returned secret is a copy owned by the caller, to destroy via
  * `duckdb_v2_secret_destroy()`.
  *
- * The lookup sees the secrets of the context's transaction, so also secrets created in it with the `transaction`
- * persist type.
+ * The lookup also sees secrets created in the transaction with the `transaction` persist type.
  *
  * history:
  * - unstable: v2.0.0
@@ -5511,6 +5510,96 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_h
                                                              DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
                                                              duckdb_v2_secret_handle *created,
                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up the secret of a type that applies best to a path, the way DuckDB resolves the credentials of a file it
+ * opens.
+ *
+ * Of the secrets of the type visible to the connection's transaction, or one of their own when the connection has none
+ * open, the one whose scope is the longest prefix of the path wins; a secret without scope matches every path with the
+ * lowest score. When no secret matches, `secret` receives a null handle and the call still succeeds. The returned
+ * secret is a copy owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * The lookup also sees secrets created in the transaction with the `transaction` persist type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to look up in.
+ * @param path The path to find a secret for, e.g. `s3://bucket/key`.
+ * @param path_length The length of `path` in bytes. `path` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param type The secret type to look for, e.g. `s3`.
+ * @param type_length The length of `type` in bytes. `type` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the best matching secret, or a null handle if none matches. Owned by the caller.
+ * @param score Optional. Receives how well the secret matches: the length of the longest matching scope prefix, higher
+ * is better. Undefined when nothing matched. Lets the caller rank the matches of several types.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_lookup_secret(duckdb_v2_connection_handle conn, const char *path,
+                                                                idx_t path_length, const char *type, idx_t type_length,
+                                                                duckdb_v2_secret_handle *secret, int64_t *score,
+                                                                duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up a secret by its name, across all storages.
+ *
+ * When no secret has the name, `secret` receives a null handle and the call still succeeds. The type is not checked:
+ * compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()`. The returned secret is a copy owned by
+ * the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to look up in.
+ * @param name The name of the secret.
+ * @param name_length The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be
+ * NULL only when this is 0.
+ * @param secret Receives the secret, or a null handle if there is none of that name. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_secret_by_name(duckdb_v2_connection_handle conn, const char *name,
+                                                                     idx_t name_length, duckdb_v2_secret_handle *secret,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a secret, as the equivalent `CREATE SECRET` statement would, in the connection's transaction, or one of their
+ * own when the connection has none open.
+ *
+ * The keys of the given secret are the named parameters of the statement. The secret function for its type and provider
+ * runs to build the stored secret, and the secret manager stores it according to its persist type and storage. Use the
+ * `transaction` persist type for credentials that must not outlive the transaction. Outside an explicit transaction a
+ * secret with the `transaction` persist type ends with the implicit transaction the call runs in. `created` is
+ * optional: when given, it receives a copy of the secret that now exists, which with `SECRET_ON_CONFLICT_IGNORE` is the
+ * existing one. The copy is owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to create the secret in.
+ * @param secret The description of the secret. Borrowed.
+ * @param on_conflict What to do when a secret of the same name exists.
+ * @param created Optional. Receives the secret. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_secret(duckdb_v2_connection_handle conn,
+                                                                duckdb_v2_secret_handle secret,
+                                                                DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                                                                duckdb_v2_secret_handle *created,
+                                                                duckdb_v2_error_info_handle *err);
 #endif
 
 /* --- Struct definitions for secret --- */

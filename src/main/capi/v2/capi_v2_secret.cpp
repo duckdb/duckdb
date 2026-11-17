@@ -538,10 +538,10 @@ DUCKDB_V2_ERROR duckdb_v2_secret_is_key_redacted(duckdb_v2_secret_handle secret,
 
 //-------------------------------------------------------- Finding and creating secrets --------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_handle ctx, const char *path, idx_t path_length,
-                                                const char *type, idx_t type_length, duckdb_v2_secret_handle *secret,
-                                                int64_t *score, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(ctx);
+namespace {
+
+DUCKDB_V2_ERROR LookupSecret(CV2Context &ctx, const char *path, idx_t path_length, const char *type, idx_t type_length,
+                             duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_STR_ARG(path, path_length);
 	DUCKDB_CHECK_STR_ARG(type, type_length);
 	DUCKDB_CHECK_ARG(secret);
@@ -549,7 +549,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_handle ctx, co
 	return WithErrorHandler(err, [&]() {
 		auto path_string = duckdb::string(Convert(path, path_length));
 		auto type_string = duckdb::string(ConvertIdentifierName(type, type_length));
-		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+		ctx.WithContext([&](duckdb::ClientContext &context) {
 			auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(context);
 			auto match = duckdb::SecretManager::Get(context).LookupSecret(transaction, path_string, type_string);
 			if (match.HasMatch()) {
@@ -562,16 +562,14 @@ DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_handle ctx, co
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ctx, const char *name, idx_t name_length,
-                                                     duckdb_v2_secret_handle *secret,
-                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(ctx);
+DUCKDB_V2_ERROR GetSecretByName(CV2Context &ctx, const char *name, idx_t name_length, duckdb_v2_secret_handle *secret,
+                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_STR_ARG(name, name_length);
 	DUCKDB_CHECK_ARG(secret);
 	*secret = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto name_string = duckdb::string(ConvertIdentifierName(name, name_length));
-		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+		ctx.WithContext([&](duckdb::ClientContext &context) {
 			auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(context);
 			auto entry = duckdb::SecretManager::Get(context).GetSecretByName(transaction, name_string);
 			if (entry) {
@@ -581,10 +579,8 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ct
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret,
-                                                DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
-                                                duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(ctx);
+DUCKDB_V2_ERROR CreateSecret(CV2Context &ctx, duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                             duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(secret);
 	if (created) {
 		*created = nullptr;
@@ -605,7 +601,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx, du
 		}
 		input.on_conflict = ConvertOnConflict(on_conflict);
 		input.persist_type = self.persist_type;
-		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+		ctx.WithContext([&](duckdb::ClientContext &context) {
 			auto &manager = duckdb::SecretManager::Get(context);
 			auto entry = manager.CreateSecret(context, input);
 			if (!created) {
@@ -620,4 +616,49 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx, du
 			}
 		});
 	});
+}
+
+} // namespace
+
+DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_handle ctx, const char *path, idx_t path_length,
+                                                const char *type, idx_t type_length, duckdb_v2_secret_handle *secret,
+                                                int64_t *score, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(ctx);
+	return LookupSecret(*Convert(ctx), path, path_length, type, type_length, secret, score, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_connection_lookup_secret(duckdb_v2_connection_handle conn, const char *path,
+                                                   idx_t path_length, const char *type, idx_t type_length,
+                                                   duckdb_v2_secret_handle *secret, int64_t *score,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	return LookupSecret(Convert(conn)->context_handle, path, path_length, type, type_length, secret, score, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ctx, const char *name, idx_t name_length,
+                                                     duckdb_v2_secret_handle *secret,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(ctx);
+	return GetSecretByName(*Convert(ctx), name, name_length, secret, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_connection_get_secret_by_name(duckdb_v2_connection_handle conn, const char *name,
+                                                        idx_t name_length, duckdb_v2_secret_handle *secret,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	return GetSecretByName(Convert(conn)->context_handle, name, name_length, secret, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret,
+                                                DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                                                duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(ctx);
+	return CreateSecret(*Convert(ctx), secret, on_conflict, created, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_connection_create_secret(duckdb_v2_connection_handle conn, duckdb_v2_secret_handle secret,
+                                                   DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+                                                   duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	return CreateSecret(Convert(conn)->context_handle, secret, on_conflict, created, err);
 }
