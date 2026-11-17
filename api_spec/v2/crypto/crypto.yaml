@@ -3,7 +3,7 @@ module: crypto
 # Cryptographic primitives backed by the instance's crypto provider, and the ability to supply a provider of your own.
 #
 # The primitives are what DuckDB itself encrypts and signs with: streaming AES-GCM (with additional authenticated data
-# and an authentication tag) and AES-CTR, SHA-256, HMAC-SHA256 and random bytes. They use the provider registered on the
+# and an authentication tag) and AES-CTR, hashing (MD5, SHA-1, SHA-256), HMAC and random bytes. They use the provider registered on the
 # instance, e.g. by httpfs, and otherwise DuckDB's built-in provider. The built-in provider is read-only-grade: it
 # decrypts and hashes, but writing (encrypting, random bytes) requires a provider that DuckDB considers secure, and fails
 # otherwise with the same error DuckDB reports for encrypted writes. The `force_mbedtls_unsafe` setting forces the
@@ -11,7 +11,7 @@ module: crypto
 #
 # A provider is built with the setters below and registered on an instance once: registration fails when a provider is
 # already registered. Registration is not transactional: a registered provider lives for as long as the instance does.
-# Callbacks the provider does not set (hashing, HMAC, random bytes) fall back to the built-in provider. The AES callbacks
+# Callbacks the provider does not set (hashing, HMAC, random bytes), and functions a hash or HMAC callback does not declare, fall back to the built-in provider. The AES callbacks
 # are all or nothing.
 #
 # Callbacks must be safe to run concurrently and on any thread. An error a callback reports fails the operation that
@@ -38,6 +38,20 @@ enums:
       CRYPTO_MODE_DECRYPT:
         value: 1
         description: Decrypt ciphertext into plaintext.
+
+  CRYPTO_HASH_FUNCTION:
+    description: A hash function, for hashing and HMAC.
+    # The values match duckdb::CryptoHashFunction
+    values:
+      CRYPTO_HASH_MD5:
+        value: 0
+        description: MD5, 16-byte digest. Not collision resistant; for legacy formats only.
+      CRYPTO_HASH_SHA1:
+        value: 1
+        description: SHA-1, 20-byte digest. Not collision resistant; for legacy formats only.
+      CRYPTO_HASH_SHA256:
+        value: 2
+        description: SHA-256, 32-byte digest.
 
 handles:
   crypto_aes:
@@ -193,12 +207,15 @@ callbacks:
         description: "The stream state to release."
     return_type: void
 
-  crypto_provider_sha256_callback:
+  crypto_provider_hash_callback:
     parameters:
       user_data:
         type: void
         indirection: 1
         description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function, one the provider declared support for."
       in:
         type: u8
         indirection: 1
@@ -212,19 +229,22 @@ callbacks:
         type: u8
         indirection: 1
         kind: OUT
-        description: "Receives the 32-byte digest."
+        description: "Receives the digest, whose size is `[[crypto_hash_digest_size]]` of the function."
       err:
         type: error_info
         indirection: 1
         description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
     return_type: void
 
-  crypto_provider_hmac_sha256_callback:
+  crypto_provider_hmac_callback:
     parameters:
       user_data:
         type: void
         indirection: 1
         description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function, one the provider declared support for."
       key:
         type: u8
         indirection: 1
@@ -247,7 +267,7 @@ callbacks:
         type: u8
         indirection: 1
         kind: OUT
-        description: "Receives the 32-byte MAC."
+        description: "Receives the MAC, whose size is `[[crypto_hash_digest_size]]` of the function."
       err:
         type: error_info
         indirection: 1
@@ -275,15 +295,86 @@ callbacks:
     return_type: void
 
 functions:
-  crypto_sha256:
+  crypto_hash_digest_size:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Computes the SHA-256 digest of `data` with the instance's crypto provider.
+      Retrieves the size in bytes of the digest, and of the HMAC, of a hash function.
+    parameters:
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the size in bytes."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_supports_hash:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves whether the instance's crypto provider supports hashing with the function.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to ask."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      supported:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: "Receives whether hashing is supported."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_supports_hmac:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves whether the instance's crypto provider supports HMAC with the function.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to ask."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      supported:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: "Receives whether HMAC is supported."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_hash:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Hashes `data` with the instance's crypto provider.
+
+      Fails if the provider does not support the function; see `[[crypto_supports_hash]]`.
     parameters:
       instance:
         type: instance
         description: "The instance whose provider to use."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
       data:
         type: u8
         indirection: 1
@@ -297,22 +388,35 @@ functions:
         type: u8
         indirection: 1
         kind: OUT
-        description: "Receives the 32-byte digest."
+        description: "Receives the digest."
+      digest_capacity:
+        type: idx
+        description: "The capacity of `digest`, at least `[[crypto_hash_digest_size]]`."
+      digest_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of digest bytes written."
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_hmac_sha256:
+  crypto_hmac:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Computes the HMAC-SHA256 of `data` under `key` with the instance's crypto provider.
+      Computes the HMAC of `data` under `key` with the instance's crypto provider.
+
+      Fails if the provider does not support the function; see `[[crypto_supports_hmac]]`.
     parameters:
       instance:
         type: instance
         description: "The instance whose provider to use."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
       key:
         type: u8
         indirection: 1
@@ -335,7 +439,15 @@ functions:
         type: u8
         indirection: 1
         kind: OUT
-        description: "Receives the 32-byte MAC."
+        description: "Receives the MAC."
+      mac_capacity:
+        type: idx
+        description: "The capacity of `mac`, at least `[[crypto_hash_digest_size]]`."
+      mac_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of MAC bytes written."
       err:
         type: error_info
         indirection: 1
@@ -592,36 +704,54 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_provider_set_sha256_callback:
+  crypto_provider_set_hash_callback:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Sets the SHA-256 callback. Optional: DuckDB's built-in implementation is used when unset.
+      Sets the hash callback and the functions it supports. Optional: DuckDB's built-in implementation serves every function the callback does not declare.
     parameters:
       provider:
         type: crypto_provider
         description: "The provider."
       callback:
-        type: crypto_provider_sha256_callback
+        type: crypto_provider_hash_callback
         description: "The callback."
+      functions:
+        type: CRYPTO_HASH_FUNCTION
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The functions the callback supports. Borrowed and copied."
+      function_count:
+        type: idx
+        description: "The number of functions."
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_provider_set_hmac_sha256_callback:
+  crypto_provider_set_hmac_callback:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Sets the HMAC-SHA256 callback. Optional: DuckDB's built-in implementation is used when unset.
+      Sets the HMAC callback and the functions it supports. Optional: DuckDB's built-in implementation serves every function the callback does not declare.
     parameters:
       provider:
         type: crypto_provider
         description: "The provider."
       callback:
-        type: crypto_provider_hmac_sha256_callback
+        type: crypto_provider_hmac_callback
         description: "The callback."
+      functions:
+        type: CRYPTO_HASH_FUNCTION
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The functions the callback supports. Borrowed and copied."
+      function_count:
+        type: idx
+        description: "The number of functions."
       err:
         type: error_info
         indirection: 1

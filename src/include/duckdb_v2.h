@@ -2059,6 +2059,19 @@ typedef enum DUCKDB_V2_CRYPTO_MODE {
 	DUCKDB_V2_CRYPTO_MODE_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_CRYPTO_MODE;
 
+//! A hash function, for hashing and HMAC.
+typedef enum DUCKDB_V2_CRYPTO_HASH_FUNCTION {
+	//! MD5, 16-byte digest. Not collision resistant; for legacy formats only.
+	DUCKDB_V2_CRYPTO_HASH_MD5 = 0,
+
+	//! SHA-1, 20-byte digest. Not collision resistant; for legacy formats only.
+	DUCKDB_V2_CRYPTO_HASH_SHA1 = 1,
+
+	//! SHA-256, 32-byte digest.
+	DUCKDB_V2_CRYPTO_HASH_SHA256 = 2,
+	DUCKDB_V2_CRYPTO_HASH_FUNCTION_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_CRYPTO_HASH_FUNCTION;
+
 /* --- Struct forward declarations for crypto --- */
 
 /* --- Types for crypto --- */
@@ -2103,12 +2116,14 @@ typedef void (*duckdb_v2_crypto_provider_aes_finalize_callback_fn)(void *user_da
 
 typedef void (*duckdb_v2_crypto_provider_aes_destroy_callback_fn)(void *user_data, void *stream);
 
-typedef void (*duckdb_v2_crypto_provider_sha256_callback_fn)(void *user_data, const uint8_t *in, idx_t in_length,
-                                                             uint8_t *out, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_hash_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                                           const uint8_t *in, idx_t in_length, uint8_t *out,
+                                                           duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_crypto_provider_hmac_sha256_callback_fn)(void *user_data, const uint8_t *key, idx_t key_length,
-                                                                  const uint8_t *in, idx_t in_length, uint8_t *out,
-                                                                  duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_hmac_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                                           const uint8_t *key, idx_t key_length, const uint8_t *in,
+                                                           idx_t in_length, uint8_t *out,
+                                                           duckdb_v2_error_info_handle *err);
 
 typedef void (*duckdb_v2_crypto_provider_random_callback_fn)(void *user_data, uint8_t *out, idx_t length,
                                                              duckdb_v2_error_info_handle *err);
@@ -2117,43 +2132,112 @@ typedef void (*duckdb_v2_crypto_provider_random_callback_fn)(void *user_data, ui
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Computes the SHA-256 digest of `data` with the instance's crypto provider.
+ * Retrieves the size in bytes of the digest, and of the HMAC, of a hash function.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param instance The instance whose provider to use.
- * @param data The bytes to hash. May be null if `length` is 0.
- * @param length The number of bytes.
- * @param digest Receives the 32-byte digest.
+ * @param function The hash function.
+ * @param size Receives the size in bytes.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_sha256(duckdb_v2_instance_handle instance, const uint8_t *data,
-                                                     idx_t length, uint8_t *digest, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hash_digest_size(DUCKDB_V2_CRYPTO_HASH_FUNCTION function, idx_t *size,
+                                                               duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Computes the HMAC-SHA256 of `data` under `key` with the instance's crypto provider.
+ * Retrieves whether the instance's crypto provider supports hashing with the function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to ask.
+ * @param function The hash function.
+ * @param supported Receives whether hashing is supported.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hash(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves whether the instance's crypto provider supports HMAC with the function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to ask.
+ * @param function The hash function.
+ * @param supported Receives whether HMAC is supported.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hmac(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Hashes `data` with the instance's crypto provider.
+ *
+ * Fails if the provider does not support the function; see `duckdb_v2_crypto_supports_hash()`.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param instance The instance whose provider to use.
- * @param key The HMAC key.
- * @param key_length The key length in bytes.
- * @param data The bytes to authenticate. May be null if `length` is 0.
+ * @param function The hash function.
+ * @param data The bytes to hash. May be null if `length` is 0.
  * @param length The number of bytes.
- * @param mac Receives the 32-byte MAC.
+ * @param digest Receives the digest.
+ * @param digest_capacity The capacity of `digest`, at least `duckdb_v2_crypto_hash_digest_size()`.
+ * @param digest_length Receives the number of digest bytes written.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hmac_sha256(duckdb_v2_instance_handle instance, const uint8_t *key,
-                                                          idx_t key_length, const uint8_t *data, idx_t length,
-                                                          uint8_t *mac, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hash(duckdb_v2_instance_handle instance,
+                                                   DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *data,
+                                                   idx_t length, uint8_t *digest, idx_t digest_capacity,
+                                                   idx_t *digest_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Computes the HMAC of `data` under `key` with the instance's crypto provider.
+ *
+ * Fails if the provider does not support the function; see `duckdb_v2_crypto_supports_hmac()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to use.
+ * @param function The hash function.
+ * @param key The HMAC key.
+ * @param key_length The key length in bytes.
+ * @param data The bytes to authenticate. May be null if `length` is 0.
+ * @param length The number of bytes.
+ * @param mac Receives the MAC.
+ * @param mac_capacity The capacity of `mac`, at least `duckdb_v2_crypto_hash_digest_size()`.
+ * @param mac_length Receives the number of MAC bytes written.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hmac(duckdb_v2_instance_handle instance,
+                                                   DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *key,
+                                                   idx_t key_length, const uint8_t *data, idx_t length, uint8_t *mac,
+                                                   idx_t mac_capacity, idx_t *mac_length,
+                                                   duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2353,38 +2437,44 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Sets the SHA-256 callback. Optional: DuckDB's built-in implementation is used when unset.
+ * Sets the hash callback and the functions it supports. Optional: DuckDB's built-in implementation serves every
+ * function the callback does not declare.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param provider The provider.
  * @param callback The callback.
+ * @param functions The functions the callback supports. Borrowed and copied.
+ * @param function_count The number of functions.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_sha256_callback(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_sha256_callback_fn callback,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hash_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hash_callback_fn callback,
+    const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Sets the HMAC-SHA256 callback. Optional: DuckDB's built-in implementation is used when unset.
+ * Sets the HMAC callback and the functions it supports. Optional: DuckDB's built-in implementation serves every
+ * function the callback does not declare.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param provider The provider.
  * @param callback The callback.
+ * @param functions The functions the callback supports. Borrowed and copied.
+ * @param function_count The number of functions.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_sha256_callback(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hmac_sha256_callback_fn callback,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hmac_callback_fn callback,
+    const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

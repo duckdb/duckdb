@@ -19,14 +19,34 @@ static void InvokeCallback(FUNC &&func) {
 	}
 }
 
+static uint32_t HashFunctionBit(CryptoHashFunction function) {
+	return 1U << static_cast<uint8_t>(function);
+}
+
+static CryptoHashFunction ConvertHashFunction(DUCKDB_V2_CRYPTO_HASH_FUNCTION function) {
+	switch (function) {
+	case DUCKDB_V2_CRYPTO_HASH_MD5:
+		return CryptoHashFunction::MD5;
+	case DUCKDB_V2_CRYPTO_HASH_SHA1:
+		return CryptoHashFunction::SHA1;
+	case DUCKDB_V2_CRYPTO_HASH_SHA256:
+		return CryptoHashFunction::SHA256;
+	default:
+		throw InvalidInputException("Unknown hash function");
+	}
+}
+
 struct CV2CryptoCallbacks {
 	duckdb_v2_crypto_provider_aes_create_callback_fn aes_create = nullptr;
 	duckdb_v2_crypto_provider_aes_init_callback_fn aes_init = nullptr;
 	duckdb_v2_crypto_provider_aes_update_callback_fn aes_update = nullptr;
 	duckdb_v2_crypto_provider_aes_finalize_callback_fn aes_finalize = nullptr;
 	duckdb_v2_crypto_provider_aes_destroy_callback_fn aes_destroy = nullptr;
-	duckdb_v2_crypto_provider_sha256_callback_fn sha256 = nullptr;
-	duckdb_v2_crypto_provider_hmac_sha256_callback_fn hmac_sha256 = nullptr;
+	duckdb_v2_crypto_provider_hash_callback_fn hash = nullptr;
+	duckdb_v2_crypto_provider_hmac_callback_fn hmac = nullptr;
+	//! Bit masks of the CryptoHashFunction values the callbacks serve
+	uint32_t hash_functions = 0;
+	uint32_t hmac_functions = 0;
 	duckdb_v2_crypto_provider_random_callback_fn random = nullptr;
 };
 
@@ -130,32 +150,36 @@ public:
 	}
 
 	void Hash(CryptoHashFunction function, const_data_ptr_t input, idx_t input_len, data_ptr_t output) const override {
-		if (function != CryptoHashFunction::SHA256 || !callbacks.sha256) {
+		if (!callbacks.hash || !(callbacks.hash_functions & HashFunctionBit(function))) {
 			fallback->Hash(function, input, input_len, output);
 			return;
 		}
+		auto c_function = static_cast<DUCKDB_V2_CRYPTO_HASH_FUNCTION>(function);
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.sha256(GetUserData(), input, input_len, output, err);
+			callbacks.hash(GetUserData(), c_function, input, input_len, output, err);
 		});
 	}
 
-	void Hmac(CryptoHashFunction function, const_data_ptr_t key, idx_t key_len, const_data_ptr_t input,
-	          idx_t input_len, data_ptr_t output) const override {
-		if (function != CryptoHashFunction::SHA256 || !callbacks.hmac_sha256) {
+	void Hmac(CryptoHashFunction function, const_data_ptr_t key, idx_t key_len, const_data_ptr_t input, idx_t input_len,
+	          data_ptr_t output) const override {
+		if (!callbacks.hmac || !(callbacks.hmac_functions & HashFunctionBit(function))) {
 			fallback->Hmac(function, key, key_len, input, input_len, output);
 			return;
 		}
+		auto c_function = static_cast<DUCKDB_V2_CRYPTO_HASH_FUNCTION>(function);
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.hmac_sha256(GetUserData(), key, key_len, input, input_len, output, err);
+			callbacks.hmac(GetUserData(), c_function, key, key_len, input, input_len, output, err);
 		});
 	}
 
 	bool SupportsHash(CryptoHashFunction function) const override {
-		return (function == CryptoHashFunction::SHA256 && callbacks.sha256) || fallback->SupportsHash(function);
+		return (callbacks.hash && (callbacks.hash_functions & HashFunctionBit(function))) ||
+		       fallback->SupportsHash(function);
 	}
 
 	bool SupportsHmac(CryptoHashFunction function) const override {
-		return (function == CryptoHashFunction::SHA256 && callbacks.hmac_sha256) || fallback->SupportsHmac(function);
+		return (callbacks.hmac && (callbacks.hmac_functions & HashFunctionBit(function))) ||
+		       fallback->SupportsHmac(function);
 	}
 
 private:
@@ -324,37 +348,81 @@ static DatabaseInstance &GetInstance(duckdb_v2_instance_handle instance) {
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_sha256(duckdb_v2_instance_handle instance, const uint8_t *data, idx_t length,
-                                        uint8_t *digest, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_hash_digest_size(DUCKDB_V2_CRYPTO_HASH_FUNCTION function, idx_t *size,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(size);
+	return WithErrorHandler(err, [&]() { *size = duckdb::CryptoHash::GetDigestSize(ConvertHashFunction(function)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hash(duckdb_v2_instance_handle instance,
+                                               DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(digest);
-	if (length > 0) {
-		DUCKDB_CHECK_ARG(data);
-	}
+	DUCKDB_CHECK_ARG(supported);
 	return WithErrorHandler(err, [&]() {
-		auto util = GetInstance(instance).GetEncryptionUtil(true);
-		if (!util->SupportsHash(duckdb::CryptoHashFunction::SHA256)) {
-			throw duckdb::NotImplementedException("The crypto provider does not support SHA-256");
-		}
-		util->Hash(duckdb::CryptoHashFunction::SHA256, data, length, digest);
+		*supported = GetInstance(instance).GetEncryptionUtil(true)->SupportsHash(ConvertHashFunction(function));
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_hmac_sha256(duckdb_v2_instance_handle instance, const uint8_t *key, idx_t key_length,
-                                             const uint8_t *data, idx_t length, uint8_t *mac,
-                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hmac(duckdb_v2_instance_handle instance,
+                                               DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(key);
-	DUCKDB_CHECK_ARG(mac);
+	DUCKDB_CHECK_ARG(supported);
+	return WithErrorHandler(err, [&]() {
+		*supported = GetInstance(instance).GetEncryptionUtil(true)->SupportsHmac(ConvertHashFunction(function));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_crypto_hash(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                      const uint8_t *data, idx_t length, uint8_t *digest, idx_t digest_capacity,
+                                      idx_t *digest_length, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(instance);
+	DUCKDB_CHECK_ARG(digest);
+	DUCKDB_CHECK_ARG(digest_length);
 	if (length > 0) {
 		DUCKDB_CHECK_ARG(data);
 	}
+	*digest_length = 0;
 	return WithErrorHandler(err, [&]() {
-		auto util = GetInstance(instance).GetEncryptionUtil(true);
-		if (!util->SupportsHmac(duckdb::CryptoHashFunction::SHA256)) {
-			throw duckdb::NotImplementedException("The crypto provider does not support HMAC-SHA256");
+		auto hash_function = ConvertHashFunction(function);
+		auto size = duckdb::CryptoHash::GetDigestSize(hash_function);
+		if (digest_capacity < size) {
+			throw duckdb::Exception(duckdb::ExceptionType::OBJECT_SIZE, "digest_capacity is smaller than the digest");
 		}
-		util->Hmac(duckdb::CryptoHashFunction::SHA256, key, key_length, data, length, mac);
+		auto util = GetInstance(instance).GetEncryptionUtil(true);
+		if (!util->SupportsHash(hash_function)) {
+			throw duckdb::NotImplementedException("The crypto provider does not support this hash function");
+		}
+		util->Hash(hash_function, data, length, digest);
+		*digest_length = size;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_crypto_hmac(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                      const uint8_t *key, idx_t key_length, const uint8_t *data, idx_t length,
+                                      uint8_t *mac, idx_t mac_capacity, idx_t *mac_length,
+                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(instance);
+	DUCKDB_CHECK_ARG(key);
+	DUCKDB_CHECK_ARG(mac);
+	DUCKDB_CHECK_ARG(mac_length);
+	if (length > 0) {
+		DUCKDB_CHECK_ARG(data);
+	}
+	*mac_length = 0;
+	return WithErrorHandler(err, [&]() {
+		auto hash_function = ConvertHashFunction(function);
+		auto size = duckdb::CryptoHash::GetDigestSize(hash_function);
+		if (mac_capacity < size) {
+			throw duckdb::Exception(duckdb::ExceptionType::OBJECT_SIZE, "mac_capacity is smaller than the MAC");
+		}
+		auto util = GetInstance(instance).GetEncryptionUtil(true);
+		if (!util->SupportsHmac(hash_function)) {
+			throw duckdb::NotImplementedException("The crypto provider does not support HMAC with this hash function");
+		}
+		util->Hmac(hash_function, key, key_length, data, length, mac);
+		*mac_length = size;
 	});
 }
 
@@ -442,11 +510,13 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_crypto_provide
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_aes_create_callback_fn create,
-    duckdb_v2_crypto_provider_aes_init_callback_fn init, duckdb_v2_crypto_provider_aes_update_callback_fn update,
-    duckdb_v2_crypto_provider_aes_finalize_callback_fn finalize,
-    duckdb_v2_crypto_provider_aes_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(duckdb_v2_crypto_provider_handle provider,
+                                                            duckdb_v2_crypto_provider_aes_create_callback_fn create,
+                                                            duckdb_v2_crypto_provider_aes_init_callback_fn init,
+                                                            duckdb_v2_crypto_provider_aes_update_callback_fn update,
+                                                            duckdb_v2_crypto_provider_aes_finalize_callback_fn finalize,
+                                                            duckdb_v2_crypto_provider_aes_destroy_callback_fn destroy,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(provider);
 	DUCKDB_CHECK_ARG(create);
 	DUCKDB_CHECK_ARG(init);
@@ -462,18 +532,44 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_sha256_callback(duckdb_v2_crypto_provider_handle provider,
-                                                              duckdb_v2_crypto_provider_sha256_callback_fn callback,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(provider);
-	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.sha256 = callback; });
+static uint32_t ToHashFunctionMask(const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count) {
+	uint32_t mask = 0;
+	for (idx_t i = 0; i < function_count; i++) {
+		mask |= HashFunctionBit(ConvertHashFunction(functions[i]));
+	}
+	return mask;
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_sha256_callback(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hmac_sha256_callback_fn callback,
-    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hash_callback(duckdb_v2_crypto_provider_handle provider,
+                                                            duckdb_v2_crypto_provider_hash_callback_fn callback,
+                                                            const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions,
+                                                            idx_t function_count, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(provider);
-	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.hmac_sha256 = callback; });
+	if (function_count > 0) {
+		DUCKDB_CHECK_ARG(functions);
+	}
+	return WithErrorHandler(err, [&]() {
+		auto mask = ToHashFunctionMask(functions, function_count);
+		auto &callbacks = Convert(provider)->callbacks;
+		callbacks.hash = callback;
+		callbacks.hash_functions = callback ? mask : 0;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_callback(duckdb_v2_crypto_provider_handle provider,
+                                                            duckdb_v2_crypto_provider_hmac_callback_fn callback,
+                                                            const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions,
+                                                            idx_t function_count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(provider);
+	if (function_count > 0) {
+		DUCKDB_CHECK_ARG(functions);
+	}
+	return WithErrorHandler(err, [&]() {
+		auto mask = ToHashFunctionMask(functions, function_count);
+		auto &callbacks = Convert(provider)->callbacks;
+		callbacks.hmac = callback;
+		callbacks.hmac_functions = callback ? mask : 0;
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_random_callback(duckdb_v2_crypto_provider_handle provider,
@@ -496,8 +592,8 @@ DUCKDB_V2_ERROR duckdb_v2_extension_register_crypto_provider(duckdb_v2_extension
                                                              duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(extension);
 	DUCKDB_CHECK_ARG(provider);
-	return WithErrorHandler(err,
-	                        [&]() { Convert(provider)->Register(GetExtensionLoader(extension).GetDatabaseInstance()); });
+	return WithErrorHandler(
+	    err, [&]() { Convert(provider)->Register(GetExtensionLoader(extension).GetDatabaseInstance()); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_crypto_provider_destroy(duckdb_v2_crypto_provider_handle *provider) {
