@@ -294,6 +294,8 @@ public:
 	void NullPaddingQuotedNewlineCheck() const;
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
+	//! Moves the start of the current line behind an empty line
+	void StartLineAfterEmptyLine();
 	inline bool AddRowInternal();
 	//! The bookkeeping of a value that is not projected
 	inline void SkipValueInternal();
