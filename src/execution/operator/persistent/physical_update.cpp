@@ -390,7 +390,9 @@ void PhysicalUpdate::StageUpdates(ExecutionContext &context, GlobalSinkState &gs
 	OperatorSinkInput sink_input {*l_state.staged_sort_gstate, *l_state.staged_sort_lstate, interrupt_state};
 	sort.Sink(context, input, sink_input);
 	l_state.staged_count += updates.size();
-	if (sort.GetLocalSizeInBytes(*l_state.staged_sort_lstate) >= g_state.staged_memory_budget) {
+	// a completed run leaves the local state, so flush then too: staged runs would otherwise pile up until Combine
+	if (sort.GetSortedCount(*l_state.staged_sort_gstate) > 0 ||
+	    sort.GetLocalSizeInBytes(*l_state.staged_sort_lstate) >= g_state.staged_memory_budget) {
 		FlushStagedUpdates(context, gstate, lstate, interrupt_state);
 	}
 }
