@@ -63,15 +63,17 @@ enum class ColumnDataType;
 class ClientContext;
 
 struct RowGroupWriteInfo {
-	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	RowGroupWriteInfo(Context &context, PartialBlockManager &manager, const vector<CompressionType> &compression_types,
 	                  CheckpointOptions options = CheckpointOptions());
-	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	RowGroupWriteInfo(Context &context, PartialBlockManager &manager, const vector<CompressionType> &compression_types,
 	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
 private:
 	PartialBlockManager &manager;
 
 public:
+	//! The context to attribute the write IO to
+	Context &context;
 	const vector<CompressionType> &compression_types;
 	CheckpointOptions options;
 

@@ -246,6 +246,10 @@ public:
 	idx_t GetTotalRows() const;
 	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
+	//! The number of row groups, including the ones that are not loaded yet, without loading them
+	idx_t GetRowGroupCountWithoutLoading() const;
+	//! The same, including the row groups of the transaction-local storage
+	idx_t GetRowGroupCountWithoutLoading(ClientContext &context);
 	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo>
@@ -301,7 +305,8 @@ public:
 
 private:
 	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(ClientContext &context, LocalStorage &local_storage, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,

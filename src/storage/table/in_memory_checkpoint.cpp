@@ -23,8 +23,8 @@ InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabas
                                            StorageManager &storage_manager, CheckpointOptions options_p,
                                            optional_ptr<ClientContext> checkpoint_context)
     : CheckpointWriter(db, context, checkpoint_context),
-      partial_block_manager(GetContext(), block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT),
-      storage_manager(storage_manager), options(options_p) {
+      partial_block_manager(block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT), storage_manager(storage_manager),
+      options(options_p) {
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {
@@ -145,7 +145,7 @@ unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(Storag
 
 void InMemoryTableDataWriter::FlushPartialBlocks() {
 	// Finalize packed buffers before the checkpoint row groups become visible.
-	checkpoint_manager.GetPartialBlockManager().FlushPartialBlocks();
+	checkpoint_manager.GetPartialBlockManager().FlushPartialBlocks(checkpoint_manager.GetContext());
 }
 
 CheckpointOptions InMemoryTableDataWriter::GetCheckpointOptions() const {
