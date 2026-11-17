@@ -56,6 +56,7 @@ TEST_CASE("Test WAL that deletes the same rows in two transactions", "[storage][
 
 	// the committed delete once more, as a transaction of its own: its rows are deleted already
 	RepeatWALEntries(lfs, storage_wal, delete_start, delete_end);
-	REQUIRE_THROWS_WITH(DuckDB(storage_database, config.get()), Catch::Contains("Conflict on tuple deletion!"));
+	REQUIRE_THROWS_WITH(DuckDB(storage_database, config.get()),
+	                    Catch::Contains("Corrupt WAL: delete of a row that is already deleted"));
 	DeleteDatabase(storage_database);
 }

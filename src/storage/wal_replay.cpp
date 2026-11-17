@@ -6,6 +6,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -1429,7 +1430,12 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		}
 	}
 	TableDeleteState delete_state;
-	storage.Delete(delete_state, context, *state.current_table, row_identifiers, chunk.size());
+	try {
+		storage.Delete(delete_state, context, *state.current_table, row_identifiers, chunk.size());
+	} catch (TransactionException &) {
+		// nothing runs next to the replay, so the conflict is with an earlier entry of the WAL
+		throw DataCorruptionException("Corrupt WAL: delete of a row that is already deleted");
+	}
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {
