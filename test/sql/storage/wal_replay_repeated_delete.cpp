@@ -13,7 +13,7 @@ static idx_t GetWALSize(FileSystem &fs, const string &path) {
 //! Append a copy of the bytes [start, end) of the WAL to its end
 static void RepeatWALEntries(FileSystem &fs, const string &path, idx_t start, idx_t end) {
 	auto size = end - start;
-	auto entries = duckdb::unique_ptr<data_t[]>(new data_t[size]);
+	auto entries = make_unsafe_uniq_array_uninitialized<data_t>(size);
 	{
 		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 		handle->Read(QueryContext(), entries.get(), size, start);
