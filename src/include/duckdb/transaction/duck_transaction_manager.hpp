@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
@@ -67,7 +68,14 @@ public:
 		return ++next_checkpoint_id;
 	}
 	void SetActiveCheckpoint(idx_t checkpoint_id);
-	void ResetActiveCheckpoint();
+	//! Ends the checkpoint. If it succeeded, frees the storage that drops handed over to it
+	void ResetActiveCheckpoint(bool checkpoint_succeeded);
+	//! Hands dropped storage over to the running checkpoint, which frees it. False if none runs: the commit frees it
+	bool DeferDroppedStorage(const vector<DroppedStorage> &dropped);
+	//! The start time that the next transaction gets
+	transaction_t NextStartTimestamp();
+	//! The earliest start of the active transactions, checkpoints aside: the next start if none, 0 if a cleanup waits
+	transaction_t LowestActiveStart();
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -130,6 +138,10 @@ private:
 
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
+	//! Lets the block manager reuse the blocks that checkpoints freed before every active transaction started
+	void ReuseFreedBlocks(transaction_t lowest_start) noexcept;
+	//! LowestActiveStart for a caller that holds the transaction lock
+	transaction_t LowestActiveStartInternal();
 
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	bool HasUnsyncedCommits();
@@ -150,6 +162,12 @@ private:
 	//! The lowest bound any active transaction reads at. A version preceding it is visible to
 	//! every active transaction, so whatever it supersedes can be cleaned up or compacted
 	atomic<VisibilityBound> lowest_visibility_bound;
+	//! Guards the dropped storage that is handed over to a checkpoint
+	mutex deferred_storage_lock;
+	//! The storage that the running checkpoint frees once it has written its header
+	vector<DroppedStorage> deferred_storage;
+	//! The lowest start time of the transactions that stayed active when the last one ended, checkpoints aside
+	atomic<transaction_t> lowest_remaining_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
 	//! The currently active checkpoint, zero when none is running

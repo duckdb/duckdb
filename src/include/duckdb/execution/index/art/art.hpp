@@ -27,6 +27,7 @@ class ARTKey;
 class ARTKeySection;
 class RowIdVectorOutput;
 class FixedSizeAllocator;
+struct BlockIdVisitor;
 
 struct ARTIndexScanState;
 
@@ -133,6 +134,8 @@ public:
 
 	//! Reset all ART storage.
 	void ResetStorage(IndexLock &index_lock) override DUCKDB_REQUIRES(index_lock);
+	//! Disowns the on-disk blocks of the ART, which stays readable, and visits them once per use.
+	void DisownBlocks(BlockIdVisitor &visitor) DUCKDB_EXCLUDES(lock);
 	//! Reset all ART storage without freeing its on-disk blocks.
 	void DisownStorage(IndexLock &index_lock) override DUCKDB_REQUIRES(index_lock);
 

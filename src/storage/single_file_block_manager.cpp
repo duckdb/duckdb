@@ -906,7 +906,7 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 		multi_use_blocks[block_id] = usage_count;
 	}
 	GetMetadataManager().Read(reader);
-	GetMetadataManager().MarkBlocksAsModified();
+	GetMetadataManager().MarkBlocksAsModified(false);
 }
 
 bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
@@ -1011,7 +1011,8 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	if (modified_blocks.find(block_id) != modified_blocks.end()) {
 		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
 	}
-	if (free_list.find(block_id) != free_list.end()) {
+	if (free_list.find(block_id) != free_list.end() ||
+	    free_blocks_pending_reuse.find(block_id) != free_blocks_pending_reuse.end()) {
 		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
 	}
 	auto newly_used_entry = newly_used_blocks.find(block_id);
@@ -1055,6 +1056,9 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			                        max_block);
 		}
 		referenced_blocks.insert(block.first);
+		if (free_blocks_pending_reuse.find(block.first) != free_blocks_pending_reuse.end()) {
+			throw InternalException("Block %lld was used, but a header lists it as free", block.first);
+		}
 		if (block.second > 1) {
 			// multi-use block
 			auto entry = multi_use_blocks.find(block.first);
@@ -1082,6 +1086,9 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 		referenced_blocks.insert(free_block);
 	}
 	for (auto &free_block : free_blocks_in_use) {
+		referenced_blocks.insert(free_block);
+	}
+	for (auto &free_block : free_blocks_pending_reuse) {
 		referenced_blocks.insert(free_block);
 	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
@@ -1292,8 +1299,8 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 		idx_t multi_use_blocks_count;
 		{
 			lock_guard<mutex> guard(single_file_block_lock);
-			free_list_count =
-			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+			free_list_count = free_list.size() + modified_blocks.size() + free_blocks_in_use.size() +
+			                  newly_used_blocks.size() + free_blocks_pending_reuse.size();
 			multi_use_blocks_count = multi_use_blocks.size();
 		}
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
@@ -1353,13 +1360,15 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	lock.lock();
 	return false;
 }
-void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound,
+                                         transaction_t read_stamp, transaction_t lowest_active_start) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
-	// add all modified blocks to the free list: they can now be written to again
-	metadata_manager.MarkBlocksAsModified();
+	// a transaction that started before the header can still read what the header frees
+	bool has_readers = lowest_active_start < read_stamp;
+	auto freed_metadata_blocks = metadata_manager.MarkBlocksAsModified(has_readers);
 
 	unique_lock<mutex> lock(single_file_block_lock);
 	// set the iteration count
@@ -1367,6 +1376,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	set<block_id_t> all_free_blocks = free_list;
 	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
+	all_free_blocks.insert(free_blocks_pending_reuse.begin(), free_blocks_pending_reuse.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
@@ -1448,15 +1458,52 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	set<block_id_t> fully_freed_blocks;
-	{
-		unique_lock<mutex> release_lock(single_file_block_lock);
+	if (!checkpoint_freed_blocks.empty() || !freed_metadata_blocks.empty()) {
+		lock_guard<mutex> release_lock(single_file_block_lock);
+		auto &freed = pending_reuse_batches[read_stamp];
 		for (auto &block : checkpoint_freed_blocks) {
 			modified_blocks.erase(block);
-			if (AddFreeBlock(release_lock, block)) {
+			freed.blocks.push_back(block);
+			free_blocks_pending_reuse.insert(block);
+		}
+		for (auto &metadata_block : freed_metadata_blocks) {
+			freed.metadata_blocks[metadata_block.first] |= metadata_block.second;
+		}
+		lowest_pending_reuse_stamp = pending_reuse_batches.begin()->first;
+	}
+	// reused right away unless a transaction that started before the header is active
+	ReuseFreedBlocks(lowest_active_start);
+}
+
+void SingleFileBlockManager::ReuseFreedBlocks(transaction_t lowest_active_start) {
+	if (lowest_pending_reuse_stamp > lowest_active_start) {
+		// nothing waits, or a transaction that started before the first batch is still active
+		return;
+	}
+	set<block_id_t> fully_freed_blocks;
+	vector<unordered_map<block_id_t, idx_t>> metadata_blocks;
+	{
+		unique_lock<mutex> lock(single_file_block_lock);
+		// the batches are ordered by stamp
+		auto end = pending_reuse_batches.upper_bound(lowest_active_start);
+		vector<block_id_t> blocks;
+		for (auto entry = pending_reuse_batches.begin(); entry != end; entry++) {
+			blocks.insert(blocks.end(), entry->second.blocks.begin(), entry->second.blocks.end());
+			metadata_blocks.push_back(std::move(entry->second.metadata_blocks));
+		}
+		pending_reuse_batches.erase(pending_reuse_batches.begin(), end);
+		lowest_pending_reuse_stamp =
+		    pending_reuse_batches.empty() ? MAX_TRANSACTION_ID : pending_reuse_batches.begin()->first;
+		// AddFreeBlock can give up the lock: no batch is looked at from here on
+		for (auto &block : blocks) {
+			free_blocks_pending_reuse.erase(block);
+			if (AddFreeBlock(lock, block)) {
 				fully_freed_blocks.insert(block);
 			}
 		}
+	}
+	for (auto &freed : metadata_blocks) {
+		GetMetadataManager().ReuseFreedBlocks(freed);
 	}
 	// Release the free fully freed blocks to the filesystem.
 	TrimFreeBlocks(fully_freed_blocks);

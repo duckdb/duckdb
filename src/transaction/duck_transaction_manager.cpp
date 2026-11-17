@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/block_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,6 +52,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	// the first timestamp a real transaction can draw: one past the bootstrap stamp, which is also
 	// the bound the system transaction reads at
 	current_start_timestamp = SYSTEM_TRANSACTION_TIMESTAMP + 1;
+	lowest_remaining_start = current_start_timestamp;
 	last_commit = SYSTEM_TRANSACTION_TIMESTAMP;
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
@@ -117,8 +119,73 @@ void DuckTransactionManager::SetActiveCheckpoint(idx_t checkpoint_id) {
 	active_checkpoint = checkpoint_id;
 }
 
-void DuckTransactionManager::ResetActiveCheckpoint() {
-	active_checkpoint = 0;
+void DuckTransactionManager::ResetActiveCheckpoint(bool checkpoint_succeeded) {
+	vector<DroppedStorage> dropped;
+	{
+		lock_guard<mutex> guard(deferred_storage_lock);
+		active_checkpoint = 0;
+		dropped = std::move(deferred_storage);
+		deferred_storage.clear();
+	}
+	if (!checkpoint_succeeded || dropped.empty()) {
+		// a failed checkpoint invalidates the database: the WAL replays the drops when it is opened again
+		return;
+	}
+	// the checkpoint no longer writes them: the next checkpoint frees the blocks
+	CommitDropState drop_state(&db.GetStorageManager().GetBlockManager());
+	drop_state.FreeStorage(dropped);
+	drop_state.FinalizeCommit();
+}
+
+bool DuckTransactionManager::DeferDroppedStorage(const vector<DroppedStorage> &dropped) {
+	lock_guard<mutex> guard(deferred_storage_lock);
+	if (active_checkpoint == 0) {
+		return false;
+	}
+	// the checkpoint started before the drops committed: its catalog still has the tables and indexes
+	deferred_storage.insert(deferred_storage.end(), dropped.begin(), dropped.end());
+	return true;
+}
+
+transaction_t DuckTransactionManager::NextStartTimestamp() {
+	lock_guard<mutex> t_lock(transaction_lock);
+	return current_start_timestamp;
+}
+
+transaction_t DuckTransactionManager::LowestActiveStart() {
+	lock_guard<mutex> t_lock(transaction_lock);
+	{
+		// a cleanup that has not run can still read a dropped table, like a transaction older than all others
+		lock_guard<mutex> q_lock(cleanup_queue_lock);
+		if (!cleanup_queue.empty()) {
+			return 0;
+		}
+	}
+	return LowestActiveStartInternal();
+}
+
+transaction_t DuckTransactionManager::LowestActiveStartInternal() {
+	transaction_t lowest_start = current_start_timestamp;
+	for (auto &transaction : active_transactions) {
+		if (transaction->IsCheckpointTransaction()) {
+			// reads nothing that its own header frees
+			continue;
+		}
+		lowest_start = MinValue<transaction_t>(lowest_start, transaction->start_time);
+	}
+	return lowest_start;
+}
+
+void DuckTransactionManager::ReuseFreedBlocks(transaction_t lowest_start) noexcept {
+	if (!db.HasStorageManager()) {
+		return;
+	}
+	try {
+		// transactions that started since then started later: the true lowest start is not below this
+		db.GetStorageManager().GetBlockManager().ReuseFreedBlocks(lowest_start);
+	} catch (std::exception &) {
+		// e.g. the file could not be trimmed: a rollback, which destructors run, must not throw
+	}
 }
 
 DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
@@ -174,9 +241,8 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
 	bool has_other_transactions = HasOtherTransactions(transaction);
 	if (has_other_transactions) {
-		if (undo_properties.has_updates || undo_properties.has_dropped_entries) {
-			// if we have made updates/catalog changes in this transaction we cannot checkpoint
-			// in the presence of other transactions
+		if (undo_properties.has_updates) {
+			// if we have made updates in this transaction we cannot checkpoint in the presence of other transactions
 			string other_transactions;
 			for (auto &active_transaction : active_transactions) {
 				if (!RefersToSameObject(*active_transaction, transaction)) {
@@ -189,14 +255,6 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 			if (!other_transactions.empty()) {
 				// there are other transactions!
 				// these active transactions might need data from BEFORE this transaction
-				// we might need to change our strategy here based on what changes THIS transaction has made
-				if (undo_properties.has_dropped_entries) {
-					// this transaction has changed the catalog - we cannot checkpoint
-					return CheckpointDecision(
-					    "Transaction has dropped catalog entries and there are other transactions "
-					    "active\nActive transactions: " +
-					    other_transactions);
-				}
 				// this transaction has performed updates - we cannot checkpoint
 				return CheckpointDecision(
 				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
@@ -324,13 +382,15 @@ void DuckTransactionManager::WaitForDurability() {
 
 void DuckTransactionManager::CleanupTransactions() {
 	lock_guard<mutex> c_lock(cleanup_lock);
+	// read before the cleanups run: every cleanup that this start time allows is queued by now
+	transaction_t lowest_start = lowest_remaining_start;
 	while (true) {
 		DuckCleanupInfo *top_cleanup_info = nullptr;
 		{
 			lock_guard<mutex> q_lock(cleanup_queue_lock);
 			if (cleanup_queue.empty()) {
 				// all transactions have been cleaned up - done
-				return;
+				break;
 			}
 			top_cleanup_info = cleanup_queue.front().get();
 		}
@@ -346,6 +406,8 @@ void DuckTransactionManager::CleanupTransactions() {
 			cleanup_queue.pop();
 		}
 	}
+	// a cleanup can still read a dropped table: only now can the blocks that waited for readers be reused
+	ReuseFreedBlocks(lowest_start);
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -550,7 +612,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	CleanupTransactions();
 
-	if (checkpoint_decision.can_checkpoint && (undo_properties.has_updates || undo_properties.has_dropped_entries) &&
+	if (checkpoint_decision.can_checkpoint && undo_properties.has_updates &&
 	    GetLastCommit() >= LowestVisibilityBound()) {
 		// GetCheckpointType does not checkpoint while another transaction might still need the state
 		// from before this commit. That check ran before the sync; transactions that started during
@@ -726,6 +788,8 @@ void DuckTransactionManager::QueueCleanup(unique_ptr<DuckCleanupInfo> cleanup_in
 		lock_guard<mutex> q_lock(cleanup_queue_lock);
 		cleanup_queue.emplace(std::move(cleanup_info));
 	}
+	// under the transaction lock, and only after the cleanup that this start time allows is queued
+	lowest_remaining_start = LowestActiveStartInternal();
 }
 
 idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {

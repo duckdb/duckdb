@@ -61,6 +61,8 @@ public:
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(idx_t index_oid);
+	//! Removes an index entry without releasing it: a running checkpoint still writes it until RemoveIndex
+	void DetachIndex(idx_t index_oid);
 	//! Returns the entry matching the index OID.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	shared_ptr<IndexEntry> FindEntry(idx_t index_oid) const;
@@ -144,6 +146,11 @@ public:
 	                                vector<StorageIndex> &mapped_column_ids);
 
 private:
+	//! Removes an index entry from the list of index entries, and returns it.
+	shared_ptr<IndexEntry> ExtractIndex(idx_t index_oid) DUCKDB_REQUIRES(index_entries_lock);
+	//! Returns the index entries that a checkpoint writes, which includes the detached ones.
+	vector<shared_ptr<IndexEntry>> CheckpointEntries() const DUCKDB_REQUIRES(index_entries_lock);
+
 	template <class>
 	friend class TableIndexIterationHelper;
 
@@ -153,6 +160,8 @@ private:
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
+	//! Index entries detached by a commit, which the checkpoint that runs meanwhile still writes
+	vector<shared_ptr<IndexEntry>> detached_index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 };
 
 template <class T>

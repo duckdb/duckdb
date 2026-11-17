@@ -1,5 +1,5 @@
 # name: test/sql/storage/concurrent_checkpoint_index_write.test_slow
-# description: Commits that change a table run while a checkpoint writes the table's indexes
+# description: Commits that change a table or drop its index run while a checkpoint writes its indexes
 # group: [storage]
 
 load {TEST_DIR}/concurrent_checkpoint_index_write.db
@@ -37,14 +37,14 @@ CREATE TABLE mem.timing (who VARCHAR, t TIMESTAMP);
 statement ok
 SET debug_checkpoint_index_sleep_ms=6000
 
-concurrentloop threadid 0 3
+concurrentloop threadid 0 4
 
-# thread 2 is a reader that needs the state from before the changes below, so that this is a concurrent checkpoint
-onlyif threadid=2
+# thread 3 is a reader that needs the state from before the changes below, so that this is a concurrent checkpoint
+onlyif threadid=3
 statement ok
 BEGIN TRANSACTION
 
-onlyif threadid=2
+onlyif threadid=3
 query I
 SELECT COUNT(*) FROM t
 ----
@@ -85,15 +85,29 @@ onlyif threadid=1
 statement ok
 INSERT INTO mem.timing VALUES ('changes', now())
 
+# during the sleep: the checkpoint still writes the dropped index, and installs its copy
 onlyif threadid=2
+statement ok
+DROP INDEX t_s
+
+onlyif threadid=2
+statement ok
+INSERT INTO mem.timing VALUES ('drop', now())
+
+onlyif threadid=3
 statement ok
 ROLLBACK
 
 endloop
 
-# the changes did not wait for the checkpoint to write the indexes
+# the changes and the drop did not wait for the checkpoint to write the indexes
 query I
 SELECT COUNT(*) FROM mem.timing w, mem.timing e WHERE w.who = 'changes' AND e.who = 'checkpoint end' AND w.t < e.t - INTERVAL 2 SECOND
+----
+1
+
+query I
+SELECT COUNT(*) FROM mem.timing w, mem.timing e WHERE w.who = 'drop' AND e.who = 'checkpoint end' AND w.t < e.t - INTERVAL 2 SECOND
 ----
 1
 
@@ -125,6 +139,11 @@ SELECT i, s FROM t WHERE s = 'during' ORDER BY i
 100001	during
 
 query I
+SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 't_s'
+----
+0
+
+query I
 SELECT s FROM t WHERE i = 20
 ----
 again
@@ -148,6 +167,11 @@ SELECT i, s FROM t WHERE s = 'during' ORDER BY i
 100000	during
 100001	during
 
+query I
+SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 't_s'
+----
+0
+
 statement ok
 CHECKPOINT
 
@@ -168,3 +192,8 @@ SELECT i, s FROM t WHERE s = 'during' ORDER BY i
 ----
 100000	during
 100001	during
+
+query I
+SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 't_s'
+----
+0

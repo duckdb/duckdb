@@ -1,0 +1,80 @@
+# name: test/sql/storage/checkpoint_freed_metadata_awaits_readers.test
+# description: Metadata blocks a checkpoint frees are reused only once the transactions that started before it have ended
+# group: [storage]
+
+load {TEST_DIR}/checkpoint_freed_metadata_awaits_readers.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CREATE TABLE t AS SELECT i, 'string ' || i AS s FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE other (x INTEGER)
+
+statement ok
+CHECKPOINT
+
+statement ok
+UPDATE t SET s = s || 'x'
+
+# a reader that started before the checkpoint
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM t WHERE s LIKE '%x'
+----
+100000
+
+# rewriting the updated column frees the metadata that described it
+statement ok con2
+CHECKPOINT
+
+# a later checkpoint does not reuse it either, and frees more
+statement ok
+INSERT INTO other VALUES (1)
+
+statement ok con2
+CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE with_reader AS SELECT SUM(free_blocks) AS free_blocks FROM pragma_metadata_info()
+
+query I con1
+SELECT COUNT(*) FROM t WHERE s LIKE '%x'
+----
+100000
+
+statement ok con1
+COMMIT
+
+query I
+SELECT (SELECT SUM(free_blocks) FROM pragma_metadata_info()) > (SELECT free_blocks FROM with_reader)
+----
+true
+
+restart
+
+statement ok
+SET debug_verify_blocks=true
+
+query II
+SELECT COUNT(*), COUNT(*) FILTER (s LIKE '%x') FROM t
+----
+100000	100000
+
+statement ok
+INSERT INTO other VALUES (2)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM other
+----
+2

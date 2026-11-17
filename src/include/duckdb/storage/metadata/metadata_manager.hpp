@@ -30,6 +30,8 @@ struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
+	//! The blocks that are free on disk but cannot be reused yet, as a mask
+	idx_t pending_reuse;
 	atomic<bool> dirty;
 
 	void Write(WriteStream &sink);
@@ -83,7 +85,10 @@ public:
 	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
 
-	void MarkBlocksAsModified();
+	//! Frees the blocks the checkpoint no longer uses. With readers, returns them instead, for ReuseFreedBlocks
+	unordered_map<block_id_t, idx_t> MarkBlocksAsModified(bool has_readers);
+	//! Lets blocks that MarkBlocksAsModified returned be reused
+	void ReuseFreedBlocks(const unordered_map<block_id_t, idx_t> &freed_blocks);
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 	//! Sets the storage version of the file, which decides whether keeping a block also keeps its next block
 	void SetStorageVersion(StorageVersion storage_version);

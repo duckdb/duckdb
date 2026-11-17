@@ -722,6 +722,13 @@ void ART::ResetStorage(IndexLock &index_lock) {
 	root_ptr.Clear();
 }
 
+void ART::DisownBlocks(BlockIdVisitor &visitor) {
+	IndexLock index_lock(*this);
+	for (auto &allocator : *allocators) {
+		allocator->DisownBlocks(visitor);
+	}
+}
+
 void ART::DisownStorage(IndexLock &index_lock) {
 	index_lock.AssertHeld(*this);
 	D_ASSERT(owns_data);

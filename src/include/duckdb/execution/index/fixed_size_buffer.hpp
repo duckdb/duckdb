@@ -44,8 +44,7 @@ public:
 
 public:
 	void Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) override;
-	//! Drops the reference to the on-disk block without marking it as modified, i.e., without freeing it.
-	//! The block stays owned by the storage information this buffer was created from.
+	//! Gives up the on-disk block without freeing it: its owner frees it, and the buffer can still be read from it.
 	void DisownBlock();
 
 public:
@@ -118,6 +117,8 @@ private:
 
 	//! Partial block id and offset
 	BlockPointer block_pointer;
+	//! False: destroying the buffer does not free its on-disk block.
+	bool owns_block = true;
 	//! The buffer handle of the in-memory buffer
 	BufferHandle buffer_handle;
 	//! The block handle of the on-disk buffer

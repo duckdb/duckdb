@@ -985,25 +985,26 @@ SingleFileStorageManager::CreateCheckpointWriter(QueryContext context, Checkpoin
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options, checkpoint_context);
 }
 
-static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
-	vector<reference<DuckTableEntry>> tables;
+//! The storage of the tables, which outlives their catalog entries: a commit after the scan can destroy those.
+static vector<shared_ptr<DataTable>> GetCommittedTables(AttachedDatabase &db) {
+	vector<shared_ptr<DataTable>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	auto bound = VisibilityBound::AllCommitted();
 	catalog.ScanSchemas(bound, [&](DuckSchemaEntry &schema) {
 		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<DuckTableEntry>());
+				tables.push_back(entry.Cast<DuckTableEntry>().GetStorage().shared_from_this());
 			}
 		});
 	});
 	return tables;
 }
 
-static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
+static vector<shared_ptr<DataTable>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
-	vector<reference<DuckTableEntry>> result;
+	vector<shared_ptr<DataTable>> result;
 	for (auto &table : GetCommittedTables(db)) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasUnbound()) {
 			result.push_back(table);
 		}
 	}
@@ -1023,9 +1024,9 @@ static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
 	return ErrorData();
 }
 
-static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) {
+static bool HasBufferedReplays(const vector<shared_ptr<DataTable>> &tables) {
 	for (auto &table : tables) {
-		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+		if (table->GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
 			return true;
 		}
 	}
@@ -1064,7 +1065,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(optional_ptr<ClientConte
 	ErrorData failure;
 	string failed_table;
 	for (auto &table : tables) {
-		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		auto &info = *table->GetDataTableInfo();
 		if (!explicit_checkpoint && !info.GetIndexes().HasBufferedReplays()) {
 			continue;
 		}
@@ -1172,7 +1173,7 @@ void SingleFileStorageManager::Destroy() {
 		return;
 	}
 	for (auto &table : GetCommittedTables(db)) {
-		table.get().GetStorage().Destroy();
+		table->Destroy();
 	}
 }
 

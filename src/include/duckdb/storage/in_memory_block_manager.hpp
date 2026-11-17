@@ -65,7 +65,8 @@ public:
 	void Write(QueryContext context, FileBuffer &block, block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - Write with client context!");
 	}
-	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) override {
+	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound, transaction_t read_stamp,
+	                 transaction_t lowest_active_start) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
 	}
 	bool InMemory() override {

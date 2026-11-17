@@ -22,6 +22,7 @@ class CatalogEntry;
 class TableIndexList;
 class DataChunk;
 class DuckTransaction;
+class DuckTransactionManager;
 class WriteAheadLog;
 class ClientContext;
 
@@ -32,10 +33,16 @@ struct UpdateInfo;
 
 enum class CommitMode { COMMIT, REVERT_COMMIT };
 
-//! An index that has been marked for removal from a table's index list once the commit chain succeeds.
-struct PendingIndexRemoval {
-	reference<TableIndexList> indexes;
+//! The storage of a table or of an index that a commit dropped, freed once the commit chain succeeds.
+struct DroppedStorage {
+	//! The dropped table, if any
+	shared_ptr<DataTable> table;
+	//! The table of the dropped index, if any
+	shared_ptr<DataTableInfo> index_table_info;
 	idx_t index_oid;
+
+	//! Keeps the storage in place for a running checkpoint, which may still write it
+	void Detach();
 };
 
 //! Accumulates block marks and index removals during commit so they can be applied together once the
@@ -48,19 +55,25 @@ public:
 public:
 	//! Register an on-disk block to mark as modified during FinalizeCommit.
 	void DropBlock(block_id_t block_id);
+	//! Register a table whose on-disk blocks, and those of its indexes, are freed when the commit is finalized.
+	void DropTable(shared_ptr<DataTable> table);
+	//! Registers the blocks of dropped tables and removes dropped indexes. Changes nothing if it fails
+	void FreeStorage(vector<DroppedStorage> &dropped);
 	//! Register an index to be removed from a table's index list during FinalizeCommit. Index removal will drop in
 	//! memory index data and also marks all blocks on disk as free blocks allowing for reclamation. Block marking for
 	//! indexes is handled implicitly along destruction paths for index memory.
-	void RemoveIndex(TableIndexList &indexes, idx_t index_oid);
-	//! Finalize accumulated block marks and index removals.
+	void RemoveIndex(shared_ptr<DataTableInfo> table_info, idx_t index_oid);
+	//! Finalize accumulated block marks.
 	void FinalizeCommit();
+	//! Finalize a commit: also frees the dropped tables and indexes, or hands them over to a running checkpoint.
+	void FinalizeCommit(DuckTransactionManager &transaction_manager);
 	//! True if no work has been queued.
 	bool Empty() const;
 
 private:
 	optional_ptr<BlockManager> block_manager;
 	vector<block_id_t> dropped_block_ids;
-	vector<PendingIndexRemoval> pending_index_removals;
+	vector<DroppedStorage> dropped_storage;
 };
 
 struct IndexDataRemover {

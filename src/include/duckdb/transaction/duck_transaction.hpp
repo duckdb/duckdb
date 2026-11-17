@@ -116,6 +116,9 @@ public:
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
 	}
+	bool IsCheckpointTransaction() const {
+		return is_checkpoint_transaction;
+	}
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated

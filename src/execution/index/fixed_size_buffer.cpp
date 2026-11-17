@@ -59,7 +59,7 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 		// decrements the reader count on the underlying block handle (Destroy() unpins)
 		buffer_handle.Destroy();
 	}
-	if (OnDisk()) {
+	if (OnDisk() && owns_block) {
 		// marking a block as modified decreases the reference count of multi-use blocks
 		// this must not throw out of a destructor, e.g., if the block ids of a corrupt file overlap
 		try {
@@ -71,7 +71,7 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 
 void FixedSizeBuffer::DisownBlock() {
 	lock_guard<mutex> l(lock);
-	block_pointer = BlockPointer();
+	owns_block = false;
 }
 
 void FixedSizeBuffer::Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) {

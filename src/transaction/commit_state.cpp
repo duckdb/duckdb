@@ -15,6 +15,8 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -38,11 +40,54 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
-	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
+void DroppedStorage::Detach() {
+	if (index_table_info) {
+		index_table_info->GetIndexes().DetachIndex(index_oid);
+	}
+}
+
+struct DroppedBlockCollector : public BlockIdVisitor {
+	explicit DroppedBlockCollector(CommitDropState &drop_state) : drop_state(drop_state) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		drop_state.DropBlock(block_id);
+	}
+
+	CommitDropState &drop_state;
+};
+
+void CommitDropState::FreeStorage(vector<DroppedStorage> &dropped) {
+	// first what can fail, which loads the tables: nothing is freed or removed unless all of it succeeds
+	for (auto &storage : dropped) {
+		if (storage.table) {
+			storage.table->CommitDropTable(*this);
+		}
+	}
+	// in the order of the drops: the indexes of a table before the table, which gives up the blocks of those it keeps
+	DroppedBlockCollector collector(*this);
+	for (auto &storage : dropped) {
+		if (!storage.table) {
+			storage.index_table_info->GetIndexes().RemoveIndex(storage.index_oid);
+			continue;
+		}
+		// transactions that still read the table keep using its indexes
+		for (auto entry : storage.table->GetDataTableInfo()->GetIndexes().IndexEntries()) {
+			entry->DisownBlocks(collector);
+		}
+	}
+}
+
+void CommitDropState::DropTable(shared_ptr<DataTable> table) {
+	dropped_storage.push_back(DroppedStorage {std::move(table), nullptr, 0});
+}
+
+void CommitDropState::RemoveIndex(shared_ptr<DataTableInfo> table_info, idx_t index_oid) {
+	dropped_storage.push_back(DroppedStorage {nullptr, std::move(table_info), index_oid});
 }
 
 void CommitDropState::FinalizeCommit() {
+	D_ASSERT(dropped_storage.empty());
 	if (block_manager) {
 		for (auto block_id : dropped_block_ids) {
 			block_manager->MarkBlockAsModified(block_id);
@@ -50,16 +95,24 @@ void CommitDropState::FinalizeCommit() {
 	}
 	// assert that !block_manager -> dropped_block_ids.empty()
 	D_ASSERT(block_manager || dropped_block_ids.empty());
-
-	for (auto &removal : pending_index_removals) {
-		removal.indexes.get().RemoveIndex(removal.index_oid);
-	}
 	dropped_block_ids.clear();
-	pending_index_removals.clear();
+}
+
+void CommitDropState::FinalizeCommit(DuckTransactionManager &transaction_manager) {
+	if (transaction_manager.DeferDroppedStorage(dropped_storage)) {
+		// handed over: the running checkpoint may still write them
+		for (auto &storage : dropped_storage) {
+			storage.Detach();
+		}
+	} else {
+		FreeStorage(dropped_storage);
+	}
+	dropped_storage.clear();
+	FinalizeCommit();
 }
 
 bool CommitDropState::Empty() const {
-	return dropped_block_ids.empty() && pending_index_removals.empty();
+	return dropped_block_ids.empty() && dropped_storage.empty();
 }
 
 //===--------------------------------------------------------------------===//
