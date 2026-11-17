@@ -135,7 +135,7 @@ private:
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
-	bool is_checkpoint_transaction = false;
+	atomic<bool> is_checkpoint_transaction {false};
 };
 
 } // namespace duckdb

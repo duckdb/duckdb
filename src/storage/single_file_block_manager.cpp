@@ -1369,6 +1369,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// a transaction that started before the header can still read what the header frees
 	bool has_readers = lowest_active_start < read_stamp;
 	auto freed_metadata_blocks = metadata_manager.MarkBlocksAsModified(has_readers);
+	// serialized here: the metadata manager's lock is taken before the lock below, never under it
+	MemoryStream metadata_stream;
+	metadata_manager.Write(metadata_stream);
 
 	unique_lock<mutex> lock(single_file_block_lock);
 	// set the iteration count
@@ -1413,7 +1416,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
-		GetMetadataManager().Write(writer);
+		writer.WriteData(metadata_stream.GetData(), metadata_stream.GetPosition());
 		writer.Flush();
 	} else {
 		// no blocks in the free list
