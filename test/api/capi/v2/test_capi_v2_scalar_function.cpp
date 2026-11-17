@@ -407,11 +407,12 @@ void SetArgTypeResolveTypes(duckdb_v2_function_bind_info_handle,
 	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	duckdb_v2_logical_type_handle bigint = nullptr;
 	duckdb_v2_logical_type_handle any = nullptr;
-	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, nullptr, nullptr, 0, &bigint,
-	                                          err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, nullptr, nullptr, nullptr, 0,
+	                                          &bigint, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY, nullptr, nullptr, 0, &any, nullptr);
+	duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY, nullptr, nullptr, nullptr, 0, &any,
+	                                      nullptr);
 	set_arg_probe.oob_rc = duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 5, bigint, nullptr);
 	set_arg_probe.incomplete_rc = duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 0, any, nullptr);
 	duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 0, bigint, err);
