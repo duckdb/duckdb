@@ -158,6 +158,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "FetchBlockTask";
+	}
+
 private:
 	CachingFileHandle &caching_file_handle;
 	QueryContext context;
@@ -180,6 +184,10 @@ public:
 
 	void ExecuteTask() override {
 		caching_file_handle.ReadAndRecord(context, buffer, nr_bytes, location);
+	}
+
+	string TaskType() const override {
+		return "ReadRangeTask";
 	}
 
 private:
