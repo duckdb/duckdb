@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/csv_comment_line_feed_crlf.test
+# description: The row after a comment that ends in a line feed keeps its first byte in a file with \r\n line breaks
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# a,b\r\n
+# #c\n
+# xyz,d\r\n
+# 1,2\r\n
+statement ok
+COPY (SELECT 'a,b' || chr(13) || chr(10) || '#c' || chr(10) || 'xyz,d' || chr(13) || chr(10) || '1,2' || chr(13)) TO '{TEST_DIR}/comment_line_feed_crlf.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_feed_crlf.csv', comment = '#');
+----
+xyz	d
+1	2
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_feed_crlf.csv', auto_detect = false, delim = ',', quote = '', escape = '', new_line = '\r\n', comment = '#', header = true, columns = {'a': 'VARCHAR', 'b': 'VARCHAR'});
+----
+xyz	d
+1	2
+
+foreach parallel true false
+
+loop buffer_size 11 30
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_feed_crlf.csv', auto_detect = false, delim = ',', quote = '', escape = '', new_line = '\r\n', comment = '#', header = true, columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, buffer_size = {buffer_size}, parallel = {parallel});
+----
+xyz	d
+1	2
+
+endloop
+
+endloop
+
+# a comment that ends in \r\n, as before
+statement ok
+COPY (SELECT 'a,b' || chr(13) || chr(10) || '#c' || chr(13) || chr(10) || 'xyz,d' || chr(13) || chr(10) || '1,2' || chr(13)) TO '{TEST_DIR}/comment_crlf.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+FROM read_csv('{TEST_DIR}/comment_crlf.csv', comment = '#');
+----
+xyz	d
+1	2
