@@ -24,6 +24,8 @@
         "test/optimizer/fixed_key_domain_replacement_plan.test",
         "test/optimizer/joins/aggregate_key_join_ce.test",
         "test/optimizer/partial_aggregate_precomputation.test",
+        "test/optimizer/partial_aggregate_pushdown.test",
+        "test/optimizer/partial_aggregate_pushdown_exported_state.test",
         "test/optimizer/partial_aggregate_selective_join_plan.test",
         "test/optimizer/partial_aggregate_uncertain_domain_plan.test",
         "test/optimizer/partial_aggregate_pushdown_serialized_plan.test",
@@ -154,13 +156,6 @@
         "test/sql/pivot/test_pivot_duplicate_aggregates.test",
         "test/sql/sql_export/pivot_list_results.test",
         "test/sql/sql_export/pivot_sql_export.test"
-      ]
-    },
-    {
-      "reason": "FIXME: null pointer dereference when the partial aggregate pushdown optimizer encounters STATE_EXPORT aggregates",
-      "paths": [
-        "test/optimizer/partial_aggregate_pushdown.test",
-        "test/sql/tpcds/tpcds_sf0.test"
       ]
     },
     {
