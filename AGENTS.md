@@ -476,7 +476,8 @@ Some files are auto-generated. After modifying their sources, run:
 make generate-files
 ```
 This regenerates:
-- C API bindings
+- C API bindings (V1 only; V2 is regenerated with `./scripts/capi_v2_regen.sh`). Read
+  `api_spec/AGENTS.md` before changing the C API.
 - Function registration
 - Settings
 - Serialization code
