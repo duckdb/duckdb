@@ -7,6 +7,7 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -28,6 +29,22 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
+
+TEST_CASE("PEG parse arenas honor the database memory limit and release it after failure", "[api][grammar_extension]") {
+	DuckDB database(nullptr);
+	Connection connection(database);
+	REQUIRE(!connection.Query("SET memory_limit='16MB'")->HasError());
+	string query = "SELECT [";
+	for (idx_t i = 0; i < 100000; ++i) {
+		query += i ? ",1" : "1";
+	}
+	query += "]";
+	auto result = connection.Query(query);
+	REQUIRE(result->HasError());
+	REQUIRE(result->GetErrorType() == ExceptionType::OUT_OF_MEMORY);
+	REQUIRE(BufferManager::GetBufferManager(*connection.context).GetUsedMemory() < 16 * 1024 * 1024);
+	REQUIRE(!connection.Query("SELECT 42")->HasError());
+}
 
 struct LiteralChoiceTestResult {
 	bool success;

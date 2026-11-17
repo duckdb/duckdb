@@ -55,11 +55,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 		return nullptr;
 	}
 	vector<MatcherSuggestion> suggestions;
-	ParseResultAllocator parse_result_allocator;
+	// Parsing is query work too: count its arenas against the database memory
+	// limit instead of letting a complex statement grow the process unchecked.
+	auto &allocator = options.context ? BufferAllocator::Get(*options.context) : Allocator::DefaultAllocator();
+	ParseResultAllocator parse_result_allocator(allocator);
 	idx_t max_token_index = token_iterator.Position();
 	// the packrat cache outlives the match processes, so they need separate arenas
-	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator process_allocator(allocator);
+	ArenaAllocator packrat_allocator(allocator);
 	ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
 	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
