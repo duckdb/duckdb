@@ -21,6 +21,10 @@ FROM range(10000) r(i)
 statement ok
 CREATE SEQUENCE seq
 
+# a DECIMAL(38,2) whose sum with itself needs more than 38 digits on the rows with k >= 2
+statement ok
+CREATE TABLE capped AS SELECT i AS k, (CASE WHEN i < 2 THEN i + 1.25 ELSE 600000000000000000000000000000000000 END)::DECIMAL(38,2) AS x FROM range(4) r(i)
+
 # TRY_CAST producing NULL from a value: group 1 has matching rows only, none converts; group 2 a non-matching row
 statement ok
 CREATE TABLE tc AS SELECT * FROM (VALUES (1, true, 'x'), (1, true, 'y'), (2, true, 'x'), (2, false, '5'), (3, true, '4'), (3, true, 'z')) tc(k, ok, sv)
@@ -130,7 +134,8 @@ EXPLAIN SELECT g, sum(CASE WHEN random() >= 0 THEN v ELSE 0 END), count(CASE WHE
 physical_plan	<!REGEX>:(?s).*FILTER.*
 
 # a THEN that can raise on a row the CASE never selects - an integer division by zero / by -1 / by a column, a
-# decimal addition capped at 38 digits, a throwing multiplication nested under CASE / COALESCE ...
+# decimal addition capped at 38 digits (max_decimal_width = 38), a throwing multiplication nested under CASE /
+# COALESCE ...
 query II
 EXPLAIN SELECT g, sum(CASE WHEN c THEN v // 0 END), sum(CASE WHEN c THEN v % 0 END) FROM t GROUP BY g
 ----
@@ -146,10 +151,32 @@ EXPLAIN SELECT g, sum(CASE WHEN q > 0 THEN v // q END), sum(CASE WHEN q > 0 THEN
 ----
 physical_plan	<!REGEX>:(?s).*FILTER.*
 
+statement ok
+SET max_decimal_width = 38
+
 query II
 EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(38,2) + d::DECIMAL(38,2) END), max(CASE WHEN c THEN d::DECIMAL(38,2) - d::DECIMAL(38,2) END) FROM t GROUP BY g
 ----
 physical_plan	<!REGEX>:(?s).*FILTER.*
+
+query II
+EXPLAIN SELECT sum(CASE WHEN k < 2 THEN x + x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+statement ok
+RESET max_decimal_width
+
+# without the cap the same addition is a DECIMAL(39,2) that holds every sum: it cannot raise and is rewritten
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(38,2) + d::DECIMAL(38,2) END), count(CASE WHEN c THEN d::DECIMAL(38,2) - d::DECIMAL(38,2) END) FROM t GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*FILTER \(WHERE.*
+
+query II
+EXPLAIN SELECT sum(CASE WHEN k < 2 THEN x + x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*FILTER \(WHERE.*
 
 query II
 EXPLAIN SELECT g, sum(CASE WHEN c THEN CASE WHEN b THEN i * v ELSE 0 END END), max(CASE WHEN c THEN coalesce(i * v, 0) END) FROM t GROUP BY g
@@ -407,6 +434,31 @@ SELECT g, sum(CASE WHEN c THEN -0.0::DOUBLE * dbl ELSE 0 END), count(CASE WHEN c
 ----
 0	0.0	358
 1	0.0	357
+
+# a decimal addition capped at 38 digits overflows on the rows with k >= 2 (the sum without a CASE raises), which
+# the CASE never evaluates; the DECIMAL(39,2) of the wide addition holds the sums of every row
+statement ok
+SET max_decimal_width = 38
+
+statement error
+SELECT sum(x + x) FROM capped
+----
+Overflow in addition of DECIMAL(38)
+
+query III
+SELECT k % 2, sum(CASE WHEN k < 2 THEN x + x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped GROUP BY 1 ORDER BY 1
+----
+0	2.50	1
+1	4.50	1
+
+statement ok
+RESET max_decimal_width
+
+query IIII
+SELECT k % 2, sum(CASE WHEN k < 2 THEN x + x END), count(CASE WHEN k < 2 THEN x - (-x) END), sum(x + x) FROM capped GROUP BY 1 ORDER BY 1
+----
+0	2.50	1	1200000000000000000000000000000000002.50
+1	4.50	1	1200000000000000000000000000000000004.50
 
 # VARCHAR min / max, bool_and / bool_or over a nullable BOOLEAN, a UHUGEINT sum, a NULL THEN without ELSE
 query IIIIIIII

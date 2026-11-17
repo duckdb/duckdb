@@ -23,6 +23,10 @@ CREATE TABLE empty_t AS SELECT * FROM t WHERE false
 statement ok
 CREATE TABLE guarded AS SELECT i AS k, CASE WHEN i < 2 THEN i::VARCHAR ELSE 'bad' END AS v FROM range(4) r(i)
 
+# a DECIMAL(38,2) whose sum and product with itself need more than 38 digits on the rows the CASE guards away
+statement ok
+CREATE TABLE capped AS SELECT i AS k, (CASE WHEN i < 2 THEN i + 1.25 ELSE 600000000000000000000000000000000000 END)::DECIMAL(38,2) AS x FROM range(4) r(i)
+
 # a nullable argument: group 1 has matching rows only, all with a NULL x; group 5 a non-matching row with a NULL x
 statement ok
 CREATE TABLE nz AS SELECT * FROM (VALUES (true, NULL::INT, 1), (true, NULL::INT, 1), (false, 5, 2), (true, 3, 3), (true, NULL, 3), (NULL, 7, 4), (true, NULL, 5), (false, NULL, 5)) t(c, x, g)
@@ -181,7 +185,9 @@ SELECT k % 2, sum(CASE WHEN k < 2 THEN v::INTEGER ELSE 0 END), count(CASE WHEN k
 
 # 23. a THEN expression of decimal arithmetic whose result width the binder did not cap cannot overflow: rewritten
 # (TPC-DS q66's `price * quantity` shape: DECIMAL(7,2) * INTEGER = DECIMAL(17,2)); a width of 18 (DECIMAL(15,2) *
-# INTEGER, capped with the overflow check) or 38, an integer multiplication and a cast that can fail keep the CASE
+# INTEGER, capped with the overflow check), an integer multiplication and a cast that can fail keep the CASE. A result
+# of more than 38 digits is a wide DECIMAL that holds every result (DECIMAL(20,2) * DECIMAL(20,2) = DECIMAL(40,4)):
+# rewritten
 query IIII nosort case23a
 SELECT g, sum(CASE WHEN c THEN p * v ELSE 0 END), sum(CASE WHEN c THEN p * v END), count(CASE WHEN c THEN p + d END) FROM t GROUP BY g ORDER BY g
 ----
@@ -193,6 +199,42 @@ SELECT sum(CASE WHEN c THEN p * v ELSE 0 END), sum(CASE WHEN b THEN p * v END), 
 query IIII nosort case23c
 SELECT g, sum(CASE WHEN c THEN d * v ELSE 0 END), sum(CASE WHEN c THEN i * v END), sum(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END) FROM t GROUP BY g ORDER BY g
 ----
+
+# the wide sum and product of the DECIMAL(38,2) hold the values of every row, also of the rows that do not match
+query IIII
+SELECT k % 2, sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped GROUP BY 1 ORDER BY 1
+----
+0	2.50	1.5625	1
+1	4.50	5.0625	1
+
+# with max_decimal_width = 38 the binder caps these results at 38 digits and they run with the overflow check: the CASE
+# is their guard. The rows with k >= 2 overflow (as the sums without a CASE show), but the CASE never evaluates them
+statement ok
+SET max_decimal_width = 38
+
+statement error
+SELECT sum(x + x) FROM capped
+----
+Overflow in addition of DECIMAL(38)
+
+statement error
+SELECT sum(x * x) FROM capped
+----
+Overflow in multiplication of DECIMAL(38)
+
+query III
+SELECT sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+7.00	6.6250	2
+
+query IIII
+SELECT k % 2, sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped GROUP BY 1 ORDER BY 1
+----
+0	2.50	1.5625	1
+1	4.50	5.0625	1
+
+statement ok
+RESET max_decimal_width
 
 # 24. sum(CASE WHEN c THEN x ELSE 0 END) over a nullable x: a group whose rows all match with every x NULL is a sum
 # over NULLs - NULL, not 0; a group with a row that does not match (c false or NULL) takes the ELSE 0 and is 0 even
@@ -408,17 +450,57 @@ EXPLAIN SELECT sum(CASE WHEN c THEN p * v ELSE 0 END), sum(CASE WHEN b THEN p * 
 ----
 physical_plan	<REGEX>:(?s).*FILTER.*
 
-# a multiplication capped at DECIMAL(18) (DECIMAL(15,2) * INTEGER) or DECIMAL(38) runs with the overflow check and
-# keeps its CASE, as does an integer multiplication
+# a multiplication capped at DECIMAL(18) (DECIMAL(15,2) * INTEGER) runs with the overflow check and keeps its CASE, as
+# does an integer multiplication
 query II
 EXPLAIN SELECT g, sum(CASE WHEN c THEN d * v ELSE 0 END), sum(CASE WHEN c THEN d * v END) FROM t GROUP BY g
 ----
 physical_plan	<!REGEX>:(?s).*FILTER.*
 
 query II
-EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END), sum(CASE WHEN c THEN i * v END) FROM t GROUP BY g
+EXPLAIN SELECT g, sum(CASE WHEN c THEN i * v END), count(CASE WHEN c THEN i * v END) FROM t GROUP BY g
 ----
 physical_plan	<!REGEX>:(?s).*FILTER.*
+
+# a result of more than 38 digits is a wide DECIMAL (DECIMAL(20,2) * DECIMAL(20,2) = DECIMAL(40,4), DECIMAL(38,2) +
+# DECIMAL(38,2) = DECIMAL(39,2)) that cannot overflow: rewritten
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END), count(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END) FROM t GROUP BY g
+----
+physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*FILTER \(WHERE.*
+
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END), count(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END) FROM t GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*CASE.*
+
+query II
+EXPLAIN SELECT sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+physical_plan	<REGEX>:(?s).*FILTER \(WHERE.*FILTER \(WHERE.*FILTER \(WHERE.*
+
+# with max_decimal_width = 38 the same expressions are capped at DECIMAL(38), run with the overflow check and keep
+# their CASE
+statement ok
+SET max_decimal_width = 38
+
+query II
+EXPLAIN SELECT g, sum(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END), count(CASE WHEN c THEN d::DECIMAL(20,2) * d::DECIMAL(20,2) END) FROM t GROUP BY g
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+query II
+EXPLAIN SELECT sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+physical_plan	<!REGEX>:(?s).*FILTER.*
+
+query II
+EXPLAIN SELECT sum(CASE WHEN k < 2 THEN x + x ELSE 0 END), sum(CASE WHEN k < 2 THEN x * x END), count(CASE WHEN k < 2 THEN x - (-x) END) FROM capped
+----
+physical_plan	<REGEX>:(?s).*CASE.*CASE.*CASE.*
+
+statement ok
+RESET max_decimal_width
 
 # the exact values of a few rewritten forms
 query IIII
