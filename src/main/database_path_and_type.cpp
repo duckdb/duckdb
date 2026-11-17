@@ -19,7 +19,7 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 	}
 }
 
-void DBPathAndType::CheckMagicBytes(QueryContext context, ContextFileSystem &fs, string &path, string &db_type,
+void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, string &db_type,
                                     optional_ptr<PrefetchedFileData> out_prefetch) {
 	// if there isn't - check the magic bytes of the file (if any)
 	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path, out_prefetch);
@@ -43,7 +43,7 @@ void DBPathAndType::CheckMagicBytes(QueryContext context, ContextFileSystem &fs,
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(ContextFileSystem &fs, string &path, string &db_type,
+void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type,
                                         optional_ptr<PrefetchedFileData> out_prefetch) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check

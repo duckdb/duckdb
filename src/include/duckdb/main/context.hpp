@@ -22,8 +22,8 @@ class ClientContext;
 struct CatalogTransaction;
 class DatabaseInstance;
 class FileOpener;
+class BaseFileSystem;
 class FileSystem;
-class ContextFileSystem;
 class Logger;
 class MetricsManager;
 class QueryProfiler;
@@ -89,7 +89,7 @@ public:
 	DUCKDB_API void SetLogger(shared_ptr<Logger> new_logger);
 	DUCKDB_API const shared_ptr<Logger> &GetLoggerPtr() const;
 	//! The file system: client-specific for the services of a ClientContext, otherwise the database file system
-	DUCKDB_API ContextFileSystem &GetFileSystem() const;
+	DUCKDB_API FileSystem &GetFileSystem() const;
 	//! The file opener of the client - only present for the services of a ClientContext
 	DUCKDB_API optional_ptr<FileOpener> TryGetFileOpener() const;
 	//! The buffer manager wrapper: forwards to the database buffer manager, tracking the allocations of the services
@@ -114,7 +114,7 @@ private:
 	shared_ptr<QueryProfiler> profiler;
 	unique_ptr<RegisteredStateManager> registered_state;
 	unique_ptr<FileOpener> file_opener;
-	unique_ptr<ContextFileSystem> client_file_system;
+	unique_ptr<FileSystem> client_file_system;
 	//! The buffer manager wrapper of the services
 	unique_ptr<BufferManager> buffer_manager;
 };

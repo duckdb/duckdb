@@ -24,7 +24,7 @@
 
 namespace duckdb {
 
-unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, ContextFileSystem &fs,
+unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, FileSystem &fs,
                                                           const string &local_path, const string &extension,
                                                           ExtensionInstallOptions &options,
                                                           optional_ptr<ClientContext> context);
@@ -40,7 +40,7 @@ public:
 		return true;
 	}
 
-	unique_ptr<ExtensionInstallInfo> Install(DatabaseInstance &db, ContextFileSystem &fs, const string &local_path,
+	unique_ptr<ExtensionInstallInfo> Install(DatabaseInstance &db, FileSystem &fs, const string &local_path,
 	                                         const string &extension, ExtensionInstallOptions &options,
 	                                         optional_ptr<ClientContext> context) override {
 		return InstallExternalExtension(db, fs, local_path, extension, options, context);

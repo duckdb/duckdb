@@ -4238,7 +4238,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	{
 		auto abs_path = TestCreatePath("test_uri_localhost.db");
 		if (!abs_path.empty() && abs_path[0] != '/') {
-			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+			abs_path = duckdb::BaseFileSystem::GetWorkingDirectory() + "/" + abs_path;
 		}
 		std::remove(abs_path.c_str());
 		string uri = string("file://localhost") + abs_path;
@@ -4260,7 +4260,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	{
 		auto abs_path = TestCreatePath("test_uri_non_localhost.db");
 		if (!abs_path.empty() && abs_path[0] != '/') {
-			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+			abs_path = duckdb::BaseFileSystem::GetWorkingDirectory() + "/" + abs_path;
 		}
 		string uri = string("file://example.com") + abs_path;
 

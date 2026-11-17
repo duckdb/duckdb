@@ -165,15 +165,15 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
-ContextFileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
+FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
 
-ContextFileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
+FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
 	return db.GetLocalFileSystem();
 }
 
-ContextFileSystem &FileSystem::Get(AttachedDatabase &db) {
+FileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
@@ -402,7 +402,7 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			WrappedContextFileSystem raw_fs(*config.file_system, nullptr);
+			BoundFileSystem raw_fs(*config.file_system, nullptr);
 			ExtensionHelper::LoadExternalExtension(*this, raw_fs, {config.options.database_type});
 		}
 	}
@@ -469,15 +469,15 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 	return *object_cache;
 }
 
-ContextFileSystem &DatabaseInstance::GetFileSystem() {
+FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
-ContextFileSystem &DatabaseInstance::GetLocalFileSystem() {
+FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
+static BaseFileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<BaseFileSystem> &owned) {
 	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
 	auto &default_fs = vfs.GetDefaultFileSystem();
 	if (default_fs.IsLocalFileSystem()) {
@@ -491,7 +491,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
     : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
 }
 
-FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+BaseFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
 	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
@@ -514,7 +514,7 @@ ExtensionManager &DatabaseInstance::GetExtensionManager() {
 	return *extension_manager;
 }
 
-ContextFileSystem &DuckDB::GetFileSystem() {
+FileSystem &DuckDB::GetFileSystem() {
 	return instance->GetFileSystem();
 }
 
@@ -563,7 +563,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
+		config.file_system = make_uniq<VirtualFileSystem>(BaseFileSystem::CreateLocal());
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {

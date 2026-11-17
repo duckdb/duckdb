@@ -1,5 +1,5 @@
 #include "duckdb/storage/magic_bytes.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -26,7 +26,7 @@ static DataFileType ClassifyMagicBytes(const char *buffer) {
 	return DataFileType::UNKNOWN_FILE;
 }
 
-DataFileType MagicBytes::CheckMagicBytes(QueryContext context, ContextFileSystem &fs, const string &path,
+DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path,
                                          optional_ptr<PrefetchedFileData> out_prefetch) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;

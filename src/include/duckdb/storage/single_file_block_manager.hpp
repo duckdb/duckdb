@@ -11,7 +11,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_options.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"

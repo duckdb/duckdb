@@ -1,7 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -67,7 +67,7 @@ void CV2Instance::Attach(const string &path, const Identifier &name,
 		}
 		// The host opening a file is not external access: allow it the way the main database path is allowed.
 		if (options.db_type.empty() && !DBConfig::IsInMemoryDatabase(info.path.c_str()) &&
-		    !FileSystem::IsRemoteFile(info.path) && !Settings::Get<EnableExternalAccessSetting>(instance)) {
+		    !BaseFileSystem::IsRemoteFile(info.path) && !Settings::Get<EnableExternalAccessSetting>(instance)) {
 			instance.config.AddAllowedDatabasePath(info.path);
 		}
 		auto &db_manager = DatabaseManager::Get(instance);

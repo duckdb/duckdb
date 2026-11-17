@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "test_helpers.hpp"

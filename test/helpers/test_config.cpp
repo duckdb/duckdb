@@ -154,7 +154,7 @@ void TestConfiguration::Initialize() {
 		}
 	}
 
-	working_dir = FileSystem::GetWorkingDirectory();
+	working_dir = BaseFileSystem::GetWorkingDirectory();
 	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
 	// NOTE: UpdateEnvironment() is intentionally NOT called here. It runs once in main()
 	// after PrepareTempDir(), so TEMP_DIR/TEMP_DIR_ROOT reflect the final --temp-dir-*
@@ -221,8 +221,8 @@ bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
 	bool rv = false;
 	// set CWD first, then get it -- this gets us normalized absolute path for free
 	// making the comparison below meaningful
-	FileSystem::SetWorkingDirectory(dir);
-	const auto &normalized = FileSystem::GetWorkingDirectory();
+	BaseFileSystem::SetWorkingDirectory(dir);
+	const auto &normalized = BaseFileSystem::GetWorkingDirectory();
 	if (working_dir != normalized) {
 		rv = true;
 		working_dir = normalized;
@@ -685,7 +685,7 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	// See also test/README.md for context on this switch.
 	const string test_dir = test_dir_override.empty() ? TestDirectoryPath() : test_dir_override;
 	path = StringUtil::Replace(path, "{TEST_DIR}", test_dir);
-	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
+	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", BaseFileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
 
@@ -700,7 +700,7 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
 		                "{WORKING_DIRECTORY}",
 		                path);
-		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", BaseFileSystem::GetWorkingDirectory());
 	}
 }
 

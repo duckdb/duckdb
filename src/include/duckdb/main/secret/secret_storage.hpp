@@ -24,7 +24,7 @@ class Catalog;
 class CatalogSet;
 struct CatalogTransaction;
 class DatabaseInstance;
-class FileSystem;
+class BaseFileSystem;
 struct SecretMatch;
 struct SecretEntry;
 class SecretManager;

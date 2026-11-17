@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
 
@@ -16,10 +16,10 @@ namespace duckdb {
 
 class BufferedFileReader : public ReadStream {
 public:
-	BufferedFileReader(ContextFileSystem &fs, const char *path, FileLockType lock_type = FileLockType::READ_LOCK);
-	BufferedFileReader(ContextFileSystem &fs, unique_ptr<FileHandle> handle);
+	BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type = FileLockType::READ_LOCK);
+	BufferedFileReader(FileSystem &fs, unique_ptr<FileHandle> handle);
 
-	ContextFileSystem &fs;
+	FileSystem &fs;
 	unsafe_unique_array<data_t> data;
 	idx_t offset;
 	idx_t read_data;

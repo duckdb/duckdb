@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -27,7 +27,7 @@ class BufferHandle;
 class ClientContext;
 class DatabaseInstance;
 class FileOpenFlags;
-class FileSystem;
+class BaseFileSystem;
 struct FileHandle;
 struct NetworkThroughputEstimate;
 class QueryContext;
@@ -117,7 +117,7 @@ private:
 	QueryContext context;
 
 	//! The client file system, held directly because the caching file system can be destroyed before this handle
-	ContextFileSystem &file_system;
+	FileSystem &file_system;
 	//! The DatabaseInstance
 	DatabaseInstance &db;
 	//! The DB external file cache
@@ -147,7 +147,7 @@ private:
 	ReadThroughputEstimator throughput_estimator;
 };
 
-//! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
+//! CachingFileSystem is a read-only file system that closely resembles the BaseFileSystem API.
 //! Instead of reading into a designated buffer, it caches reads using the BufferManager,
 //! it returns a BufferHandle and sets a pointer into it
 class CachingFileSystem {
@@ -156,7 +156,7 @@ private:
 
 public:
 	// Notice, the provided [file_system] should be a raw, non-caching filesystem.
-	DUCKDB_API CachingFileSystem(ContextFileSystem &file_system, DatabaseInstance &db);
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 
 public:
@@ -169,8 +169,8 @@ public:
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
-	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
-	ContextFileSystem &file_system;
+	//! The Client BaseFileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
+	FileSystem &file_system;
 	//! The DatabaseInstance.
 	DatabaseInstance &db;
 	//! The External File Cache that caches the files

@@ -1,7 +1,7 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -143,7 +143,7 @@ string ExtensionRepository::ToReadableString() {
 	return path;
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(ContextFileSystem &fs,
+unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs,
                                                                        const std::string &info_file_path,
                                                                        const std::string &extension_name) {
 	unique_ptr<ExtensionInstallInfo> result;

@@ -1,5 +1,5 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -636,7 +636,7 @@ optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
 
 static idx_t GetDefaultMax(const string &path) {
 	D_ASSERT(!path.empty());
-	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
+	auto disk_space = BaseFileSystem::GetAvailableDiskSpace(path);
 	// Use the available disk space
 	// We have made sure that the file exists before we call this, it shouldn't fail
 	if (!disk_space.IsValid()) {

@@ -1,6 +1,6 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
@@ -35,7 +35,7 @@ void GatheredMetrics::InitTrackedMetrics(const vector<string> &patterns) {
 		if (pattern == "*") {
 			track_all = true;
 			return;
-		} else if (!FileSystem::HasGlob(pattern)) {
+		} else if (!BaseFileSystem::HasGlob(pattern)) {
 			tracked_exact.insert(pattern);
 		} else if (IsPrefixPattern(pattern)) {
 			tracked_prefixes.insert(pattern.substr(0, pattern.size() - 1));

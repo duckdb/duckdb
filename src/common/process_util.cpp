@@ -1,6 +1,6 @@
 #include "duckdb/common/process_util.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -78,7 +78,7 @@ string FormatProcessDescription(const string &process_name, const string &proces
 
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(BaseFileSystem &fs, int64_t pid) {
 	string process_name, process_owner;
 	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
 #ifdef PROC_PIDT_SHORTBSDINFO
@@ -104,7 +104,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #elif defined(__linux__)
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(BaseFileSystem &fs, int64_t pid) {
 	string process_name, process_owner;
 
 	try {
@@ -143,7 +143,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #elif defined(_WIN32)
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(BaseFileSystem &fs, int64_t pid) {
 	auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
 	if (!process) {
 		return string();
@@ -161,7 +161,7 @@ string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
 
 #else
 
-string ProcessUtil::GetProcessDescription(FileSystem &fs, int64_t pid) {
+string ProcessUtil::GetProcessDescription(BaseFileSystem &fs, int64_t pid) {
 	return string();
 }
 

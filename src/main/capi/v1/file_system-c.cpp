@@ -3,10 +3,10 @@
 namespace duckdb {
 namespace {
 struct CFileSystem {
-	ContextFileSystem &fs;
+	FileSystem &fs;
 	ErrorData error_data;
 
-	explicit CFileSystem(ContextFileSystem &fs_p) : fs(fs_p) {
+	explicit CFileSystem(FileSystem &fs_p) : fs(fs_p) {
 	}
 
 	void SetError(const char *message) {

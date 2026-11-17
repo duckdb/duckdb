@@ -4,7 +4,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/error_manager.hpp"
@@ -256,7 +256,7 @@ static string RemoveQueryParams(const string &name) {
 	return vec[0];
 }
 
-Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, ContextFileSystem &fs) {
+Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return Identifier("memory");
 	}

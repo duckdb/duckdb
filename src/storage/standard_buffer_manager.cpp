@@ -1,5 +1,5 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"

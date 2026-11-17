@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "debug_fs_extension.hpp"
 #include "sqlite/catch_test_reporter.hpp"
@@ -306,7 +306,7 @@ static bool TryReadExactSQLLogicTestFilter(const vector<string> &input_files, ve
 	if (input_files.empty()) {
 		return false;
 	}
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	unordered_set<string> seen_paths;
 	for (auto &input_file : input_files) {
 		std::ifstream file(input_file.c_str());

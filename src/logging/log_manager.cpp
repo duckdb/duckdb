@@ -1,5 +1,5 @@
 #include "duckdb/logging/log_type.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/file_system_logger.hpp"

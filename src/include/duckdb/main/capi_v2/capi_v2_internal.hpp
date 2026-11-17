@@ -9,7 +9,7 @@
 #pragma once
 
 // DuckDB C++ internals (also pulls in duckdb.h which defines idx_t, etc.)
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -34,7 +34,7 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/query_context.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 // The engine implements the whole V2 C API, including the unstable surface
 #ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -336,10 +336,10 @@ inline void CheckRegistrationTarget(const DatabaseInstance &created_for, const D
 //! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
 class CV2FileSystem {
 public:
-	CV2FileSystem(ContextFileSystem &fs, QueryContext query) : fs(fs), query(query) {
+	CV2FileSystem(FileSystem &fs, QueryContext query) : fs(fs), query(query) {
 	}
 
-	ContextFileSystem &fs;
+	FileSystem &fs;
 	QueryContext query;
 };
 

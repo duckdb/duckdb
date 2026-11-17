@@ -1,7 +1,7 @@
 #include "parquet_prefetch_cost_model.hpp"
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 namespace duckdb {
 

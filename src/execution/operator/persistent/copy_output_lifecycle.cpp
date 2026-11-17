@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
-#include "duckdb/common/context_file_system.hpp"
-
 #include "duckdb/common/file_system.hpp"
+
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include <algorithm>

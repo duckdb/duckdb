@@ -1,6 +1,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -252,7 +252,7 @@ bool PersistentSecretFiles::TryGetOtherSecretAt(const string &path, const Identi
 }
 
 //! Reads the name that is stored in a secret file, without loading the secret
-static bool TryReadSecretName(ContextFileSystem &fs, const string &path, string &name) {
+static bool TryReadSecretName(FileSystem &fs, const string &path, string &name) {
 	try {
 		BufferedFileReader reader(fs, path.c_str());
 		if (reader.Finished()) {
@@ -272,7 +272,7 @@ static bool TryReadSecretName(ContextFileSystem &fs, const string &path, string 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
                                                const string &secret_path_p)
     : CatalogSetSecretStorage(db_p, name_p, LOCAL_FILE_STORAGE_OFFSET), files(make_shared_ptr<PersistentSecretFiles>()),
-      secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
+      secret_path(BaseFileSystem::ExpandPath(secret_path_p, nullptr)) {
 	persistent = true;
 
 	// Check existence of persistent secret dir
@@ -321,7 +321,7 @@ CatalogTransaction CatalogSetSecretStorage::GetTransactionOrDefault(optional_ptr
 	return CatalogTransaction::GetSystemTransaction(db);
 }
 
-static void WriteSecretFileToDisk(ContextFileSystem &fs, const string &path, const BaseSecret &secret) {
+static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const BaseSecret &secret) {
 	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
 	// Ensure we are writing to a private file with 600 permission
 	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;

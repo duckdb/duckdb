@@ -15,7 +15,7 @@
 #include <string>
 #include <utility>
 
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -57,7 +57,7 @@ class TProtocol;
 } // namespace duckdb_apache
 
 namespace duckdb {
-class FileSystem;
+class BaseFileSystem;
 class FileOpener;
 class ParquetEncryptionConfig;
 class ParquetStatsAccumulator;
@@ -218,7 +218,7 @@ struct ParquetWriterOptions {
 
 class ParquetWriter {
 public:
-	ParquetWriter(ClientContext &context, ContextFileSystem &fs, ParquetWriterOptions &&options,
+	ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options,
 	              const vector<pair<string, string>> &kv_metadata);
 	~ParquetWriter();
 

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/serializer/async_write_queue.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
@@ -55,7 +55,7 @@ public:
 	DUCKDB_API static const FileOpenFlags DEFAULT_OPEN_FLAGS;
 
 public:
-	DUCKDB_API AsyncFileWriter(Context &context, ContextFileSystem &fs, const string &path,
+	DUCKDB_API AsyncFileWriter(Context &context, FileSystem &fs, const string &path,
 	                           const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS);
 	DUCKDB_API ~AsyncFileWriter() override;
 	using WriteStream::Write;
@@ -145,7 +145,7 @@ private:
 
 private:
 	Context &context;
-	ContextFileSystem &fs;
+	FileSystem &fs;
 	string path;
 	unique_ptr<FileHandle> handle;
 	//! Managed queue that owns stream scheduling, backpressure, and write coalescing.

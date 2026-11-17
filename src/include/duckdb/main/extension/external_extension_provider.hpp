@@ -15,8 +15,8 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
-class ContextFileSystem;
 class FileSystem;
+class BaseFileSystem;
 class ExtensionInstallInfo;
 struct ExtensionInstallOptions;
 
@@ -30,9 +30,8 @@ public:
 	virtual string GetName() const;
 	//! Whether this provider can install and load external extensions at all
 	virtual bool SupportsExternalExtensions() const;
-	virtual unique_ptr<ExtensionInstallInfo> Install(DatabaseInstance &db, ContextFileSystem &fs,
-	                                                 const string &local_path, const string &extension,
-	                                                 ExtensionInstallOptions &options,
+	virtual unique_ptr<ExtensionInstallInfo> Install(DatabaseInstance &db, FileSystem &fs, const string &local_path,
+	                                                 const string &extension, ExtensionInstallOptions &options,
 	                                                 optional_ptr<ClientContext> context);
 	//! Open the library of an external extension, throws if it cannot be opened
 	virtual void *OpenLibrary(const string &filename, const string &filebase);

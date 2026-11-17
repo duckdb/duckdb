@@ -3,7 +3,7 @@
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -250,9 +250,9 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db,
-                                                     ContextFileSystem &fs, const string &full_extension_path,
-                                                     const string &extension_name, const string &extension_directory) {
+static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
+                                                     const string &full_extension_path, const string &extension_name,
+                                                     const string &extension_directory) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 
@@ -435,7 +435,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 
 void ExtensionHelper::AutoLoadExtensionForPath(DatabaseInstance &db, const string &path, const string &path_kind) {
 	string extension_name;
-	if (!FileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
+	if (!BaseFileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
 		return;
 	}
 	if (!CanAutoloadExtension(db, extension_name) || !Settings::Get<AutoloadKnownExtensionsSetting>(db)) {

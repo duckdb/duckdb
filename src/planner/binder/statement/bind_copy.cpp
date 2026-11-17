@@ -1,5 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -224,7 +224,7 @@ struct CopyToResolvedOptions {
 };
 
 static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, const CopyToParsedOptions &options) {
-	if (FileSystem::IsRemoteFile(file_path)) {
+	if (BaseFileSystem::IsRemoteFile(file_path)) {
 		return false;
 	}
 	if (options.use_tmp_file.has_value()) {
@@ -564,7 +564,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
-	if (!file_path.empty() && !FileSystem::IsRemoteFile(file_path) &&
+	if (!file_path.empty() && !BaseFileSystem::IsRemoteFile(file_path) &&
 	    DatabaseManager::Get(context).IsAttachedDatabaseFile(context, file_path)) {
 		// writing to the file of an attached database would corrupt it
 		throw BinderException("Cannot COPY to \"%s\": the file belongs to an attached database", file_path);

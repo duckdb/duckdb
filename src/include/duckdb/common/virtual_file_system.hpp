@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -17,10 +17,10 @@ namespace duckdb {
 struct FileSystemRegistry;
 
 // bunch of wrappers to allow registering protocol handlers
-class VirtualFileSystem : public FileSystem {
+class VirtualFileSystem : public BaseFileSystem {
 public:
 	VirtualFileSystem();
-	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
+	explicit VirtualFileSystem(unique_ptr<BaseFileSystem> &&inner_file_system);
 	~VirtualFileSystem() override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -64,14 +64,14 @@ public:
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 
-	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
+	void RegisterSubSystem(unique_ptr<BaseFileSystem> fs) override;
 	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
 	void UnregisterSubSystem(const string &name) override;
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
+	unique_ptr<BaseFileSystem> ExtractSubSystem(const string &name) override;
 
 	vector<string> ListSubSystems() override;
 
-	FileSystem &GetDefaultFileSystem();
+	BaseFileSystem &GetDefaultFileSystem();
 
 	std::string GetName() const override;
 
@@ -105,20 +105,20 @@ protected:
 	}
 
 private:
-	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
-	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
-	                           optional_ptr<FileOpener> file_opener);
-	optional_ptr<FileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
+	BaseFileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
+	BaseFileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
+	                               optional_ptr<FileOpener> file_opener);
+	optional_ptr<BaseFileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
 	// Return nullptr if compression is not involved, throw exception if compression is requested but no usable
 	// filesystem gets registered.
-	optional_ptr<FileSystem> FindCompressionFileSystem(FileSystemRegistry &registry,
-	                                                   const FileCompressionType &compression, const string &path,
-	                                                   bool for_writing);
+	optional_ptr<BaseFileSystem> FindCompressionFileSystem(FileSystemRegistry &registry,
+	                                                       const FileCompressionType &compression, const string &path,
+	                                                       bool for_writing);
 
 private:
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
-	vector<unique_ptr<FileSystem>> unregistered_file_systems;
+	vector<unique_ptr<BaseFileSystem>> unregistered_file_systems;
 };
 
 } // namespace duckdb

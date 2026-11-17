@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -16,7 +16,7 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
-class FileSystem;
+class BaseFileSystem;
 
 //! Manages the trusted extension repositories of a DuckDB installation. Trusted repositories are stored as json files
 //! in the extension repository directory (by default `~/.duckdb/extension_repositories`). Every repository has a
@@ -35,7 +35,7 @@ class ExtensionRepositoryManager {
 public:
 	//! The file extension used for the stored repository definitions
 	//! Repository files carry a ".duckdb_extension." segment so that they are covered by the write protection in
-	//! ContextFileSystem::IsDuckDBExtensionName: they hold the pinned keys that decide which extensions may be loaded,
+	//! FileSystem::IsDuckDBExtensionName: they hold the pinned keys that decide which extensions may be loaded,
 	//! so they must not be writable through anything but CREATE EXTENSION REPOSITORY
 	static constexpr const char *FILE_EXTENSION = ".duckdb_extension.repo.json";
 	//! The version of the repository file format
@@ -47,25 +47,24 @@ public:
 
 public:
 	//! The directory in which the trusted extension repositories are stored
-	static string GetRepositoryDirectory(DatabaseInstance &db, ContextFileSystem &fs);
+	static string GetRepositoryDirectory(DatabaseInstance &db, FileSystem &fs);
 
 	//! Store a new trusted repository on disk, from what was requested: a name, a prefix and optionally keys - or a
 	//! name alone, which is then the host that names the prefix (the 'hosts' default of
 	//! allow_extension_repositories permits that form; keys cannot be given with it). Keys that were not given are
 	//! fetched from the prefix and pinned. The conflict is decided before anything is fetched. Returns the repository
 	//! as it was stored, `host` set when it was resolved from one
-	static ExtensionRepository CreateRepository(DatabaseInstance &db, ContextFileSystem &fs,
+	static ExtensionRepository CreateRepository(DatabaseInstance &db, FileSystem &fs,
 	                                            optional_ptr<ClientContext> context,
 	                                            const ExtensionRepository &requested, OnCreateConflict on_conflict);
 	//! Remove a trusted repository from disk
-	static void DropRepository(DatabaseInstance &db, ContextFileSystem &fs, const string &name,
+	static void DropRepository(DatabaseInstance &db, FileSystem &fs, const string &name,
 	                           OnEntryNotFound on_entry_not_found);
 
 	//! Get all trusted repositories that were added by the user
-	static vector<ExtensionRepository> GetRepositories(DatabaseInstance &db, ContextFileSystem &fs);
+	static vector<ExtensionRepository> GetRepositories(DatabaseInstance &db, FileSystem &fs);
 	//! Try to look up a trusted repository by name
-	static bool TryGetRepository(DatabaseInstance &db, ContextFileSystem &fs, const string &name,
-	                             ExtensionRepository &result);
+	static bool TryGetRepository(DatabaseInstance &db, FileSystem &fs, const string &name, ExtensionRepository &result);
 
 	//! Repository names are case insensitive and are used as file names - restrict them to a safe character set
 	static string NormalizeRepositoryName(const string &name);
@@ -117,8 +116,8 @@ private:
 	static void CheckCanCreate(DatabaseInstance &db, bool from_host);
 	//! Throws if the configuration is locked, freezing the trust store
 	static void CheckNotLocked(DatabaseInstance &db);
-	static string GetRepositoryPath(DatabaseInstance &db, ContextFileSystem &fs, const string &name);
-	static ExtensionRepository ReadRepository(ContextFileSystem &fs, const string &path);
+	static string GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name);
+	static ExtensionRepository ReadRepository(FileSystem &fs, const string &path);
 };
 
 } // namespace duckdb

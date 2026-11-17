@@ -54,7 +54,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
@@ -1458,7 +1458,7 @@ FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	} else if (strcmp(zFile, "off") == 0) {
 		f = 0;
 	} else {
-		const string expanded_path = duckdb::FileSystem::ExpandPath(zFile, /*opener=*/nullptr);
+		const string expanded_path = duckdb::BaseFileSystem::ExpandPath(zFile, /*opener=*/nullptr);
 		f = fopen(expanded_path.c_str(), bTextMode ? "w" : "wb");
 		if (f == 0) {
 			PrintF(PrintOutput::STDERR, "Error: cannot open \"%s\"\n", zFile);

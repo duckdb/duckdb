@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "caching_test_utils.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
@@ -411,7 +411,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 
 	// Create a test directory
 	auto test_dir = TestCreatePath("test_list_dir");
-	auto local_fs = FileSystem::CreateLocal();
+	auto local_fs = BaseFileSystem::CreateLocal();
 	local_fs->CreateDirectory(test_dir);
 
 	// Create several test files in the directory.
@@ -508,7 +508,7 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto &opener_filesystem = db_instance.GetFileSystem().Cast<ContextFileSystem>();
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<FileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
 	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
@@ -549,7 +549,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto &opener_filesystem = db_instance.GetFileSystem().Cast<ContextFileSystem>();
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<FileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
 	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
@@ -734,7 +734,7 @@ TEST_CASE("Uncached read buffer reuse preserves pins and exact read ranges",
 	auto con = make_uniq<Connection>(db);
 	auto &manager = BufferManager::GetBufferManager(*con->context);
 	TrackingFileSystem file_system;
-	WrappedContextFileSystem cfs_bound(file_system, nullptr);
+	BoundFileSystem cfs_bound(file_system, nullptr);
 	CachingFileSystem cfs(cfs_bound, *db.instance);
 	const idx_t size = 270 * 1024;
 	string content(size, 'a');
@@ -781,7 +781,7 @@ TEST_CASE("Concurrent uncached reads keep their buffers until the last consumer"
 	DuckDB db;
 	Connection con(db);
 	LocalFileSystem file_system;
-	WrappedContextFileSystem cfs_bound(file_system, nullptr);
+	BoundFileSystem cfs_bound(file_system, nullptr);
 	CachingFileSystem cfs(cfs_bound, *db.instance);
 	const idx_t size = 270 * 1024;
 	string content;
@@ -835,7 +835,7 @@ TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_b
 		read_count = 2;
 	}
 	LocalFileSystem file_system;
-	WrappedContextFileSystem cfs_bound(file_system, nullptr);
+	BoundFileSystem cfs_bound(file_system, nullptr);
 	CachingFileSystem cfs(cfs_bound, *db.instance);
 	const idx_t size = 2 * 1024 * 1024 + 1;
 	string content(size, 'x');
@@ -872,7 +872,7 @@ TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[cac
 	auto &manager = BufferManager::GetBufferManager(*con.context);
 	manager.SetMemoryLimit(memory_limit);
 	LocalFileSystem file_system;
-	WrappedContextFileSystem cfs_bound(file_system, nullptr);
+	BoundFileSystem cfs_bound(file_system, nullptr);
 	CachingFileSystem cfs(cfs_bound, *db.instance);
 	string content(size, 'x');
 	TestFileGuard test_file("uncached_read_rounding.bin", content);
@@ -899,7 +899,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	}
 	TestFileGuard test_file("test_multi_block.bin", content);
 
-	WrappedContextFileSystem cfs_bound(*tracking_fs, nullptr);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
 
 	CachingFileSystem cfs(cfs_bound, db_instance);
 	OpenFileInfo file_info(test_file.GetPath());
@@ -985,7 +985,7 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 	const string content = "Hello, this is test content for EOF behavior.";
 	TestFileGuard test_file("test_eof_behavior.bin", content);
 
-	WrappedContextFileSystem cfs_bound(*tracking_fs, nullptr);
+	BoundFileSystem cfs_bound(*tracking_fs, nullptr);
 
 	CachingFileSystem cfs(cfs_bound, db_instance);
 	OpenFileInfo file_info(test_file.GetPath());
@@ -1033,7 +1033,7 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	string content(FILE_SIZE, 'X');
 	TestFileGuard test_file("test_skip_open.bin", content);
 
-	WrappedContextFileSystem cfs_bound(*counting_fs, nullptr);
+	BoundFileSystem cfs_bound(*counting_fs, nullptr);
 
 	CachingFileSystem cfs(cfs_bound, db_instance);
 

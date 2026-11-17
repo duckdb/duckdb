@@ -1,9 +1,9 @@
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"

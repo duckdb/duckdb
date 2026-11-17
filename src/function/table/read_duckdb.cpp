@@ -1,5 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -566,7 +566,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_duckdb", std::move(children));
 
-	if (!FileSystem::HasGlob(table_name)) {
+	if (!BaseFileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}

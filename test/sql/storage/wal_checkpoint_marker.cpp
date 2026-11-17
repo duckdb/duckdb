@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/exception.hpp"
@@ -14,12 +14,12 @@
 
 using namespace duckdb;
 
-static void RemoveCheckpointRecoveryFiles(FileSystem &fs, const string &database_path) {
+static void RemoveCheckpointRecoveryFiles(BaseFileSystem &fs, const string &database_path) {
 	fs.TryRemoveFile(database_path + ".wal.checkpoint");
 	fs.TryRemoveFile(database_path + ".wal.recovery");
 }
 
-static duckdb::vector<data_t> ReadFile(FileSystem &fs, const string &path) {
+static duckdb::vector<data_t> ReadFile(BaseFileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto size = handle->GetFileSize();
 	duckdb::vector<data_t> result(size);
@@ -29,8 +29,8 @@ static duckdb::vector<data_t> ReadFile(FileSystem &fs, const string &path) {
 	return result;
 }
 
-static void WriteFile(FileSystem &raw_fs, const string &path, const duckdb::vector<data_t> &contents) {
-	WrappedContextFileSystem fs(raw_fs, nullptr);
+static void WriteFile(BaseFileSystem &raw_fs, const string &path, const duckdb::vector<data_t> &contents) {
+	BoundFileSystem fs(raw_fs, nullptr);
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	if (!contents.empty()) {
 		writer.WriteData(contents.data(), contents.size());
@@ -38,8 +38,8 @@ static void WriteFile(FileSystem &raw_fs, const string &path, const duckdb::vect
 	writer.Sync();
 }
 
-static void WriteTornLegacyCheckpointMarker(FileSystem &raw_fs, const string &path) {
-	WrappedContextFileSystem fs(raw_fs, nullptr);
+static void WriteTornLegacyCheckpointMarker(BaseFileSystem &raw_fs, const string &path) {
+	BoundFileSystem fs(raw_fs, nullptr);
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	BinarySerializer serializer(writer);
 	serializer.Begin();

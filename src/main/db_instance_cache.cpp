@@ -13,8 +13,8 @@ DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DatabaseInstance> &insta
 DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
-static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
-	auto database = FileSystem::ExpandPath(database_p, nullptr);
+static string GetDBAbsolutePath(const string &database_p, BaseFileSystem &fs) {
+	auto database = BaseFileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
 	}
@@ -37,7 +37,7 @@ static string GetCacheKey(const string &database_p, const DBConfig &config) {
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
 	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
+		auto tmp_fs = BaseFileSystem::CreateLocal();
 		abs_database_path = GetDBAbsolutePath(database_p, *tmp_fs);
 	}
 #if defined(_WIN32) || defined(__APPLE__)
@@ -117,7 +117,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
 	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
+		auto tmp_fs = BaseFileSystem::CreateLocal();
 		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
 	}
 	// Creates new instance

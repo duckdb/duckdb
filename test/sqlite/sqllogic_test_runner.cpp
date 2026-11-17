@@ -1,7 +1,7 @@
 
 #include "sqllogic_test_runner.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -587,7 +587,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a minimum amount of ram
 		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
-		auto limit = FileSystem::GetAvailableMemory();
+		auto limit = BaseFileSystem::GetAvailableMemory();
 		if (!limit.IsValid()) {
 			return RequireResult::MISSING;
 		}
@@ -603,7 +603,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a minimum amount of disk space
 		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
-		auto available_space = FileSystem::GetAvailableDiskSpace(".");
+		auto available_space = BaseFileSystem::GetAvailableDiskSpace(".");
 		if (!available_space.IsValid()) {
 			return RequireResult::MISSING;
 		}

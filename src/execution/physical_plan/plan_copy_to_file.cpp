@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"

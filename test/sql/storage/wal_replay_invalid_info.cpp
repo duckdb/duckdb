@@ -12,7 +12,7 @@
 using namespace duckdb;
 
 //! Append a framed [size][checksum][payload] entry to the WAL
-static void AppendWALEntry(FileSystem &fs, const string &path, MemoryStream &payload) {
+static void AppendWALEntry(BaseFileSystem &fs, const string &path, MemoryStream &payload) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND);
 	uint64_t size = payload.GetPosition();
 	uint64_t checksum = Checksum(payload.GetData(), size);

@@ -18,7 +18,7 @@ class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
 class FileOpener;
-class FileSystem;
+class BaseFileSystem;
 class QueryProfiler;
 class PreparedStatementData;
 class RandomEngine;

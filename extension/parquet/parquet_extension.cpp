@@ -1,5 +1,5 @@
 #include "parquet_extension.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include <stdint.h>
 #include <string>
@@ -30,7 +30,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -974,7 +974,7 @@ static unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, Repla
 	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 
-	if (!FileSystem::HasGlob(table_name)) {
+	if (!BaseFileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}

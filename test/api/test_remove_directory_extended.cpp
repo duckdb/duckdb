@@ -11,7 +11,7 @@ string ProbeDir(const string &name) {
 	return fs.JoinPath(TestDirectoryPath(), name);
 }
 
-void MakeFile(FileSystem &fs, const string &path) {
+void MakeFile(BaseFileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Close();
 }

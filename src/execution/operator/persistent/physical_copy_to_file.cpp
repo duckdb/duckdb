@@ -1,8 +1,8 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -128,7 +128,7 @@ enum class CopyDirectoryState : uint8_t { PENDING, COMPLETE, FAILED };
 
 class CopyDirectoryManager {
 public:
-	bool EnsureDirectory(ContextFileSystem &fs, const string &dir_path);
+	bool EnsureDirectory(FileSystem &fs, const string &dir_path);
 
 private:
 	struct DirectoryEntry {
@@ -1714,7 +1714,7 @@ static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyTo
 	return StringValue::Get(path);
 }
 
-void CheckDirectory(ContextFileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
+void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
 	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE ||
 	    overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
@@ -1876,7 +1876,7 @@ void CopyFileLifecycleExecutor::ThrowError() {
 //===--------------------------------------------------------------------===//
 // Copy File State Helpers
 //===--------------------------------------------------------------------===//
-bool CopyDirectoryManager::EnsureDirectory(ContextFileSystem &fs, const string &dir_path) {
+bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
 #ifdef D_ASSERT_IS_ENABLED
 	bool created_entry = false;
 #endif
@@ -4222,12 +4222,12 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	// This is a relative path fragment, not a file to resolve through the VFS. Resolving it
 	// would require the local filesystem even when the COPY target is remote.
 	auto parsed_path = Path::FromString(partition_path);
-	if (parsed_path.IsAbsolute() || FileSystem::IsRemoteFile(partition_path)) {
+	if (parsed_path.IsAbsolute() || BaseFileSystem::IsRemoteFile(partition_path)) {
 		throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
 		                            partition_path);
 	}
 	auto separator = fs.PathSeparator(result.path);
-	if (!FileSystem::IsRemoteFile(result.path)) {
+	if (!BaseFileSystem::IsRemoteFile(result.path)) {
 		partition_path = fs.ConvertSeparators(partition_path);
 	}
 	vector<string> components;

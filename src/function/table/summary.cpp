@@ -1,7 +1,7 @@
 #include "duckdb/function/table/summary.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 // this function makes not that much sense on its own but is a demo for table-parameter table-producing functions
 

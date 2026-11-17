@@ -12,7 +12,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_class_hash.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/time_point.hpp"

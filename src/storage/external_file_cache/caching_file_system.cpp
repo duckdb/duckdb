@@ -6,7 +6,7 @@
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -53,7 +53,7 @@ BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t siz
 }
 
 // IO operation is performed to stat the file.
-CacheValidationInfo GetValidationInfo(ContextFileSystem &file_system, FileHandle &handle) {
+CacheValidationInfo GetValidationInfo(FileSystem &file_system, FileHandle &handle) {
 	auto stats = file_system.Stats(handle);
 	CacheValidationInfo result;
 	result.file_size = NumericCast<idx_t>(stats.file_size);
@@ -196,7 +196,7 @@ private:
 // CachingFileSystem
 //===----------------------------------------------------------------------===//
 
-CachingFileSystem::CachingFileSystem(ContextFileSystem &file_system_p, DatabaseInstance &db_p)
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
     : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
@@ -575,7 +575,7 @@ bool CachingFileHandle::Validate() const {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;
 	case CacheValidationMode::VALIDATE_REMOTE:
-		return FileSystem::IsRemoteFile(path.path);
+		return BaseFileSystem::IsRemoteFile(path.path);
 	case CacheValidationMode::NO_VALIDATION:
 		return false;
 	default:
@@ -593,7 +593,7 @@ bool CachingFileHandle::CanSeek() {
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
-	return FileSystem::IsRemoteFile(path.path);
+	return BaseFileSystem::IsRemoteFile(path.path);
 }
 
 bool CachingFileHandle::OnDiskFile() {

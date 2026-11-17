@@ -32,7 +32,7 @@ FileCompressionType DebugFileHandle::GetFileCompressionType() {
 	return inner->GetFileCompressionType();
 }
 
-DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db)
+DebugFileSystem::DebugFileSystem(unique_ptr<BaseFileSystem> inner_fs, DatabaseInstance &db)
     : inner_fs(std::move(inner_fs)), db(db) {
 }
 
@@ -289,7 +289,7 @@ vector<OpenFileInfo> DebugFileSystem::Glob(const string &path, FileOpener *opene
 	return inner_fs->Glob(path, opener);
 }
 
-void DebugFileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
+void DebugFileSystem::RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs) {
 	inner_fs->RegisterSubSystem(std::move(sub_fs));
 }
 
@@ -301,7 +301,7 @@ void DebugFileSystem::UnregisterSubSystem(const string &name) {
 	inner_fs->UnregisterSubSystem(name);
 }
 
-unique_ptr<FileSystem> DebugFileSystem::ExtractSubSystem(const string &name) {
+unique_ptr<BaseFileSystem> DebugFileSystem::ExtractSubSystem(const string &name) {
 	return inner_fs->ExtractSubSystem(name);
 }
 

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
@@ -24,11 +24,11 @@ public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold. The optional QueryContext is used to attribute
 	//! the written bytes to the query's I/O metrics.
-	DUCKDB_API BufferedFileWriter(ContextFileSystem &fs, const string &path,
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path,
 	                              const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS,
 	                              QueryContext context = QueryContext());
 
-	ContextFileSystem &fs;
+	FileSystem &fs;
 	string path;
 	unsafe_unique_array<data_t> data;
 	idx_t offset;

@@ -9,7 +9,7 @@
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
@@ -93,7 +93,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	if (validation_mode == CacheValidationMode::NO_VALIDATION) {
 		return ParquetCacheValidity::VALID;
 	}
-	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && !FileSystem::IsRemoteFile(info.path)) {
+	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && !BaseFileSystem::IsRemoteFile(info.path)) {
 		return ParquetCacheValidity::VALID;
 	}
 	if (info.extended_info == nullptr) {

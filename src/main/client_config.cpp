@@ -1,6 +1,6 @@
 #include "duckdb/main/client_config.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 
 namespace duckdb {
 
@@ -30,7 +30,7 @@ void ClientConfig::ResetUserVariable(const String &name) {
 }
 
 void ClientConfig::SetDefaultStreamingBufferSize() {
-	auto memory = FileSystem::GetAvailableMemory();
+	auto memory = BaseFileSystem::GetAvailableMemory();
 	auto default_size = ClientConfig().max_streaming_buffer_size;
 	if (!memory.IsValid()) {
 		max_streaming_buffer_size = default_size;

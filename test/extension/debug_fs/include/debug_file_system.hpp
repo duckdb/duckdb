@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
 
@@ -29,10 +29,10 @@ struct DebugFileHandle : public FileHandle {
 	unique_ptr<FileHandle> inner;
 };
 
-//! Wraps a FileSystem and injects configurable latency on open/read/write.
-class DebugFileSystem : public FileSystem {
+//! Wraps a BaseFileSystem and injects configurable latency on open/read/write.
+class DebugFileSystem : public BaseFileSystem {
 public:
-	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db);
+	DebugFileSystem(unique_ptr<BaseFileSystem> inner_fs, DatabaseInstance &db);
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
@@ -81,10 +81,10 @@ public:
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 	string PathSeparator(const string &path) override;
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override;
+	void RegisterSubSystem(unique_ptr<BaseFileSystem> sub_fs) override;
 	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
 	void UnregisterSubSystem(const string &name) override;
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
+	unique_ptr<BaseFileSystem> ExtractSubSystem(const string &name) override;
 	void SetDisabledFileSystems(const vector<string> &names) override;
 	vector<string> GetDisabledFileSystems() override;
 	bool SubSystemIsDisabled(const string &name) override;
@@ -118,7 +118,7 @@ private:
 	void ApplyDelay();
 	void EnsureRandomEngineInitialized();
 
-	unique_ptr<FileSystem> inner_fs;
+	unique_ptr<BaseFileSystem> inner_fs;
 	DatabaseInstance &db;
 	annotated_mutex random_engine_lock;
 	unique_ptr<RandomEngine> random_engine DUCKDB_GUARDED_BY(random_engine_lock);

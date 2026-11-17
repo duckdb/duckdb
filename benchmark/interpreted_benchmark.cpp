@@ -13,7 +13,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/main/query_result_stream.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
@@ -522,7 +522,7 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
 			auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
 			if (extension_directory && extension_directory[0]) {
-				auto fs = FileSystem::CreateLocal();
+				auto fs = BaseFileSystem::CreateLocal();
 				auto extension_path = fs->JoinPath(extension_directory, extension + ".duckdb_extension");
 				if (!fs->FileExists(extension_path)) {
 					throw InvalidInputException("Extension %s is not linked and was not found at %s", extension,
@@ -586,7 +586,7 @@ unique_ptr<InterpretedBenchmarkState> InterpretedBenchmark::OpenState(const stri
 void InterpretedBenchmark::LoadData(unique_ptr<InterpretedBenchmarkState> &state, const string &full_db_path,
                                     const string &load_query) {
 	static constexpr idx_t DEFAULT_HTTP_LOAD_RETRIES = 3;
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	for (idx_t attempt = 0;; attempt++) {
 		LoadExtensions(*state, true);
 		auto result = state->con.Query(load_query);
@@ -634,7 +634,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 
 	if (!cache_file.empty()) {
-		auto fs = FileSystem::CreateLocal();
+		auto fs = BaseFileSystem::CreateLocal();
 		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
 			LoadData(state, full_db_path, load_query);
@@ -794,7 +794,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	if (!cache_db.empty()) {
 		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	}

@@ -1,5 +1,5 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hive_partitioning.hpp"

@@ -223,7 +223,7 @@ idx_t HTTPTransportManager::CalculateCapacity(idx_t system_concurrency, optional
 	if (!file_descriptor_limit.IsValid()) {
 		return cpu_target;
 	}
-	auto fd_target = FileSystem::GetFileDescriptorShare(file_descriptor_limit.GetIndex());
+	auto fd_target = BaseFileSystem::GetFileDescriptorShare(file_descriptor_limit.GetIndex());
 	return MinValue<idx_t>(cpu_target, fd_target);
 }
 
@@ -264,7 +264,8 @@ idx_t HTTPTransportManager::AutomaticCapacity(const DBConfig &config) {
 	auto io_concurrency = config.options.async_threads == DConstants::INVALID_INDEX
 	                          ? DBConfig::GetSystemMaxAsyncThreads(fs)
 	                          : config.options.async_threads;
-	return CalculateCapacity(DBConfig::GetSystemMaxThreads(fs), FileSystem::GetFileDescriptorLimit(), io_concurrency);
+	return CalculateCapacity(DBConfig::GetSystemMaxThreads(fs), BaseFileSystem::GetFileDescriptorLimit(),
+	                         io_concurrency);
 }
 
 idx_t HTTPTransportManager::GetCapacity() const {

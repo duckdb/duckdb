@@ -1,7 +1,7 @@
 #include "duckdb/main/config.hpp"
 
 #include "duckdb/common/cgroups.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -721,7 +721,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads(BaseFileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
@@ -740,7 +740,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxAsyncThreads(BaseFileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
@@ -748,9 +748,9 @@ idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
 #endif
 }
 
-idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+idx_t DBConfig::GetSystemAvailableMemory(BaseFileSystem &fs) {
 	// System memory detection
-	auto memory = FileSystem::GetAvailableMemory();
+	auto memory = BaseFileSystem::GetAvailableMemory();
 	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
 
 #ifdef __linux__
@@ -981,7 +981,7 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 }
 
 string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
-	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener));
+	auto result = file_system->CanonicalizePath(BaseFileSystem::ExpandPath(path_p, opener));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {

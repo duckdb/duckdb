@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"
@@ -19,7 +19,7 @@
 
 namespace duckdb {
 class Allocator;
-class FileSystem;
+class BaseFileSystem;
 struct CSVReaderOptions;
 
 class CSVFileHandle {
@@ -53,7 +53,7 @@ public:
 
 	string GetFilePath();
 
-	static unique_ptr<FileHandle> OpenFileHandle(ContextFileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
+	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(ClientContext &context, const OpenFileInfo &file,
 	                                          const CSVReaderOptions &options);

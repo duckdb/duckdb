@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
@@ -39,7 +39,7 @@ public:
 
 public:
 	void SetFilenamePattern(const string &pattern);
-	string CreateFilename(ContextFileSystem &fs, const string &path, const string &extension, idx_t offset) const;
+	string CreateFilename(FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
 
 	void Serialize(Serializer &serializer) const;
 	static FilenamePattern Deserialize(Deserializer &deserializer);

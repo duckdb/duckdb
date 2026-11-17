@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 
-class LocalFileSystem : public FileSystem {
+class LocalFileSystem : public BaseFileSystem {
 public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override;

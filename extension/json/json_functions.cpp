@@ -1,12 +1,12 @@
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/context_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "json_functions.hpp"
 
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -255,7 +255,7 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
 
-	if (!FileSystem::HasGlob(table_name)) {
+	if (!BaseFileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}

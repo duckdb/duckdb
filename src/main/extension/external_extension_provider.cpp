@@ -15,7 +15,7 @@ bool ExternalExtensionProvider::SupportsExternalExtensions() const {
 	return false;
 }
 
-unique_ptr<ExtensionInstallInfo> ExternalExtensionProvider::Install(DatabaseInstance &db, ContextFileSystem &fs,
+unique_ptr<ExtensionInstallInfo> ExternalExtensionProvider::Install(DatabaseInstance &db, FileSystem &fs,
                                                                     const string &local_path, const string &extension,
                                                                     ExtensionInstallOptions &options,
                                                                     optional_ptr<ClientContext> context) {

@@ -12,7 +12,7 @@ static string GetSeparator(const string_t &input) {
 	string option = input.GetString();
 
 	// system's path separator
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	auto system_sep = fs->PathSeparator(option);
 
 	string separator;

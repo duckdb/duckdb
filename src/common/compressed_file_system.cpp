@@ -69,7 +69,7 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 	this->context = context;
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
-	if (!write && FileSystem::IsRemoteFile(child_handle->path)) {
+	if (!write && BaseFileSystem::IsRemoteFile(child_handle->path)) {
 		stream_data.in_buf_size = MaxValue<idx_t>(
 		    stream_data.in_buf_size, MinValue<idx_t>(REMOTE_READ_IN_BUF_SIZE, child_handle->GetFileSize()));
 	}
@@ -163,7 +163,7 @@ int64_t CompressedFile::WriteData(data_ptr_t buffer, int64_t nr_bytes) {
 }
 
 // Clear does most of the heavy lifting of a close, but leaves the child_handle intact. Specifically it is separated out
-// to support upstream Reset() calls from the FileSystem, which should tear down / reset ephemeral state but leave
+// to support upstream Reset() calls from the BaseFileSystem, which should tear down / reset ephemeral state but leave
 // persistent state (child_handle) intact.
 void CompressedFile::Clear() {
 	if (stream_wrapper) {
