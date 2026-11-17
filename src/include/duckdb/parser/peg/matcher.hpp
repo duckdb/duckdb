@@ -328,8 +328,9 @@ public:
 	MatcherResult MatchParseResult(MatchState &state) const;
 	//! Create matcher-local state with state.Make<PROCESS>() for incremental execution.
 	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
-	virtual bool IsAtomic() const {
-		return false;
+	//! Whether the matcher is an AtomicMatcher, which matches in one step without a process
+	bool IsAtomic() const {
+		return atomic;
 	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
@@ -417,6 +418,7 @@ protected:
 	string name;
 	string label;
 	optional_idx packrat_id;
+	bool atomic = false;
 	bool packrat_memoized = false;
 	bool collapsible = false;
 	bool structural = false;
@@ -429,11 +431,9 @@ DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table
 class AtomicMatcher : public Matcher {
 public:
 	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
+		atomic = true;
 	}
 
-	bool IsAtomic() const final {
-		return true;
-	}
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
