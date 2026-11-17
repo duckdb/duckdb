@@ -79,3 +79,47 @@ query I
 SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_null/*/*.parquet', filename=true) WHERE filename LIKE '%p=2%';
 ----
 3
+
+# a partition value that can not be cast to the hive type is an error
+statement error
+SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_mixed/*/*.parquet', hive_partitioning=true, hive_types={'p': 'INTEGER'}) WHERE p > 2;
+----
+Unable to cast 'abc' (from hive partition column 'P') to: 'INTEGER'
+
+query II
+SELECT a, p FROM read_parquet('{TEST_DIR}/hive_filter_eval_mixed/*/*.parquet', hive_partitioning=true, hive_types={'p': 'VARCHAR'}) WHERE p = 'abc';
+----
+3	abc
+
+# escaped values, NULL markers and empty strings
+statement ok
+COPY (SELECT i AS a, ['a/b', 'c d', 'NULL', '', 'x=y', NULL][i + 1] AS p FROM range(6) t(i))
+TO '{TEST_DIR}/hive_filter_eval_escaped' (FORMAT parquet, PARTITION_BY (p));
+
+query II
+SELECT a, p FROM read_parquet('{TEST_DIR}/hive_filter_eval_escaped/*/*.parquet', hive_partitioning=true) WHERE p = 'a/b' OR p = 'c d' OR p = 'x=y' ORDER BY a;
+----
+0	a/b
+1	c d
+4	x=y
+
+query II
+SELECT a, p FROM read_parquet('{TEST_DIR}/hive_filter_eval_escaped/*/*.parquet', hive_partitioning=true) WHERE p IS NULL ORDER BY a;
+----
+5	NULL
+
+query II
+SELECT a, p FROM read_parquet('{TEST_DIR}/hive_filter_eval_escaped/*/*.parquet', hive_partitioning=true) WHERE p = '' ORDER BY a;
+----
+3	(empty)
+
+# "NULL" and empty strings are NULL for non-string types
+statement ok
+COPY (SELECT i AS a, [1, 2, NULL][i + 1] AS p FROM range(3) t(i))
+TO '{TEST_DIR}/hive_filter_eval_int_null' (FORMAT parquet, PARTITION_BY (p));
+
+query II
+SELECT a, p FROM read_parquet('{TEST_DIR}/hive_filter_eval_int_null/*/*.parquet', hive_partitioning=true, hive_types={'p': 'INTEGER'}) WHERE p IS NULL OR p = 2 ORDER BY a;
+----
+1	2
+2	NULL

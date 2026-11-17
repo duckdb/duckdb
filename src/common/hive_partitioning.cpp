@@ -3,6 +3,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -10,6 +11,9 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -49,6 +53,20 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 	return result;
 }
 
+//! Unescapes a partition value as a string of the given type - returns false if the value is NULL
+static bool TryGetPartitionString(const string &str_val, const LogicalType &type, string &result) {
+	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
+	if (str_val == HivePartitioning::DEFAULT_PARTITION_NAME) {
+		return false;
+	}
+	// "NULL" and empty strings are NULL for non-string partition types
+	if (type.id() != LogicalTypeId::VARCHAR && (StringUtil::CIEquals(str_val, "NULL") || str_val.empty())) {
+		return false;
+	}
+	result = HivePartitioning::Unescape(str_val);
+	return true;
+}
+
 // Replaces references to columns of the given table using the replacement callback (nullptr = keep)
 static void ReplaceTableColumns(unique_ptr<Expression> &expr, TableIndex table_index,
                                 const std::function<unique_ptr<Expression>(BoundColumnRefExpression &)> &replace) {
@@ -76,7 +94,7 @@ struct PartitionFilter {
 	vector<LogicalType> types;
 };
 
-static unique_ptr<PartitionFilter> PreparePartitionFilter(const Expression &filter,
+static unique_ptr<PartitionFilter> PreparePartitionFilter(ClientContext &context, const Expression &filter,
                                                           const HivePartitioningFilterInfo &filter_info,
                                                           TableIndex table_index) {
 	unordered_set<ProjectionIndex> partition_columns;
@@ -112,14 +130,16 @@ static unique_ptr<PartitionFilter> PreparePartitionFilter(const Expression &filt
 			result->columns.push_back(column_index);
 			result->types.push_back(colref.GetReturnType());
 		}
-		return make_uniq<BoundReferenceExpression>(colref.GetReturnType(), slot);
+		// the partition values are loaded as strings and cast as part of the filter
+		auto reference = make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, slot);
+		return BoundCastExpression::AddCastToType(context, std::move(reference), colref.GetReturnType());
 	});
 	return result;
 }
 
 //! Evaluates the filter over a chunk of files - if the filter throws, the files in the chunk are not pruned
 static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk &chunk,
-                                         const vector<idx_t> &file_indexes,
+                                         array_ptr<const idx_t> file_indexes,
                                          vector<PartitionFilterResult> &file_results) {
 	SelectionVector true_sel(chunk.size());
 	idx_t true_count;
@@ -138,20 +158,39 @@ static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk
 	}
 }
 
+//! Loads the (unescaped) string values of a partition column for the given files into the result vector
+static void LoadPartitionColumn(ProjectionIndex column, const LogicalType &type,
+                                const vector<unordered_map<ProjectionIndex, PartitioningColumnValue>> &known_values,
+                                array_ptr<const idx_t> file_indexes, Vector &result) {
+	auto count = file_indexes.size();
+	Vector strings(LogicalType::VARCHAR, count);
+	{
+		auto writer = FlatVector::Writer<string_t>(strings, count);
+		string unescaped;
+		for (auto &file_idx : file_indexes) {
+			auto &partition_val = known_values[file_idx].find(column)->second;
+			if (partition_val.key.empty()) {
+				// filename column - use directly
+				unescaped = partition_val.value;
+			} else if (!TryGetPartitionString(partition_val.value, type, unescaped)) {
+				writer.WriteNull();
+				continue;
+			}
+			if (!Utf8Proc::IsValid(unescaped.c_str(), unescaped.size())) {
+				throw ErrorManager::InvalidUnicodeError(unescaped, "value construction");
+			}
+			writer.WriteValue(string_t(unescaped));
+		}
+	}
+	result.Reference(strings);
+}
+
 static vector<PartitionFilterResult>
 EvaluatePartitionFilter(ClientContext &context, const PartitionFilter &filter,
                         const vector<unordered_map<ProjectionIndex, PartitioningColumnValue>> &known_values) {
 	vector<PartitionFilterResult> file_results(known_values.size(), PartitionFilterResult::NOT_EVALUATED);
-	ExpressionExecutor executor(context, *filter.expr);
-	DataChunk chunk;
-	chunk.Initialize(context, filter.types);
+	// files that have values for all partition columns referenced by the filter
 	vector<idx_t> file_indexes;
-	auto flush = [&]() {
-		chunk.SetChildCardinality(file_indexes.size());
-		EvaluatePartitionFilterChunk(executor, chunk, file_indexes, file_results);
-		chunk.Reset();
-		file_indexes.clear();
-	};
 	for (idx_t file_idx = 0; file_idx < known_values.size(); file_idx++) {
 		auto &file_values = known_values[file_idx];
 		bool has_all_columns = true;
@@ -161,27 +200,22 @@ EvaluatePartitionFilter(ClientContext &context, const PartitionFilter &filter,
 				break;
 			}
 		}
-		if (!has_all_columns) {
-			continue;
-		}
-		auto row = file_indexes.size();
-		for (idx_t col = 0; col < filter.columns.size(); col++) {
-			auto &partition_val = file_values.find(filter.columns[col])->second;
-			if (partition_val.key.empty()) {
-				// filename column - use directly
-				chunk.data[col].SetValue(row, Value(partition_val.value));
-			} else {
-				chunk.data[col].SetValue(row, HivePartitioning::GetValue(context, partition_val.key,
-				                                                         partition_val.value, filter.types[col]));
-			}
-		}
-		file_indexes.push_back(file_idx);
-		if (file_indexes.size() == STANDARD_VECTOR_SIZE) {
-			flush();
+		if (has_all_columns) {
+			file_indexes.push_back(file_idx);
 		}
 	}
-	if (!file_indexes.empty()) {
-		flush();
+
+	ExpressionExecutor executor(context, *filter.expr);
+	DataChunk chunk;
+	chunk.InitializeEmpty(vector<LogicalType>(filter.columns.size(), LogicalType::VARCHAR));
+	for (idx_t offset = 0; offset < file_indexes.size(); offset += STANDARD_VECTOR_SIZE) {
+		auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, file_indexes.size() - offset);
+		auto batch = array_ptr<const idx_t>(file_indexes.data() + offset, count);
+		for (idx_t col = 0; col < filter.columns.size(); col++) {
+			LoadPartitionColumn(filter.columns[col], filter.types[col], known_values, batch, chunk.data[col]);
+		}
+		chunk.SetChildCardinality(count);
+		EvaluatePartitionFilterChunk(executor, chunk, batch, file_results);
 	}
 	return file_results;
 }
@@ -253,25 +287,14 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
-	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
-	if (str_val == DEFAULT_PARTITION_NAME) {
+	string unescaped;
+	if (!TryGetPartitionString(str_val, type, unescaped)) {
 		return Value(type);
 	}
+	Value value(std::move(unescaped));
 	if (type.id() == LogicalTypeId::VARCHAR) {
-		// for string values we can directly return the type
-		return Value(Unescape(str_val));
+		return value;
 	}
-	// Handle Hive NULL markers for non-string partition types
-	if (StringUtil::CIEquals(str_val, "NULL")) {
-		return Value(type);
-	}
-	if (str_val.empty()) {
-		// empty strings are NULL for non-string types
-		return Value(type);
-	}
-
-	// cast to the target type
-	Value value(Unescape(str_val));
 	auto cast = value.TryCastAs(context, type);
 	if (!cast) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
@@ -307,7 +330,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	}
 	vector<vector<PartitionFilterResult>> filter_results;
 	for (auto &filter : filters) {
-		auto partition_filter = PreparePartitionFilter(*filter, filter_info, table_index);
+		auto partition_filter = PreparePartitionFilter(context, *filter, filter_info, table_index);
 		if (!partition_filter) {
 			filter_results.emplace_back(files.size(), PartitionFilterResult::NOT_EVALUATED);
 			continue;
