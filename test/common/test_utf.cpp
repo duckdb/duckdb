@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
@@ -29,4 +30,17 @@ TEST_CASE("UTF8 error checking", "[utf8]") {
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf0\x28\x8c\x28")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf8\xa1\xa1\xa1\xa1")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xfc\xa1\xa1\xa1\xa1\xa1")));
+}
+
+TEST_CASE("UTF8 verification errors escape invalid bytes", "[utf8]") {
+	const string invalid = "prefix\xff\xfe";
+	try {
+		string_t(invalid).ForceVerify();
+		FAIL("Invalid UTF8 was accepted");
+	} catch (const InternalException &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Type() == ExceptionType::INTERNAL);
+		REQUIRE(error.RawMessage() == "Invalid UTF8 found in string - prefix\\xFF\\xFE");
+		REQUIRE_NOTHROW(string_t(error.Message()).ForceVerify());
+	}
 }

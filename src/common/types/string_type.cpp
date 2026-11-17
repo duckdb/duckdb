@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -27,7 +28,8 @@ void string_t::VerifyUTF8() const {
 
 	auto utf_type = Utf8Proc::Analyze(dataptr, GetSize());
 	if (utf_type == UnicodeType::INVALID) {
-		throw InternalException("Invalid UTF8 found in string - %s", string(dataptr, GetSize()));
+		// Invalid bytes must remain readable in clients that decode error messages as UTF8.
+		throw InternalException("Invalid UTF8 found in string - %s", Blob::ToString(*this));
 	}
 }
 
