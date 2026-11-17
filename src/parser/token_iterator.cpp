@@ -67,40 +67,25 @@ const MatcherToken &TokenIterator::Previous() const {
 	return GetToken(position - 1);
 }
 
-const MatcherToken &TokenIterator::GetToken(idx_t index) const {
-	if (index >= tokens.size()) {
-		throw InternalException("Token index %llu is out of range (size %llu)", index, tokens.size());
-	}
-	return tokens[index];
+void TokenIterator::ThrowIndexError(idx_t index) const {
+	throw InternalException("Token index %llu is out of range (size %llu)", index, tokens.size());
 }
 
-void TokenIterator::Advance(idx_t count) {
-	if (count > tokens.size() - position) {
-		throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
-		                        position, tokens.size());
-	}
-	position += count;
+void TokenIterator::ThrowAdvanceError(idx_t count) const {
+	throw InternalException("Cannot advance TokenIterator by %llu tokens from position %llu (size %llu)", count,
+	                        position, tokens.size());
 }
 
-void TokenIterator::SetPosition(idx_t position_p) {
-	if (position_p > tokens.size()) {
-		throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
-	}
-	position = position_p;
+void TokenIterator::ThrowPositionError(idx_t position_p) const {
+	throw InternalException("Token position %llu is out of range (size %llu)", position_p, tokens.size());
 }
 
-void TokenIterator::SetPosition(const TokenIterator &other) {
-	if (&tokens != &other.tokens) {
-		throw InternalException("Cannot set TokenIterator position from a different token collection");
-	}
-	SetPosition(other.position);
+void TokenIterator::ThrowCollectionError() const {
+	throw InternalException("Cannot set TokenIterator position from a different token collection");
 }
 
-void TokenIterator::SetPreviousTokenType(TokenType type) {
-	if (position == 0) {
-		throw InternalException("TokenIterator has no previous token to annotate");
-	}
-	tokens[position - 1].type = type;
+void TokenIterator::ThrowNoPreviousError() const {
+	throw InternalException("TokenIterator has no previous token to annotate");
 }
 
 vector<SimpleToken> TokenIterator::RemainingTokens() const {

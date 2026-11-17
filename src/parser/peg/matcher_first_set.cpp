@@ -178,19 +178,4 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	}
 }
 
-bool MatcherFirstSet::MightMatch(MatchState &state) const {
-	if (!computed || any || nullable) {
-		return true;
-	}
-	auto token = state.token_iterator.Current();
-	if (!token) {
-		return false;
-	}
-	if (token->token_class & class_mask) {
-		return true;
-	}
-	auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
-	return literal_id && HasLiteral(literal_id);
-}
-
 } // namespace duckdb

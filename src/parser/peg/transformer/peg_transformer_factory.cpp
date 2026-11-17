@@ -59,8 +59,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = token_iterator.Position();
 	// the packrat cache outlives the match processes, so they need separate arenas
-	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator(), 16384);
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator(), 16384);
 	ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
 	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
@@ -95,7 +95,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 		}
 	}
 
-	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator(), 16384);
 	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
