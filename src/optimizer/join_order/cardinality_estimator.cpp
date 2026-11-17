@@ -44,7 +44,7 @@ double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 		}
 	}
 	if (!domain) {
-		return NumericLimits<idx_t>::Maximum();
+		return static_cast<double>(NumericLimits<idx_t>::Maximum());
 	}
 	auto result = domain->distinct_count;
 	auto comparison = predicate.GetComparisonType();
@@ -52,11 +52,12 @@ double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 	    predicate.GetJoinType() == JoinType::INNER &&
 	    (comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
 		// Discount scan-backed domains before applying predicate-local bounds.
-		return MinValue<double>(result, MaxValue(1.0, static_cast<double>(estimate->distinct_count) *
-		                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY));
+		return MinValue<double>(static_cast<double>(result),
+		                        MaxValue(1.0, static_cast<double>(estimate->distinct_count) *
+		                                          RelationStatisticsHelper::DEFAULT_SELECTIVITY));
 	}
 	if (!HasReliableDistinctCount() || reliable_source_count != 1) {
-		return result;
+		return static_cast<double>(result);
 	}
 	auto key_domain = NumericLimits<idx_t>::Maximum();
 	for (auto candidate : min_max_candidates) {
@@ -64,7 +65,7 @@ double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 			key_domain = MinValue(key_domain, candidate);
 		}
 	}
-	return key_domain == NumericLimits<idx_t>::Maximum() ? result : key_domain;
+	return static_cast<double>(key_domain == NumericLimits<idx_t>::Maximum() ? result : key_domain);
 }
 
 bool DomainEstimate::HasReliableDistinctCount() const {
