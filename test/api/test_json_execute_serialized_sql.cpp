@@ -343,8 +343,7 @@ TEST_CASE("json_execute_serialized_sql runs its statement as any SELECT when a r
 	SECTION("an unaliased column over now() fails the column check, an aliased one does not") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE ev(id INTEGER, created TIMESTAMPTZ)"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO ev VALUES (1, TIMESTAMPTZ '2026-01-01 00:00:00+00')"));
-		// the remote rewrite names an unaliased column after the value now() has in its transaction, and the bind and
-		// the scan start run in two
+		// the remote rewrite names an unaliased column after now()'s value, which differs between bind and scan start
 		auto result = con.Query(
 		    "SELECT id FROM json_execute_serialized_sql(json_serialize_sql('SELECT id, now() - created FROM ev'))");
 		REQUIRE_FAIL(result);
