@@ -12,6 +12,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -335,7 +336,8 @@ public:
 	//! a trailing alias there is a genuine alias, not an argument name.
 	template <class FUNCTION_SET>
 	static void RestoreNamesFromAliases(const FUNCTION_SET &functions, const vector<unique_ptr<Expression>> &children,
-	                                    idx_t &positional_count, vector<Identifier> &named_arguments) {
+	                                    const LogicalType &return_type, idx_t &positional_count,
+	                                    vector<Identifier> &named_arguments) {
 		bool takes_named = false;
 		idx_t standard_count = 0;
 		for (auto &function : functions.functions) {
@@ -347,6 +349,15 @@ public:
 			standard_count = MaxValue(standard_count, signature.GetPositionalParameterCount());
 		}
 		if (!takes_named || children.size() != positional_count) {
+			return;
+		}
+		// the fields of a v1.x struct_pack are its argument names, also where a rewrite dropped an argument's alias
+		if (standard_count == 0 && return_type.id() == LogicalTypeId::STRUCT &&
+		    StructType::GetChildCount(return_type) == children.size()) {
+			for (idx_t i = 0; i < children.size(); i++) {
+				named_arguments.push_back(StructType::GetChildName(return_type, i));
+			}
+			positional_count = 0;
 			return;
 		}
 		idx_t named_offset = children.size();
@@ -417,7 +428,7 @@ public:
 			const bool argument_names_serialized = positional_count != 0;
 			positional_count = arguments.size();
 			if (!argument_names_serialized) {
-				RestoreNamesFromAliases(functions, children, positional_count, named_arguments);
+				RestoreNamesFromAliases(functions, children, return_type, positional_count, named_arguments);
 			}
 		}
 
@@ -442,10 +453,12 @@ public:
 			}
 		}
 
-		// Lookup the function (and the correct overload)
-		FunctionBinder binder(context);
+		// Lookup the function (and the correct overload), binding within the decimal width the function was bound in
+		const auto decimal_width_limit = DecimalWidthLimit::FromReturnType(return_type);
+		FunctionBinder binder(context, &decimal_width_limit);
 		binder.arguments_collated = true;
-		const auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types});
+		const auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types},
+		                                                     false, binder.FixedDecimalWidthLimit());
 		optional_idx overload;
 		if (func_idx.IsSuccess()) {
 			overload = func_idx.GetBinding().GetOverloadIndex();
@@ -480,7 +493,8 @@ public:
 				// arguments it is called with
 				std::decay_t<decltype(functions)> overload(functions.name);
 				overload.AddFunction(function);
-				auto rebind = FunctionBinder::SelectFunction(context, overload, {children, keyword_args}, true);
+				auto rebind = FunctionBinder::SelectFunction(context, overload, {children, keyword_args}, true,
+				                                             binder.FixedDecimalWidthLimit());
 				if (!rebind) {
 					rebind.GetError().Throw();
 				}

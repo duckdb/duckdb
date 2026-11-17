@@ -2155,6 +2155,8 @@ public:
 	                                                                              GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeFromSourceStringTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeFromSourceNameTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeVersionNumberTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
@@ -2164,7 +2166,14 @@ public:
 	static arena_ptr<TransformResultValue> FinalizeRepositoryPublicKeyTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
+	FinalizeCreateExtensionRepositoryFromHostStmtTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
 	FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeExtensionRepositoryHostNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeTableMatchRecognizeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMatchRecognizeBodyTrampoline(PEGTransformer &transformer,
@@ -2790,7 +2799,7 @@ public:
 	                                                        unique_ptr<AlterInfo> alter_sequence_options);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &catalog_qualification,
-	                                                    const optional<Identifier> &schema_qualification,
+	                                                    const optional<vector<Identifier>> &schema_qualification,
 	                                                    const Identifier &sequence_name);
 	static unique_ptr<AlterInfo> TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
 	                                                                 unique_ptr<AlterTableInfo> rename_alter);
@@ -3408,7 +3417,7 @@ public:
 	                                                  const Identifier &reserved_index_name);
 	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
 	                                                         const Identifier &catalog_qualification,
-	                                                         const Identifier &reserved_schema_qualification,
+	                                                         const vector<Identifier> &reserved_schema_qualification,
 	                                                         const Identifier &reserved_index_name);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &qualified_sequence_name);
@@ -4039,9 +4048,15 @@ public:
 	                                        const string &string_literal);
 	static vector<string> TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
 	                                                   const vector<string> &string_literal);
+	static unique_ptr<SQLStatement>
+	TransformCreateExtensionRepositoryFromHostStmt(PEGTransformer &transformer, const optional<bool> &or_replace,
+	                                               const optional<bool> &if_not_exists,
+	                                               const Identifier &extension_repository_name);
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
 	                                                                     const optional<bool> &if_exists,
 	                                                                     const Identifier &col_id_or_string);
+	static Identifier TransformExtensionRepositoryHostName(PEGTransformer &transformer, const Identifier &col_id,
+	                                                       const vector<string> &dot_col_label);
 	static unique_ptr<TableRef> TransformTableMatchRecognizeClause(PEGTransformer &transformer,
 	                                                               unique_ptr<TableRef> match_recognize_body,
 	                                                               const optional<TableAlias> &table_alias);
