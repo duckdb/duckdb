@@ -45,6 +45,9 @@ private:
 
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 
+	//! Throws if the chain of metadata blocks loops back to a block that was already read
+	void CheckForCycle();
+
 private:
 	MetadataManager &manager;
 	BlockReaderType type;
@@ -56,6 +59,10 @@ private:
 	idx_t offset;
 	idx_t next_offset;
 	idx_t capacity;
+	//! Cycle detection: the pointer of the block that was read when blocks_read reached the previous power of two
+	idx_t cycle_check_pointer;
+	idx_t cycle_check_at;
+	idx_t blocks_read;
 };
 
 } // namespace duckdb
