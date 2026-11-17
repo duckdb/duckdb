@@ -75,6 +75,18 @@ SELECT ma(1)
 ----
 Max expression depth limit of 50 exceeded
 
+# typed self-recursion through a lambda body
+statement ok
+CREATE MACRO ml(x INTEGER) AS x
+
+statement ok
+CREATE OR REPLACE MACRO ml(x INTEGER) AS list_extract(list_transform([1], lambda y: ml(ml(y))), 1)
+
+statement error
+SELECT ml(1)
+----
+Max expression depth limit of 50 exceeded
+
 # mixed: a typed macro recursing through an untyped one
 statement ok
 CREATE MACRO mx(x) AS x
@@ -108,7 +120,16 @@ SELECT * FROM tm(1)
 ----
 infinite recursion detected: attempting to recursively expand table macro "tm"
 
-# the same holds with the default depth limit
+# overload selection binds the arguments of a typed macro that discards them, so they count towards the depth
+statement ok
+CREATE MACRO drop_arg(x INTEGER) AS 1
+
+statement error
+SELECT drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(1))))))))))))
+----
+Max expression depth limit of 50 exceeded
+
+# recursion is also bounded by the default depth limit
 statement ok
 RESET max_expression_depth
 
@@ -121,6 +142,12 @@ statement error
 SELECT ma(1)
 ----
 Max expression depth limit of 1000 exceeded
+
+# the discarded-argument nesting binds within the default limit
+query I
+SELECT drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(drop_arg(1))))))))))))
+----
+1
 
 statement ok
 SET max_expression_depth = 50
