@@ -409,6 +409,9 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	case LogicalTypeId::SQLNULL:
 		// a column without values has no minimum or maximum
 		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}

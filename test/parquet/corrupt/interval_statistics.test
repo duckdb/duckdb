@@ -1,0 +1,19 @@
+# name: test/parquet/corrupt/interval_statistics.test
+# description: parquet_metadata of an INTERVAL column whose column chunk has min/max statistics
+# group: [corrupt]
+
+require parquet
+
+# The file is written by DuckDB (COPY (SELECT INTERVAL 1 DAY * i AS iv FROM range(3) t(i)) TO ...), with min_value
+# and max_value added to the statistics of the column chunk in the footer.
+# Parquet does not define an order for intervals, so the statistics are NULL.
+query IIIII
+SELECT type, stats_min, stats_max, stats_min_value, stats_max_value
+FROM parquet_metadata('{DATA_DIR}/parquet-testing/corrupt/interval_statistics.parquet');
+----
+FIXED_LEN_BYTE_ARRAY	NULL	NULL	NULL	NULL
+
+query I
+SELECT iv FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/interval_statistics.parquet') WHERE iv > INTERVAL 1 DAY;
+----
+2 days
