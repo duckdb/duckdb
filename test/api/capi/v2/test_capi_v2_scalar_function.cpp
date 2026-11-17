@@ -394,10 +394,11 @@ void ArgProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_con
 	}
 }
 
-// Casts the first argument to BIGINT, and refuses an out of range index and an incomplete type.
+// Casts the first argument to INTEGER, and refuses an out of range index and an incomplete type.
 struct {
 	DUCKDB_V2_ERROR oob_rc = DUCKDB_V2_ERROR_NONE;
 	DUCKDB_V2_ERROR incomplete_rc = DUCKDB_V2_ERROR_NONE;
+	DUCKDB_V2_ERROR any_create_rc = DUCKDB_V2_ERROR_NONE;
 } set_arg_probe;
 
 void SetArgTypeResolveTypes(duckdb_v2_function_bind_info_handle,
@@ -405,18 +406,18 @@ void SetArgTypeResolveTypes(duckdb_v2_function_bind_info_handle,
                             duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_factory_handle factory = nullptr;
 	duckdb_v2_context_get_factory(context, &factory, nullptr);
-	duckdb_v2_logical_type_handle bigint = nullptr;
+	duckdb_v2_logical_type_handle integer = nullptr;
 	duckdb_v2_logical_type_handle any = nullptr;
-	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, nullptr, nullptr, nullptr, 0,
-	                                          &bigint, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, nullptr, 0,
+	                                          &integer, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY, nullptr, nullptr, nullptr, 0, &any,
-	                                      nullptr);
-	set_arg_probe.oob_rc = duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 5, bigint, nullptr);
+	set_arg_probe.any_create_rc = duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY, nullptr,
+	                                                                    nullptr, nullptr, 0, &any, nullptr);
+	set_arg_probe.oob_rc = duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 5, integer, nullptr);
 	set_arg_probe.incomplete_rc = duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 0, any, nullptr);
-	duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 0, bigint, err);
-	duckdb_v2_logical_type_destroy(&bigint);
+	duckdb_v2_scalar_function_resolve_types_set_arg_type(result, 0, integer, err);
+	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
 }
 
@@ -687,10 +688,12 @@ TEST_CASE("V2 scalar: resolve types sees the uncast argument types, bind the cas
 TEST_CASE("V2 scalar: resolve types sets an argument type and the engine casts to it", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
 	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
+	// The parameter is BIGINT, so a plan rebound with the INTEGER argument it is cast to still binds.
 	auto function = MakeScalar(fx.conn, "set_arg_probe");
 	auto sig = SigOf(function);
-	SigParam(sig, "x", integer);
+	SigParam(sig, "x", bigint);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_resolve_types_callback(function, SetArgTypeResolveTypes, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
@@ -699,13 +702,15 @@ TEST_CASE("V2 scalar: resolve types sets an argument type and the engine casts t
 	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
+	duckdb_v2_logical_type_destroy(&bigint);
 
 	phase_probe = {};
 	set_arg_probe = {};
 	arg_probe = {};
 	REQUIRE(QueryI32(fx.conn, "SELECT set_arg_probe(1::SMALLINT)") == 0);
 	// The bind callback sees the argument cast to the type set by the resolve types callback.
-	REQUIRE(phase_probe.bind_arg_type == DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	REQUIRE(phase_probe.bind_arg_type == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	REQUIRE(set_arg_probe.any_create_rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(set_arg_probe.oob_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(set_arg_probe.incomplete_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
