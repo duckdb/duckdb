@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "The stored statistics of the database file intentionally understate the string length, which the statistics verification rejects before the sort.",
+      "paths": [
+        "test/sql/order/sort_key_exceeds_statistics.test"
+      ]
+    },
+    {
       "reason": "FIXME: string length statistics of list elements are too small for ordered exported aggregate states",
       "paths": [
         "test/sql/aggregate/aggregate_state_export/ordered_export_state_layout.test"

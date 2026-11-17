@@ -66,6 +66,7 @@
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/aggregate/group/perfect_hash_corrupt_stats_range.test",
         "test/sql/aggregate/group/perfect_hash_corrupt_stats_wrapped_id.test",
+        "test/sql/order/sort_key_exceeds_statistics.test",
         "test/sql/copy/parquet/parquet_row_number.test",
         "test/sql/copy/parquet/parquet_string_stats.test",
         "test/sql/storage/extended_string_stats.test",

@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "The ORDER BY expression is cast to VARIANT, so the sort does not size a fixed-size key from the string statistics that the test corrupts.",
+      "paths": [
+        "test/sql/order/sort_key_exceeds_statistics.test"
+      ]
+    },
+    {
       "reason": "VARIANT does not carry the VARCHAR collation, so ORDER BY on collated strings orders by the raw (binary) value instead of the collation.",
       "paths": [
         "test/sql/attach/attach_icu_collation.test",
