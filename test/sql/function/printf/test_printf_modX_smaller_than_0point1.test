@@ -1,3 +1,6 @@
+# name: test/sql/function/printf/test_printf_modX_smaller_than_0point1.test
+# group: [printf]
+
 query IIIIIIII
 SELECT
     printf('%#.0f', CAST(0.0 AS DOUBLE))     AS zero,
