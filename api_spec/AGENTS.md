@@ -79,8 +79,9 @@ adds a V2 entry in any other state than `unstable`, says so in its description a
   from an engine enum by a cast, each exposed value has a `static_assert` beside the cast, as in
   `src/main/capi/v2/capi_v2_expression.cpp`. A conversion through a `switch` needs none, and its
   numbers may differ from the engine's. A new engine value enters V2 only when the specification
-  is meant to expose it. Three casts have no assertion yet: the log level and the log scope in
-  `capi_v2_log_sink.cpp`, and the logical type id in `capi_v2_logical_type.cpp`.
+  is meant to expose it. Three enums are cast without an assertion yet: the log level and the log scope
+  in `capi_v2_log_sink.cpp`, and the logical type id, in both directions, in
+  `capi_v2_logical_type.cpp`.
 
 ## Tests for V2
 
