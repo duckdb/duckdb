@@ -25,13 +25,19 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, Physi
 	} else if (op.preserve_order == PreserveOrderType::DONT_PRESERVE_ORDER) {
 		preserve_insertion_order = false;
 	}
-	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty() || !op.order_columns.empty()) {
+	if (op.per_thread_output || op.partition_output || !op.partition_columns.empty() || !op.order_columns.empty()) {
 		if (op.preserve_order == PreserveOrderType::PRESERVE_ORDER) {
 			throw InvalidInputException("PRESERVE_ORDER is not supported with these parameters");
 		}
 		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
 		preserve_insertion_order = false;
+		supports_batch_index = false;
+	} else if (op.file_size_bytes.IsValid() || op.rotate) {
+		// rotated files are written one after another, so a sequential sink keeps the order across them
+		// only a required order is kept: the insertion order of an unordered source still writes in parallel
+		if (op.preserve_order == PreserveOrderType::AUTOMATIC) {
+			preserve_insertion_order = OrderPreservationRecursive(plan) == OrderPreservationType::FIXED_ORDER;
+		}
 		supports_batch_index = false;
 	}
 	auto mode = CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;

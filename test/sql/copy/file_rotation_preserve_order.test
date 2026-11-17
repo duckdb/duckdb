@@ -1,0 +1,166 @@
+# name: test/sql/copy/file_rotation_preserve_order.test
+# description: File rotation (FILE_SIZE_BYTES, ROW_GROUPS_PER_FILE) keeps the order of an ordered source
+# group: [copy]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=8;
+
+# keys in no particular order, so a writer that drops the sort shows it
+statement ok
+CREATE TABLE src AS SELECT (i * 7919) % 300007 AS k, i AS id FROM range(300000) t(i);
+
+# rows read back file by file, in the order the files were written
+statement ok
+CREATE MACRO order_breaks(dir) AS TABLE
+SELECT count(DISTINCT filename) AS files, count(*) AS row_count, count(*) FILTER (WHERE k < prev) AS breaks
+FROM (
+	SELECT filename, k, lag(k) OVER (
+		ORDER BY regexp_extract(filename, 'data_(\d+)\.parquet', 1)::BIGINT, file_row_number) AS prev
+	FROM read_parquet(dir || '/*.parquet', filename = true, file_row_number = true)
+);
+
+# FILE_SIZE_BYTES: one file
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_one'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '1GB');
+
+query III
+FROM order_breaks('{TEST_DIR}/rotate_order_one');
+----
+1	300000	0
+
+# FILE_SIZE_BYTES: several files, ordered within and across
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_many'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_many');
+----
+true	300000	0
+
+# ROW_GROUPS_PER_FILE
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k DESC) TO '{TEST_DIR}/rotate_order_row_groups'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, ROW_GROUPS_PER_FILE 10);
+
+query III
+SELECT files > 2, row_count, breaks
+FROM (
+	SELECT count(DISTINCT filename) AS files, count(*) AS row_count, count(*) FILTER (WHERE k > prev) AS breaks
+	FROM (
+		SELECT filename, k, lag(k) OVER (
+			ORDER BY regexp_extract(filename, 'data_(\d+)\.parquet', 1)::BIGINT, file_row_number) AS prev
+		FROM read_parquet('{TEST_DIR}/rotate_order_row_groups/*.parquet', filename = true, file_row_number = true)
+	)
+);
+----
+true	300000	0
+
+# the sort survives a projection and a filter above it
+statement ok
+COPY (SELECT k, id + 1 AS id FROM (SELECT * FROM src ORDER BY k) WHERE id % 3 <> 0) TO '{TEST_DIR}/rotate_order_projection'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_projection');
+----
+true	200000	0
+
+# ORDER BY ... LIMIT
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k LIMIT 200000) TO '{TEST_DIR}/rotate_order_limit'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_limit');
+----
+true	200000	0
+
+# the returned files are listed in the order they were written, whatever they are named
+statement ok
+CREATE TABLE returned AS
+WITH written AS (
+	COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_uuid'
+	(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', FILENAME_PATTERN 'part_{uuid}', RETURN_FILES)
+)
+SELECT unnest(Files) AS file, generate_subscripts(Files, 1) AS position FROM written;
+
+query III
+SELECT count(DISTINCT position) > 2, count(*), count(*) FILTER (WHERE k < prev)
+FROM (
+	SELECT position, k, lag(k) OVER (ORDER BY position, file_row_number) AS prev
+	FROM read_parquet('{TEST_DIR}/rotate_order_uuid/*.parquet', filename = true, file_row_number = true)
+	JOIN returned ON (filename = file)
+);
+----
+true	300000	0
+
+# PRESERVE_ORDER keeps the insertion order of a source that is not sorted
+statement ok
+COPY src TO '{TEST_DIR}/rotate_preserve_order'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', PRESERVE_ORDER);
+
+query III
+SELECT files > 2, row_count, breaks
+FROM (
+	SELECT count(DISTINCT filename) AS files, count(*) AS row_count, count(*) FILTER (WHERE id <> prev + 1) AS breaks
+	FROM (
+		SELECT filename, id, lag(id) OVER (
+			ORDER BY regexp_extract(filename, 'data_(\d+)\.parquet', 1)::BIGINT, file_row_number) AS prev
+		FROM read_parquet('{TEST_DIR}/rotate_preserve_order/*.parquet', filename = true, file_row_number = true)
+	)
+);
+----
+true	300000	0
+
+# PRESERVE_ORDER false gives up the sort's order, and an unsorted source never asked for one
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_no_order'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', PRESERVE_ORDER false);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/rotate_no_order/*.parquet';
+----
+300000
+
+statement ok
+COPY src TO '{TEST_DIR}/rotate_unsorted' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query II
+SELECT count(*), sum(id) FROM '{TEST_DIR}/rotate_unsorted/*.parquet';
+----
+300000	44999850000
+
+# an empty sorted source
+statement ok
+COPY (SELECT k, id FROM src WHERE id < 0 ORDER BY k) TO '{TEST_DIR}/rotate_order_empty'
+(FORMAT PARQUET, FILE_SIZE_BYTES '200kB');
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/rotate_order_empty/*.parquet';
+----
+0
+
+# several files written at once have no order to keep
+statement error
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_per_thread'
+(FORMAT PARQUET, PER_THREAD_OUTPUT, PRESERVE_ORDER);
+----
+PRESERVE_ORDER is not supported with these parameters
+
+statement error
+COPY (SELECT k, id, id % 4 AS p FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_partitioned'
+(FORMAT PARQUET, PARTITION_BY (p), FILE_SIZE_BYTES '200kB', PRESERVE_ORDER);
+----
+PRESERVE_ORDER is not supported with these parameters
+
+statement error
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_order_by'
+(FORMAT PARQUET, ORDER_BY (id), FILE_SIZE_BYTES '200kB', PRESERVE_ORDER);
+----
+PRESERVE_ORDER is not supported with these parameters

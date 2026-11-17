@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
+#include "duckdb/common/deque.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
@@ -460,6 +461,56 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, C
 }
 
 //===--------------------------------------------------------------------===//
+// Ordered Batch Declarations
+//===--------------------------------------------------------------------===//
+//! A batch of a rotating copy that keeps its input order: prepared on any thread, flushed in sink order
+struct OrderedCopyBatch {
+	explicit OrderedCopyBatch(const CopyFunctionBatchAnalyzer &batch_analyzer_p) : batch_analyzer(batch_analyzer_p) {
+	}
+
+	const CopyFunctionBatchAnalyzer batch_analyzer;
+	unique_ptr<PreparedBatchData> prepared_batch;
+	std::exception_ptr error;
+	atomic<bool> finished {false};
+};
+
+class OrderedCopyPrepareTask : public BaseExecutorTask {
+public:
+	OrderedCopyPrepareTask(TaskExecutor &executor_p, const PhysicalCopyToFile &op_p, ClientContext &context_p,
+	                       GlobalFunctionData &prepare_state_p, shared_ptr<OrderedCopyBatch> batch_p,
+	                       unique_ptr<ColumnDataCollection> collection_p)
+	    : BaseExecutorTask(executor_p), op(op_p), context(context_p), prepare_state(prepare_state_p),
+	      batch(std::move(batch_p)), collection(std::move(collection_p)) {
+	}
+
+public:
+	void ExecuteTask() override {
+		try {
+			batch->prepared_batch = op.function.prepare_batch(context, *op.bind_data, prepare_state, std::move(collection));
+		} catch (...) {
+			batch->error = std::current_exception();
+		}
+		batch->finished.store(true, std::memory_order_release);
+	}
+
+	void Cancel() override {
+		batch->error = std::make_exception_ptr(InternalException("COPY batch was cancelled before it was prepared"));
+		batch->finished.store(true, std::memory_order_release);
+	}
+
+	string TaskType() const override {
+		return "OrderedCopyPrepareTask";
+	}
+
+private:
+	const PhysicalCopyToFile &op;
+	ClientContext &context;
+	GlobalFunctionData &prepare_state;
+	shared_ptr<OrderedCopyBatch> batch;
+	unique_ptr<ColumnDataCollection> collection;
+};
+
+//===--------------------------------------------------------------------===//
 // Copy State Declarations
 //===--------------------------------------------------------------------===//
 class PartitionedCopy;
@@ -500,6 +551,11 @@ public:
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
 	void WaitForLifecycleTasks() DUCKDB_EXCLUDES(lock);
 	void MarkSuccessful() noexcept;
+
+	//! Prepare a batch on the task scheduler, to be flushed after every batch scheduled before it
+	void ScheduleOrderedBatch(unique_ptr<ColumnDataCollection> collection) DUCKDB_EXCLUDES(lock);
+	//! Flush the prepared batches at the front of the queue: all of them when draining
+	void FlushOrderedBatches(bool drain) DUCKDB_EXCLUDES(lock);
 
 private:
 	void PrepareOutputDirectory() DUCKDB_EXCLUDES(lock);
@@ -548,6 +604,11 @@ public:
 	//! Counters
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
+
+	//! Batches of an ordered rotating copy in sink order, only touched by the thread that sinks
+	deque<shared_ptr<OrderedCopyBatch>> ordered_batches;
+	//! Destroyed first, so no prepare outlives the file state it runs against
+	TaskExecutor ordered_prepare_executor;
 };
 
 //===--------------------------------------------------------------------===//
@@ -4493,10 +4554,12 @@ void PartitionedCopy::FinalizeFileStates(vector<FileStateHandle> files_to_finali
 CopyToFileGlobalState::CopyToFileGlobalState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
     : op(op_p), context(context_p), output_lifecycle(context_p), initialized(false), prepare_global_state(nullptr),
       create_file_state_fun([&](FileStateHandle &file_state) DUCKDB_EXCLUDES(lock) { RequestFileState(file_state); }),
-      lifecycle_executor(context_p), output_files(op_p), rows_copied(0), last_file_offset(0) {
+      lifecycle_executor(context_p), output_files(op_p), rows_copied(0), last_file_offset(0),
+      ordered_prepare_executor(context_p) {
 }
 
 CopyToFileGlobalState::~CopyToFileGlobalState() {
+	ordered_prepare_executor.CancelAndDrain();
 	try {
 		WaitForLifecycleTasks();
 	} catch (...) {
@@ -4805,6 +4868,48 @@ void CopyToFileGlobalState::MarkSuccessful() noexcept {
 	output_lifecycle.MarkSuccessful();
 }
 
+void CopyToFileGlobalState::ScheduleOrderedBatch(unique_ptr<ColumnDataCollection> collection) {
+	auto prepare_state = prepare_global_state.load(std::memory_order_acquire);
+	if (!prepare_state) {
+		EnsureFileStateReady(global_state, create_file_state_fun);
+		prepare_state = prepare_global_state.load(std::memory_order_acquire);
+		D_ASSERT(prepare_state);
+	}
+	const CopyFunctionBatchAnalyzer batch_analyzer(*collection, op.batch_size, op.batch_size_bytes);
+	auto batch = make_shared_ptr<OrderedCopyBatch>(batch_analyzer);
+	ordered_batches.push_back(batch);
+	ordered_prepare_executor.ScheduleTask(make_uniq<OrderedCopyPrepareTask>(
+	    ordered_prepare_executor, op, context, *prepare_state->data, std::move(batch), std::move(collection)));
+	FlushOrderedBatches(false);
+}
+
+void CopyToFileGlobalState::FlushOrderedBatches(bool drain) {
+	const auto max_pending_batches = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	while (!ordered_batches.empty()) {
+		auto &batch = *ordered_batches.front();
+		if (!batch.finished.load(std::memory_order_acquire)) {
+			if (!drain && ordered_batches.size() <= max_pending_batches) {
+				break;
+			}
+			// the oldest batch is still being prepared: help out until it is done
+			context.InterruptCheck();
+			shared_ptr<Task> task;
+			if (ordered_prepare_executor.GetTask(task)) {
+				task->Execute(TaskExecutionMode::PROCESS_ALL);
+			} else {
+				TaskScheduler::YieldThread();
+			}
+			continue;
+		}
+		if (batch.error) {
+			std::rethrow_exception(batch.error);
+		}
+		op.FlushBatch(context, *this, global_state, create_file_state_fun, batch.batch_analyzer,
+		              std::move(batch.prepared_batch));
+		ordered_batches.pop_front();
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Copy Local State
 //===--------------------------------------------------------------------===//
@@ -4932,6 +5037,10 @@ void PhysicalCopyToFile::ReturnNoFileStatistics(DataChunk &chunk) {
 
 bool PhysicalCopyToFile::Rotate() const {
 	return file_size_bytes.IsValid() || batches_per_file.IsValid();
+}
+
+bool PhysicalCopyToFile::OrderedRotation() const {
+	return Rotate() && !parallel && !per_thread_output && !partition_output;
 }
 
 static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
@@ -5109,6 +5218,9 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 			                     std::move(gstate.last_batch));
 		}
 	}
+	if (OrderedRotation()) {
+		gstate.FlushOrderedBatches(true);
+	}
 
 	if (per_thread_output) {
 		// already happened in combine
@@ -5141,6 +5253,10 @@ void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSink
                                               FileStateHandle &file_state,
                                               const std::function<void(FileStateHandle &)> &create_file_state_fun,
                                               unique_ptr<ColumnDataCollection> batch) const {
+	if (OrderedRotation()) {
+		gstate_p.Cast<CopyToFileGlobalState>().ScheduleOrderedBatch(std::move(batch));
+		return;
+	}
 	auto [batch_analyzer, prepared_batch] =
 	    PrepareBatch(context, gstate_p, file_state, create_file_state_fun, std::move(batch));
 	FlushBatch(context, gstate_p, file_state, create_file_state_fun, batch_analyzer, std::move(prepared_batch));

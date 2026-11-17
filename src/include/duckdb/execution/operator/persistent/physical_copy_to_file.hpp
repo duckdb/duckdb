@@ -56,6 +56,8 @@ public:
 	                              const vector<LogicalType> &query_types);
 
 	bool Rotate() const;
+	//! Whether the files rotate while the rows keep the order they were sunk in
+	bool OrderedRotation() const;
 
 	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
 	                          const std::function<void(FileStateHandle &)> &create_file_state_fun,
