@@ -42,9 +42,3 @@ query I
 SELECT count(x) FROM (SELECT histogram(DISTINCT i % 7) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(30000) r(i))
 ----
 30000
-
-# framed mode rebuilds its frequency map instead of clearing it
-query I
-SELECT count(x) FROM (SELECT mode(i) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(2000000) r(i))
-----
-2000000

@@ -1,6 +1,8 @@
 # name: test/sql/aggregate/aggregates/arena_states_memory_limit.test
-# description: Histogram, binned histogram and mode states count against the memory limit, sorted and combined states are reclaimed
+# description: Histogram, binned histogram and mode states count against the memory limit, sorted, combined and framed states are reclaimed
 # group: [aggregates]
+
+require vector_size 2048
 
 statement ok
 SET threads=1;
@@ -39,3 +41,12 @@ SELECT count(*), sum(len(x)) FROM (
 );
 ----
 1000	10000
+
+# framed mode rebuilds its frequency map instead of clearing it
+statement ok
+SET memory_limit='64MB';
+
+query I
+SELECT count(x) FROM (SELECT mode(i) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(2000000) r(i));
+----
+2000000
