@@ -1235,6 +1235,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			is_variant = true;
 		}
 		if (is_variant) {
+			if (child_schemas.size() < 2) {
+				throw DataCorruptionException("Failed to read Parquet file \"%s\": VARIANT column \"%s\" must have a "
+				                              "'metadata' and a 'value' column",
+				                              file.path, string(s_ele.name));
+			}
 			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
 			for (auto &child_schema : child_schemas) {
 				if (child_schema.name != "metadata" && child_schema.name != "value") {
