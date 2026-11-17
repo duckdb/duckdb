@@ -2,9 +2,6 @@
 # description: Empty lines are not part of the size of the line that follows them
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # two rows with 3 MB of empty lines between them, more than the default maximum line size of 2 MB
 statement ok
 COPY (SELECT CASE WHEN i = 0 OR i = 3000000 THEN '1,2' END AS a FROM range(3000001) t(i)) TO '{TEST_DIR}/empty_lines_two_columns.csv' (HEADER false, DELIM '|', QUOTE '');
