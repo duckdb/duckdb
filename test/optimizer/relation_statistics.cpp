@@ -227,6 +227,139 @@ static unique_ptr<Expression> CreateJoinComparison(ColumnBinding left, ColumnBin
 	                                         make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right));
 }
 
+TEST_CASE("Unknown equality estimates scale with population and ignore redundant predicates",
+          "[optimizer][relation_statistics]") {
+	for (idx_t rows :
+	     {idx_t(0), idx_t(1), idx_t(4), idx_t(5), idx_t(6), idx_t(9), idx_t(10), idx_t(100), idx_t(1000)}) {
+		for (auto source : {DistinctCountSource::CARDINALITY, DistinctCountSource::MIN_MAX, DistinctCountSource::HLL,
+		                    DistinctCountSource::EXACT}) {
+			for (bool scan_source : {false, true}) {
+				for (bool redundant : {false, true}) {
+					for (bool reverse : {false, true}) {
+						CAPTURE(rows, source, scan_source, redundant, reverse);
+						JoinRelationSetManager sets;
+						JoinPredicateModel model;
+						vector<RelationStats> stats;
+						join_column_sources_t sources;
+						vector<ColumnBinding> bindings;
+						vector<unique_ptr<FilterInfo>> filters;
+						JoinEqualityClass group;
+						group.index = 0;
+						for (idx_t i = 0; i < 3; i++) {
+							bindings.emplace_back(TableIndex(i), ProjectionIndex(0));
+							stats.push_back(CreateStats({bindings.back()}, {rows}, rows));
+							stats.back().columns[0].total_domain.source = source;
+							if (scan_source) {
+								sources.emplace(bindings.back(),
+								                JoinColumnSources({bindings.back(), rows, rows,
+								                                   stats.back().columns[0].total_domain}));
+							}
+							group.columns.insert(bindings.back());
+							group.relations.insert(RelationIndex(i));
+						}
+						vector<pair<idx_t, idx_t>> edges {{0, 1}, {1, 2}};
+						if (redundant) {
+							edges.emplace_back(0, 2);
+						}
+						if (reverse) {
+							std::reverse(edges.begin(), edges.end());
+						}
+						for (auto edge : edges) {
+							auto l = reverse ? edge.second : edge.first;
+							auto r = reverse ? edge.first : edge.second;
+							auto &lhs = sets.GetJoinRelation(RelationIndex(l));
+							auto &rhs = sets.GetJoinRelation(RelationIndex(r));
+							auto filter = make_uniq<FilterInfo>(
+							    CreateJoinComparison(bindings[l], bindings[r], ExpressionType::COMPARE_EQUAL),
+							    sets.Union(lhs, rhs), filters.size());
+							filter->SetLeftSet(lhs);
+							filter->SetRightSet(rhs);
+							filter->left_binding = bindings[l];
+							filter->right_binding = bindings[r];
+							auto &predicate = model.RegisterPredicate(*filter, JoinPredicateClass::INNER_EQUALITY,
+							                                          bindings[l], bindings[r]);
+							predicate.SetEqualityClassIndex(optional_idx(0));
+							group.edges.emplace_back(predicate, RelationIndex(l), RelationIndex(r), bindings[l],
+							                         bindings[r]);
+							filters.push_back(std::move(filter));
+						}
+						model.AddEqualityClass(std::move(group));
+						CardinalityEstimator estimator(sets, model);
+						estimator.Initialize(stats, {}, sources);
+						auto &pair =
+						    sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
+						auto &all = sets.Union(pair, sets.GetJoinRelation(RelationIndex(2)));
+						auto expansion =
+						    scan_source && source == DistinctCountSource::CARDINALITY ? MinValue<double>(5, rows) : 1;
+						REQUIRE(estimator.EstimateCardinality(all).GetDouble() == Approx(rows * expansion * expansion));
+						REQUIRE(estimator.EstimateCardinality(pair).GetDouble() == Approx(rows * expansion));
+						REQUIRE(estimator.EstimateCardinality(all).GetDouble() == Approx(rows * expansion * expansion));
+					}
+				}
+			}
+		}
+	}
+}
+
+TEST_CASE("Unknown composite joins replace the discounted denominator once", "[optimizer][relation_statistics]") {
+	for (idx_t domain : {idx_t(100), idx_t(624), idx_t(625), idx_t(1000)}) {
+		for (bool unique : {false, true}) {
+			for (bool reverse : {false, true}) {
+				CAPTURE(domain, unique, reverse);
+				JoinRelationSetManager sets;
+				JoinPredicateModel model;
+				vector<RelationStats> stats;
+				join_column_sources_t sources;
+				vector<unique_ptr<FilterInfo>> filters;
+				for (idx_t i = 0; i < 2; i++) {
+					stats.push_back(CreateStats({ColumnBinding(TableIndex(i), ProjectionIndex(0)),
+					                             ColumnBinding(TableIndex(i), ProjectionIndex(1))},
+					                            {domain, domain}, i == 0 ? 2000 : 1000));
+					for (auto &column : stats.back().columns) {
+						column.total_domain.source = DistinctCountSource::CARDINALITY;
+						sources.emplace(column.binding,
+						                JoinColumnSources({column.binding, stats.back().cardinality,
+						                                   stats.back().cardinality, column.total_domain}));
+					}
+				}
+				if (unique) {
+					stats[0].unique_key = {0, 1};
+				}
+				auto &lhs = sets.GetJoinRelation(RelationIndex(reverse ? 1 : 0));
+				auto &rhs = sets.GetJoinRelation(RelationIndex(reverse ? 0 : 1));
+				auto &joined = sets.Union(lhs, rhs);
+				for (idx_t column : {idx_t(0), idx_t(1)}) {
+					auto position = reverse ? 1 - column : column;
+					auto left = ColumnBinding(TableIndex(reverse ? 1 : 0), ProjectionIndex(position));
+					auto right = ColumnBinding(TableIndex(reverse ? 0 : 1), ProjectionIndex(position));
+					auto filter = make_uniq<FilterInfo>(
+					    CreateJoinComparison(left, right, ExpressionType::COMPARE_EQUAL), joined, filters.size());
+					filter->SetLeftSet(lhs);
+					filter->SetRightSet(rhs);
+					filter->left_binding = left;
+					filter->right_binding = right;
+					auto &predicate = model.RegisterPredicate(*filter, JoinPredicateClass::INNER_EQUALITY, left, right);
+					predicate.SetEqualityClassIndex(optional_idx(column));
+					JoinEqualityClass group;
+					group.index = column;
+					group.columns = {left, right};
+					group.relations = {RelationIndex(0), RelationIndex(1)};
+					group.edges.emplace_back(predicate, RelationIndex(left.table_index.index),
+					                         RelationIndex(right.table_index.index), left, right);
+					model.AddEqualityClass(std::move(group));
+					model.AddDirectEqualityPairClass(joined, column, reverse ? right : left, reverse ? left : right);
+					filters.push_back(std::move(filter));
+				}
+				CardinalityEstimator estimator(sets, model);
+				estimator.Initialize(stats, {}, sources);
+				// The two-column cap applies at 625 * 0.2 * 8 = 1000; a covered key always applies.
+				auto expected = unique ? 1000 : domain >= 625 ? 2000 : 10000000.0 / domain;
+				REQUIRE(estimator.EstimateCardinality(joined).GetDouble() == Approx(expected));
+			}
+		}
+	}
+}
+
 TEST_CASE("Join source populations survive changes in relation cardinality", "[optimizer][relation_statistics]") {
 	for (auto current_rows : {idx_t(100000), idx_t(8006)}) {
 		for (auto weak_source : {DistinctCountSource::CARDINALITY, DistinctCountSource::MIN_MAX}) {
@@ -312,9 +445,9 @@ TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimiz
 		CardinalityEstimator estimator(sets, model);
 		estimator.Initialize(stats, {}, sources);
 		auto &base_join = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
-		REQUIRE(estimator.EstimateCardinality(base_join).GetIndex() == 100000);
+		REQUIRE(estimator.EstimateCardinality(base_join).GetIndex() == 500000);
 		auto &full_join = sets.Union(base_join, sets.GetJoinRelation(RelationIndex(2)));
-		REQUIRE(estimator.EstimateCardinality(full_join).GetIndex() == 100000);
+		REQUIRE(estimator.EstimateCardinality(full_join).GetIndex() == 500000);
 	}
 }
 
@@ -425,9 +558,9 @@ TEST_CASE("Predicate-local fallback domains order competing equality edges", "[o
 			estimator.Initialize(stats, {}, sources);
 			auto &base = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
 			auto &all = sets.Union(base, sets.GetJoinRelation(RelationIndex(2)));
-			REQUIRE(estimator.EstimateCardinality(base).GetIndex() == 1000);
-			// Use domains 1000 and 100 before the redundant local domain of 10.
-			REQUIRE(estimator.EstimateCardinality(all).GetIndex() == 100);
+			REQUIRE(estimator.EstimateCardinality(base).GetIndex() == 5000);
+			// Use domains 200 and 100 before the redundant local domain of 10.
+			REQUIRE(estimator.EstimateCardinality(all).GetIndex() == 500);
 		}
 	}
 }

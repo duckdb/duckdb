@@ -14,7 +14,7 @@ public:
 	DomainEstimate();
 
 public:
-	idx_t GetDistinctCount(const JoinPredicate &predicate) const;
+	double GetDistinctCount(const JoinPredicate &predicate) const;
 	bool HasReliableDistinctCount() const;
 	idx_t GetReliableDistinctCount() const;
 	void Update(ColumnBinding binding, const DistinctCount &distinct_count,
@@ -35,7 +35,7 @@ private:
 DomainEstimate::DomainEstimate() {
 }
 
-idx_t DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
+double DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 	auto domain = estimate;
 	for (bool left : {true, false}) {
 		auto entry = local_fallbacks.find(predicate.GetStatsBinding(left));
@@ -47,6 +47,14 @@ idx_t DomainEstimate::GetDistinctCount(const JoinPredicate &predicate) const {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	auto result = domain->distinct_count;
+	auto comparison = predicate.GetComparisonType();
+	if (domain->source == DistinctCountSource::CARDINALITY && estimate && result > 0 &&
+	    predicate.GetJoinType() == JoinType::INNER &&
+	    (comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+		// Discount scan-backed domains before applying predicate-local bounds.
+		return MinValue<double>(result, MaxValue(1.0, static_cast<double>(estimate->distinct_count) *
+		                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY));
+	}
 	if (!HasReliableDistinctCount() || reliable_source_count != 1) {
 		return result;
 	}
@@ -142,7 +150,7 @@ public:
 public:
 	reference<JoinPredicate> predicate;
 	reference<const DomainEstimate> domain_estimate;
-	idx_t distinct_count;
+	double distinct_count;
 };
 
 struct SelectivitySubgraph {
@@ -214,7 +222,7 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	return static_cast<double>(distinct_count);
+	return distinct_count;
 }
 
 bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
