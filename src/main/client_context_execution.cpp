@@ -278,6 +278,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 	// A custom hook can hand back the default sink, which is then served like any other query
 	const bool delegating = collector->Cast<PhysicalResultCollector>().BuildsOwnResult();
+	const bool streaming = collector->Cast<PhysicalResultCollector>().IsStreaming();
 	if (delegating && expands && !active_query->inside_submission) {
 		throw NotImplementedException("A result collector that builds its own result object can only serve a "
 		                              "statement that expands into several when it is set before the submission");
@@ -351,7 +352,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	auto result = make_uniq<QueryResult>(shared_from_this(), statement_data, std::move(types),
 	                                     std::move(client_properties), std::move(buffer));
 	active_query->SetOpenResult(*result);
-	if (delegating) {
+	if (delegating && !streaming) {
 		// The collector builds its own result object: run the query and hand that object out. The
 		// handle is released first, so destroying it never takes the context lock held here
 		result->context.reset();

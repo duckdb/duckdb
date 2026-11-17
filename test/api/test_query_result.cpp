@@ -16,6 +16,9 @@
 #include "test_result_format.hpp"
 
 #include <chrono>
+#include <condition_variable>
+#include <future>
+#include <mutex>
 #include <thread>
 
 using namespace duckdb;
@@ -72,25 +75,74 @@ QueryResultState StepToEnd(QueryResult &handle) {
 	return state;
 }
 
+class TestStreamingCollectorGate {
+public:
+	void EnterAndWait() {
+		std::unique_lock<std::mutex> guard(lock);
+		entered = true;
+		condition.notify_all();
+		condition.wait(guard, [&] { return released; });
+	}
+
+	bool WaitUntilEntered() {
+		std::unique_lock<std::mutex> guard(lock);
+		return condition.wait_for(guard, std::chrono::seconds(10), [&] { return entered; });
+	}
+
+	bool HasEntered() {
+		std::lock_guard<std::mutex> guard(lock);
+		return entered;
+	}
+
+	void Release() {
+		std::lock_guard<std::mutex> guard(lock);
+		released = true;
+		condition.notify_all();
+	}
+
+private:
+	std::mutex lock;
+	std::condition_variable condition;
+	bool entered = false;
+	bool released = false;
+};
+
+class TestStreamingCollectorGateRelease {
+public:
+	explicit TestStreamingCollectorGateRelease(shared_ptr<TestStreamingCollectorGate> gate_p)
+	    : gate(std::move(gate_p)) {
+	}
+
+	~TestStreamingCollectorGateRelease() {
+		gate->Release();
+	}
+
+private:
+	shared_ptr<TestStreamingCollectorGate> gate;
+};
+
 //! Stands in for an out-of-tree streaming collector: it builds its own result object and keeps the
 //! query open, the combination no in-tree collector has
 class TestCollectorState : public GlobalSinkState {
 public:
-	TestCollectorState(ClientContext &context, const vector<LogicalType> &types)
+	TestCollectorState(ClientContext &context, const vector<LogicalType> &types,
+	                   shared_ptr<TestStreamingCollectorGate> gate_p)
 	    : collection(make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types)),
-	      client_properties(context.GetClientProperties()) {
+	      client_properties(context.GetClientProperties()), gate(std::move(gate_p)) {
 		collection->InitializeAppend(append_state);
 	}
 
 	unique_ptr<ColumnDataCollection> collection;
 	ColumnDataAppendState append_state;
 	ClientProperties client_properties;
+	shared_ptr<TestStreamingCollectorGate> gate;
 };
 
 class TestStreamingCollector : public PhysicalResultCollector {
 public:
-	TestStreamingCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
-	    : PhysicalResultCollector(physical_plan, data) {
+	TestStreamingCollector(PhysicalPlan &physical_plan, PreparedStatementData &data,
+	                       shared_ptr<TestStreamingCollectorGate> gate_p)
+	    : PhysicalResultCollector(physical_plan, data), gate(std::move(gate_p)) {
 	}
 
 public:
@@ -99,11 +151,14 @@ public:
 	}
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override {
-		return make_uniq<TestCollectorState>(context, types);
+		return make_uniq<TestCollectorState>(context, types, gate);
 	}
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override {
 		auto &gstate = input.global_state.Cast<TestCollectorState>();
+		if (gstate.gate) {
+			gstate.gate->EnterAndWait();
+		}
 		gstate.collection->Append(gstate.append_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -113,15 +168,19 @@ public:
 		return make_uniq<QueryResult>(statement_type, properties, names, std::move(gstate.collection),
 		                              gstate.client_properties);
 	}
+
+private:
+	shared_ptr<TestStreamingCollectorGate> gate;
 };
 
-ScopedConfigSetting UseTestStreamingCollector(ClientConfig &config) {
+ScopedConfigSetting UseTestStreamingCollector(ClientConfig &config,
+                                              shared_ptr<TestStreamingCollectorGate> gate = nullptr) {
 	return ScopedConfigSetting(
 	    config,
-	    [](ClientConfig &config) {
-		    config.get_result_collector = [](ClientContext &context,
-		                                     PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
-			    return make_uniq<TestStreamingCollector>(*data.physical_plan, data);
+	    [gate = std::move(gate)](ClientConfig &config) {
+		    config.get_result_collector = [gate](ClientContext &context,
+		                                         PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
+			    return make_uniq<TestStreamingCollector>(*data.physical_plan, data, gate);
 		    };
 	    },
 	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
@@ -544,6 +603,18 @@ TEST_CASE("A custom collector hands out its own result object", "[api][query_res
 		auto while_open = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(while_open, 0, {42}));
 		REQUIRE(result->RowCount() == 3000);
+	}
+	SECTION("submission does not synchronously complete a streaming collector") {
+		auto gate = make_shared_ptr<TestStreamingCollectorGate>();
+		auto setting = UseTestStreamingCollector(config, gate);
+		auto submitted = std::async(std::launch::async, [&] { return con.Submit("SELECT i FROM range(3000) t(i)"); });
+		TestStreamingCollectorGateRelease release_gate(gate);
+		REQUIRE(gate->WaitUntilEntered());
+		REQUIRE(submitted.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+		auto result = submitted.get();
+		REQUIRE(!result->HasError());
+		REQUIRE(gate->HasEntered());
+		gate->Release();
 	}
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
