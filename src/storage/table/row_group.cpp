@@ -1019,8 +1019,8 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 		// partial scan: we have deletions or table filters
 		idx_t approved_tuple_count = count;
 		SelectionVector sel;
-		SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
 		if (has_sample_selection && count != max_count) {
+			SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
 			approved_tuple_count = IntersectSelections(state.valid_sel, count, sample_sel, sample_count, intersect_sel);
 			if (approved_tuple_count == 0) {
 				NextVector(state);
