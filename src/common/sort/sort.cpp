@@ -160,7 +160,7 @@ private:
 class SortGlobalSinkState : public GlobalSinkState {
 private:
 	//! Small sorts grow on demand; forced external sorts retain their fixed run budget.
-	static constexpr idx_t INITIAL_RESERVATION = 4 * DEFAULT_BLOCK_ALLOC_SIZE;
+	static constexpr idx_t MINIMUM_INITIAL_RESERVATION = 4 * DEFAULT_BLOCK_ALLOC_SIZE;
 
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
@@ -169,8 +169,12 @@ public:
 	      sorted_tuples(0), sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0),
 	      partition_size(0) {
 		if (!external) {
-			temporary_memory_state->SetRemainingSize(
-			    MinValue(INITIAL_RESERVATION, temporary_memory_state->GetMinimumReservation()));
+			auto initial_reservation = temporary_memory_state->GetMinimumReservation();
+			// Preserve the default minimum's doubling sequence.
+			while (initial_reservation / 2 >= MINIMUM_INITIAL_RESERVATION) {
+				initial_reservation /= 2;
+			}
+			temporary_memory_state->SetRemainingSize(initial_reservation);
 			temporary_memory_state->UpdateReservation(context.GetContext());
 		}
 	}
