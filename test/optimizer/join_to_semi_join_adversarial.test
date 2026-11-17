@@ -340,7 +340,7 @@ physical_plan	<!REGEX>:.*Join Type: SEMI.*
 foreach disabled extension join_to_semi_join
 
 statement ok
-SET disabled_optimizers = '${disabled}';
+SET disabled_optimizers = '{disabled}';
 
 # an empty relation: no row either way
 query I rowsort

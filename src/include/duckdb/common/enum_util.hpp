@@ -332,6 +332,8 @@ enum class JoinOrderOperatorType : uint8_t;
 
 enum class JoinRefType : uint8_t;
 
+enum class JoinSimplificationPhase : uint8_t;
+
 enum class JoinType : uint8_t;
 
 enum class KeywordCase : uint8_t;
@@ -1156,6 +1158,9 @@ const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value
 
 template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
+
+template<>
+const char* EnumUtil::ToChars<JoinSimplificationPhase>(JoinSimplificationPhase value);
 
 template<>
 const char* EnumUtil::ToChars<JoinType>(JoinType value);
@@ -2168,6 +2173,9 @@ JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *va
 
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
+
+template<>
+JoinSimplificationPhase EnumUtil::FromString<JoinSimplificationPhase>(const char *value);
 
 template<>
 JoinType EnumUtil::FromString<JoinType>(const char *value);

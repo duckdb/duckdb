@@ -176,6 +176,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/join_simplification.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
@@ -3503,6 +3504,24 @@ const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value) {
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value) {
 	return static_cast<JoinRefType>(StringUtil::StringToEnum(GetJoinRefTypeValues(), 7, "JoinRefType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetJoinSimplificationPhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(JoinSimplificationPhase::BEFORE_FILTER_PUSHDOWN), "BEFORE_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(JoinSimplificationPhase::AFTER_FILTER_PUSHDOWN), "AFTER_FILTER_PUSHDOWN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<JoinSimplificationPhase>(JoinSimplificationPhase value) {
+	return StringUtil::EnumToString(GetJoinSimplificationPhaseValues(), 2, "JoinSimplificationPhase", static_cast<uint32_t>(value));
+}
+
+template<>
+JoinSimplificationPhase EnumUtil::FromString<JoinSimplificationPhase>(const char *value) {
+	return static_cast<JoinSimplificationPhase>(StringUtil::StringToEnum(GetJoinSimplificationPhaseValues(), 2, "JoinSimplificationPhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinTypeValues() {
