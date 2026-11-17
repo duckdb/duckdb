@@ -54,6 +54,8 @@
         "test/sql/storage/types/variant/variant_stats_merge_fast.test",
         "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/sql/types/variant/variant_cast_stats.test",
+        "test/sql/types/variant/variant_stats_merge_constant.test",
+        "test/sql/types/variant/variant_stats_merge_unshredded_row_group.test",
         "test/sql/alter/alter_type/test_alter_type.test",
         "test/sql/alter/alter_type/alter_type_distinct_stats.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
