@@ -225,7 +225,9 @@ void RadixHTConfig::ResetForNewIteration(const idx_t scheduled_workers) {
 
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
 	const auto requested_bits = MinValue(maximum_sink_radix_bits, radix_bits_p);
-	const auto reserve_bits = MinValue(requested_bits, RadixPartitioning::RadixBits(sink.number_of_threads) - 1);
+	// Reserve extra partitions only for workers that have started sinking.
+	const auto workers = MaxValue<idx_t>(MinValue(sink.number_of_threads, sink.active_threads.load()), 1);
+	const auto reserve_bits = MinValue(requested_bits, RadixPartitioning::RadixBits(workers) - 1);
 	const idx_t pages_per_partition = sink.radix_ht.GetLayout().AllConstant() && !sink.spill_plan ? 2 : 4;
 	const auto required = RadixPartitioning::NumberOfPartitions(reserve_bits) * pages_per_partition *
 	                      sink.block_alloc_size * sink.number_of_threads;
