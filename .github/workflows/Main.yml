@@ -53,12 +53,11 @@ env:
 jobs:
  prepare:
     # We run all other jobs on PRs only if they are not draft PR
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
+      runner_linux_slim: ${{ fromJSON(steps.config.outputs.runners).linux_slim }}
       runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
       runner_linux_x64: ${{ fromJSON(steps.config.outputs.runners).linux_x64 }}
       runner_linux_22_x64: ${{ fromJSON(steps.config.outputs.runners).linux_22_x64 }}
@@ -1385,8 +1384,9 @@ jobs:
 
  summary:
     name: Summary
-    if: ${{ always() }}
-    runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_slim }}
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    # Use a fallback runner when prepare has no outputs.
+    runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
       - linux-relassert
@@ -1526,6 +1526,11 @@ jobs:
         shell: bash
         run: |
           NEEDS_JSON='${{ toJSON(needs) }}'
+
+          if ! jq -e '.prepare.result == "success"' <<<"$NEEDS_JSON" > /dev/null; then
+            echo "The prepare job did not succeed."
+            exit 1
+          fi
 
           failed_or_cancelled=$(
             jq -r '
