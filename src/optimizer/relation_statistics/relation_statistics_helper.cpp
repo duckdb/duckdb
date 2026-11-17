@@ -451,6 +451,28 @@ idx_t RelationStatisticsHelper::EstimateGroupCardinality(LogicalOperator &input,
 	return estimate;
 }
 
+static optional_ptr<const RelationColumnStats> GetSelectedValueStats(const Expression &expression,
+                                                                     const RelationColumnStatsLookup &child_columns) {
+	// Only a direct, type-preserving argument has a known value domain here.
+	// Rewrites and sorted/state wrappers must declare their own contract; neither
+	// single-row identity nor a BaseStatistics callback implies value selection.
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+		return nullptr;
+	}
+	const auto &aggregate = expression.Cast<BoundAggregateExpression>();
+	auto source = aggregate.Function().GetSelectedValueArgument();
+	if (!source.IsValid() || source.GetIndex() >= aggregate.GetChildren().size() ||
+	    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
+		return nullptr;
+	}
+	const auto &argument = *aggregate.GetChildren()[source.GetIndex()];
+	if (argument.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    !argument.GetReturnType().EqualsIncludingCollation(aggregate.GetReturnType())) {
+		return nullptr;
+	}
+	return child_columns.Find(argument.Cast<BoundColumnRefExpression>().Binding());
+}
+
 static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate &aggregate,
                                                                const RelationStats &child_stats,
                                                                RelationStatsExtractor &extractor,
@@ -557,10 +579,18 @@ static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate 
 				auto binding = agg_children[0]->Cast<BoundColumnRefExpression>().Binding();
 				auto child_column = child_columns.Find(binding);
 				if (child_column) {
-					total_domain = child_column->total_domain;
-					current_domain = child_column->current_domain;
+					result.columns.emplace_back(bindings[result.columns.size()], child_column->total_domain,
+					                            child_column->current_domain, Identifier());
+					continue;
 				}
 			}
+		}
+		// A selector can bias which values survive. Only the total domain keeps the
+		// source confidence; the common cardinality cap below bounds the current domain.
+		if (auto source = GetSelectedValueStats(*expression, child_columns)) {
+			total_domain = source->total_domain;
+			current_domain.distinct_count =
+			    MinValue(source->current_domain.distinct_count, total_domain.distinct_count);
 		}
 		result.columns.emplace_back(bindings[result.columns.size()], total_domain, current_domain, Identifier());
 	}

@@ -352,6 +352,10 @@ public:
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
 
+	//! Non-NULL results are unchanged values of this argument from an input row.
+	//! This is a value-domain contract, not a uniqueness or nullability guarantee.
+	optional_idx selected_value_argument;
+
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 
@@ -403,6 +407,9 @@ public: // Properties
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
+
+	auto GetSelectedValueArgument() const -> optional_idx { return properties.selected_value_argument; }
+	auto SetSelectedValueArgument(optional_idx value) -> void { properties.selected_value_argument = value; }
 
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }

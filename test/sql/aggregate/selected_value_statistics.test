@@ -1,0 +1,66 @@
+# name: test/sql/aggregate/selected_value_statistics.test
+# description: Selected aggregate domain propagation preserves NULL, FILTER, and prepared query semantics
+# group: [aggregate]
+
+statement ok
+CREATE TABLE selected_values(g INTEGER, v INTEGER, d DECIMAL(12,2), s STRUCT(k INTEGER));
+
+statement ok
+INSERT INTO selected_values VALUES (1,NULL,NULL,{'k':NULL}),(1,2,2.25,{'k':2}),(1,2,2.25,{'k':2}),(2,NULL,NULL,NULL);
+
+query IIII
+SELECT g, first(v ORDER BY v NULLS FIRST), last(v ORDER BY v NULLS FIRST), any_value(v) FROM selected_values GROUP BY g ORDER BY g;
+----
+1	NULL	2	2
+2	NULL	NULL	NULL
+
+query III
+SELECT first(v), last(v), any_value(v) FROM selected_values WHERE false;
+----
+NULL	NULL	NULL
+
+query III
+SELECT first(v) FILTER(WHERE false), last(v) FILTER(WHERE false), any_value(v) FILTER(WHERE false) FROM selected_values;
+----
+NULL	NULL	NULL
+
+query IIII
+SELECT g, count(*), count(first_v), count(any_v) FROM (SELECT g, first(v) FILTER(WHERE v IS NOT NULL) first_v, any_value(v) any_v FROM selected_values GROUP BY g) GROUP BY g ORDER BY g;
+----
+1	1	1	1
+2	1	0	0
+
+query IRI
+SELECT count(*), first(d), first(s).k FROM selected_values WHERE v=2;
+----
+2	2.25	2
+
+statement ok
+CREATE TABLE selected_edges AS SELECT i AS k FROM range(10) t(i);
+
+statement ok
+PREPARE selected_join AS SELECT count(*) FROM (SELECT g, first(v) AS k FROM selected_values WHERE v IS NOT NULL GROUP BY g) f JOIN selected_edges e ON f.k=e.k;
+
+query I
+EXECUTE selected_join;
+----
+1
+
+statement ok
+INSERT INTO selected_values VALUES (3,3,3.00,{'k':3});
+
+query I
+EXECUTE selected_join;
+----
+2
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT ON(g) v AS k FROM selected_values WHERE v IS NOT NULL) f JOIN selected_edges e ON f.k=e.k;
+----
+2
+
+# Empty-input aggregates still produce a NULL value that can match NULL safely.
+query I
+SELECT count(*) FROM (SELECT first(v) AS k FROM selected_values WHERE false) f JOIN (VALUES(NULL::INTEGER)) e(k) ON f.k IS NOT DISTINCT FROM e.k;
+----
+1
