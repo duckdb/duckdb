@@ -7,10 +7,10 @@ require parquet
 statement ok
 SET max_execution_time=10000;
 
-# A row group of 9223372036854775807 rows whose column chunk has no metadata. Its only column has the NULL type, which
-# is not read from the file, so the scan produced the declared rows from the footer alone.
+# A row group of 9223372036854775807 rows whose column chunk has no metadata: a scan that reads no column chunk
+# produced the declared rows from the footer alone.
 statement error
-SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/row_group_rows_beyond_file.parquet');
+SELECT 42 FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/row_group_rows_beyond_file.parquet');
 ----
 column chunk is missing its metadata
 
