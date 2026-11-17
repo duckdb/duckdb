@@ -1,6 +1,12 @@
 #include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -8,31 +14,56 @@
 
 namespace duckdb {
 
-static void VerifyFileColumn(const TableFunction &function, const vector<LogicalType> &return_types) {
-	if (!function.function) {
-		throw InternalException("Table function %s cannot provide a file list - it has no regular function",
-		                        function.name);
-	}
-	if (return_types.empty()) {
-		throw InternalException("Table function %s cannot provide a file list - it produces no columns", function.name);
-	}
-	auto type = return_types[0].id();
-	if (type != LogicalTypeId::VARCHAR && type != LogicalTypeId::STRUCT && type != LogicalTypeId::VARIANT) {
-		throw BinderException("Table function %s cannot provide a file list - its first column must be a VARCHAR "
-		                      "path or a file struct, not %s",
-		                      function.name, return_types[0].ToString());
-	}
+static bool IsOptionsColumn(const LogicalType &type) {
+	return type.id() == LogicalTypeId::MAP && MapType::KeyType(type).id() == LogicalTypeId::VARCHAR;
 }
 
-TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p, TableFunction function_p,
-                                                       vector<Value> inputs, named_argument_map_t named_parameters,
-                                                       TableFunctionMultiFileListSettings settings_p)
-    : LazyMultiFileList(&context_p.GetContext()), context(context_p), function(std::move(function_p)),
-      settings(settings_p) {
-	if (!function.bind) {
-		throw InternalException("Table function %s cannot provide a file list - it has no bind", function.name);
+static vector<OpenFileInfo> GetInputFiles(const vector<Value> &inputs, const Identifier &function_name) {
+	vector<OpenFileInfo> result;
+	if (inputs.empty() || inputs[0].IsNull()) {
+		return result;
 	}
-	function.GetSignature().FillNamedDefaults(context, named_parameters);
+	auto &input = inputs[0];
+	if (input.type().id() == LogicalTypeId::LIST) {
+		for (auto &entry : ListValue::GetChildren(input)) {
+			if (entry.IsNull()) {
+				return vector<OpenFileInfo>();
+			}
+			result.push_back(OpenFileInfo::FromValue(entry, function_name));
+		}
+		return result;
+	}
+	auto type = input.type().id();
+	if (type == LogicalTypeId::VARCHAR || type == LogicalTypeId::STRUCT || type == LogicalTypeId::VARIANT) {
+		result.push_back(OpenFileInfo::FromValue(input, function_name));
+	}
+	return result;
+}
+
+TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p, const Identifier &function_name,
+                                                       vector<Value> inputs, named_argument_map_t named_parameters)
+    : LazyMultiFileList(&context_p.GetContext()), context(context_p) {
+	auto &entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), function_name));
+	vector<LogicalType> input_types;
+	for (auto &input : inputs) {
+		input_types.push_back(input.type());
+	}
+	function = *entry.functions.GetFunctionByArguments(context, input_types);
+	if (!function.bind || !function.function) {
+		throw BinderException("Table function %s cannot provide a file list", function.name);
+	}
+	auto &signature = function.GetSignature();
+	for (idx_t i = 0; i < inputs.size() && i < signature.GetPositionalParameterCount(); i++) {
+		auto &parameter_type = signature.GetParameter(i).GetType();
+		if (parameter_type.id() != LogicalTypeId::ANY && parameter_type.id() != LogicalTypeId::LIST &&
+		    inputs[i].type() != parameter_type) {
+			inputs[i] = inputs[i].DefaultCastAs(parameter_type);
+		}
+	}
+	signature.FillNamedDefaults(context, named_parameters);
+	input_files = GetInputFiles(inputs, function.name);
+
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 	TableFunctionRef empty_ref;
@@ -41,40 +72,45 @@ TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p,
 	                                  function.function_info.get(), nullptr, bound_function, empty_ref);
 	vector<Identifier> names;
 	bind_data = function.bind(context, bind_input, return_types, names);
-	VerifyFileColumn(function, return_types);
-}
 
-TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p, TableFunction function_p,
-                                                       unique_ptr<FunctionData> bind_data_p,
-                                                       vector<LogicalType> return_types_p,
-                                                       TableFunctionMultiFileListSettings settings_p)
-    : LazyMultiFileList(&context_p.GetContext()), context(context_p), function(std::move(function_p)),
-      settings(settings_p), bind_data(std::move(bind_data_p)), return_types(std::move(return_types_p)) {
-	VerifyFileColumn(function, return_types);
+	auto file_type = return_types.empty() ? LogicalTypeId::INVALID : return_types[0].id();
+	if (file_type != LogicalTypeId::VARCHAR && file_type != LogicalTypeId::STRUCT &&
+	    file_type != LogicalTypeId::VARIANT) {
+		throw BinderException("Table function %s cannot provide a file list - its first column must be a VARCHAR "
+		                      "path or a file struct, not %s",
+		                      function.name, return_types.empty() ? "nothing" : return_types[0].ToString());
+	}
 }
 
 TableFunctionMultiFileList::~TableFunctionMultiFileList() {
 }
 
 vector<OpenFileInfo> TableFunctionMultiFileList::GetDisplayFileList(optional_idx max_files) const {
-	if (settings.display_files && bind_data) {
-		return settings.display_files(*bind_data, max_files);
+	if (input_files.empty()) {
+		return LazyMultiFileList::GetDisplayFileList(max_files);
 	}
-	return LazyMultiFileList::GetDisplayFileList(max_files);
+	vector<OpenFileInfo> result;
+	for (auto &file : input_files) {
+		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
+			break;
+		}
+		result.push_back(file);
+	}
+	return result;
 }
 
 void TableFunctionMultiFileList::InitializeFunction() const {
 	if (initialized) {
 		return;
 	}
-	// only the files are needed - the other columns are only produced if the function cannot leave them out
+	// only the files (and their options) are needed
 	vector<column_t> column_ids;
-	if (function.projection_pushdown) {
-		column_ids.push_back(0);
-	} else {
-		for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
-			column_ids.push_back(col_idx);
-		}
+	idx_t column_count = return_types.size() > 1 && IsOptionsColumn(return_types[1]) ? 2 : 1;
+	if (!function.projection_pushdown) {
+		column_count = return_types.size();
+	}
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		column_ids.push_back(col_idx);
 	}
 	vector<idx_t> projection_ids;
 	TableFunctionInitInput init_input(bind_data.get(), column_ids, projection_ids, nullptr);
@@ -86,17 +122,16 @@ void TableFunctionMultiFileList::InitializeFunction() const {
 		ExecutionContext execution_context(context, *thread_context, nullptr);
 		local_state = function.init_local(execution_context, init_input, global_state.get());
 	}
-	if (!settings.scan_files) {
-		vector<LogicalType> chunk_types;
-		for (auto &col_id : column_ids) {
-			chunk_types.push_back(return_types[col_id]);
-		}
-		chunk.Initialize(Allocator::Get(context), chunk_types);
+	vector<LogicalType> chunk_types;
+	for (auto &col_id : column_ids) {
+		chunk_types.push_back(return_types[col_id]);
 	}
+	chunk.Initialize(Allocator::Get(context), chunk_types);
 	initialized = true;
 }
 
 void TableFunctionMultiFileList::ReadFiles(DataChunk &output) const {
+	auto start = expanded_files.size();
 	auto &files = output.data[0];
 	if (files.GetType().id() == LogicalTypeId::VARCHAR) {
 		for (auto entry : files.Values<string_t>()) {
@@ -105,20 +140,58 @@ void TableFunctionMultiFileList::ReadFiles(DataChunk &output) const {
 			}
 			expanded_files.emplace_back(entry.GetValue().GetString());
 		}
+	} else {
+		for (idx_t row_idx = 0; row_idx < output.size(); row_idx++) {
+			expanded_files.push_back(OpenFileInfo::FromValue(files.GetValue(row_idx), function.name));
+		}
+	}
+	if (output.ColumnCount() < 2 || !IsOptionsColumn(output.data[1].GetType())) {
 		return;
 	}
-	// a file struct holds the options to open the file with next to its path
-	for (idx_t row_idx = 0; row_idx < output.size(); row_idx++) {
-		expanded_files.push_back(OpenFileInfo::FromValue(files.GetValue(row_idx), function.name));
+	// the options to open the files with
+	auto &options = output.data[1];
+	auto unpack_variant = MapType::ValueType(options.GetType()).id() == LogicalTypeId::VARIANT;
+	auto list_entries = options.Values<list_entry_t>();
+	auto &values = MapVector::GetValues(options);
+	auto key_values = MapVector::GetKeys(options).Values<string_t>();
+	// variants are decoded from their unified format, which is only built once
+	RecursiveUnifiedVectorFormat variant_format;
+	unique_ptr<UnifiedVariantVectorData> variant_data;
+	if (unpack_variant) {
+		Vector::RecursiveToUnifiedFormat(values, variant_format);
+		variant_data = make_uniq<UnifiedVariantVectorData>(variant_format);
+	}
+	for (auto entry : list_entries) {
+		if (!entry.IsValid()) {
+			continue;
+		}
+		auto &file = expanded_files[start + entry.GetIndex()];
+		if (!file.extended_info) {
+			file.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		}
+		auto list_entry = entry.GetValue();
+		file.extended_info->options.reserve(file.extended_info->options.size() + list_entry.length);
+		for (idx_t child_idx = list_entry.offset; child_idx < list_entry.offset + list_entry.length; child_idx++) {
+			Value value;
+			if (variant_data) {
+				if (!variant_data->RowIsValid(child_idx)) {
+					continue;
+				}
+				value = VariantUtils::ConvertVariantToValue(*variant_data, child_idx, 0);
+			} else {
+				value = values.GetValue(child_idx);
+			}
+			if (value.IsNull()) {
+				continue;
+			}
+			file.extended_info->options[key_values[child_idx].GetValue().GetString()] = std::move(value);
+		}
 	}
 }
 
 bool TableFunctionMultiFileList::ExpandNextPath() const {
 	InitializeFunction();
 	TableFunctionInput input(bind_data.get(), local_state.get(), global_state.get());
-	if (settings.scan_files) {
-		return settings.scan_files(context, input, expanded_files);
-	}
 	// the function is run synchronously, outside of a pipeline
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;

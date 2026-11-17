@@ -10,7 +10,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/function/table/range.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -224,9 +224,54 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	return files;
 }
 
+//! A file list that expands the globs with the glob_extended table function. Files that are given together with
+//! the options to open them with are passed as file structs, which are listed as-is instead of being globbed
+static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, const vector<OpenFileInfo> &files,
+                                                    const FileGlobInput &glob_input) {
+	bool has_open_options = false;
+	for (auto &file : files) {
+		if (file.extended_info) {
+			has_open_options = true;
+			break;
+		}
+	}
+	vector<Value> globs;
+	for (auto &file : files) {
+		if (!has_open_options) {
+			globs.emplace_back(file.path);
+			continue;
+		}
+		Value entry(file.path);
+		if (file.extended_info) {
+			// a struct even without options - an entry with open options is never globbed
+			vector<string> names;
+			for (auto &option : file.extended_info->options) {
+				names.push_back(option.first);
+			}
+			std::sort(names.begin(), names.end());
+			child_list_t<Value> children;
+			children.emplace_back(OpenFileInfo::PATH_FIELD, Value(file.path));
+			for (auto &name : names) {
+				children.emplace_back(name, file.extended_info->options.at(name));
+			}
+			entry = Value::STRUCT(std::move(children));
+		}
+		globs.push_back(entry.DefaultCastAs(LogicalType::VARIANT()));
+	}
+	auto glob_type = has_open_options ? LogicalType::VARIANT() : LogicalType::VARCHAR;
+	vector<Value> inputs {Value::LIST(glob_type, std::move(globs))};
+	named_argument_map_t named_parameters;
+	named_parameters["allow_empty"] = Value::BOOLEAN(glob_input.AllowsEmpty());
+	if (glob_input.behavior == FileGlobOptions::FALLBACK_GLOB) {
+		named_parameters["fallback_extension"] = Value(glob_input.extension);
+	}
+	return make_uniq<TableFunctionMultiFileList>(context, Identifier("glob_extended"), std::move(inputs),
+	                                             std::move(named_parameters));
+}
+
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
-	auto res = GlobTableFunction::CreateFileList(context, vector<OpenFileInfo>(paths.begin(), paths.end()), glob_input);
+	auto res = CreateGlobFileList(context, vector<OpenFileInfo>(paths.begin(), paths.end()), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -251,7 +296,7 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 		}
 		return CreateFileList(context, paths, glob_input);
 	}
-	auto res = GlobTableFunction::CreateFileList(context, std::move(files), glob_input);
+	auto res = CreateGlobFileList(context, files, glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

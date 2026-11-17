@@ -3,10 +3,11 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 #include "duckdb/execution/progress_data.hpp"
 
 #include <algorithm>
@@ -28,14 +29,45 @@ struct GlobFunctionBindData : public TableFunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto result = make_uniq<GlobFunctionBindData>(FileGlobOptions::ALLOW_EMPTY);
+static unique_ptr<GlobFunctionBindData> BindGlobs(TableFunctionBindInput &input, FileGlobInput glob_input) {
+	auto result = make_uniq<GlobFunctionBindData>(std::move(glob_input));
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	result->globs = multi_file_reader->ParseFileList(input.inputs[0]);
+	return result;
+}
+
+static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
-	return std::move(result);
+	return BindGlobs(input, FileGlobOptions::ALLOW_EMPTY);
+}
+
+static unique_ptr<FunctionData> GlobExtendedFunctionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                         vector<LogicalType> &return_types, vector<Identifier> &names) {
+	bool allow_empty = true;
+	string fallback_extension;
+	for (auto &entry : input.named_parameters) {
+		if (entry.second.IsNull()) {
+			continue;
+		}
+		if (entry.first == "allow_empty") {
+			allow_empty = BooleanValue::Get(entry.second);
+		} else if (entry.first == "fallback_extension") {
+			fallback_extension = StringValue::Get(entry.second);
+		}
+	}
+	FileGlobInput glob_input(allow_empty ? FileGlobOptions::ALLOW_EMPTY : FileGlobOptions::DISALLOW_EMPTY);
+	if (!fallback_extension.empty()) {
+		// a pattern without a glob that matches nothing is globbed as a directory of files with this extension
+		glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, fallback_extension);
+		glob_input.allow_empty = allow_empty;
+	}
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("file");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARIANT()));
+	names.emplace_back("options");
+	return BindGlobs(input, std::move(glob_input));
 }
 
 struct GlobFunctionState : public GlobalTableFunctionState {
@@ -106,11 +138,10 @@ static bool GlobExpandNext(ClientContext &context, const GlobFunctionBindData &b
 	return true;
 }
 
-static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+//! Expand until there are files to return - returns the number of files to return next (0 when done)
+static idx_t GlobNextFiles(ClientContext &context, TableFunctionInput &data_p) {
 	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
-
-	// expand until there are files to return, or until all globs have been expanded
 	while (state.pending_offset >= state.pending_files.size()) {
 		if (context.IsInterrupted()) {
 			throw InterruptException();
@@ -118,36 +149,118 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		state.pending_files.clear();
 		state.pending_offset = 0;
 		if (!GlobExpandNext(context, bind_data, state, state.pending_files)) {
-			return;
+			return 0;
 		}
 	}
-	auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.pending_files.size() - state.pending_offset);
-	auto writer = FlatVector::Writer<string_t>(output.data[0], count);
+	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.pending_files.size() - state.pending_offset);
+}
+
+static void WriteFiles(GlobFunctionState &state, Vector &result, idx_t count) {
+	auto writer = FlatVector::Writer<string_t>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		writer.WriteValue(string_t(state.pending_files[state.pending_offset + i].path));
+	}
+}
+
+//! Write the options to open the files with as a MAP(VARCHAR, VARIANT). The values are converted to VARIANT one
+//! type at a time - a glob produces the same few option types for every file
+static void WriteFileOptions(ClientContext &context, GlobFunctionState &state, Vector &result, idx_t count) {
+	idx_t option_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto &file = state.pending_files[state.pending_offset + i];
-		writer.WriteValue(string_t(file.path));
+		if (file.extended_info) {
+			option_count += file.extended_info->options.size();
+		}
 	}
+	ListVector::Reserve(result, option_count);
+	auto &keys = MapVector::GetKeys(result);
+	auto &values = MapVector::GetValues(result);
+
+	//! the values of every type, and the position of each value among the options
+	vector<LogicalType> value_types;
+	vector<vector<reference<const Value>>> typed_values;
+	vector<pair<idx_t, idx_t>> value_positions;
+	value_positions.reserve(option_count);
+	{
+		auto list_writer = FlatVector::Writer<list_entry_t>(result, count);
+		auto key_writer = FlatVector::Writer<string_t>(keys, option_count);
+		idx_t offset = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto &file = state.pending_files[state.pending_offset + i];
+			if (!file.extended_info) {
+				list_writer.WriteNull();
+				continue;
+			}
+			auto &options = file.extended_info->options;
+			list_writer.WriteValue(list_entry_t(offset, options.size()));
+			offset += options.size();
+			for (auto &option : options) {
+				key_writer.WriteValue(string_t(option.first));
+				idx_t type_idx;
+				for (type_idx = 0; type_idx < value_types.size(); type_idx++) {
+					if (value_types[type_idx] == option.second.type()) {
+						break;
+					}
+				}
+				if (type_idx == value_types.size()) {
+					value_types.push_back(option.second.type());
+					typed_values.emplace_back();
+				}
+				value_positions.emplace_back(type_idx, typed_values[type_idx].size());
+				typed_values[type_idx].push_back(option.second);
+			}
+		}
+	}
+	ListVector::SetListSize(result, option_count);
+	if (option_count == 0) {
+		return;
+	}
+	// convert the values of every type to VARIANT in one go, one after the other
+	Vector variants(LogicalType::VARIANT(), option_count);
+	vector<idx_t> type_offsets;
+	idx_t variant_offset = 0;
+	for (idx_t type_idx = 0; type_idx < value_types.size(); type_idx++) {
+		auto &type_values = typed_values[type_idx];
+		Vector typed(value_types[type_idx], type_values.size());
+		for (idx_t i = 0; i < type_values.size(); i++) {
+			typed.SetValue(i, type_values[i].get());
+		}
+		Vector converted(LogicalType::VARIANT(), type_values.size());
+		VectorOperations::Cast(context, typed, converted, type_values.size());
+		VectorOperations::Copy(converted, variants, type_values.size(), 0, variant_offset);
+		type_offsets.push_back(variant_offset);
+		variant_offset += type_values.size();
+	}
+	// and put them in the position of their option
+	SelectionVector sel(option_count);
+	for (idx_t i = 0; i < option_count; i++) {
+		auto &position = value_positions[i];
+		sel.set_index(i, type_offsets[position.first] + position.second);
+	}
+	VectorOperations::Copy(variants, values, sel, option_count, 0, 0);
+}
+
+static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &state = data_p.global_state->Cast<GlobFunctionState>();
+	auto count = GlobNextFiles(context, data_p);
+	if (count == 0) {
+		return;
+	}
+	WriteFiles(state, output.data[0], count);
 	state.pending_offset += count;
 	state.files_returned.fetch_add(count, std::memory_order_relaxed);
 }
 
-static bool GlobScanFiles(ClientContext &context, TableFunctionInput &data_p, vector<OpenFileInfo> &result) {
-	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
+static void GlobExtendedFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
-	return GlobExpandNext(context, bind_data, state, result);
-}
-
-static vector<OpenFileInfo> GlobDisplayFiles(const FunctionData &bind_data_p, optional_idx max_files) {
-	// for globs we display the actual globs in the ToString() - instead of expanding to the files read
-	auto &bind_data = bind_data_p.Cast<GlobFunctionBindData>();
-	vector<OpenFileInfo> result;
-	for (auto &glob : bind_data.globs) {
-		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
-			break;
-		}
-		result.emplace_back(glob);
+	auto count = GlobNextFiles(context, data_p);
+	if (count == 0) {
+		return;
 	}
-	return result;
+	WriteFiles(state, output.data[0], count);
+	WriteFileOptions(context, state, output.data[1], count);
+	state.pending_offset += count;
+	state.files_returned.fetch_add(count, std::memory_order_relaxed);
 }
 
 static double GlobFunctionProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -167,29 +280,24 @@ static double GlobFunctionProgress(ClientContext &context, const FunctionData *b
 	return 100.0 * result.done;
 }
 
-TableFunction GlobTableFunction::GetFunction() {
+void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction glob_function("glob", FunctionSignature().AddPositionalOnly("pattern", LogicalType::VARCHAR),
 	                            GlobFunction, GlobFunctionBind, GlobFunctionInit);
 	glob_function.table_scan_progress = GlobFunctionProgress;
 	// lists the filesystem at execution time
 	glob_function.stability = FunctionStability::VOLATILE;
-	return glob_function;
-}
+	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 
-unique_ptr<MultiFileList> GlobTableFunction::CreateFileList(ClientContext &context, vector<OpenFileInfo> globs,
-                                                            const FileGlobInput &glob_input) {
-	auto bind_data = make_uniq<GlobFunctionBindData>(glob_input);
-	bind_data->globs = std::move(globs);
-	vector<LogicalType> return_types {LogicalType::VARCHAR};
-	TableFunctionMultiFileListSettings settings;
-	settings.scan_files = GlobScanFiles;
-	settings.display_files = GlobDisplayFiles;
-	return make_uniq<TableFunctionMultiFileList>(context, GetFunction(), std::move(bind_data), std::move(return_types),
-	                                             settings);
-}
-
-void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(MultiFileReader::CreateFunctionSet(GetFunction()));
+	// glob_extended also returns the options to open every file with - e.g. its size and modification time
+	TableFunction glob_extended("glob_extended",
+	                            FunctionSignature()
+	                                .AddPositionalOnly("pattern", LogicalType::VARCHAR)
+	                                .AddKeywordOnly("allow_empty", LogicalType::BOOLEAN, Value::BOOLEAN(true))
+	                                .AddKeywordOnly("fallback_extension", LogicalType::VARCHAR, Value()),
+	                            GlobExtendedFunction, GlobExtendedFunctionBind, GlobFunctionInit);
+	glob_extended.table_scan_progress = GlobFunctionProgress;
+	glob_extended.stability = FunctionStability::VOLATILE;
+	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_extended));
 }
 
 } // namespace duckdb
