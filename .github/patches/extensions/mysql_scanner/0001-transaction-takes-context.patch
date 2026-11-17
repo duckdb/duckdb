@@ -1,0 +1,244 @@
+diff --git a/src/include/mysql_types.hpp b/src/include/mysql_types.hpp
+index c6e512e..a4559c9 100644
+--- a/src/include/mysql_types.hpp
++++ b/src/include/mysql_types.hpp
+@@ -12,6 +12,7 @@
+ 
+ #include "duckdb.hpp"
+ #include "duckdb/main/client_context.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/parser/parsed_expression.hpp"
+ #include "duckdb/parser/expression/type_expression.hpp"
+ 
+@@ -39,6 +40,7 @@ struct MySQLTypeConfig {
+ 	bool incomplete_dates_as_nulls = false;
+ 
+ 	MySQLTypeConfig();
++	MySQLTypeConfig(Context &context);
+ 	MySQLTypeConfig(ClientContext &context);
+ };
+ 
+diff --git a/src/include/storage/mysql_transaction.hpp b/src/include/storage/mysql_transaction.hpp
+index 7a1325a..881f0ca 100644
+--- a/src/include/storage/mysql_transaction.hpp
++++ b/src/include/storage/mysql_transaction.hpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/transaction/transaction.hpp"
+ #include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/client_context.hpp"
++#include "duckdb/main/context.hpp"
+ 
+ #include "mysql_connection.hpp"
+ #include "storage/mysql_connection_pool.hpp"
+@@ -23,7 +24,7 @@ enum class MySQLTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STAR
+ 
+ class MySQLTransaction : public Transaction {
+ public:
+-	MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, ClientContext &context);
++	MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, Context &context);
+ 
+ 	void Start();
+ 	void Commit();
+@@ -36,12 +37,15 @@ public:
+ 		return access_mode;
+ 	}
+ 
+-	ClientContext &GetContext();
++	const MySQLTypeConfig &GetTypeConfig() const {
++		return conn_init_opts.type_config;
++	}
++
+ 	optional_ptr<CatalogEntry> ReferenceEntry(shared_ptr<CatalogEntry> &entry);
+ 
+ private:
+-	static bool GetTransactionsEnabled(ClientContext &context);
+-	static MySQLConnectionInitOptions GetConnectionInitOptions(ClientContext &context);
++	static bool GetTransactionsEnabled(Context &context);
++	static MySQLConnectionInitOptions GetConnectionInitOptions(Context &context);
+ 
+ 	MySQLCatalog &catalog;
+ 	const bool transactions_enabled = true;
+diff --git a/src/include/storage/mysql_transaction_manager.hpp b/src/include/storage/mysql_transaction_manager.hpp
+index 72bab8d..200f548 100644
+--- a/src/include/storage/mysql_transaction_manager.hpp
++++ b/src/include/storage/mysql_transaction_manager.hpp
+@@ -8,13 +8,74 @@
+ 
+ #pragma once
+ 
+-#include "dbconnector/storage/transaction_manager.hpp"
++#include <mutex>
++
++#include "duckdb/common/reference_map.hpp"
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/main/client_context.hpp"
++#include "duckdb/main/context.hpp"
++#include "duckdb/transaction/transaction_manager.hpp"
+ 
+ #include "storage/mysql_catalog.hpp"
+ #include "storage/mysql_transaction.hpp"
+ 
+ namespace duckdb {
+ 
+-using MySQLTransactionManager = dbconnector::storage::TransactionManager<MySQLCatalog, MySQLTransaction>;
++class MySQLTransactionManager : public TransactionManager {
++public:
++	MySQLTransactionManager(AttachedDatabase &db_p, MySQLCatalog &catalog_p)
++	    : TransactionManager(db_p), catalog(catalog_p) {
++	}
++
++	Transaction &StartTransaction(Context &context) override {
++		auto transaction = make_uniq<MySQLTransaction>(catalog, *this, context);
++		transaction->Start();
++		auto &result = *transaction;
++		std::lock_guard<std::mutex> guard(transaction_lock);
++		transactions[result] = std::move(transaction);
++		return result;
++	}
++
++	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override {
++		auto &db_transaction = transaction.Cast<MySQLTransaction>();
++		ErrorData error;
++		try {
++			db_transaction.Commit();
++		} catch (const std::exception &ex) {
++			error = ErrorData(ex);
++		} catch (...) {
++			error = ErrorData("Server COMMIT failed");
++		}
++		DestroyTransaction(transaction);
++		return error;
++	}
++
++	void RollbackTransaction(Transaction &transaction) override {
++		auto &db_transaction = transaction.Cast<MySQLTransaction>();
++		try {
++			db_transaction.Rollback();
++		} catch (...) {
++			DestroyTransaction(transaction);
++			throw;
++		}
++		DestroyTransaction(transaction);
++	}
++
++	void Checkpoint(ClientContext &context, bool force = false) override {
++		auto &transaction = MySQLTransaction::Get(context, db.GetCatalog());
++		auto &conn = transaction.GetConnection();
++		conn.Execute(context, "CHECKPOINT");
++	}
++
++protected:
++	void DestroyTransaction(Transaction &transaction) {
++		std::lock_guard<std::mutex> guard(transaction_lock);
++		transactions.erase(transaction);
++	}
++
++	MySQLCatalog &catalog;
++	std::mutex transaction_lock;
++	reference_map_t<Transaction, unique_ptr<MySQLTransaction>> transactions;
++};
+ 
+ } // namespace duckdb
+diff --git a/src/mysql_types.cpp b/src/mysql_types.cpp
+index 389ce9a..83e9e98 100644
+--- a/src/mysql_types.cpp
++++ b/src/mysql_types.cpp
+@@ -7,7 +7,7 @@
+ 
+ namespace duckdb {
+ 
+-static bool GetBoolOption(ClientContext &context, const std::string &opt_name) {
++static bool GetBoolOption(Context &context, const std::string &opt_name) {
+ 	Value val;
+ 	if (context.TryGetCurrentSetting(Identifier(opt_name), val)) {
+ 		return BooleanValue::Get(val);
+@@ -18,7 +18,10 @@ static bool GetBoolOption(ClientContext &context, const std::string &opt_name) {
+ MySQLTypeConfig::MySQLTypeConfig() {
+ }
+ 
+-MySQLTypeConfig::MySQLTypeConfig(ClientContext &context)
++MySQLTypeConfig::MySQLTypeConfig(ClientContext &context) : MySQLTypeConfig(context.GetContext()) {
++}
++
++MySQLTypeConfig::MySQLTypeConfig(Context &context)
+     : bit1_as_boolean(GetBoolOption(context, "mysql_bit1_as_boolean")),
+       tinyint1_as_boolean(GetBoolOption(context, "mysql_tinyint1_as_boolean")),
+       time_as_time(GetBoolOption(context, "mysql_time_as_time")),
+diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
+index 49eabe5..fbb2506 100644
+--- a/src/storage/mysql_table_entry.cpp
++++ b/src/storage/mysql_table_entry.cpp
+@@ -105,7 +105,7 @@ static bool GetBoolSetting(ClientContext &context, const std::string &name) {
+ TableFunction MySQLTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+ 	MySQLCatalog &catalog = ParentCatalog().Cast<MySQLCatalog>();
+ 	MySQLTransaction &transaction = MySQLTransaction::Get(context, catalog);
+-	auto result = make_uniq<MySQLBindData>(*this, transaction.context);
++	auto result = make_uniq<MySQLBindData>(*this, context.shared_from_this());
+ 	for (auto &col : columns.Logical()) {
+ 		result->types.push_back(col.GetType());
+ 		result->names.emplace_back(col.GetName().GetIdentifierName());
+diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
+index b44d959..da4254c 100644
+--- a/src/storage/mysql_table_set.cpp
++++ b/src/storage/mysql_table_set.cpp
+@@ -34,7 +34,7 @@ void MySQLTableSet::AddColumn(MySQLTransaction &transaction, MySQLResult &result
+ 	type_info.precision = result.IsNull(column_index + 5) ? -1 : result.GetInt64(column_index + 5);
+ 	type_info.scale = result.IsNull(column_index + 6) ? -1 : result.GetInt64(column_index + 6);
+ 
+-	auto column_type = MySQLTypes::TypeToLogicalType({transaction.GetContext()}, type_info);
++	auto column_type = MySQLTypes::TypeToLogicalType(transaction.GetTypeConfig(), type_info);
+ 	ColumnDefinition column(Identifier(std::move(column_name)), std::move(column_type));
+ 	if (!default_value.empty()) {
+ 		auto expressions = Parser::GetBuiltinParser().ParseExpressionList(default_value);
+@@ -224,7 +224,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
+ }
+ 
+ string GetMySQLCreateTable(MySQLTransaction &transaction, CreateTableInfo &info) {
+-	MySQLTypeConfig type_config(transaction.GetContext());
++	const auto &type_config = transaction.GetTypeConfig();
+ 	for (idx_t i = 0; i < info.columns.LogicalColumnCount(); i++) {
+ 		auto &col = info.columns.GetColumnMutable(LogicalIndex(i));
+ 		col.SetType(MySQLTypes::ToMySQLType(type_config, col.GetType()));
+diff --git a/src/storage/mysql_transaction.cpp b/src/storage/mysql_transaction.cpp
+index 27cd593..4580f45 100644
+--- a/src/storage/mysql_transaction.cpp
++++ b/src/storage/mysql_transaction.cpp
+@@ -4,7 +4,7 @@
+ 
+ namespace duckdb {
+ 
+-MySQLTransaction::MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, ClientContext &context)
++MySQLTransaction::MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), catalog(mysql_catalog), transactions_enabled(GetTransactionsEnabled(context)),
+       access_mode(mysql_catalog.access_mode), conn_init_opts(GetConnectionInitOptions(context)) {
+ }
+@@ -91,7 +91,7 @@ MySQLTransaction &MySQLTransaction::Get(ClientContext &context, Catalog &catalog
+ 	return Transaction::Get(context, catalog).Cast<MySQLTransaction>();
+ }
+ 
+-bool MySQLTransaction::GetTransactionsEnabled(ClientContext &context) {
++bool MySQLTransaction::GetTransactionsEnabled(Context &context) {
+ 	Value val;
+ 	if (context.TryGetCurrentSetting("mysql_enable_transactions", val)) {
+ 		return BooleanValue::Get(val);
+@@ -99,7 +99,7 @@ bool MySQLTransaction::GetTransactionsEnabled(ClientContext &context) {
+ 	return true;
+ }
+ 
+-MySQLConnectionInitOptions MySQLTransaction::GetConnectionInitOptions(ClientContext &context) {
++MySQLConnectionInitOptions MySQLTransaction::GetConnectionInitOptions(Context &context) {
+ 	MySQLConnectionInitOptions res;
+ 	res.type_config = MySQLTypeConfig(context);
+ 	Value val;
+@@ -109,11 +109,6 @@ MySQLConnectionInitOptions MySQLTransaction::GetConnectionInitOptions(ClientCont
+ 	return res;
+ }
+ 
+-// todo: shared_ptr
+-ClientContext &MySQLTransaction::GetContext() {
+-	return *context.lock();
+-}
+-
+ optional_ptr<CatalogEntry> MySQLTransaction::ReferenceEntry(shared_ptr<CatalogEntry> &entry) {
+ 	auto &ref = *entry;
+ 	referenced_entries.emplace(ref, entry);

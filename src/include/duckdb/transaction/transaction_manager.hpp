@@ -19,6 +19,7 @@ namespace duckdb {
 
 class AttachedDatabase;
 class ClientContext;
+class Context;
 class Catalog;
 struct ClientLockWrapper;
 class DatabaseInstance;
@@ -32,7 +33,7 @@ public:
 	virtual ~TransactionManager();
 
 	//! Start a new transaction
-	virtual Transaction &StartTransaction(ClientContext &context) = 0;
+	virtual Transaction &StartTransaction(Context &context) = 0;
 	//! Commit the given transaction. Returns a non-empty error message on failure.
 	virtual ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) = 0;
 	//! Rollback the given transaction

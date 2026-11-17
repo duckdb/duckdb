@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -36,10 +37,10 @@ TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound
     : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
-DuckTransaction::DuckTransaction(DuckTransactionManager &manager, transaction_t start_time, SnapshotView view_p,
-                                 idx_t catalog_version_p)
-    : Transaction(manager), start_time(start_time), view(view_p), commit_id(0), catalog_version(catalog_version_p),
-      awaiting_cleanup(false), undo_buffer(*this, manager.GetDB().GetDatabase()),
+DuckTransaction::DuckTransaction(DuckTransactionManager &manager, Context &context, transaction_t start_time,
+                                 SnapshotView view_p, idx_t catalog_version_p)
+    : Transaction(manager, context), start_time(start_time), view(view_p), commit_id(0),
+      catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context.GetDatabase()),
       storage(make_uniq<LocalStorage>(*this)) {
 	D_ASSERT(IsCommitted(start_time) && !IsCommitted(view.transaction_id));
 }

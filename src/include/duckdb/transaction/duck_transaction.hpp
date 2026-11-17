@@ -36,7 +36,7 @@ struct CommitInfo {
 
 class DuckTransaction : public Transaction {
 public:
-	DuckTransaction(DuckTransactionManager &manager, transaction_t start_time, SnapshotView view,
+	DuckTransaction(DuckTransactionManager &manager, Context &context, transaction_t start_time, SnapshotView view,
 	                idx_t catalog_version);
 	~DuckTransaction() override;
 

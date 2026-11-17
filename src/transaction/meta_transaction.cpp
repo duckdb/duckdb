@@ -62,7 +62,7 @@ Transaction &MetaTransaction::GetTransaction(ClientContext &context, AttachedDat
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
-		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
+		auto &new_transaction = db.GetTransactionManager().StartTransaction(context.GetContext());
 		new_transaction.active_query = active_query.load();
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);

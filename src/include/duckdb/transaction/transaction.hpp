@@ -22,6 +22,7 @@ class SchemaCatalogEntry;
 class AttachedDatabase;
 class ColumnData;
 class ClientContext;
+class Context;
 class CatalogEntry;
 class DataTable;
 class DatabaseInstance;
@@ -40,7 +41,7 @@ struct DatabaseModificationType;
 //! transaction
 class Transaction {
 public:
-	DUCKDB_API explicit Transaction(TransactionManager &manager);
+	DUCKDB_API Transaction(TransactionManager &manager, Context &context);
 	DUCKDB_API virtual ~Transaction();
 
 	TransactionManager &manager;

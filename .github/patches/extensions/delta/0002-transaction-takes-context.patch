@@ -1,0 +1,77 @@
+diff --git a/src/include/storage/delta_transaction.hpp b/src/include/storage/delta_transaction.hpp
+index db31d77..7fdefd8 100644
+--- a/src/include/storage/delta_transaction.hpp
++++ b/src/include/storage/delta_transaction.hpp
+@@ -12,6 +12,7 @@
+ #include "duckdb/common/optional_idx.hpp"
+ #include "duckdb/common/types/timestamp.hpp"
+ #include "duckdb/transaction/transaction.hpp"
++#include "duckdb/main/context.hpp"
+ 
+ namespace duckdb {
+ class DeltaCatalog;
+@@ -26,7 +27,7 @@ enum class DeltaTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STAR
+ 
+ class DeltaTransaction : public Transaction {
+ public:
+-	DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context);
++	DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, Context &context);
+ 	~DeltaTransaction() override;
+ 
+ 	void Start();
+diff --git a/src/include/storage/delta_transaction_manager.hpp b/src/include/storage/delta_transaction_manager.hpp
+index 3957982..b33180a 100644
+--- a/src/include/storage/delta_transaction_manager.hpp
++++ b/src/include/storage/delta_transaction_manager.hpp
+@@ -18,7 +18,7 @@ class DeltaTransactionManager : public TransactionManager {
+ public:
+ 	DeltaTransactionManager(AttachedDatabase &db_p, DeltaCatalog &delta_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
+ 
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+index 4c8961e..ca1e705 100644
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -29,7 +29,7 @@
+ 
+ namespace duckdb {
+ 
+-DeltaTransaction::DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, ClientContext &context)
++DeltaTransaction::DeltaTransaction(DeltaCatalog &delta_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), access_mode(delta_catalog.access_mode), parent_commit(delta_catalog.parent_commit),
+       parent_catalog_name(delta_catalog.parent_catalog_name), unity_table_id(delta_catalog.unity_table_id) {
+ 	commit_function = delta_catalog.commit_function;
+@@ -336,7 +336,7 @@ vector<DeltaMultiFileColumnDefinition> DeltaTransaction::GetWriteSchema(ClientCo
+ 
+ void DeltaTransaction::CleanUpFiles() {
+ 	// Clean up the files created by this transaction
+-	auto context_ptr = context.lock();
++	auto context_ptr = current_context.lock();
+ 	if (context_ptr) {
+ 		for (const auto &append : outstanding_appends) {
+ 			auto &fs = FileSystem::GetFileSystem(*context_ptr);
+@@ -603,6 +603,7 @@ void DeltaTransaction::Append(ClientContext &context, const vector<DeltaDataFile
+ 	if (transaction_state == DeltaTransactionState::TRANSACTION_NOT_YET_STARTED) {
+ 		InitializeTransaction(context);
+ 	}
++	current_context = context.shared_from_this();
+ 
+ 	idx_t start = outstanding_appends.size();
+ 
+diff --git a/src/storage/delta_transaction_manager.cpp b/src/storage/delta_transaction_manager.cpp
+index e3f5265..32d6daa 100644
+--- a/src/storage/delta_transaction_manager.cpp
++++ b/src/storage/delta_transaction_manager.cpp
+@@ -8,7 +8,7 @@ DeltaTransactionManager::DeltaTransactionManager(AttachedDatabase &db_p, DeltaCa
+     : TransactionManager(db_p), delta_catalog(delta_catalog) {
+ }
+ 
+-Transaction &DeltaTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &DeltaTransactionManager::StartTransaction(Context &context) {
+ 	auto transaction = make_uniq<DeltaTransaction>(delta_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;

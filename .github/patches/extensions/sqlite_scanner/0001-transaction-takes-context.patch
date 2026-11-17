@@ -1,0 +1,487 @@
+diff --git a/src/include/storage/sqlite_schema_entry.hpp b/src/include/storage/sqlite_schema_entry.hpp
+index 6661467..af2d2ff 100644
+--- a/src/include/storage/sqlite_schema_entry.hpp
++++ b/src/include/storage/sqlite_schema_entry.hpp
+@@ -39,10 +39,10 @@ public:
+ 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+ 
+ private:
+-	void AlterTable(SQLiteTransaction &transaction, RenameTableInfo &info);
+-	void AlterTable(SQLiteTransaction &transaction, RenameColumnInfo &info);
+-	void AlterTable(SQLiteTransaction &transaction, AddColumnInfo &info);
+-	void AlterTable(SQLiteTransaction &transaction, RemoveColumnInfo &info);
++	void AlterTable(ClientContext &context, SQLiteTransaction &transaction, RenameTableInfo &info);
++	void AlterTable(ClientContext &context, SQLiteTransaction &transaction, RenameColumnInfo &info);
++	void AlterTable(ClientContext &context, SQLiteTransaction &transaction, AddColumnInfo &info);
++	void AlterTable(ClientContext &context, SQLiteTransaction &transaction, RemoveColumnInfo &info);
+ 
+ 	void TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name);
+ };
+diff --git a/src/include/storage/sqlite_transaction.hpp b/src/include/storage/sqlite_transaction.hpp
+index 2b90b84..99bf62c 100644
+--- a/src/include/storage/sqlite_transaction.hpp
++++ b/src/include/storage/sqlite_transaction.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/transaction/transaction.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/common/case_insensitive_map.hpp"
+ #include "duckdb/common/mutex.hpp"
+ #include "duckdb/common/atomic.hpp"
+@@ -21,16 +22,16 @@ class SQLiteCatalogMap;
+ 
+ class SQLiteTransaction : public Transaction {
+ public:
+-	SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, ClientContext &context);
++	SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, Context &context);
+ 	~SQLiteTransaction() override;
+ 
+ 	void Start();
+ 	void Commit();
+ 	void Rollback();
+ 
+-	SQLiteDB &GetDB();
+-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &table_name);
+-	void DropEntry(CatalogType type, const string &table_name, bool cascade);
++	SQLiteDB &GetDB(ClientContext &context);
++	optional_ptr<CatalogEntry> GetCatalogEntry(ClientContext &context, const string &table_name);
++	void DropEntry(ClientContext &context, CatalogType type, const string &table_name, bool cascade);
+ 	void ClearTableEntry(const string &table_name);
+ 
+ 	static SQLiteTransaction &Get(ClientContext &context, Catalog &catalog);
+diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
+index b6a736d..8c28c5f 100644
+--- a/src/include/storage/sqlite_transaction_manager.hpp
++++ b/src/include/storage/sqlite_transaction_manager.hpp
+@@ -19,7 +19,7 @@ class SQLiteTransactionManager : public TransactionManager {
+ public:
+ 	SQLiteTransactionManager(AttachedDatabase &db_p, SQLiteCatalog &sqlite_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
+ 
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index 6c40ad3..3a17812 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -220,7 +220,7 @@ SqliteInitLocalState(ExecutionContext &context, TableFunctionInitInput &input, G
+ 	if (!bind_data.catalog_name.empty()) {
+ 		auto attached_catalog = SQLiteCatalog::Lookup(context.client, bind_data.catalog_name);
+ 		SQLiteCatalog &catalog = attached_catalog.Get<SQLiteCatalog>();
+-		result->db = &SQLiteTransaction::Get(context.client, catalog).GetDB();
++		result->db = &SQLiteTransaction::Get(context.client, catalog).GetDB(context.client);
+ 	}
+ 	if (!SqliteParallelStateNext(context.client, bind_data, *result, gstate)) {
+ 		result->done = true;
+@@ -266,7 +266,7 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
+ 		auto attached_catalog = SQLiteCatalog::Lookup(context, bind_data.catalog_name);
+ 		SQLiteCatalog &catalog = attached_catalog.Get<SQLiteCatalog>();
+ 		auto &transaction = SQLiteTransaction::Get(context, catalog);
+-		auto &con = transaction.GetDB();
++		auto &con = transaction.GetDB(context);
+ 		int64_t affected_rows = con.Execute(bind_data.sql);
+ 		int64_t *vec_data = FlatVector::GetDataMutable<int64_t>(output.data[0]);
+ 		vec_data[0] = affected_rows;
+diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
+index e38f332..4fadcb3 100644
+--- a/src/storage/sqlite_catalog.cpp
++++ b/src/storage/sqlite_catalog.cpp
+@@ -89,7 +89,7 @@ DatabaseSize SQLiteCatalog::GetDatabaseSize(ClientContext &context) {
+ 	DatabaseSize result;
+ 
+ 	auto &transaction = SQLiteTransaction::Get(context, *this);
+-	auto &db = transaction.GetDB();
++	auto &db = transaction.GetDB(context);
+ 	result.total_blocks = db.RunPragma("page_count");
+ 	result.block_size = db.RunPragma("page_size");
+ 	result.free_blocks = db.RunPragma("freelist_count");
+diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
+index 0088a4e..63fbccd 100644
+--- a/src/storage/sqlite_delete.cpp
++++ b/src/storage/sqlite_delete.cpp
+@@ -70,7 +70,7 @@ SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataCh
+ 		if (!insert_gstate.statement.IsOpen()) {
+ 			auto &transaction = SQLiteTransaction::Get(context.client, insert_gstate.table.catalog);
+ 			insert_gstate.statement =
+-			    transaction.GetDB().Prepare(GetDeleteSQL(insert_gstate.table.name.GetIdentifierName()));
++			    transaction.GetDB(context.client).Prepare(GetDeleteSQL(insert_gstate.table.name.GetIdentifierName()));
+ 		}
+ 		for (auto row_id : insert_gstate.rowids) {
+ 			insert_gstate.statement.Bind<int64_t>(0, row_id);
+diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
+index 8100563..ef410cf 100644
+--- a/src/storage/sqlite_insert.cpp
++++ b/src/storage/sqlite_insert.cpp
+@@ -90,7 +90,7 @@ unique_ptr<GlobalSinkState> SQLiteInsert::GetGlobalSinkState(ClientContext &cont
+ 	}
+ 	auto &transaction = SQLiteTransaction::Get(context, insert_table->catalog);
+ 	auto result = make_uniq<SQLiteInsertGlobalState>(context);
+-	result->statement = transaction.GetDB().Prepare(GetInsertSQL(*this, insert_table));
++	result->statement = transaction.GetDB(context).Prepare(GetInsertSQL(*this, insert_table));
+ 	return std::move(result);
+ }
+ 
+diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
+index e4012b3..859f86f 100644
+--- a/src/storage/sqlite_query.cpp
++++ b/src/storage/sqlite_query.cpp
+@@ -69,7 +69,7 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 		}
+ 	}
+ 
+-	auto &con = transaction.GetDB();
++	auto &con = transaction.GetDB(context);
+ 	auto stmt = con.Prepare(sql);
+ 	if (!stmt.stmt) {
+ 		throw BinderException("Failed to prepare query \"%s\"", sql);
+diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
+index 50cc245..afc5f44 100644
+--- a/src/storage/sqlite_schema_entry.cpp
++++ b/src/storage/sqlite_schema_entry.cpp
+@@ -123,7 +123,7 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateTable(CatalogTransaction tra
+ 		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name.GetIdentifierName());
+ 	}
+ 
+-	sqlite_transaction.GetDB().Execute(GetCreateTableSQL(base_info));
++	sqlite_transaction.GetDB(transaction.GetContext()).Execute(GetCreateTableSQL(base_info));
+ 	return GetEntry(transaction, CatalogType::TABLE_ENTRY, table_name);
+ }
+ 
+@@ -181,7 +181,7 @@ string GetCreateIndexSQL(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+                                                           TableCatalogEntry &table) {
+ 	auto &sqlite_transaction = SQLiteTransaction::Get(transaction.GetContext(), table.catalog);
+-	sqlite_transaction.GetDB().Execute(GetCreateIndexSQL(info, table));
++	sqlite_transaction.GetDB(transaction.GetContext()).Execute(GetCreateIndexSQL(info, table));
+ 	return nullptr;
+ }
+ 
+@@ -222,7 +222,7 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateView(CatalogTransaction tran
+ 		TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.GetViewName().GetIdentifierName());
+ 	}
+ 	auto &sqlite_transaction = GetSQLiteTransaction(transaction);
+-	sqlite_transaction.GetDB().Execute(GetCreateViewSQL(info));
++	sqlite_transaction.GetDB(transaction.GetContext()).Execute(GetCreateViewSQL(info));
+ 	return GetEntry(transaction, CatalogType::VIEW_ENTRY, info.GetViewName());
+ }
+ 
+@@ -254,28 +254,30 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateType(CatalogTransaction tran
+ 	throw BinderException("SQLite databases do not support creating types");
+ }
+ 
+-void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RenameTableInfo &info) {
++void SQLiteSchemaEntry::AlterTable(ClientContext &context, SQLiteTransaction &sqlite_transaction,
++                                   RenameTableInfo &info) {
+ 	string sql = "ALTER TABLE ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.GetQualifiedName().Name().GetIdentifierName());
+ 	sql += " RENAME TO ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.new_table_name.GetIdentifierName());
+-	sqlite_transaction.GetDB().Execute(sql);
++	sqlite_transaction.GetDB(context).Execute(sql);
+ }
+ 
+-void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RenameColumnInfo &info) {
++void SQLiteSchemaEntry::AlterTable(ClientContext &context, SQLiteTransaction &sqlite_transaction,
++                                   RenameColumnInfo &info) {
+ 	string sql = "ALTER TABLE ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.GetQualifiedName().Name().GetIdentifierName());
+ 	sql += " RENAME COLUMN  ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.old_name.GetIdentifierName());
+ 	sql += " TO ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.new_name.GetIdentifierName());
+-	sqlite_transaction.GetDB().Execute(sql);
++	sqlite_transaction.GetDB(context).Execute(sql);
+ }
+ 
+-void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, AddColumnInfo &info) {
++void SQLiteSchemaEntry::AlterTable(ClientContext &context, SQLiteTransaction &sqlite_transaction, AddColumnInfo &info) {
+ 	if (info.if_column_not_exists) {
+-		if (sqlite_transaction.GetDB().ColumnExists(info.GetQualifiedName().Name().GetIdentifierName(),
+-		                                            info.new_column.GetName().GetIdentifierName())) {
++		if (sqlite_transaction.GetDB(context).ColumnExists(info.GetQualifiedName().Name().GetIdentifierName(),
++		                                                   info.new_column.GetName().GetIdentifierName())) {
+ 			return;
+ 		}
+ 	}
+@@ -285,13 +287,14 @@ void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, AddCol
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.new_column.Name().GetIdentifierName());
+ 	sql += " ";
+ 	sql += info.new_column.Type().ToString();
+-	sqlite_transaction.GetDB().Execute(sql);
++	sqlite_transaction.GetDB(context).Execute(sql);
+ }
+ 
+-void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RemoveColumnInfo &info) {
++void SQLiteSchemaEntry::AlterTable(ClientContext &context, SQLiteTransaction &sqlite_transaction,
++                                   RemoveColumnInfo &info) {
+ 	if (info.if_column_exists) {
+-		if (!sqlite_transaction.GetDB().ColumnExists(info.GetQualifiedName().Name().GetIdentifierName(),
+-		                                             info.removed_column.GetIdentifierName())) {
++		if (!sqlite_transaction.GetDB(context).ColumnExists(info.GetQualifiedName().Name().GetIdentifierName(),
++		                                                    info.removed_column.GetIdentifierName())) {
+ 			return;
+ 		}
+ 	}
+@@ -299,7 +302,7 @@ void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, Remove
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.GetQualifiedName().Name().GetIdentifierName());
+ 	sql += " DROP COLUMN  ";
+ 	sql += SQLiteUtils::WriteOptionallyQuoted(info.removed_column.GetIdentifierName());
+-	sqlite_transaction.GetDB().Execute(sql);
++	sqlite_transaction.GetDB(context).Execute(sql);
+ }
+ 
+ void SQLiteSchemaEntry::Alter(CatalogTransaction catalog_transaction, AlterInfo &info) {
+@@ -307,19 +310,20 @@ void SQLiteSchemaEntry::Alter(CatalogTransaction catalog_transaction, AlterInfo
+ 		throw BinderException("Only altering tables is supported for now");
+ 	}
+ 	auto &alter = info.Cast<AlterTableInfo>();
+-	auto &transaction = SQLiteTransaction::Get(catalog_transaction.GetContext(), catalog);
++	auto &context = catalog_transaction.GetContext();
++	auto &transaction = SQLiteTransaction::Get(context, catalog);
+ 	switch (alter.alter_table_type) {
+ 	case AlterTableType::RENAME_TABLE:
+-		AlterTable(transaction, alter.Cast<RenameTableInfo>());
++		AlterTable(context, transaction, alter.Cast<RenameTableInfo>());
+ 		break;
+ 	case AlterTableType::RENAME_COLUMN:
+-		AlterTable(transaction, alter.Cast<RenameColumnInfo>());
++		AlterTable(context, transaction, alter.Cast<RenameColumnInfo>());
+ 		break;
+ 	case AlterTableType::ADD_COLUMN:
+-		AlterTable(transaction, alter.Cast<AddColumnInfo>());
++		AlterTable(context, transaction, alter.Cast<AddColumnInfo>());
+ 		break;
+ 	case AlterTableType::REMOVE_COLUMN:
+-		AlterTable(transaction, alter.Cast<RemoveColumnInfo>());
++		AlterTable(context, transaction, alter.Cast<RemoveColumnInfo>());
+ 		break;
+ 	default:
+ 		throw BinderException("Unsupported ALTER TABLE type - SQLite tables only "
+@@ -335,13 +339,13 @@ void SQLiteSchemaEntry::Scan(ClientContext &context, CatalogType type,
+ 	vector<string> entries;
+ 	switch (type) {
+ 	case CatalogType::TABLE_ENTRY:
+-		entries = transaction.GetDB().GetTables();
++		entries = transaction.GetDB(context).GetTables();
+ 		break;
+ 	case CatalogType::VIEW_ENTRY:
+-		entries = transaction.GetDB().GetEntries("view");
++		entries = transaction.GetDB(context).GetEntries("view");
+ 		break;
+ 	case CatalogType::INDEX_ENTRY:
+-		entries = transaction.GetDB().GetEntries("index");
++		entries = transaction.GetDB(context).GetEntries("index");
+ 		break;
+ 	default:
+ 		// no entries of this catalog type
+@@ -373,7 +377,7 @@ void SQLiteSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ 		throw InternalException("Failed to drop entry \"%s\" - could not find entry", info.GetQualifiedName().Name());
+ 	}
+ 	auto &transaction = SQLiteTransaction::Get(context, catalog);
+-	transaction.DropEntry(info.type, info.GetQualifiedName().Name().GetIdentifierName(), info.cascade);
++	transaction.DropEntry(context, info.type, info.GetQualifiedName().Name().GetIdentifierName(), info.cascade);
+ }
+ 
+ optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction transaction,
+@@ -383,7 +387,7 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction tra
+ 	case CatalogType::INDEX_ENTRY:
+ 	case CatalogType::TABLE_ENTRY:
+ 	case CatalogType::VIEW_ENTRY:
+-		return sqlite_transaction.GetCatalogEntry(lookup_info.GetEntryName());
++		return sqlite_transaction.GetCatalogEntry(transaction.GetContext(), lookup_info.GetEntryName());
+ 	default:
+ 		return nullptr;
+ 	}
+diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
+index 808a84d..d1e4b1a 100644
+--- a/src/storage/sqlite_table_entry.cpp
++++ b/src/storage/sqlite_table_entry.cpp
+@@ -37,7 +37,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 	result->all_varchar = all_varchar;
+ 
+ 	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
+-	auto &db = transaction.GetDB();
++	auto &db = transaction.GetDB(context);
+ 
+ 	if (!db.GetRowIdInfo(name.GetIdentifierName(), result->row_id_info)) {
+ 		result->rows_per_group = optional_idx();
+@@ -64,7 +64,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 		result->rows_per_group = optional_idx();
+ 	}
+ 	result->qualified_table_name = QualifiedName(ParentCatalog().GetName(), ParentSchema().name, name);
+-	result->context_ptr = transaction.context;
++	result->context_ptr = context.shared_from_this();
+ 
+ 	bind_data = std::move(result);
+ 	return static_cast<TableFunction>(SqliteScanFunction());
+@@ -72,7 +72,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 
+ TableStorageInfo SQLiteTableEntry::GetStorageInfo(ClientContext &context) {
+ 	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
+-	auto &db = transaction.GetDB();
++	auto &db = transaction.GetDB(context);
+ 	TableStorageInfo result;
+ 
+ 	RowIdInfo info;
+diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
+index 8b4b474..5f773da 100644
+--- a/src/storage/sqlite_transaction.cpp
++++ b/src/storage/sqlite_transaction.cpp
+@@ -53,14 +53,18 @@ void SQLiteCatalogMap::EraseEntry(const string &entry_name) {
+ 	catalog_entries.erase(entry_name);
+ }
+ 
+-SQLiteTransaction::SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, ClientContext &context)
++SQLiteTransaction::SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), sqlite_catalog(sqlite_catalog), db(nullptr) {
+ 	if (sqlite_catalog.InMemory()) {
+ 		db = sqlite_catalog.GetInMemoryDatabase();
+ 		initialized.store(true, std::memory_order_release);
+ 	} else if (!FileSystem::IsRemoteFile(sqlite_catalog.path)) {
+ 		// local on-disk database - open eagerly (cheap; surfaces open errors at attach time)
+-		owned_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, context, true);
++		auto client_context = context.TryGetClientContext();
++		if (!client_context) {
++			throw InternalException("Opening a SQLite database requires a client context");
++		}
++		owned_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, *client_context, true);
+ 		db = &owned_db;
+ 		initialized.store(true, std::memory_order_release);
+ 	}
+@@ -95,7 +99,7 @@ void SQLiteTransaction::Rollback() {
+ 	}
+ }
+ 
+-SQLiteDB &SQLiteTransaction::GetDB() {
++SQLiteDB &SQLiteTransaction::GetDB(ClientContext &context) {
+ 	// Fast path: local and in-memory databases are initialized in the constructor.
+ 	if (initialized.load(std::memory_order_acquire)) {
+ 		return *db;
+@@ -104,11 +108,7 @@ SQLiteDB &SQLiteTransaction::GetDB() {
+ 	// the MetaTransaction lock. A per-transaction lock guards the init (parallel scans may race it).
+ 	lock_guard<mutex> guard(init_lock);
+ 	if (!initialized.load(std::memory_order_relaxed)) {
+-		auto client_context = context.lock();
+-		if (!client_context) {
+-			throw TransactionException("ClientContext expired before the remote SQLite connection could be opened");
+-		}
+-		auto new_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, *client_context, true);
++		auto new_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, context, true);
+ 		new_db.Execute("BEGIN TRANSACTION");
+ 		owned_db = std::move(new_db);
+ 		db = &owned_db;
+@@ -180,13 +180,13 @@ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalog
+ 	return info;
+ }
+ 
+-optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entry_name) {
++optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(ClientContext &context, const string &entry_name) {
+ 	auto entry = catalog_map->GetEntry(entry_name);
+ 	if (entry) {
+ 		return entry;
+ 	}
+ 	// catalog entry not found - look up table in main SQLite database
+-	auto type = GetDB().GetEntryType(entry_name);
++	auto type = GetDB(context).GetEntryType(entry_name);
+ 	if (type == CatalogType::INVALID) {
+ 		// no table or view found
+ 		return nullptr;
+@@ -195,8 +195,8 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+ 	switch (type) {
+ 	case CatalogType::TABLE_ENTRY: {
+ 		CreateTableInfo info(sqlite_catalog.GetMainSchema(), Identifier(entry_name));
+-		bool all_varchar = SQLiteUtils::AllVarchar(*context.lock());
+-		GetDB().GetTableInfo(entry_name, info.columns, info.constraints, all_varchar);
++		bool all_varchar = SQLiteUtils::AllVarchar(context);
++		GetDB(context).GetTableInfo(entry_name, info.columns, info.constraints, all_varchar);
+ 		D_ASSERT(!info.columns.empty());
+ 
+ 		result = make_uniq<SQLiteTableEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), info, all_varchar);
+@@ -204,18 +204,18 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+ 	}
+ 	case CatalogType::VIEW_ENTRY: {
+ 		string sql;
+-		GetDB().GetViewInfo(entry_name, sql);
++		GetDB(context).GetViewInfo(entry_name, sql);
+ 
+ 		unique_ptr<CreateViewInfo> view_info;
+ 		try {
+-			view_info = CreateViewInfo::FromCreateView(*context.lock(), sqlite_catalog.GetMainSchema(), sql);
++			view_info = CreateViewInfo::FromCreateView(context, sqlite_catalog.GetMainSchema(), sql);
+ 		} catch (std::exception &ex) {
+ 			auto view_sql = ExtractSelectStatement(sql);
+ 			auto catalog_name = StringUtil::Replace(sqlite_catalog.GetName().GetIdentifierName(), "\"", "\"\"");
+ 			auto escaped_view_sql = StringUtil::Replace(view_sql, "'", "''");
+ 			auto view_def = StringUtil::Format("CREATE VIEW %s AS FROM sqlite_query(\"%s\", '%s')", entry_name,
+ 			                                   catalog_name, escaped_view_sql);
+-			view_info = CreateViewInfo::FromCreateView(*context.lock(), sqlite_catalog.GetMainSchema(), view_def);
++			view_info = CreateViewInfo::FromCreateView(context, sqlite_catalog.GetMainSchema(), view_def);
+ 		}
+ 		view_info->internal = false;
+ 		result = make_uniq<ViewCatalogEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), *view_info);
+@@ -224,12 +224,12 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+ 	case CatalogType::INDEX_ENTRY: {
+ 		string table_name;
+ 		string sql;
+-		GetDB().GetIndexInfo(entry_name, sql, table_name);
++		GetDB(context).GetIndexInfo(entry_name, sql, table_name);
+ 		if (sql.empty()) {
+ 			throw InternalException("SQL is empty");
+ 		}
+-		auto &table = GetCatalogEntry(table_name)->Cast<TableCatalogEntry>();
+-		auto index_info = FromCreateIndex(*context.lock(), table, std::move(sql));
++		auto &table = GetCatalogEntry(context, table_name)->Cast<TableCatalogEntry>();
++		auto index_info = FromCreateIndex(context, table, std::move(sql));
+ 		index_info->SetQualifiedName(QualifiedName(sqlite_catalog.GetName(), index_info->GetQualifiedName().Schema(),
+ 		                                           index_info->GetQualifiedName().Name()));
+ 
+@@ -268,9 +268,9 @@ string GetDropSQL(CatalogType type, const string &table_name, bool cascade) {
+ 	return result;
+ }
+ 
+-void SQLiteTransaction::DropEntry(CatalogType type, const string &table_name, bool cascade) {
++void SQLiteTransaction::DropEntry(ClientContext &context, CatalogType type, const string &table_name, bool cascade) {
+ 	catalog_map->EraseEntry(table_name);
+-	GetDB().Execute(GetDropSQL(type, table_name, cascade));
++	GetDB(context).Execute(GetDropSQL(type, table_name, cascade));
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/sqlite_transaction_manager.cpp b/src/storage/sqlite_transaction_manager.cpp
+index 84183b2..8d71ab9 100644
+--- a/src/storage/sqlite_transaction_manager.cpp
++++ b/src/storage/sqlite_transaction_manager.cpp
+@@ -7,7 +7,7 @@ SQLiteTransactionManager::SQLiteTransactionManager(AttachedDatabase &db_p, SQLit
+     : TransactionManager(db_p), sqlite_catalog(sqlite_catalog) {
+ }
+ 
+-Transaction &SQLiteTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &SQLiteTransactionManager::StartTransaction(Context &context) {
+ 	auto transaction = make_uniq<SQLiteTransaction>(sqlite_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;
+@@ -58,7 +58,7 @@ void SQLiteTransactionManager::ExtractAndCloseAfterUnlock(Transaction &transacti
+ 
+ void SQLiteTransactionManager::Checkpoint(ClientContext &context, bool force) {
+ 	auto &transaction = SQLiteTransaction::Get(context, db.GetCatalog());
+-	auto &db = transaction.GetDB();
++	auto &db = transaction.GetDB(context);
+ 	db.Execute("PRAGMA wal_checkpoint");
+ }
+ 
+diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
+index d2f6ebe..68bb335 100644
+--- a/src/storage/sqlite_update.cpp
++++ b/src/storage/sqlite_update.cpp
+@@ -48,7 +48,7 @@ unique_ptr<GlobalSinkState> SQLiteUpdate::GetGlobalSinkState(ClientContext &cont
+ 
+ 	auto &transaction = SQLiteTransaction::Get(context, sqlite_table.catalog);
+ 	auto result = make_uniq<SQLiteUpdateGlobalState>(sqlite_table);
+-	result->statement = transaction.GetDB().Prepare(GetUpdateSQL(sqlite_table, columns));
++	result->statement = transaction.GetDB(context).Prepare(GetUpdateSQL(sqlite_table, columns));
+ 	return std::move(result);
+ }
+ 

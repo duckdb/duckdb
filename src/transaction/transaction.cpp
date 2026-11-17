@@ -2,10 +2,11 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 
 namespace duckdb {
 
-Transaction::Transaction(TransactionManager &manager_p)
+Transaction::Transaction(TransactionManager &manager_p, Context &)
     : manager(manager_p), active_query(MAXIMUM_QUERY_ID), is_read_only(true) {
 }
 

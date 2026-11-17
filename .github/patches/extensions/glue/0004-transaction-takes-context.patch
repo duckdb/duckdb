@@ -1,0 +1,73 @@
+diff --git a/src/catalog/glue_transaction.cpp b/src/catalog/glue_transaction.cpp
+index 09f8369..5deb6d3 100644
+--- a/src/catalog/glue_transaction.cpp
++++ b/src/catalog/glue_transaction.cpp
+@@ -5,13 +5,14 @@
+ #include "duckdb/logging/logger.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/client_context.hpp"
++#include "duckdb/main/context.hpp"
+ #include "duckdb/transaction/transaction_manager.hpp"
+ 
+ namespace duckdb {
+ 
+ namespace {
+ 
+-bool ConnectionScopedMetadataCache(ClientContext &context) {
++bool ConnectionScopedMetadataCache(Context &context) {
+ 	Value scope;
+ 	if (context.TryGetCurrentSetting("glue_metadata_cache_scope", scope) && !scope.IsNull()) {
+ 		return StringUtil::Lower(StringValue::Get(scope)) == "connection";
+@@ -22,11 +23,11 @@ bool ConnectionScopedMetadataCache(ClientContext &context) {
+ 
+ } // namespace
+ 
+-GlueTransaction::GlueTransaction(GlueCatalog &glue_catalog, TransactionManager &manager, ClientContext &context)
++GlueTransaction::GlueTransaction(GlueCatalog &glue_catalog, TransactionManager &manager, Context &context)
+     : Transaction(manager, context), glue_catalog(glue_catalog),
+       transaction_state(GlueTransactionState::TRANSACTION_NOT_YET_STARTED) {
+ 	if (ConnectionScopedMetadataCache(context)) {
+-		auto state = context.GetContext().GetRegisteredState().GetOrCreate<GlueMetadataCacheState>("glue_metadata_cache");
++		auto state = context.GetRegisteredState().GetOrCreate<GlueMetadataCacheState>("glue_metadata_cache");
+ 		cache = state->GetCache(glue_catalog.GetName().GetIdentifierName(), glue_catalog.GetAttached().oid);
+ 	} else {
+ 		cache = make_shared_ptr<GlueTransactionCache>();
+diff --git a/src/catalog/glue_transaction_manager.cpp b/src/catalog/glue_transaction_manager.cpp
+index 9f53af1..112a4d6 100644
+--- a/src/catalog/glue_transaction_manager.cpp
++++ b/src/catalog/glue_transaction_manager.cpp
+@@ -11,7 +11,7 @@ GlueTransactionManager::GlueTransactionManager(AttachedDatabase &db_p, GlueCatal
+     : TransactionManager(db_p), glue_catalog(glue_catalog) {
+ }
+ 
+-Transaction &GlueTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &GlueTransactionManager::StartTransaction(Context &context) {
+ 	auto transaction = make_uniq<GlueTransaction>(glue_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;
+diff --git a/src/include/catalog/glue_transaction.hpp b/src/include/catalog/glue_transaction.hpp
+index 68bb793..db37941 100644
+--- a/src/include/catalog/glue_transaction.hpp
++++ b/src/include/catalog/glue_transaction.hpp
+@@ -146,7 +146,7 @@ private:
+ //! immediately. The transaction exists because every attached database needs one, and carries the metadata cache.
+ class GlueTransaction : public Transaction {
+ public:
+-	GlueTransaction(GlueCatalog &glue_catalog, TransactionManager &manager, ClientContext &context);
++	GlueTransaction(GlueCatalog &glue_catalog, TransactionManager &manager, Context &context);
+ 	~GlueTransaction() override;
+ 
+ 	void Start();
+diff --git a/src/include/catalog/glue_transaction_manager.hpp b/src/include/catalog/glue_transaction_manager.hpp
+index e37e655..c6c4c97 100644
+--- a/src/include/catalog/glue_transaction_manager.hpp
++++ b/src/include/catalog/glue_transaction_manager.hpp
+@@ -12,7 +12,7 @@ class GlueTransactionManager : public TransactionManager {
+ public:
+ 	GlueTransactionManager(AttachedDatabase &db_p, GlueCatalog &glue_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
+ 
