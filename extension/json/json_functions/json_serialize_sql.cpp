@@ -315,6 +315,42 @@ struct ExecuteSqlTableFunction {
 		return make_uniq<State>();
 	}
 
+	//! Binds a copy of the statement, rewritten as it will be when it runs, so the columns are the ones it returns
+	static void BindColumns(Binder &binder, ClientContext &context, BindData &data) {
+		unique_ptr<SQLStatement> statement = make_uniq<SelectStatement>();
+		statement->Cast<SelectStatement>().node = data.node->Copy();
+		Optimizer(binder, context).OptimizeStatement(statement);
+		auto bound = binder.Bind(*statement);
+		data.names = std::move(bound.names);
+		data.types = std::move(bound.types);
+	}
+
+	//! Pins each object a replacement scan found outside the catalog as a CTE around the statement, so that every
+	//! execution reads the object this bind found. Returns whether anything was pinned.
+	static bool PinReplacementScans(Binder &binder, BindData &data) {
+		bool pinned_any = false;
+		for (auto &replacement : binder.GetReplacementScans()) {
+			if (!replacement.second->external_dependency) {
+				continue;
+			}
+			pinned_any = true;
+			auto pinned = make_uniq<SelectNode>();
+			pinned->select_list.push_back(make_uniq<StarExpression>());
+			pinned->from_table = std::move(replacement.second);
+			auto cte_info = make_uniq<CommonTableExpressionInfo>();
+			cte_info->query_node = std::move(pinned);
+
+			auto outer = make_uniq<SelectNode>();
+			outer->select_list.push_back(make_uniq<StarExpression>());
+			auto inner = make_uniq<SelectStatement>();
+			inner->node = std::move(data.node);
+			outer->from_table = make_uniq<SubqueryRef>(std::move(inner), "query_relation");
+			outer->cte_map.map[replacement.first] = std::move(cte_info);
+			data.node = std::move(outer);
+		}
+		return pinned_any;
+	}
+
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		JSONFunctionLocalState local_state(context.GetContext());
@@ -336,45 +372,14 @@ struct ExecuteSqlTableFunction {
 
 		auto &inner_context = *result->con->context;
 		inner_context.RunFunctionInTransaction([&]() {
-			auto bind_columns = [&](Binder &binder) {
-				unique_ptr<SQLStatement> statement = make_uniq<SelectStatement>();
-				statement->Cast<SelectStatement>().node = result->node->Copy();
-				// the statement is rewritten as it will be when it runs, so the columns bound here are the ones it
-				// returns
-				Optimizer(binder, inner_context).OptimizeStatement(statement);
-				auto bound = binder.Bind(*statement);
-				result->names = std::move(bound.names);
-				result->types = std::move(bound.types);
-			};
 			auto binder = Binder::CreateBinder(inner_context);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-			bind_columns(*binder);
-			// An object a replacement scan found outside the catalog is pinned as a CTE, so every execution reads the
-			// object this bind found
-			bool pinned_any = false;
-			for (auto &replacement : binder->GetReplacementScans()) {
-				if (!replacement.second->external_dependency) {
-					continue;
-				}
-				pinned_any = true;
-				auto pinned = make_uniq<SelectNode>();
-				pinned->select_list.push_back(make_uniq<StarExpression>());
-				pinned->from_table = std::move(replacement.second);
-				auto cte_info = make_uniq<CommonTableExpressionInfo>();
-				cte_info->query_node = std::move(pinned);
-
-				auto outer = make_uniq<SelectNode>();
-				outer->select_list.push_back(make_uniq<StarExpression>());
-				auto inner = make_uniq<SelectStatement>();
-				inner->node = std::move(result->node);
-				outer->from_table = make_uniq<SubqueryRef>(std::move(inner), "query_relation");
-				outer->cte_map.map[replacement.first] = std::move(cte_info);
-				result->node = std::move(outer);
-			}
+			BindColumns(*binder, inner_context, *result);
 			// the remote rewrite can push a pinned object down with the rest of the statement, where its unresolved
 			// name kept the statement local, so the columns come from the statement that runs
-			if (pinned_any && DatabaseManager::Get(inner_context).GetRemoteCatalogCount() > 0) {
-				bind_columns(*Binder::CreateBinder(inner_context));
+			if (PinReplacementScans(*binder, *result) &&
+			    DatabaseManager::Get(inner_context).GetRemoteCatalogCount() > 0) {
+				BindColumns(*Binder::CreateBinder(inner_context), inner_context, *result);
 			}
 		});
 		return_types = result->types;
