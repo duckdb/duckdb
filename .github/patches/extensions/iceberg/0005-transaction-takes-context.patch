@@ -392,7 +392,7 @@ index 961e31ce1..87df25731 100644
  	auto &schema = table_metadata.GetLatestSchema();
  	auto &updated_table_entry = *updated_table.schema_versions[schema.schema_id];
 diff --git a/src/execution/operator/iceberg_insert.cpp b/src/execution/operator/iceberg_insert.cpp
-index b39451527..6d2b3a353 100644
+index 5f3b8cf6e..7e69c9cff 100644
 --- a/src/execution/operator/iceberg_insert.cpp
 +++ b/src/execution/operator/iceberg_insert.cpp
 @@ -383,11 +383,11 @@ SinkFinalizeType IcebergInsert::Finalize(Pipeline &pipeline, Event &event, Clien
@@ -424,7 +424,7 @@ index b39451527..6d2b3a353 100644
  				                             std::move(empty_deletes), merge_action);
  			});
  		}
-@@ -1085,7 +1085,7 @@ PhysicalOperator &IcebergCatalog::PlanInsert(ClientContext &context, PhysicalPla
+@@ -1091,7 +1091,7 @@ PhysicalOperator &IcebergCatalog::PlanInsert(ClientContext &context, PhysicalPla
  	auto &irc_transaction = IcebergTransaction::Get(context, *this);
  
  	auto &alter = irc_transaction.GetOrCreateAlter();

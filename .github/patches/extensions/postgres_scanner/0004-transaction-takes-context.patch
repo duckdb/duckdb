@@ -11,10 +11,10 @@ index 6e1a62e..decee61 100644
  
  } // namespace duckdb
 diff --git a/src/include/postgres_utils.hpp b/src/include/postgres_utils.hpp
-index a265176..bf26926 100644
+index a7262ce..633805f 100644
 --- a/src/include/postgres_utils.hpp
 +++ b/src/include/postgres_utils.hpp
-@@ -83,8 +83,7 @@ public:
+@@ -96,8 +96,7 @@ public:
  	static string GetCustomStalenessQuery(ClientContext &context);
  	static string DataTypeToTypeName(const string &data_type);
  	static LogicalType ToPostgresType(const LogicalType &input);
@@ -25,7 +25,7 @@ index a265176..bf26926 100644
  	                                     PostgresType &postgres_type);
  	static string TypeToString(const LogicalType &input);
 diff --git a/src/include/storage/postgres_catalog_set.hpp b/src/include/storage/postgres_catalog_set.hpp
-index e0c5f43..dbb4b69 100644
+index c8eb7ad..14c6444 100644
 --- a/src/include/storage/postgres_catalog_set.hpp
 +++ b/src/include/storage/postgres_catalog_set.hpp
 @@ -27,7 +27,7 @@ public:
@@ -37,7 +37,7 @@ index e0c5f43..dbb4b69 100644
  	void Scan(ClientContext &context, PostgresTransaction &transaction,
  	          const std::function<void(CatalogEntry &)> &callback);
  	virtual optional_ptr<CatalogEntry> CreateEntry(PostgresTransaction &transaction, shared_ptr<CatalogEntry> entry);
-@@ -35,7 +35,8 @@ public:
+@@ -37,7 +37,8 @@ public:
  	virtual bool SupportReload() const {
  		return false;
  	}
@@ -47,7 +47,7 @@ index e0c5f43..dbb4b69 100644
  
  protected:
  	virtual void LoadEntries(ClientContext &context, PostgresTransaction &transaction) = 0;
-@@ -49,7 +50,8 @@ protected:
+@@ -51,7 +52,8 @@ protected:
  		return string();
  	}
  	void TryLoadEntries(ClientContext &context, PostgresTransaction &transaction);
@@ -87,10 +87,10 @@ index 9ac1a3c..0312620 100644
  	static string GetInitializeQuery(const vector<string> &schemas);
  	static string GetInitializeQueryInformationSchema(const vector<string> &schemas);
 diff --git a/src/include/storage/postgres_table_set.hpp b/src/include/storage/postgres_table_set.hpp
-index 8812e16..aa1e55b 100644
+index 2e1c32c..8108673 100644
 --- a/src/include/storage/postgres_table_set.hpp
 +++ b/src/include/storage/postgres_table_set.hpp
-@@ -24,13 +24,15 @@ public:
+@@ -27,13 +27,15 @@ public:
  	explicit PostgresTableSet(PostgresSchemaEntry &schema, unique_ptr<PostgresResultSlice> tables = nullptr);
  
  public:
@@ -110,7 +110,7 @@ index 8812e16..aa1e55b 100644
  
  	void AlterTable(ClientContext &context, PostgresTransaction &transaction, AlterTableInfo &info);
  
-@@ -51,15 +53,16 @@ protected:
+@@ -55,15 +57,16 @@ protected:
  	void AlterTable(ClientContext &context, PostgresTransaction &transaction, AddColumnInfo &info);
  	void AlterTable(ClientContext &context, PostgresTransaction &transaction, RemoveColumnInfo &info);
  
@@ -133,7 +133,7 @@ index 8812e16..aa1e55b 100644
  private:
  	string GetAlterTablePrefix(ClientContext &context, PostgresTransaction &transaction, const string &name);
 diff --git a/src/include/storage/postgres_transaction.hpp b/src/include/storage/postgres_transaction.hpp
-index aef6aac..e3a72c4 100644
+index f8f0c56..7d7f8a5 100644
 --- a/src/include/storage/postgres_transaction.hpp
 +++ b/src/include/storage/postgres_transaction.hpp
 @@ -10,6 +10,7 @@
@@ -144,7 +144,7 @@ index aef6aac..e3a72c4 100644
  #include "duckdb/catalog/catalog.hpp"
  #include "postgres_connection.hpp"
  #include "storage/postgres_connection_pool.hpp"
-@@ -24,27 +25,26 @@ enum class PostgresTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_S
+@@ -24,29 +25,28 @@ enum class PostgresTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_S
  
  class PostgresTransaction : public Transaction {
  public:
@@ -159,8 +159,10 @@ index aef6aac..e3a72c4 100644
  
  	PostgresConnection &GetConnectionWithoutTransaction();
 -	PostgresConnection &GetConnection();
--	optional_ptr<ClientContext> GetContext();
 +	PostgresConnection &GetConnection(ClientContext &context);
+ 	//! ID of the pooled connection used by this transaction
+ 	uint64_t GetPoolConnectionId();
+-	optional_ptr<ClientContext> GetContext();
  
  	string GetDSN();
 -	unique_ptr<PostgresResult> Query(const string &query);
@@ -302,10 +304,10 @@ index a9cc073..fcdcb7c 100644
  	if (ctx.TryGetCurrentSetting("pg_oauth_token", val) && !val.IsNull()) {
  		std::string token = StringValue::Get(val);
 diff --git a/src/postgres_query.cpp b/src/postgres_query.cpp
-index f0b310d..e3ad96c 100644
+index 5edd150..35a2332 100644
 --- a/src/postgres_query.cpp
 +++ b/src/postgres_query.cpp
-@@ -144,7 +144,7 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
+@@ -201,7 +201,7 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
  	} else {
  		auto &transaction = Transaction::Get(context, catalog).Cast<PostgresTransaction>();
  		if (use_transaction) {
@@ -315,19 +317,19 @@ index f0b310d..e3ad96c 100644
  			con_ptr = &transaction.GetConnectionWithoutTransaction();
  		}
 diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
-index 071698a..88cd162 100644
+index 03ded22..078b1a6 100644
 --- a/src/postgres_scanner.cpp
 +++ b/src/postgres_scanner.cpp
-@@ -333,7 +333,7 @@ static unique_ptr<GlobalTableFunctionState> PostgresInitGlobalState(ClientContex
- 	} else {
- 		auto &transaction = Transaction::Get(context, *pg_catalog).Cast<PostgresTransaction>();
- 		if (bind_data.use_transaction) {
--			con_ptr = &transaction.GetConnection();
-+			con_ptr = &transaction.GetConnection(context);
- 		} else {
- 			con_ptr = &transaction.GetConnectionWithoutTransaction();
- 		}
-@@ -435,7 +435,7 @@ bool PostgresGlobalState::TryOpenNewConnection(ClientContext &context, PostgresL
+@@ -191,7 +191,7 @@ PostgresConnection &PostgresGlobalState::GetConnection(ClientContext &context) {
+ 	PostgresCatalog &catalog = attached_catalog.Get<PostgresCatalog>();
+ 	auto &transaction = PostgresTransaction::Get(context, catalog);
+ 	if (use_transaction) {
+-		return transaction.GetConnection();
++		return transaction.GetConnection(context);
+ 	}
+ 	return transaction.GetConnectionWithoutTransaction();
+ }
+@@ -499,7 +499,7 @@ bool PostgresGlobalState::TryOpenNewConnection(ClientContext &context, PostgresL
  				// we cannot use the main thread but we haven't initiated ANY scan yet
  				// we HAVE to open a new connection
  				{
@@ -335,8 +337,8 @@ index 071698a..88cd162 100644
 +					auto oauth_token_holder = SetThreadLocalOAuthTokenFromSessionOption(context.GetContext());
  					lstate.pool_connection = pg_catalog->GetConnectionPool().ForceAcquire();
  				}
- 				lstate.connection = PostgresConnection(lstate.pool_connection.GetConnection().GetConnection());
-@@ -450,7 +450,7 @@ bool PostgresGlobalState::TryOpenNewConnection(ClientContext &context, PostgresL
+ 				// unlike the main-thread connection this one is not in a transaction yet, so we pin it to
+@@ -513,7 +513,7 @@ bool PostgresGlobalState::TryOpenNewConnection(ClientContext &context, PostgresL
  	}
  
  	{
@@ -346,11 +348,11 @@ index 071698a..88cd162 100644
  			return false;
  		}
 diff --git a/src/postgres_utils.cpp b/src/postgres_utils.cpp
-index dd1f98e..ac296e4 100644
+index f38ade9..550eb73 100644
 --- a/src/postgres_utils.cpp
 +++ b/src/postgres_utils.cpp
-@@ -259,7 +259,7 @@ PostgresTypeConfig PostgresTypeConfig::FromContext(optional_ptr<ClientContext> c
- 	return result;
+@@ -322,7 +322,7 @@ static bool TryRedshiftTypeToLogicalType(const PostgresTypeData &type_info, Post
+ 	return true;
  }
  
 -LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> transaction,
@@ -358,7 +360,7 @@ index dd1f98e..ac296e4 100644
                                               optional_ptr<PostgresSchemaEntry> schema,
                                               const PostgresTypeConfig &type_config, const PostgresTypeData &type_info,
                                               PostgresType &postgres_type) {
-@@ -283,7 +283,7 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
+@@ -353,7 +353,7 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
  		child_type_info.type_schema = type_info.type_schema;
  		PostgresType child_pg_type;
  		auto child_type =
@@ -367,7 +369,7 @@ index dd1f98e..ac296e4 100644
  		// populate the child OID from the actual Postgres type name
  		if (child_pg_type.oid == 0) {
  			child_pg_type.oid = TypeNameToPostgresOid(child_type_info.type_name);
-@@ -392,18 +392,13 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
+@@ -462,18 +462,13 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
  		return LogicalType::LIST(LogicalType::DOUBLE);
  	}
  
@@ -388,10 +390,10 @@ index dd1f98e..ac296e4 100644
  	optional_ptr<SchemaCatalogEntry> lookup_schema;
  	if (type_schema == schema->name) {
 diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
-index d52aab9..ea3c8ca 100644
+index 5c57881..9b7fd57 100644
 --- a/src/storage/postgres_catalog.cpp
 +++ b/src/storage/postgres_catalog.cpp
-@@ -228,7 +228,7 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
+@@ -606,7 +606,7 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
  			try_drop.SetName(info.GetQualifiedName().Schema());
  			try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
  			try_drop.cascade = false;
@@ -400,7 +402,7 @@ index d52aab9..ea3c8ca 100644
  			break;
  		}
  		case OnCreateConflict::IGNORE_ON_CONFLICT:
-@@ -239,12 +239,12 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
+@@ -617,12 +617,12 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
  			                      info.GetQualifiedName().Schema());
  		}
  	}
@@ -415,7 +417,7 @@ index d52aab9..ea3c8ca 100644
  }
  
  void PostgresCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-@@ -259,7 +259,7 @@ optional_ptr<SchemaCatalogEntry> PostgresCatalog::LookupSchema(CatalogTransactio
+@@ -637,7 +637,7 @@ optional_ptr<SchemaCatalogEntry> PostgresCatalog::LookupSchema(CatalogTransactio
  	auto schema_name = schema_lookup.GetEntryName();
  	auto &postgres_transaction = PostgresTransaction::Get(transaction.GetContext(), *this);
  	if (schema_name == "pg_temp") {
@@ -423,8 +425,8 @@ index d52aab9..ea3c8ca 100644
 +		schema_name = postgres_transaction.GetTemporarySchema(transaction.GetContext());
  	}
  	auto entry = schemas.GetEntry(transaction.GetContext(), postgres_transaction, schema_name);
- 	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
-@@ -278,7 +278,7 @@ string PostgresCatalog::GetDBPath() {
+ 	if (!entry && schema_name == DEFAULT_SCHEMA) {
+@@ -661,7 +661,7 @@ string PostgresCatalog::GetDBPath() {
  
  DatabaseSize PostgresCatalog::GetDatabaseSize(ClientContext &context) {
  	auto &postgres_transaction = PostgresTransaction::Get(context, *this);
@@ -434,7 +436,7 @@ index d52aab9..ea3c8ca 100644
  	size.free_blocks = 0;
  	size.total_blocks = 0;
 diff --git a/src/storage/postgres_catalog_set.cpp b/src/storage/postgres_catalog_set.cpp
-index 98e7e88..0af13ce 100644
+index c23eda4..072a1e6 100644
 --- a/src/storage/postgres_catalog_set.cpp
 +++ b/src/storage/postgres_catalog_set.cpp
 @@ -37,7 +37,7 @@ optional_ptr<CatalogEntry> PostgresCatalogSet::GetEntry(ClientContext &context,
@@ -535,37 +537,28 @@ index 00cc881..aa20164 100644
  	    make_shared_ptr<PostgresIndexEntry>(schema.ParentCatalog(), schema, info, table.name.GetIdentifierName());
  	return CreateEntry(transaction, std::move(index_entry));
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
-index a373893..3b35d70 100644
+index 4142df9..3d7fd96 100644
 --- a/src/storage/postgres_insert.cpp
 +++ b/src/storage/postgres_insert.cpp
-@@ -109,7 +109,7 @@ unique_ptr<GlobalSinkState> PostgresInsert::GetGlobalSinkStateCopy(ClientContext
- 		insert_table = &table.get_mutable()->Cast<PostgresTableEntry>();
- 	}
- 	auto &transaction = PostgresTransaction::Get(context, insert_table->catalog);
--	auto &connection = transaction.GetConnection();
-+	auto &connection = transaction.GetConnection(context);
- 	auto insert_columns = GetInsertColumns(*this, *insert_table);
- 	auto format = insert_table->GetCopyFormat(context);
- 	auto result = make_uniq<PostgresInsertCopyGlobalState>(context, *insert_table, format);
-@@ -176,7 +176,7 @@ unique_ptr<GlobalSinkState> PostgresInsert::GetGlobalSinkStatePlain(ClientContex
+@@ -195,7 +195,7 @@ unique_ptr<GlobalSinkState> PostgresInsert::GetGlobalSinkStatePlain(ClientContex
  SinkResultType PostgresInsert::SinkCopy(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
  	auto &gstate = input.global_state.Cast<PostgresInsertCopyGlobalState>();
  	auto &transaction = PostgresTransaction::Get(context.client, gstate.table.catalog);
 -	auto &connection = transaction.GetConnection();
 +	auto &connection = transaction.GetConnection(context.client);
- 	if (!gstate.copy_is_active) {
- 		// copy hasn't started yet
- 		connection.BeginCopyTo(context.client, gstate.copy_state, gstate.format,
-@@ -226,7 +226,7 @@ SinkResultType PostgresInsert::SinkPlain(ExecutionContext &context, DataChunk &c
+ 	auto &columns = gstate.columns;
+ 	chunk.Flatten();
+ 	columns.CheckGeneratedColumns(chunk);
+@@ -299,7 +299,7 @@ SinkResultType PostgresInsert::SinkPlain(ExecutionContext &context, DataChunk &c
  
  	auto &gstate = input.global_state.Cast<PostgresInsertPlainGlobalState>();
  	auto &transaction = PostgresTransaction::Get(context.client, gstate.table.catalog);
 -	auto &con = transaction.GetConnection();
 +	auto &con = transaction.GetConnection(context.client);
+ 	auto &columns = gstate.columns;
  	// cast to varchar
- 	D_ASSERT(chunk.ColumnCount() == gstate.varchar_chunk.ColumnCount());
- 	chunk.Flatten();
-@@ -320,7 +320,7 @@ SinkFinalizeType PostgresInsert::FinalizeCopy(Pipeline &pipeline, Event &event,
+ 	if (chunk.ColumnCount() != gstate.varchar_chunk.ColumnCount()) {
+@@ -417,7 +417,7 @@ SinkFinalizeType PostgresInsert::FinalizeCopy(Pipeline &pipeline, Event &event,
                                                OperatorSinkFinalizeInput &input) const {
  	auto &gstate = input.global_state.Cast<PostgresInsertCopyGlobalState>();
  	auto &transaction = PostgresTransaction::Get(context, gstate.table.catalog);
@@ -574,7 +567,7 @@ index a373893..3b35d70 100644
  	gstate.FinishCopyTo(connection);
  	// update the approx_num_pages - approximately 8 bytes per column per row
  	idx_t bytes_per_page = 8192;
-@@ -336,7 +336,7 @@ SinkFinalizeType PostgresInsert::FinalizePlain(Pipeline &pipeline, Event &event,
+@@ -433,7 +433,7 @@ SinkFinalizeType PostgresInsert::FinalizePlain(Pipeline &pipeline, Event &event,
  	if (!gstate.insert_values.empty()) {
  		// perform the final insert
  		auto &transaction = PostgresTransaction::Get(context, gstate.table.catalog);
@@ -584,7 +577,7 @@ index a373893..3b35d70 100644
  	}
  	return SinkFinalizeType::READY;
 diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
-index 9bea7b5..d915a0b 100644
+index 596ac66..ec43738 100644
 --- a/src/storage/postgres_schema_entry.cpp
 +++ b/src/storage/postgres_schema_entry.cpp
 @@ -61,7 +61,7 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateTable(CatalogTransaction t
@@ -635,7 +628,7 @@ index 9bea7b5..d915a0b 100644
  
  optional_ptr<CatalogEntry> PostgresSchemaEntry::LookupEntry(CatalogTransaction transaction,
 diff --git a/src/storage/postgres_schema_set.cpp b/src/storage/postgres_schema_set.cpp
-index 786d3a4..d6cdde5 100644
+index 01c779b..54d25f1 100644
 --- a/src/storage/postgres_schema_set.cpp
 +++ b/src/storage/postgres_schema_set.cpp
 @@ -160,13 +160,14 @@ void PostgresSchemaSet::LoadEntries(ClientContext &context, PostgresTransaction
@@ -708,10 +701,10 @@ index 881221e..5c7aea0 100644
  	if (result->Count() == 0) {
  		return nullptr;
 diff --git a/src/storage/postgres_table_entry.cpp b/src/storage/postgres_table_entry.cpp
-index 7f5235f..866390f 100644
+index 409e096..d3b0809 100644
 --- a/src/storage/postgres_table_entry.cpp
 +++ b/src/storage/postgres_table_entry.cpp
-@@ -56,7 +56,7 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
+@@ -68,7 +68,7 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
  	result->dsn = transaction.GetDSN();
  	result->attach_path = pg_catalog.attach_path;
  	result->qualified_table_name = QualifiedName(ParentCatalog().GetName(), ParentSchema().name, name);
@@ -720,7 +713,7 @@ index 7f5235f..866390f 100644
  	for (auto &col : columns.Logical()) {
  		result->types.push_back(col.GetType());
  	}
-@@ -81,7 +81,7 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
+@@ -93,7 +93,7 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
  
  TableStorageInfo PostgresTableEntry::GetStorageInfo(ClientContext &context) {
  	auto &transaction = Transaction::Get(context, catalog).Cast<PostgresTransaction>();
@@ -730,10 +723,10 @@ index 7f5235f..866390f 100644
  	result.cardinality = 0;
  	// get index info based on constraints
 diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
-index 7ef008b..68e09cf 100644
+index 66a0661..9465732 100644
 --- a/src/storage/postgres_table_set.cpp
 +++ b/src/storage/postgres_table_set.cpp
-@@ -95,9 +95,9 @@ ORDER BY table_schema, table_name, ordinal_position;
+@@ -153,9 +153,9 @@ ORDER BY table_schema, table_name, ordinal_position;
  	return StringUtil::Replace(base_query, "${CONDITION}", condition);
  }
  
@@ -746,7 +739,7 @@ index 7ef008b..68e09cf 100644
  	PostgresTypeData type_info;
  	idx_t column_index = 3;
  	auto column_name = result.GetString(row, column_index);
-@@ -113,7 +113,7 @@ void PostgresTableSet::AddColumn(optional_ptr<PostgresTransaction> transaction,
+@@ -174,7 +174,7 @@ void PostgresTableSet::AddColumn(optional_ptr<PostgresTransaction> transaction,
  	string default_value;
  
  	PostgresType postgres_type;
@@ -754,8 +747,8 @@ index 7ef008b..68e09cf 100644
 +	auto column_type = PostgresUtils::TypeToLogicalType(context, schema, type_config, type_info, postgres_type);
  	table_info.postgres_types.push_back(std::move(postgres_type));
  	table_info.postgres_names.push_back(column_name);
- 	ColumnDefinition column(Identifier(std::move(column_name)), std::move(column_type));
-@@ -164,7 +164,7 @@ void PostgresTableSet::AddConstraint(PostgresResult &result, idx_t row, Postgres
+ 	string type_name =
+@@ -234,7 +234,7 @@ void PostgresTableSet::AddConstraint(PostgresResult &result, idx_t row, Postgres
  	create_info.constraints.push_back(make_uniq<UniqueConstraint>(std::move(columns), constraint_type == "p"));
  }
  
@@ -764,7 +757,7 @@ index 7ef008b..68e09cf 100644
                                               optional_ptr<PostgresSchemaEntry> schema,
                                               const PostgresTypeConfig &type_config, PostgresResult &result, idx_t row,
                                               PostgresTableInfo &table_info) {
-@@ -172,15 +172,16 @@ void PostgresTableSet::AddColumnOrConstraint(optional_ptr<PostgresTransaction> t
+@@ -242,15 +242,16 @@ void PostgresTableSet::AddColumnOrConstraint(optional_ptr<PostgresTransaction> t
  		// constraint
  		AddConstraint(result, row, table_info);
  	} else {
@@ -784,7 +777,7 @@ index 7ef008b..68e09cf 100644
  	for (idx_t row = start; row < end; row++) {
  		auto table_name = result.GetString(row, 1);
  		if (!info || info->GetTableName() != table_name) {
-@@ -194,7 +195,7 @@ void PostgresTableSet::CreateEntries(PostgresTransaction &transaction, PostgresR
+@@ -264,7 +265,7 @@ void PostgresTableSet::CreateEntries(PostgresTransaction &transaction, PostgresR
  				info->create_info->comment = Value(result.GetString(row, 14));
  			}
  		}
@@ -793,7 +786,7 @@ index 7ef008b..68e09cf 100644
  	}
  	if (info) {
  		tables.push_back(std::move(info));
-@@ -207,17 +208,17 @@ void PostgresTableSet::CreateEntries(PostgresTransaction &transaction, PostgresR
+@@ -277,7 +278,7 @@ void PostgresTableSet::CreateEntries(PostgresTransaction &transaction, PostgresR
  
  void PostgresTableSet::LoadEntries(ClientContext &context, PostgresTransaction &transaction) {
  	if (table_result) {
@@ -802,8 +795,9 @@ index 7ef008b..68e09cf 100644
  		table_result.reset();
  	} else {
  		auto query = PostgresUtils::UseInformationSchemaIntrospection(context)
- 		                 ? GetInitializeQueryInformationSchema(schema.name.GetIdentifierName())
- 		                 : GetInitializeQuery(schema.name.GetIdentifierName());
+@@ -285,10 +286,10 @@ void PostgresTableSet::LoadEntries(ClientContext &context, PostgresTransaction &
+ 		                 : GetInitializeQuery(catalog.Cast<PostgresCatalog>().GetPostgresVersion(),
+ 		                                      schema.name.GetIdentifierName());
  
 -		auto result = transaction.Query(query);
 +		auto result = transaction.Query(context, query);
@@ -814,7 +808,7 @@ index 7ef008b..68e09cf 100644
  	}
  }
  
-@@ -243,20 +244,20 @@ ORDER BY pg_class.oid;
+@@ -314,21 +315,21 @@ ORDER BY pg_class.oid;
  	return StringUtil::Replace(base_query, "${SCHEMA}", PostgresUtils::WriteLiteral(schema.name.GetIdentifierName()));
  }
  
@@ -824,7 +818,8 @@ index 7ef008b..68e09cf 100644
 -	auto query = PostgresUtils::UseInformationSchemaIntrospection(transaction.GetContext())
 +	auto query = PostgresUtils::UseInformationSchemaIntrospection(context)
  	                 ? GetInitializeQueryInformationSchema(schema.name.GetIdentifierName(), table_name)
- 	                 : GetInitializeQuery(schema.name.GetIdentifierName(), table_name);
+ 	                 : GetInitializeQuery(schema.catalog.Cast<PostgresCatalog>().GetPostgresVersion(),
+ 	                                      schema.name.GetIdentifierName(), table_name);
 -	auto result = transaction.Query(query);
 +	auto result = transaction.Query(context, query);
  	auto rows = result->Count();
@@ -840,7 +835,7 @@ index 7ef008b..68e09cf 100644
  	}
  	table_info->approx_num_pages = result->IsNull(0, 2) ? 0 : result->GetInt64(0, 2);
  	// Read table-level comment from 14
-@@ -289,14 +290,15 @@ unique_ptr<PostgresTableInfo> PostgresTableSet::GetTableInfo(ClientContext &cont
+@@ -361,14 +362,15 @@ unique_ptr<PostgresTableInfo> PostgresTableSet::GetTableInfo(ClientContext &cont
  	return table_info;
  }
  
@@ -859,7 +854,7 @@ index 7ef008b..68e09cf 100644
  	return result;
  }
  
-@@ -415,12 +417,13 @@ string GetPostgresCreateTable(CreateTableInfo &info) {
+@@ -487,12 +489,13 @@ string GetPostgresCreateTable(CreateTableInfo &info) {
  	return ss.str();
  }
  
@@ -876,7 +871,7 @@ index 7ef008b..68e09cf 100644
  	return result;
  }
  
-@@ -454,7 +457,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
+@@ -526,7 +529,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
  	string sql = GetAlterTablePrefix(context, transaction, info.GetQualifiedName().Name().GetIdentifierName());
  	sql += " RENAME TO ";
  	sql += PostgresUtils::WriteIdentifier(info.new_table_name.GetIdentifierName());
@@ -885,7 +880,7 @@ index 7ef008b..68e09cf 100644
  }
  
  void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &transaction, RenameColumnInfo &info) {
-@@ -466,7 +469,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
+@@ -538,7 +541,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
  	sql += " TO ";
  	sql += PostgresUtils::WriteIdentifier(info.new_name.GetIdentifierName());
  
@@ -894,7 +889,7 @@ index 7ef008b..68e09cf 100644
  }
  
  void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &transaction, AddColumnInfo &info) {
-@@ -491,7 +494,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
+@@ -563,7 +566,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
  		sql += sql_str;
  	}
  
@@ -903,7 +898,7 @@ index 7ef008b..68e09cf 100644
  }
  
  void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &transaction, RemoveColumnInfo &info) {
-@@ -503,7 +506,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
+@@ -575,7 +578,7 @@ void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &t
  	}
  	string column_name = GetAlterTableColumnName(info.removed_column.GetIdentifierName(), entry);
  	sql += PostgresUtils::WriteIdentifier(column_name);
@@ -913,7 +908,7 @@ index 7ef008b..68e09cf 100644
  
  void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &transaction, AlterTableInfo &alter) {
 diff --git a/src/storage/postgres_transaction.cpp b/src/storage/postgres_transaction.cpp
-index 087c549..f88adbf 100644
+index d6b58a3..4cd2fdf 100644
 --- a/src/storage/postgres_transaction.cpp
 +++ b/src/storage/postgres_transaction.cpp
 @@ -12,7 +12,7 @@
@@ -969,7 +964,7 @@ index 087c549..f88adbf 100644
  	}
  	return con;
  }
-@@ -104,18 +100,18 @@ string PostgresTransaction::GetDSN() {
+@@ -108,18 +104,18 @@ string PostgresTransaction::GetDSN() {
  	return GetConnectionRaw().GetDSN();
  }
  
@@ -992,7 +987,7 @@ index 087c549..f88adbf 100644
  	auto &con = GetConnectionRaw();
  	if (transaction_state == PostgresTransactionState::TRANSACTION_STARTED) {
  		throw std::runtime_error("Execution without a Transaction is not possible if a Transaction already started");
-@@ -123,7 +119,7 @@ unique_ptr<PostgresResult> PostgresTransaction::QueryWithoutTransaction(const st
+@@ -127,7 +123,7 @@ unique_ptr<PostgresResult> PostgresTransaction::QueryWithoutTransaction(const st
  	if (access_mode == AccessMode::READ_ONLY) {
  		throw std::runtime_error("Execution without a Transaction is not possible in Read Only Mode");
  	}
@@ -1001,7 +996,7 @@ index 087c549..f88adbf 100644
  }
  
  vector<unique_ptr<PostgresResult>> PostgresTransaction::ExecuteQueries(ClientContext &context, const string &queries) {
-@@ -149,14 +145,14 @@ void PostgresTransaction::StageStalenessSignature(PostgresCatalogSet &catalog_se
+@@ -153,14 +149,14 @@ void PostgresTransaction::StageStalenessSignature(PostgresCatalogSet &catalog_se
  	pending_signatures.emplace_back(catalog_set, std::move(signature));
  }
  

@@ -29,10 +29,10 @@ index 83feca9..0864028 100644
  
  	//! The id the client uses to address this session, as returned to it by the connection handshake.
 diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
-index 588eaa2..4630594 100644
+index 9dc2c45..eb9e9e4 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
-@@ -76,7 +76,7 @@ public:
+@@ -79,7 +79,7 @@ public:
  		return GetDBPath();
  	}
  

@@ -1,8 +1,8 @@
 diff --git a/src/include/storage/sqlite_schema_entry.hpp b/src/include/storage/sqlite_schema_entry.hpp
-index 6661467..af2d2ff 100644
+index a1a054c..6fd994b 100644
 --- a/src/include/storage/sqlite_schema_entry.hpp
 +++ b/src/include/storage/sqlite_schema_entry.hpp
-@@ -39,10 +39,10 @@ public:
+@@ -46,10 +46,10 @@ public:
  	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
  
  private:
@@ -18,7 +18,7 @@ index 6661467..af2d2ff 100644
  	void TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name);
  };
 diff --git a/src/include/storage/sqlite_transaction.hpp b/src/include/storage/sqlite_transaction.hpp
-index 2b90b84..99bf62c 100644
+index d068441..7c3c0af 100644
 --- a/src/include/storage/sqlite_transaction.hpp
 +++ b/src/include/storage/sqlite_transaction.hpp
 @@ -9,6 +9,7 @@
@@ -48,8 +48,8 @@ index 2b90b84..99bf62c 100644
 +	optional_ptr<CatalogEntry> GetCatalogEntry(ClientContext &context, const string &table_name);
 +	void DropEntry(ClientContext &context, CatalogType type, const string &table_name, bool cascade);
  	void ClearTableEntry(const string &table_name);
- 
- 	static SQLiteTransaction &Get(ClientContext &context, Catalog &catalog);
+ 	//! Remove all cached catalog entries - after a statement that was executed in SQLite modified them
+ 	void ClearCatalogCache();
 diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
 index b6a736d..8c28c5f 100644
 --- a/src/include/storage/sqlite_transaction_manager.hpp
@@ -64,10 +64,10 @@ index b6a736d..8c28c5f 100644
  	void RollbackTransaction(Transaction &transaction) override;
  
 diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
-index 6c40ad3..3a17812 100644
+index b8565fd..fe1b183 100644
 --- a/src/sqlite_scanner.cpp
 +++ b/src/sqlite_scanner.cpp
-@@ -220,7 +220,7 @@ SqliteInitLocalState(ExecutionContext &context, TableFunctionInitInput &input, G
+@@ -251,7 +251,7 @@ SqliteInitLocalState(ExecutionContext &context, TableFunctionInitInput &input, G
  	if (!bind_data.catalog_name.empty()) {
  		auto attached_catalog = SQLiteCatalog::Lookup(context.client, bind_data.catalog_name);
  		SQLiteCatalog &catalog = attached_catalog.Get<SQLiteCatalog>();
@@ -76,20 +76,42 @@ index 6c40ad3..3a17812 100644
  	}
  	if (!SqliteParallelStateNext(context.client, bind_data, *result, gstate)) {
  		result->done = true;
-@@ -266,7 +266,7 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
+@@ -268,7 +268,7 @@ static unique_ptr<GlobalTableFunctionState> SqliteInitGlobalState(ClientContext
+ 		auto &transaction = SQLiteTransaction::Get(context, attached_catalog.Get<SQLiteCatalog>());
+ 		if (!bind_data.preliminary_queries.empty()) {
+ 			for (auto &query : bind_data.preliminary_queries) {
+-				transaction.GetDB().Execute(query);
++				transaction.GetDB(context).Execute(query);
+ 			}
+ 			if (bind_data.clear_catalog_cache) {
+ 				transaction.ClearCatalogCache();
+@@ -375,7 +375,7 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
  		auto attached_catalog = SQLiteCatalog::Lookup(context, bind_data.catalog_name);
  		SQLiteCatalog &catalog = attached_catalog.Get<SQLiteCatalog>();
  		auto &transaction = SQLiteTransaction::Get(context, catalog);
 -		auto &con = transaction.GetDB();
 +		auto &con = transaction.GetDB(context);
- 		int64_t affected_rows = con.Execute(bind_data.sql);
- 		int64_t *vec_data = FlatVector::GetDataMutable<int64_t>(output.data[0]);
- 		vec_data[0] = affected_rows;
+ 		int64_t affected_rows;
+ 		if (bind_data.params.empty()) {
+ 			affected_rows = con.Execute(bind_data.sql);
+diff --git a/src/sqlite_sql_writer.cpp b/src/sqlite_sql_writer.cpp
+index 10831bf..dbdeefe 100644
+--- a/src/sqlite_sql_writer.cpp
++++ b/src/sqlite_sql_writer.cpp
+@@ -5018,7 +5018,7 @@ void SQLiteSQLWriter::WriteCreateTable(CreateStatement &statement, SQLiteWriterR
+ 	create_table_as = false;
+ 	{
+ 		// verify that SQLite accepts the query - the table does not exist yet, so the statement cannot be prepared
+-		auto &db = SQLiteTransaction::Get(context, catalog).GetDB();
++		auto &db = SQLiteTransaction::Get(context, catalog).GetDB(context);
+ 		string error;
+ 		if (!db.TryPrepareStrict(query_str, error)) {
+ 			throw SQLitePushdownNotSupported("SQLite cannot prepare the query: " + error);
 diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
-index e38f332..4fadcb3 100644
+index afab059..fbfd8f7 100644
 --- a/src/storage/sqlite_catalog.cpp
 +++ b/src/storage/sqlite_catalog.cpp
-@@ -89,7 +89,7 @@ DatabaseSize SQLiteCatalog::GetDatabaseSize(ClientContext &context) {
+@@ -121,7 +121,7 @@ DatabaseSize SQLiteCatalog::GetDatabaseSize(ClientContext &context) {
  	DatabaseSize result;
  
  	auto &transaction = SQLiteTransaction::Get(context, *this);
@@ -98,45 +120,63 @@ index e38f332..4fadcb3 100644
  	result.total_blocks = db.RunPragma("page_count");
  	result.block_size = db.RunPragma("page_size");
  	result.free_blocks = db.RunPragma("freelist_count");
+@@ -274,7 +274,7 @@ static void SQLitePrintPushdownFallback(const string &reason) {
+ bool SQLiteCatalog::HasUTF8Encoding(ClientContext &context) {
+ 	lock_guard<mutex> guard(encoding_lock);
+ 	if (!utf8_encoding.IsValid()) {
+-		auto &db = SQLiteTransaction::Get(context, *this).GetDB();
++		auto &db = SQLiteTransaction::Get(context, *this).GetDB(context);
+ 		utf8_encoding = db.IsUTF8() ? 1 : 0;
+ 	}
+ 	return utf8_encoding.GetIndex() == 1;
+@@ -332,7 +332,7 @@ unique_ptr<TableRef> SQLiteCatalog::RemoteExecute(ClientContext &context, unique
+ 	{
+ 		// verify that SQLite accepts the query (e.g. no LATERAL references, which SQLite does not support)
+ 		// a double-quoted identifier that does not resolve would be read as a string literal by SQLite
+-		auto &db = SQLiteTransaction::Get(context, *this).GetDB();
++		auto &db = SQLiteTransaction::Get(context, *this).GetDB(context);
+ 		string error;
+ 		if (!db.TryPrepareStrict(query.sql, error)) {
+ 			SQLitePrintPushdownFallback("SQLite cannot prepare the query: " + error);
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
-index 0088a4e..63fbccd 100644
+index f2eee17..d9cd97a 100644
 --- a/src/storage/sqlite_delete.cpp
 +++ b/src/storage/sqlite_delete.cpp
-@@ -70,7 +70,7 @@ SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataCh
+@@ -73,7 +73,7 @@ SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataCh
+ 	if (!insert_gstate.delete_done) {
  		if (!insert_gstate.statement.IsOpen()) {
  			auto &transaction = SQLiteTransaction::Get(context.client, insert_gstate.table.catalog);
- 			insert_gstate.statement =
--			    transaction.GetDB().Prepare(GetDeleteSQL(insert_gstate.table.name.GetIdentifierName()));
-+			    transaction.GetDB(context.client).Prepare(GetDeleteSQL(insert_gstate.table.name.GetIdentifierName()));
+-			auto &db = transaction.GetDB();
++			auto &db = transaction.GetDB(context.client);
+ 			auto table_name = insert_gstate.table.name.GetIdentifierName();
+ 			insert_gstate.statement = db.Prepare(GetDeleteSQL(table_name, insert_gstate.table.GetWriteRowIdName(db)));
  		}
- 		for (auto row_id : insert_gstate.rowids) {
- 			insert_gstate.statement.Bind<int64_t>(0, row_id);
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index 8100563..ef410cf 100644
+index e679373..31fb226 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
-@@ -90,7 +90,7 @@ unique_ptr<GlobalSinkState> SQLiteInsert::GetGlobalSinkState(ClientContext &cont
- 	}
- 	auto &transaction = SQLiteTransaction::Get(context, insert_table->catalog);
+@@ -78,7 +78,7 @@ unique_ptr<GlobalSinkState> SQLiteInsert::GetGlobalSinkState(ClientContext &cont
  	auto result = make_uniq<SQLiteInsertGlobalState>(context);
--	result->statement = transaction.GetDB().Prepare(GetInsertSQL(*this, insert_table));
-+	result->statement = transaction.GetDB(context).Prepare(GetInsertSQL(*this, insert_table));
+ 	result->transaction = transaction;
+ 	result->table_name = insert_table->name.GetIdentifierName();
+-	result->statement = transaction.GetDB().Prepare(GetInsertSQL(insert_table, result->column_count));
++	result->statement = transaction.GetDB(context).Prepare(GetInsertSQL(insert_table, result->column_count));
  	return std::move(result);
  }
  
 diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
-index e4012b3..859f86f 100644
+index 9aa9428..b4b44de 100644
 --- a/src/storage/sqlite_query.cpp
 +++ b/src/storage/sqlite_query.cpp
-@@ -69,7 +69,7 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
- 		}
- 	}
+@@ -143,7 +143,7 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 	result->preliminary_queries = ExtractStringList(input, "preliminary_queries");
+ 	result->clear_catalog_cache = SQLiteQueryFlag(input, "clear_catalog_cache");
  
 -	auto &con = transaction.GetDB();
 +	auto &con = transaction.GetDB(context);
- 	auto stmt = con.Prepare(sql);
- 	if (!stmt.stmt) {
- 		throw BinderException("Failed to prepare query \"%s\"", sql);
+ 	bool suppress_output = SQLiteQueryFlag(input, "suppress_output");
+ 	// whether the statement writes to the database - statements without a result are assumed to write
+ 	bool modifies_database = SQLiteQueryFlag(input, "modifies_database") || !result->preliminary_queries.empty();
 diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
 index 50cc245..afc5f44 100644
 --- a/src/storage/sqlite_schema_entry.cpp
@@ -296,19 +336,28 @@ index 50cc245..afc5f44 100644
  		return nullptr;
  	}
 diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
-index 808a84d..d1e4b1a 100644
+index e1a2dc0..f4a70f0 100644
 --- a/src/storage/sqlite_table_entry.cpp
 +++ b/src/storage/sqlite_table_entry.cpp
-@@ -37,7 +37,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
- 	result->all_varchar = all_varchar;
+@@ -24,7 +24,7 @@ void SQLiteTableEntry::LoadIndexes(ClientContext &context) {
+ 	SQLiteTableShape shape;
+ 	shape.rowid_name = rowid_name;
+ 	shape.integer_primary_key = integer_primary_key;
+-	auto &db = Transaction::Get(context, catalog).Cast<SQLiteTransaction>().GetDB();
++	auto &db = Transaction::Get(context, catalog).Cast<SQLiteTransaction>().GetDB(context);
+ 	indexed_columns = db.GetIndexedColumns(name.GetIdentifierName(), shape, non_binary_unique_key);
+ 	indexes_loaded = true;
+ }
+@@ -82,7 +82,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 	result->utf8_text_affinity = utf8_text_affinity;
  
  	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
 -	auto &db = transaction.GetDB();
 +	auto &db = transaction.GetDB(context);
  
- 	if (!db.GetRowIdInfo(name.GetIdentifierName(), result->row_id_info)) {
- 		result->rows_per_group = optional_idx();
-@@ -64,7 +64,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 	result->rowid_name = rowid_name;
+ 	if (!GetRowIdInfo(db, result->row_id_info)) {
+@@ -110,7 +110,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
  		result->rows_per_group = optional_idx();
  	}
  	result->qualified_table_name = QualifiedName(ParentCatalog().GetName(), ParentSchema().name, name);
@@ -316,8 +365,8 @@ index 808a84d..d1e4b1a 100644
 +	result->context_ptr = context.shared_from_this();
  
  	bind_data = std::move(result);
- 	return static_cast<TableFunction>(SqliteScanFunction());
-@@ -72,7 +72,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+ 	TableFunction function = SqliteScanFunction();
+@@ -126,7 +126,7 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
  
  TableStorageInfo SQLiteTableEntry::GetStorageInfo(ClientContext &context) {
  	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
@@ -327,11 +376,11 @@ index 808a84d..d1e4b1a 100644
  
  	RowIdInfo info;
 diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
-index 8b4b474..5f773da 100644
+index f7015fe..a03eb90 100644
 --- a/src/storage/sqlite_transaction.cpp
 +++ b/src/storage/sqlite_transaction.cpp
-@@ -53,14 +53,18 @@ void SQLiteCatalogMap::EraseEntry(const string &entry_name) {
- 	catalog_entries.erase(entry_name);
+@@ -78,14 +78,18 @@ void SQLiteCatalogMap::ClearRowIdInfo(const string &table_name) {
+ 	}
  }
  
 -SQLiteTransaction::SQLiteTransaction(SQLiteCatalog &sqlite_catalog, TransactionManager &manager, ClientContext &context)
@@ -351,7 +400,7 @@ index 8b4b474..5f773da 100644
  		db = &owned_db;
  		initialized.store(true, std::memory_order_release);
  	}
-@@ -95,7 +99,7 @@ void SQLiteTransaction::Rollback() {
+@@ -120,7 +124,7 @@ void SQLiteTransaction::Rollback() {
  	}
  }
  
@@ -360,7 +409,7 @@ index 8b4b474..5f773da 100644
  	// Fast path: local and in-memory databases are initialized in the constructor.
  	if (initialized.load(std::memory_order_acquire)) {
  		return *db;
-@@ -104,11 +108,7 @@ SQLiteDB &SQLiteTransaction::GetDB() {
+@@ -129,11 +133,7 @@ SQLiteDB &SQLiteTransaction::GetDB() {
  	// the MetaTransaction lock. A per-transaction lock guards the init (parallel scans may race it).
  	lock_guard<mutex> guard(init_lock);
  	if (!initialized.load(std::memory_order_relaxed)) {
@@ -373,7 +422,7 @@ index 8b4b474..5f773da 100644
  		new_db.Execute("BEGIN TRANSACTION");
  		owned_db = std::move(new_db);
  		db = &owned_db;
-@@ -180,13 +180,13 @@ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalog
+@@ -205,13 +205,13 @@ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalog
  	return info;
  }
  
@@ -389,18 +438,33 @@ index 8b4b474..5f773da 100644
  	if (type == CatalogType::INVALID) {
  		// no table or view found
  		return nullptr;
-@@ -195,8 +195,8 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+@@ -220,20 +220,19 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	switch (type) {
  	case CatalogType::TABLE_ENTRY: {
  		CreateTableInfo info(sqlite_catalog.GetMainSchema(), Identifier(entry_name));
--		bool all_varchar = SQLiteUtils::AllVarchar(*context.lock());
--		GetDB().GetTableInfo(entry_name, info.columns, info.constraints, all_varchar);
+-		auto client_context = context.lock();
+-		bool all_varchar = SQLiteUtils::AllVarchar(*client_context);
 +		bool all_varchar = SQLiteUtils::AllVarchar(context);
-+		GetDB(context).GetTableInfo(entry_name, info.columns, info.constraints, all_varchar);
+ 		vector<bool> utf8_text_affinity;
+ 		SQLiteTableShape shape;
+-		GetDB().GetTableInfo(entry_name, sqlite_catalog.HasUTF8Encoding(*client_context), info.columns,
+-		                     info.constraints, all_varchar, utf8_text_affinity, shape);
++		GetDB(context).GetTableInfo(entry_name, sqlite_catalog.HasUTF8Encoding(context), info.columns, info.constraints,
++		                            all_varchar, utf8_text_affinity, shape);
  		D_ASSERT(!info.columns.empty());
  
- 		result = make_uniq<SQLiteTableEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), info, all_varchar);
-@@ -204,18 +204,18 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+ 		auto table = make_uniq<SQLiteTableEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), info, all_varchar,
+ 		                                         std::move(utf8_text_affinity), std::move(shape));
+ 		if (sqlite_catalog.options.remote_pushdown) {
+ 			// only the SQL that remote pushdown generates depends on these - the indexes are read when it needs them
+-			table->binary_collation = GetDB().GetBinaryCollation(entry_name, table->GetColumns());
+-			table->real_affinity = GetDB().GetRealAffinity(entry_name, table->GetColumns());
++			table->binary_collation = GetDB(context).GetBinaryCollation(entry_name, table->GetColumns());
++			table->real_affinity = GetDB(context).GetRealAffinity(entry_name, table->GetColumns());
+ 			table->has_pushdown_info = true;
+ 		}
+ 		result = std::move(table);
+@@ -241,18 +240,18 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	}
  	case CatalogType::VIEW_ENTRY: {
  		string sql;
@@ -422,7 +486,7 @@ index 8b4b474..5f773da 100644
  		}
  		view_info->internal = false;
  		result = make_uniq<ViewCatalogEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), *view_info);
-@@ -224,12 +224,12 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+@@ -261,12 +260,12 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	case CatalogType::INDEX_ENTRY: {
  		string table_name;
  		string sql;
@@ -438,7 +502,7 @@ index 8b4b474..5f773da 100644
  		index_info->SetQualifiedName(QualifiedName(sqlite_catalog.GetName(), index_info->GetQualifiedName().Schema(),
  		                                           index_info->GetQualifiedName().Name()));
  
-@@ -268,9 +268,9 @@ string GetDropSQL(CatalogType type, const string &table_name, bool cascade) {
+@@ -317,9 +316,9 @@ string GetDropSQL(CatalogType type, const string &table_name, bool cascade) {
  	return result;
  }
  
@@ -473,15 +537,15 @@ index 84183b2..8d71ab9 100644
  }
  
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index d2f6ebe..68bb335 100644
+index 58f27bb..e058fe0 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
-@@ -48,7 +48,7 @@ unique_ptr<GlobalSinkState> SQLiteUpdate::GetGlobalSinkState(ClientContext &cont
+@@ -51,7 +51,7 @@ unique_ptr<GlobalSinkState> SQLiteUpdate::GetGlobalSinkState(ClientContext &cont
  
  	auto &transaction = SQLiteTransaction::Get(context, sqlite_table.catalog);
- 	auto result = make_uniq<SQLiteUpdateGlobalState>(sqlite_table);
--	result->statement = transaction.GetDB().Prepare(GetUpdateSQL(sqlite_table, columns));
-+	result->statement = transaction.GetDB(context).Prepare(GetUpdateSQL(sqlite_table, columns));
+ 	auto result = make_uniq<SQLiteUpdateGlobalState>(sqlite_table, transaction);
+-	auto &db = transaction.GetDB();
++	auto &db = transaction.GetDB(context);
+ 	auto rowid_name = sqlite_table.GetWriteRowIdName(db);
+ 	result->statement = db.Prepare(GetUpdateSQL(sqlite_table, columns, rowid_name));
  	return std::move(result);
- }
- 
