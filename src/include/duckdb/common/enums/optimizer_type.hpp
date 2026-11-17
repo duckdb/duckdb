@@ -67,7 +67,8 @@ enum class OptimizerType : uint32_t {
 	SELF_JOIN_AGGREGATE = 50,
 	SCALAR_AGGREGATE_MERGE = 51,
 	DUPLICATE_ELIMINATED_DOMAIN = 52,
-	CASE_TO_FILTER_AGGREGATE = 53
+	REDUNDANT_DISTINCT = 53,
+	CASE_TO_FILTER_AGGREGATE = 54
 };
 
 string OptimizerTypeToString(OptimizerType type);

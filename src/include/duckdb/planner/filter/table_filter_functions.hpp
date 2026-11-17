@@ -61,7 +61,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX = 0, BF = 1, PRF = 3 };
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX = 0, BF = 1, PRF = 3, IN_FILTER = 4 };
 
 void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
                                    idx_t &n_vectors_to_check);
@@ -206,9 +206,19 @@ public:
 	                         idx_t count) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
+	bool IsPublished() const {
+		return published;
+	}
+	void MarkPublished() {
+		D_ASSERT(IsInitialized());
+		published = true;
+	}
 	static bool SupportedType(const LogicalType &type);
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
+
+private:
+	bool published = false;
 };
 
 //! FunctionData for prefix range internal function
