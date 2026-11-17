@@ -178,26 +178,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 		return backend.StoreSecret(std::move(secret), on_conflict, &transaction);
 	}
 
-	//! Handle default for persist type
-	if (persist_type == SecretPersistType::DEFAULT) {
-		if (storage.empty()) {
-			persist_type = config.default_persist_type;
-		} else {
-			// Derive the persist type from the named storage's own flag, so that *any* registered temporary storage
-			// (not only "memory") accepts a default `CREATE SECRET ... IN <storage>` without the TEMPORARY keyword.
-			auto storage_backend = GetSecretStorage(storage);
-			persist_type = (storage_backend && !storage_backend->Persistent()) ? SecretPersistType::TEMPORARY
-			                                                                   : SecretPersistType::PERSISTENT;
-		}
-	}
-
-	//! Resolve storage
-	string resolved_storage;
-	if (storage.empty()) {
-		resolved_storage = persist_type == SecretPersistType::PERSISTENT ? DefaultStorage() : TEMPORARY_STORAGE_NAME;
-	} else {
-		resolved_storage = storage.GetIdentifierName();
-	}
+	auto resolved_storage = ResolveSecretStorage(persist_type, storage);
 
 	//! Lookup which backend to store the secret in
 	auto backend = GetSecretStorage(Identifier(resolved_storage));
@@ -227,6 +208,27 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 		}
 	}
 	return backend->StoreSecret(std::move(secret), on_conflict, &transaction);
+}
+
+string SecretManager::ResolveSecretStorage(SecretPersistType &persist_type, const Identifier &storage) {
+	if (persist_type == SecretPersistType::TRANSACTION) {
+		return TRANSACTION_STORAGE_NAME;
+	}
+	if (persist_type == SecretPersistType::DEFAULT) {
+		if (storage.empty()) {
+			persist_type = config.default_persist_type;
+		} else {
+			// Derive the persist type from the named storage's own flag, so that *any* registered temporary storage
+			// (not only "memory") accepts a default `CREATE SECRET ... IN <storage>` without the TEMPORARY keyword.
+			auto storage_backend = GetSecretStorage(storage);
+			persist_type = (storage_backend && !storage_backend->Persistent()) ? SecretPersistType::TEMPORARY
+			                                                                   : SecretPersistType::PERSISTENT;
+		}
+	}
+	if (storage.empty()) {
+		return persist_type == SecretPersistType::PERSISTENT ? DefaultStorage() : TEMPORARY_STORAGE_NAME;
+	}
+	return storage.GetIdentifierName();
 }
 
 optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const Identifier &type,
@@ -309,6 +311,16 @@ BoundStatement SecretManager::BindCreateSecret(Context &context, CatalogTransact
 	if (info.persist_type == SecretPersistType::TRANSACTION || info.storage_type == TRANSACTION_STORAGE_NAME) {
 		throw BinderException("Transaction-scoped secrets cannot be created through SQL");
 	}
+	BindCreateSecretOptions(context, transaction, info);
+
+	BoundStatement result;
+	result.names = {"Success"};
+	result.types = {LogicalType::BOOLEAN};
+	result.plan = make_uniq<LogicalCreateSecret>(info);
+	return result;
+}
+
+void SecretManager::BindCreateSecretOptions(Context &context, CatalogTransaction transaction, CreateSecretInput &info) {
 	InitializeSecrets(transaction);
 
 	auto type = info.type;
@@ -350,12 +362,7 @@ BoundStatement SecretManager::BindCreateSecret(Context &context, CatalogTransact
 
 		bound_info.options[Identifier(matched_param->first.GetIdentifierName()).GetIdentifierName()] = {*cast_value};
 	}
-
-	BoundStatement result;
-	result.names = {"Success"};
-	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalCreateSecret>(std::move(bound_info));
-	return result;
+	info.options = std::move(bound_info.options);
 }
 
 SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const string &path, const string &type) {

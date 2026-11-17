@@ -5328,7 +5328,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_get_scope_count(duckdb_v2_secret_h
  *
  * @param secret The secret.
  * @param index The index of the scope.
- * @param scope Receives a borrowed pointer to the scope. Valid until the secret is destroyed.
+ * @param scope Receives a borrowed pointer to the scope. Valid until the secret is destroyed or its scopes change
+ * (`duckdb_v2_secret_add_scope()`, `duckdb_v2_secret_clear_scope()`).
  * @param scope_length Receives the length of `*scope` in bytes. `*scope` is not guaranteed to be null-terminated.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.

@@ -486,4 +486,80 @@ TEST_CASE("V2 secret: a connection looks up and creates secrets without a callba
 	REQUIRE_FALSE(txn_visible());
 }
 
+TEST_CASE("V2 secret: a connection creates secrets as CREATE SECRET would", "[capi_v2][secret]") {
+	EnvFixture fx;
+	auto make_request = [&](const char *name, std::initializer_list<std::pair<const char *, std::string>> values) {
+		duckdb_v2_secret_handle request = nullptr;
+		REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "http", 4, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		if (name) {
+			REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_NAME, name, strlen(name),
+			                                      nullptr) == DUCKDB_V2_ERROR_NONE);
+		}
+		for (auto &entry : values) {
+			auto value = MakeVarcharValue(fx.factory, entry.second);
+			REQUIRE(duckdb_v2_secret_set_value(request, entry.first, strlen(entry.first), value, nullptr) ==
+			        DUCKDB_V2_ERROR_NONE);
+			duckdb_v2_value_destroy(&value);
+		}
+		return request;
+	};
+	auto create = [&](duckdb_v2_secret_handle request, DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
+	                  duckdb_v2_secret_handle *created) {
+		return duckdb_v2_connection_create_secret(fx.conn, request, on_conflict, created, nullptr);
+	};
+
+	// The parameters are checked and cast against the provider, also for a provider not registered via this API
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET bad_sql (TYPE http, verify_ssl 'not-a-bool')") != DUCKDB_V2_ERROR_NONE);
+	auto bad_value = make_request("bad_api", {{"verify_ssl", "not-a-bool"}});
+	REQUIRE(create(bad_value, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&bad_value);
+	auto unknown = make_request("unknown_api", {{"bogus", "1"}});
+	REQUIRE(create(unknown, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&unknown);
+	auto cast = make_request("cast_api", {{"verify_ssl", "false"}});
+	REQUIRE(create(cast, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&cast);
+
+	// An unnamed secret gets the default name of its type
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET (TYPE http)") == DUCKDB_V2_ERROR_NONE);
+	auto unnamed = make_request(nullptr, {});
+	REQUIRE(create(unnamed, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_handle created = nullptr;
+	REQUIRE(create(unnamed, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, &created) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(created != nullptr);
+	ProbeLog log;
+	RecordSecret(log, created);
+	REQUIRE(log.name == "__default_http");
+	duckdb_v2_secret_destroy(&created);
+	duckdb_v2_secret_destroy(&unnamed);
+	duckdb_v2_secret_handle empty_name = nullptr;
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "", 0, &empty_name, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(empty_name == nullptr);
+
+	// An ignored conflict returns the secret from the storage the request resolved to
+	REQUIRE(RunSql(fx.conn, "CREATE TEMPORARY SECRET duplicate (TYPE http, http_proxy 'memory_one')") ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "BEGIN") == DUCKDB_V2_ERROR_NONE);
+	auto in_transaction = make_request("duplicate", {{"http_proxy", "txn_one"}});
+	REQUIRE(duckdb_v2_secret_set_property(in_transaction, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "transaction", 11,
+	                                      nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(create(in_transaction, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&in_transaction);
+	auto in_memory = make_request("duplicate", {{"http_proxy", "ignored"}});
+	REQUIRE(duckdb_v2_secret_set_property(in_memory, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "temporary", 9, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(in_memory, DUCKDB_V2_SECRET_PROPERTY_STORAGE, "memory", 6, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(create(in_memory, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, &created) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(created != nullptr);
+	RecordSecret(log, created);
+	REQUIRE(log.storage == "memory");
+	REQUIRE(log.values["http_proxy"] == "memory_one");
+	duckdb_v2_secret_destroy(&created);
+	duckdb_v2_secret_destroy(&in_memory);
+	REQUIRE(RunSql(fx.conn, "ROLLBACK") == DUCKDB_V2_ERROR_NONE);
+}
+
 } // namespace test_capi_v2

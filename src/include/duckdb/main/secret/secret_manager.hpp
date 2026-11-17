@@ -132,6 +132,12 @@ public:
 	//! The Bind for create secret is done by the secret manager
 	DUCKDB_API BoundStatement BindCreateSecret(Context &context, CatalogTransaction transaction,
 	                                           CreateSecretInput &info);
+	//! Checks the options of a create secret input against its provider's named parameters and casts them to the
+	//! declared types, as CREATE SECRET does
+	DUCKDB_API void BindCreateSecretOptions(Context &context, CatalogTransaction transaction, CreateSecretInput &info);
+	//! The storage a secret with this persist type and (optional) storage is registered in; resolves a default
+	//! persist type in place
+	DUCKDB_API string ResolveSecretStorage(SecretPersistType &persist_type, const Identifier &storage);
 	//! Lookup the best matching secret by matching the secret scopes to the path
 	DUCKDB_API SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type);
 	//! Get a secret by name, optionally from a specific storage

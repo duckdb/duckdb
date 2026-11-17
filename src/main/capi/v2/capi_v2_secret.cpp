@@ -594,7 +594,10 @@ DUCKDB_V2_ERROR CreateSecret(CV2Context &ctx, duckdb_v2_secret_handle secret, DU
 		input.type = self.type;
 		input.provider = self.provider;
 		input.storage_type = duckdb::Identifier(self.storage);
-		input.name = self.name;
+		// an unnamed secret gets the default name of its type, as CREATE SECRET without a name does
+		input.name = self.name.empty()
+		                 ? duckdb::Identifier("__default_" + duckdb::StringUtil::Lower(self.type.GetIdentifierName()))
+		                 : self.name;
 		input.scope = self.scope;
 		for (auto &value : self.values) {
 			input.options[value.first.GetIdentifierName()] = value.second;
@@ -603,13 +606,17 @@ DUCKDB_V2_ERROR CreateSecret(CV2Context &ctx, duckdb_v2_secret_handle secret, DU
 		input.persist_type = self.persist_type;
 		ctx.WithContext([&](duckdb::ClientContext &context) {
 			auto &manager = duckdb::SecretManager::Get(context);
+			auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(context);
+			manager.BindCreateSecretOptions(context.GetContext(), transaction, input);
 			auto entry = manager.CreateSecret(context, input);
 			if (!created) {
 				return;
 			}
-			if (!entry && !self.name.empty()) {
-				auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(context);
-				entry = manager.GetSecretByName(transaction, self.name.GetIdentifierName());
+			if (!entry) {
+				// the conflict was ignored: return the secret it was with, from the storage the request resolved to
+				auto persist_type = input.persist_type;
+				auto storage = manager.ResolveSecretStorage(persist_type, input.storage_type);
+				entry = manager.GetSecretByName(transaction, input.name.GetIdentifierName(), storage);
 			}
 			if (entry) {
 				*created = Convert(CV2Secret::FromEntry(*entry).release());
