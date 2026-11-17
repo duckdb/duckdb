@@ -606,6 +606,8 @@ enum class SourceBatchIndexState : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
+enum class StandardByteClass : uint8_t;
+
 enum class StarExpressionType : uint8_t;
 
 enum class StateMemoryOwnership : uint8_t;
@@ -1577,6 +1579,9 @@ const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
+
+template<>
+const char* EnumUtil::ToChars<StandardByteClass>(StandardByteClass value);
 
 template<>
 const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
@@ -2604,6 +2609,9 @@ SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *va
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StandardByteClass EnumUtil::FromString<StandardByteClass>(const char *value);
 
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
