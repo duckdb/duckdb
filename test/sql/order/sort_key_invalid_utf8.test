@@ -1,0 +1,78 @@
+# name: test/sql/order/sort_key_invalid_utf8.test
+# description: Decoding a sort key that was broken by a VARCHAR with invalid UTF-8 throws a data corruption error
+# group: [order]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+# This test intentionally reads invalid UTF-8 bytes from storage.
+require no_vector_verification
+
+# t0 (v VARCHAR, w VARCHAR, g BIGINT) holds 100 rows. The stored bytes of v in the row g = 42 contain the byte FF,
+# which is not valid UTF-8. Reading the string from storage skips the UTF-8 validation at the input boundaries.
+# A sort key encodes a VARCHAR as its bytes incremented by one, followed by a zero byte: the byte FF turns into the
+# delimiter, so the key of that row is not the encoding of its columns and decoding it must not read other bytes.
+unzip data/storage/corrupt/sort_key_invalid_utf8.db.gz {TEST_DIR}/sort_key_invalid_utf8.db
+
+load {TEST_DIR}/sort_key_invalid_utf8.db readonly
+
+# Internal vector verification rejects the intentionally invalid UTF-8 bytes
+# before they reach the code under test, so disable it after the load.
+statement ok
+SET debug_verification_mode='none';
+
+query II
+SELECT count(*), max(CASE WHEN g = 42 THEN hex(v) END) FROM t0
+----
+100	736F7274FF6B6579206F66206120737472696E67
+
+# all sort columns are decoded from the key
+statement error
+SELECT * FROM t0 ORDER BY ALL
+----
+Data Corruption Error: Failed to decode sort key
+
+# only the string
+statement error
+SELECT v FROM t0 ORDER BY v
+----
+Data Corruption Error: Failed to decode sort key
+
+statement error
+SELECT v FROM t0 ORDER BY v DESC
+----
+Data Corruption Error: Failed to decode sort key
+
+# a column that follows the string in the key
+statement error
+SELECT g FROM t0 ORDER BY v, g
+----
+Data Corruption Error: Failed to decode sort key
+
+# window sort
+statement error
+SELECT hex(v) FROM (SELECT v, row_number() OVER (ORDER BY v, w) AS r FROM t0) WHERE r = 100
+----
+Data Corruption Error: Failed to decode sort key
+
+# aggregates that keep nested values as sort keys
+statement error
+SELECT max([v]) FROM t0
+----
+Data Corruption Error: Failed to decode sort key
+
+statement error
+SELECT arg_max([v], g) FROM t0 WHERE g <= 42
+----
+Data Corruption Error: Failed to decode sort key
+
+# the other rows sort
+query I
+SELECT count(*) FROM (SELECT * FROM t0 WHERE g <> 42 ORDER BY ALL)
+----
+99
+
+query I
+SELECT 42
+----
+42
