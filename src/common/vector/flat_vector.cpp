@@ -443,8 +443,11 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::DECIMAL(reinterpret_cast<const int64_t *>(data_ptr)[index], width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::VARCHAR:
+			// the unscaled value of a wide decimal is a BIGNUM blob
+			return Value::DECIMAL(reinterpret_cast<const bignum_t *>(data_ptr)[index], width, scale);
 		default:
-			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			throw InternalException("Unimplemented physical type '%s' for DECIMAL",
 			                        TypeIdToString(type.InternalType()));
 		}
 	}
@@ -486,6 +489,13 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
 		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::GEOGRAPHY: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		if (GeoType::HasCRS(type)) {
+			return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
+		}
+		return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
