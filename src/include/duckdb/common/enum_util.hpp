@@ -218,6 +218,8 @@ enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
 
+enum class DistinctnessPropagation : uint8_t;
+
 enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
@@ -985,6 +987,9 @@ const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
+
+template<>
+const char* EnumUtil::ToChars<DistinctnessPropagation>(DistinctnessPropagation value);
 
 template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
@@ -1997,6 +2002,9 @@ DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value)
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
+
+template<>
+DistinctnessPropagation EnumUtil::FromString<DistinctnessPropagation>(const char *value);
 
 template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);

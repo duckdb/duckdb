@@ -175,6 +175,7 @@
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -2144,6 +2145,24 @@ const char* EnumUtil::ToChars<DistinctType>(DistinctType value) {
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	return static_cast<DistinctType>(StringUtil::StringToEnum(GetDistinctTypeValues(), 2, "DistinctType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDistinctnessPropagationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DistinctnessPropagation::UNARY_OPERATORS), "UNARY_OPERATORS" },
+		{ static_cast<uint32_t>(DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS), "UNARY_OPERATORS_AND_JOINS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DistinctnessPropagation>(DistinctnessPropagation value) {
+	return StringUtil::EnumToString(GetDistinctnessPropagationValues(), 2, "DistinctnessPropagation", static_cast<uint32_t>(value));
+}
+
+template<>
+DistinctnessPropagation EnumUtil::FromString<DistinctnessPropagation>(const char *value) {
+	return static_cast<DistinctnessPropagation>(StringUtil::StringToEnum(GetDistinctnessPropagationValues(), 2, "DistinctnessPropagation", value));
 }
 
 const StringUtil::EnumStringLiteral *GetErrorTypeValues() {
