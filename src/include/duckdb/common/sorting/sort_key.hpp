@@ -145,6 +145,10 @@ public:
 	}
 };
 
+//! Thrown when a key is larger than the fixed-size sort key that was selected for it.
+//! The size is derived from the statistics of the sort columns, so this means that the statistics are wrong.
+[[noreturn]] DUCKDB_API void ThrowSortKeyExceedsFixedSize(idx_t key_size, idx_t fixed_size);
+
 template <idx_t REMAINING>
 static bool SortKeyLessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
 	return (*lhs < *rhs) || ((*lhs == *rhs) && SortKeyLessThan<REMAINING - 1>(lhs + 1, rhs + 1));
@@ -172,7 +176,10 @@ public:
 	}
 
 	void Construct(const string_t &str, data_ptr_t &) {
-		D_ASSERT(str.GetSize() <= SORT_KEY::INLINE_LENGTH);
+		if (DUCKDB_UNLIKELY(str.GetSize() > SORT_KEY::INLINE_LENGTH)) {
+			// the size of a fixed-size key is derived from the statistics of the sort columns
+			ThrowSortKeyExceedsFixedSize(str.GetSize(), SORT_KEY::INLINE_LENGTH);
+		}
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
 			(&sort_key.part0)[i] = 0;
