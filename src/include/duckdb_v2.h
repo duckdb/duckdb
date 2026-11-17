@@ -15296,6 +15296,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
  * global state of a scan, so it should only report what the bind already determined. A function wrapped in a multi-file
  * function is not asked: the plan describes the multi-file scan.
  *
+ * With profiling enabled (including `EXPLAIN ANALYZE`), the engine also invokes the callback while the query executes,
+ * once per worker thread that scans the function. Calls can therefore run concurrently with the same bind data and user
+ * data, so the callback must not modify them without synchronization, and an error it reports there fails the query.
+ * Builds with assertions enabled also invoke it while executing queries without profiling.
+ *
  * history:
  * - unstable: v2.0.0
  *

@@ -4606,7 +4606,10 @@ public:
 	using MetricsCallback = void (*)(MetricsInput &input);
 	/// Called with the bind data of a bound call when the engine renders a query plan that scans the function, e.g.
 	/// for `EXPLAIN`, possibly more than once; reports the key-value pairs the plan shows for the scan. They replace
-	/// the `Function` entry the physical plan shows by default. Optional; unstable API.
+	/// the `Function` entry the physical plan shows by default. With profiling enabled (including `EXPLAIN ANALYZE`)
+	/// it is also called while the query executes, once per worker thread and possibly concurrently, so it must not
+	/// modify shared state without synchronization, and an error it throws there fails the query. Optional; unstable
+	/// API.
 	using ToStringCallback = void (*)(ToStringInput &input);
 
 	/// A column a function can produce next to the columns it declares in bind: a query asks for it by name.

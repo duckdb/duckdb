@@ -758,3 +758,53 @@ TEST_CASE("Stable C++API: table function describes its scan in the query plan", 
 	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_empty_key(3)").Drain(),
 	                    Catch::Contains("the key cannot be empty"));
 }
+
+namespace {
+
+void UserDataToString(TableFunction::ToStringInput &input) {
+	input.Set("Server", input.GetUserData<std::string>());
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: table function to string callback with user data, profiling and no callback", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	RegisterToStringFunction(conn, "cpp_described", HintToString);
+	RegisterToStringFunction(conn, "cpp_describe_fails", FailingToString);
+	RegisterToStringFunction(conn, "cpp_not_described", nullptr);
+	{
+		auto &factory = conn.GetFactory();
+		auto function = TableFunction::Create(factory);
+		function.SetName("cpp_described_by_user_data");
+		function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
+		function.SetBindCallback(HintBindFunction)
+		    .SetInitGlobalCallback(HintInitGlobal)
+		    .SetExecCallback(HintExec)
+		    .SetToStringCallback(UserDataToString)
+		    .SetUserData<std::string>("db.example.com");
+		conn.Register(function);
+	}
+
+	// Without the callback the physical plan shows the default Function entry
+	auto plain = CollectExplainValues(conn.Execute("EXPLAIN SELECT * FROM cpp_not_described(3)"));
+	REQUIRE(plain.size() == 1);
+	REQUIRE(plain[0].find("Function") != std::string::npos);
+	REQUIRE(plain[0].find("CPP_NOT_DESCRIBED") != std::string::npos);
+
+	// The callback reads the user data
+	auto with_user_data = CollectExplainValues(conn.Execute("EXPLAIN SELECT * FROM cpp_described_by_user_data(3)"));
+	REQUIRE(with_user_data.size() == 1);
+	REQUIRE(with_user_data[0].find("db.example.com") != std::string::npos);
+
+	// EXPLAIN ANALYZE runs the query with profiling and shows the reported pairs
+	auto analyzed = CollectExplainValues(conn.Execute("EXPLAIN ANALYZE SELECT * FROM cpp_described(3)"));
+	REQUIRE(analyzed.size() == 1);
+	REQUIRE(analyzed[0].find("remote.rows_3") != std::string::npos);
+
+	// With profiling enabled the callback runs while the query executes, so its errors fail the query
+	conn.Execute("SET enable_profiling = 'no_output'").Drain();
+	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_described(2)")) == std::vector<int64_t> {0, 1});
+	REQUIRE_THROWS_WITH(conn.Execute("SELECT i FROM cpp_describe_fails(2)").Drain(),
+	                    Catch::Contains("cannot describe the scan"));
+}

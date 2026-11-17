@@ -2472,6 +2472,11 @@ functions:
       them either way. The callback may be invoked more than once for the same bind data, and is not invoked with the
       global state of a scan, so it should only report what the bind already determined. A function wrapped in a
       multi-file function is not asked: the plan describes the multi-file scan.
+
+      With profiling enabled (including `EXPLAIN ANALYZE`), the engine also invokes the callback while the query
+      executes, once per worker thread that scans the function. Calls can therefore run concurrently with the same
+      bind data and user data, so the callback must not modify them without synchronization, and an error it reports
+      there fails the query. Builds with assertions enabled also invoke it while executing queries without profiling.
     parameters:
       function:
         type: table_function
