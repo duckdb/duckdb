@@ -2647,6 +2647,26 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	}
 };
 
+//! The rows of a row group are produced from its row count wherever no column chunk is read (a scan without columns,
+//! count(*) from the row group statistics) - every column chunk has a value (or NULL) per row, so it cannot have fewer
+//! values than the row group has rows. Returns the first column chunk that does not back the row count.
+static optional_ptr<const duckdb_parquet::ColumnChunk>
+FindColumnChunkWithoutRows(const duckdb_parquet::RowGroup &row_group) {
+	for (auto &column : row_group.columns) {
+		if (!column.__isset.meta_data) {
+			// only the metadata of an encrypted column is not part of the footer
+			if (!column.__isset.encrypted_column_metadata) {
+				return &column;
+			}
+			continue;
+		}
+		if (column.meta_data.num_values < row_group.num_rows) {
+			return &column;
+		}
+	}
+	return nullptr;
+}
+
 void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
                                       optional_ptr<ParquetColumnSchema> root_schema,
                                       optional_ptr<ParquetOptions> parquet_options) {
@@ -2656,7 +2676,9 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 		PartitionStatistics partition_stats;
 		partition_stats.row_start = offset;
 		partition_stats.count = row_group.num_rows;
-		partition_stats.count_type = CountType::COUNT_EXACT;
+		// a row count that the column chunks do not back is reported when the row group is scanned
+		partition_stats.count_type =
+		    FindColumnChunkWithoutRows(row_group) ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
 		if (root_schema && parquet_options) {
 			partition_stats.partition_row_group =
 			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);
@@ -2826,6 +2848,19 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 		auto col_idx = MultiFileLocalIndex(i);
 		PrepareRowGroupBuffer(context, state, col_idx);
 		state.GetColumnReader(i).GatherColumnChunks(scanned_column_chunks);
+	}
+	if (scanned_column_chunks.empty()) {
+		// no reader checks the row count against the column chunk that it reads
+		auto column = FindColumnChunkWithoutRows(group);
+		if (column && !column->__isset.meta_data) {
+			throw InvalidInputException("Failed to read file \"%s\": column chunk is missing its metadata",
+			                            GetFileName());
+		}
+		if (column) {
+			throw DataCorruptionException(
+			    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
+			    GetFileName(), column->meta_data.num_values, group.num_rows);
+		}
 	}
 	// the row group statistics could not rule the row group out - the page index may still rule out pages
 	PreparePageIndex(context, state);
