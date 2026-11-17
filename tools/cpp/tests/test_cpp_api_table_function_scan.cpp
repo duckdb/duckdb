@@ -749,10 +749,8 @@ TEST_CASE("Stable C++API: table function describes its scan in the query plan", 
 	}
 	conn.Execute("SET explain_output = 'physical_only'").Drain();
 
-	// The callback is only asked when a plan is rendered
-	to_string_calls = 0;
+	// The scan itself is unaffected (assertion builds also render plans while executing, so calls are not counted)
 	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_described(3)")) == std::vector<int64_t> {0, 1, 2});
-	REQUIRE(to_string_calls == 0);
 
 	// The errors of the callback fail the EXPLAIN, not the query
 	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_fails(3)").Drain(),
