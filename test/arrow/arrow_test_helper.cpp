@@ -3,10 +3,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
@@ -103,13 +101,19 @@ void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
-unique_ptr<SelectStatement> ArrowTestHelper::ArrowScanSelect(shared_ptr<ArrowScanFactory> factory) {
+static unique_ptr<TableRef> ArrowScanRef(shared_ptr<ArrowScanFactory> factory) {
+	// construct the `arrow_scan(...)` function expression
 	auto scan = make_uniq<TableFunctionRef>();
 	scan->function = make_uniq<FunctionExpression>("arrow_scan", vector<unique_ptr<ParsedExpression>>());
 	scan->bind_info = std::move(factory);
+	return std::move(scan);
+}
+
+unique_ptr<SelectStatement> ArrowTestHelper::ArrowScanSelect(shared_ptr<ArrowScanFactory> factory) {
+	// construct the `SELECT * FROM arrow_scan(...)` statement
 	auto node = make_uniq<SelectNode>();
 	node->select_list.push_back(make_uniq<StarExpression>());
-	node->from_table = std::move(scan);
+	node->from_table = ArrowScanRef(std::move(factory));
 	auto select = make_uniq<SelectStatement>();
 	select->node = std::move(node);
 	return select;
@@ -117,14 +121,7 @@ unique_ptr<SelectStatement> ArrowTestHelper::ArrowScanSelect(shared_ptr<ArrowSca
 
 void ArrowTestHelper::CreateArrowScanView(Connection &con, shared_ptr<ArrowScanFactory> factory, const string &name,
                                           bool replace, bool temporary) {
-	auto info = make_uniq<CreateViewInfo>();
-	info->query = ArrowScanSelect(std::move(factory));
-	info->temporary = temporary;
-	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
-	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	auto statement = make_uniq<CreateStatement>();
-	statement->info = std::move(info);
-	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+	CreateViewOver(con, ArrowScanRef(std::move(factory)), name, replace, temporary);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, shared_ptr<ArrowScanFactory> factory) {
