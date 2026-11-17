@@ -11,7 +11,6 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -407,15 +406,17 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 
 		ExpressionFilterState state(context.GetContext(), expression);
 		REQUIRE(state.fast_executor);
-		Vector input(type, 3);
-		FlatVector::SetSize(input, count_t(3));
+		Vector input(type, 5);
+		FlatVector::SetSize(input, count_t(5));
 		input.SetValue(0, values[0]);
 		input.SetValue(1, strings ? Value(wide_span ? "m" : "same-b") : Value::INTEGER(5));
 		input.SetValue(2, values[1]);
+		input.SetValue(3, input.GetValue(1));
+		input.SetValue(4, input.GetValue(1));
 		SelectionVector selected;
 		idx_t count = input.size();
 		state.fast_executor->FilterSelection(selected, input, input.size(), count);
-		REQUIRE(count == (pruning_only ? 3 : 2));
+		REQUIRE(count == (pruning_only ? 5 : 2));
 		if (!pruning_only) {
 			REQUIRE(selected.get_index(0) == 0);
 			REQUIRE(selected.get_index(1) == 2);
@@ -497,14 +498,13 @@ TEST_CASE("IN and other runtime filters from separate producers retain fast exec
 }
 
 TEST_CASE("Reconstructed IN consumers retain the pruning fallback", "[dynamic_filter_groups]") {
+	DuckDB db;
+	Connection con(db);
 	const auto cast = GENERATE(false, true);
 	auto type = LogicalType::INTEGER;
 	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(type, 0);
 	if (cast) {
-		CastFunctionSet default_casts;
-		auto cast_input = GetCastFunctionInput::Default();
-		auto bound_cast = default_casts.GetCastFunction(type, LogicalType::BIGINT, cast_input);
-		input = BoundCastExpression::CreateDefault(std::move(input), LogicalType::BIGINT, std::move(bound_cast));
+		input = BoundCastExpression::AddCastToType(*con.context, std::move(input), LogicalType::BIGINT);
 	}
 	auto input_type = input->GetReturnType();
 	auto filter = ExpressionFilter::CreateInExpression(

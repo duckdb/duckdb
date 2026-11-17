@@ -380,6 +380,11 @@ string StorageManager::GetUnsupportedTypeReason(const LogicalType &logical_type)
 				                required, db.GetName(), current);
 			}
 			break;
+		case LogicalTypeId::GEOGRAPHY:
+			if (storage_version < Geometry::GEOGRAPHY_VERSION_ADDED) {
+				reason = unsupported("GEOGRAPHY columns", Geometry::GEOGRAPHY_VERSION_ADDED);
+			}
+			break;
 		default:
 			break;
 		}

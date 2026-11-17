@@ -294,6 +294,8 @@ enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
 
+enum class GeometryModel : uint8_t;
+
 enum class GeometryStorageType : uint8_t;
 
 enum class GeometryType : uint8_t;
@@ -313,8 +315,6 @@ enum class HTTPStatusCode : uint16_t;
 enum class HTTPTransportReusePolicy : uint8_t;
 
 enum class IdentifierCaseMode : uint8_t;
-
-enum class InFilterMode : uint8_t;
 
 enum class IndexAppendMode : uint8_t;
 
@@ -1105,6 +1105,9 @@ template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
+const char* EnumUtil::ToChars<GeometryModel>(GeometryModel value);
+
+template<>
 const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value);
 
 template<>
@@ -1133,9 +1136,6 @@ const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy
 
 template<>
 const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
-
-template<>
-const char* EnumUtil::ToChars<InFilterMode>(InFilterMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
@@ -2123,6 +2123,9 @@ template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
+GeometryModel EnumUtil::FromString<GeometryModel>(const char *value);
+
+template<>
 GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value);
 
 template<>
@@ -2151,9 +2154,6 @@ HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const ch
 
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
-
-template<>
-InFilterMode EnumUtil::FromString<InFilterMode>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);

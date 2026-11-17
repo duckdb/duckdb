@@ -4,8 +4,6 @@
 
 require parquet
 
-require vector_size 102
-
 # Keep the duplicate-heavy rows in the hash build.
 statement ok
 SET disabled_optimizers='join_order,build_side_probe_side,compressed_materialization,partial_aggregate_pushdown';
@@ -25,12 +23,12 @@ CREATE TABLE build(county VARCHAR, state INTEGER);
 
 foreach storage native parquet
 
-# The last row contributes a fourth key; all four must be retained.
+# The final chunk contributes a fourth key; all four must be retained.
 statement ok
 INSERT INTO build
-SELECT CASE WHEN i=101 THEN '99' ELSE (i%3)::VARCHAR END,
-       CASE WHEN i=101 THEN 9 ELSE (i%3)::INTEGER END
-FROM range(102) t(i);
+SELECT CASE WHEN i=4096 THEN '99' ELSE (i%3)::VARCHAR END,
+       CASE WHEN i=4096 THEN 9 ELSE (i%3)::INTEGER END
+FROM range(4097) t(i);
 
 statement ok
 PREPARE runtime_in_query AS
@@ -39,13 +37,13 @@ SELECT count(*) FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.s
 query I
 EXECUTE runtime_in_query;
 ----
-10200
+409700
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
 FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*county.*IN.*
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters":.*county IN \([^)]*'99'.*
 
 # Reject a distinct set above the configured limit without publishing a prefix.
 statement ok
@@ -54,7 +52,7 @@ SET dynamic_or_filter_threshold=2;
 query I
 EXECUTE runtime_in_query;
 ----
-10200
+409700
 
 statement ok
 RESET dynamic_or_filter_threshold;
@@ -62,14 +60,35 @@ RESET dynamic_or_filter_threshold;
 statement ok
 DELETE FROM build;
 
-# The default collection budget does not inspect an arbitrarily large build.
+# The row immediately beyond the collection cap disables IN filtering.
 statement ok
-INSERT INTO build SELECT (i%3)::VARCHAR, (i%3)::INTEGER FROM range(5000) t(i);
+INSERT INTO build SELECT (i%3)::VARCHAR, (i%3)::INTEGER FROM range(65537) t(i);
 
 query I
 EXECUTE runtime_in_query;
 ----
-500000
+6553700
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
+FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
+----
+analyzed_plan	<!REGEX>:(?s).*"Dynamic Filters":.*county IN \(.*
+
+# Exactly the cap is eligible, independently of vector size.
+statement ok
+DELETE FROM build WHERE rowid=(SELECT max(rowid) FROM build);
+
+query I
+EXECUTE runtime_in_query;
+----
+6553600
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*)
+FROM {storage}_probe p JOIN build b ON p.county=b.county AND p.state=b.state;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters":.*county IN \(.*
 
 statement ok
 DELETE FROM build;
@@ -80,7 +99,7 @@ EXECUTE runtime_in_query;
 0
 
 statement ok
-INSERT INTO build SELECT NULL, NULL FROM range(102);
+INSERT INTO build SELECT NULL, NULL FROM range(4097);
 
 query I
 EXECUTE runtime_in_query;
@@ -92,12 +111,12 @@ DELETE FROM build;
 
 # A different complete key set replaces the earlier filters.
 statement ok
-INSERT INTO build SELECT (7+i%3)::VARCHAR, (7+i%3)::INTEGER FROM range(102) t(i);
+INSERT INTO build SELECT (7+i%3)::VARCHAR, (7+i%3)::INTEGER FROM range(4097) t(i);
 
 query I
 EXECUTE runtime_in_query;
 ----
-10200
+409700
 
 statement ok
 DELETE FROM build;

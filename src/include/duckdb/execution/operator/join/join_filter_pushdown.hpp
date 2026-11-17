@@ -65,7 +65,7 @@ struct JoinFilterPushdownColumn {
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
 
-enum class InFilterMode : uint8_t { PRUNING_ONLY, ADAPTIVE_ROW_FILTERING };
+enum class InFilterMode { PRUNING_ONLY, ADAPTIVE_ROW_FILTERING };
 
 struct DeferredRuntimeFilterPushdown {
 	DeferredRuntimeFilterType type = DeferredRuntimeFilterType::BLOOM_FILTER;

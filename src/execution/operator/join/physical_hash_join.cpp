@@ -7,16 +7,19 @@
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -556,7 +559,14 @@ public:
 	//! The memory available to the hash table: the reservation minus what partitioning the probe side requires
 	idx_t GetMaxExternalHTSize() const {
 		const auto reservation = temporary_memory_state->GetReservation();
-		return reservation > probe_side_requirement ? reservation - probe_side_requirement : 0;
+		const auto retained_size = probe_side_requirement + hash_table->GetRetainedDictionarySize();
+		return reservation > retained_size ? reservation - retained_size : 0;
+	}
+
+	idx_t GetMaxInMemoryHTSize() const {
+		// The external minimum reservation can exceed the memory limit.
+		return MinValue(temporary_memory_state->GetReservation(),
+		                BufferManager::GetBufferManager(context).GetMaxMemory());
 	}
 
 	//! Whether we are doing an external + some sizes
@@ -700,7 +710,7 @@ static shared_ptr<TupleDataLayout> BuildJoinLayout(const vector<LogicalType> &co
 }
 
 //! Join-level eligibility for preserving build-side dictionary slots.
-static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTable &ht, bool build_side_multi_source) {
+static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, bool build_side_multi_source) {
 	// external is safe here: the dictionary is an in-memory self-owned copy and the index is a plain row-store
 	// column, so a spill/repartition preserves both (unlike the pointer-embedding dict-emission/compressed-probe paths)
 	// a multi-source build (UNION ALL, CTE) can deliver a later chunk flat or as a different dictionary under the
@@ -708,20 +718,6 @@ static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTa
 	// the build subtree is fine: its second phase only ever delivers NULL-only probe columns, which the reserved
 	// NULL index of the owned dictionary encodes.
 	if (build_side_multi_source) {
-		return false;
-	}
-	// SINGLE joins need FlatVector::SetNull on unmatched rows; dictionary vectors cannot supply it
-	if (ht.join_type == JoinType::SINGLE) {
-		return false;
-	}
-	// LEFT may dispatch into NextUniqueLeftJoin, which gathers payload via ScanStructure::GatherResult and
-	// bypasses GatherRHS' dict branch; the narrowed slot would be read as native type and trip the gather type check.
-	if (ht.join_type == JoinType::LEFT) {
-		return false;
-	}
-	// OUTER fills unmatched-probe rows with CONSTANT_NULL (NextLeftJoin), mixing dict chunks with flat fill chunks;
-	// admitting it would re-emit a falsely global dictionary a downstream consumer cannot trust.
-	if (ht.join_type == JoinType::OUTER) {
 		return false;
 	}
 	if (op.rhs_output_columns.col_types.empty()) {
@@ -736,7 +732,7 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 		const auto &build_types = lstate.hash_table->build_types;
 
 		shared_ptr<const DictSurvivingInfo> dict_info;
-		if (CanUseDictSurvivingJoin(op, *lstate.hash_table, build_side_multi_source)) {
+		if (CanUseDictSurvivingJoin(op, build_side_multi_source)) {
 			// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
 			// The dictionary a narrowed slot indexes into is created here, once, and handed to every thread with the
 			// layout: a later chunk may carry no dictionary at all (NULL-only), so no thread can pin it lazily.
@@ -1041,15 +1037,17 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 		}
 		gstate.layout_gate.layout_ptr = std::move(layout);
 	});
-	const auto &ht = *gstate.hash_table;
+	auto &ht = *gstate.hash_table;
 
+	ht.MergePerfectHashBounds(gstate.local_hash_tables);
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
 	    GetPartitioningSpaceRequirement(context, gstate.probe_types, ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
-	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
+	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement +
+	                                                     ht.GetRetainedDictionarySize());
 
 	bool all_constant;
 	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(gstate.probe_types, all_constant));
@@ -1328,9 +1326,18 @@ private:
 
 		// Both finalize paths finish writing the chains before reaching here,
 		// so dictionary emission is safe on either path
-		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
-		                                              sink.op.children[0].get().estimated_cardinality)) {
-			sink.hash_table->BuildDictionaryArrays(sink.op);
+		const auto dictionary_size = sink.hash_table->GetDictionaryReservationSize(
+		    sink.op, sink.external, sink.op.children[0].get().estimated_cardinality);
+		if (dictionary_size > 0) {
+			auto &memory = *sink.temporary_memory_state;
+			const auto requested_size = sink.total_size + dictionary_size;
+			memory.SetRemainingSizeAndUpdateReservation(sink.context.GetContext(), requested_size);
+			if (sink.GetMaxInMemoryHTSize() >= requested_size) {
+				sink.hash_table->BuildDictionaryArrays(sink.op, dictionary_size);
+			}
+			const auto retained_size = sink.total_size + sink.hash_table->GetMaterializedDictionarySize();
+			memory.SetMinimumReservation(retained_size);
+			memory.SetRemainingSizeAndUpdateReservation(sink.context.GetContext(), retained_size);
 		}
 
 		if (sink.global_filter_state) {
@@ -1492,14 +1499,16 @@ public:
 		const auto num_partitions = RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits());
 		vector<idx_t> partition_sizes(num_partitions, 0);
 		vector<idx_t> partition_counts(num_partitions, 0);
+		sink.hash_table->GetSinkCollection().GetSizesAndCounts(partition_sizes, partition_counts);
 		sink.total_size = sink.hash_table->GetTotalSize(partition_sizes, partition_counts, sink.max_partition_size,
 		                                                sink.max_partition_count);
 		sink.probe_side_requirement =
 		    GetPartitioningSpaceRequirement(sink.context, op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 
-		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
-		                                                   sink.hash_table->PointerTableSize(sink.max_partition_count) +
-		                                                   sink.probe_side_requirement);
+		sink.temporary_memory_state->SetMinimumReservation(
+		    sink.max_partition_size + sink.hash_table->PointerTableSize(sink.max_partition_count) +
+		    sink.probe_side_requirement + sink.hash_table->GetRetainedDictionarySize());
+		sink.temporary_memory_state->SetRemainingSize(sink.total_size);
 		sink.temporary_memory_state->UpdateReservation(executor.context.GetContext());
 
 		FinalizeExternalRuntimeFilters(sink.context, op, sink);
@@ -1509,18 +1518,24 @@ public:
 	}
 };
 
+//! The IN filter threshold limits the number of distinct values of a key column, not the number of build rows.
+//! A build side with more rows than the threshold can still have few distinct values in one of its key columns, e.g.
+//! the partition key of a multi-column join. Counting them requires a scan of the key column, so only build sides up
+//! to this many rows are scanned.
+static constexpr idx_t IN_FILTER_MAX_BUILD_SCAN_COUNT = 65536;
+
+static idx_t InFilterMaxBuildScanCount(idx_t dynamic_or_filter_threshold) {
+	return MaxValue<idx_t>(dynamic_or_filter_threshold, IN_FILTER_MAX_BUILD_SCAN_COUNT);
+}
+
 bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
                                             const ExpressionType &cmp) const {
 	auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
-	if (!ht || ht->Count() <= 1 || dynamic_or_filter_threshold == 0 ||
-	    (cmp != ExpressionType::COMPARE_EQUAL && cmp != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+	if (dynamic_or_filter_threshold <= 1) {
 		return false;
 	}
-	if (ht->Count() <= dynamic_or_filter_threshold) {
-		return true;
-	}
-	static constexpr idx_t MAX_IN_FILTER_BUILD_BYTES = 256ULL * 1024;
-	return ht->Count() <= STANDARD_VECTOR_SIZE && ht->SizeInBytes() <= MAX_IN_FILTER_BUILD_BYTES;
+	return ht && ht->Count() > 1 && ht->Count() <= InFilterMaxBuildScanCount(dynamic_or_filter_threshold) &&
+	       (cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 }
 
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
@@ -1708,6 +1723,7 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 		if (!prefix_range_filter || !prefix_range_filter->IsInitialized()) {
 			return nullptr;
 		}
+		prefix_range_filter->MarkPublished();
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(filter_input_type)), std::move(children),
 		    make_uniq<PrefixRangeFunctionData>(prefix_range_filter, filters_null_values, key_name, key_type,
@@ -1806,6 +1822,47 @@ static unique_ptr<Expression> CreateJoinFilterComparisonExpression(
 	return RetainRuntimeFilterNulls(std::move(filter_expr), std::move(null_check_input));
 }
 
+static bool CollectInFilterValues(ClientContext &context, Vector &build_vector, const LogicalType &filter_input_type,
+                                  idx_t threshold, bool retain_nulls, vector<Value> &in_list) {
+	GroupedAggregateHashTable distinct_keys(context, Allocator::Get(context), {filter_input_type});
+	DataChunk keys;
+	keys.Initialize(context, {filter_input_type});
+	Vector input(build_vector.GetType());
+	Vector addresses(LogicalType::POINTER);
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	CastFunctionSet cast_functions;
+	auto cast_input = GetCastFunctionInput::Default();
+	for (idx_t offset = 0; offset < build_vector.size(); offset += STANDARD_VECTOR_SIZE) {
+		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, build_vector.size() - offset);
+		keys.Reset();
+		input.Slice(build_vector, offset, offset + count);
+		if (build_vector.GetType() == filter_input_type) {
+			keys.data[0].Reference(input);
+		} else {
+			string error;
+			if (!VectorOperations::TryCast(cast_functions, cast_input, input, keys.data[0], count, &error)) {
+				return false;
+			}
+		}
+		keys.CheckCardinality(count);
+		const auto new_count = distinct_keys.FindOrCreateGroups(keys, addresses, new_groups);
+		for (idx_t i = 0; i < new_count; i++) {
+			auto value = keys.data[0].GetValue(new_groups.get_index(i));
+			if (value.IsNull()) {
+				if (retain_nulls) {
+					continue;
+				}
+				return false;
+			}
+			in_list.push_back(std::move(value));
+			if (in_list.size() > threshold) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
                                           const JoinFilterPushdownColumn &column, JoinHashTable &ht,
                                           const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
@@ -1834,28 +1891,18 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 		}
 		filter_input = std::move(input.expression);
 	} else {
-		filter_input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
+		filter_input = make_uniq<BoundReferenceExpression>(column.storage_type, static_cast<idx_t>(0));
 	}
 
-	const auto threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
-	value_set_t unique_ht_values;
-	for (idx_t k = 0; k < key_count; k++) {
-		auto value = build_vector.GetValue(k).DefaultTryCastAs(filter_input_type);
-		if (!value) {
-			return false;
-		}
-		if (retain_nulls && value->IsNull()) {
-			continue;
-		}
-		unique_ht_values.insert(std::move(*value));
-		if (unique_ht_values.size() > threshold) {
-			return false;
-		}
+	const auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
+	vector<Value> in_list;
+	if (!CollectInFilterValues(context, build_vector, filter_input_type, dynamic_or_filter_threshold, retain_nulls,
+	                           in_list)) {
+		return false;
 	}
-	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
-	// An IN filter is only useful when the values are neither null nor dense.
-	if (in_list.empty() || FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
+	// An IN filter is only useful when the values are not dense.
+	if (in_list.empty() || FilterCombiner::IsDenseRange(in_list)) {
 		return false;
 	}
 
@@ -2078,13 +2125,13 @@ void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilter
 		    pushdown.TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx, key_idx,
 		                                          min_val_before_cast, max_val_before_cast, bloom_filter_bits, *gstate);
 	}
-	const auto can_use_bloom = !registered_prf && allow_bloom_filters && can_emit_runtime_filters;
+	const auto can_use_bloom = !registered_prf && allow_bloom_filters && can_emit_runtime_filters &&
+	                           (ht->HasPublishableBloomFilter(key_idx) || allow_prefix_range_filters);
 	bool pushed_in_filter = false;
 	if (pushdown.CanUseInFilter(context, ht, cmp)) {
 		// String prefixes can leave false positives that a small IN filter removes.
-		const auto runtime_filter_input_type =
-		    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
-		const auto prefer_prf = registered_prf && runtime_filter_input_type.InternalType() != PhysicalType::VARCHAR;
+		const auto prefer_prf =
+		    registered_prf && ht->conditions[key_idx].GetLHS().GetReturnType().InternalType() != PhysicalType::VARCHAR;
 		const auto mode =
 		    prefer_prf || can_use_bloom ? InFilterMode::PRUNING_ONLY : InFilterMode::ADAPTIVE_ROW_FILTERING;
 		pushed_in_filter =
@@ -2097,7 +2144,7 @@ void JoinFilterPushdownInfo::FilterFinalizer::FinalizeCandidate(const JoinFilter
 
 	if (!pushed_in_filter) {
 		CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val, max_val,
-		                           condition_type, reconstruct_filter_expression, false);
+		                           condition_type, reconstruct_filter_expression, true);
 	}
 	if (can_use_bloom) {
 		if (ht->HasPublishableBloomFilter(key_idx)) {
@@ -2148,7 +2195,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	ht.SealBloomFilter();
 
 	sink.temporary_memory_state->UpdateReservation(context.GetContext());
-	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
+	sink.external = sink.GetMaxInMemoryHTSize() < sink.total_size;
 	if (sink.external) {
 		// For external join we reduce the load factor, this may even prevent the external join altogether
 		ht.load_factor = JoinHashTable::EXTERNAL_LOAD_FACTOR;
@@ -2158,7 +2205,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		idx_t temp_total_size =
 		    ht.GetTotalSize(sink.local_hash_tables, temp_max_partition_size, temp_max_partition_count);
 
-		if (temp_total_size < sink.temporary_memory_state->GetReservation()) {
+		if (temp_total_size <= sink.GetMaxInMemoryHTSize()) {
 			// We prevented the external join by reducing the load factor. Update the state accordingly
 			sink.temporary_memory_state->SetMinimumReservation(temp_total_size);
 			sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.GetContext(), temp_total_size);
@@ -2171,19 +2218,23 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		}
 	}
 	DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Finalize",
-	           {{"external", to_string(sink.external)}});
+	           {{"external", to_string(sink.external)},
+	            {"build_size", to_string(sink.total_size)},
+	            {"reservation", to_string(sink.temporary_memory_state->GetReservation())}});
 	if (sink.external) {
 		// External Hash Join
 		// Recursive preserved-build reuse only applies to the in-memory finalized HT. External hash join
 		// runs through repeated build/probe rounds with partition/probe-spill state, so it cannot be
 		// treated as a stable materialized build that later recursive iterations may skip entirely.
 		sink.preserve_build_for_reuse = false;
+		sink.total_size = ht.GetTotalSize(sink.local_hash_tables, sink.max_partition_size, sink.max_partition_count,
+		                                  JoinHashTable::LookupSizing::HASH_ONLY);
+		sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.GetContext(), sink.total_size);
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
 		const auto very_very_skewed = // No point in repartitioning if it's this skewed
 		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
-		if (!very_very_skewed &&
-		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
+		if (!very_very_skewed && max_partition_ht_size > sink.GetMaxExternalHTSize()) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
 			ht.SetRepartitionRadixBits(sink.GetMaxExternalHTSize(), sink.max_partition_size, sink.max_partition_count);
@@ -2208,6 +2259,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	// In-memory Hash Join
+	sink.temporary_memory_state->SetMinimumReservation(sink.total_size);
 	for (auto &local_ht : sink.local_hash_tables) {
 		ht.Merge(local_ht.get());
 	}
@@ -2239,9 +2291,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 static bool CanUseCompressedProbe(const HashJoinGlobalSinkState &sink, const vector<JoinCondition> &conditions) {
 	if (sink.external) {
 		// external joins re-finalize the HT mid-probe, invalidating the per-id pointer cache
-		return false;
-	}
-	if (!sink.hash_table->SupportsCompressedProbe()) {
 		return false;
 	}
 	if (conditions.size() != 1) {
@@ -2301,8 +2350,8 @@ public:
 		if (spill_chunk.ColumnCount() != 0) {
 			spill_chunk.Reset();
 		}
-		// discard cached build-side pointers; the HT may have been reset between iterations (e.g. recursive CTE)
-		if (probe_state.dict_state) {
+		probe_state.dict_state.reset();
+		if (CanUseCompressedProbe(op.sink_state->Cast<HashJoinGlobalSinkState>(), op.conditions)) {
 			probe_state.dict_state = make_uniq<JoinHashTable::ProbeDictionaryState>();
 		}
 	}
@@ -2670,6 +2719,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 
 	auto &data_collection = ht.GetDataCollection();
 	if (data_collection.Count() == 0 && op.EmptyResultIfRHSIsEmpty()) {
+		ht.Reset();
 		PrepareBuild(sink);
 		return;
 	}

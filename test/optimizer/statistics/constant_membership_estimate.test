@@ -2,6 +2,8 @@
 # description: Constant membership retains a conservative estimate for skewed values
 # group: [statistics]
 
+require skip_reload
+
 statement ok
 CREATE TABLE membership_skew AS
 SELECT CASE WHEN i < 9000 THEN 'common' ELSE i::VARCHAR END AS value
