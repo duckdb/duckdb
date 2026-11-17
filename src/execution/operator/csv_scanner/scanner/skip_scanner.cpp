@@ -20,7 +20,11 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 }
 
 void SkipResult::SetComment(SkipResult &result, idx_t buffer_pos) {
-	if (!result.states.WasStandard()) {
+	// The line starts as a comment when nothing stands before the comment. A comment that follows a value, a
+	// delimiter or a quoted value ends a row that has to be counted, and so does a comment that is continued in
+	// the next buffer, where the state before is the comment itself.
+	if (result.states.WasState(CSVState::NOT_SET) || result.states.WasState(CSVState::RECORD_SEPARATOR) ||
+	    result.states.WasState(CSVState::CARRIAGE_RETURN)) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;
