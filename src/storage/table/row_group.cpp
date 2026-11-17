@@ -1467,14 +1467,15 @@ ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column
     : column_idx(column_idx), info(info) {
 }
 
-RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-                                     CheckpointOptions options_p)
-    : manager(manager), compression_types(compression_types), options(options_p) {
+RowGroupWriteInfo::RowGroupWriteInfo(Context &context, PartialBlockManager &manager,
+                                     const vector<CompressionType> &compression_types, CheckpointOptions options_p)
+    : manager(manager), context(context), compression_types(compression_types), options(options_p) {
 }
 
-RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+RowGroupWriteInfo::RowGroupWriteInfo(Context &context, PartialBlockManager &manager,
+                                     const vector<CompressionType> &compression_types,
                                      vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p)
-    : manager(manager), compression_types(compression_types), options(),
+    : manager(manager), context(context), compression_types(compression_types), options(),
       column_partial_block_managers(column_partial_block_managers_p) {
 }
 
@@ -1483,6 +1484,10 @@ PartialBlockManager &RowGroupWriteInfo::GetPartialBlockManager(idx_t column_idx)
 		return *column_partial_block_managers->at(column_idx);
 	}
 	return manager;
+}
+
+Context &ColumnCheckpointInfo::GetContext() {
+	return info.context;
 }
 
 PartialBlockManager &ColumnCheckpointInfo::GetPartialBlockManager() {
@@ -1730,7 +1735,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		}
 	}
 
-	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
+	RowGroupWriteInfo info(writer.GetTableWriter().GetContext(), writer.GetPartialBlockManager(), compression_types,
+	                       writer.GetCheckpointOptions());
 
 	vector<idx_t> reused_columns;
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
