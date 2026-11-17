@@ -40,7 +40,7 @@ public:
 
 public:
 	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
-	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
+	                   cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 	~PhysicalCopyToFile() override;
 
 public:
@@ -115,7 +115,7 @@ public:
 public:
 	//! Function and associated bind data
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 
 	//! Names and types going into the file(s)
 	vector<Identifier> names;
