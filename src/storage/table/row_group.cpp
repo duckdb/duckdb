@@ -10,7 +10,10 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
@@ -987,6 +990,106 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	}
 }
 
+[[noreturn]] static void ThrowEnumValueOutOfRange(idx_t value, idx_t enum_size) {
+	throw DataCorruptionException("ENUM value %llu is out of range for an ENUM type with %llu values", value,
+	                              enum_size);
+}
+
+//! Whether an entry of the ENUM vector, NULL or not, is not a position in the dictionary
+template <class T>
+static bool HasEnumValueOutOfRange(const Vector &vector, idx_t enum_size) {
+	if (enum_size > NumericLimits<T>::Maximum()) {
+		return false;
+	}
+	T max_value = 0;
+	auto values = vector.Values<T>();
+	for (idx_t i = 0; i < values.size(); i++) {
+		max_value = MaxValue<T>(max_value, values.GetValueUnsafe(i));
+	}
+	return max_value >= enum_size;
+}
+
+static bool HasEnumValueOutOfRange(const Vector &vector) {
+	auto &type = vector.GetType();
+	switch (type.id()) {
+	case LogicalTypeId::ENUM: {
+		auto enum_size = EnumType::GetSize(type);
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return HasEnumValueOutOfRange<uint8_t>(vector, enum_size);
+		case PhysicalType::UINT16:
+			return HasEnumValueOutOfRange<uint16_t>(vector, enum_size);
+		case PhysicalType::UINT32:
+			return HasEnumValueOutOfRange<uint32_t>(vector, enum_size);
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+		for (auto &child : StructVector::GetEntries(vector)) {
+			if (HasEnumValueOutOfRange(child)) {
+				return true;
+			}
+		}
+		return false;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return HasEnumValueOutOfRange(ListVector::GetChild(vector));
+	case LogicalTypeId::ARRAY:
+		return HasEnumValueOutOfRange(ArrayVector::GetChild(vector));
+	default:
+		return false;
+	}
+}
+
+static void VerifyEnumValue(const Value &value) {
+	if (value.IsNull()) {
+		return;
+	}
+	auto &type = value.type();
+	switch (type.id()) {
+	case LogicalTypeId::ENUM: {
+		auto enum_value = value.GetValue<uint32_t>();
+		if (enum_value >= EnumType::GetSize(type)) {
+			ThrowEnumValueOutOfRange(enum_value, EnumType::GetSize(type));
+		}
+		break;
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+		for (auto &child : StructValue::GetChildren(value)) {
+			VerifyEnumValue(child);
+		}
+		break;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		for (auto &child : ListValue::GetChildren(value)) {
+			VerifyEnumValue(child);
+		}
+		break;
+	case LogicalTypeId::ARRAY:
+		for (auto &child : ArrayValue::GetChildren(value)) {
+			VerifyEnumValue(child);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void RowGroup::VerifyScannedValues(const DataChunk &chunk) {
+	for (auto &vector : chunk.data) {
+		// the entry of a NULL can hold anything: only look at the validity if an entry is out of range
+		if (!HasEnumValueOutOfRange(vector)) {
+			continue;
+		}
+		for (idx_t row = 0; row < chunk.size(); row++) {
+			VerifyEnumValue(vector.GetValue(row));
+		}
+	}
+}
+
 void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
@@ -1107,6 +1210,7 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 		count = approved_tuple_count;
 	}
 	result.SetChildCardinality(count);
+	VerifyScannedValues(result);
 	FinishVector(state);
 }
 

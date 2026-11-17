@@ -1,0 +1,66 @@
+# name: test/sql/types/enum/enum_corrupt_nested_value.test
+# description: A stored ENUM value nested in a STRUCT, LIST, ARRAY or MAP that is not a position in the dictionary throws
+# group: [enum]
+
+require vector_size 2048
+
+# t0 (id INTEGER, s STRUCT(e mood, i INTEGER), l mood[], ar mood[2], m MAP(VARCHAR, mood)) holds the ids 0 to 15
+# mood is ENUM('a', 'b', 'c'). The stored value is out of range in s.e (id = 5), l (id = 9), ar (id = 14), m (id = 2).
+# t1 (id INTEGER, s STRUCT(e mood, i INTEGER)): s is NULL in the row id = 12, only the entry of s.e under that NULL
+# is out of range, which must be ignored.
+unzip data/storage/corrupt/enum_corrupt_nested_value.db.gz {TEST_DIR}/enum_corrupt_nested_value.db
+
+load {TEST_DIR}/enum_corrupt_nested_value.db readonly
+
+statement error
+SELECT s FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 3 values
+
+statement error
+SELECT s.e FROM t0
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 3 values
+
+statement error
+SELECT l FROM t0
+----
+Data Corruption Error: ENUM value 200 is out of range for an ENUM type with 3 values
+
+statement error
+SELECT ar FROM t0
+----
+Data Corruption Error: ENUM value 99 is out of range for an ENUM type with 3 values
+
+statement error
+SELECT m FROM t0
+----
+Data Corruption Error: ENUM value 77 is out of range for an ENUM type with 3 values
+
+# which value is reported depends on whether the filter is evaluated in the scan
+statement error
+SELECT * FROM t0 WHERE id = 9
+----
+is out of range for an ENUM type with 3 values
+
+# other columns are unaffected
+query II
+SELECT count(*), sum(id) FROM t0
+----
+16	120
+
+# a value under a NULL struct is not a value
+query IT
+SELECT id, s FROM t1 WHERE id >= 10 ORDER BY id
+----
+10	{'e': b, 'i': 10}
+11	{'e': a, 'i': 11}
+12	NULL
+13	{'e': c, 'i': 13}
+14	{'e': b, 'i': 14}
+15	{'e': a, 'i': 15}
+
+query I
+SELECT count(*) FROM t1 WHERE s.e = 'c'
+----
+5

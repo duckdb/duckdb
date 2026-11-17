@@ -1,5 +1,5 @@
 # name: test/sql/types/enum/enum_corrupt_value.test
-# description: A stored ENUM value that is not a position in the dictionary of its type must error, not read past the dictionary
+# description: A stored ENUM value that is not a position in the dictionary of its type throws when it is scanned
 # group: [enum]
 
 require vector_size 2048
@@ -13,74 +13,52 @@ load {TEST_DIR}/enum_corrupt_value.db readonly
 statement ok
 USE enum_corrupt_value
 
-# ENUM -> VARCHAR
 statement error
 SELECT m::VARCHAR FROM t0
 ----
 Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
 statement error
-SELECT COLUMNS(*)::VARCHAR FROM t0 WHERE a = 6
+SELECT * FROM t0 WHERE a = 6
 ----
 Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
-statement error
-SELECT [m]::VARCHAR, {'m': m}::VARCHAR FROM t0
-----
-Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
-
-# ENUM -> ENUM
 statement error
 SELECT m::ENUM('b', 'a', 'c') FROM t0
 ----
 Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
 statement error
-SELECT TRY_CAST(m AS ENUM('b', 'a', 'c')) FROM t0
-----
-Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
-
-# ENUM -> other types goes through VARCHAR
-statement error
-SELECT m::BLOB FROM t0
-----
-Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
-
-# ENUM -> VARIANT
-statement error
-SELECT m::VARIANT FROM t0
-----
-Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
-
-# enum_range_boundary
-statement error
 SELECT enum_range_boundary(NULL, m) FROM t0
 ----
 Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
 statement error
-SELECT enum_range_boundary(m, NULL) FROM t0
+SELECT enum_code(m) FROM t0
 ----
 Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
-# statements that do not need the string of the value are unaffected
-query II
-SELECT a, enum_code(m) FROM t0 WHERE a BETWEEN 5 AND 7 ORDER BY a
+statement error
+SELECT count(*) FROM t0 GROUP BY m
 ----
-5	1
-6	86
-7	1
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
 
-# the other rows can be read
-query IT
-SELECT a, m::VARCHAR FROM t0 WHERE a <> 6 AND a > 8 ORDER BY a
+statement error
+COPY (SELECT m FROM t0) TO '{TEST_DIR}/enum_corrupt_value.csv'
 ----
-9	b
-10	a
-11	NULL
-12	a
-13	a
-14	b
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+# scans that do not read the column are unaffected
+query II
+SELECT count(*), sum(a) FROM t0
+----
+15	105
+
+query IT
+SELECT a, b IS NOT NULL FROM t0 WHERE a > 12 ORDER BY a
+----
+13	true
+14	true
 
 query I
 SELECT 42

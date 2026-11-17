@@ -400,11 +400,6 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	}
 }
 
-void EnumType::ThrowValueOutOfRange(idx_t value, idx_t enum_size) {
-	throw DataCorruptionException("ENUM value %llu is out of range for an ENUM type with %llu values", value,
-	                              enum_size);
-}
-
 string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 	D_ASSERT(pos < EnumType::GetSize(type));
 	return FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type))[pos];

@@ -5,37 +5,11 @@
 
 namespace duckdb {
 
-//! Verifies that the values of an ENUM vector are positions in the dictionary of its type.
-//! This is done once per vector to keep the check out of the cast loops.
-template <class T>
-static void VerifyEnumValues(const Vector &source, idx_t count, idx_t dictionary_size) {
-	if (dictionary_size > NumericLimits<T>::Maximum()) {
-		// every value of the physical type is a position in the dictionary
-		return;
-	}
-	// the entry of a NULL can hold anything: only look at the validity if an entry is out of range
-	auto values = source.Values<T>();
-	T max_value = 0;
-	for (idx_t i = 0; i < count; i++) {
-		max_value = MaxValue<T>(max_value, values.GetValueUnsafe(i));
-	}
-	if (max_value < dictionary_size) {
-		return;
-	}
-	for (idx_t i = 0; i < count; i++) {
-		auto entry = values[i];
-		if (entry.IsValid() && entry.GetValue() >= dictionary_size) {
-			EnumType::ThrowValueOutOfRange(entry.GetValue(), dictionary_size);
-		}
-	}
-}
-
 template <class SRC_TYPE, class RES_TYPE>
 static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
 	auto res_enum_type = result.GetType();
-	VerifyEnumValues<SRC_TYPE>(source, count, EnumType::GetSize(source.GetType()));
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	UnaryExecutor::Execute<SRC_TYPE, RES_TYPE>(source, result, count, [&](SRC_TYPE value) -> optional<RES_TYPE> {
@@ -71,7 +45,6 @@ template <class SRC>
 static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
-	VerifyEnumValues<SRC>(source, count, EnumType::GetSize(source.GetType()));
 
 	UnaryExecutor::Execute<SRC, string_t>(source, result, count,
 	                                      [&](SRC enum_idx) { return dictionary_data[enum_idx]; });

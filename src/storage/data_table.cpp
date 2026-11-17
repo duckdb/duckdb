@@ -497,6 +497,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	if (!has_local) {
 		// All committed rows — fast path (common case).
 		row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
+		RowGroup::VerifyScannedValues(result);
 		return;
 	}
 
@@ -552,6 +553,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	for (idx_t col = 0; col < result.ColumnCount(); col++) {
 		result.data[col].Slice(inv_perm, fetch_count);
 	}
+	RowGroup::VerifyScannedValues(result);
 }
 
 void DataTable::FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
