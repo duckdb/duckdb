@@ -672,32 +672,92 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_provider_set_cipher_callbacks:
+  crypto_provider_set_cipher_create_callback:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Sets the streaming cipher callbacks. All but `destroy` are required.
+      Sets the callback that creates a cipher stream.
 
-      The provider's implementation must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
+      The create, init, update and finalize callbacks are required before registration, and together must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
     parameters:
       provider:
         type: crypto_provider
         description: "The provider."
-      create:
+      callback:
         type: crypto_provider_cipher_create_callback
-        description: "Creates a stream."
-      init:
+        description: "The create callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_init_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that starts a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
         type: crypto_provider_cipher_init_callback
-        description: "Starts a stream."
-      update:
+        description: "The init callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_update_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that processes a chunk of a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
         type: crypto_provider_cipher_update_callback
-        description: "Processes a chunk."
-      finalize:
+        description: "The update callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_finalize_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that completes a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
         type: crypto_provider_cipher_finalize_callback
-        description: "Completes a stream."
-      destroy:
+        description: "The finalize callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_destroy_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the optional callback that releases a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
         type: crypto_provider_cipher_destroy_callback
-        description: "Optional. Releases a stream."
+        description: "Optional. The destroy callback to set."
       err:
         type: error_info
         indirection: 1

@@ -2415,29 +2415,95 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_c
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Sets the streaming cipher callbacks. All but `destroy` are required.
+ * Sets the callback that creates a cipher stream.
  *
- * The provider's implementation must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24-
- * and 32-byte keys.
+ * The create, init, update and finalize callbacks are required before registration, and together must support every
+ * `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param provider The provider.
- * @param create Creates a stream.
- * @param init Starts a stream.
- * @param update Processes a chunk.
- * @param finalize Completes a stream.
- * @param destroy Optional. Releases a stream.
+ * @param callback The create callback to set.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_callbacks(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn create,
-    duckdb_v2_crypto_provider_cipher_init_callback_fn init, duckdb_v2_crypto_provider_cipher_update_callback_fn update,
-    duckdb_v2_crypto_provider_cipher_finalize_callback_fn finalize,
-    duckdb_v2_crypto_provider_cipher_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_create_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that starts a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The init callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_init_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_init_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that processes a chunk of a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The update callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_update_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_update_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that completes a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The finalize callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_finalize_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_finalize_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional callback that releases a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback Optional. The destroy callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_destroy_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_destroy_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

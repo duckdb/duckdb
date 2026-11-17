@@ -512,24 +512,48 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_crypto_provide
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_callbacks(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn create,
-    duckdb_v2_crypto_provider_cipher_init_callback_fn init, duckdb_v2_crypto_provider_cipher_update_callback_fn update,
-    duckdb_v2_crypto_provider_cipher_finalize_callback_fn finalize,
-    duckdb_v2_crypto_provider_cipher_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_crypto_provider_set_cipher_create_callback(duckdb_v2_crypto_provider_handle provider,
+                                                     duckdb_v2_crypto_provider_cipher_create_callback_fn callback,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(provider);
-	DUCKDB_CHECK_ARG(create);
-	DUCKDB_CHECK_ARG(init);
-	DUCKDB_CHECK_ARG(update);
-	DUCKDB_CHECK_ARG(finalize);
-	return WithErrorHandler(err, [&]() {
-		auto &callbacks = Convert(provider)->callbacks;
-		callbacks.cipher_create = create;
-		callbacks.cipher_init = init;
-		callbacks.cipher_update = update;
-		callbacks.cipher_finalize = finalize;
-		callbacks.cipher_destroy = destroy;
-	});
+	DUCKDB_CHECK_ARG(callback);
+	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.cipher_create = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_crypto_provider_set_cipher_init_callback(duckdb_v2_crypto_provider_handle provider,
+                                                   duckdb_v2_crypto_provider_cipher_init_callback_fn callback,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(provider);
+	DUCKDB_CHECK_ARG(callback);
+	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.cipher_init = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_crypto_provider_set_cipher_update_callback(duckdb_v2_crypto_provider_handle provider,
+                                                     duckdb_v2_crypto_provider_cipher_update_callback_fn callback,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(provider);
+	DUCKDB_CHECK_ARG(callback);
+	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.cipher_update = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_crypto_provider_set_cipher_finalize_callback(duckdb_v2_crypto_provider_handle provider,
+                                                       duckdb_v2_crypto_provider_cipher_finalize_callback_fn callback,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(provider);
+	DUCKDB_CHECK_ARG(callback);
+	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.cipher_finalize = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_crypto_provider_set_cipher_destroy_callback(duckdb_v2_crypto_provider_handle provider,
+                                                      duckdb_v2_crypto_provider_cipher_destroy_callback_fn callback,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(provider);
+	return WithErrorHandler(err, [&]() { Convert(provider)->callbacks.cipher_destroy = callback; });
 }
 
 static uint32_t ToHashFunctionMask(const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count) {

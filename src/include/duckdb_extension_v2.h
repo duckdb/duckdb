@@ -1623,11 +1623,21 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_create)
 	(duckdb_v2_factory_handle factory, duckdb_v2_crypto_provider_handle *provider, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_crypto_provider_destroy)(duckdb_v2_crypto_provider_handle *provider);
-	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_callbacks)
-	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn create,
-	 duckdb_v2_crypto_provider_cipher_init_callback_fn init, duckdb_v2_crypto_provider_cipher_update_callback_fn update,
-	 duckdb_v2_crypto_provider_cipher_finalize_callback_fn finalize,
-	 duckdb_v2_crypto_provider_cipher_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_create_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_destroy_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_destroy_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_finalize_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_finalize_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_init_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_init_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_cipher_update_callback)
+	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_update_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_crypto_provider_set_hash_callback)
 	(duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hash_callback_fn callback,
 	 const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
@@ -3735,7 +3745,24 @@ typedef struct {
 #define duckdb_v2_crypto_provider_destroy duckdb_ext_api.duckdb_v2_crypto_provider_destroy
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_crypto_provider_set_cipher_callbacks duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_callbacks
+#define duckdb_v2_crypto_provider_set_cipher_create_callback                                                           \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_create_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_destroy_callback                                                          \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_destroy_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_finalize_callback                                                         \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_finalize_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_init_callback                                                             \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_init_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_crypto_provider_set_cipher_update_callback                                                           \
+	duckdb_ext_api.duckdb_v2_crypto_provider_set_cipher_update_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_crypto_provider_set_hash_callback duckdb_ext_api.duckdb_v2_crypto_provider_set_hash_callback

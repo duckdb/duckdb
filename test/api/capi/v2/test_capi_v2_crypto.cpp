@@ -344,8 +344,15 @@ duckdb_v2_crypto_provider_handle MakeProvider(duckdb_v2_factory_handle factory, 
 	duckdb_v2_opaque data = {stats, DestroyStats, nullptr};
 	REQUIRE(duckdb_v2_crypto_provider_set_user_data(provider, &data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	if (with_aes) {
-		REQUIRE(duckdb_v2_crypto_provider_set_cipher_callbacks(provider, XorCreate, XorInit, XorUpdate, XorFinalize,
-		                                                       XorDestroy, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_create_callback(provider, XorCreate, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_init_callback(provider, XorInit, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_update_callback(provider, XorUpdate, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_finalize_callback(provider, XorFinalize, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_destroy_callback(provider, XorDestroy, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 	}
 	DUCKDB_V2_CRYPTO_HASH_FUNCTION hashes[] = {DUCKDB_V2_CRYPTO_HASH_SHA256};
 	REQUIRE(duckdb_v2_crypto_provider_set_hash_callback(provider, FixedHash, hashes, 1, nullptr) ==
