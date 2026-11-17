@@ -4979,8 +4979,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_provider(duckdb_v2_se
  * Sets whether the function is the default provider of its type: the one `CREATE SECRET (TYPE <type>)` uses when the
  * statement names no provider. Defaults to false.
  *
- * A type without a default provider requires every statement to name its provider. Registration fails when another
- * function of the type is already the default.
+ * A type without a default provider requires every statement to name its provider. Only the function that defines the
+ * type, the first one registered for it, can be the default: registering a later function of an existing type with this
+ * set fails.
  *
  * history:
  * - unstable: v2.0.0
@@ -5152,9 +5153,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_create(duckdb_v2_factory_handle fa
  * defaults to the default provider of the type, the name to one DuckDB chooses, the storage and persist type to what
  * DuckDB chooses.
  *
- * The value is borrowed and copied. An invalid persist type fails with `ERROR_INPUT_PARAMETER_INVALID`. Fails with
- * `ERROR_API` on a read-only secret. On the secret a create callback fills it also fails with `ERROR_API` for the type,
- * provider and name.
+ * The value is borrowed and copied. An invalid persist type fails with `ERROR_INPUT_INVALID`. Fails with `ERROR_API` on
+ * a read-only secret. On the secret a create callback fills it also fails with `ERROR_API` for the type, provider and
+ * name.
  *
  * history:
  * - unstable: v2.0.0

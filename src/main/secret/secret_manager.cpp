@@ -290,6 +290,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	}
 
 	// Call the function
+	function_input.function_info = function_lookup->info.get();
 	auto secret = function_lookup->function(context, function_input);
 
 	if (!secret) {
