@@ -26,49 +26,42 @@ typedef struct {
  * (create_secret_functions.cpp, s3_auth.cpp)
  * ---------------------------------------------------------------------------------------------------------------- */
 
-static void CreateS3SecretFromConfig(duckdb_v2_secret_create_input_handle input,
-                                     duckdb_v2_secret_builder_handle builder, duckdb_v2_context_handle context,
-                                     duckdb_v2_error_info_handle *err) {
+static void CreateS3SecretFromConfig(duckdb_v2_secret_handle input, duckdb_v2_secret_handle output, void *user_data,
+                                     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	/* S3SecretBuilder: copy every option into the secret (validating the ones that need it) */
 	idx_t count = 0;
-	duckdb_v2_secret_create_input_get_option_count(input, &count, NULL);
+	duckdb_v2_secret_get_key_count(input, &count, NULL);
 	for (idx_t i = 0; i < count; i++) {
-		sv name;
+		sv key;
 		duckdb_v2_value_handle value = NULL;
-		duckdb_v2_secret_create_input_get_option_name(input, i, &name.ptr, &name.len, NULL);
-		duckdb_v2_secret_create_input_get_option_value(input, i, &value, NULL);
-		duckdb_v2_secret_builder_set_value(builder, name.ptr, name.len, value, err);
+		duckdb_v2_secret_get_key(input, i, &key.ptr, &key.len, NULL);
+		duckdb_v2_secret_get_value(input, key.ptr, key.len, &value, NULL);
+		duckdb_v2_secret_set_value(output, key.ptr, key.len, value, err);
 		duckdb_v2_value_destroy(&value);
 	}
-	/* only a secret that carries an SSE-C key hides its refresh info: redaction is decided per secret */
+	/* the sensitive keys; refresh_info only when it carries an SSE-C key: redaction is decided per secret */
+	duckdb_v2_secret_add_redacted_key(output, S("secret"), NULL);
+	duckdb_v2_secret_add_redacted_key(output, S("session_token"), NULL);
 	duckdb_v2_value_handle sse_key = NULL;
-	duckdb_v2_secret_create_input_get_option(input, S("sse_c_key"), &sse_key, NULL);
+	duckdb_v2_secret_get_value(input, S("sse_c_key"), &sse_key, NULL);
 	if (sse_key) {
-		duckdb_v2_secret_builder_add_redacted_key(builder, S("refresh_info"), NULL);
+		duckdb_v2_secret_add_redacted_key(output, S("refresh_info"), NULL);
 		duckdb_v2_value_destroy(&sse_key);
 	}
 	/* a default scope when the user gave none (S3SecretConfig::DefaultSecretScope) */
 	idx_t scopes = 0;
-	duckdb_v2_secret_create_input_get_scope_count(input, &scopes, NULL);
+	duckdb_v2_secret_get_scope_count(output, &scopes, NULL);
 	if (scopes == 0) {
-		duckdb_v2_secret_builder_add_scope(builder, S("s3://"), NULL);
+		duckdb_v2_secret_add_scope(output, S("s3://"), NULL);
 	}
 }
 
 static void RegisterS3Secret(duckdb_v2_extension_handle extension, duckdb_v2_factory_handle factory) {
-	duckdb_v2_secret_type_handle type = NULL;
-	duckdb_v2_secret_type_create(factory, &type, NULL);
-	duckdb_v2_secret_type_set_name(type, S("s3"), NULL);
-	duckdb_v2_secret_type_set_default_provider(type, S("config"), NULL);
-	duckdb_v2_secret_type_add_redacted_key(type, S("secret"), NULL);
-	duckdb_v2_secret_type_add_redacted_key(type, S("session_token"), NULL);
-	duckdb_v2_extension_register_secret_type(extension, type, NULL);
-	duckdb_v2_secret_type_destroy(&type);
-
 	duckdb_v2_secret_function_handle function = NULL;
 	duckdb_v2_secret_function_create(factory, &function, NULL);
 	duckdb_v2_secret_function_set_type(function, S("s3"), NULL);
 	duckdb_v2_secret_function_set_provider(function, S("config"), NULL);
+	duckdb_v2_secret_function_set_default(function, true, NULL);
 	duckdb_v2_logical_type_handle varchar = NULL;
 	duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR, NULL, NULL, NULL, 0, &varchar,
 	                                      NULL);
@@ -104,30 +97,11 @@ static bool GetS3Region(duckdb_v2_context_handle ctx, const char *path, char *ou
 	return found;
 }
 
-/* httpfs and iceberg refresh: re-create a secret from the one it replaces (GenerateRefreshSecretInfo). */
-static void RefreshSecret(duckdb_v2_context_handle ctx, duckdb_v2_factory_handle factory, duckdb_v2_secret_handle old) {
-	duckdb_v2_secret_create_input_handle input = NULL;
-	duckdb_v2_secret_create_input_create(factory, &input, NULL);
-	sv s;
-	duckdb_v2_secret_get_type(old, &s.ptr, &s.len, NULL);
-	duckdb_v2_secret_create_input_set_type(input, s.ptr, s.len, NULL);
-	duckdb_v2_secret_get_name(old, &s.ptr, &s.len, NULL);
-	duckdb_v2_secret_create_input_set_name(input, s.ptr, s.len, NULL);
-	duckdb_v2_secret_get_storage(old, &s.ptr, &s.len, NULL);
-	duckdb_v2_secret_create_input_set_storage(input, s.ptr, s.len, NULL);
-	DUCKDB_V2_SECRET_PERSIST_TYPE persist;
-	duckdb_v2_secret_get_persist_type(old, &persist, NULL);
-	duckdb_v2_secret_create_input_set_persist_type(input, persist, NULL);
-	idx_t scopes = 0;
-	duckdb_v2_secret_get_scope_count(old, &scopes, NULL);
-	for (idx_t i = 0; i < scopes; i++) {
-		duckdb_v2_secret_get_scope(old, i, &s.ptr, &s.len, NULL);
-		duckdb_v2_secret_create_input_add_scope(input, s.ptr, s.len, NULL);
-	}
-	duckdb_v2_secret_create_input_set_on_conflict(input, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL);
-	/* the refreshed options (e.g. `refresh_info`) are set with duckdb_v2_secret_create_input_set_option */
-	duckdb_v2_context_create_secret(ctx, input, NULL, NULL);
-	duckdb_v2_secret_create_input_destroy(&input);
+/* httpfs and iceberg refresh: replace a secret by its looked-up copy with new values (GenerateRefreshSecretInfo). A
+ * looked-up secret is an owned copy, so it is changed and stored back as is. */
+static void RefreshSecret(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret, duckdb_v2_value_handle token) {
+	duckdb_v2_secret_set_value(secret, S("session_token"), token, NULL);
+	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL, NULL);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
@@ -169,15 +143,14 @@ static duckdb_v2_secret_handle QuackFindByName(duckdb_v2_context_handle ctx, con
 /* quack's CreateDefault: a persistent secret, ignoring a name that is taken */
 static void QuackCreateDefault(duckdb_v2_context_handle ctx, duckdb_v2_factory_handle factory,
                                duckdb_v2_value_handle token) {
-	duckdb_v2_secret_create_input_handle input = NULL;
-	duckdb_v2_secret_create_input_create(factory, &input, NULL);
-	duckdb_v2_secret_create_input_set_type(input, S("quack"), NULL);
-	duckdb_v2_secret_create_input_set_name(input, S("__default_quack"), NULL);
-	duckdb_v2_secret_create_input_set_option(input, S("token"), token, NULL);
-	duckdb_v2_secret_create_input_set_persist_type(input, DUCKDB_V2_SECRET_PERSIST_TYPE_PERSISTENT, NULL);
-	duckdb_v2_secret_create_input_set_on_conflict(input, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, NULL);
-	duckdb_v2_context_create_secret(ctx, input, NULL, NULL);
-	duckdb_v2_secret_create_input_destroy(&input);
+	duckdb_v2_secret_handle secret = NULL;
+	duckdb_v2_secret_create(factory, &secret, NULL);
+	duckdb_v2_secret_set_type(secret, S("quack"), NULL);
+	duckdb_v2_secret_set_name(secret, S("__default_quack"), NULL);
+	duckdb_v2_secret_set_value(secret, S("token"), token, NULL);
+	duckdb_v2_secret_set_persist_type(secret, DUCKDB_V2_SECRET_PERSIST_TYPE_PERSISTENT, NULL);
+	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, NULL, NULL);
+	duckdb_v2_secret_destroy(&secret);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
@@ -210,15 +183,14 @@ static duckdb_v2_secret_handle IcebergBestStorageSecret(duckdb_v2_context_handle
 
 static void IcebergCreateVendedSecret(duckdb_v2_context_handle ctx, duckdb_v2_factory_handle factory,
                                       const char *table_location, duckdb_v2_value_handle key_id) {
-	duckdb_v2_secret_create_input_handle input = NULL;
-	duckdb_v2_secret_create_input_create(factory, &input, NULL);
-	duckdb_v2_secret_create_input_set_type(input, S("s3"), NULL);
-	duckdb_v2_secret_create_input_add_scope(input, S(table_location), NULL);
-	duckdb_v2_secret_create_input_set_option(input, S("key_id"), key_id, NULL);
-	duckdb_v2_secret_create_input_set_persist_type(input, DUCKDB_V2_SECRET_PERSIST_TYPE_TRANSACTION, NULL);
-	duckdb_v2_secret_create_input_set_on_conflict(input, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL);
-	duckdb_v2_context_create_secret(ctx, input, NULL, NULL);
-	duckdb_v2_secret_create_input_destroy(&input);
+	duckdb_v2_secret_handle secret = NULL;
+	duckdb_v2_secret_create(factory, &secret, NULL);
+	duckdb_v2_secret_set_type(secret, S("s3"), NULL);
+	duckdb_v2_secret_add_scope(secret, S(table_location), NULL);
+	duckdb_v2_secret_set_value(secret, S("key_id"), key_id, NULL);
+	duckdb_v2_secret_set_persist_type(secret, DUCKDB_V2_SECRET_PERSIST_TYPE_TRANSACTION, NULL);
+	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL, NULL);
+	duckdb_v2_secret_destroy(&secret);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
@@ -246,5 +218,5 @@ static void CopySecretToOptions(duckdb_v2_context_handle ctx, const char *path, 
 	duckdb_v2_secret_destroy(&secret);
 }
 
-/* ducklake, postgres, azure: a type with a named parameter per option and a "config" provider whose callback is the
- * option loop of CreateS3SecretFromConfig, with the sensitive keys declared on the type. */
+/* ducklake, postgres, azure: a function per provider with a named parameter per option, whose callback is the key
+ * loop of CreateS3SecretFromConfig, with the sensitive keys marked on the output. */
