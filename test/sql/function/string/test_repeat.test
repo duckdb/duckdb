@@ -84,3 +84,30 @@ statement error
 select REPEAT('hello', 'world', 3)
 ----
 
+# Non-power-of-two copies and embedded zero bytes must preserve every byte.
+query TT
+SELECT repeat('ab', 5), hex(repeat(from_hex('00FF'), 5));
+----
+ababababab	00FF00FF00FF00FF00FF
+
+# Varying repetition counts exercise the flat-vector path.
+query T
+SELECT repeat(chr(CAST(97 + i % 3 AS INTEGER)), i % 5) FROM range(10) t(i);
+----
+(empty)
+b
+cc
+aaa
+bbbb
+(empty)
+a
+bb
+ccc
+aaaa
+
+query TII
+SELECT repeat('é', 3), octet_length(repeat(from_hex('00'), 65)),
+       repeat(from_hex('00'), 65) = from_hex(repeat('00', 65));
+----
+ééé	65	true
+

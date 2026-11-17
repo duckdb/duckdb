@@ -23,8 +23,17 @@ static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		    if (TryMultiplyOperator::Operation(size_str, copy_count, copy_size)) {
 			    auto result_str = StringVector::EmptyString(result, copy_size);
 			    auto result_data = result_str.GetDataWriteable();
-			    for (idx_t i = 0; i < copy_count; i++) {
-				    memcpy(result_data + i * size_str, input_str, size_str);
+			    if (size_str == 1) {
+				    memset(result_data, input_str[0], copy_size);
+			    } else if (copy_size > 0) {
+				    memcpy(result_data, input_str, size_str);
+				    // Every copy extends the already repeated prefix without overlap.
+				    idx_t filled = size_str;
+				    while (filled < copy_size) {
+					    const auto next = MinValue<idx_t>(filled, copy_size - filled);
+					    memcpy(result_data + filled, result_data, next);
+					    filled += next;
+				    }
 			    }
 			    result_str.Finalize();
 			    return result_str;
