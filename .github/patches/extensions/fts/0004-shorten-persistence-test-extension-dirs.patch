@@ -1,0 +1,31 @@
+diff --git a/test/sql/fts/test_pattern_persistence.test b/test/sql/fts/test_pattern_persistence.test
+index b24e7ff..1ab47b4 100644
+--- a/test/sql/fts/test_pattern_persistence.test
++++ b/test/sql/fts/test_pattern_persistence.test
+@@ -11,7 +11,7 @@ require no_alternative_verify
+ load {TEST_DIR}/pattern_persistence.db
+ 
+ statement ok
+-SET extension_directory='{TEST_DIR}/pattern_persistence_extensions'
++SET extension_directory='{TEST_DIR}/pp_ext'
+ 
+ statement ok
+ INSTALL '{BUILD_DIRECTORY}/extension/fts/fts.duckdb_extension'
+@@ -35,7 +35,7 @@ PRAGMA create_fts_index(
+ restart no_extension_load
+ 
+ statement ok
+-SET extension_directory='{TEST_DIR}/pattern_persistence_extensions'
++SET extension_directory='{TEST_DIR}/pp_ext'
+ 
+ statement ok
+ SET autoload_known_extensions=true
+@@ -63,7 +63,7 @@ FROM fts_main_documents.search_layered_bm25(
+ restart no_extension_load
+ 
+ statement ok
+-SET extension_directory='{TEST_DIR}/pattern_persistence_extensions'
++SET extension_directory='{TEST_DIR}/pp_ext'
+ 
+ statement ok
+ LOAD json
