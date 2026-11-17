@@ -1,3 +1,4 @@
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -186,7 +187,7 @@ void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 	if (info.return_type.id() == LogicalTypeId::LIST) {
@@ -251,7 +252,8 @@ void ResolveListConcatTypes(ResolveScalarFunctionTypesInput &input, bool is_oper
 			throw BinderException(arg, "Cannot concatenate types %s - an explicit cast is required", type_list);
 		}
 		}
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type,
+		                                       input.GetDecimalWidthLimit())) {
 			throw BinderException(arg, "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
 			                      child_type.ToString(), next_type.ToString());
 		}
@@ -332,6 +334,23 @@ unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStati
 	for (idx_t i = 1; i < child_stats.size(); i++) {
 		stats->Merge(child_stats[i]);
 	}
+	// NULL lists are skipped, so the result length is the sum of the input lengths
+	idx_t min_length = 0;
+	optional_idx max_length = 0;
+	for (auto &child : child_stats) {
+		auto child_min = ListStats::MinListLength(child);
+		auto child_max = ListStats::MaxListLength(child);
+		if (!child.CanHaveNull() && child_min.IsValid()) {
+			min_length += child_min.GetIndex();
+		}
+		if (!max_length.IsValid() || !child_max.IsValid() ||
+		    child_max.GetIndex() > NumericLimits<idx_t>::Maximum() - max_length.GetIndex()) {
+			max_length = optional_idx();
+		} else {
+			max_length = max_length.GetIndex() + child_max.GetIndex();
+		}
+	}
+	ListStats::SetLengthBounds(*stats, min_length, max_length);
 	return stats;
 }
 

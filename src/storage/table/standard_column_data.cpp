@@ -35,9 +35,10 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	return validity->GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
-void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
-	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
-	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t start_row,
+                                            idx_t end_row) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, start_row, end_row);
+	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], start_row, end_row);
 }
 
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
@@ -87,11 +88,17 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || filter_state.can_throw) {
-		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
-		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
-		// filter already removed - pushing the filter down there must not raise errors that would not occur otherwise
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || !filter_state.can_cache) {
+		// Cached evaluation requires safe predicates and complete value validity.
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		return;
+	}
+	bool needs_row_validity = false;
+	if (!filter_includes_validity) {
+		lock_guard<mutex> guard(stats_lock);
+		needs_row_validity = state.current->GetNode().GetStats().CanHaveNull();
+	}
+	if (needs_row_validity) {
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
@@ -118,6 +125,13 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
 		return;
 	}
+	// a scan references uncompressed data without copying it: slicing beats gathering unless few rows are selected
+	static constexpr idx_t UNCOMPRESSED_SELECT_DENSITY = 5;
+	if (compression->type == CompressionType::COMPRESSION_UNCOMPRESSED &&
+	    sel_count * UNCOMPRESSED_SELECT_DENSITY > target_count) {
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
 	SelectVector(state, result, target_count, sel, sel_count, scan_type);
 	validity->SelectVector(state.child_states[0], result, target_count, sel, sel_count, scan_type);
 }
@@ -125,6 +139,7 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnData::InitializeAppend(state);
 	ColumnAppendState child_append;
+	child_append.transient = state.transient;
 	validity->InitializeAppend(child_append);
 	state.child_appends.push_back(std::move(child_append));
 }
@@ -144,26 +159,11 @@ void StandardColumnData::RevertAppend(row_t new_count) {
 	validity->RevertAppend(new_count);
 }
 
-idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	// fetch validity mask
-	if (state.child_states.empty()) {
-		ColumnScanState child_state(state.parent);
-		child_state.scan_options = state.scan_options;
-		state.child_states.push_back(std::move(child_state));
-	}
-	auto scan_count = ColumnData::Fetch(state, row_id, result);
-	validity->Fetch(state.child_states[0], row_id, result);
-	return scan_count;
-}
-
 void StandardColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	ColumnScanState standard_state(nullptr);
-	ColumnScanState validity_state(nullptr);
-	Vector base_vector(type);
-
-	FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
-	validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
+	Vector base_vector(type, update_count);
+	FetchBaseRows(row_ids, update_count, base_vector, row_group_start);
+	validity->FetchBaseRows(row_ids, update_count, base_vector, row_group_start);
 
 	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
@@ -340,6 +340,21 @@ PersistentColumnData StandardColumnData::Serialize() {
 void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	ColumnData::InitializeColumn(column_data, target_stats);
 	validity->InitializeColumn(column_data.child_columns[0], target_stats);
+	// segments without a byte size come from older storage, which may record NULLs only in the validity statistics
+	bool legacy_segments = false;
+	for (auto &pointer : column_data.pointers) {
+		legacy_segments = legacy_segments || !pointer.byte_size;
+	}
+	bool validity_has_null = false;
+	for (auto &pointer : column_data.child_columns[0].pointers) {
+		validity_has_null = validity_has_null || pointer.statistics.CanHaveNull();
+	}
+	if (!legacy_segments || !validity_has_null) {
+		return;
+	}
+	for (auto &node : data.SegmentNodes()) {
+		node.GetNode().GetStatsMutable().SetHasNull();
+	}
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,

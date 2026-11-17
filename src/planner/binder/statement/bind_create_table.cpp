@@ -339,20 +339,20 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 }
 
 void Binder::BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
-                              const string &catalog, const string &schema) {
+                              const string &catalog, const vector<Identifier> &schema_path) {
 	ColumnList col_list;
 	col_list.AddColumn(column.Copy());
-	BindDefaultValues(col_list, bound_defaults, catalog, schema);
+	BindDefaultValues(col_list, bound_defaults, catalog, schema_path);
 }
 
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
-                               const string &catalog_name, const string &schema_p) {
-	string schema_name = schema_p;
+                               const string &catalog_name, const vector<Identifier> &schema_p) {
+	vector<Identifier> schema_path = schema_p;
 	if (schema_p.empty()) {
-		schema_name = DEFAULT_SCHEMA;
+		schema_path.emplace_back(DEFAULT_SCHEMA);
 	}
 
-	auto default_binder = CreateBinderWithSearchPath(Identifier(catalog_name), Identifier(schema_name));
+	auto default_binder = CreateBinderWithSearchPath(Identifier(catalog_name), schema_path);
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
@@ -590,9 +590,25 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		D_ASSERT(fk.info.fk_keys.empty());
 		FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
 
+		auto reference = fk.referenced_table;
+		if (reference.Path().empty()) {
+			reference = fk.info.schema.empty() || fk.info.schema == schema.name
+			                ? QualifiedName(fk.info.table)
+			                : QualifiedName(Identifier(), fk.info.schema, fk.info.table);
+		}
+		auto resolved = Binder::ResolveCatalog(entry_retriever, reference, false);
+		auto &path = resolved.Path();
+		auto catalog = path.front().empty() ? schema.ParentCatalog().GetName() : path.front();
+		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+		if (schema_path.empty()) {
+			schema_path = schema.GetSchemaPath();
+		}
+		auto fk_name = QualifiedName::FromCatalogSchema(std::move(catalog), std::move(schema_path), fk.info.table);
+
 		// Resolve the self-reference.
-		if (create_info.GetTableName() == fk.info.table) {
+		if (fk_name == schema.GetQualifiedName(create_info.GetTableName())) {
 			fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+			fk.referenced_table = QualifiedName(schema.GetSchemaPath(), fk.info.table);
 			FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 			FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
 			CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
@@ -602,13 +618,6 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		// Resolve the table reference in the same catalog/schema as the table being
 		// created, so FK references work for external catalogs (not just the default).
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
-		QualifiedName fk_name;
-		if (fk.info.schema.empty() || fk.info.schema == schema.name) {
-			// a foreign key can only reference a table in the same (possibly nested) schema
-			fk_name = schema.GetQualifiedName(fk.info.table);
-		} else {
-			fk_name = QualifiedName(Identifier::InvalidCatalog(), fk.info.schema, fk.info.table);
-		}
 		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(table_lookup, fk_name));
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
@@ -619,6 +628,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		if (&pk_table_entry_ptr.schema != &schema) {
 			throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 		}
+		fk.referenced_table = QualifiedName(schema.GetSchemaPath(), fk.info.table);
 		FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
 		FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 		CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
@@ -653,9 +663,26 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		storage_manager = StorageManager::Get(catalog);
 	}
 
+	if (!base.query) {
+		// the type binder below takes this callback over, so the table depends on the types of its columns
+		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
+			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+
+			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
+				// Don't register dependencies on internal types
+				return;
+			}
+
+			dependencies.AddDependency(entry);
+		});
+	}
+
 	// Bind all types by first looking into the same catalog/schema as the table
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
+	type_binder->SetSearchPath(result->schema.catalog, result->schema.GetSchemaPath());
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
@@ -700,20 +727,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 
 	} else {
-		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
-			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
-				// Don't register dependencies between catalogs
-				return;
-			}
-
-			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
-				// Don't register dependencies on internal types
-				return;
-			}
-
-			dependencies.AddDependency(entry);
-		});
-
 		// Bind all physical column types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
@@ -739,9 +752,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();
-			auto &schema_name = schema.name;
-			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetIdentifierName(),
-			                  schema_name.GetIdentifierName());
+			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetIdentifierName(), schema.GetSchemaPath());
 		}
 	}
 

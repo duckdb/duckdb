@@ -370,11 +370,6 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 		    path, "cast_type", "The cast type has no SQL type representation")});
 	}
 	if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
-		if (!BoundCastExpression::IsDefaultCast(expression)) {
-			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "compressed_materialization_cast",
-			    "The compressed materialization projection contains a non-default cast")});
-		}
 		return ExportChild(*expression.GetChildren()[0], path, 0);
 	}
 	if (BoundCastExpression::IsDefaultCast(expression)) {
@@ -573,6 +568,15 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 		}
 		expected_type = expression.GetReturnType();
 		break;
+	case ExpressionType::OPERATOR_HAS_ERROR:
+		D_ASSERT(expression.GetChildren().size() == 1 && expression.GetChildren()[0] &&
+		         expression.GetReturnType() == LogicalType::BOOLEAN);
+		if (expression.GetChildren()[0]->IsVolatile()) {
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "has_error_volatile_child", "HAS_ERROR cannot be rebound around a volatile expression")});
+		}
+		expected_type = expression.GetChildren()[0]->GetReturnType();
+		break;
 	case ExpressionType::OPERATOR_UNPACK:
 	case ExpressionType::OPERATOR_NULLIF:
 	case ExpressionType::GROUPING_FUNCTION:
@@ -592,6 +596,13 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 	ExportChildren(expression.GetChildren(), path, children, issues, expected_type);
 	if (!issues.empty()) {
 		return BoundExpressionSQLExportResult::Failure(std::move(issues));
+	}
+	if (expression.GetExpressionType() == ExpressionType::OPERATOR_HAS_ERROR) {
+		// an unqualified has_error(...) resolves through the catalog, where a user function of the same
+		// name can shadow the built-in, so the export spells out the system entry
+		QualifiedName has_error_name(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("has_error"));
+		return BoundExpressionSQLExportResult::Success(
+		    make_uniq<FunctionExpression>(has_error_name, std::move(children)));
 	}
 	return BoundExpressionSQLExportResult::Success(
 	    make_uniq<OperatorExpression>(expression.GetExpressionType(), std::move(children)));

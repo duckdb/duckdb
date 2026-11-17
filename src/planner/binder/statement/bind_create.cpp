@@ -18,6 +18,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -175,14 +176,19 @@ void Binder::SearchSchema(CreateInfo &info) {
 		// no catalog and no schema given: use the search path default for both
 		auto &default_entry = search_path->GetDefault();
 		catalog = default_entry.GetCatalog();
-		schema_path.push_back(default_entry.GetSchema());
+		schema_path = default_entry.GetSchemaPath();
 	} else if (schema_path.empty()) {
 		// a catalog was given but no schema: use the catalog's default schema
-		auto default_schema = search_path->GetDefaultSchema(context, catalog);
-		if (!default_schema) {
-			throw BinderException("Catalog %s has no default schema - specify a schema explicitly", catalog);
+		auto entries = search_path->GetEntriesForCatalog(catalog);
+		if (catalog != TEMP_CATALOG && !entries.empty()) {
+			schema_path = entries[0].GetSchemaPath();
+		} else {
+			auto default_schema = search_path->GetDefaultSchema(context, catalog);
+			if (!default_schema) {
+				throw BinderException("Catalog %s has no default schema - specify a schema explicitly", catalog);
+			}
+			schema_path.push_back(*default_schema);
 		}
-		schema_path.push_back(*default_schema);
 	} else if (IsInvalidCatalog(catalog)) {
 		// a schema was given but no catalog: resolve the catalog that holds it
 		catalog = search_path->ResolveCatalog(schema_path[0]);
@@ -263,12 +269,19 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 		EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(schema_path[0]));
 		auto schema = Catalog::GetSchema(retriever, schema_lookup, OnEntryNotFound::RETURN_NULL);
 		if (schema) {
-			catalog = schema->ParentCatalog().GetName();
+			catalog = schema->ParentCatalog().IsTemporaryCatalog()
+			              ? retriever.GetSearchPath().ResolveCatalog(schema_path[0])
+			              : schema->ParentCatalog().GetName();
 		} else {
 			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 		}
 	}
-	return QualifiedName::FromCatalogSchema(std::move(catalog), std::move(schema_path), resolved.Name());
+	auto result = QualifiedName::FromCatalogSchema(std::move(catalog), std::move(schema_path), resolved.Name());
+	auto catalog_entry = Catalog::GetCatalogEntry(retriever, result.Catalog());
+	if (catalog_entry) {
+		catalog_entry->CheckNestedSchemaSupport(result, CatalogType::TABLE_ENTRY);
+	}
+	return result;
 }
 
 QualifiedName Binder::BindTableName(const QualifiedName &name) {
@@ -294,6 +307,7 @@ void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
 
 	auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+	resolved_catalog.CheckNestedSchemaSupport(info.GetQualifiedName(), CatalogType::SCHEMA_ENTRY);
 	auto supports_create_schema = resolved_catalog.SupportsCreateSchema(info);
 	if (supports_create_schema.HasError()) {
 		supports_create_schema.Throw();
@@ -336,7 +350,7 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 }
 
 void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
-                      const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<Identifier> &schema_path, optional_ptr<LogicalDependencyList> dependencies,
                       const vector<Identifier> &aliases, vector<LogicalType> &result_types,
                       vector<Identifier> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
@@ -353,7 +367,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->SetCanContainNulls(true);
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_path, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();
@@ -395,8 +409,33 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
 	}
-	BindView(context, *base.query, base.GetQualifiedName().Catalog(), base.GetQualifiedName().Schema(), dependencies,
-	         base.aliases, base.types, base.names);
+	BindView(context, *base.query, base.GetQualifiedName().Catalog(), base.GetQualifiedName().SchemaPath(),
+	         dependencies, base.aliases, base.types, base.names);
+}
+
+void Binder::CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info) {
+	bool uses_returns = false;
+	for (auto &member : info.macros) {
+		if (member->return_type.id() != LogicalTypeId::UNKNOWN) {
+			uses_returns = true;
+			break;
+		}
+	}
+	if (!uses_returns) {
+		return;
+	}
+	auto &attached = catalog.GetAttached();
+	if (!attached.HasStorageManager()) {
+		return;
+	}
+	auto &storage_manager = attached.GetStorageManager();
+	const auto since = StorageCompatibility::FromString("v2.1.0").storage_version;
+	if (!info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+	    storage_manager.GetStorageVersion() < since) {
+		string msg = "Macros with a declared RETURNS type are only supported for storage versions v2.1.0 and higher.\n";
+		msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP macro";
+		throw BinderException(msg);
+	}
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -445,6 +484,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
+	CheckMacroStorageVersion(catalog, base);
 	for (auto &function : base.macros) {
 		if (!store_types) {
 			for (const auto &type : function->types) {
@@ -506,6 +546,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			default_values[param_name] = std::move(default_val);
 		}
 
+		// Resolve a user type in the declared return type
+		if (function->return_type.id() == LogicalTypeId::UNBOUND) {
+			BindLogicalType(function->return_type);
+		}
+
 		// Resolve any user type arguments
 		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
 			auto &type = function->types[param_idx];
@@ -529,6 +574,26 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 					    function->default_parameters[param_name]->ToString(), param_name, type.ToString());
 					throw BinderException(msg + " Please add an explicit type cast.");
 				}
+			}
+		}
+
+		if (!info.temporary && attached.HasStorageManager()) {
+			// the parameter, default and return types are written to the catalog, and the stored expressions may cast
+			auto &storage_manager = attached.GetStorageManager();
+			for (const auto &type : function->types) {
+				storage_manager.CheckDecimalWidthIsSupported(type);
+			}
+			for (const auto &default_value : default_values) {
+				storage_manager.CheckDecimalWidthIsSupported(default_value.second.type());
+			}
+			storage_manager.CheckDecimalWidthIsSupported(function->return_type);
+			for (auto &default_parameter : function->default_parameters) {
+				storage_manager.CheckExpressionDecimalsAreSupported(*default_parameter.second);
+			}
+			if (info.type == CatalogType::MACRO_ENTRY) {
+				storage_manager.CheckExpressionDecimalsAreSupported(*function->Cast<ScalarMacroFunction>().expression);
+			} else {
+				storage_manager.CheckQueryDecimalsAreSupported(*function->Cast<TableMacroFunction>().query_node);
 			}
 		}
 
@@ -842,6 +907,20 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
 }
 
+//! The literal of a CREATE SECRET type or provider without evaluating it, empty when it is not a plain literal
+static string SecretLiteral(const unique_ptr<ParsedExpression> &expr) {
+	if (!expr) {
+		return string();
+	}
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		return StringUtil::Lower(expr->Cast<ConstantExpression>().GetLiteral().ToValue().ToString());
+	}
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		return StringUtil::Lower(expr->Cast<ColumnRefExpression>().GetName().GetIdentifierName());
+	}
+	return string();
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -882,6 +961,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (existing_entry && existing_entry->type == CatalogType::VIEW_ENTRY) {
 				// IF EXISTS and the view already exists - avoid binding
 				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;
+			}
+		}
+		if (base.query && !base.temporary) {
+			// the query of the view is stored, so a cast in it may not target a decimal wider than the database stores
+			auto &attached = schema.ParentCatalog().GetAttached();
+			if (!attached.IsTemporary() && attached.HasStorageManager()) {
+				attached.GetStorageManager().CheckQueryDecimalsAreSupported(*base.query->node);
 			}
 		}
 		BindCreateViewInfo(base);
@@ -1007,6 +1093,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			SetCatalogLookupCallback(dependency_callback);
 			// Bind the underlying type
 			BindLogicalType(create_type_info.type);
+			// the type is written to the catalog
+			auto &attached = catalog.GetAttached();
+			if (!create_type_info.temporary && attached.HasStorageManager()) {
+				attached.GetStorageManager().CheckDecimalWidthIsSupported(create_type_info.type);
+			}
 		}
 		break;
 	}
@@ -1015,6 +1106,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		return_type = StatementReturnType::QUERY_RESULT;
 
 		auto &info = stmt.info->Cast<CreateSecretInfo>();
+
+		// Refuse before any option expression runs, so a refused statement has no side effects
+		SecretManager::ThrowIfSecretCreationDisabled(DatabaseInstance::GetDatabase(context),
+		                                             Identifier(SecretLiteral(info.type)),
+		                                             Identifier(SecretLiteral(info.provider)));
 
 		// We need to execute all expressions in the CreateSecretInfo to construct a CreateSecretInput
 		ConstantBinder default_binder(*this, context, "Secret Parameter");
@@ -1085,7 +1181,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		                                       info.on_conflict,
 		                                       info.persist_type};
 
-		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		result = SecretManager::Get(context).BindCreateSecret(context.GetContext(), transaction, create_secret_input);
 		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {

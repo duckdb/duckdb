@@ -1,3 +1,4 @@
+#include "duckdb/common/types/decimal.hpp"
 #include <stdint.h>
 #include <string>
 #include <unordered_map>
@@ -65,7 +66,7 @@ static void AnalyzeSchemaInternal(VariantAnalyzeData &state, UnifiedVariantVecto
 			auto child_key_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 
 			auto &key = variant.GetKey(row, child_key_index);
-			auto &child_state = object_data.fields[key.GetString()];
+			auto &child_state = object_data.GetOrCreateField(key);
 			AnalyzeSchemaInternal(child_state, variant, row, child_values_index, depth + 1);
 		}
 	} else if (type_id == VariantLogicalType::ARRAY) {
@@ -131,7 +132,8 @@ static void CheckPrimitive(const VariantAnalyzeData &state, ShredAnalysisState &
 	}
 	if (VARIANT_TYPE == VariantLogicalType::DECIMAL) {
 		D_ASSERT(count);
-		if (!state.decimal_consistent) {
+		if (!state.decimal_consistent || state.decimal_width > Decimal::MAX_WIDTH_INT128) {
+			// the Parquet VARIANT specification holds decimals of at most 38 digits: wider ones stay in the value
 			return;
 		}
 		result.highest_count = count;
@@ -207,7 +209,7 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 			//! only 10% of rows make use of the field
 			child_list_t<LogicalType> field_types;
 			for (auto &field : object_data.fields) {
-				if (field.first.empty()) {
+				if (field.first.Empty()) {
 					//! A STRUCT field cannot have an empty name, so the empty key stays in the 'value'
 					continue;
 				}
@@ -216,7 +218,7 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 					// cannot shred on this field - skip
 					continue;
 				}
-				field_types.emplace_back(field.first, child_type);
+				field_types.emplace_back(field.first.GetString(), child_type);
 			}
 			if (field_types.empty()) {
 				// no field types to shred on - avoid shredding

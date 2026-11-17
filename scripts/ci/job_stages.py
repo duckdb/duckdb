@@ -6,7 +6,24 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TextIO
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+EXTENSION_GROUP_CONFIGS = {
+    "core": "core.cmake",
+    "cloud": "cloud.cmake",
+    "search": "search.cmake",
+    "scanner": "scanner.cmake",
+    "rust": "rust_based_extensions.cmake",
+    "external": "external_extensions.cmake",
+}
+MAIN_EXTENSION_GROUPS = ("core", "cloud", "search", "scanner")
+RUST_EXTENSION_EXCLUDE_ARCHS = (
+    "wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;"
+    "linux_amd64_musl;windows_arm64;linux_arm64_musl"
+)
 
 COMMON_JOBS = [
     "linux-relassert",
@@ -83,11 +100,14 @@ class JobSelection:
     enabled_jobs: list[str]
     save_cache: bool
     reduced_ci_mode: str
+    windows_full_matrix: bool
     extension_opt_in_archs: str = ""
     optimized_release: bool = False
     runners: dict[str, str] = field(default_factory=dict)
     linux_release_matrix: list[dict[str, object]] = field(default_factory=list)
     linux_musl_matrix: list[dict[str, object]] = field(default_factory=list)
+    extension_groups: dict[str, dict[str, str]] = field(default_factory=dict)
+    extension_entries: str = ""
 
 
 @dataclass(frozen=True)
@@ -99,8 +119,59 @@ class JobSelectionInput:
     skip_tests: bool
     changed_keys: set[str]
     reduced_ci_mode: str
+    run_all: bool
     runners: dict[str, str] = field(default_factory=dict)
     runner_provider: str = ""
+    changed_extension_files: list[str] | None = field(default_factory=list)
+
+
+def extension_group_members() -> dict[str, set[str]]:
+    members = {}
+    for group, config in EXTENSION_GROUP_CONFIGS.items():
+        content = (REPO_ROOT / ".github" / "config" / config).read_text(encoding="utf-8")
+        members[group] = set(
+            re.findall(r'^\s*include\("\$\{EXTENSION_CONFIG_BASE_DIR\}/([^"/]+)\.cmake"\)', content, re.MULTILINE)
+        )
+        members[group].update(re.findall(r"^\s*duckdb_extension_load\(\s*(\w+)", content, re.MULTILINE))
+    return members
+
+
+def select_extension_groups(selection_input: JobSelectionInput, members: dict[str, set[str]]) -> list[str]:
+    if selection_input.event_name != "pull_request" or selection_input.changed_extension_files is None:
+        return list(EXTENSION_GROUP_CONFIGS)
+    if not selection_input.changed_extension_files:
+        if "extensions" in selection_input.changed_keys:
+            return list(EXTENSION_GROUP_CONFIGS)
+        return list(MAIN_EXTENSION_GROUPS)
+
+    selected = set()
+    for filename in selection_input.changed_extension_files:
+        path = Path(filename).as_posix()
+        matching_groups = {
+            group for group, config in EXTENSION_GROUP_CONFIGS.items() if path == f".github/config/{config}"
+        }
+        config_match = re.fullmatch(r"\.github/config/extensions/([^/]+)\.cmake", path)
+        patch_match = re.fullmatch(r"\.github/patches/extensions/([^/]+)/.+", path)
+        extension_match = config_match or patch_match
+        if extension_match:
+            matching_groups.update(group for group, extensions in members.items() if extension_match[1] in extensions)
+        if not matching_groups:
+            print(f"Selecting all extension groups for shared or unknown path: {filename}", file=sys.stderr)
+            return list(EXTENSION_GROUP_CONFIGS)
+        selected.update(matching_groups)
+    return [group for group in EXTENSION_GROUP_CONFIGS if group in selected]
+
+
+def configure_extension_groups(groups: list[str], opt_in_archs: str) -> dict[str, dict[str, str]]:
+    result = {}
+    for group in groups:
+        config = {"config": f"duckdb/.github/config/{EXTENSION_GROUP_CONFIGS[group]}"}
+        if group in MAIN_EXTENSION_GROUPS:
+            config.update(extra_toolchains="unixodbc;parser_tools", opt_in_archs=opt_in_archs, toolchain="main")
+        else:
+            config.update(default_exclude_archs=RUST_EXTENSION_EXCLUDE_ARCHS, toolchain="rust")
+        result[group] = config
+    return result
 
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
@@ -113,6 +184,14 @@ def extension_opt_in_archs(selection_input: JobSelectionInput) -> str:
     if selection_input.event_name == "pull_request" and "extensions" in selection_input.changed_keys:
         return "windows_arm64;linux_arm64_musl"
     return ""
+
+
+def windows_full_matrix(selection_input: JobSelectionInput) -> bool:
+    if selection_input.ref_name == selection_input.default_branch or selection_input.repository != "duckdb/duckdb":
+        return True
+    if selection_input.event_name == "pull_request":
+        return "extensions" in selection_input.changed_keys
+    return selection_input.run_all
 
 
 def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> list[str]:
@@ -299,15 +378,22 @@ def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
     full_extension_matrix = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
     runners = configure_runners(selection_input)
     configured_input = replace(selection_input, runners=runners)
+    members = extension_group_members()
+    groups = select_extension_groups(selection_input, members)
+    opt_in_archs = extension_opt_in_archs(selection_input)
+    entry_extensions = set().union(*(members[group] for group in groups if group in MAIN_EXTENSION_GROUPS))
     return JobSelection(
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
         reduced_ci_mode=reduced_ci_mode,
-        extension_opt_in_archs=extension_opt_in_archs(selection_input),
+        windows_full_matrix=windows_full_matrix(selection_input),
+        extension_opt_in_archs=opt_in_archs,
         optimized_release=optimized_release,
         runners=runners,
         linux_release_matrix=linux_release_matrix(configured_input, optimized_release, full_extension_matrix),
         linux_musl_matrix=linux_musl_matrix(configured_input),
+        extension_groups=configure_extension_groups(groups, opt_in_archs),
+        extension_entries=",".join(sorted(entry_extensions)),
     )
 
 
@@ -316,11 +402,19 @@ def write_outputs(selection: JobSelection, out: TextIO, *, include_matrices: boo
     out.write(f"save_cache={'true' if selection.save_cache else 'false'}\n")
     out.write(f"optimized_release={'true' if selection.optimized_release else 'false'}\n")
     out.write(f"reduced_ci_mode={selection.reduced_ci_mode}\n")
+    out.write(f"windows_full_matrix={'true' if selection.windows_full_matrix else 'false'}\n")
     out.write(f"extension_opt_in_archs={selection.extension_opt_in_archs}\n")
     out.write(f"runners={json.dumps(selection.runners, separators=(',', ':'))}\n")
     if include_matrices:
         out.write(f"linux_release_matrix={json.dumps(selection.linux_release_matrix, separators=(',', ':'))}\n")
         out.write(f"linux_musl_matrix={json.dumps(selection.linux_musl_matrix, separators=(',', ':'))}\n")
+    out.write(f"extension_entries={selection.extension_entries}\n")
+    out.write("extension_groups<<EXTENSION_GROUPS\n")
+    for group, config in selection.extension_groups.items():
+        out.write(f"{group}:\n")
+        for key, value in config.items():
+            out.write(f"  {key}: {json.dumps(value)}\n")
+    out.write("EXTENSION_GROUPS\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,7 +425,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repository", default="duckdb/duckdb")
     parser.add_argument("--skip-tests", default="false")
     parser.add_argument("--changed-keys", default="")
+    parser.add_argument("--changed-extensions-file", type=Path)
     parser.add_argument("--reduced-ci-mode", required=True)
+    parser.add_argument("--run-all", required=True)
     parser.add_argument("--runners", required=True)
     parser.add_argument("--runner-provider", required=True)
     return parser.parse_args()
@@ -382,6 +478,17 @@ def parse_runners(value: str) -> dict[str, str]:
 
 def main() -> int:
     args = parse_args()
+    changed_extension_files = []
+    if args.changed_extensions_file:
+        try:
+            changed_extension_files = [
+                line.strip()
+                for line in args.changed_extensions_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except OSError as error:
+            print(f"Unable to read changed extension files; selecting all groups: {error}", file=sys.stderr)
+            changed_extension_files = None
     selection_input = JobSelectionInput(
         event_name=args.event_name,
         ref_name=args.ref_name,
@@ -390,8 +497,10 @@ def main() -> int:
         skip_tests=parse_bool(args.skip_tests),
         changed_keys=parse_changed_keys(args.changed_keys),
         reduced_ci_mode=args.reduced_ci_mode,
+        run_all=parse_bool(args.run_all),
         runners=parse_runners(args.runners),
         runner_provider=args.runner_provider,
+        changed_extension_files=changed_extension_files,
     )
     selection = compute_job_selection(selection_input)
 

@@ -58,18 +58,15 @@ public:
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as included in the next checkpoint
 	virtual void MarkBlockAsCheckpointed(block_id_t block_id) = 0;
+	//! Mark a newly used block as part of a commit: checkpoints whose bound is past the commit include it
+	virtual void MarkBlockAsCommitted(block_id_t block_id, transaction_t commit_id) {
+		MarkBlockAsCheckpointed(block_id);
+	}
 	//! Mark a block as "used"; either the block is removed from the free list, or the reference count is incremented
 	virtual void MarkBlockAsUsed(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
 	//! assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) = 0;
-	//! Mark a use of a block as excluded: checkpoints no longer write it, but it stays in use until marked as modified
-	virtual void MarkBlockAsExcluded(block_id_t block_id) {
-	}
-	//! Mark an excluded use of a block as modified
-	virtual void MarkExcludedBlockAsModified(block_id_t block_id) {
-		MarkBlockAsModified(block_id);
-	}
 	//! Increase the reference count of a block. The block should hold at least one reference before this method is
 	//! called.
 	virtual void IncreaseBlockReferenceCount(block_id_t block_id) = 0;
@@ -87,8 +84,8 @@ public:
 	void Write(Block &block) {
 		Write(block, block.id);
 	}
-	//! Write the header; should be the final step of a checkpoint
-	virtual void WriteHeader(QueryContext context, DatabaseHeader header) = 0;
+	//! Write the header of a checkpoint with the given bound; should be the final step of a checkpoint
+	virtual void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) = 0;
 
 	//! Returns the number of total blocks
 	virtual idx_t TotalBlocks() = 0;
@@ -116,7 +113,7 @@ public:
 	//! If mode is set to destructive (default) - the old_block will be destroyed as part of this method
 	//! This can only be safely used when there is no other (lingering) usage of old_block
 	//! If there is concurrent usage of the block elsewhere - use the THREAD_SAFE mode which creates an extra copy
-	//! The new block keeps the memory tag of old_block, unless a tag is given
+	//! Unless a tag is given, keep old_block's tag, except IN_MEMORY_TABLE becomes BASE_TABLE.
 	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
 	                                            shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
 	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE,

@@ -32,7 +32,10 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 	}
 	D_ASSERT(!shadow_pending);
 	auto &bound_index = owned_index->Cast<BoundIndex>();
-	bound_index.Append(chunk, row_ids);
+	auto error = bound_index.Append(chunk, row_ids);
+	if (error.HasError()) {
+		error.Throw();
+	}
 }
 
 ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
@@ -62,7 +65,6 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		}
 	}
 
-	ErrorData error;
 	try {
 		if (lookup_main_index) {
 			IndexAppendInfo lookup_append_info;
@@ -74,21 +76,20 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 			}
 			bound_index.VerifyAppend(chunk, lookup_append_info, optional_ptr<ConflictManager>());
 		}
-
-		IndexAppendInfo index_append_info(append_mode, nullptr);
-		if (delete_index) {
-			index_append_info.delete_indexes.push_back(*delete_index);
-		}
-		if (append_index) {
-			error = append_index->Append(chunk, row_ids, index_append_info);
-		} else {
-			D_ASSERT(!shadow_pending);
-			error = bound_index.Append(chunk, row_ids, index_append_info);
-		}
 	} catch (std::exception &ex) {
-		error = ErrorData(ex);
+		// the lookup is read-only: nothing was inserted yet
+		return ErrorData(ex);
 	}
-	return error;
+
+	IndexAppendInfo index_append_info(append_mode, nullptr);
+	if (delete_index) {
+		index_append_info.delete_indexes.push_back(*delete_index);
+	}
+	if (append_index) {
+		return append_index->Append(chunk, row_ids, index_append_info);
+	}
+	D_ASSERT(!shadow_pending);
+	return bound_index.Append(chunk, row_ids, index_append_info);
 }
 
 void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
@@ -140,6 +141,9 @@ void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 	IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
 	auto result = bound_index.Append(chunk, row_ids, index_append_info);
 	if (result.HasError()) {
+		if (result.Type() != ExceptionType::CONSTRAINT) {
+			result.Throw();
+		}
 		throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 	}
 }
@@ -148,6 +152,9 @@ static void AppendIndexEntries(BoundIndex &index, DataChunk &chunk, Vector &row_
 	IndexAppendInfo append_info;
 	const auto error = index.Append(chunk, row_ids, append_info);
 	if (error.HasError()) {
+		if (error.Type() != ExceptionType::CONSTRAINT) {
+			error.Throw();
+		}
 		throw InternalException("Failed to append to %s: %s", index.GetIndexName(), error.Message());
 	}
 }
@@ -353,28 +360,10 @@ void IndexEntry::Retire() {
 	bind_state = IndexBindState::RETIRED;
 }
 
-void IndexEntry::VisitBlockIds(BlockIdVisitor &visitor) {
-	auto entry_lock = lock.GetSharedLock();
-	if (!owned_index) {
-		return;
-	}
-	// a dropped table keeps its constraint indexes, which are ART indexes that are bound when they are loaded
-	D_ASSERT(owned_index->IsBound() && GetIndexType() == ART::TYPE_NAME);
-	owned_index->Cast<ART>().VisitBlockIds(visitor);
-}
-
-void IndexEntry::DisownBlocks() {
-	auto entry_lock = lock.GetSharedLock();
-	if (!owned_index) {
-		return;
-	}
-	D_ASSERT(owned_index->IsBound() && GetIndexType() == ART::TYPE_NAME);
-	owned_index->Cast<ART>().DisownBlocks();
-}
-
-unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<LogicalType> &table_types) {
+unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<LogicalType> &table_types,
+                                        bool skip_mismatched_keys) {
 	auto entry_lock = lock.GetExclusiveLock();
-	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types);
+	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types, skip_mismatched_keys);
 }
 
 void IndexEntry::CommitBind(unique_ptr<BoundIndex> bound_index) {
@@ -451,10 +440,8 @@ void IndexEntry::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
 
 void IndexEntry::Vacuum() {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (shadow_pending) {
-		// the checkpoint's copy shares the buffers that vacuuming rewrites
-		return;
-	}
+	// vacuuming holds the shared checkpoint lock
+	D_ASSERT(!shadow_pending);
 	if (owned_index->IsBound()) {
 		owned_index->Cast<BoundIndex>().Vacuum();
 	}
@@ -473,6 +460,9 @@ void IndexEntry::Rebuild(const IndexRebuildScan &scan) {
 	IndexRebuildAppend append = [&](DataChunk &chunk, Vector &row_ids) {
 		auto error = bound_index.Append(chunk, row_ids);
 		if (error.HasError()) {
+			if (error.Type() != ExceptionType::CONSTRAINT) {
+				error.Throw();
+			}
 			throw InternalException("Failed to rebuild index %s after vacuum: %s", bound_index.GetIndexName(),
 			                        error.Message());
 		}

@@ -5,6 +5,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -12,6 +13,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -50,83 +52,10 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 }
 
 static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
-	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
-		if (type.IsAggregateState()) {
-			const auto storage_version = db.GetStorageManager().GetStorageVersion();
-
-			if (storage_version < StorageVersion::V2_0_0) {
-				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
-				auto current = GetStorageVersionName(storage_version, false);
-
-				throw InvalidInputException("Aggregate state columns are not supported in storage versions prior to %s "
-				                            "(database %s is using storage version %s)",
-				                            required, db.GetName(), current);
-			}
-			return false;
-		}
-		switch (type.id()) {
-		case LogicalTypeId::TYPE: {
-			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
-		} break;
-		case LogicalTypeId::STRUCT: {
-			const auto storage_version = db.GetStorageManager().GetStorageVersion();
-
-			if (storage_version < StorageVersion::V2_0_0 && StructType::GetChildCount(type) == 0) {
-				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
-				auto current = GetStorageVersionName(storage_version, false);
-
-				throw InvalidInputException("Empty STRUCT columns are not supported in storage versions prior to %s "
-				                            "(database %s is using storage version %s)",
-				                            required, db.GetName(), current);
-			}
-		} break;
-		case LogicalTypeId::TUPLE: {
-			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate creation to v2.0.0+
-			// existing unnamed STRUCTs (deserialized as TUPLE while loading an older file) must stay attachable
-			const auto storage_version = db.GetStorageManager().GetStorageVersion();
-
-			if (storage_version < StorageVersion::V2_0_0 && db.GetStorageManager().IsLoaded()) {
-				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
-				auto current = GetStorageVersionName(storage_version, false);
-
-				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
-				                            "(database %s is using storage version %s)",
-				                            required, db.GetName(), current);
-			}
-		} break;
-		case LogicalTypeId::VARIANT: {
-			const auto storage_version = db.GetStorageManager().GetStorageVersion();
-
-			if (storage_version < Variant::VERSION_ADDED) {
-				auto required = GetStorageVersionName(Variant::VERSION_ADDED, false);
-				auto current = GetStorageVersionName(storage_version, false);
-
-				throw InvalidInputException("VARIANT columns are not supported in storage versions prior to %s "
-				                            "(database %s is using storage version %s)",
-				                            required, db.GetName(), current);
-			}
-		} break;
-		case LogicalTypeId::GEOMETRY: {
-			const auto storage_version = db.GetStorageManager().GetStorageVersion();
-
-			if (GeoType::HasCRS(type) && storage_version < Geometry::VERSION_ADDED) {
-				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
-				auto current = GetStorageVersionName(storage_version, false);
-
-				// TODO: Turn this into a hard error
-				auto &logger = Logger::Get(db.GetDatabase());
-				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
-				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
-				                "storage versions prior "
-				                "to %s (database %s is using storage version %s). CRS will not be persisted.",
-				                required, db.GetName(), current);
-			}
-		} break;
-		default:
-			break;
-		}
-		return false;
-	});
+	if (TypeVisitor::Contains(logical_type, LogicalTypeId::TYPE)) {
+		throw InvalidInputException("A table cannot be created with a 'TYPE' column");
+	}
+	db.GetStorageManager().CheckTypeIsSupported(logical_type);
 }
 
 static void SetAlterDependencies(ClientContext &context, BoundCreateTableInfo &info, AlterInfo &alter_info) {
@@ -171,6 +100,23 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			storage->SetIndexStorageInfo(std::move(info.indexes));
 		}
 		return;
+	}
+
+	// the default, generated and check expressions are written to the catalog, as are the generated column types
+	auto &storage_manager = catalog.GetAttached().GetStorageManager();
+	for (auto &col_def : columns.Logical()) {
+		if (col_def.Generated()) {
+			storage_manager.CheckDecimalWidthIsSupported(col_def.Type());
+			storage_manager.CheckExpressionDecimalsAreSupported(col_def.GeneratedExpression());
+		}
+		if (col_def.HasDefaultValue()) {
+			storage_manager.CheckExpressionDecimalsAreSupported(col_def.DefaultValue());
+		}
+	}
+	for (auto &constraint : constraints) {
+		if (constraint->type == ConstraintType::CHECK) {
+			storage_manager.CheckExpressionDecimalsAreSupported(*constraint->Cast<CheckConstraint>().expression);
+		}
 	}
 
 	// create the physical storage
@@ -454,27 +400,21 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 	});
 }
 
-// Keep struct literal defaults aligned with nested field renames.
+//! Remaps the default of a struct column with the mapping and the field defaults of the remap_struct call
 static unique_ptr<ParsedExpression> RemapStructDefault(unique_ptr<ParsedExpression> default_value,
-                                                       const LogicalType &new_type,
-                                                       unique_ptr<ParsedExpression> mapping) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(default_value));
-	children.push_back(ConstantExpression::FromValue(Value(new_type)));
-	children.push_back(std::move(mapping));
-	children.push_back(ConstantExpression::Null());
-	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
-}
-
-//! The mapping argument of the remap_struct call, so nested defaults can be remapped with the same mapping
-static unique_ptr<ParsedExpression> GetRemapStructMapping(ChangeColumnTypeInfo &info) {
+                                                       const LogicalType &new_type, ChangeColumnTypeInfo &info) {
 	D_ASSERT(info.expression);
 	D_ASSERT(info.expression->GetExpressionClass() == ExpressionClass::FUNCTION);
 	auto &function = info.expression->Cast<FunctionExpression>();
 	D_ASSERT(function.FunctionName() == "remap_struct");
 	auto &arguments = function.GetArguments();
 	D_ASSERT(arguments.size() == 4);
-	return arguments[2].GetExpression().Copy();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(default_value));
+	children.push_back(ConstantExpression::FromValue(Value(new_type)));
+	children.push_back(arguments[2].GetExpression().Copy());
+	children.push_back(arguments[3].GetExpression().Copy());
+	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
@@ -608,7 +548,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	binder->SetSearchPath(catalog, schema.name);
+	binder->SetSearchPath(catalog, schema.GetSchemaPath());
 	binder->BindLogicalType(info.new_column.TypeMutable());
 
 	// Check if type is supported in this database version
@@ -626,9 +566,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	if (info.bind_mode == AlterBindMode::SKIP_BINDING) {
 		// When replaying WAL, only Bind DEFAULT for added Column
 		auto &catalog_name = schema.ParentCatalog().GetName();
-		auto &schema_name = schema.name;
 		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name.GetIdentifierName(),
-		                         schema_name.GetIdentifierName());
+		                         schema.GetSchemaPath());
 	}
 	SetAlterDependencies(context, *bound_create_info, info);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
@@ -1226,7 +1165,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	}
 	// Bind type
 	auto type_binder = Binder::CreateBinder(context);
-	type_binder->SetSearchPath(catalog, schema.name);
+	type_binder->SetSearchPath(catalog, schema.GetSchemaPath());
 	type_binder->BindLogicalType(info.target_type);
 
 	auto change_idx = GetColumnIndex(info.column_path[0]);
@@ -1259,9 +1198,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
 			}
 			copy.SetType(info.target_type);
-			if (alter_table_type == AlterTableType::RENAME_FIELD && copy.HasDefaultValue()) {
-				copy.SetDefaultValue(
-				    RemapStructDefault(copy.DefaultValue().Copy(), info.target_type, GetRemapStructMapping(info)));
+			if ((alter_table_type == AlterTableType::RENAME_FIELD || alter_table_type == AlterTableType::ADD_FIELD) &&
+			    copy.HasDefaultValue()) {
+				// the stored default is not cast yet, the mapping is for the old type of the column
+				auto old_default = make_uniq<CastExpression>(col.Type(), copy.DefaultValue().Copy());
+				copy.SetDefaultValue(RemapStructDefault(std::move(old_default), info.target_type, info));
 			}
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
@@ -1541,11 +1482,11 @@ void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_stat
 	}
 	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
-	drop_state.DropColumn(storage, column_index);
+	storage->CommitDropColumn(column_index, drop_state);
 }
 
 void DuckTableEntry::CommitDrop(CommitDropState &drop_state) {
-	drop_state.DropTable(storage);
+	storage->CommitDropTable(drop_state);
 }
 
 DataTable &DuckTableEntry::GetStorage() {

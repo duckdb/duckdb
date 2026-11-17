@@ -96,7 +96,8 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 	case LogicalTypeId::INTERVAL:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, interval_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::DECIMAL:
-		return BoundCastInfo(&VectorCastHelpers::ToDecimalCast<string_t>);
+		return DefaultCasts::WideDecimalCast(BoundCastInfo(&VectorCastHelpers::ToDecimalCast<string_t>), source,
+		                                     target);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}
@@ -526,7 +527,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
 	case LogicalTypeId::BIGNUM:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, bignum_t, TryCastToBignum>);
+		return BoundCastInfo(&Bignum::VarcharToBignumCast);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

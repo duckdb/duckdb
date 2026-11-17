@@ -10,11 +10,11 @@
 
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
 class PartialBlockManager;
+class PendingPublication;
 class SingleFileCheckpointWriter;
 class BoundIndex;
 
@@ -39,12 +39,10 @@ public:
 	}
 	//! Segments managed by this block manager will be packer on a per-index basis.
 	virtual PartialBlockManager CreatePerIndexPartialBlockManager() = 0;
-	//! Writes the index buffers to disk
-	virtual void Flush() = 0;
+	//! Transfer prepared state to the enclosing checkpoint.
+	virtual void AddPendingPublication(unique_ptr<PendingPublication> publication) = 0;
 	//! Get the targeted storage version for the current writer
 	StorageVersion GetStorageVersion() const;
-	//! The OIDs of the indexes in the catalog that the checkpoint writes
-	virtual const unordered_set<idx_t> &GetIndexOids() const = 0;
 
 protected:
 	//! Used to colocate blocks across indexes, used when index supports deferred checkpointing.
@@ -58,8 +56,7 @@ public:
 
 private:
 	PartialBlockManager CreatePerIndexPartialBlockManager() override;
-	void Flush() override;
-	const unordered_set<idx_t> &GetIndexOids() const override;
+	void AddPendingPublication(unique_ptr<PendingPublication> publication) override;
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;

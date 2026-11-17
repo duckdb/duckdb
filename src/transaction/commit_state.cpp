@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
@@ -25,8 +24,6 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
@@ -41,86 +38,28 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::DropIndex(shared_ptr<DataTableInfo> info, idx_t index_oid) {
-	dropped_indexes.push_back(DroppedIndex {std::move(info), index_oid, nullptr});
+void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
+	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
 }
 
-void CommitDropState::DropTable(shared_ptr<DataTable> table) {
-	dropped_tables.push_back(std::move(table));
-}
-
-void CommitDropState::DropColumn(shared_ptr<DataTable> table, idx_t column_index) {
-	dropped_columns.emplace_back(std::move(table), column_index);
-}
-
-void CommitDropState::DetachIndexes() {
-	for (auto &index : dropped_indexes) {
-		index.detached_entry = index.info->GetIndexes().DetachIndex(index.index_oid);
-	}
-}
-
-void CommitDropState::ExcludeFromCheckpoints() {
-	if (excluded) {
-		return;
-	}
-	// older snapshots still read the dropped tables, whose metadata the checkpoint frees
-	for (auto &table : dropped_tables) {
-		for (auto &row_group : table->GetRowGroupCollection()->GetRowGroups()->Segments()) {
-			row_group.LoadMetadata();
-		}
-	}
-	excluded = true;
-	Collect();
-	if (!block_manager) {
-		return;
-	}
-	for (auto block_id : dropped_block_ids) {
-		block_manager->MarkBlockAsExcluded(block_id);
-	}
-}
-
-void CommitDropState::Collect() {
-	// nothing uses the detached indexes any more
-	for (auto &index : dropped_indexes) {
-		if (index.detached_entry) {
-			index.info->GetIndexes().RemoveDetachedIndex(*index.detached_entry);
-		}
-	}
-	dropped_indexes.clear();
-	// collected now: a checkpoint that wrote the table frees the blocks it replaced itself
-	for (auto &table : dropped_tables) {
-		table->CommitDropTable(*this);
-	}
-	for (auto &column : dropped_columns) {
-		column.first->CommitDropColumn(column.second, *this);
-	}
-}
-
-void CommitDropState::Free() {
-	if (!excluded) {
-		// no snapshot reads the dropped tables any more
-		Collect();
-	}
-	// the index blocks are freed with the others, not when the indexes are destroyed
-	for (auto &table : dropped_tables) {
-		table->GetDataTableInfo()->GetIndexes().DisownBlocks();
-	}
+void CommitDropState::FinalizeCommit() {
 	if (block_manager) {
 		for (auto block_id : dropped_block_ids) {
-			if (excluded) {
-				block_manager->MarkExcludedBlockAsModified(block_id);
-			} else {
-				block_manager->MarkBlockAsModified(block_id);
-			}
+			block_manager->MarkBlockAsModified(block_id);
 		}
 	}
 	// assert that !block_manager -> dropped_block_ids.empty()
 	D_ASSERT(block_manager || dropped_block_ids.empty());
+
+	for (auto &removal : pending_index_removals) {
+		removal.indexes.get().RemoveIndex(removal.index_oid);
+	}
 	dropped_block_ids.clear();
+	pending_index_removals.clear();
 }
 
 bool CommitDropState::Empty() const {
-	return dropped_tables.empty() && dropped_columns.empty() && dropped_indexes.empty();
+	return dropped_block_ids.empty() && pending_index_removals.empty();
 }
 
 //===--------------------------------------------------------------------===//
@@ -352,10 +291,13 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
 			auto &dep = new_entry.Cast<DependencyEntry>();
 			if (dep.Side() == DependencyEntryType::SUBJECT) {
-				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
+				new_entry.set->VerifyExistenceOfDependency(commit_id, transaction.view.visibility_bound, new_entry);
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
 			old_entry.set->CommitDrop(commit_id, transaction.view.visibility_bound, old_entry);
+		} else if (old_entry.set && new_entry.InvalidatesDependents(old_entry)) {
+			// an alter that breaks what dependents rely on must not race a dependency created meanwhile, like a drop
+			old_entry.set->VerifyCommitDrop(commit_id, transaction.view.visibility_bound, old_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
@@ -437,7 +379,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
-		CommitDelete(*info);
+		CommitDelete(*info, transaction.GetTransactionId());
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -453,6 +395,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		info->version_number = commit_id;
 		break;
 	}
+	case UndoFlags::UPDATE_ROWS: {
+		auto info = reinterpret_cast<DeleteInfo *>(data);
+		info->version_info->CommitWrite(transaction.GetTransactionId(), commit_id, *info, false);
+		break;
+	}
 	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
@@ -462,9 +409,9 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	}
 }
 
-void CommitState::CommitDelete(DeleteInfo &info) {
+void CommitState::CommitDelete(DeleteInfo &info, transaction_t old_id) {
 	// mark the tuples as committed
-	info.version_info->CommitDelete(info.vector_idx, commit_id, info);
+	info.version_info->CommitWrite(old_id, commit_id, info, true);
 	// delete from indexes
 	index_data_remover.PushDelete(info);
 }
@@ -492,13 +439,19 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		CommitDelete(*info);
+		CommitDelete(*info, transaction.commit_id);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
 		info->version_number = transaction_id;
+		break;
+	}
+	case UndoFlags::UPDATE_ROWS: {
+		auto info = reinterpret_cast<DeleteInfo *>(data);
+		// revert the commit by writing the (uncommitted) transaction_id back into the version info
+		info->version_info->CommitWrite(transaction.commit_id, transaction_id, *info, false);
 		break;
 	}
 	case UndoFlags::ATTACHED_DATABASE:

@@ -10,6 +10,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -53,7 +54,7 @@ static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	}
 }
 
-idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();
@@ -70,7 +71,8 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	}
 
 	// variant group
-	duckdb_parquet::SchemaElement top_element;
+	schemas.emplace_back();
+	auto &top_element = schemas.back();
 	top_element.repetition_type = repetition_type;
 	top_element.num_children = NumericCast<int32_t>(child_writers.size());
 	top_element.logicalType.__isset.VARIANT = true;
@@ -84,7 +86,6 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 		top_element.__isset.field_id = true;
 		top_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
-	schemas.push_back(std::move(top_element));
 
 	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
@@ -128,7 +129,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 	}
 }
 
-static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = nullptr) {
+LogicalType VariantColumnWriter::GetParquetVariantType(optional_ptr<LogicalType> shredding) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
@@ -157,10 +158,12 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      expr_return_type);
 		}
 		auto type_str = input.GetNonNullConstant(1);
-		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
-		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
+		// the shredding type is bound within the decimal width limit of the bind
+		const auto decimal_width_limit = input.GetDecimalWidthLimit();
+		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context, &decimal_width_limit);
+		bound_function.SetReturnType(VariantColumnWriter::GetParquetVariantType(shredded_type));
 	} else {
-		bound_function.SetReturnType(GetParquetVariantType());
+		bound_function.SetReturnType(VariantColumnWriter::GetParquetVariantType());
 	}
 
 	return nullptr;

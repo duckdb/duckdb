@@ -19,7 +19,6 @@
 
 namespace duckdb {
 
-struct BlockIdVisitor;
 class ConflictManager;
 class ConflictInfo;
 class IndexEntry;
@@ -44,10 +43,6 @@ public:
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
 	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
-	//! Visits the on-disk blocks of every index, once per use
-	void VisitBlockIds(BlockIdVisitor &visitor);
-	//! Disowns the on-disk blocks of every index: destroying an index no longer frees them
-	void DisownBlocks();
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -66,15 +61,13 @@ public:
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(idx_t index_oid);
-	//! Removes an index entry without releasing it: checkpoints still write it until RemoveDetachedIndex
-	shared_ptr<IndexEntry> DetachIndex(idx_t index_oid);
-	//! Removes an index entry detached by DetachIndex and releases any storage the index owns.
-	void RemoveDetachedIndex(const IndexEntry &entry);
 	//! Returns the entry matching the index OID.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	shared_ptr<IndexEntry> FindEntry(idx_t index_oid) const;
-	//! Binds unbound indexes possibly present after loading an extension.
-	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
+	//! Binds unbound indexes possibly present after loading an extension. An index whose stored keys bind to other
+	//! types here is refused, or left unbound when skip_mismatched_keys is set, for a read that can do without it.
+	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {},
+	          bool skip_mismatched_keys = false);
 	//! Returns true, if there are no index entries.
 	bool Empty() const {
 		return Count() == 0;
@@ -131,7 +124,7 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
-	//! Persist the buffers of the indexes the writer asks for and install replacements, returning their metadata.
+	//! Persist index buffers and install replacements before returning their metadata.
 	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
@@ -151,12 +144,6 @@ public:
 	                                vector<StorageIndex> &mapped_column_ids);
 
 private:
-	//! Removes an index entry from the list of index entries, and returns it.
-	shared_ptr<IndexEntry> ExtractIndex(idx_t index_oid) DUCKDB_REQUIRES(index_entries_lock);
-	//! Returns the index entries with these OIDs, also among the ones that a drop detached.
-	vector<shared_ptr<IndexEntry>> FindEntries(const unordered_set<idx_t> &index_oids) const
-	    DUCKDB_REQUIRES(index_entries_lock);
-
 	template <class>
 	friend class TableIndexIterationHelper;
 
@@ -166,8 +153,6 @@ private:
 	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
-	//! Index entries detached by a commit, which checkpoints with an earlier bound still write
-	vector<shared_ptr<IndexEntry>> detached_index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 };
 
 template <class T>

@@ -115,50 +115,23 @@ struct DBConfigOptions {
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
-	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
-	//! space for sparse files, on platforms that support it.
-	bool trim_free_blocks = false;
-	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
-	bool buffer_manager_track_eviction_timestamps = false;
-	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
-	bool force_checkpoint = false;
-	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
-	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
-	//! Enable mbedtls explicitly (overrides OpenSSL if available)
-	bool force_mbedtls = false;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
-	//! Force a specific schema for VARIANT shredding
-	LogicalType force_variant_shredding = LogicalType::INVALID;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
-	//! Additional directories to store extension binaries in
-	vector<string> extension_directories;
-	//! Debug setting - how to initialize  blocks in the storage layer when allocating
-	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
-	//! Debug setting - how to verify ORDER BY results (e.g. by rewriting ORDER BY into create_sort_key)
-	DebugOrderVerification debug_order_verification = DebugOrderVerification::NONE;
 	//! The set of user-provided options
 	identifier_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	identifier_map_t<Value> unrecognized_options;
-	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
-	//! Delta Only! - Fall back to recognizing Variant columns structurally
-	bool variant_legacy_encoding = false;
-	//! Metadata from DuckDB callers
-	string custom_user_agent;
 	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
 	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
-	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
 	//! Environment variables the embedder configures itself from, readable with OSUtil::GetEnvUnrestricted
@@ -198,7 +171,7 @@ public:
 	}
 
 	template <class... ARGS>
-	void emplace_back(ARGS &&...args) { // NOLINT
+	void emplace_back(ARGS &&... args) { // NOLINT
 		auto scan = make_shared_ptr<ReplacementScan>(std::forward<ARGS>(args)...);
 		lock_guard<mutex> guard(lock);
 		scans.push_back(std::move(scan));
@@ -258,6 +231,10 @@ public:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
 	GlobalUserSettings user_settings;
+	//! The grammar extensions sessions parse with when active_grammar_extensions is not set: an
+	//! immutable snapshot replaced on SET GLOBAL and loaded atomically because sessions read it at
+	//! parse time without the config lock (nullptr when unset)
+	shared_ptr<const vector<string>> default_grammar_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -369,6 +346,8 @@ public:
 	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
+	SettingLookupResult TryGetDefaultValue(const Identifier &key, optional_ptr<const ConfigurationOption> option,
+	                                       Value &result) const;
 
 	//! The opener (if any) is used to expand "~" using the connection-specific home_directory
 	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
@@ -397,6 +376,10 @@ public:
 	HTTPUtil &GetHTTPUtil() const;
 	//! Replace how external extensions are installed and loaded, before the database runs queries
 	DUCKDB_API void SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider);
+	//! Returns a copy of the forced variant shredding type (INVALID if unset), safe to call while it is being modified
+	DUCKDB_API LogicalType GetForceVariantShredding() const;
+	//! Returns a copy of the allowed_configs set, safe to call while it is being modified
+	DUCKDB_API identifier_set_t GetAllowedConfigs() const;
 	DUCKDB_API ExternalExtensionProvider &GetExternalExtensionProvider() const;
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;

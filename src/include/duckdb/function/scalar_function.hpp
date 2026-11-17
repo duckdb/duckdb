@@ -103,14 +103,24 @@ struct FunctionModifiedDatabasesInput {
 
 struct FunctionBindExpressionInput {
 	FunctionBindExpressionInput(ClientContext &context_p, BoundScalarFunction &bound_function,
-	                            optional_ptr<FunctionData> bind_data_p, vector<unique_ptr<Expression>> &children_p)
-	    : context(context_p), bound_function(bound_function), bind_data(bind_data_p), children(children_p) {
+	                            optional_ptr<FunctionData> bind_data_p, vector<unique_ptr<Expression>> &children_p,
+	                            optional_ptr<Binder> binder_p = nullptr,
+	                            optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : context(context_p), bound_function(bound_function), bind_data(bind_data_p), children(children_p),
+	      binder(binder_p), decimal_width_limit(decimal_width_limit_p) {
 	}
 
 	ClientContext &context;
 	BoundScalarFunction &bound_function;
 	optional_ptr<FunctionData> bind_data;
 	vector<unique_ptr<Expression>> &children;
+	//! The binder of the query the function is bound in, if any
+	optional_ptr<Binder> binder;
+	//! The fixed limit of a bind outside of a query, if any
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
+
+	//! The widest DECIMAL the expression constructs: the limit of the binder, the fixed limit, or the setting
+	DUCKDB_API DecimalWidthLimit GetDecimalWidthLimit() const;
 };
 
 struct FunctionUnbindInput {
@@ -433,6 +443,14 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	static constexpr const FunctionKind KIND = FunctionKind::SCALAR;
+	FunctionKind GetKind() const override {
+		return KIND;
+	}
+	//! The properties of the function, for code that only knows it as a SimpleFunction
+	auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> override {
+		return GetProperties();
+	}
 	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
 	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
@@ -658,35 +676,19 @@ private:
 class BindScalarFunctionInput : public BindFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
-	                        optional_ptr<Binder> binder_p = nullptr)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
-	      bound_function(bound_function_p), binder(binder_p) {
-	}
-
-	//! Construct without argument names - looking arguments up by name is not available in this case.
-	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
-	      binder(binder_p) {
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr,
+	                        optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p,
+	                        binder_p, decimal_width_limit_p),
+	      bound_function(bound_function_p) {
 	}
 
 	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
 	}
-	bool HasBinder() const {
-		return binder != nullptr;
-	}
-	Binder &GetBinder() {
-		if (binder == nullptr) {
-			throw InternalException("Function %s has cannot be bound without a Binder!", bound_function.GetName());
-		}
-		return *binder;
-	}
 
 private:
 	BoundScalarFunction &bound_function;
-	optional_ptr<Binder> binder;
 };
 
 //! Input of the resolve_types callback - the arguments are read-only, the bound function can be modified
@@ -694,15 +696,19 @@ class ResolveScalarFunctionTypesInput : private BindFunctionInput {
 public:
 	ResolveScalarFunctionTypesInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
 	                                vector<unique_ptr<Expression>> &arguments_p,
-	                                const vector<Identifier> &argument_names_p)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
+	                                optional_ptr<Binder> binder_p = nullptr,
+	                                optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p,
+	                        binder_p, decimal_width_limit_p),
 	      bound_function(bound_function_p), arguments(arguments_p) {
 	}
 
-	using BindFunctionInput::GetArgumentNames;
+	using BindFunctionInput::GetArgumentName;
 	using BindFunctionInput::GetClientContext;
 	using BindFunctionInput::GetConstant;
+	using BindFunctionInput::GetDecimalWidthLimit;
 	using BindFunctionInput::GetNonNullConstant;
+	using BindFunctionInput::NestedFunctionBinder;
 	using BindFunctionInput::TryGetConstant;
 
 	BoundScalarFunction &GetBoundFunction() const {

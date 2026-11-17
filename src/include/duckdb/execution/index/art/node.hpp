@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -144,8 +145,12 @@ public:
 	void ReplaceChild(const ART &art, const uint8_t byte, const NodePtr child_ptr = NodePtr()) const;
 	//! Insert the child at byte.
 	static void InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const NodePtr child_ptr = NodePtr());
-	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte,
+	//! Delete the child at byte of the node that node_ptr_handle's NodePtr points to.
+	//! Takes over node_ptr_handle's pin and releases it before freeing the node that stores its NodePtr.
+	//! The caller must keep the storage containing parent_ptr valid for the duration of the call,
+	//! and must hold no other pins on nodes below parent_ptr, which this call may free.
+	//! At the root, parent_ptr is node_ptr_handle's NodePtr itself.
+	static void DeleteChild(ART &art, NodePtrHandle node_ptr_handle, NodePtr &parent_ptr, const uint8_t byte,
 	                        const GateStatus status, const ARTKey &row_id);
 
 	//! Get the child node at byte, if it exists.

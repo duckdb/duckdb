@@ -136,28 +136,80 @@ bool GlobalUserSettings::TryGetExtensionOption(const Identifier &name, Extension
 	return true;
 }
 
+optional_idx GlobalUserSettings::TryGetExtensionSettingIndex(const Identifier &name) const {
 #ifndef __MINGW32__
-CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
-// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
-#ifdef __MVS__
-	static __tlssim<CachedGlobalSettings> current_cache_impl;
-#define current_cache (*current_cache_impl.access())
+	auto &extension_setting_indexes = GetSettings().extension_setting_indexes;
+	auto entry = extension_setting_indexes.find(name);
+	if (entry == extension_setting_indexes.end()) {
+		return optional_idx();
+	}
+	return entry->second;
 #else
-	thread_local CachedGlobalSettings current_cache;
+	lock_guard<mutex> l(lock);
+	auto entry = extension_parameters.find(name);
+	if (entry == extension_parameters.end()) {
+		return optional_idx();
+	}
+	return entry->second.setting_index;
+#endif
+}
+
+#if !defined(__MINGW32__) && !defined(__MVS__)
+//! The cache of the worker thread running on this thread, if any. A pointer needs no thread_local destructor
+static thread_local CachedGlobalSettings *worker_settings_cache = nullptr; // NOLINT
 #endif
 
+WorkerSettingsCache::WorkerSettingsCache() {
+}
+
+WorkerSettingsCache::~WorkerSettingsCache() {
+#if !defined(__MINGW32__) && !defined(__MVS__)
+	if (cache) {
+		worker_settings_cache = previous.get();
+	}
+#endif
+}
+
+bool WorkerSettingsCache::IsInitialized() const {
+	return cache != nullptr;
+}
+
+void WorkerSettingsCache::Initialize() {
+	cache = make_uniq<CachedGlobalSettings>();
+#if !defined(__MINGW32__) && !defined(__MVS__)
+	previous = worker_settings_cache;
+	worker_settings_cache = cache.get();
+#endif
+}
+
+#ifndef __MINGW32__
+// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+static CachedGlobalSettings &GetThreadSettingsCache() {
+#ifdef __MVS__
+	static __tlssim<CachedGlobalSettings> current_cache_impl;
+	return *current_cache_impl.access();
+#else
+	if (worker_settings_cache) {
+		return *worker_settings_cache;
+	}
+	// the first use on a thread registers the destructor, which allocates
+	thread_local CachedGlobalSettings current_cache;
+	return current_cache;
+#endif
+}
+
+CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
+	auto &current_cache = GetThreadSettingsCache();
 	const auto current_version = settings_version.load(std::memory_order_acquire);
 	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
 	    current_cache.uuid != uuid || current_cache.version != current_version) {
 		// out-of-date, refresh the cache
 		lock_guard<mutex> guard(lock);
-		current_cache = CachedGlobalSettings(*this, settings_version, settings_map);
+		current_cache = CachedGlobalSettings(*this, settings_version, settings_map, extension_parameters);
 	}
 	return current_cache;
-#ifdef __MVS__
-#undef current_cache
-#endif
 }
+#endif
 
 hugeint_t GlobalUserSettings::GetUUID() const {
 	return uuid;
@@ -167,11 +219,15 @@ CachedGlobalSettings::CachedGlobalSettings() : version(0), uuid(0) {
 }
 
 CachedGlobalSettings::CachedGlobalSettings(const GlobalUserSettings &global_user_settings_p, idx_t version,
-                                           UserSettingsMap settings_p)
+                                           UserSettingsMap settings_p,
+                                           const identifier_map_t<ExtensionOption> &extension_parameters)
     : global_user_settings(global_user_settings_p), version(version), settings(std::move(settings_p)),
       uuid(global_user_settings_p.GetUUID()) {
+	extension_setting_indexes.reserve(extension_parameters.size());
+	for (auto &entry : extension_parameters) {
+		extension_setting_indexes.emplace(entry.first, entry.second.setting_index.GetIndex());
+	}
 }
-#endif
 
 //===--------------------------------------------------------------------===//
 // LocalUserSettings

@@ -12,7 +12,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -52,6 +51,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	// the first timestamp a real transaction can draw: one past the bootstrap stamp, which is also
 	// the bound the system transaction reads at
 	current_start_timestamp = SYSTEM_TRANSACTION_TIMESTAMP + 1;
+	last_commit = SYSTEM_TRANSACTION_TIMESTAMP;
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
 	// if transaction_id < start_timestamp for any set of active transactions
@@ -121,51 +121,6 @@ void DuckTransactionManager::ResetActiveCheckpoint() {
 	active_checkpoint = 0;
 }
 
-CommitDropState &DuckTransactionManager::AddDroppedStorage(unique_ptr<CommitDropState> drop_state) {
-	D_ASSERT(drop_state->commit_id != 0);
-	drop_state->DetachIndexes();
-	auto &result = *drop_state;
-	lock_guard<mutex> guard(dropped_storage_lock);
-	dropped_storage.push_back(std::move(drop_state));
-	return result;
-}
-
-void DuckTransactionManager::ExcludeDroppedStorage(VisibilityBound visibility_bound) {
-	lock_guard<mutex> exclude_or_free_guard(exclude_or_free_lock);
-	vector<reference<CommitDropState>> drop_states;
-	{
-		lock_guard<mutex> guard(dropped_storage_lock);
-		for (auto &drop_state : dropped_storage) {
-			if (drop_state->commit_id < visibility_bound) {
-				drop_states.push_back(*drop_state);
-			}
-		}
-	}
-	for (auto &drop_state : drop_states) {
-		drop_state.get().ExcludeFromCheckpoints();
-	}
-}
-
-void DuckTransactionManager::FreeDroppedStorage(CommitDropState &drop_state) {
-	lock_guard<mutex> exclude_or_free_guard(exclude_or_free_lock);
-	unique_ptr<CommitDropState> owned_state;
-	{
-		lock_guard<mutex> guard(dropped_storage_lock);
-		for (idx_t i = 0; i < dropped_storage.size(); i++) {
-			if (dropped_storage[i].get() == &drop_state) {
-				owned_state = std::move(dropped_storage[i]);
-				dropped_storage.erase_at(i);
-				break;
-			}
-		}
-	}
-	if (!owned_state) {
-		throw InternalException("FreeDroppedStorage called with storage that is not registered");
-	}
-	// removed first: if freeing fails, the state is destroyed while unwinding
-	owned_state->Free();
-}
-
 DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
     : can_checkpoint(false), reason(std::move(reason_p)) {
 }
@@ -219,8 +174,9 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
 	bool has_other_transactions = HasOtherTransactions(transaction);
 	if (has_other_transactions) {
-		if (undo_properties.has_updates) {
-			// if we have made updates in this transaction we cannot checkpoint in the presence of other transactions
+		if (undo_properties.has_updates || undo_properties.has_dropped_entries) {
+			// if we have made updates/catalog changes in this transaction we cannot checkpoint
+			// in the presence of other transactions
 			string other_transactions;
 			for (auto &active_transaction : active_transactions) {
 				if (!RefersToSameObject(*active_transaction, transaction)) {
@@ -233,6 +189,14 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 			if (!other_transactions.empty()) {
 				// there are other transactions!
 				// these active transactions might need data from BEFORE this transaction
+				// we might need to change our strategy here based on what changes THIS transaction has made
+				if (undo_properties.has_dropped_entries) {
+					// this transaction has changed the catalog - we cannot checkpoint
+					return CheckpointDecision(
+					    "Transaction has dropped catalog entries and there are other transactions "
+					    "active\nActive transactions: " +
+					    other_transactions);
+				}
 				// this transaction has performed updates - we cannot checkpoint
 				return CheckpointDecision(
 				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
@@ -296,7 +260,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 
-	storage_manager.CreateCheckpoint(context, options);
+	storage_manager.CreateCheckpoint(context, options, &context);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -417,7 +381,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined state, as those commits were made assuming this one was already committed
-		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
+		// we must write the WAL if an unbound index has buffered replays: the checkpoint may be skipped
+		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context) &&
+		    !db.GetStorageManager().HasBufferedIndexReplays()) {
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}
@@ -430,8 +396,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		t_lock.unlock();
 		// grab the commit lock and hold it until the entire commit is finished
 		held_commit_lock = db.GetStorageManager().GetCommitLock();
+		// a commit that failed while we waited for the commit lock may have invalidated the database
+		error = db.InvalidationError("commit");
 
-		if (!skip_wal_write_due_to_checkpoint) {
+		if (!error.HasError() && !skip_wal_write_due_to_checkpoint) {
 			error = transaction.AppendLocalStorage(context, db, commit_state);
 			if (!error.HasError() && should_write_to_wal) {
 				// Commit the changes to the WAL.
@@ -555,7 +523,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// published and no longer revertable, but not durable: invalidate. The WAL keeps the
 			// bytes; whether a restart replays them is in doubt
 			error = ErrorData(ex);
-			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
+			db.Invalidate("syncing the WAL after a commit failed", error.RawMessage());
 			// no checkpoint after a failed commit, as on the rollback path above
 			checkpoint_decision = CheckpointDecision(error.Message());
 			lock.reset();
@@ -582,7 +550,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	CleanupTransactions();
 
-	if (checkpoint_decision.can_checkpoint && undo_properties.has_updates &&
+	if (checkpoint_decision.can_checkpoint && (undo_properties.has_updates || undo_properties.has_dropped_entries) &&
 	    GetLastCommit() >= LowestVisibilityBound()) {
 		// GetCheckpointType does not checkpoint while another transaction might still need the state
 		// from before this commit. That check ran before the sync; transactions that started during

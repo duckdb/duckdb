@@ -10,7 +10,11 @@ namespace duckdb {
 IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p) : info(std::move(info_p)) {
 }
 
-void DuckIndexEntry::Rollback(CatalogEntry &) {
+void DuckIndexEntry::Rollback(CatalogEntry &prev_entry) {
+	if (prev_entry.oid == oid) {
+		// an altered copy, e.g. by COMMENT ON INDEX, keeps the index of the entry it replaces
+		return;
+	}
 	if (!info) {
 		return;
 	}
@@ -57,7 +61,7 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop(CommitDropState &drop_state) {
 	D_ASSERT(info);
-	drop_state.DropIndex(info->info, oid);
+	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), oid);
 }
 
 } // namespace duckdb

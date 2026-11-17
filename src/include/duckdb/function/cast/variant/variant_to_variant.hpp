@@ -116,14 +116,19 @@ struct VariantToVariantSizeAnalyzer {
 	}
 
 	template <typename T>
-	static uint32_t VisitDecimal(T, uint32_t width, uint32_t scale, AnalyzeState &state) {
+	static uint32_t VisitDecimal(T val, uint32_t width, uint32_t scale, AnalyzeState &state) {
 		uint32_t size = GetVarintSize(width) + GetVarintSize(scale);
-		size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			size += VisitString(val.data, state);
+		} else {
+			size += sizeof(T);
+		}
 		return size;
 	}
 
 	static uint32_t VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                           AnalyzeState &state) {
+	                           idx_t depth, AnalyzeState &state) {
 		uint32_t size = GetVarintSize(nested_data.child_count);
 		if (nested_data.child_count) {
 			size += GetVarintSize(nested_data.children_idx + state.children_offset);
@@ -132,8 +137,8 @@ struct VariantToVariantSizeAnalyzer {
 	}
 
 	static uint32_t VisitObject(const UnifiedVariantVectorData &variant, idx_t row,
-	                            const VariantNestedData &nested_data, AnalyzeState &state) {
-		return VisitArray(variant, row, nested_data, state);
+	                            const VariantNestedData &nested_data, idx_t depth, AnalyzeState &state) {
+		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
 	static uint32_t VisitDefault(VariantLogicalType type_id, const_data_ptr_t, AnalyzeState &) {
@@ -222,12 +227,17 @@ struct VariantToVariantDataWriter {
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, WriteState &state) {
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
-		Store<T>(val, state.GetDestination());
-		state.blob_size += sizeof(T);
+		if constexpr (std::is_same<T, bignum_t>::value) {
+			// the BIGNUM blob of a decimal wider than 38 digits
+			VisitString(val.data, state);
+		} else {
+			Store<T>(val, state.GetDestination());
+			state.blob_size += sizeof(T);
+		}
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                       WriteState &state) {
+	                       idx_t depth, WriteState &state) {
 		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
 		if (nested_data.child_count) {
 			//! NOTE: The 'child_index' stored in the OBJECT/ARRAY data could require more bits
@@ -237,8 +247,8 @@ struct VariantToVariantDataWriter {
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                        WriteState &state) {
-		return VisitArray(variant, row, nested_data, state);
+	                        idx_t depth, WriteState &state) {
+		return VisitArray(variant, row, nested_data, depth, state);
 	}
 
 	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, WriteState &) {
@@ -335,7 +345,8 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 				WriteVariantMetadata<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset + blob_size,
 				                                 nullptr, 0, source_type_id);
 
-				VariantVisitor<VariantToVariantDataWriter>::Visit(source, scan_index, source_value_index, write_state);
+				VariantVisitor<VariantToVariantDataWriter>::Visit(source, scan_index, source_value_index, 0,
+				                                                  write_state);
 			}
 		} else {
 			AnalyzeState analyze_state(children_offset);
@@ -343,7 +354,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			     source_value_index++) {
 				values_offset_data[result_index]++;
 				OffsetData::AddBlobOffset(blob_size, VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(
-				                                         source, scan_index, source_value_index, analyze_state));
+				                                         source, scan_index, source_value_index, 0, analyze_state));
 			}
 		}
 
