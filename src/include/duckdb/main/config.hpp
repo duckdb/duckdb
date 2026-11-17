@@ -91,6 +91,8 @@ struct DBConfigOptions {
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	//! Whether to register autoloading placeholders for extension function overloads
+	bool register_extension_overloads = true;
 	//! Where automatic installs go when neither autoinstall_extension_repository nor custom_extension_repository is
 	//! set; empty means the core repository. The local_extension_repository capability sets it to its build's
 	//! repository

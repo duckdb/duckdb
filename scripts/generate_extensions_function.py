@@ -4,6 +4,8 @@ import re
 import argparse
 import glob
 import sys
+import subprocess
+import shlex
 from typing import Set, Tuple, cast
 import pathlib
 from typing import NamedTuple
@@ -43,7 +45,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.csv")
-DUCKDB_PATH = os.path.join(*args.shell.split('/'))
+DUCKDB_PATH = os.path.normpath(args.shell)
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
 EXTENSION_DEPENDENCIES = {
@@ -378,11 +380,26 @@ def get_query(sql_query, load_query) -> list:
     import csv
     import io
 
-    query = f'{DUCKDB_PATH} -unsigned -csv -c "{load_query}{sql_query}" '
-    query_result = os.popen(query).read()
-    f = io.StringIO(query_result)
+    command = [
+        DUCKDB_PATH,
+        '-unsigned',
+        '-no-builtin-extensions',
+        '-no-init',
+        '-csv',
+        '-c',
+        load_query + sql_query,
+    ]
+    query_result = subprocess.run(command, capture_output=True, text=True)
+    if query_result.returncode != 0:
+        raise RuntimeError(
+            f"Extension metadata query failed (exit {query_result.returncode}): {shlex.join(command)}\n"
+            f"stdout:\n{query_result.stdout}\nstderr:\n{query_result.stderr}"
+        )
+    f = io.StringIO(query_result.stdout)
     reader = csv.reader(f)
-    header = next(reader)
+    header = next(reader, None)
+    if header is None:
+        raise RuntimeError(f"Extension metadata query returned no CSV header: {shlex.join(command)}")
     result = []
     for line in reader:
         result_obj = {}
