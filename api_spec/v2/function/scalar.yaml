@@ -432,6 +432,31 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  scalar_function_resolve_types_set_arg_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the type of an argument of the call site being bound.
+
+      The engine inserts a cast from the actual argument type to this type before the function is executed. Use it
+      to accept an argument in several types without registering one overload per type. The type is borrowed and
+      copied.
+    parameters:
+      info:
+        type: scalar_function_resolve_types_info
+        description: The resolve types info handle.
+      arg_idx:
+        type: idx
+        description: The index of the argument to set the type of.
+      arg_type:
+        type: logical_type
+        description: The argument type to cast to. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Bind Callback Functions
   #---------------------------------------------------------------------------------------------------------------------

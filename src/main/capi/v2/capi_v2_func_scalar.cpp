@@ -468,6 +468,26 @@ duckdb_v2_scalar_function_resolve_types_set_return_type(duckdb_v2_scalar_functio
 	});
 }
 
+DUCKDB_V2_ERROR
+duckdb_v2_scalar_function_resolve_types_set_arg_type(duckdb_v2_scalar_function_resolve_types_info_handle info,
+                                                     idx_t arg_idx, duckdb_v2_logical_type_handle arg_type,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(arg_type);
+	return WithErrorHandler(err, [&]() {
+		auto &arguments = Convert(info)->bound_function.GetArguments();
+		if (arg_idx >= arguments.size()) {
+			throw duckdb::InvalidInputException("Argument index %llu is out of range, the call has %llu arguments.",
+			                                    arg_idx, arguments.size());
+		}
+		auto type = Convert(arg_type);
+		if (!type->IsComplete()) {
+			throw duckdb::InvalidInputException("Argument type must be a fully defined concrete type");
+		}
+		arguments[arg_idx] = *type;
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(duckdb_v2_scalar_function_bind_info_handle info,
                                                              duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);

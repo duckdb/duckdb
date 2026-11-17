@@ -11299,6 +11299,28 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_resolve_types_set_return_
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Sets the type of an argument of the call site being bound.
+ *
+ * The engine inserts a cast from the actual argument type to this type before the function is executed. Use it to
+ * accept an argument in several types without registering one overload per type. The type is borrowed and copied.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The resolve types info handle.
+ * @param arg_idx The index of the argument to set the type of.
+ * @param arg_type The argument type to cast to. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_resolve_types_set_arg_type(
+    duckdb_v2_scalar_function_resolve_types_info_handle info, idx_t arg_idx, duckdb_v2_logical_type_handle arg_type,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Sets the function's "bind data" from the bind callback.
  *
  * The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque handle

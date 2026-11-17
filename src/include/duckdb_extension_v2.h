@@ -1599,6 +1599,9 @@ typedef struct {
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_stats_set_value)
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_resolve_types_set_arg_type)
+	(duckdb_v2_scalar_function_resolve_types_info_handle info, idx_t arg_idx, duckdb_v2_logical_type_handle arg_type,
+	 duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3651,6 +3654,10 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_stats_set_value duckdb_ext_api.duckdb_v2_stats_set_value
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_scalar_function_resolve_types_set_arg_type                                                           \
+	duckdb_ext_api.duckdb_v2_scalar_function_resolve_types_set_arg_type
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
