@@ -253,6 +253,17 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+void Binder::AddTableAlias(TableIndex index, const Identifier &alias) {
+	if (alias.empty()) {
+		return;
+	}
+	global_binder_state->table_aliases.emplace(index, alias);
+}
+
+const unordered_map<TableIndex, Identifier> &Binder::GetTableAliases() const {
+	return global_binder_state->table_aliases;
+}
+
 optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
 	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
 	auto *current = &op;

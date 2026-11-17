@@ -741,6 +741,10 @@ void BindContext::GetTypesAndNames(vector<Identifier> &result_names, vector<Logi
 }
 
 void BindContext::AddBinding(unique_ptr<Binding> binding) {
+	// Only a table or a table function is scanned under its own index, so only those aliases name a scan.
+	if (binding->GetBindingType() == BindingType::TABLE) {
+		binder.AddTableAlias(binding->GetIndex(), binding->GetAlias());
+	}
 	bindings_list.push_back(std::move(binding));
 }
 

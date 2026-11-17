@@ -184,6 +184,8 @@ private:
 struct GlobalBinderState {
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
+	//! The alias each table index was bound under, for plans that name their scans
+	unordered_map<TableIndex, Identifier> table_aliases;
 	//! Statement properties
 	StatementProperties prop;
 	//! Binding mode
@@ -405,6 +407,10 @@ public:
 	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
+	//! Record the alias a table index was bound under
+	void AddTableAlias(TableIndex index, const Identifier &alias);
+	//! The alias each table index of this query was bound under, subqueries and views included
+	const unordered_map<TableIndex, Identifier> &GetTableAliases() const;
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
