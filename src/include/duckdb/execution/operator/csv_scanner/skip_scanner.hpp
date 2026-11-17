@@ -24,6 +24,10 @@ public:
 
 	idx_t row_count = 0;
 	idx_t rows_to_skip;
+	//! The buffer that is being scanned
+	const char *buffer_ptr = nullptr;
+	//! Whether the line that the buffer starts in held only spaces in the buffers before
+	bool only_spaces_before_buffer = true;
 
 	//! Adds a Value to the result
 	static inline void AddValue(SkipResult &result, const idx_t buffer_pos);
@@ -41,6 +45,8 @@ public:
 	static inline bool UnsetComment(SkipResult &result, idx_t buffer_pos);
 	//! Internal code to add a row
 	inline void InternalAddRow();
+	//! Whether only spaces stand between the start of the line and a position of the buffer
+	bool OnlySpacesBefore(idx_t buffer_pos) const;
 };
 
 //! Scanner used to skip lines in a CSV File

@@ -55,6 +55,36 @@ FROM read_csv('{TEST_DIR}/comment_line_before_header.csv', auto_detect = false, 
 1	2
 4	5
 
+# spaces before the comment: still a comment line
+foreach spaces 1 2
+
+statement ok
+COPY (SELECT repeat(' ', {spaces}) || '#x' || chr(10) || 'a;b' || chr(10) || '1;2' || chr(10) || '4;5') TO '{TEST_DIR}/comment_line_behind_spaces.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_behind_spaces.csv', auto_detect = false, delim = ';', comment = '#', header = true, columns = {'a': 'BIGINT', 'b': 'BIGINT'});
+----
+1	2
+4	5
+
+query II
+FROM read_csv('{TEST_DIR}/comment_line_behind_spaces.csv', auto_detect = false, delim = ';', comment = '#', header = false, skip = 1, columns = {'a': 'BIGINT', 'b': 'BIGINT'});
+----
+1	2
+4	5
+
+endloop
+
+# a space between the last delimiter of the header and its comment
+statement ok
+COPY (SELECT 'a; #x' || chr(10) || '1;2' || chr(10) || '4;5') TO '{TEST_DIR}/header_comment_after_space.csv' (HEADER false, QUOTE '', DELIM '|');
+
+query II
+FROM read_csv('{TEST_DIR}/header_comment_after_space.csv', auto_detect = false, delim = ';', comment = '#', header = true, columns = {'a': 'BIGINT', 'b': 'BIGINT'});
+----
+1	2
+4	5
+
 # the comment of the header follows a value and runs over the end of a buffer
 # # comment
 # a;b#12;#
