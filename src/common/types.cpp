@@ -925,8 +925,12 @@ bool LogicalType::HasPhysicalType() const {
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:
 		case PhysicalType::ARRAY:
-			// a VARIANT has no child types of its own
-			return type.id() != LogicalTypeId::VARIANT && !type.HasParameters();
+			if (!type.HasParameters()) {
+				return true;
+			}
+			// the visitor does not look at the child types of a VARIANT, which are those of its storage layout
+			return type.id() == LogicalTypeId::VARIANT &&
+			       StructType::GetChildTypes(type) != StructType::GetChildTypes(LogicalType::VARIANT());
 		default:
 			return false;
 		}

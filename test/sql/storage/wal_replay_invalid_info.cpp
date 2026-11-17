@@ -88,34 +88,55 @@ TEST_CASE("Test WAL add constraint entry without a constraint", "[storage][.]") 
 TEST_CASE("Test WAL add column entry with a type that no column can have", "[storage][.]") {
 	AlterEntryData data(QualifiedName(Identifier(""), Identifier("main"), Identifier("t")),
 	                    OnEntryNotFound::THROW_EXCEPTION);
-	// a type without a physical type
+	// a type without a physical type, as a column and as the child of a LIST
 	TestReplayInvalidAlterInfo(
 	    "wal_add_column_literal_type",
 	    make_uniq<AddColumnInfo>(data, ColumnDefinition(Identifier("c"), LogicalType(LogicalTypeId::INTEGER_LITERAL)),
 	                             false, AddColumnConstraints()),
 	    "add column entry with a type that no column can have");
-	// a LIST without its child type
 	TestReplayInvalidAlterInfo(
-	    "wal_add_column_list_without_child",
-	    make_uniq<AddColumnInfo>(data, ColumnDefinition(Identifier("c"), LogicalType(LogicalTypeId::LIST)), false,
-	                             AddColumnConstraints()),
+	    "wal_add_column_list_of_literal_type",
+	    make_uniq<AddColumnInfo>(
+	        data, ColumnDefinition(Identifier("c"), LogicalType::LIST(LogicalType(LogicalTypeId::INTEGER_LITERAL))),
+	        false, AddColumnConstraints()),
 	    "add column entry with a type that no column can have");
 }
 
-TEST_CASE("Test WAL insert entry with a chunk of a type that no vector can hold", "[storage][.]") {
+//! Replay a WAL whose only new entry is an INSERT_TUPLE with a chunk of one column, whose type the callback writes
+static void TestReplayInvalidInsertType(const string &name, const std::function<void(Serializer &)> &write_type,
+                                        const string &expected_error) {
 	TestReplayInvalidEntry(
-	    "wal_insert_literal_type",
+	    name,
 	    [&](Serializer &serializer) {
 		    serializer.WriteProperty(100, "wal_type", WALType::INSERT_TUPLE);
 		    serializer.WriteObject(101, "chunk", [&](Serializer &chunk) {
 			    chunk.WriteProperty<sel_t>(100, "rows", 1);
-			    chunk.WriteList(101, "types", 1, [&](Serializer::List &list, idx_t) {
-				    list.WriteElement(LogicalType(LogicalTypeId::INTEGER_LITERAL));
-			    });
+			    chunk.WriteList(101, "types", 1, [&](Serializer::List &list, idx_t) { list.WriteObject(write_type); });
 			    chunk.WriteList(102, "columns", 0, [&](Serializer::List &, idx_t) {});
 		    });
 	    },
+	    expected_error);
+}
+
+TEST_CASE("Test WAL insert entry with a chunk of a type that no vector can hold", "[storage][.]") {
+	TestReplayInvalidInsertType(
+	    "wal_insert_literal_type",
+	    [&](Serializer &type) { LogicalType(LogicalTypeId::INTEGER_LITERAL).Serialize(type); },
 	    "a vector cannot hold the type INTEGER_LITERAL");
+	// an ENUM without its values: the error names the type by its id
+	TestReplayInvalidInsertType(
+	    "wal_insert_enum_without_values",
+	    [&](Serializer &type) { type.WriteProperty<LogicalTypeId>(100, "id", LogicalTypeId::ENUM); }, "type ENUM");
+	// a VARIANT whose child types are not those of a VARIANT
+	auto child_types = LogicalType::STRUCT({{"keys", LogicalType(LogicalTypeId::INTEGER_LITERAL)}});
+	TestReplayInvalidInsertType(
+	    "wal_insert_variant_child_types",
+	    [&](Serializer &type) {
+		    type.WriteProperty<LogicalTypeId>(100, "id", LogicalTypeId::VARIANT);
+		    optional_ptr<const LogicalTypeInfo> type_info = &child_types.GetTypeInfo();
+		    type.WritePropertyWithDefault<optional_ptr<const LogicalTypeInfo>>(101, "type_info", type_info);
+	    },
+	    "a vector cannot hold the type VARIANT");
 }
 
 TEST_CASE("Test WAL drop trigger entry without a base table", "[storage][.]") {
