@@ -1,0 +1,75 @@
+# name: test/sql/join/hash_join/perfect_hash_join_bitmap_budget.test
+# description: Membership bitmaps cover domains above 8 MiB and retain range fallback
+# group: [hash_join]
+
+require 64bit
+
+require skip_reload
+
+statement ok
+SET threads=4
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,join_filter_pushdown,compressed_materialization'
+
+statement ok
+SET VARIABLE check_activation = NOT current_setting('debug_force_external')
+    AND NOT current_setting('debug_disable_optimizer')
+
+statement ok
+CREATE TABLE b AS SELECT (i % 500000) * 200 k FROM range(4000000) t(i)
+
+statement ok
+INSERT INTO b VALUES (NULL)
+
+statement ok
+CREATE TABLE p AS SELECT i * 250 k FROM range(400000) t(i)
+
+statement ok
+INSERT INTO p VALUES (NULL)
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM p SEMI JOIN b USING (k)
+----
+100000
+
+statement ok
+CALL disable_logging()
+
+query I
+SELECT NOT getvariable('check_activation') OR count(*) = 1
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalHashJoin' AND event='Lookup' AND info['backend']='bitmap'
+----
+true
+
+query I
+SELECT count(*) FROM p ANTI JOIN b USING (k)
+----
+300001
+
+query II
+SELECT count(found), count(*) FILTER (WHERE found IS NULL)
+FROM (SELECT k IN (SELECT k FROM b) found FROM p)
+----
+100000	300001
+
+statement ok
+PREPARE membership AS SELECT count(*) FROM p SEMI JOIN b USING (k)
+
+statement ok
+INSERT INTO b VALUES (-9223372036854775808), (9223372036854775807)
+
+query I
+EXECUTE membership
+----
+100000
+
+statement ok
+DROP TABLE p
+
+statement ok
+DROP TABLE b

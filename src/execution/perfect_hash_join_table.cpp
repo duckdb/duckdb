@@ -99,8 +99,8 @@ public:
 		const auto slots = has_bounds ? KeyDistance(max, min).lower + 2 : 1;
 		const auto bytes = IsBitmap() ? ((slots + 63) / 64) * sizeof(uint64_t) : slots * sizeof(uint64_t);
 		const auto budget = IsBitmap() && !track_matches
-		                        ? MinValue<idx_t>(MAX_BYTES / sizeof(uint64_t), build_count) * sizeof(uint64_t)
-		                        : MinValue<idx_t>(MAX_BYTES, pointer_table_size);
+		                        ? MinValue<idx_t>(GetMaxBytes() / sizeof(uint64_t), build_count) * sizeof(uint64_t)
+		                        : MinValue<idx_t>(GetMaxBytes(), pointer_table_size);
 		if (bytes > budget / (track_matches ? 2 : 1)) {
 			return 0;
 		}
@@ -353,7 +353,8 @@ private:
 	}
 
 	void CheckRange() {
-		const auto max_slots = IsBitmap() ? MAX_BYTES * 8 / (track_matches ? 2 : 1) : MAX_BYTES / sizeof(uint64_t);
+		const auto max_slots =
+		    IsBitmap() ? GetMaxBytes() * 8 / (track_matches ? 2 : 1) : GetMaxBytes() / sizeof(uint64_t);
 		if (has_bounds && KeyDistance(max, min) >= static_cast<uhugeint_t>(max_slots - 1)) {
 			range_too_large = true;
 		}
@@ -373,10 +374,15 @@ private:
 	}
 
 private:
+	idx_t GetMaxBytes() const {
+		return IsBitmap() ? MAX_BITMAP_BYTES : MAX_BYTES;
+	}
+
+	static constexpr idx_t MAX_BITMAP_BYTES = 64ULL * 1024ULL * 1024ULL;
 	static constexpr idx_t PREFETCH_MIN_BYTES = 1024ULL * 1024ULL;
 	static constexpr idx_t PREFETCH_MIN_COUNT = 128;
 	static constexpr uint32_t MISS_BIT = static_cast<uint32_t>(1) << 31;
-	static_assert(MAX_BYTES * 8 < MISS_BIT, "Bitmap slots must leave the high bit available");
+	static_assert(MAX_BITMAP_BYTES * 8 < MISS_BIT, "Bitmap slots must leave the high bit available");
 
 	T min {};
 	T max {};
