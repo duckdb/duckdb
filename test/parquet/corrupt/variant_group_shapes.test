@@ -4,14 +4,21 @@
 
 require parquet
 
-# A group annotated as VARIANT with a single child.
+# Both files are written by DuckDB, with one change in the schema of the footer each.
+
+# The VARIANT group has a single child: its 'value' and 'typed_value' are siblings of the group.
 statement error
 SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_group_one_child.parquet');
 ----
-must have a 'metadata' and a 'value' column
+VARIANT column "var" must have a 'metadata' and a 'value' column
 
-# A field below 'typed_value' whose 'value' is an INT32 column.
+# The 'value' of the field 'd' below 'typed_value' is an INT32 column.
 statement error
-SELECT var FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
 ----
-Column 'value' of a Variant group has to be binary
+the 'value' column of a shredded field of VARIANT column "var" must be a binary BYTE_ARRAY column
+
+statement error
+SELECT var.d FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
+----
+the 'value' column of a shredded field of VARIANT column "var" must be a binary BYTE_ARRAY column

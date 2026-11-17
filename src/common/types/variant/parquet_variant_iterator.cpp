@@ -331,10 +331,6 @@ void ShreddedGroupView::Build(Vector &group) {
 	if (!value_vec) {
 		throw InvalidInputException("Required column 'value' not found in Variant group");
 	}
-	if (value_vec->GetType().InternalType() != PhysicalType::VARCHAR) {
-		throw DataCorruptionException("Column 'value' of a Variant group has to be binary, not %s",
-		                              value_vec->GetType().ToString());
-	}
 
 	value = make_uniq<VectorIterator<string_t>>(*value_vec);
 
