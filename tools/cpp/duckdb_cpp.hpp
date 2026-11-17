@@ -100,6 +100,8 @@ class ReplacementScan;
 class QualifiedName;
 class TableDescription;
 class ColumnDescription;
+class QueryMetrics;
+class QueryMetricsNode;
 class FileSystem;
 class FileHandle;
 class FileOpenOptions;
@@ -110,6 +112,7 @@ class TableFunction;
 class CopyFunction;
 class Factory;
 class Extension;
+class Stats;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -993,12 +996,10 @@ public:
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
 	/// `StatementIterator::Next` rather than from this call.
 	/// @param sql One or more semicolon-separated SQL statements.
-	auto ParseSQL(const char *sql) -> StatementIterator;
-
-	/// `std::string` overload of `ParseSQL`.
-	auto ParseSQL(const std::string &sql) -> StatementIterator {
-		return ParseSQL(sql.c_str());
-	}
+	/// @param apply_invalidation_policy Whether a syntax error invalidates the active transaction, according to the
+	/// transaction invalidation policy. Pass false when the statements are only inspected, e.g. with `Bind`, instead of
+	/// run.
+	auto ParseSQL(std::string_view sql, bool apply_invalidation_policy = true) -> StatementIterator;
 
 	/// Splits a SQL string into its tokens without parsing it: no binding, no catalog access, no transaction. The
 	/// connection supplies the grammar whose keyword set decides KEYWORD versus IDENTIFIER. Offsets are byte offsets
@@ -1065,6 +1066,8 @@ public:
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` for a statement that expands into several,
+	/// whose columns are known only once it executes.
 	auto Bind(const SqlStatement &statement) const -> Signature;
 
 	/// Resolves a table name and snapshots its description: where it resolved, its columns, and per-column facts.
@@ -1072,6 +1075,17 @@ public:
 	/// @throws Exception When the name resolves to nothing, to a view, or is ambiguous between a schema and an attached
 	/// database.
 	auto DescribeTable(const QualifiedName &name) const -> TableDescription;
+
+	/// Enables or disables profiling for the queries this connection runs from now on, which gathers the metrics
+	/// `GetQueryMetrics` reports. Profiling also prints every profile as the `enable_profiling` and `profiling_output`
+	/// options configure, by default to the standard output; set `enable_profiling` to `no_output` to only gather
+	/// metrics. Unstable API.
+	auto EnableProfiling(bool enabled = true) -> void;
+
+	/// Takes a snapshot of the metrics of the last query this connection finished. What it holds is decided by the
+	/// profiling configuration, e.g. `SET enable_profiling = 'no_output'`. Unstable API.
+	/// @throws Exception While a result on this connection is still live.
+	auto GetQueryMetrics() const -> QueryMetrics;
 
 	/// Prepares a statement into a handle that can be executed repeatedly, borrowing it rather than consuming it.
 	/// @param statement The statement to prepare.
@@ -1515,11 +1529,11 @@ public:
 	// kind they misread that type's parameters or throw, so check the kind first. Names and dictionary entries come
 	// back as owned strings.
 
-	/// The total number of digits a DECIMAL holds.
-	auto GetDecimalWidth() const -> uint8_t;
+	/// The total number of digits a DECIMAL holds; any `uint32_t`, widths above 38 are BIGNUM-backed.
+	auto GetDecimalWidth() const -> uint32_t;
 
 	/// The number of digits a DECIMAL keeps after the point.
-	auto GetDecimalScale() const -> uint8_t;
+	auto GetDecimalScale() const -> uint32_t;
 
 	/// How many entries an ENUM's dictionary holds.
 	auto GetEnumSize() const -> idx_t;
@@ -1565,8 +1579,8 @@ public:
 	/// @param index Member index in [0, GetUnionMemberCount()).
 	auto GetUnionMemberType(idx_t index) const -> LogicalType;
 
-	/// The integer type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the
-	/// width.
+	/// The type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the width:
+	/// SMALLINT, INTEGER, BIGINT or HUGEINT up to 38 digits, BIGNUM (`bignum_t` elements) beyond.
 	auto GetDecimalInternalTypeId() const -> LogicalTypeId;
 
 	/// The unsigned integer type an ENUM's dictionary indices are stored in, which is what its vector elements are;
@@ -1750,10 +1764,11 @@ struct list_entry_t {
 
 /// DECIMAL(WIDTH, SCALE): an exact number, kept as an integer of WIDTH digits with the point SCALE digits from the
 /// right. The width picks the storage integer, so DECIMAL(9, 2) and DECIMAL(18, 2) are different C++ types and their
-/// payloads are not interchangeable.
+/// payloads are not interchangeable. This covers the fixed-size decimals of up to 38 digits; a wider DECIMAL stores
+/// its digits as a `bignum_t`, see `LogicalType::GetDecimalInternalTypeId`.
 template <int8_t WIDTH, uint8_t SCALE>
 struct decimal_t {
-	static_assert(WIDTH >= 1 && WIDTH <= 38, "DECIMAL type width must be between 1 and 38");
+	static_assert(WIDTH >= 1 && WIDTH <= 38, "decimal_t covers fixed-size decimals, with a width between 1 and 38");
 	static_assert(SCALE <= WIDTH, "DECIMAL scale must be less than or equal to width");
 	using storage_type = std::conditional_t<
 	    (WIDTH <= 4), int16_t,
@@ -3162,15 +3177,16 @@ public:
 	~QueryResult() override;
 
 	/// The result's columns, their names and types, as one owned `Schema`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet, for
+	/// a statement that expands into several; step the result first.
 	auto GetSchema() const -> Schema;
 
 	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3252,16 +3268,16 @@ public:
 	/// copy. Available as soon as `QueryResult::GetSchema` would be: at once for most statements, after stepping for
 	/// one that expands into several, such as PIVOT.
 	/// @param out Caller-allocated; overwritten. The caller then owns it and releases it with `out.release(&out)`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first. `out` is left
-	/// released on any throw.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet;
+	/// step the result first. `out` is left released on any throw.
 	auto GetSchema(ArrowSchema &out) const -> void;
 
 	/// The shape of the result, so a caller can decide between reading arrays and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3549,6 +3565,58 @@ enum class OrderPreservation : uint8_t {
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Statistics
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The statistics of an expression or a column: what values it can produce. A function's stats callback reads the
+/// statistics of its arguments and narrows those of its result, and the engine uses them to simplify the query, e.g.
+/// folding `x IS NULL` to false when `x` cannot be NULL.
+///
+/// Every statistic states what can occur: `true` means a kind of value may be present, `false` guarantees it is
+/// absent. The engine relies on the guarantees, so claiming less than the data holds produces wrong query results.
+/// Borrowed: valid only for the duration of the callback that handed it out. Unstable API.
+class Stats final : public detail::Handle<Stats> {
+	friend detail::HandleFactory;
+
+public:
+	Stats(Stats &&) noexcept = default;
+	Stats &operator=(Stats &&) noexcept = default;
+	~Stats() override = default;
+
+	/// Whether a value can be NULL. False guarantees every value is non-NULL.
+	auto CanHaveNull() const -> bool;
+	/// Whether a value can be valid, i.e. non-NULL. False guarantees every value is NULL. When both this and
+	/// `CanHaveNull` are false, there are no values at all.
+	auto CanHaveValid() const -> bool;
+
+	/// Sets whether a value can be NULL. Setting false is a guarantee the engine relies on; setting true is always
+	/// safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveNull(bool value) -> void;
+	/// Sets whether a value can be valid, i.e. non-NULL. Setting false is a guarantee the engine relies on; setting
+	/// true is always safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveValid(bool value) -> void;
+
+	/// The statistics as a STRUCT value with one field per known statistic, the shape of the SQL function `stats()`:
+	/// `min` and `max` (values of the column's type), `has_null`, `has_no_null`, `approx_unique`, `child_stats` for
+	/// nested types, ... A field is absent when that statistic is unknown. Unstable API.
+	auto GetValue() const -> Value;
+
+	/// Narrows the statistics from a STRUCT value in the shape `GetValue` returns: a field that is set replaces that
+	/// statistic, a NULL or absent field leaves it unchanged. `{'min': 20, 'max': 30, 'has_null': false}` on an
+	/// INTEGER column reports exactly those bounds and the absence of NULLs. A bound is a value of the column's type,
+	/// or one that casts to it. Every statistic states what can occur: a bound that excludes a value the scan then
+	/// produces, or `has_null: false` for a column with NULLs, produces wrong query results. Unstable API.
+	/// @throws InvalidInputException When the value is not a STRUCT, a field does not exist for the type or does not
+	/// convert, or the statistics are read-only, such as those of an argument.
+	auto SetValue(const Value &value) -> void;
+
+private:
+	explicit Stats(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3571,6 +3639,7 @@ public:
 	class BindInput;
 	class InitInput;
 	class ExecInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound, before the arguments are cast to the parameter types.
 	/// Optional; required when the return type is ANY.
@@ -3582,6 +3651,9 @@ public:
 	using InitCallback = void (*)(InitInput &input);
 	/// Called for every batch of rows; must fill the result vector. Required.
 	using ExecCallback = void (*)(ExecInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	ScalarFunction(ScalarFunction &&) noexcept = default;
 	ScalarFunction &operator=(ScalarFunction &&) noexcept = default;
@@ -3633,6 +3705,7 @@ public:
 	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
 	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> ScalarFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> ScalarFunction &;
@@ -3655,6 +3728,7 @@ private:
 	BindCallback bind_callback = nullptr;
 	InitCallback init_callback = nullptr;
 	ExecCallback exec_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3820,6 +3894,56 @@ public:
 		void *GetInitDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. A callback that leaves them
+	/// unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3869,6 +3993,7 @@ public:
 	class CombineInput;
 	class FinalizeInput;
 	class DestroyInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
 	using BindCallback = void (*)(BindInput &input);
@@ -3884,6 +4009,9 @@ public:
 	using FinalizeCallback = void (*)(FinalizeInput &input);
 	/// Called to release resources a batch of states owns. Optional; must not fail.
 	using DestroyCallback = void (*)(DestroyInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	AggregateFunction(AggregateFunction &&) noexcept = default;
 	AggregateFunction &operator=(AggregateFunction &&) noexcept = default;
@@ -3937,6 +4065,7 @@ public:
 	auto SetCombineCallback(CombineCallback callback) & -> AggregateFunction &;
 	auto SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction &;
 	auto SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> AggregateFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> AggregateFunction &;
@@ -3966,6 +4095,7 @@ private:
 	CombineCallback combine_callback = nullptr;
 	FinalizeCallback finalize_callback = nullptr;
 	DestroyCallback destroy_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4227,6 +4357,57 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. They describe every result the
+	/// aggregate produces, including that of a group with no input rows, such as an ungrouped aggregate over an empty
+	/// table. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4371,6 +4552,8 @@ public:
 	class PartitioningInput;
 	class ClaimBatchInput;
 	class GetBindInfoInput;
+	class StatsInput;
+	class MetricsInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4414,6 +4597,32 @@ public:
 	/// identifiers, and exposes the options as the metadata of the reader of the file. May be called more than once
 	/// for the same bind data: only report what the bind already determined. Optional; unstable API.
 	using GetBindInfoCallback = void (*)(GetBindInfoInput &input);
+	/// Called while the query is optimized, once per declared column the query reads, to narrow that column's
+	/// statistics. Optional; without it the engine knows nothing about the columns. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
+	/// Called when the engine collects the metrics of the scan, possibly while the scan is still running, to report
+	/// what the scan did. Optional; unstable API.
+	using MetricsCallback = void (*)(MetricsInput &input);
+
+	/// A column a function can produce next to the columns it declares in bind: a query asks for it by name.
+	enum class VirtualColumn : uint8_t {
+		/// `file_row_number`, a BIGINT holding the position of the row within the file it was read from, counting
+		/// from 0. Produced by a function that reads a single file when it is wrapped in a `MultiFileFunction`.
+		FILE_ROW_NUMBER = 0,
+	};
+
+	/// The first column index that stands for a virtual column rather than a declared one. The index the inputs'
+	/// `GetColumnIndex` reports for a virtual column is this plus its value in `VirtualColumn`.
+	static constexpr idx_t VIRTUAL_COLUMN_START = static_cast<idx_t>(1) << 63;
+
+	/// Whether a column index reported by `GetColumnIndex` stands for a virtual column.
+	static auto IsVirtualColumn(idx_t column_index) -> bool {
+		return column_index >= VIRTUAL_COLUMN_START;
+	}
+
+	/// The virtual column a column index reported by `GetColumnIndex` stands for.
+	/// @throws InvalidInputException When the index stands for a declared column.
+	static auto GetVirtualColumn(idx_t column_index) -> VirtualColumn;
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -4474,12 +4683,22 @@ public:
 	auto SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction &;
 	/// Lets the function describe what a bound call reads: see `GetBindInfoCallback`. Unstable API.
 	auto SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction &;
+	/// Lets the function narrow the statistics of the columns it produces: see `StatsCallback`. Unstable API.
+	auto SetStatsCallback(StatsCallback callback) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
 	/// the init and exec inputs' `GetColumnIndex` says which declared column each vector stands for. Without it the
 	/// output chunk always holds every declared column, and the engine drops the unused ones itself.
 	auto SetProjectionPushdown(bool enable) & -> TableFunction &;
+
+	/// Declares that the function can produce a virtual column, which a query asks for by name. It then takes up a
+	/// vector of the exec callback's output chunk, whose column index (see `GetColumnIndex`) is
+	/// `VIRTUAL_COLUMN_START` plus the value of the column. Requires projection pushdown. Unstable API.
+	auto AddVirtualColumn(VirtualColumn column) & -> TableFunction &;
+
+	/// Lets the function report what the scan did: see `MetricsCallback`. Unstable API.
+	auto SetMetricsCallback(MetricsCallback callback) & -> TableFunction &;
 
 private:
 	explicit TableFunction(void *impl);
@@ -4498,6 +4717,8 @@ private:
 	PartitioningCallback partitioning_callback = nullptr;
 	ClaimBatchCallback claim_batch_callback = nullptr;
 	GetBindInfoCallback get_bind_info_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
+	MetricsCallback metrics_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4738,6 +4959,14 @@ public:
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
+		/// The global state set via `InitGlobalInput::SetGlobalState`, or nullptr when the scan has not been
+		/// initialized yet -- which is the case when a `MultiFileFunction` asks about a file it has not started on. The
+		/// state must be read in a thread-safe way.
+		template <class T>
+		auto TryGetGlobalState() const -> T * {
+			return static_cast<T *>(TryGetGlobalStateInternal());
+		}
+
 		/// The user data set via `TableFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -4762,6 +4991,7 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
+		void *TryGetGlobalStateInternal() const;
 		void *GetUserDataInternal() const;
 	};
 
@@ -4773,6 +5003,13 @@ public:
 	/// the engine as usual, so a callback that recognizes nothing can simply return. The optimizer may run the
 	/// callback more than once for the same query, each time with the predicates not yet accepted, and never with
 	/// none.
+	///
+	/// A function that also has projection pushdown is offered the predicates that apply to a single column of it
+	/// once more when a scan starts, just before the global init callback. That is how the callback of a function
+	/// wrapped in a `MultiFileFunction` sees them, since the optimizer only offers them to the wrapper; the bind data
+	/// is then the one of the file being scanned. The engine applies these predicates to the rows the function
+	/// produces itself, so the function may use them to skip what the query can never use (e.g. the parts of a file
+	/// whose statistics rule them out), and accepting one has no effect. Unstable API.
 	class FilterPushdownInput {
 		friend detail::HandleFactory;
 
@@ -4806,7 +5043,7 @@ public:
 		/// `Expression::GetColumnIndex` indexes.
 		auto GetColumnCount() const -> idx_t;
 		/// Resolves the index a column reference node reports to the declared column (in `BindInput::AddResultColumn`
-		/// order) it refers to.
+		/// order) it refers to, or to the index of a virtual column (see `IsVirtualColumn`).
 		/// @throws InvalidInputException When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
@@ -5058,6 +5295,99 @@ public:
 		Context context;
 
 		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The column statistics start out unknown, with every kind of value possible, and describe every value the scan
+	/// produces for the column. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Which declared column (in `BindInput::AddResultColumn` order) the statistics describe.
+		auto GetColumnIndex() const -> idx_t;
+
+		/// The statistics of the column, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the metrics callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	///
+	/// The callback runs when the engine collects the metrics of the scan, which can be while the scan is still
+	/// running, and possibly more than once: it adds up what it is told.
+	class MetricsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`, or nullptr when the scan has not been
+		/// initialized or set none. The scan can be running, so the state must be read in a thread-safe way.
+		template <class T>
+		auto GetGlobalState() const -> T * {
+			return static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// Reports an operator metric of the scan by its profiler name, e.g. "operator.row_groups_scanned" or
+		/// "operator.total_row_groups_to_scan". See `duckdb_v2_table_function_metrics_set` for the accepted names.
+		/// @param name The name of the metric.
+		/// @param value The value since the metrics were last collected ("operator.total_row_groups_to_scan": in all).
+		/// @throws InvalidInputException When the name is not a metric a table function can report.
+		auto SetMetric(std::string_view name, uint64_t value) -> void;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		MetricsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
 		void *GetUserDataInternal() const;
 	};
 };
@@ -6260,7 +6590,7 @@ enum class LogScope : uint8_t {
 /// Code of your own that receives DuckDB's log entries. Create one through a `Factory` of the database it will be
 /// registered in, give it a name and a write callback, then register it with `Instance::Register` or
 /// `Extension::Register`, which makes it available to the logging configuration under its name; once the
-/// configuration directs entries to it (currently with `SET logging_storage = '<name>'`), the write callback receives
+/// configuration directs entries to it (currently with `SET logging_sink = '<name>'`), the write callback receives
 /// them. A log sink only receives entries: they cannot be read back through `duckdb_logs`.
 ///
 /// Which entries a sink receives, and when and on which thread its callbacks run, are up to DuckDB: the callbacks must
@@ -6684,6 +7014,75 @@ public:
 
 private:
 	explicit ColumnDescription(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Query Metrics
+//----------------------------------------------------------------------------------------------------------------------
+
+/// An owned snapshot of the metrics of a query, taken by `Connection::GetQueryMetrics`: a tree whose root describes
+/// the query as a whole and whose other nodes describe its operators. Later queries do not update it. Which metrics
+/// are present, their names and the shape of the tree may change between versions. Unstable API.
+class QueryMetrics final : public detail::Handle<QueryMetrics> {
+	friend detail::HandleFactory;
+
+public:
+	QueryMetrics(QueryMetrics &&) noexcept = default;
+	QueryMetrics &operator=(QueryMetrics &&) noexcept = default;
+
+	~QueryMetrics() override;
+
+	/// The node describing the query as a whole.
+	/// @return A borrowed node, valid for as long as this snapshot is.
+	auto GetRoot() const -> QueryMetricsNode;
+
+private:
+	explicit QueryMetrics(void *impl);
+};
+
+/// One node of a `QueryMetrics` snapshot, carrying a set of named, numeric metrics. Borrowed, valid for as long as the
+/// snapshot is. Unstable API.
+class QueryMetricsNode final : public detail::Handle<QueryMetricsNode> {
+	friend detail::HandleFactory;
+
+public:
+	QueryMetricsNode(QueryMetricsNode &&) noexcept = default;
+	QueryMetricsNode &operator=(QueryMetricsNode &&) noexcept = default;
+
+	~QueryMetricsNode() override;
+
+	/// `QUERY` for the root node, the name of the operator, e.g. `TABLE_SCAN`, for the others.
+	/// @return A view borrowed from the snapshot.
+	auto GetName() const -> std::string_view;
+
+	/// How many children the node has.
+	auto GetChildCount() const -> idx_t;
+
+	/// One child of the node.
+	/// @param index Child index in [0, GetChildCount()).
+	/// @throws Exception When the index is out of range.
+	auto GetChild(idx_t index) const -> QueryMetricsNode;
+
+	/// How many metrics the node carries.
+	auto GetMetricCount() const -> idx_t;
+
+	/// The name of one metric, e.g. `query.total_time`. The order of the metrics is unspecified.
+	/// @param index Metric index in [0, GetMetricCount()).
+	/// @return A view borrowed from the snapshot.
+	/// @throws Exception When the index is out of range.
+	auto GetMetricName(idx_t index) const -> std::string_view;
+
+	/// The value of one metric, a number such as a UBIGINT count or a DOUBLE duration.
+	/// @param index Metric index in [0, GetMetricCount()).
+	/// @throws Exception When the index is out of range.
+	auto GetMetricValue(idx_t index) const -> Value;
+
+	/// Looks a metric up by its exact name.
+	/// @return Its value, or nothing when the node does not carry it.
+	auto GetMetric(std::string_view name) const -> std::optional<Value>;
+
+private:
+	explicit QueryMetricsNode(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------

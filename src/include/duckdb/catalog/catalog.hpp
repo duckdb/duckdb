@@ -47,6 +47,7 @@ struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
 struct MetadataBlockInfo;
+class SchemaScanFilters;
 
 class AttachedDatabase;
 class ClientContext;
@@ -245,10 +246,13 @@ public:
 	                                                                 const EntryLookupInfo &schema_lookup,
 	                                                                 OnEntryNotFound if_not_found) = 0;
 
-	//! Whether schema strings can denote nested paths as well as literal schema names.
+	//! Whether the catalog supports nested schema lookup, creation and dropping.
+	//! Also enables nested paths in string schema arguments. Literal dotted names do not require this capability.
 	virtual bool SupportsNestedSchemas() const {
 		return false;
 	}
+	//! Reject unsupported nested paths before invoking extension catalog methods.
+	DUCKDB_API void CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const;
 	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
 	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
 	                                          const string &entry_name, CatalogType type = CatalogType::TABLE_ENTRY,
@@ -301,6 +305,11 @@ public:
 	          OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
+	//! The schemas a system catalog scan (duckdb_tables, duckdb_views) visits in this catalog, given the filters
+	//! pushed down on the schema identity columns. Lists every schema and keeps those the filters accept. A catalog
+	//! may override this to avoid the listing; it must return every schema the filters accept and may return more.
+	DUCKDB_API virtual vector<reference<SchemaCatalogEntry>> GetSchemasForScan(ClientContext &context,
+	                                                                           const SchemaScanFilters &filters);
 
 	//! Gets the entry described by the (optionally catalog/schema-qualified) EntryLookupInfo. If the entry does not
 	//! exist behavior depends on OnEntryNotFound
@@ -517,6 +526,7 @@ protected:
 	AttachedDatabase &db;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
+	mutable mutex default_table_lock;
 	Identifier default_table;
 	Identifier default_table_schema;
 
@@ -535,6 +545,7 @@ private:
 	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
 	                                             OnEntryNotFound if_not_found);
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
+	CatalogEntryLookup TryLookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info);
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);
 	//! Looks the entry up within this catalog only, using the schema carried in the lookup_info. Does not resolve the

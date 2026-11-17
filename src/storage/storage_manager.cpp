@@ -4,27 +4,40 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/path.hpp"
 
@@ -50,9 +63,8 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 
 	switch (target_encryption_version) {
 	case EncryptionTypes::V0_1:
-		// storage version not explicitly set
+		// without an explicit storage version, new files get the default on creation and existing files keep theirs
 		if (storage_version == StorageVersion::INVALID && storage_version_user_provided.empty()) {
-			storage_version = StorageVersion::V1_5_0;
 			break;
 		}
 		// storage version set, but v1.4.0 =< storage < v1.5.0
@@ -75,12 +87,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 		break;
 
 	case EncryptionTypes::V0_0:
-		// we set this to V0 to V1.5.0 if no explicit storage version provided
-		if (storage_version == StorageVersion::INVALID && storage_version_user_provided.empty()) {
-			storage_version = StorageVersion::V1_5_0;
-			break;
-		}
-		// if storage version is provided, we do nothing
+		// without an explicit storage version, new files get the default on creation and existing files keep theirs
 		break;
 	default:
 		throw InvalidConfigurationException("Encryption version is not set");
@@ -89,7 +96,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	encryption_version = target_encryption_version;
 }
 
-void StorageOptions::Initialize(unordered_map<string, Value> &options) {
+void StorageOptions::Initialize(Context &context, unordered_map<string, Value> &options) {
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
@@ -105,7 +112,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			} else if (entry.second.GetValue<string>().empty()) {
 				throw BinderException("Not a valid key. A key cannot be empty");
 			}
-			user_key = make_shared_ptr<string>(StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB)));
+			user_key = make_shared_ptr<string>(StringValue::Get(entry.second.CastAs(context, LogicalType::BLOB)));
 			block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			encryption = true;
 		} else if (entry.first == "encryption_cipher") {
@@ -121,7 +128,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			storage_version_user_provided = entry.second.ToString();
 			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
 		} else if (entry.first == "compress") {
-			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
+			if (entry.second.CastAs(context, LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
 			} else {
 				compress_in_memory = CompressInMemory::DO_NOT_COMPRESS;
@@ -142,7 +149,11 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    entry.second.ToString());
 			}
 		} else if (entry.first == "mmap_reserve_size") {
-			mmap_reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			const auto reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			if (reserve_size > NumericCast<idx_t>(NumericLimits<int64_t>::Maximum())) {
+				throw BinderException("MMAP_RESERVE_SIZE \"%s\" is out of range", entry.second.ToString());
+			}
+			mmap_reserve_size = reserve_size;
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -165,7 +176,8 @@ StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOption
 	auto &fs = FileSystem::Get(db);
 	path = fs.ExpandPath(path);
 
-	storage_options.Initialize(options.options);
+	auto &services = db.GetDatabase().GetContext();
+	storage_options.Initialize(services, options.options);
 }
 
 StorageManager::~StorageManager() {
@@ -182,10 +194,6 @@ DatabaseInstance &StorageManager::GetDatabase() {
 	return db.GetDatabase();
 }
 
-ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
-	return context.db->GetObjectCache();
-}
-
 idx_t StorageManager::GetWALSize() {
 	return wal_size;
 }
@@ -196,6 +204,14 @@ void StorageManager::AddWALSize(idx_t size) {
 
 void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
+}
+
+void StorageManager::MarkBufferedIndexReplays() {
+	buffered_index_replays = true;
+}
+
+bool StorageManager::HasBufferedIndexReplays() const {
+	return buffered_index_replays;
 }
 
 idx_t StorageManager::GetWALEntriesCount() const {
@@ -243,6 +259,196 @@ bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, Storage
 	return true;
 }
 
+//! The argument types recorded in the signature of an AGGREGATE_STATE type (see EncodeStateParameters)
+static vector<LogicalType> AggregateStateArgumentTypes(const LogicalType &state_type) {
+	vector<LogicalType> result;
+	auto ext_info = state_type.GetExtensionInfo();
+	if (!ext_info) {
+		return result;
+	}
+	auto entry = ext_info->properties.find("parameters");
+	if (entry == ext_info->properties.end() || entry->second.IsNull() ||
+	    entry->second.type().id() != LogicalTypeId::LIST) {
+		return result;
+	}
+	for (auto &parameter : ListValue::GetChildren(entry->second)) {
+		if (parameter.IsNull()) {
+			continue;
+		}
+		if (parameter.type().id() == LogicalTypeId::TYPE) {
+			result.push_back(TypeValue::GetType(parameter));
+		} else if (parameter.type().id() == LogicalTypeId::STRUCT) {
+			// a (type, value) pair of a parameter bound to a constant
+			auto &children = StructValue::GetChildren(parameter);
+			if (!children.empty() && !children[0].IsNull() && children[0].type().id() == LogicalTypeId::TYPE) {
+				result.push_back(TypeValue::GetType(children[0]));
+			}
+		}
+	}
+	return result;
+}
+
+static string UnsupportedAtStorageVersion(AttachedDatabase &db, StorageVersion storage_version, const string &what,
+                                          StorageVersion required) {
+	return StringUtil::Format("%s are not supported in storage versions prior to %s (database %s is using storage "
+	                          "version %s)",
+	                          what, GetStorageVersionName(required, false), db.GetName(),
+	                          GetStorageVersionName(storage_version, false));
+}
+
+static string WideDecimalUnsupportedReason(AttachedDatabase &db, StorageVersion storage_version,
+                                           const string &subject) {
+	auto what = StringUtil::Format("DECIMAL %s wider than %d digits", subject, Decimal::MAX_WIDTH_INT128);
+	return UnsupportedAtStorageVersion(db, storage_version, what, Decimal::WIDE_VERSION_ADDED);
+}
+
+bool StorageManager::ContainsWideDecimal(const LogicalType &logical_type) {
+	return TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			for (auto &argument_type : AggregateStateArgumentTypes(type)) {
+				if (ContainsWideDecimal(argument_type)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		return type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type));
+	});
+}
+
+string StorageManager::GetUnsupportedPriorToVersionReason(const string &what, StorageVersion required) const {
+	D_ASSERT(IsPriorToVersion(required, GetStorageVersion()));
+	return UnsupportedAtStorageVersion(db, GetStorageVersion(), what, required);
+}
+
+string StorageManager::GetUnsupportedTypeReason(const LogicalType &logical_type) const {
+	const auto storage_version = GetStorageVersion();
+	auto unsupported = [&](const string &what, StorageVersion required) {
+		return UnsupportedAtStorageVersion(db, storage_version, what, required);
+	};
+	string reason;
+	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			if (storage_version < StorageVersion::V2_0_0) {
+				reason = unsupported("Aggregate state columns", StorageVersion::V2_0_0);
+				return true;
+			}
+			// the argument types of the aggregate are stored with the state
+			for (auto &argument_type : AggregateStateArgumentTypes(type)) {
+				reason = GetUnsupportedTypeReason(argument_type);
+				if (!reason.empty()) {
+					return true;
+				}
+			}
+			return false;
+		}
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			if (storage_version < StorageVersion::V2_0_0 && StructType::GetChildCount(type) == 0) {
+				reason = unsupported("Empty STRUCT columns", StorageVersion::V2_0_0);
+			}
+			break;
+		case LogicalTypeId::TUPLE:
+			// TUPLEs are stored as unnamed STRUCTs, which older engines reject; the unnamed STRUCTs of an older file
+			// are deserialized as TUPLE while loading and must stay attachable
+			if (storage_version < StorageVersion::V2_0_0 && IsLoaded()) {
+				reason = unsupported("TUPLE columns", StorageVersion::V2_0_0);
+			}
+			break;
+		case LogicalTypeId::DECIMAL:
+			// decimals wider than 38 digits are stored as BIGNUM blobs, which older engines cannot read
+			if (storage_version < Decimal::WIDE_VERSION_ADDED && Decimal::IsWide(DecimalType::GetWidth(type))) {
+				reason = WideDecimalUnsupportedReason(db, storage_version, "columns");
+			}
+			break;
+		case LogicalTypeId::VARIANT:
+			if (storage_version < Variant::VERSION_ADDED) {
+				reason = unsupported("VARIANT columns", Variant::VERSION_ADDED);
+			}
+			break;
+		case LogicalTypeId::GEOMETRY:
+			if (GeoType::HasCRS(type) && storage_version < Geometry::VERSION_ADDED) {
+				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				// TODO: Turn this into a hard error
+				auto &logger = Logger::Get(db.GetDatabase());
+				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
+				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
+				                "storage versions prior "
+				                "to %s (database %s is using storage version %s). CRS will not be persisted.",
+				                required, db.GetName(), current);
+			}
+			break;
+		case LogicalTypeId::GEOGRAPHY:
+			if (storage_version < Geometry::GEOGRAPHY_VERSION_ADDED) {
+				reason = unsupported("GEOGRAPHY columns", Geometry::GEOGRAPHY_VERSION_ADDED);
+			}
+			break;
+		default:
+			break;
+		}
+		return !reason.empty();
+	});
+	return reason;
+}
+
+void StorageManager::CheckTypeIsSupported(const LogicalType &type) const {
+	auto reason = GetUnsupportedTypeReason(type);
+	if (!reason.empty()) {
+		throw InvalidInputException(reason);
+	}
+}
+
+string StorageManager::GetUnsupportedDecimalWidthReason(const LogicalType &type, const string &subject) const {
+	const auto storage_version = GetStorageVersion();
+	if (storage_version >= Decimal::WIDE_VERSION_ADDED || !ContainsWideDecimal(type)) {
+		return string();
+	}
+	return WideDecimalUnsupportedReason(db, storage_version, subject);
+}
+
+void StorageManager::CheckDecimalWidthIsSupported(const LogicalType &type) const {
+	auto reason = GetUnsupportedDecimalWidthReason(type);
+	if (!reason.empty()) {
+		throw InvalidInputException(reason);
+	}
+}
+
+void StorageManager::CheckExpressionDecimalsAreSupported(const ParsedExpression &expression) const {
+	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
+		// from v2.0.0 on a CAST stores its target as a type expression, which the reading engine binds itself
+		return;
+	}
+	// a work list instead of recursion, the expression tree is user data
+	vector<reference<const ParsedExpression>> work;
+	work.emplace_back(expression);
+	while (!work.empty()) {
+		auto &expr = work.back().get();
+		work.pop_back();
+		switch (expr.GetExpressionClass()) {
+		case ExpressionClass::CAST:
+			CheckDecimalWidthIsSupported(UnboundType::TryDefaultBind(expr.Cast<CastExpression>().TargetType()));
+			break;
+		case ExpressionClass::SUBQUERY:
+			CheckQueryDecimalsAreSupported(*expr.Cast<SubqueryExpression>().Subquery()->node);
+			break;
+		default:
+			break;
+		}
+		ParsedExpressionIterator::EnumerateChildren(expr,
+		                                            [&](const ParsedExpression &child) { work.emplace_back(child); });
+	}
+}
+
+void StorageManager::CheckQueryDecimalsAreSupported(QueryNode &node) const {
+	if (GetStorageVersion() >= StorageVersion::V2_0_0) {
+		return;
+	}
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { CheckExpressionDecimalsAreSupported(*child); });
+}
+
 bool StorageManager::HasWAL() const {
 	if (InMemory() || read_only || !load_complete) {
 		return false;
@@ -253,21 +459,28 @@ bool StorageManager::HasWAL() const {
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
                                         ActiveCheckpointWrapper &active_checkpoint) {
 	unique_lock<mutex> guard;
-	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
-	if (!options.wal_lock) {
-		// not holding the WAL lock yet - grab it
-		guard = GetWALLock();
+	// Lock ordering: commit lock -> transaction lock (in ActiveCheckpointWrapper::Begin)
+	if (!options.commit_lock) {
+		// not holding the commit lock yet - grab it
+		guard = GetCommitLock();
 	}
-	if (active_checkpoint.HasCheckpointContext()) {
-		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
-		// The start time of this transaction defines the visibility for checkpointing, any new commits are written
-		// to the next WAL.
-		active_checkpoint.GetCheckpointTransaction(options);
-	} else {
-		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-		options.checkpoint_id = transaction_manager.NextCheckpointId();
-		options.visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
+	// a commit that failed while we waited for the commit lock may have invalidated the database
+	auto invalidation_error = db.InvalidationError("checkpoint");
+	if (invalidation_error.HasError()) {
+		invalidation_error.Throw();
 	}
+	// drain under the commit lock before the checkpoint transaction starts: its snapshot would
+	// otherwise be bounded below commits whose WAL this checkpoint deletes
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	transaction_manager.WaitForDurability();
+	if (options.type == CheckpointType::FULL_CHECKPOINT &&
+	    transaction_manager.GetLastCommit() >= transaction_manager.LowestVisibilityBound()) {
+		// an active bounded snapshot still needs state a full checkpoint would vacuum away
+		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+	}
+
+	// While holding the commit lock: any new commits are written to the next WAL
+	active_checkpoint.Begin(options);
 
 	D_ASSERT(options.checkpoint_id.IsValid());
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.checkpoint_id.GetIndex());
@@ -275,10 +488,6 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 		return false;
 	}
 	// start the checkpoint process around the WAL
-	if (GetWALSize() == 0) {
-		// no WAL - we don't need to do anything here
-		return false;
-	}
 	// verify the main WAL is the active WAL currently
 	if (wal->GetPath() != wal_path) {
 		throw InternalException("Current WAL path \"%s\" does not match base WAL path \"%s\" in WALStartCheckpoint",
@@ -323,6 +532,8 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	}
 
 	// we have had writes to the checkpoint WAL - we need to override our WAL with the checkpoint WAL
+	// commits to the checkpoint WAL may still be syncing: drain before destroying the WAL object
+	DuckTransactionManager::Get(db).WaitForDurability();
 	// first close the WAL writer
 	auto checkpoint_wal_path = wal->GetPath();
 	wal.reset();
@@ -337,8 +548,8 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
-unique_lock<mutex> StorageManager::GetWALLock() {
-	return unique_lock<mutex>(wal_lock);
+unique_lock<mutex> StorageManager::GetCommitLock() {
+	return unique_lock<mutex>(commit_lock);
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
@@ -440,7 +651,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	}
 	options.io_mode = resolved_io_mode;
 	options.mmap_reserve_size = storage_options.mmap_reserve_size;
-	options.debug_initialize = config.options.debug_initialize;
+	options.debug_initialize = Settings::Get<DebugInitializeSetting>(config);
 	options.storage_version = storage_options.storage_version;
 
 	if (storage_options.encryption) {
@@ -499,6 +710,11 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		if (options.storage_version == StorageVersion::INVALID) {
 			// when creating a new database we default to the serialization version specified in the config
 			options.storage_version = config.options.storage_compatibility.storage_version;
+			if (storage_options.encryption &&
+			    StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, options.storage_version)) {
+				// the default encryption format needs at least v1.5.0
+				options.storage_version = StorageVersion::V1_5_0;
+			}
 		}
 
 		// Initialize the block manager before creating a new database.
@@ -561,9 +777,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		unique_ptr<MetricsTimer> timer = nullptr;
 
 		// Start timing the storage load step.
-		auto client_context = context.GetClientContext();
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
+		auto profiler = Context::TryGetQueryProfiler(context.GetContext());
+		if (profiler) {
 			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachLoadStorageLatency>());
 		}
 
@@ -577,8 +792,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 
 		// Start timing the WAL replay step.
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
+		if (profiler) {
 			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachReplayWALLatency>());
 		}
 
@@ -622,7 +836,7 @@ public:
 	//! Revert the commit
 	void RevertCommit() override;
 	// Make the commit persistent
-	void FlushCommit() override;
+	idx_t FlushCommit(transaction_t commit_id, bool sync_now) override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -684,9 +898,9 @@ void SingleFileStorageCommitState::RevertCommit() {
 	state = WALCommitState::TRUNCATED;
 }
 
-void SingleFileStorageCommitState::FlushCommit() {
+idx_t SingleFileStorageCommitState::FlushCommit(transaction_t commit_id, bool sync_now) {
 	if (state != WALCommitState::IN_PROGRESS) {
-		return;
+		return 0;
 	}
 
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
@@ -695,15 +909,32 @@ void SingleFileStorageCommitState::FlushCommit() {
 		auto &writer = wal.Initialize();
 		writer.Sync();
 		storage.SetWALSize(writer.GetFileSize());
-		ValidChecker::Invalidate(storage.GetDatabase(), "Simulated crash before WAL_FLUSH write");
-		ValidChecker::Invalidate(storage.GetAttached(), "Simulated crash before WAL_FLUSH write");
+		storage.GetAttached().Invalidate("of a simulated crash", "Simulated crash before WAL_FLUSH write");
 		// Prevent `RevertCommit` from truncating the WAL so the torn records are kept for crash recovery
 		state = WALCommitState::FLUSHED;
 		throw FatalException("Simulated crash before WAL_FLUSH write");
 	}
 
-	wal.Flush();
+	idx_t wal_sync_offset = 0;
+	if (sync_now) {
+		wal.Flush();
+	} else {
+		// only the marker is written here: the sync happens once the locks are released
+		wal_sync_offset = wal.FlushMarker();
+	}
 	state = WALCommitState::FLUSHED;
+	// checkpoints whose bound is past the commit include the blocks of its optimistically written row groups
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsCommitted(block_id, commit_id);
+				}
+			}
+		}
+	}
+	return wal_sync_offset;
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
@@ -750,15 +981,126 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
-                                                                              CheckpointOptions options) {
+unique_ptr<CheckpointWriter>
+SingleFileStorageManager::CreateCheckpointWriter(QueryContext context, CheckpointOptions options,
+                                                 optional_ptr<ClientContext> checkpoint_context) {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options, checkpoint_context);
 	}
-	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
+	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options, checkpoint_context);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
+static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
+	vector<reference<DuckTableEntry>> tables;
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	auto bound = VisibilityBound::AllCommitted();
+	catalog.ScanSchemas(bound, [&](DuckSchemaEntry &schema) {
+		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<DuckTableEntry>());
+			}
+		});
+	});
+	return tables;
+}
+
+static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
+	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
+	vector<reference<DuckTableEntry>> result;
+	for (auto &table : GetCommittedTables(db)) {
+		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
+			result.push_back(table);
+		}
+	}
+	return result;
+}
+
+static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
+	try {
+		info.BindIndexes(context);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+			throw;
+		}
+		return error;
+	}
+	return ErrorData();
+}
+
+static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) {
+	for (auto &table : tables) {
+		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SingleFileStorageManager::BindIndexesForCheckpoint(optional_ptr<ClientContext> checkpoint_context,
+                                                        bool explicit_checkpoint) {
+	// Explicit checkpoints also bind indexes without buffered replays, so that their tables can be vacuumed.
+	if (!buffered_index_replays && !explicit_checkpoint) {
+		return true;
+	}
+	auto tables = GetTablesWithUnboundIndexes(db);
+	if (tables.empty()) {
+		buffered_index_replays = false;
+		return true;
+	}
+
+	// Shutdown and DETACH do not bind.
+	if (!checkpoint_context) {
+		buffered_index_replays = HasBufferedReplays(tables);
+		return !buffered_index_replays;
+	}
+
+	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+	if (checkpoint_sleep_ms > 0) {
+		ThreadUtil::SleepMs(checkpoint_sleep_ms);
+	}
+
+	// Read-only: a concurrent FORCE CHECKPOINT holds start_transaction_lock while waiting for this checkpoint.
+	auto &transaction = checkpoint_context->transaction;
+	transaction.BeginTransaction();
+	transaction.SetReadOnly();
+
+	// Indexes with buffered replays must be bound, otherwise the checkpoint would lose these operations.
+	ErrorData failure;
+	string failed_table;
+	for (auto &table : tables) {
+		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		if (!explicit_checkpoint && !info.GetIndexes().HasBufferedReplays()) {
+			continue;
+		}
+		auto error = TryBindIndexes(info, *checkpoint_context);
+		// A failed bind only matters if it leaves buffered replays behind.
+		if (error.HasError() && info.GetIndexes().HasBufferedReplays()) {
+			failure = std::move(error);
+			failed_table = info.GetTableName().GetIdentifierName();
+			break;
+		}
+	}
+	// End the bind transaction: the checkpoint transaction runs on the same connection.
+	transaction.Rollback(nullptr);
+
+	if (failure.HasError()) {
+		auto message = StringUtil::Format("an index on table \"%s\" has buffered operations and cannot be bound: %s",
+		                                  failed_table, failure.RawMessage());
+		if (explicit_checkpoint) {
+			throw Exception(failure.Type(), "Cannot CHECKPOINT: " + message);
+		}
+		// FIXME: every commit that triggers an automatic checkpoint retries the bind until it succeeds
+		DUCKDB_LOG_WARNING(db.GetDatabase(), "Skipped the checkpoint of database %s and kept its write-ahead log: %s",
+		                   db.GetName(), message);
+		return false;
+	}
+	buffered_index_replays = false;
+	return true;
+}
+
+void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options,
+                                                optional_ptr<ClientContext> client_context) {
 	if (read_only || !load_complete) {
 		return;
 	}
@@ -783,28 +1125,42 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	auto &config = DBConfig::Get(db);
 	// We only need to checkpoint if there is anything in the WAL.
 	auto wal_size = GetWALSize();
-	if (wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
+	auto should_checkpoint = wal_size > 0 || Settings::Get<DebugForceCheckpointSetting>(config) ||
+	                         options.action == CheckpointAction::ALWAYS_CHECKPOINT;
+	// Shared by the index binds before the checkpoint and by the checkpoint transaction.
+	unique_ptr<Connection> checkpoint_connection;
+	optional_ptr<ClientContext> checkpoint_context;
+	if (should_checkpoint && Context::TryGetClientContext(context.GetContext())) {
+		checkpoint_connection = make_uniq<Connection>(Connection::CreateInternal(db.GetDatabase()));
+		checkpoint_context = checkpoint_connection->context.get();
+	}
+	// Bind before the checkpoint starts: a failure after that invalidates the database.
+	if (should_checkpoint && !BindIndexesForCheckpoint(checkpoint_context, client_context != nullptr)) {
+		should_checkpoint = false;
+	}
+
+	if (should_checkpoint) {
 		try {
 			// Start timing the checkpoint.
-			auto client_context = context.GetClientContext();
+			auto profiler = Context::TryGetQueryProfiler(context.GetContext());
 			MetricsTimer timer;
-			if (client_context) {
-				timer = client_context->client_data->profiler->StartTimer<MetricStorageCheckpointLatency>();
+			if (profiler) {
+				timer = profiler->StartTimer<MetricStorageCheckpointLatency>();
 			}
 
 			// Write the checkpoint.
-			auto checkpointer = CreateCheckpointWriter(context, options);
+			auto checkpointer = CreateCheckpointWriter(context, options, checkpoint_context);
 			checkpointer->CreateCheckpoint();
 			timer.EndTimer();
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			if (db.IsInitialDatabase()) {
+			if (!db.SupportsScopedInvalidation()) {
 				ValidChecker::Invalidate(db.GetDatabase(), error.RawMessage());
 				throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 			}
 			// A non-initial database can be detached and reattached, so scope invalidation to this db.
-			db.Invalidate(error.RawMessage());
+			db.Invalidate("checkpointing failed", error.RawMessage());
 			throw IOException("Checkpoint failed for database %s. The database has been invalidated. Original "
 			                  "error: %s",
 			                  db.GetName(), error.RawMessage());
@@ -820,26 +1176,8 @@ void SingleFileStorageManager::Destroy() {
 	if (!load_complete) {
 		return;
 	}
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
-	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
-
-	vector<reference<DuckTableEntry>> tables;
-	for (auto &schema : schemas) {
-		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<DuckTableEntry>());
-			}
-		});
-	}
-
-	for (auto &table : tables) {
-		auto &data_table = table.get().GetStorage();
-		data_table.Destroy();
+	for (auto &table : GetCommittedTables(db)) {
+		table.get().GetStorage().Destroy();
 	}
 }
 

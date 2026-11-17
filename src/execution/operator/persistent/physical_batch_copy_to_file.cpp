@@ -87,8 +87,8 @@ public:
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), initialized(false),
-	      rows_copied(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), rows_copied(0),
+	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
@@ -98,8 +98,7 @@ public:
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
 	mutex flush_lock;
-	//! Whether or not the copy has been initialized
-	atomic<bool> initialized;
+	atomic<bool> initialized {false};
 	//! The total number of rows copied to the file
 	atomic<idx_t> rows_copied;
 	//! Global copy state
@@ -122,26 +121,28 @@ public:
 	unique_ptr<CopyToFileInfo> written_file_info;
 
 	void Initialize(ClientContext &context, const PhysicalBatchCopyToFile &op) {
-		if (initialized) {
+		if (initialized.load(std::memory_order_acquire)) {
 			return;
 		}
 		lock_guard<mutex> guard(lock);
-		if (initialized) {
+		if (initialized.load(std::memory_order_relaxed)) {
 			return;
 		}
-		// initialize writing to the file
 		output_lifecycle.RegisterFile(op.file_path);
-		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
-			op.function.initialize_operator(*global_state, op);
+			op.function.initialize_operator(*new_global_state, op);
 		}
-		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
-			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
-			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
-			                                           *written_file_info->file_stats);
+		unique_ptr<CopyToFileInfo> new_written_file_info;
+		if (GetCopyFunctionBaseReturnType(op.return_type) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+			new_written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
+			new_written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *new_global_state,
+			                                           *new_written_file_info->file_stats);
 		}
-		initialized = true;
+		global_state = std::move(new_global_state);
+		written_file_info = std::move(new_written_file_info);
+		initialized.store(true, std::memory_order_release);
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage,
@@ -710,7 +711,8 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
                                                           OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
-	switch (return_type) {
+	auto return_column_types = CopyFunctionReturnsColumnTypes(return_type);
+	switch (GetCopyFunctionBaseReturnType(return_type)) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
@@ -726,7 +728,10 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
 		if (g.written_file_info) {
 			g.written_file_info->file_path = std::move(fp);
-			PhysicalCopyToFile::ReturnStatistics(chunk, *g.written_file_info);
+			PhysicalCopyToFile::ReturnStatistics(context.client.GetContext(), chunk, *g.written_file_info);
+		} else if (return_column_types) {
+			// WRITE_EMPTY_FILE false writes no file without rows
+			PhysicalCopyToFile::ReturnNoFileStatistics(chunk);
 		}
 		break;
 	}
@@ -734,6 +739,9 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	if (return_column_types) {
+		PhysicalCopyToFile::ReturnColumnTypes(chunk, query_names, query_types);
+	}
 	return SourceResultType::FINISHED;
 }
 

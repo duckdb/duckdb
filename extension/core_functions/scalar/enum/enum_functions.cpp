@@ -21,16 +21,22 @@ static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &r
 }
 
 static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto types = input.GetTypes();
-	D_ASSERT(types.size() == 1);
-	auto enum_size = EnumType::GetSize(types[0]);
-	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
-	vector<Value> enum_values;
-	for (idx_t i = 0; i < enum_size; i++) {
-		enum_values.emplace_back(enum_vector.GetValue(i));
+	D_ASSERT(input.ColumnCount() == 1);
+	auto &enum_type = input.data[0].GetType();
+	auto &enum_vector = EnumType::GetValuesInsertOrder(enum_type);
+	auto enum_strings = enum_vector.Values<string_t>();
+	const auto enum_size = EnumType::GetSize(enum_type);
+
+	// every row gets the same list: write the enum's values into the result once and make it a constant, instead of
+	// materializing them as Values (three copies of the enum per call, dozens of bytes per value)
+	{
+		auto writer = FlatVector::Writer<VectorListType<string_t>>(result, 1);
+		idx_t enum_idx = 0;
+		for (auto &child_writer : writer.WriteList(enum_size)) {
+			child_writer.WriteValue(enum_strings[enum_idx++].GetValue());
+		}
 	}
-	auto val = Value::LIST(LogicalType::VARCHAR, enum_values);
-	result.Reference(val, count_t(input.size()));
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }
 
 static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {

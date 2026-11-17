@@ -1,4 +1,5 @@
 #include "column_writer.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <cmath>
 #include <limits>
@@ -6,6 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "duckdb/common/types/interval_no_normalize.hpp"
 #include "parquet_writer.hpp"
 #include "writer/array_column_writer.hpp"
 #include "writer/boolean_column_writer.hpp"
@@ -116,6 +118,19 @@ optional_ptr<GeometryStatsData> ColumnWriterStatistics::GetGeoStats() {
 
 void ColumnWriterStatistics::WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats) {
 	D_ASSERT(false); // this should never be called
+}
+
+void ColumnWriterStatistics::Merge(const ColumnWriterStatistics &other) {
+	// an accumulator that tracks statistics must fold them in, or the column chunk statistics would be lost
+	D_ASSERT(!HasStats());
+}
+
+int ColumnWriterStatistics::CompareMin(const ColumnWriterStatistics &other) const {
+	return 0;
+}
+
+int ColumnWriterStatistics::CompareMax(const ColumnWriterStatistics &other) const {
+	return 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -539,6 +554,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), path_in_schema);
 		case PhysicalType::INT64:
 			return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), path_in_schema);
+		case PhysicalType::VARCHAR:
+			// wide decimal stored as a BIGNUM blob
+			return make_uniq<WideDecimalColumnWriter>(writer, std::move(schema), path_in_schema);
 		default:
 			return make_uniq<FixedDecimalColumnWriter>(writer, std::move(schema), path_in_schema);
 		}
@@ -548,6 +566,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	case LogicalTypeId::GEOMETRY:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(writer, std::move(schema),
 		                                                                                    path_in_schema);
+	case LogicalTypeId::GEOGRAPHY:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeographyOperator>>(writer, std::move(schema),
+		                                                                                     path_in_schema);
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(writer, std::move(schema),
 		                                                                                  path_in_schema);
@@ -555,7 +576,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<hugeint_t, ParquetUUIDTargetType, ParquetUUIDOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<StandardColumnWriter<interval_t, ParquetIntervalTargetType, ParquetIntervalOperator>>(
+		return make_uniq<
+		    StandardColumnWriter<interval_no_normalize, ParquetIntervalTargetType, ParquetIntervalOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, std::move(schema), path_in_schema);

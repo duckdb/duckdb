@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -111,13 +112,19 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	}
 
 	auto type_name = args.front().second.GetValue<string>();
-	auto qualified_name = QualifiedName::Parse(type_name);
+	QualifiedName qualified_name;
+	string error;
+	if (!QualifiedName::TryParse(type_name, qualified_name, error)) {
+		throw ParserException(error);
+	}
 
 	auto unbound_type =
 	    LogicalType::UNBOUND(make_uniq<TypeExpression>(std::move(qualified_name), std::move(type_args)));
 
-	// Bind the unbound type
+	// Bind the unbound type within the decimal width of the expression
 	auto binder = Binder::CreateBinder(input.context);
+	const auto decimal_width_limit = input.GetDecimalWidthLimit();
+	binder->SetDecimalWidthLimit(&decimal_width_limit);
 	binder->BindLogicalType(unbound_type);
 	return make_uniq<BoundConstantExpression>(Value::TYPE(unbound_type));
 }

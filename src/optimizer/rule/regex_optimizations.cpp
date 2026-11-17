@@ -164,7 +164,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
                                                     bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
-	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
+	D_ASSERT(root.GetChildren().size() == 2 || root.GetChildren().size() == 3);
 	for (idx_t i = 0; i < 2; i++) {
 		const auto &type = root.GetChildren()[i]->GetReturnType();
 		if (type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(type).empty()) {
@@ -173,7 +173,10 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 	auto regexp_bind_data = root.BindInfo().get()->Cast<RegexpMatchesBindData>();
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	Value constant_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, constant_value)) {
+		return nullptr;
+	}
 	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
@@ -205,9 +208,9 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
-		if (root.GetChildrenMutable().size() == 3) {
+		if (root.GetChildren().size() == 3) {
 			root.GetChildrenMutable().pop_back();
-			D_ASSERT(root.GetChildrenMutable().size() == 2);
+			D_ASSERT(root.GetChildren().size() == 2);
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
@@ -227,9 +230,9 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	// if regexp had options, remove them so the new Like Expression can be matched for other optimizers.
-	if (root.GetChildrenMutable().size() == 3) {
+	if (root.GetChildren().size() == 3) {
 		root.GetChildrenMutable().pop_back();
-		D_ASSERT(root.GetChildrenMutable().size() == 2);
+		D_ASSERT(root.GetChildren().size() == 2);
 	}
 
 	auto like_expression = BindBuiltinScalarFunction(GetContext(), LikeFun::Name, std::move(root.GetChildrenMutable()));
@@ -303,7 +306,7 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 	}
 
 	string options_str = "k";
-	if (root.GetChildrenMutable().size() == 4) {
+	if (root.GetChildren().size() == 4) {
 		auto &options_const = root.GetChildrenMutable()[3]->Cast<BoundConstantExpression>();
 		if (options_const.GetValue().IsNull() || options_const.GetValue().type().id() != LogicalTypeId::VARCHAR) {
 			return nullptr;

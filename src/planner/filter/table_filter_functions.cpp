@@ -38,10 +38,12 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
 	static constexpr float BF_THRESHOLD = 0.5f;
 	static constexpr float PRF_THRESHOLD = 0.5f;
+	static constexpr float IN_THRESHOLD = 0.5f;
 
 	static constexpr idx_t MIN_MAX_CHECK_N = 6;
 	static constexpr idx_t BF_CHECK_N = 6;
 	static constexpr idx_t PRF_CHECK_N = 6;
+	static constexpr idx_t IN_CHECK_N = 6;
 
 	switch (type) {
 	case SelectivityOptionalFilterType::MIN_MAX:
@@ -55,6 +57,10 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	case SelectivityOptionalFilterType::PRF:
 		selectivity_threshold = PRF_THRESHOLD;
 		n_vectors_to_check = PRF_CHECK_N;
+		return;
+	case SelectivityOptionalFilterType::IN_FILTER:
+		selectivity_threshold = IN_THRESHOLD;
+		n_vectors_to_check = IN_CHECK_N;
 		return;
 	default:
 		throw NotImplementedException("GetThresholdAndVectorsToCheck");
@@ -118,7 +124,8 @@ void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<Fun
 unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	auto key_type = function.GetArguments().empty() ? LogicalType::ANY : function.GetArguments()[0];
 	if (function.GetName() == BloomFilterScalarFun::NAME) {
-		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
+		return make_uniq<BloomFilterFunctionData>(shared_ptr<const BloomFilter>(), false, string(), key_type, 0.0f,
+		                                          idx_t(0));
 	}
 	if (function.GetName() == PrefixRangeScalarFun::NAME) {
 		return make_uniq<PrefixRangeFunctionData>(nullptr, true, string(), key_type, 0.0f, idx_t(0));
@@ -126,7 +133,7 @@ unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializ
 	if (function.GetName() == DynamicFilterScalarFun::NAME) {
 		return make_uniq<DynamicFilterFunctionData>(nullptr);
 	}
-	throw InternalException("Unsupported table filter function \"%s\" during deserialization", function.GetName());
+	throw InternalException("Unsupported table filter function %s during deserialization", function.GetName());
 }
 
 } // namespace duckdb

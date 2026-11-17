@@ -15,6 +15,10 @@
 
 namespace duckdb {
 
+struct bignum_t;
+class StringHeap;
+struct BignumArithmeticState;
+
 struct interval_t;
 
 struct MultiplyOperator {
@@ -22,6 +26,8 @@ struct MultiplyOperator {
 	static inline TR Operation(TA left, TB right) {
 		return left * right;
 	}
+	//! BIGNUM-backed values allocate their result in the heap, the scratch state serves the multiplication
+	DUCKDB_API static bignum_t Operation(bignum_t left, bignum_t right, StringHeap &heap, BignumArithmeticState &state);
 };
 
 template <>
@@ -40,7 +46,7 @@ interval_t MultiplyOperator::Operation(double left, interval_t right);
 struct TryMultiplyOperator {
 	template <class TA, class TB, class TR>
 	static inline bool Operation(TA left, TB right, TR &result) {
-		throw InternalException("Unimplemented type for TryMultiplyOperator");
+		InternalException::Throw("Unimplemented type for TryMultiplyOperator");
 	}
 };
 
@@ -84,7 +90,7 @@ struct MultiplyOperatorOverflowCheck {
 struct TryDecimalMultiply {
 	template <class TA, class TB, class TR>
 	static inline bool Operation(TA left, TB right, TR &result) {
-		throw InternalException("Unimplemented type for TryDecimalMultiply");
+		InternalException::Throw("Unimplemented type for TryDecimalMultiply");
 	}
 };
 

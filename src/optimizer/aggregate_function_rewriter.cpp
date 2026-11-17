@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -93,6 +94,11 @@ public:
 	}
 
 	bool ShouldRewrite(const LogicalAggregate &aggr, Expression &expr) override {
+		auto &child_type = expr.Cast<BoundAggregateExpression>().GetChildren()[0]->GetReturnType();
+		if (child_type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(child_type))) {
+			// the wide avg divides its exact sum before the result becomes a DOUBLE, SUM / COUNT would overflow it
+			return false;
+		}
 		if (aggr.groups.empty()) {
 			return true;
 		}
@@ -154,7 +160,7 @@ public:
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
 		auto count_arg = args.back()->Copy();
-		expr = function_binder.BindAggregateFunction(std::move(sum_fun), std::move(args));
+		expr = function_binder.BindAggregateFunction(sum_fun, std::move(args));
 
 		return count_arg;
 	}
@@ -384,7 +390,7 @@ private:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *) override {
 		const auto entry = aggregate_map.find(expr.Binding());
 		if (entry != aggregate_map.end()) {
-			expr.BindingMutable() = entry->second;
+			return expr.WithBinding(entry->second);
 		}
 		return nullptr;
 	}
@@ -419,8 +425,8 @@ private:
 				count_args.push_back(std::move(count_arg));
 			}
 			auto count_fun = GetBuiltinAggregateFunction(optimizer.context, CountFun::Name, count_arg_types);
-			auto count_aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(count_args),
-			                                                        nullptr, AggregateType::NON_DISTINCT);
+			auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
+			                                                        AggregateType::NON_DISTINCT);
 
 			rewrite_info.count_idx = aggr.expressions.size();
 			rewrites.emplace(i, std::move(rewrite_info));

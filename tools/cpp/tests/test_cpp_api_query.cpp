@@ -183,12 +183,12 @@ TEST_CASE("Stable C++API: SqlStatement parse-time metadata", "[cpp_api][sql_stat
 	REQUIRE(!statements.Next());
 
 	REQUIRE(first.GetStatementType() == StatementType::SELECT);
-	REQUIRE(first.GetText() == "select $1; ");
+	REQUIRE(first.GetText() == "select $1;");
 	REQUIRE(first.GetParameterNames() == std::vector<std::string_view> {"1"});
 	REQUIRE(conn.Bind(first).parameters.GetFieldName(0) == first.GetParameterNames()[0]);
 
 	REQUIRE(second.GetStatementType() == StatementType::SELECT);
-	REQUIRE(second.GetText() == "select 21");
+	REQUIRE(second.GetText() == " select 21");
 	REQUIRE(second.GetParameterNames().empty());
 
 	// The type is the parser's, before execution rewrites the statement; the enum reaches core's newest members.
@@ -223,11 +223,11 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	auto sig2 = conn.Bind(stmt);
 	REQUIRE(sig2.output.GetFieldCount() == 2);
 
-	// Dynamic PIVOT is rejected with INVALID_INPUT.
+	// A dynamic PIVOT expands into several statements, so its columns are known only once it executes.
 	conn.Execute("CREATE TABLE sales(product VARCHAR, quarter VARCHAR, amount INTEGER)").Drain();
 	auto piter = conn.ParseSQL("PIVOT sales ON quarter USING sum(amount)");
 	auto pstmt = piter.Next();
-	REQUIRE_THROWS_MATCHES(conn.Bind(pstmt), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn.Bind(pstmt), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED));
 }
 TEST_CASE("Stable C++API: QueryResult GetSchema", "[cpp_api][query_result]") {
 	using namespace duckdb::cxx;

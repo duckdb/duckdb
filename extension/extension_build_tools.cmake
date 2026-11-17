@@ -156,7 +156,29 @@ endfunction()
 
 # Links what duckdb_resolve_static_link picked at configure time, capabilities first, into a DuckDB target.
 function(link_extension_libraries LIBRARY LINKAGE)
+    # From an extension's own CMakeLists, while the extensions are added: what to link isn't resolved yet, and neither
+    # the DuckDB targets nor the extensions after this one exist. Done by duckdb_link_deferred_extension_libraries.
+    if(DUCKDB_ADDING_EXTENSIONS)
+        set_property(GLOBAL APPEND PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS "${LIBRARY}" "${LINKAGE}")
+        return()
+    endif()
     duckdb_link_extensions(${LIBRARY} ${LINKAGE} ${DUCKDB_STATICALLY_LINKED_CAPABILITIES} ${DUCKDB_STATICALLY_LINKED_EXTENSIONS})
+endfunction()
+
+# Called by the top-level CMakeLists once every target exists
+function(duckdb_link_deferred_extension_libraries)
+    get_property(DEFERRED GLOBAL PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS)
+    list(LENGTH DEFERRED COUNT)
+    if(COUNT EQUAL 0)
+        return()
+    endif()
+    math(EXPR LAST "${COUNT} - 1")
+    foreach(I RANGE 0 ${LAST} 2)
+        math(EXPR J "${I} + 1")
+        list(GET DEFERRED ${I} LIBRARY)
+        list(GET DEFERRED ${J} LINKAGE)
+        link_extension_libraries(${LIBRARY} "${LINKAGE}")
+    endforeach()
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -284,6 +306,10 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     elseif (EXTENSION_STATIC_BUILD)
         if (WIN32)
             target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+            if (MSVC)
+                # link.exe/lld-link only default these on without /DEBUG; pin the --gc-sections equivalent
+                target_link_options(${TARGET_NAME} PRIVATE "$<$<CONFIG:Release>:/OPT:REF;/OPT:ICF>")
+            endif()
         elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             if (APPLE)
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -719,19 +745,32 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
         )
     endif()
     if (IS_IN_GIT_DIR)
+        # sync_out_of_tree_extensions.py commits patches on top of the pin; version the pin, like FetchContent builds
+        set(VERSION_COMMIT "HEAD")
+        while (TRUE)
+            execute_process(
+                    COMMAND ${GIT_EXECUTABLE} log -1 "--format=%H %s" ${VERSION_COMMIT}
+                    WORKING_DIRECTORY ${WORKING_DIR}
+                    RESULT_VARIABLE GIT_RESULT
+                    OUTPUT_VARIABLE GIT_COMMIT_INFO
+                    ERROR_VARIABLE GIT_ERROR
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if (GIT_RESULT AND VERSION_COMMIT STREQUAL "HEAD")
+                message(FATAL_ERROR
+                        "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1': ${GIT_ERROR}")
+            elseif (GIT_RESULT)
+                string(REPLACE "~1" "" VERSION_COMMIT "${VERSION_COMMIT}")
+                break()
+            endif()
+            string(REGEX MATCH "^[0-9a-f]+" VERSION_COMMIT "${GIT_COMMIT_INFO}")
+            if (NOT GIT_COMMIT_INFO MATCHES "^[0-9a-f]+ [^ ]+\\.patch$")
+                break()
+            endif()
+            set(VERSION_COMMIT "${VERSION_COMMIT}~1")
+        endwhile()
+        string(SUBSTRING "${VERSION_COMMIT}" 0 10 GIT_COMMIT_HASH)
         execute_process(
-                COMMAND ${GIT_EXECUTABLE} log -1 --format=%H
-                WORKING_DIRECTORY ${WORKING_DIR}
-                RESULT_VARIABLE GIT_RESULT
-                OUTPUT_VARIABLE GIT_COMMIT_HASH
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if (GIT_RESULT)
-            message(FATAL_ERROR
-                    "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%H'.")
-        endif()
-        string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
-        execute_process(
-                COMMAND ${GIT_EXECUTABLE} describe --tags --always --match "${VERSIONING_TAG_MATCH}"
+                COMMAND ${GIT_EXECUTABLE} describe --tags --always --match "${VERSIONING_TAG_MATCH}" ${VERSION_COMMIT}
                 WORKING_DIRECTORY ${WORKING_DIR}
                 RESULT_VARIABLE GIT_RESULT
                 OUTPUT_VARIABLE GIT_DESCRIBE
@@ -968,6 +1007,7 @@ function(set_extension_version_sources EXT_NAME)
 endfunction()
 
 # Add subdirectories for registered extensions
+set(DUCKDB_ADDING_EXTENSIONS TRUE)
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
@@ -1009,6 +1049,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
     endif()
 endforeach()
+unset(DUCKDB_ADDING_EXTENSIONS)
 
 # Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees
 duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)

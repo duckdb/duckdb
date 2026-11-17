@@ -1,7 +1,11 @@
 #include "duckdb/parser/literal.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/bignum.hpp"
@@ -90,7 +94,7 @@ Literal Literal::Negate() const {
 	return Literal(kind, "-" + text);
 }
 
-static Value NumberToValue(const string &val) {
+static Value NumberToValue(const string &val, uint32_t max_decimal_width) {
 	string_t str_val(val);
 	bool try_cast_as_integer = true;
 	bool try_cast_as_decimal = true;
@@ -118,7 +122,10 @@ static Value NumberToValue(const string &val) {
 	if (try_cast_as_integer) {
 		int32_t int_value;
 		if (TryCast::Operation<string_t, int32_t>(str_val, int_value)) {
-			return Value::INTEGER(int_value);
+			// the magnitude of INT32_MIN does not fit an INTEGER, so -2147483648 is typed as BIGINT
+			if (int_value != NumericLimits<int32_t>::Minimum()) {
+				return Value::INTEGER(int_value);
+			}
 		}
 		int64_t bigint_value;
 		if (TryCast::Operation<string_t, int64_t>(str_val, bigint_value)) {
@@ -142,21 +149,20 @@ static Value NumberToValue(const string &val) {
 	}
 	idx_t decimal_offset = val[0] == '-' ? 3 : 2;
 	if (try_cast_as_decimal && decimal_position.IsValid() &&
-	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+	    str_val.GetSize() - num_underscores < max_decimal_width + decimal_offset) {
 		// figure out the width/scale based on the decimal position
-		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+		auto width = NumericCast<uint32_t>(str_val.GetSize() - 1 - num_underscores);
 		// a well-formed decimal has a single '.', so its position never sits past the width; a second (e.g. trailing)
 		// dot pushes decimal_position beyond width and would underflow the scale computation below
-		if (decimal_position.GetIndex() > NumericCast<idx_t>(width) + num_integer_underscores) {
+		if (decimal_position.GetIndex() > width + num_integer_underscores) {
 			throw ParserException("Could not convert string \"%s\" to a decimal value", val);
 		}
-		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
+		auto scale = NumericCast<uint32_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 		if (val[0] == '-') {
 			width--;
 		}
-		if (width <= Decimal::MAX_WIDTH_DECIMAL) {
-			return Value(str_val).DefaultCastAs(LogicalType::DECIMAL(width, scale));
-		}
+		// a literal up to the maximum width is an exact decimal, which keeps every digit
+		return Value(str_val).DefaultCastAs(LogicalType::DECIMAL(width, scale));
 	}
 	// there is an exponent, or the value is too wide for a decimal
 	double dbl_value = Cast::Operation<string_t, double>(str_val);
@@ -164,6 +170,10 @@ static Value NumberToValue(const string &val) {
 }
 
 Value Literal::ToValue() const {
+	return ToValue(NumericLimits<uint32_t>::Maximum());
+}
+
+Value Literal::ToValue(uint32_t max_decimal_width) const {
 	switch (kind) {
 	case LiteralKind::NULL_LITERAL:
 		return Value();
@@ -171,7 +181,7 @@ Value Literal::ToValue() const {
 		return Value::BOOLEAN(text == "true");
 	case LiteralKind::INTEGER:
 	case LiteralKind::NUMERIC:
-		return NumberToValue(text);
+		return NumberToValue(text, max_decimal_width);
 	case LiteralKind::STRING:
 		return Value(text);
 	case LiteralKind::HEX: {
@@ -189,6 +199,58 @@ Value Literal::ToValue() const {
 		return Value::POINTER(CastToPointer::Operation<string_t, uintptr_t>(string_t(text)));
 	default:
 		throw InternalException("Cannot convert an invalid literal to a value");
+	}
+}
+
+void Literal::Verify() const {
+	// validates that text conforms to kind so a (potentially deserialized) literal never renders arbitrary SQL text
+	auto all_of = [&](const char *allowed) {
+		return text.find_first_not_of(allowed) == string::npos;
+	};
+	auto has_digit = [&]() {
+		return text.find_first_of("0123456789") != string::npos;
+	};
+	switch (kind) {
+	case LiteralKind::NULL_LITERAL:
+		if (!text.empty()) {
+			throw SerializationException("Invalid NULL literal: text must be empty");
+		}
+		return;
+	case LiteralKind::BOOLEAN:
+		if (text != "true" && text != "false") {
+			throw SerializationException("Invalid BOOLEAN literal text '%s'", text);
+		}
+		return;
+	case LiteralKind::INTEGER:
+		if (!has_digit() || !all_of("0123456789_-")) {
+			throw SerializationException("Invalid INTEGER literal text '%s'", text);
+		}
+		return;
+	case LiteralKind::NUMERIC:
+		if (!has_digit() || !all_of("0123456789_.eE+-")) {
+			throw SerializationException("Invalid NUMERIC literal text '%s'", text);
+		}
+		return;
+	case LiteralKind::STRING:
+		// any text; rendered through SQLString quoting
+		return;
+	case LiteralKind::HEX:
+		if (text.size() % 2 != 0 || !all_of("0123456789abcdefABCDEF")) {
+			throw SerializationException("Invalid HEX literal text '%s'", text);
+		}
+		return;
+	case LiteralKind::BIT:
+		if (!all_of("01")) {
+			throw SerializationException("Invalid BIT literal text '%s'", text);
+		}
+		return;
+	case LiteralKind::POINTER:
+		if (text.empty() || !all_of("0123456789abcdefABCDEFxX")) {
+			throw SerializationException("Invalid POINTER literal text '%s'", text);
+		}
+		return;
+	default:
+		throw SerializationException("Invalid literal kind");
 	}
 }
 

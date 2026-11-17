@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -108,8 +110,17 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		}
 	}
 
+	// only values stored as strings reach the check, the directly cast types never do; a scan that reads its first
+	// column only to count rows validates a few bytes per row, less than the tracking would cost
+	const bool counts_rows_only = csv_file_scan && csv_file_scan->reads_first_column_to_count_rows;
+	for (idx_t i = 0; i < logical_types.size() && !counts_rows_only; i++) {
+		validates_utf8 =
+		    validates_utf8 || (parse_types[i].validate_utf8 && parse_types[i].type_id == LogicalTypeId::VARCHAR);
+	}
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
+	// one slot more, the cast error search of Flush can stop one past the last row
+	line_positions_per_row.resize(result_size + 1);
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetDataMutable(col));
 		validity_mask.push_back(&FlatVector::ValidityMutable(col));
@@ -235,6 +246,18 @@ void FullLinePosition::SanitizeError(string &value) {
 	value = {char_array.begin(), char_array.end() - 1};
 }
 
+//! Parses a decimal of the tier into the target slot of the vector, with the separator of the CSV
+template <class T>
+static bool ParseDecimal(const char *value_ptr, idx_t size, const ParseTypeInfo &parse_type, char decimal_separator,
+                         Vector &vector, T &target) {
+	typename DecimalHelper<T>::OWNED parsed;
+	if (!DecimalHelper<T>::TryParse(value_ptr, size, parse_type.width, parse_type.scale, parsed, decimal_separator)) {
+		return false;
+	}
+	target = DecimalHelper<T>::Store(vector, parsed);
+	return true;
+}
+
 void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
@@ -262,11 +285,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		return;
 	}
 
-	if (projecting_columns) {
-		if (!projected_columns[cur_col_id]) {
-			cur_col_id++;
-			return;
-		}
+	if (CanSkipValue(*this)) {
+		cur_col_id++;
+		return;
 	}
 
 	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
@@ -424,68 +445,43 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (decimal_separator == ',') {
-			switch (parse_types[chunk_col_id].internal_type) {
-			case PhysicalType::INT16:
-				success = TryDecimalStringCast<int16_t, ','>(
-				    value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT32:
-				success = TryDecimalStringCast<int32_t, ','>(
-				    value_ptr, size, static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT64:
-				success = TryDecimalStringCast<int64_t, ','>(
-				    value_ptr, size, static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT128:
-				success = TryDecimalStringCast<hugeint_t, ','>(
-				    value_ptr, size, static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
-			}
-
-		} else if (decimal_separator == '.') {
-			switch (parse_types[chunk_col_id].internal_type) {
-			case PhysicalType::INT16:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT32:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT64:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			case PhysicalType::INT128:
-				success = TryDecimalStringCast(value_ptr, size,
-				                               static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
-				break;
-			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
-			}
-		} else {
+		auto &parse_type = parse_types[chunk_col_id];
+		auto &vector = parse_chunk.data[chunk_col_id];
+		auto target = vector_ptr[chunk_col_id];
+		if (decimal_separator != ',' && decimal_separator != '.') {
 			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
+		}
+		switch (parse_type.internal_type) {
+		case PhysicalType::INT16:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int16_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT32:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int32_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT64:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<int64_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::INT128:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<hugeint_t *>(target)[number_of_rows]);
+			break;
+		case PhysicalType::VARCHAR:
+			success = ParseDecimal(value_ptr, size, parse_type, decimal_separator, vector,
+			                       static_cast<bignum_t *>(target)[number_of_rows]);
+			break;
+		default:
+			throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+			                        TypeIdToString(parse_type.internal_type));
 		}
 		break;
 	}
 	default: {
 		// By default, we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
-		if (parse_types[chunk_col_id].validate_utf8 &&
+		if (parse_types[chunk_col_id].validate_utf8 && !ascii_value &&
 		    !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors.GetValue() && sniffing;
 			// Invalid unicode, we must error
@@ -673,11 +669,29 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
 		AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
-		                        buffer_pos - result.last_position.buffer_pos, false);
+		                        result.HandleMultiDelimiter(buffer_pos), false);
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
 	}
+	result.last_position.buffer_pos = buffer_pos + 1;
+}
+
+void StringValueResult::SkipValueInternal() {
+	D_ASSERT(CanSkipValue(*this));
+	if (quoted && !unquoted) {
+		current_errors.Insert(UNTERMINATED_QUOTES, cur_col_id, chunk_col_id, last_position);
+	}
+	cur_col_id++;
+	quoted = false;
+	escaped = false;
+}
+
+void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_pos) {
+	if (result.last_position.buffer_pos > buffer_pos) {
+		return;
+	}
+	result.SkipValueInternal();
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
@@ -749,11 +763,9 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
-			// the file types are those of the projected columns
-			auto &file_types = result.csv_file_scan->file_types;
-			if (cur_error.chunk_idx < file_types.size() &&
-			    !StringValueScanner::CanDirectlyCast(file_types[cur_error.chunk_idx], result.icu_loaded)) {
-				result.number_of_rows--;
+			// the value is invalid: make it NULL so that casting the column does not report a second error for it
+			if (cur_error.chunk_idx < result.validity_mask.size()) {
+				result.validity_mask[cur_error.chunk_idx]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
 			}
 			break;
 		}
@@ -857,6 +869,13 @@ void StringValueResult::InvalidateUnwrittenColumns(idx_t first_unwritten_col) {
 	}
 }
 
+void StringValueResult::StoreLinePosition() {
+	// a removed row leaves number_of_rows at -1, nothing reads a position for it
+	if (number_of_rows >= 0) {
+		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
+	}
+}
+
 bool StringValueResult::AddRowInternal() {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
@@ -877,7 +896,7 @@ bool StringValueResult::AddRowInternal() {
 
 		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
 		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
-		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
+		StoreLinePosition();
 		number_of_rows++;
 		if (static_cast<idx_t>(number_of_rows) >= result_size) {
 			// We have a full chunk
@@ -938,7 +957,7 @@ bool StringValueResult::AddRowInternal() {
 	}
 	D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
 	D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
-	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
+	StoreLinePosition();
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	number_of_rows++;
@@ -947,6 +966,15 @@ bool StringValueResult::AddRowInternal() {
 		return true;
 	}
 	return false;
+}
+
+void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
+	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
+	    states.states[1] != CSVState::RECORD_SEPARATOR) {
+		last_position.buffer_pos = buffer_pos + 2;
+	} else {
+		last_position.buffer_pos = buffer_pos + 1;
+	}
 }
 
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
@@ -963,19 +991,18 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 				result.AddValueToVector(value_ptr, size);
 			}
 		}
-		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
-				// Even though this is marked as a carry on, this is a hippie mixie
-				result.last_position.buffer_pos = buffer_pos + 1;
-			} else {
-				result.last_position.buffer_pos = buffer_pos + 2;
-			}
-		} else {
-			result.last_position.buffer_pos = buffer_pos + 1;
-		}
+		result.SetLastPositionAfterNewline(buffer_pos);
 	}
 
 	// We add the value
+	return result.AddRowInternal();
+}
+
+bool StringValueResult::AddRowWithoutValue(StringValueResult &result, const idx_t buffer_pos) {
+	if (result.last_position.buffer_pos <= buffer_pos) {
+		result.SkipValueInternal();
+		result.SetLastPositionAfterNewline(buffer_pos);
+	}
 	return result.AddRowInternal();
 }
 
@@ -1329,9 +1356,9 @@ void StringValueScanner::ProcessExtraRow() {
 			}
 			result.SetQuoted(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
-			while (state_machine->transition_array
-			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-			       iterator.pos.buffer_pos < to_pos - 1) {
+			while (iterator.pos.buffer_pos < to_pos - 1 &&
+			       state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])]) {
 				iterator.pos.buffer_pos++;
 			}
 			break;
@@ -1527,21 +1554,36 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		j++;
 	}
+	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
+	    states.IsQuotedCurrent() && state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+		// the file ended inside a quoted value: record that before the value itself is added
+		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
+	}
 	bool skip_value = false;
 	if (result.projecting_columns) {
-		if (!result.projected_columns[result.cur_col_id] && result.cur_col_id != result.number_of_columns) {
+		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
 			result.cur_col_id++;
 			skip_value = true;
 		}
 	}
 	if (!skip_value) {
 		string_t value;
+		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
+		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;
+		bool removed_extra_delimiter_bytes = false;
 		if (result.quoted && !result.comment) {
 			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
 			while (length > 0 && result.ignore_empty_values &&
 			       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
 				length--;
 			}
+			// remove the extra delimiter bytes before removing escapes, which can change the length of the value
+			if (extra_delimiter_bytes > length) {
+				throw InternalException(
+				    "Value size is lower than the number of extra delimiter bytes in the ProcessOverBufferValue()");
+			}
+			length -= extra_delimiter_bytes;
+			removed_extra_delimiter_bytes = true;
 			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
 				if (result.cur_col_id >= result.number_of_columns &&
@@ -1566,12 +1608,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
-					value =
-					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+					value = RemoveEscape(
+					    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
@@ -1611,10 +1652,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
-			if (states.IsDelimiter() &&
-			    !result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()) {
-				idx_t extra_delimiter_bytes =
-				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
+			if (!removed_extra_delimiter_bytes) {
 				if (extra_delimiter_bytes > value_size) {
 					throw InternalException(
 					    "Value size is lower than the number of extra delimiter bytes in the ProcessOverBufferValue()");
@@ -1681,6 +1719,16 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 	if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 	    states.IsNotSet()) {
 		if (result.cur_col_id == result.number_of_columns && !result.IsStateCurrent(CSVState::INVALID)) {
+			// the last value was already added: this row ends at the end of the file
+			LinePosition line_end = {iterator.pos.buffer_idx, previous_buffer_handle->actual_size, result.buffer_size};
+			result.current_line_position.begin = result.current_line_position.end;
+			result.current_line_position.end = line_end;
+			// handle the errors recorded for the row before counting it, as AddRowInternal does
+			const auto chunk_col_id_before = result.chunk_col_id;
+			if (result.current_errors.HandleErrors(result)) {
+				result.InvalidateUnwrittenColumns(chunk_col_id_before);
+			}
+			result.line_positions_per_row[static_cast<idx_t>(result.number_of_rows)] = result.current_line_position;
 			result.number_of_rows++;
 		}
 		result.cur_col_id = 0;
@@ -1758,12 +1806,16 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	CSVStates current_state;
 	current_state.Initialize(CSVState::STANDARD);
 	const idx_t to_pos = iterator.GetEndPos();
+	const auto quote = state_machine->dialect_options.state_machine_options.quote.GetValue();
+	const auto start_pos = iterator.pos.buffer_pos;
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
 		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
 		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
-			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
-			       state_machine->dialect_options.state_machine_options.quote.GetValue();
+			// a value that also starts with a quote is a regular quoted value
+			const auto value_end = iterator.pos.buffer_pos - 2;
+			return value_end > start_pos && buffer_handle_ptr[value_end] == quote &&
+			       buffer_handle_ptr[start_pos] != quote;
 		}
 	}
 	return false;
@@ -1825,8 +1877,8 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::DECIMAL:
 	case LogicalType::BOOLEAN:
+	case LogicalTypeId::DECIMAL:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
@@ -2012,25 +2064,21 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 	}
 	const bool found_error =
 	    result.current_errors.HasErrorType(UNTERMINATED_QUOTES) || result.current_errors.HasErrorType(INVALID_STATE);
-	auto chunk_col_id_before = result.chunk_col_id;
+	if (states.IsQuotedCurrent() && !found_error) {
+		if (!state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			used_unstrictness = true;
+		} else if (cur_buffer_handle) {
+			// a row still open in a quoted state after its buffer has unterminated quotes; once the file has ended,
+			// the end-of-file handling in TryMoveToNextBuffer has already finished that row
+			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+			                             result.last_position);
+		}
+	}
+	// the errors all belong to the row being finished, so this appends at most one row
+	const auto chunk_col_id_before = result.chunk_col_id;
 	if (result.current_errors.HandleErrors(result)) {
 		result.InvalidateUnwrittenColumns(chunk_col_id_before);
 		result.number_of_rows++;
-	}
-	if (states.IsQuotedCurrent() && !found_error) {
-		if (state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
-			// quotes
-			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
-			                             result.last_position);
-			chunk_col_id_before = result.chunk_col_id;
-			if (result.current_errors.HandleErrors(result)) {
-				result.InvalidateUnwrittenColumns(chunk_col_id_before);
-				result.number_of_rows++;
-			}
-		} else {
-			used_unstrictness = true;
-		}
 	}
 	if (!iterator.done) {
 		if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||

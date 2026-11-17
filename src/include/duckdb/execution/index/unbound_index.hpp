@@ -66,7 +66,8 @@ private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
-	IndexStorageInfo storage_info;
+	//! This information is owned solely by the unbound index, except during checkpointing.
+	shared_ptr<const IndexStorageInfo> storage_info;
 
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
@@ -103,21 +104,23 @@ public:
 		return create_info->Cast<CreateIndexInfo>();
 	}
 	const IndexStorageInfo &GetStorageInfo() const {
-		return storage_info;
+		return *storage_info;
 	}
-	IndexStorageInfo CopyStorageInfo() const;
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}
 	const Identifier &GetTableName() const {
 		return GetCreateInfo().table;
 	}
+	IndexCheckpointResult Checkpoint(PartialBlockManager &partial_block_manager, StorageVersion version) override;
 
 	//! Buffers an insert or delete (replay_type) chunk, to be replayed once the index is bound.
 	//! table_chunk uses physical table layout: data[j] holds physical column j. It may be sparse,
 	//! but all columns required by this index must be populated.
 	void BufferChunk(DataChunk &table_chunk, Vector &row_ids, BufferedIndexReplay replay_type);
-	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types);
+	//! Binds the index, or returns nullptr for an index with mismatched stored keys when those are skipped
+	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types,
+	                            bool skip_mismatched_keys = false);
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

@@ -541,6 +541,9 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type, null_handling);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type, null_handling);
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs
+		return GetArgMinMaxFunctionBy<OP, string_t>(by_type, type, null_handling);
 	default:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type, null_handling);
 	}
@@ -915,6 +918,7 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	    .AddParameter("arg", LogicalTypeId::ANY)
 	    .AddParameter("val", LogicalTypeId::ANY)
 	    .AddParameter("N", LogicalType::BIGINT);
+	function.SetFallible(); // the update callback rejects NULL and out-of-range n values at runtime
 
 	set.AddFunction(function);
 }

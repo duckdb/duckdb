@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/prefetch.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
@@ -95,6 +96,13 @@ public:
 private:
 	hash_t value;
 };
+
+//! Prefetch a future bucket, evaluating its address only within the loop bounds.
+template <class GET_ENTRY>
+inline void PrefetchHashTableEntry(idx_t row_idx, idx_t row_count, GET_ENTRY get_entry) {
+	constexpr idx_t PREFETCH_DISTANCE = 64;
+	Prefetch(row_idx, row_count, PREFETCH_DISTANCE, get_entry);
+}
 
 // uses an AND operation to apply the modulo operation instead of an if condition that could be branch mispredicted
 inline void IncrementAndWrap(idx_t &offset, const uint64_t &capacity_mask) {
