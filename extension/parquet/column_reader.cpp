@@ -388,6 +388,10 @@ bool ColumnReader::AllValuesAreNull() const {
 	if (MaxRepeat() != 0 || !chunk || !chunk->__isset.meta_data) {
 		return false;
 	}
+	if (MaxDefine() == 0) {
+		// a column without definition levels has no NULL values, whatever its statistics say
+		return false;
+	}
 	auto &chunk_meta = chunk->meta_data;
 	if (!chunk_meta.__isset.statistics || !chunk_meta.statistics.__isset.null_count) {
 		return false;

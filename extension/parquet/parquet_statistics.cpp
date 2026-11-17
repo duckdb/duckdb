@@ -774,7 +774,9 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
-		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
+		// a column without definition levels has no NULL values, whatever its null count says
+		if (schema.max_define != 0 && parquet_stats.__isset.null_count &&
+		    parquet_stats.null_count == column_chunk.meta_data.num_values) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
 		}
 	}
