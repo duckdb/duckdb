@@ -1,0 +1,43 @@
+# name: test/sql/copy/csv/csv_record_separator_buffer_start.test
+# description: A record separator at the start of a buffer of a single-column file is the end of the open row or an empty line, not both
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# three lines: 'a', 62 times 'x' and 'b'
+# with 32 byte buffers the second line starts in the first buffer, fills the second buffer and its line feed is the first byte of the third buffer
+statement ok
+COPY (FROM (VALUES ('a'), (repeat('x', 62)), ('b')) t(a)) TO '{TEST_DIR}/value_fills_buffer.csv' (HEADER false);
+
+query II
+SELECT a[1], length(a) FROM read_csv('{TEST_DIR}/value_fills_buffer.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false);
+----
+a	1
+x	62
+b	1
+
+query II
+SELECT a[1], length(a) FROM read_csv('{TEST_DIR}/value_fills_buffer.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, buffer_size = 32, parallel = false);
+----
+a	1
+x	62
+b	1
+
+# every second line is empty, lines end in \r\n: the line break of an empty line can start a buffer, in one piece or split
+statement ok
+COPY (SELECT CASE WHEN i % 2 = 0 THEN 'value' || i END AS a FROM range(200) t(i)) TO '{TEST_DIR}/empty_lines_crlf.csv' (HEADER false, NEW_LINE '\r\n');
+
+query III
+SELECT count(*), count(a), sum(length(a)) FROM read_csv('{TEST_DIR}/empty_lines_crlf.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false);
+----
+200	100	745
+
+loop buffer_size 20 60
+
+query III
+SELECT count(*), count(a), sum(length(a)) FROM read_csv('{TEST_DIR}/empty_lines_crlf.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, buffer_size = {buffer_size}, parallel = false);
+----
+200	100	745
+
+endloop

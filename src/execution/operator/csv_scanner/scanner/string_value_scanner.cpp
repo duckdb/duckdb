@@ -1559,6 +1559,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// the file ended inside a quoted value: record that before the value itself is added
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
+	// With a single column an empty line is a row of its own. A record separator that is the first byte read after
+	// the states were reset is an empty line and the end of a row at once: it ends the row that is still open (its
+	// value ran to the end of the previous buffer), or it is an empty line when no row is open, but never both.
+	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
+	const bool empty_line = single_column_empty_line && result.cur_col_id == 0;
 	bool skip_value = false;
 	if (result.projecting_columns) {
 		if (result.cur_col_id < result.number_of_columns && !result.projected_columns[result.cur_col_id]) {
@@ -1648,8 +1653,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				}
 			}
 		}
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
+		if (single_column_empty_line) {
+			if (empty_line) {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+			}
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
@@ -1661,13 +1668,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 			result.AddValueToVector(value.GetData(), value_size, true);
 		}
-	} else {
-		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-			result.EmptyLine(result, iterator.pos.buffer_pos);
-		}
+	} else if (empty_line) {
+		result.EmptyLine(result, iterator.pos.buffer_pos);
 	}
 
-	if (states.NewRow() && !states.IsNotSet()) {
+	if (states.NewRow() && !states.IsNotSet() && !empty_line) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
 		} else {
