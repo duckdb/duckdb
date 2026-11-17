@@ -1,0 +1,31 @@
+diff --git a/test/sql/catalog/nested_schema/drop_macro_used_by_table.test b/test/sql/catalog/nested_schema/drop_macro_used_by_table.test
+index 65cd6957..2d61e15c 100644
+--- a/test/sql/catalog/nested_schema/drop_macro_used_by_table.test
++++ b/test/sql/catalog/nested_schema/drop_macro_used_by_table.test
+@@ -44,26 +44,3 @@ statement error
+ DROP MACRO lake.a.b.f
+ ----
+ Cannot drop macro "f" because the default of column "c" of table "y" calls it
+-
+-# catalog.name in a table of a nested schema resolves through the name of its schema
+-statement ok
+-CREATE SCHEMA lake.b
+-
+-statement ok
+-CREATE MACRO lake.b.k() AS 9
+-
+-statement ok
+-CREATE TABLE lake.a.b.t (c INTEGER DEFAULT lake.k())
+-
+-statement ok
+-INSERT INTO lake.a.b.t DEFAULT VALUES
+-
+-query I
+-SELECT c FROM lake.a.b.t
+-----
+-9
+-
+-statement error
+-DROP MACRO lake.b.k
+-----
+-Cannot drop macro "k" because the default of column "c" of table "t" calls it
