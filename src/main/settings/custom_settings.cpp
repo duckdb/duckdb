@@ -884,6 +884,7 @@ static LogicalType ParseForceVariantShredding(const string &input, bool allow_un
 		case LogicalTypeId::INTERVAL:
 		case LogicalTypeId::BIT:
 		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::GEOGRAPHY:
 			break;
 		default:
 			throw InvalidInputException("Variants can not be shredded on type: %s", type.ToString());

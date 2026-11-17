@@ -193,6 +193,7 @@ bool EncodeVariantNode(const VariantNode &it, SINK &sink, vector<VariantEncodeFr
 		break;
 	case VariantComparisonType::BLOB:
 	case VariantComparisonType::GEOMETRY:
+	case VariantComparisonType::GEOGRAPHY:
 		VariantEncodeString(sink, it.GetString(), false);
 		break;
 	case VariantComparisonType::BITSTRING: {
