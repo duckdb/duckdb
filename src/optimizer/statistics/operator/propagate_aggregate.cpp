@@ -533,9 +533,14 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (!count_star_idxs.empty()) {
 		// Execute count_star aggregates on partition statistics
 		idx_t count = 0;
+		const auto max_count = NumericCast<idx_t>(NumericLimits<int64_t>::Maximum());
 		for (const auto &stats : partition_stats) {
 			if (stats.count_type == CountType::COUNT_APPROXIMATE) {
 				// we cannot get an exact count
+				return;
+			}
+			if (stats.count > max_count - count) {
+				// the count does not fit in a BIGINT
 				return;
 			}
 			count += stats.count;

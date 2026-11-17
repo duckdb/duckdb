@@ -1,0 +1,19 @@
+# name: test/parquet/corrupt/row_group_rows_overflow.test
+# description: count(*) over a Parquet file whose row group row counts do not fit in a BIGINT
+# group: [corrupt]
+
+require parquet
+
+# The file is written by DuckDB with two row groups of 2048 rows. The footer is changed to declare
+# 9223372036854775807 rows (and values) for the second row group.
+query II
+SELECT row_group_id, row_group_num_rows
+FROM parquet_metadata('{DATA_DIR}/parquet-testing/corrupt/row_group_rows_overflow.parquet')
+ORDER BY row_group_id;
+----
+0	2048
+1	9223372036854775807
+
+# the count is not computed from the row group counts, which do not add up to a BIGINT
+statement ok
+EXPLAIN SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/row_group_rows_overflow.parquet');
