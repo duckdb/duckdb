@@ -1559,9 +1559,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		// the file ended inside a quoted value: record that before the value itself is added
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
-	// With a single column an empty line is a row of its own. A record separator that is the first byte read after
-	// the states were reset is an empty line and the end of a row at once: it ends the row that is still open (its
-	// value ran to the end of the previous buffer), or it is an empty line when no row is open, but never both.
+	// With a single column, a record separator read right after a state reset ends the open row or is an empty line
 	const bool single_column_empty_line = states.EmptyLine() && state_machine->dialect_options.num_cols == 1;
 	const bool empty_line = single_column_empty_line && result.cur_col_id == 0;
 	bool skip_value = false;
