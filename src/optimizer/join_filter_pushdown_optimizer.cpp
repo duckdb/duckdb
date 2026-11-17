@@ -651,8 +651,8 @@ static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColu
 		}
 		// a join filter enters the view as a pushed WHERE filter would, and needs no barrier: it cannot fail, as a cast
 		// that can fail is a TRY_CAST that keeps the rows it cannot convert for the join
-		// (PreserveRuntimeFilterCastErrors). A view that may hide rows marks the columns, for the profiler only: it does
-		// not report the rows that leave the view (JoinFilterPushdownInfo::CrossesSecureView)
+		// (PreserveRuntimeFilterCastErrors). A view that may hide rows marks the columns, for the profiler only: it
+		// does not report the rows that leave the view (JoinFilterPushdownInfo::CrossesSecureView)
 		if (!op.Cast<LogicalSecureView>().propagate_statistics) {
 			for (auto &filter : columns) {
 				filter.crossed_secure_view = true;

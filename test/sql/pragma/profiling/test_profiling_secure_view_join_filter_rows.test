@@ -24,12 +24,12 @@ CREATE TABLE groups_30 AS SELECT i AS g FROM range(30) t(i);
 statement ok
 CREATE MACRO profiled_operators() AS TABLE
 SELECT j.id AS plan_order, j.value ->> '$.name' AS name, json_exists(j.value, '$.intermediate_rows') AS rows_reported
-FROM read_text('__TEST_DIR__/secure_view_profile.json') r, json_tree(r.content, '$.operator') j
+FROM read_text('{TEST_DIR}/secure_view_profile.json') r, json_tree(r.content, '$.operator') j
 WHERE j.type = 'OBJECT' AND json_exists(j.value, '$.name');
 
 statement ok
 CREATE MACRO total_rows_reported() AS
-(SELECT json_exists(content, '$.query.total_intermediate_rows') FROM read_text('__TEST_DIR__/secure_view_profile.json'));
+(SELECT json_exists(content, '$.query.total_intermediate_rows') FROM read_text('{TEST_DIR}/secure_view_profile.json'));
 
 # a view that hides rows: the rows leaving it are not reported, nor are the query-wide totals that include them. The
 # join whose filter crossed the view still reports its rows
@@ -37,7 +37,7 @@ statement ok
 SET enable_profiling = 'json';
 
 statement ok
-SET profiling_output = '__TEST_DIR__/secure_view_profile.json';
+SET profiling_output = '{TEST_DIR}/secure_view_profile.json';
 
 query I
 SELECT count(*) FROM big_secure_filtered b JOIN dim d ON b.id = d.k WHERE d.yr = 42
