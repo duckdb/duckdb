@@ -80,9 +80,9 @@ public:
 		return child_readers[0]->FileOffset();
 	}
 
-	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override {
+	void GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers) override {
 		for (auto &child_reader : child_readers) {
-			child_reader->RegisterPrefetch(transport, allow_merge);
+			child_reader->GatherChunkReaders(chunk_readers);
 		}
 	}
 	void InitializePageIndex(const ParquetRowGroupPageIndex &page_index) override {

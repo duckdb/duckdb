@@ -171,10 +171,12 @@ public:
 	virtual idx_t FileOffset() const;
 	//! Adds the indexes of the row group's column chunks this reader reads
 	virtual void GatherColumnChunks(unordered_set<idx_t> &column_chunks);
+	//! Adds the readers that read a column chunk: this reader, or the leaf readers of a nested reader
+	virtual void GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers);
 	virtual idx_t GroupRowsAvailable();
 
 	// register the range this reader will touch for prefetching
-	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
+	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 	//! The first offset RegisterPrefetch registered: the chunk start, or the first needed page with a page index
 	idx_t PrefetchOffset() const;
 	//! Hands the reader the page index of the row group, so it can prefetch and read only the pages whose rows may

@@ -150,6 +150,15 @@ static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chu
 	return offset;
 }
 
+//! The name of a column chunk in the prefetch log
+static string ParquetColumnChunkName(const duckdb_parquet::ColumnChunk &chunk) {
+	auto &path = chunk.meta_data.path_in_schema;
+	if (path.empty()) {
+		return string();
+	}
+	return StringUtil::Join(path, ".", [](const duckdb_parquet::ParquetString &part) { return string(part); });
+}
+
 void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
                                                          vector<ParquetPrefetchColumn> &requested_columns,
                                                          const duckdb_parquet::ColumnChunkList &all_chunks) {
@@ -193,13 +202,8 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 		if (bucket_it == buckets.end()) {
 			continue;
 		}
-		auto &path = chunk.meta_data.path_in_schema;
-		string name =
-		    path.empty()
-		        ? string()
-		        : StringUtil::Join(path, ".", [](const duckdb_parquet::ParquetString &part) { return string(part); });
 		// we tag hitchhikers with *column_name*
-		bucket_it->second.emplace_back("*" + std::move(name) + "*", chunk_start);
+		bucket_it->second.emplace_back("*" + ParquetColumnChunkName(chunk) + "*", chunk_start);
 	}
 
 	// Issue one log group per ReadHead, on the order they were registered
@@ -2704,12 +2708,8 @@ ParquetPrefetchStrategy ParquetReader::WholeGroupPrefetch(ParquetReaderScanState
 		state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
 		vector<ParquetPrefetchColumn> pending_registrations;
 		for (auto &column_chunk : group.columns) {
-			auto &path = column_chunk.meta_data.path_in_schema;
-			string name =
-			    path.empty() ? string() : StringUtil::Join(path, ".", [](const duckdb_parquet::ParquetString &part) {
-				    return string(part);
-			    });
-			pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
+			pending_registrations.emplace_back(ParquetColumnChunkName(column_chunk),
+			                                   ParquetColumnChunkFileOffset(column_chunk));
 		}
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
 	}
@@ -2731,6 +2731,25 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 
 	vector<bool> already_registered(column_ids.size(), false);
 	vector<ParquetPrefetchColumn> pending_registrations;
+	// readers can share a column chunk (e.g. two fields of one variant column), each chunk is registered once
+	unordered_set<idx_t> registered_chunks;
+	vector<reference<ColumnReader>> chunk_readers;
+	auto register_prefetch = [&](ColumnReader &reader) {
+		// a nested reader has no column chunk of its own: its leaf readers register
+		chunk_readers.clear();
+		reader.GatherChunkReaders(chunk_readers);
+		for (auto &entry : chunk_readers) {
+			auto &chunk_reader = entry.get();
+			if (!registered_chunks.insert(chunk_reader.ColumnIndex()).second) {
+				continue;
+			}
+			chunk_reader.RegisterPrefetch(trans, true);
+			if (log_prefetch) {
+				pending_registrations.emplace_back(ParquetColumnChunkName(group.columns[chunk_reader.ColumnIndex()]),
+				                                   chunk_reader.PrefetchOffset());
+			}
+		}
+	};
 
 	if (lazy_fetch && !state.scan_filters.empty()) {
 		auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
@@ -2745,11 +2764,7 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 			}
 			auto &scan_filter = state.scan_filters[permutation[i]];
 			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
-			auto &child = state.GetColumnReader(local_idx);
-			child.RegisterPrefetch(trans, true);
-			if (log_prefetch) {
-				pending_registrations.emplace_back(child.Schema().name, child.PrefetchOffset());
-			}
+			register_prefetch(state.GetColumnReader(local_idx));
 			already_registered[local_idx.GetIndex()] = true;
 		}
 		// Done with the filter columns, time to merge the non-filter columns.
@@ -2766,16 +2781,7 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		if (already_registered[i]) {
 			continue;
 		}
-		auto col_idx = MultiFileLocalIndex(i);
-		auto &child = state.GetColumnReader(col_idx);
-		if (child.IsSkipped()) {
-			//! Column reader is skipped entirely
-			continue;
-		}
-		child.RegisterPrefetch(trans, true);
-		if (log_prefetch) {
-			pending_registrations.emplace_back(child.Schema().name, child.PrefetchOffset());
-		}
+		register_prefetch(state.GetColumnReader(MultiFileLocalIndex(i)));
 	}
 	trans.FinalizeRegistration();
 	ParquetPrefetchStrategy strategy;

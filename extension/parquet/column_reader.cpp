@@ -343,6 +343,13 @@ void ColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	column_chunks.insert(ColumnIndex());
 }
 
+void ColumnReader::GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers) {
+	if (IsSkipped()) {
+		return;
+	}
+	chunk_readers.push_back(*this);
+}
+
 // Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.

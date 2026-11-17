@@ -40,8 +40,8 @@ public:
 		child_column_reader->GatherColumnChunks(column_chunks);
 	}
 
-	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override {
-		child_column_reader->RegisterPrefetch(transport, allow_merge);
+	void GatherChunkReaders(vector<reference<ColumnReader>> &chunk_readers) override {
+		child_column_reader->GatherChunkReaders(chunk_readers);
 	}
 
 protected:
