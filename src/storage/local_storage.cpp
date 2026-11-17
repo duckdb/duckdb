@@ -681,8 +681,8 @@ void LocalStorage::Flush(Context &context, DataTable &table, LocalTableStorage &
 		}
 	} catch (std::exception &ex) {
 		// the shared table or indexes may be partially modified: no checkpoint may persist them
-		ValidChecker::Invalidate(table.db.GetDatabase(), "Failed to flush table " + table.GetTableName() +
-		                                                     " during commit: " + ErrorData(ex).RawMessage());
+		table.db.Invalidate("flushing table \"" + table.GetTableName() + "\" during commit failed",
+		                    ErrorData(ex).RawMessage());
 		throw;
 	}
 	if (error.HasError()) {

@@ -166,7 +166,7 @@ ClientContext::~ClientContext() {
 	try {
 		Destroy();
 	} catch (...) {
-		// a destructor cannot throw, and locking the context allocates
+		// a destructor cannot throw, and ending the active query allocates
 	}
 }
 
@@ -218,7 +218,9 @@ static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
 }
 
 void ClientContext::Destroy() {
-	auto lock = LockContext();
+	// the destructor runs this when the heap may be exhausted: lock on the stack, so the tasks of an active query are
+	// still drained before their executor goes away
+	ClientContextLock lock(context_lock);
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
@@ -229,7 +231,7 @@ void ClientContext::Destroy() {
 			}
 		}
 	}
-	CleanupInternal(*lock);
+	CleanupInternal(lock);
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
@@ -248,7 +250,7 @@ void ClientContext::ApplyInvalidationPolicy(const ErrorData &error) {
 		invalidates_transaction = false;
 	} else if (Exception::InvalidatesDatabase(error.Type())) {
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db_instance, error.RawMessage());
+		ValidChecker::Invalidate(db_instance, error);
 	}
 	// a statement issued while CONNECT-ed that did not run locally is not part of the local transaction
 	const bool outside_local_transaction = active_query ? active_query->outside_local_transaction : is_connected;
@@ -335,8 +337,20 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	{
 		auto planner_timer = profiler.StartTimer<MetricPlannerTotalTime>();
+		logical_planner.reuse_prepared_plans = true;
 		logical_planner.CreatePlan(std::move(statement));
-		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
+		D_ASSERT(logical_planner.plan || logical_planner.reused_statement ||
+		         !logical_planner.properties.bound_all_parameters);
+	}
+	if (logical_planner.reused_statement) {
+		// re-use the physical plan of the prepared statement
+		result->properties = logical_planner.properties;
+		result->names = logical_planner.names;
+		result->types = logical_planner.types;
+		result->physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(*this));
+		result->physical_plan->SetRoot(logical_planner.reused_statement->physical_plan->Root());
+		result->reused_statement = std::move(logical_planner.reused_statement);
+		return result;
 	}
 
 	if (logical_planner.properties.bound_all_parameters) {
@@ -636,7 +650,7 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 			    }
 			    auto bound = std::move(expanded.statements[0]);
 			    auto named_param_map = bound->named_param_map;
-			    Planner planner(*this);
+			    Planner planner(*this, PlanningMode::BIND_ONLY);
 			    planner.CreatePlan(std::move(bound));
 			    signature.names = planner.names;
 			    signature.types = planner.types;
@@ -828,9 +842,9 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		if (Exception::InvalidatesDatabase(error.Type())) {
-			// fatal exceptions invalidate the entire database
+			// fatal exceptions invalidate the database instance, unless scoped to an attached database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_instance, error.RawMessage());
+			ValidChecker::Invalidate(db_instance, error);
 		}
 		return ErrorResult<QueryResult>(std::move(error), query);
 	}
@@ -861,9 +875,9 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			// standard exceptions do not invalidate the current transaction
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
-			// fatal exceptions invalidate the entire database
+			// fatal exceptions invalidate the database instance, unless scoped to an attached database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_instance, error.RawMessage());
+			ValidChecker::Invalidate(db_instance, error);
 		}
 		// other types of exceptions do invalidate the current transaction
 		result = ErrorResult<QueryResult>(std::move(error), query);
@@ -1342,7 +1356,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 			invalidates_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_instance, error.RawMessage());
+			ValidChecker::Invalidate(db_instance, error);
 		}
 		if (require_new_transaction) {
 			transaction.Rollback(error);
@@ -1535,7 +1549,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const Identifier &key, V
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// setting is not set - get the default value
-	return DBConfig::TryGetDefaultValue(option, result);
+	return db_config.TryGetDefaultValue(key, option, result);
 }
 
 SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
@@ -1552,7 +1566,7 @@ ParserOptions ClientContext::GetParserOptions() {
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.compiled_grammar = CompiledGrammar::Get(*this);
-	options.context = *this;
+	options.context = GetContext();
 	return options;
 }
 

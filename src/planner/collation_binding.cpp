@@ -116,10 +116,8 @@ static unique_ptr<Expression> ApplyCollationFunction(ClientContext &context, con
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 	FunctionBinder function_binder(context);
-	auto function =
-	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(function_name), std::move(children));
-	function->SetAlias(source_alias);
-	return function;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(function_name),
+	                                          std::move(children), false, nullptr, std::move(source_alias));
 }
 
 //! Pushes collations into STRUCT/TUPLE fields using invoke with a lambda that rebuilds the value and preserves NULLs.
@@ -169,8 +167,8 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(),
 	                                                 Identifier(is_tuple ? "row" : "struct_pack"), std::move(fields));
 	// A NULL struct must remain distinct from a struct containing only NULL fields.
-	auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-	is_null->GetChildrenMutable().push_back(lambda_parameter_expr->Copy());
+	auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN,
+	                                                  lambda_parameter_expr->Copy());
 	auto null_result = make_uniq<BoundConstantExpression>(Value(result->GetReturnType()));
 	auto body = make_uniq<BoundCaseExpression>(std::move(is_null), std::move(null_result), std::move(result));
 	auto lambda =
@@ -182,8 +180,8 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(lambda));
 	arguments.push_back(std::move(source));
-	source = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "invoke", std::move(arguments));
-	source->SetAlias(source_alias);
+	source = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "invoke", std::move(arguments), false,
+	                                            nullptr, std::move(source_alias));
 	return true;
 }
 
