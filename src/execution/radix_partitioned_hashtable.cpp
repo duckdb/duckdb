@@ -1244,6 +1244,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	} else {
 		ht->Abandon();
 	}
+	const auto allocator_size = ht->GetAggregateAllocator()->AllocationSize();
 
 	// Now combine the uncombined data using this thread's HT
 	partition.combine_chunk_count = partition.data->ChunkCount();
@@ -1273,6 +1274,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		partition.allocator = ht->GetAggregateAllocator();
 	} else {
 		sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
+		sink.stored_allocators_size += sink.stored_allocators.back()->AllocationSize() - allocator_size;
 	}
 	if (task_idx == sink.partitions.size()) {
 		ht.reset();

@@ -46,6 +46,8 @@ enum class AccessMode : uint8_t;
 
 enum class AdaptiveFilterSource : uint8_t;
 
+enum class AggregateCombineSourceRetention : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateDistinctDependent : uint8_t;
@@ -739,6 +741,9 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
 const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateCombineSourceRetention>(AggregateCombineSourceRetention value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
@@ -1769,6 +1774,9 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
 AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value);
+
+template<>
+AggregateCombineSourceRetention EnumUtil::FromString<AggregateCombineSourceRetention>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
