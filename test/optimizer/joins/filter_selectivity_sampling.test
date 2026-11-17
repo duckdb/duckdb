@@ -18,7 +18,7 @@ SET filter_selectivity_sample_size = 0;
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE i > 99990;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
 
 statement ok
 SET filter_selectivity_sample_size = 2048;
@@ -27,31 +27,31 @@ SET filter_selectivity_sample_size = 2048;
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE i > 99990;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"24".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"24".*
 
 # A missed rare equality must retain its smaller distinct-count estimate.
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE i = 99999;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"[12]".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"[12]".*
 
 # 2000 rows qualify
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE q = 7;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"(1[5-9]|2[0-4])[0-9]{2}".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"(1[5-9]|2[0-4])[0-9]{2}".*
 
 # the conjunction is evaluated on the same sampled rows, so its correlation is taken into account
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE i > 99990 AND q = 7;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"24".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"24".*
 
 # 1900 rows qualify
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE s LIKE '%99%';
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"(1[4-9]|2[0-4])[0-9]{2}".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"(1[4-9]|2[0-4])[0-9]{2}".*
 
 # a filter over several columns stays above the scan, and is sampled as well: 33 rows qualify
 query II
@@ -72,7 +72,7 @@ CREATE TABLE big AS SELECT i, i % 100 AS m FROM range(1000000) r(i);
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM big WHERE m = 7;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.big",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"([5-9][0-9]{3}|1[0-9]{4})".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.big",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"([5-9][0-9]{3}|1[0-9]{4})".*
 
 query I
 SELECT count(*) FROM big WHERE m = 7;
@@ -100,7 +100,7 @@ SELECT count(*) FROM t WHERE st.a = 3 AND q = 3;
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE CAST(s AS INTEGER) > 0;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
 
 statement error
 SELECT * FROM t WHERE CAST(s AS INTEGER) > 0;
@@ -194,7 +194,7 @@ INSERT INTO local_rows SELECT 'new' FROM range(1000);
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM local_rows WHERE s LIKE '%new%';
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.local_rows",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"400".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.local_rows",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"400".*
 
 query I
 SELECT count(*) FROM local_rows WHERE s LIKE '%new%';
@@ -228,7 +228,7 @@ loop value 0 100
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM rare WHERE i = {value};
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.rare",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"[12]".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.rare",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"[12]".*
 
 endloop
 
@@ -238,7 +238,7 @@ loop value 0 7
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM rare WHERE i % 7 = {value};
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.rare",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.rare",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20".*
 
 endloop
 
@@ -268,7 +268,7 @@ SET filter_selectivity_sample_size = 0;
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM t WHERE i > 99990;
 ----
-logical_opt	<REGEX>:.*"Table":\s*"memory.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
+logical_opt	<REGEX>:.*"Table":\s*".*\.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"20000".*
 
 # Without sampling, the existing join-domain policy still underestimates this correlation.
 query II

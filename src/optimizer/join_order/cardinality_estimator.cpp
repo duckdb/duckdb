@@ -127,7 +127,7 @@ public:
 struct FilterInfoWithTotalDomains {
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
 	    : predicate(predicate), domain_estimate(relation_set_to_stats.domain_estimate),
-	      distinct_count(domain_estimate.get().GetDistinctCount(predicate)) {
+	      distinct_count(static_cast<double>(domain_estimate.get().GetDistinctCount(predicate))) {
 	}
 
 public:

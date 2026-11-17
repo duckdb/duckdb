@@ -16,6 +16,12 @@
       ]
     },
     {
+      "reason": "Forced row fetches do not fit in the memory limit of the test",
+      "paths": [
+        "test/optimizer/joins/filter_selectivity_sampling_memory.test"
+      ]
+    },
+    {
       "reason": "No stats",
       "paths": [
         "test/sql/types/geo/geometry_shred_types.test_slow",
