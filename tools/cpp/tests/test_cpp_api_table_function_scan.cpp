@@ -673,3 +673,91 @@ TEST_CASE("Stable C++API: multi-file function uses the stats callback of its tab
 
 	std::filesystem::remove_all(directory);
 }
+
+namespace {
+
+std::vector<std::string> CollectExplainValues(QueryResult result) {
+	std::vector<std::string> out;
+	while (auto chunk = result.FetchChunk()) {
+		auto view = chunk.GetVector(1).GetView();
+		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
+			REQUIRE(view.IsValid(i));
+			out.emplace_back(view.Data<varchar_t>()[view.SelAt(i)].view());
+		}
+	}
+	return out;
+}
+
+std::atomic<idx_t> to_string_calls {0};
+
+void HintToString(TableFunction::ToStringInput &input) {
+	to_string_calls++;
+	auto &bind = input.GetBindData<HintBind>();
+	input.Set("Remote Table", "remote.rows_" + std::to_string(bind.count));
+	input.Set("Mode", "first");
+	// Setting a key again replaces its value, in place
+	input.Set("Mode", "streaming");
+}
+
+void FailingToString(TableFunction::ToStringInput &) {
+	throw InvalidInputException("cannot describe the scan");
+}
+
+void EmptyKeyToString(TableFunction::ToStringInput &input) {
+	input.Set("", "nothing");
+}
+
+void RegisterToStringFunction(Connection &conn, const std::string &name, TableFunction::ToStringCallback callback) {
+	auto &factory = conn.GetFactory();
+	auto function = TableFunction::Create(factory);
+	function.SetName(name);
+	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
+	function.SetBindCallback(HintBindFunction)
+	    .SetInitGlobalCallback(HintInitGlobal)
+	    .SetExecCallback(HintExec)
+	    .SetToStringCallback(callback);
+	conn.Register(function);
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: table function describes its scan in the query plan", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	RegisterToStringFunction(conn, "cpp_described", HintToString);
+	RegisterToStringFunction(conn, "cpp_describe_fails", FailingToString);
+	RegisterToStringFunction(conn, "cpp_describe_empty_key", EmptyKeyToString);
+
+	// The physical plan shows what the callback reports instead of the name of the function
+	to_string_calls = 0;
+	auto plan = CollectExplainValues(conn.Execute("EXPLAIN SELECT i FROM cpp_described(7) WHERE j > 2"));
+	REQUIRE(plan.size() == 1);
+	auto &text = plan[0];
+	REQUIRE(text.find("Remote Table") != std::string::npos);
+	REQUIRE(text.find("remote.rows_7") != std::string::npos);
+	REQUIRE(text.find("streaming") != std::string::npos);
+	REQUIRE(text.find("first") == std::string::npos);
+	REQUIRE(text.find("CPP_DESCRIBED") == std::string::npos);
+	REQUIRE(to_string_calls > 0);
+
+	// The logical plans show it too
+	conn.Execute("SET explain_output = 'all'").Drain();
+	auto plans = CollectExplainValues(conn.Execute("EXPLAIN SELECT i FROM cpp_described(3)"));
+	REQUIRE(plans.size() == 3);
+	for (auto &entry : plans) {
+		REQUIRE(entry.find("remote.rows_3") != std::string::npos);
+	}
+	conn.Execute("SET explain_output = 'physical_only'").Drain();
+
+	// The callback is only asked when a plan is rendered
+	to_string_calls = 0;
+	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_described(3)")) == std::vector<int64_t> {0, 1, 2});
+	REQUIRE(to_string_calls == 0);
+
+	// The errors of the callback fail the EXPLAIN, not the query
+	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_fails(3)").Drain(),
+	                    Catch::Contains("cannot describe the scan"));
+	REQUIRE_THROWS_WITH(conn.Execute("EXPLAIN SELECT * FROM cpp_describe_empty_key(3)").Drain(),
+	                    Catch::Contains("the key cannot be empty"));
+	REQUIRE(CollectSortedBigints(conn.Execute("SELECT i FROM cpp_describe_fails(2)")) == std::vector<int64_t> {0, 1});
+}

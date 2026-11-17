@@ -2338,4 +2338,27 @@ TEST_CASE("V2 table: virtual column and metrics arguments", "[capi_v2][table_fun
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
+namespace {
+
+void NoToStringCb(duckdb_v2_table_function_to_string_info_handle, duckdb_v2_error_info_handle *) {
+}
+
+} // namespace
+
+TEST_CASE("V2 table: to string arguments", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	auto function = MakeTable(fx.conn, "to_string_arguments");
+	REQUIRE(duckdb_v2_table_function_set_to_string_callback(function, NoToStringCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_to_string_callback(function, nullptr, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+
+	void *data = nullptr;
+	REQUIRE(duckdb_v2_table_function_set_to_string_callback(nullptr, NoToStringCb, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_to_string_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_to_string_get_bind_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_to_string_set(nullptr, "key", 3, "value", 5, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 } // namespace test_capi_v2

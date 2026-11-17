@@ -13336,6 +13336,15 @@ typedef struct _duckdb_v2_table_function_get_bind_info_info {
 } * duckdb_v2_table_function_get_bind_info_info_handle;
 
 /*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the engine describes a bound call of it
+ * in a query plan, e.g. for `EXPLAIN`. The "to string" callback receives this handle and can use it to report the
+ * key-value pairs the plan shows for the scan.
+ */
+typedef struct _duckdb_v2_table_function_to_string_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_to_string_info_handle;
+
+/*!
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
@@ -13400,6 +13409,9 @@ typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
 typedef void (*duckdb_v2_table_function_stats_callback_fn)(duckdb_v2_table_function_stats_info_handle info,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_to_string_callback_fn)(duckdb_v2_table_function_to_string_info_handle info,
+                                                               duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -15268,6 +15280,93 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_column_i
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
     duckdb_v2_table_function_get_bind_info_info_handle info, const char *key, idx_t key_length,
     duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional "to string" callback of the table function.
+ *
+ * The engine invokes the callback with the bind data of a bound call when it renders a query plan that scans the
+ * function, e.g. for `EXPLAIN`, `EXPLAIN ANALYZE` and the profiler, both for the logical and for the physical plan. The
+ * callback reports what the plan shows for the scan as key-value pairs with `duckdb_v2_table_function_to_string_set()`,
+ * e.g. the file or the remote table it reads. Without the callback the physical plan shows the name of the function
+ * under the key `Function`; with it, the plan shows what the callback reports instead, so a callback that wants the
+ * name shown reports it itself. The engine shows the projections, filters and estimated cardinality of the scan next to
+ * them either way. The callback may be invoked more than once for the same bind data, and is not invoked with the
+ * global state of a scan, so it should only report what the bind already determined. A function wrapped in a multi-file
+ * function is not asked: the plan describes the multi-file scan.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The "to string" callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_to_string_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_to_string_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_user_data(
+    duckdb_v2_table_function_to_string_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data the function's bind callback set for the bound call being described.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_bind_data(
+    duckdb_v2_table_function_to_string_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports a key-value pair the query plan shows for the scan, e.g. `File` and the path of the file it reads. The plan
+ * shows the pairs in the order they were first reported; setting a key again replaces its value in place. Fails with
+ * `ERROR_INPUT_INVALID` when the key is empty.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param key The key. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated.
+ * @param value The value. Borrowed and copied. May span several lines.
+ * @param value_length The length of `value` in bytes. `value` need not be null-terminated and may be NULL only when
+ * this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_set(duckdb_v2_table_function_to_string_info_handle info,
+                                                                    const char *key, idx_t key_length,
+                                                                    const char *value, idx_t value_length,
+                                                                    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

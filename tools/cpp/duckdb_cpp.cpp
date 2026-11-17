@@ -4281,6 +4281,7 @@ struct TableFunctionInfo {
 	TableFunction::GetBindInfoCallback get_bind_info_callback = nullptr;
 	TableFunction::StatsCallback stats_callback = nullptr;
 	TableFunction::MetricsCallback metrics_callback = nullptr;
+	TableFunction::ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
@@ -4292,13 +4293,13 @@ struct TableFunctionInfo {
 	                  TableFunction::ClaimBatchCallback claim_batch_callback,
 	                  TableFunction::GetBindInfoCallback get_bind_info_callback,
 	                  TableFunction::StatsCallback stats_callback, TableFunction::MetricsCallback metrics_callback,
-	                  detail::UserData user_data)
+	                  TableFunction::ToStringCallback to_string_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
 	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
 	      partitioning_callback(partitioning_callback), claim_batch_callback(claim_batch_callback),
 	      get_bind_info_callback(get_bind_info_callback), stats_callback(stats_callback),
-	      metrics_callback(metrics_callback), user_data(std::move(user_data)) {
+	      metrics_callback(metrics_callback), to_string_callback(to_string_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
@@ -4310,7 +4311,8 @@ struct TableFunctionInfo {
 		       partitioning_callback == other.partitioning_callback &&
 		       claim_batch_callback == other.claim_batch_callback &&
 		       get_bind_info_callback == other.get_bind_info_callback && stats_callback == other.stats_callback &&
-		       metrics_callback == other.metrics_callback && user_data.get() == other.user_data.get();
+		       metrics_callback == other.metrics_callback && to_string_callback == other.to_string_callback &&
+		       user_data.get() == other.user_data.get();
 	}
 };
 
@@ -4719,13 +4721,36 @@ auto TableFunction::SetMetricsCallback(MetricsCallback callback) & -> TableFunct
 	return *this;
 }
 
+auto TableFunction::SetToStringCallback(ToStringCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_to_string_callback, handle(), nullptr);
+		to_string_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_to_string_info_handle info, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_to_string_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input = detail::HandleFactory::Make<ToStringInput>(static_cast<void *>(info));
+			function.to_string_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_to_string_callback, handle(), trampoline);
+	to_string_callback = callback;
+	return *this;
+}
+
 auto TableFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
 	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
 	    filter_pushdown_callback, partition_data_callback, partitioning_callback, claim_batch_callback,
-	    get_bind_info_callback, stats_callback, metrics_callback, std::move(user_data)));
+	    get_bind_info_callback, stats_callback, metrics_callback, to_string_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -5227,6 +5252,27 @@ auto TableFunction::ClaimBatchInput::GetContext() -> Context & {
 
 auto TableFunction::GetBindInfoInput::GetContext() -> Context & {
 	return context;
+}
+
+void *TableFunction::ToStringInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_to_string_get_bind_data,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::ToStringInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_to_string_get_user_data,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::ToStringInput::Set(std::string_view key, std::string_view value) -> void {
+	CheckedAPICall(duckdb_v2_table_function_to_string_set,
+	               static_cast<duckdb_v2_table_function_to_string_info_handle>(args), key.data(),
+	               static_cast<idx_t>(key.size()), value.data(), static_cast<idx_t>(value.size()));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
