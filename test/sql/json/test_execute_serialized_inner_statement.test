@@ -1,5 +1,5 @@
 # name: test/sql/json/test_execute_serialized_inner_statement.test
-# description: json_execute_serialized_sql binds its statement with the outer query, and plans and runs it at each scan start
+# description: json_execute_serialized_sql plans its statement when the outer query is bound, and plans and runs it again at each scan start
 # group: [json]
 
 require json
@@ -10,16 +10,42 @@ CREATE TABLE t(i INTEGER, s VARCHAR);
 statement ok
 INSERT INTO t VALUES (1, 'abc'), (2, 'def');
 
-# a parameter in the statement is refused when the outer query is bound
+# a parameter the statement binds is refused when the outer query is bound
 statement error
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT $1 + 1'));
 ----
-Binder Error: Unexpected prepared parameter
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+
+statement error
+SELECT 1 FROM json_execute_serialized_sql(json_serialize_sql('SELECT $1 + 1'));
+----
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+
+statement error
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM t WHERE i = $1'));
+----
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+
+statement error
+EXPLAIN SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT $1::INTEGER AS p'));
+----
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
 
 statement error
 EXPLAIN SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT ? AS p'));
 ----
-Binder Error: Unexpected prepared parameter
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+
+# also when the serialized statement does not list it among its parameters
+statement error
+SELECT 1 FROM json_execute_serialized_sql(replace(json_serialize_sql('SELECT $1 + 1'), ',"named_param_map":[{"key":"1","value":1}]', ''));
+----
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+
+statement error
+EXPLAIN SELECT * FROM json_execute_serialized_sql(replace(json_serialize_sql('SELECT $1::INTEGER AS p'), ',"named_param_map":[{"key":"1","value":1}]', ''));
+----
+Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
 
 # a parameter in a part of the statement that is never bound is ignored
 query I
@@ -33,9 +59,11 @@ EXPLAIN SELECT * FROM (VALUES ('abc'::INTEGER));
 ----
 Conversion Error: Could not convert string 'abc' to INT32
 
-# the function binds it without planning it, so the outer query can be explained
-statement ok
+# the function plans it when the outer query is bound, so explaining the outer query fails too
+statement error
 EXPLAIN SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM (VALUES (''abc''::INTEGER))'));
+----
+Conversion Error: Could not convert string 'abc' to INT32
 
 statement error
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM (VALUES (''abc''::INTEGER))'));
