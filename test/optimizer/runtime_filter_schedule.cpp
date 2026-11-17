@@ -103,16 +103,6 @@ TEST_CASE("Small runtime filter builds bound input work", "[runtime_filter_sched
 	auto &aggregate_projection =
 	    plan.Make<PhysicalProjection>(vector<LogicalType> {}, vector<unique_ptr<Expression>> {}, 1);
 	aggregate_projection.children.push_back(aggregate);
-	LogicalComparisonJoin logical_mark(JoinType::MARK);
-	auto &small_mark = plan.Make<PhysicalHashJoin>(logical_mark, small_input, small_input, vector<JoinCondition> {},
-	                                               JoinType::MARK, DEFAULT_ROW_GROUP_SIZE);
-	auto &large_mark = plan.Make<PhysicalHashJoin>(logical_mark, large_input, small_input, vector<JoinCondition> {},
-	                                               JoinType::MARK, 1);
-	auto &aggregate_mark =
-	    plan.Make<PhysicalHashJoin>(logical_mark, small_input, aggregate, vector<JoinCondition> {}, JoinType::MARK, 1);
-	LogicalComparisonJoin logical_inner(JoinType::INNER);
-	auto &small_join = plan.Make<PhysicalHashJoin>(logical_inner, small_input, small_input, vector<JoinCondition> {},
-	                                               JoinType::INNER, 1);
 	auto &scan =
 	    plan.Make<PhysicalTableScan>(vector<LogicalType> {}, BoundTableFunction(), nullptr, vector<LogicalType> {},
 	                                 vector<ColumnIndex> {}, vector<idx_t> {}, vector<string> {}, nullptr, 1000000,
@@ -123,9 +113,19 @@ TEST_CASE("Small runtime filter builds bound input work", "[runtime_filter_sched
 
 	vector<pair<reference<PhysicalOperator>, bool>> builds {{small_input, true},      {large_input, false},
 	                                                        {small_projection, true}, {large_projection, false},
-	                                                        {aggregate, false},       {aggregate_projection, false},
-	                                                        {small_mark, true},       {large_mark, false},
-	                                                        {aggregate_mark, false},  {small_join, false}};
+	                                                        {aggregate, false},       {aggregate_projection, false}};
+	for (auto join_type : {JoinType::MARK, JoinType::SEMI, JoinType::ANTI, JoinType::INNER}) {
+		LogicalComparisonJoin logical_join(join_type);
+		auto &small_join = plan.Make<PhysicalHashJoin>(logical_join, small_input, small_input, vector<JoinCondition> {},
+		                                               join_type, DEFAULT_ROW_GROUP_SIZE);
+		auto &large_join =
+		    plan.Make<PhysicalHashJoin>(logical_join, large_input, small_input, vector<JoinCondition> {}, join_type, 1);
+		auto &aggregate_join =
+		    plan.Make<PhysicalHashJoin>(logical_join, small_input, aggregate, vector<JoinCondition> {}, join_type, 1);
+		builds.emplace_back(small_join, join_type != JoinType::INNER);
+		builds.emplace_back(large_join, false);
+		builds.emplace_back(aggregate_join, false);
+	}
 	vector<pair<bool, bool>> consumers {{false, false}, {true, false}, {false, true}};
 	for (auto &build : builds) {
 		for (auto &consumer : consumers) {

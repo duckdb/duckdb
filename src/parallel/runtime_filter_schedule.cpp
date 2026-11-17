@@ -25,10 +25,13 @@ static optional_ptr<PhysicalComparisonJoin> RuntimeFilterProducer(Pipeline &pipe
 }
 
 static bool IsSmallBuild(const PhysicalOperator &op) {
-	// Hash MARK joins implement IN predicates without expanding the probe side.
-	const auto mark_join =
-	    op.type == PhysicalOperatorType::HASH_JOIN && op.Cast<PhysicalComparisonJoin>().join_type == JoinType::MARK;
-	if (op.estimated_cardinality > DEFAULT_ROW_GROUP_SIZE || (op.IsSink() && !mark_join)) {
+	// Membership joins do not expand the probe side.
+	bool membership_join = false;
+	if (op.type == PhysicalOperatorType::HASH_JOIN) {
+		const auto join_type = op.Cast<PhysicalComparisonJoin>().join_type;
+		membership_join = join_type == JoinType::MARK || join_type == JoinType::SEMI || join_type == JoinType::ANTI;
+	}
+	if (op.estimated_cardinality > DEFAULT_ROW_GROUP_SIZE || (op.IsSink() && !membership_join)) {
 		return false;
 	}
 	for (auto &child : op.children) {
