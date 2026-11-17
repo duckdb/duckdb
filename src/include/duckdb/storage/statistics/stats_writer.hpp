@@ -131,7 +131,9 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
-	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY),
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR),
+	      is_geometry(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY),
+	      geometry_model(Geometry::GetModel(type)),
 	      is_bignum(BaseStatistics::GetStatsType(type) == StatisticsType::BIGNUM_STATS) {
 		Clear();
 	}
@@ -157,7 +159,7 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	inline void Update(const string_t &value) {
 		SetHasValid();
 		if (is_geometry) {
-			geometry_stats.Update(value);
+			geometry_stats.Update(value, geometry_model);
 			return;
 		}
 		if (is_bignum) {
@@ -249,7 +251,7 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {
-			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
+			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats, geometry_model);
 		} else if (is_bignum) {
 			BignumStats::Merge(other, string_t(bignum_min), string_t(bignum_max));
 		} else {
@@ -281,6 +283,7 @@ private:
 	idx_t total_string_length;
 	bool is_varchar;
 	bool is_geometry;
+	GeometryModel geometry_model;
 	bool is_bignum;
 	GeometryStatsData geometry_stats;
 	string bignum_min;

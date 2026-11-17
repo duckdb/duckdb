@@ -109,7 +109,7 @@ void SingleFileTableDataWriter::AddPendingPublication(unique_ptr<PendingPublicat
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
-	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
+	checkpoint_manager.partial_block_manager.FlushPartialBlocks(checkpoint_manager.GetContext());
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,

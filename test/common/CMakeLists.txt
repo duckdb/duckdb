@@ -17,6 +17,7 @@ add_library_unity(
   test_file_system.cpp
   test_fsst.cpp
   test_gzip_file_system.cpp
+  test_geometry_extent.cpp
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_expression_executor.cpp
@@ -41,6 +42,7 @@ add_library_unity(
   test_parse_memory_limit_slurm.cpp
   test_pipeline_broadcast_exchange.cpp
   test_recursive_cte_metrics.cpp
+  test_scan_affinity.cpp
   test_scalar_executor.cpp
   test_shared_ptr.cpp
   test_string_stats.cpp

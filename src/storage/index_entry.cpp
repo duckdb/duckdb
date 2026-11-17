@@ -524,7 +524,7 @@ IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 
 	auto partial_block_manager = index_writer.CreatePerIndexPartialBlockManager();
 	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
-	partial_block_manager.FlushPartialBlocks();
+	partial_block_manager.FlushPartialBlocks(index_writer.GetContext());
 
 	InstallShadowInternal(std::move(checkpoint.shadow_index));
 	return checkpoint;

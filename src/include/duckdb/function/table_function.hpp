@@ -20,6 +20,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/pipeline_execution_order.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -166,6 +167,9 @@ struct TableFunctionInitInput {
 	optional_ptr<const PhysicalOperator> op;
 	//! (Optional) Set when a multi-file scan initializes this function to read one of its files
 	optional_ptr<const TableFunctionFileInitInput> multi_file_input;
+	//! Runtime pipeline requirements, supplied only when initializing the source's local state.
+	PipelineExecutionOrder execution_order = PipelineExecutionOrder::ORDERED;
+	idx_t max_threads = 1;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {

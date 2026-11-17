@@ -476,13 +476,16 @@ Some files are auto-generated. After modifying their sources, run:
 make generate-files
 ```
 This regenerates:
-- C API bindings
+- C API bindings (V1 only; V2 is regenerated with `./scripts/capi_v2_regen.sh`)
 - Function registration
 - Settings
 - Serialization code
 - Storage info
 - Metric enums
 - Enum utilities
+
+Before changing anything under `api_spec/`, `src/main/capi/` or `tools/cpp/`, or a generated C API
+header, read [api_spec/AGENTS.md](api_spec/AGENTS.md).
 
 ## Documentation
 
