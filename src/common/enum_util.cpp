@@ -132,6 +132,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
+#include "duckdb/execution/operator/order/top_n_boundary.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
@@ -7173,6 +7174,42 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
 	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 5, "TimestampCastResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTopNBoundaryRowOrderValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TopNBoundaryRowOrder::ANY), "ANY" },
+		{ static_cast<uint32_t>(TopNBoundaryRowOrder::INPUT_ORDER), "INPUT_ORDER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryRowOrder>(TopNBoundaryRowOrder value) {
+	return StringUtil::EnumToString(GetTopNBoundaryRowOrderValues(), 2, "TopNBoundaryRowOrder", static_cast<uint32_t>(value));
+}
+
+template<>
+TopNBoundaryRowOrder EnumUtil::FromString<TopNBoundaryRowOrder>(const char *value) {
+	return static_cast<TopNBoundaryRowOrder>(StringUtil::StringToEnum(GetTopNBoundaryRowOrderValues(), 2, "TopNBoundaryRowOrder", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTopNBoundaryTiesValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TopNBoundaryTies::EXCLUDE), "EXCLUDE" },
+		{ static_cast<uint32_t>(TopNBoundaryTies::INCLUDE), "INCLUDE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TopNBoundaryTies>(TopNBoundaryTies value) {
+	return StringUtil::EnumToString(GetTopNBoundaryTiesValues(), 2, "TopNBoundaryTies", static_cast<uint32_t>(value));
+}
+
+template<>
+TopNBoundaryTies EnumUtil::FromString<TopNBoundaryTies>(const char *value) {
+	return static_cast<TopNBoundaryTies>(StringUtil::StringToEnum(GetTopNBoundaryTiesValues(), 2, "TopNBoundaryTies", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
