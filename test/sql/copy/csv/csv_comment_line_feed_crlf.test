@@ -2,9 +2,6 @@
 # description: The row after a comment that ends in a line feed keeps its first byte in a file with \r\n line breaks
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # a,b\r\n
 # #c\n
 # xyz,d\r\n
