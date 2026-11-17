@@ -310,10 +310,7 @@ T ReadBinaryDecimalValue(VariantPrimitiveType primitive_type, const_data_ptr_t p
 // ShreddedGroupView
 //===--------------------------------------------------------------------===//
 void ShreddedGroupView::Build(Vector &group) {
-	if (group.GetType().id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("Variant group has to be a group of 'value'/'typed_value', not %s",
-		                            group.GetType().ToString());
-	}
+	D_ASSERT(group.GetType().id() == LogicalTypeId::STRUCT);
 	auto &entries = StructVector::GetEntries(group);
 	auto &child_types = StructType::GetChildTypes(group.GetType());
 	D_ASSERT(entries.size() == child_types.size());
@@ -335,8 +332,8 @@ void ShreddedGroupView::Build(Vector &group) {
 		throw InvalidInputException("Required column 'value' not found in Variant group");
 	}
 	if (value_vec->GetType().InternalType() != PhysicalType::VARCHAR) {
-		throw InvalidInputException("Column 'value' of a Variant group has to be binary, not %s",
-		                            value_vec->GetType().ToString());
+		throw DataCorruptionException("Column 'value' of a Variant group has to be binary, not %s",
+		                              value_vec->GetType().ToString());
 	}
 
 	value = make_uniq<VectorIterator<string_t>>(*value_vec);
