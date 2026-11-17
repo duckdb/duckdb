@@ -39,9 +39,9 @@ void ValidityColumnData::AppendData(ColumnAppendState &state, UnifiedVectorForma
 }
 
 struct ValidityColumnCheckpointState : public ColumnCheckpointState {
-	ValidityColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	ValidityColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                              PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 	}
 
 public:
@@ -53,8 +53,9 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState>
-ValidityColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_uniq<ValidityColumnCheckpointState>(row_group, *this, partial_block_manager);
+ValidityColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
+                                          PartialBlockManager &partial_block_manager) {
+	return make_uniq<ValidityColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 void ValidityColumnData::Verify(RowGroup &parent) {

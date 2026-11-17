@@ -38,6 +38,10 @@ private:
 private:
 	//! Find all materialized CTEs and their refs
 	void FindCandidates(LogicalOperator &op);
+	//! Filters the reference of a materialized CTE on the left side of a SEMI join (or of a MARK join below a filter on
+	//! its mark) by what the filters on the right side imply for the join keys, when that makes every reference of the
+	//! CTE a filtered one
+	void GenerateSemiJoinFilters(LogicalOperator &op);
 	bool CanPushFilter(const MaterializedCTEInfo &info);
 	bool HasValidDependency(const MaterializedCTEInfo &info);
 	//! Creates an OR filter and pushes it into a materialized CTE

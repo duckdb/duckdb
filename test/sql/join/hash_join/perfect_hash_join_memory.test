@@ -2,8 +2,10 @@
 # description: Cost direct lookup before spilling and reserve optional dictionary output separately
 # group: [hash_join]
 
-# The fixed memory budgets below assume default-sized vectors.
+# The fixed memory budgets below assume default-sized vectors and 64-bit memory usage.
 require vector_size 2048
+
+require 64bit
 
 require skip_reload
 

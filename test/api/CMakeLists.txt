@@ -8,6 +8,7 @@ add_subdirectory(cpp)
 set(TEST_API_OBJECTS
     test_api.cpp
     test_multi_file_column_mapper.cpp
+    test_multi_file_lazy_initialization.cpp
     test_process_util.cpp
     test_random_after_clone.cpp
     test_remove_directory_extended.cpp
@@ -68,6 +69,7 @@ set(TEST_API_OBJECTS
     test_extension_metrics.cpp
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
+    test_native_scan.cpp
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
