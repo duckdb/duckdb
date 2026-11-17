@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
@@ -281,7 +282,7 @@ void RegisterLifecycleCopyFunction(DuckDB &db, const string &name, const shared_
 	loader.RegisterFunction(CreateLifecycleCopyFunction(name, info, batch_mode));
 }
 
-void RemoveDirectoryIfPresent(FileSystem &fs, const string &path) {
+void RemoveDirectoryIfPresent(ContextFileSystem &fs, const string &path) {
 	if (fs.DirectoryExists(path)) {
 		fs.RemoveDirectoryExtended(path, {RemoveDirectoryMode::RECURSIVE});
 	}

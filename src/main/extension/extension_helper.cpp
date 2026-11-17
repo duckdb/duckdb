@@ -250,9 +250,9 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
-                                                     const string &full_extension_path, const string &extension_name,
-                                                     const string &extension_directory) {
+static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db,
+                                                     ContextFileSystem &fs, const string &full_extension_path,
+                                                     const string &extension_name, const string &extension_directory) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 

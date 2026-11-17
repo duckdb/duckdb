@@ -38,6 +38,7 @@ class AttachedDatabase;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
+class ContextFileSystem;
 class Logger;
 class ClientContext;
 class CompressedFileSystem;
@@ -193,10 +194,10 @@ public:
 	DUCKDB_API virtual ~FileSystem();
 
 public:
-	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
-	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
-	DUCKDB_API static FileSystem &GetLocal(DatabaseInstance &db);
-	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
+	DUCKDB_API static ContextFileSystem &GetFileSystem(ClientContext &context);
+	DUCKDB_API static ContextFileSystem &GetFileSystem(DatabaseInstance &db);
+	DUCKDB_API static ContextFileSystem &GetLocal(DatabaseInstance &db);
+	DUCKDB_API static ContextFileSystem &Get(AttachedDatabase &db);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);

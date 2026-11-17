@@ -572,7 +572,7 @@ ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollec
 	return buffer;
 }
 
-ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options_p,
+ParquetWriter::ParquetWriter(ClientContext &context, ContextFileSystem &fs, ParquetWriterOptions &&options_p,
                              const vector<pair<string, string>> &kv_metadata)
     : context(context), options(std::move(options_p)), metadata_arena(BufferAllocator::Get(context)),
       file_meta_data(metadata_arena) {

@@ -371,7 +371,7 @@ private:
 	StorageManager &storage_manager;
 	AttachedDatabase &database;
 	const string &main_wal_path;
-	FileSystem &fs;
+	ContextFileSystem &fs;
 };
 
 unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,

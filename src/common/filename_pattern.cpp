@@ -95,7 +95,7 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	}
 }
 
-string FilenamePattern::CreateFilename(FileSystem &fs, const string &path, const string &extension,
+string FilenamePattern::CreateFilename(ContextFileSystem &fs, const string &path, const string &extension,
                                        idx_t offset) const {
 	string result;
 	for (auto &segment : segments) {

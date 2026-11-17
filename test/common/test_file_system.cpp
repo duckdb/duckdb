@@ -5,7 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -47,9 +47,9 @@ public:
 	bool create_called = false;
 };
 
-class TestOpenerFileSystem : public OpenerFileSystem {
+class TestContextFileSystem : public ContextFileSystem {
 public:
-	TestOpenerFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
+	TestContextFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
 	    : file_system(file_system_p), opener(opener_p) {
 	}
 
@@ -393,7 +393,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
 	auto fs = FileSystem::CreateLocal();
-	TestOpenerFileSystem opener_fs(*fs, opener);
+	TestContextFileSystem opener_fs(*fs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
 	if (fs->DirectoryExists(base)) {
 		fs->RemoveDirectory(base);

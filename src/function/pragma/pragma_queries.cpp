@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"

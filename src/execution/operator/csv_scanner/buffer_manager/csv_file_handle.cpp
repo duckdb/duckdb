@@ -18,8 +18,8 @@ CSVFileHandle::CSVFileHandle(ClientContext &context_p, unique_ptr<FileHandle> fi
 	compression_type = file_handle->GetFileCompressionType();
 }
 
-unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
-                                                     FileCompressionType compression) {
+unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(ContextFileSystem &fs, Allocator &allocator,
+                                                     const OpenFileInfo &file, FileCompressionType compression) {
 	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS | std::move(compression);
 	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
 	auto file_handle = fs.OpenFile(file, flags);

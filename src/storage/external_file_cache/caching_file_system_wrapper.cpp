@@ -46,13 +46,14 @@ void CachingFileHandleWrapper::Close() {
 // CachingFileSystemWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db, CachingMode mode)
-    : caching_file_system(file_system, db), underlying_file_system(file_system), caching_mode(mode) {
+    : underlying_file_system(file_system), bound_file_system(file_system, nullptr),
+      caching_file_system(bound_file_system, db), caching_mode(mode) {
 }
 
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
                                                    CachingMode mode)
-    : caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system),
-      caching_mode(mode) {
+    : underlying_file_system(file_system), bound_file_system(file_system, file_opener),
+      caching_file_system(bound_file_system, GetDatabaseInstance(file_opener)), caching_mode(mode) {
 }
 
 bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {

@@ -103,7 +103,7 @@ void FileOpenFlags::Verify() {
 FileSystem::~FileSystem() {
 }
 
-FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
+ContextFileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return context.GetContext().GetFileSystem();
 }
 

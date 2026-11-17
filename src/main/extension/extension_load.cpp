@@ -489,7 +489,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 #ifndef WASM_LOADABLE_EXTENSIONS
 // The trusted user-provided repositories for which is_installed holds. This only feeds an error message, so a
 // repository file that cannot be read is skipped rather than reported
-static vector<string> FindUserRepositoryInstalls(DatabaseInstance &db, FileSystem &fs,
+static vector<string> FindUserRepositoryInstalls(DatabaseInstance &db, ContextFileSystem &fs,
                                                  const std::function<bool(const string &)> &is_installed) {
 	vector<string> result;
 	if (!ExtensionRepositoryManager::TrustsExistingRepositories(db)) {
@@ -508,7 +508,7 @@ static vector<string> FindUserRepositoryInstalls(DatabaseInstance &db, FileSyste
 }
 #endif
 
-bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, ContextFileSystem &fs, const string &extension,
                                      const string &repository_name, bool core_only, ExtensionInitResult &result,
                                      string &error) {
 	auto &provider = db.config.GetExternalExtensionProvider();
@@ -776,7 +776,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	return true;
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, ContextFileSystem &fs, const string &extension,
                                                  const string &repository_name, bool core_only) {
 	string error;
 	ExtensionInitResult result;
@@ -824,8 +824,8 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
-                                            optional_ptr<ClientContext> context) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, ContextFileSystem &fs,
+                                            const ExtensionLoadOptions &options, optional_ptr<ClientContext> context) {
 	// Loading a second copy of an extension that is already linked into this binary is an ODR
 	// violation, so ask the registry of extensions linked into this binary first.
 	// Statically linked extensions are inherently core-trusted, so only take this shortcut for a bare
@@ -854,9 +854,10 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	}
 }
 
-void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                    const string &repository_name, bool core_only,
-                                                    ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, ContextFileSystem &fs,
+                                                    const string &extension, const string &repository_name,
+                                                    bool core_only, ExtensionActiveLoad &info,
+                                                    optional_ptr<ClientContext> context) {
 	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
 	auto loaded_path = fs.CanonicalizePath(extension_init_result.filename);
 

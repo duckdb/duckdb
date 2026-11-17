@@ -136,7 +136,7 @@ struct JSONReaderScanState {
 	explicit JSONReaderScanState(ClientContext &context, Allocator &global_allocator,
 	                             idx_t reconstruct_buffer_capacity);
 
-	FileSystem &fs;
+	ContextFileSystem &fs;
 	Allocator &global_allocator;
 	//! Thread-local allocator
 	JSONAllocator allocator;

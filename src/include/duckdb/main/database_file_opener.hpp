@@ -10,7 +10,7 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/main/database.hpp"
@@ -53,7 +53,7 @@ private:
 	Context &context;
 };
 
-class DatabaseFileSystem : public OpenerFileSystem {
+class DatabaseFileSystem : public ContextFileSystem {
 public:
 	explicit DatabaseFileSystem(DatabaseInstance &db_p) : db(db_p), database_opener(db_p) {
 	}
@@ -71,7 +71,7 @@ private:
 	mutable DatabaseFileOpener database_opener;
 };
 
-class LocalDatabaseFileSystem : public OpenerFileSystem {
+class LocalDatabaseFileSystem : public ContextFileSystem {
 public:
 	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p);
 

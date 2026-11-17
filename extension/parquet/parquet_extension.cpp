@@ -1,4 +1,5 @@
 #include "parquet_extension.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include <stdint.h>
 #include <string>

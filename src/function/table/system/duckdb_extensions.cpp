@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"

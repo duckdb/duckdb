@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
@@ -209,7 +210,7 @@ public:
 		return original_path;
 	}
 	static bool NameIsReserved(const Identifier &name);
-	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	static Identifier ExtractDatabaseName(const string &dbpath, ContextFileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);

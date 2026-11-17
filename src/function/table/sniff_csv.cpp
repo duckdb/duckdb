@@ -1,4 +1,5 @@
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"

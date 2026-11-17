@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"

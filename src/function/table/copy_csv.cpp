@@ -1,4 +1,5 @@
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"

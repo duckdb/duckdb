@@ -9,6 +9,7 @@
 #pragma once
 
 // DuckDB C++ internals (also pulls in duckdb.h which defines idx_t, etc.)
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -335,10 +336,10 @@ inline void CheckRegistrationTarget(const DatabaseInstance &created_for, const D
 //! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
 class CV2FileSystem {
 public:
-	CV2FileSystem(FileSystem &fs, QueryContext query) : fs(fs), query(query) {
+	CV2FileSystem(ContextFileSystem &fs, QueryContext query) : fs(fs), query(query) {
 	}
 
-	FileSystem &fs;
+	ContextFileSystem &fs;
 	QueryContext query;
 };
 

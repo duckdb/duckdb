@@ -53,7 +53,7 @@ BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t siz
 }
 
 // IO operation is performed to stat the file.
-CacheValidationInfo GetValidationInfo(FileSystem &file_system, FileHandle &handle) {
+CacheValidationInfo GetValidationInfo(ContextFileSystem &file_system, FileHandle &handle) {
 	auto stats = file_system.Stats(handle);
 	CacheValidationInfo result;
 	result.file_size = NumericCast<idx_t>(stats.file_size);
@@ -196,7 +196,7 @@ private:
 // CachingFileSystem
 //===----------------------------------------------------------------------===//
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+CachingFileSystem::CachingFileSystem(ContextFileSystem &file_system_p, DatabaseInstance &db_p)
     : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
@@ -346,7 +346,7 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	file_handle = file_system.OpenFile(path, internal_flags, opener);
+	file_handle = file_system.OpenFile(path, internal_flags);
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
 	validation_info = GetValidationInfo(file_system, *file_handle);
 

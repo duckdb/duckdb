@@ -1,4 +1,5 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/common/exception.hpp"
 

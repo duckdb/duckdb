@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/exception.hpp"
@@ -28,7 +29,8 @@ static duckdb::vector<data_t> ReadFile(FileSystem &fs, const string &path) {
 	return result;
 }
 
-static void WriteFile(FileSystem &fs, const string &path, const duckdb::vector<data_t> &contents) {
+static void WriteFile(FileSystem &raw_fs, const string &path, const duckdb::vector<data_t> &contents) {
+	WrappedContextFileSystem fs(raw_fs, nullptr);
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	if (!contents.empty()) {
 		writer.WriteData(contents.data(), contents.size());
@@ -36,7 +38,8 @@ static void WriteFile(FileSystem &fs, const string &path, const duckdb::vector<d
 	writer.Sync();
 }
 
-static void WriteTornLegacyCheckpointMarker(FileSystem &fs, const string &path) {
+static void WriteTornLegacyCheckpointMarker(FileSystem &raw_fs, const string &path) {
+	WrappedContextFileSystem fs(raw_fs, nullptr);
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	BinarySerializer serializer(writer);
 	serializer.Begin();

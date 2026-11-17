@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -217,7 +218,7 @@ struct ParquetWriterOptions {
 
 class ParquetWriter {
 public:
-	ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options,
+	ParquetWriter(ClientContext &context, ContextFileSystem &fs, ParquetWriterOptions &&options,
 	              const vector<pair<string, string>> &kv_metadata);
 	~ParquetWriter();
 

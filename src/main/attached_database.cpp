@@ -256,7 +256,7 @@ static string RemoveQueryParams(const string &name) {
 	return vec[0];
 }
 
-Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
+Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, ContextFileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return Identifier("memory");
 	}

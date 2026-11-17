@@ -21,7 +21,8 @@
 
 namespace duckdb {
 
-static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(ContextFileSystem &fs, const string &path,
+                                                             idx_t &file_size) {
 	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	file_size = source_file->GetFileSize();
 	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);
@@ -30,7 +31,7 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 	return in_buffer;
 }
 
-static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
+static void WriteExtensionFileToDisk(QueryContext &query_context, ContextFileSystem &fs, const string &path, void *data,
                                      idx_t data_size, DatabaseInstance &db, ExtensionInstallInfo &info) {
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		string signature_key_fingerprint;
@@ -58,7 +59,8 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
 	target_file.reset();
 }
 
-static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
+static void WriteExtensionMetadataFileToDisk(ContextFileSystem &fs, const string &path,
+                                             ExtensionInstallInfo &metadata) {
 	// the metadata file records which repository the extension came from, and thereby which keys may have signed it,
 	// so it is part of the extension trust domain and reserved from other writers
 	auto file_writer = BufferedFileWriter(fs, path,
@@ -91,7 +93,7 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   1. Crash after extension removal: extension is now uninstalled, metadata file still present
 //   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
-static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
+static void WriteExtensionFiles(QueryContext &query_context, ContextFileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
                                 ExtensionInstallInfo &info, DatabaseInstance &db) {
 	// temp_path ends with '.duckdb_extension'
@@ -122,11 +124,10 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 }
 
 // Install an extension using a filesystem
-static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path,
-                                                               const string &temp_path, const string &extension_name,
-                                                               const string &local_extension_path,
-                                                               ExtensionInstallOptions &options,
-                                                               optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo>
+DirectInstallExtension(DatabaseInstance &db, ContextFileSystem &fs, const string &path, const string &temp_path,
+                       const string &extension_name, const string &local_extension_path,
+                       ExtensionInstallOptions &options, optional_ptr<ClientContext> context) {
 	string extension;
 	string file;
 	if (fs.IsRemoteFile(path, extension)) {
@@ -341,18 +342,18 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 	}
 
 	QueryContext query_context(context);
-	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
+	auto local_fs = FileSystem::CreateLocal();
+	WrappedContextFileSystem fs(*local_fs, nullptr);
+	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
 
 // Install an extension using a hand-rolled http request
-static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url,
-                                                              const string &extension_name, const string &temp_path,
-                                                              const string &local_extension_path,
-                                                              ExtensionInstallOptions &options,
-                                                              optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo>
+InstallFromRepository(DatabaseInstance &db, ContextFileSystem &fs, const string &url, const string &extension_name,
+                      const string &temp_path, const string &local_extension_path, ExtensionInstallOptions &options,
+                      optional_ptr<ClientContext> context) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
@@ -379,7 +380,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	                              context);
 }
 
-static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
+static void ThrowErrorOnMismatchingExtensionOrigin(ContextFileSystem &fs, const string &local_extension_path,
                                                    const string &extension_name, const string &extension,
                                                    optional_ptr<ExtensionRepository> repository) {
 	auto install_info = ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
@@ -405,7 +406,7 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 	}
 }
 
-unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, FileSystem &fs,
+unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, ContextFileSystem &fs,
                                                           const string &local_path, const string &extension,
                                                           ExtensionInstallOptions &options,
                                                           optional_ptr<ClientContext> context) {

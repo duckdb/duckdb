@@ -36,6 +36,7 @@ class ObjectCache;
 struct AttachInfo;
 struct AttachOptions;
 class DatabaseFileSystem;
+class ContextFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
 class OSUtil;
@@ -62,8 +63,8 @@ public:
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API ExternalResourceTypeRegistry &GetExternalResourceTypeRegistry();
 	DUCKDB_API ExternalResourcesManager &GetExternalResourcesManager();
-	DUCKDB_API FileSystem &GetFileSystem();
-	DUCKDB_API FileSystem &GetLocalFileSystem();
+	DUCKDB_API ContextFileSystem &GetFileSystem();
+	DUCKDB_API ContextFileSystem &GetLocalFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -199,7 +200,7 @@ public:
 	// Same, for an extension built against the V2 C API
 	DUCKDB_API void LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun);
 
-	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API ContextFileSystem &GetFileSystem();
 
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();

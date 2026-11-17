@@ -63,7 +63,7 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	return link;
 }
 
-vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) {
+vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(ContextFileSystem &fs) {
 	vector<duckdb::string> default_folders;
 // These fallbacks are necessary if the user doesn't use the CMake build.
 #ifndef DUCKDB_EXTENSION_DIRECTORIES
@@ -101,7 +101,7 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context
 	return GetExtensionDirectoryPath(db, fs);
 }
 
-vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
+vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, ContextFileSystem &fs) {
 	vector<string> extension_directories;
 	auto &config = db.config;
 
@@ -145,7 +145,7 @@ vector<InstalledExtensionDirectory> ExtensionHelper::GetInstalledExtensionDirect
 }
 
 vector<InstalledExtensionDirectory> ExtensionHelper::GetInstalledExtensionDirectories(DatabaseInstance &db,
-                                                                                      FileSystem &fs) {
+                                                                                      ContextFileSystem &fs) {
 	auto extension_directories = GetExtensionDirectoryPath(db, fs);
 	vector<InstalledExtensionDirectory> result;
 	for (auto &directory : extension_directories) {
@@ -180,7 +180,7 @@ bool ExtensionHelper::IsInstalledExtensionFile(const string &path) {
 	return StringUtil::EndsWith(path, ".duckdb_extension") && !StringUtil::Contains(path, ".duckdb_extension.tmp-");
 }
 
-string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
+string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, ContextFileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
@@ -232,7 +232,7 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DatabaseInstance &db, FileSystem &fs,
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DatabaseInstance &db, ContextFileSystem &fs,
                                                                    const string &extension,
                                                                    ExtensionInstallOptions &options) {
 #ifdef WASM_LOADABLE_EXTENSIONS
@@ -279,7 +279,7 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, ContextFileSystem &fs,
                                                                            const string &local_path,
                                                                            const string &extension,
                                                                            ExtensionInstallOptions &options,

@@ -1,4 +1,5 @@
 #include "duckdb/main/extension_repository_manager.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -569,7 +570,7 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 //===--------------------------------------------------------------------===//
 // Repository storage
 //===--------------------------------------------------------------------===//
-string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, FileSystem &fs) {
+string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, ContextFileSystem &fs) {
 	auto directory = Settings::Get<ExtensionRepositoryDirectorySetting>(db);
 	if (directory.empty()) {
 		directory = fs.JoinPath(fs.JoinPath(fs.GetHomeDirectory(), ".duckdb"), "extension_repositories");
@@ -577,7 +578,7 @@ string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, 
 	return fs.ExpandPath(fs.ConvertSeparators(directory));
 }
 
-string ExtensionRepositoryManager::GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name) {
+string ExtensionRepositoryManager::GetRepositoryPath(DatabaseInstance &db, ContextFileSystem &fs, const string &name) {
 	return fs.JoinPath(GetRepositoryDirectory(db, fs), name + FILE_EXTENSION);
 }
 
@@ -623,7 +624,7 @@ static vector<string> ReadJSONKeys(yyjson_val *root, const string &path) {
 	return result;
 }
 
-ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, const string &path) {
+ExtensionRepository ExtensionRepositoryManager::ReadRepository(ContextFileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = handle->GetFileSize();
 	auto buffer = make_unsafe_uniq_array<char>(file_size);
@@ -712,7 +713,7 @@ static string DescribeDifference(const ExtensionRepository &stored, const Extens
 	return string();
 }
 
-ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstance &db, FileSystem &fs,
+ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstance &db, ContextFileSystem &fs,
                                                                  optional_ptr<ClientContext> context,
                                                                  const ExtensionRepository &requested,
                                                                  OnCreateConflict on_conflict) {
@@ -835,7 +836,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	return result;
 }
 
-void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem &fs, const string &name_p,
+void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, ContextFileSystem &fs, const string &name_p,
                                                 OnEntryNotFound on_entry_not_found) {
 	// dropping a repository only removes a trusted key, so it is not gated by the opt-in; it is still frozen by a
 	// locked configuration
@@ -852,7 +853,7 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 	fs.RemoveFile(file_path);
 }
 
-vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(DatabaseInstance &db, FileSystem &fs) {
+vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(DatabaseInstance &db, ContextFileSystem &fs) {
 	// note that existing repositories are always readable, even when adding new ones is not allowed: extensions from
 	// repositories that were created earlier can still be installed and loaded
 	vector<ExtensionRepository> result;
@@ -881,7 +882,7 @@ vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(Database
 	return result;
 }
 
-bool ExtensionRepositoryManager::TryGetRepository(DatabaseInstance &db, FileSystem &fs, const string &name_p,
+bool ExtensionRepositoryManager::TryGetRepository(DatabaseInstance &db, ContextFileSystem &fs, const string &name_p,
                                                   ExtensionRepository &result) {
 	// existing repositories are always resolvable, even when adding new ones is not allowed
 	string name;

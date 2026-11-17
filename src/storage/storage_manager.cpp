@@ -1,4 +1,5 @@
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"

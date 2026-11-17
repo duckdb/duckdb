@@ -63,7 +63,7 @@ add_library_unity(
   local_file_system.cpp
   memory_mapped_file.cpp
   error_data.cpp
-  opener_file_system.cpp
+  context_file_system.cpp
   open_file_info.cpp
   optional_idx.cpp
   printer.cpp

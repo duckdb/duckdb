@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -122,12 +123,12 @@ public:
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
 	                                                         ExtensionInstallOptions &options);
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, ContextFileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
 	//! Load an extension. `context`, where available, is lent to a V2 C API extension's entrypoint; without one the
 	//! loader opens an internal connection for the duration of the load instead.
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
+	static void LoadExternalExtension(DatabaseInstance &db, ContextFileSystem &fs, const ExtensionLoadOptions &options,
 	                                  optional_ptr<ClientContext> context = nullptr);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
@@ -155,15 +156,16 @@ public:
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
-	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
+	static string ExtensionDirectory(DatabaseInstance &db, ContextFileSystem &fs);
 
 	// Get all extension directory paths (flat)
 	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
-	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, ContextFileSystem &fs);
 
 	// Get all extension directory paths, including those in the 'repositories' subdirectory
 	static vector<InstalledExtensionDirectory> GetInstalledExtensionDirectories(ClientContext &context);
-	static vector<InstalledExtensionDirectory> GetInstalledExtensionDirectories(DatabaseInstance &db, FileSystem &fs);
+	static vector<InstalledExtensionDirectory> GetInstalledExtensionDirectories(DatabaseInstance &db,
+	                                                                            ContextFileSystem &fs);
 
 	//! Whether a file in an extension directory is an installed extension, and not the temporary file of an install
 	static bool IsInstalledExtensionFile(const string &path);
@@ -297,21 +299,21 @@ public:
 	static string ExtensionInstallDocumentationLink(const string &extension_name);
 
 private:
-	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, ContextFileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
 	                                                                 ExtensionInstallOptions &options,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
-	static vector<string> DefaultExtensionFolders(FileSystem &fs);
+	static vector<string> DefaultExtensionFolders(ContextFileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	static ExtensionInitResult InitialLoad(DatabaseInstance &db, ContextFileSystem &fs, const string &extension,
 	                                       const string &repository_name = string(), bool core_only = false);
-	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	static bool TryInitialLoad(DatabaseInstance &db, ContextFileSystem &fs, const string &extension,
 	                           const string &repository_name, bool core_only, ExtensionInitResult &result,
 	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
-	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	static void LoadExternalExtensionInternal(DatabaseInstance &db, ContextFileSystem &fs, const string &extension,
 	                                          const string &repository_name, bool core_only, ExtensionActiveLoad &info,
 	                                          optional_ptr<ClientContext> context);
 

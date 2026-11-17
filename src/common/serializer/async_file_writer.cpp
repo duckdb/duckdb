@@ -42,7 +42,7 @@ private:
 	idx_t size = 0;
 };
 
-AsyncFileWriter::AsyncFileWriter(Context &context_p, FileSystem &fs_p, const string &path_p,
+AsyncFileWriter::AsyncFileWriter(Context &context_p, ContextFileSystem &fs_p, const string &path_p,
                                  const FileOpenFlags &open_flags)
     : context(context_p), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
@@ -300,7 +300,7 @@ FileWriteMode AsyncFileWriter::GetWriteMode() {
 }
 
 bool AsyncFileWriter::IsLocalFile() {
-	auto local_file = fs.IsLocalFileSystem();
+	auto local_file = fs.GetFileSystem().IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {
 			local_file = handle->OnDiskFile();

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/enable_shared_from_this_ipp.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -140,8 +141,9 @@ private:
 	// Return an optional caching file handle, if certain filepath is cached.
 	CachingFileHandle *GetCachingHandleIfPossible(FileHandle &handle);
 
-	CachingFileSystem caching_file_system;
 	FileSystem &underlying_file_system;
+	WrappedContextFileSystem bound_file_system;
+	CachingFileSystem caching_file_system;
 	CachingMode caching_mode;
 };
 

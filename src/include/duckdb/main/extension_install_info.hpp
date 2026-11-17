@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -85,7 +86,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 
 	//! Try to read install info. returns ExtensionInstallMode::UNKNOWN on missing file, and throws on corrupt file
-	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path,
+	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(ContextFileSystem &fs, const string &info_file_path,
 	                                                        const string &extension_name);
 
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);

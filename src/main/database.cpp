@@ -165,15 +165,15 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
-FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
+ContextFileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
 
-FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
+ContextFileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
 	return db.GetLocalFileSystem();
 }
 
-FileSystem &FileSystem::Get(AttachedDatabase &db) {
+ContextFileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
@@ -402,7 +402,8 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
+			WrappedContextFileSystem raw_fs(*config.file_system, nullptr);
+			ExtensionHelper::LoadExternalExtension(*this, raw_fs, {config.options.database_type});
 		}
 	}
 
@@ -468,11 +469,11 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 	return *object_cache;
 }
 
-FileSystem &DatabaseInstance::GetFileSystem() {
+ContextFileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
-FileSystem &DatabaseInstance::GetLocalFileSystem() {
+ContextFileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
@@ -513,7 +514,7 @@ ExtensionManager &DatabaseInstance::GetExtensionManager() {
 	return *extension_manager;
 }
 
-FileSystem &DuckDB::GetFileSystem() {
+ContextFileSystem &DuckDB::GetFileSystem() {
 	return instance->GetFileSystem();
 }
 

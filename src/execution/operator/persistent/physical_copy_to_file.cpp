@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -127,7 +128,7 @@ enum class CopyDirectoryState : uint8_t { PENDING, COMPLETE, FAILED };
 
 class CopyDirectoryManager {
 public:
-	bool EnsureDirectory(FileSystem &fs, const string &dir_path);
+	bool EnsureDirectory(ContextFileSystem &fs, const string &dir_path);
 
 private:
 	struct DirectoryEntry {
@@ -1713,7 +1714,7 @@ static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyTo
 	return StringValue::Get(path);
 }
 
-void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
+void CheckDirectory(ContextFileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
 	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE ||
 	    overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
@@ -1875,7 +1876,7 @@ void CopyFileLifecycleExecutor::ThrowError() {
 //===--------------------------------------------------------------------===//
 // Copy File State Helpers
 //===--------------------------------------------------------------------===//
-bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
+bool CopyDirectoryManager::EnsureDirectory(ContextFileSystem &fs, const string &dir_path) {
 #ifdef D_ASSERT_IS_ENABLED
 	bool created_entry = false;
 #endif

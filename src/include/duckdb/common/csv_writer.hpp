@@ -66,8 +66,8 @@ public:
 	CSVWriter(CSVReaderOptions &options, AsyncFileWriter &file_writer, bool shared = true);
 
 	//! Create a CSVWriter that writes to a file
-	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,
-	          QueryContext context = QueryContext(), bool shared = true);
+	CSVWriter(CSVReaderOptions &options, ContextFileSystem &fs, const string &file_path,
+	          FileCompressionType compression, QueryContext context = QueryContext(), bool shared = true);
 	~CSVWriter();
 
 	//! Writes header and prefix if necessary

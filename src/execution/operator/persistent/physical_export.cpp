@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_export.hpp"
+#include "duckdb/common/context_file_system.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -47,7 +48,7 @@ static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entrie
 	ss << '\n';
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
+static void WriteStringStreamToFile(ContextFileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileLockType::WRITE_LOCK);
@@ -55,7 +56,8 @@ static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const stri
 	handle.reset();
 }
 
-static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table) {
+static void WriteCopyStatement(ContextFileSystem &fs, stringstream &ss, CopyInfo &info,
+                               ExportedTableData &exported_table) {
 	ss << "COPY ";
 
 	//! NOTE: The catalog is explicitly not set here

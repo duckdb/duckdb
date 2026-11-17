@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/context_file_system.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
