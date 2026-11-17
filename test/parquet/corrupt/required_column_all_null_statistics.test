@@ -1,30 +1,24 @@
 # name: test/parquet/corrupt/required_column_all_null_statistics.test
-# description: A REQUIRED column whose statistics count every value as NULL is read from its pages
+# description: Reject statistics that count NULL values for a column that cannot hold NULL values
 # group: [corrupt]
 
 require parquet
 
 # The file is data/parquet-testing/required_dictionary_single_page.parquet (6001 rows of a REQUIRED BIGINT column,
 # all 1) with statistics added to the column chunk in the footer: null_count = 6001.
-query III
+# The column was read as 6001 NULL values, and a filter on it pruned the row group.
+statement error
 SELECT count(*), count(x), sum(x)
 FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_column_all_null_statistics.parquet');
 ----
-6001	6001	6001
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
 
-query I
+statement error
 SELECT count(*)
 FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_column_all_null_statistics.parquet')
 WHERE x = 1;
 ----
-6001
-
-query I
-SELECT count(*)
-FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_column_all_null_statistics.parquet')
-WHERE x IS NULL;
-----
-0
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
 
 # the unchanged file
 query III
