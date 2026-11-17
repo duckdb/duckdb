@@ -137,8 +137,8 @@ static unique_ptr<PartitionFilter> PreparePartitionFilter(ClientContext &context
 	return result;
 }
 
-//! Evaluates the filter over a chunk of files - if the filter throws, the files in the chunk are not pruned
-static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk &chunk,
+//! Evaluates the filter over a chunk of files - returns false (leaving the files unevaluated) if the filter throws
+static bool EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk &chunk,
                                          array_ptr<const idx_t> file_indexes,
                                          vector<PartitionFilterResult> &file_results) {
 	SelectionVector true_sel(chunk.size());
@@ -148,7 +148,7 @@ static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk
 	} catch (InternalException &) {
 		throw;
 	} catch (...) {
-		return;
+		return false;
 	}
 	for (auto &file_idx : file_indexes) {
 		file_results[file_idx] = PartitionFilterResult::PRUNE_FILE;
@@ -156,6 +156,7 @@ static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk
 	for (idx_t i = 0; i < true_count; i++) {
 		file_results[file_indexes[true_sel.get_index(i)]] = PartitionFilterResult::KEEP_FILE;
 	}
+	return true;
 }
 
 //! Loads the (unescaped) string values of a partition column for the given files into the result vector
@@ -208,14 +209,22 @@ EvaluatePartitionFilter(ClientContext &context, const PartitionFilter &filter,
 	ExpressionExecutor executor(context, *filter.expr);
 	DataChunk chunk;
 	chunk.InitializeEmpty(vector<LogicalType>(filter.columns.size(), LogicalType::VARCHAR));
-	for (idx_t offset = 0; offset < file_indexes.size(); offset += STANDARD_VECTOR_SIZE) {
-		auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, file_indexes.size() - offset);
-		auto batch = array_ptr<const idx_t>(file_indexes.data() + offset, count);
+	// if the filter throws for some files, the batch is split in halves so the remaining files can still be pruned
+	std::function<void(array_ptr<const idx_t>)> evaluate_files = [&](array_ptr<const idx_t> batch) {
 		for (idx_t col = 0; col < filter.columns.size(); col++) {
 			LoadPartitionColumn(filter.columns[col], filter.types[col], known_values, batch, chunk.data[col]);
 		}
-		chunk.SetChildCardinality(count);
-		EvaluatePartitionFilterChunk(executor, chunk, batch, file_results);
+		chunk.SetChildCardinality(batch.size());
+		if (EvaluatePartitionFilterChunk(executor, chunk, batch, file_results) || batch.size() == 1) {
+			return;
+		}
+		auto half = batch.size() / 2;
+		evaluate_files(array_ptr<const idx_t>(batch.data(), half));
+		evaluate_files(array_ptr<const idx_t>(batch.data() + half, batch.size() - half));
+	};
+	for (idx_t offset = 0; offset < file_indexes.size(); offset += STANDARD_VECTOR_SIZE) {
+		auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, file_indexes.size() - offset);
+		evaluate_files(array_ptr<const idx_t>(file_indexes.data() + offset, count));
 	}
 	return file_results;
 }
