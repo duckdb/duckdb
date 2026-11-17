@@ -77,7 +77,7 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 	if (!transaction.view.Sees(GetWriter(id))) {
 		return true;
 	}
-	// no statement writes a row whose delete it sees, only the replay of a WAL that deletes a row twice
+	// a delete the writer sees: a MERGE that matches the row twice, or the replay of a WAL that deletes it twice
 	return IsDeleteId(id);
 }
 

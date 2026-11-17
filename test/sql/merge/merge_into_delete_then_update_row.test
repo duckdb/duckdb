@@ -1,0 +1,35 @@
+# name: test/sql/merge/merge_into_delete_then_update_row.test
+# description: MERGE whose source matches one target row twice, for a DELETE and then for an UPDATE
+# group: [merge]
+
+statement ok
+CREATE TABLE t(id INTEGER, value INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 0);
+
+statement error
+MERGE INTO t
+USING (VALUES (1, 'd'), (1, 'u')) AS s(id, action)
+ON t.id = s.id
+WHEN MATCHED AND s.action = 'd' THEN DELETE
+WHEN MATCHED THEN UPDATE SET value = 1
+WHEN NOT MATCHED AND s.action = 'd' THEN INSERT VALUES (s.id, 0)
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, 1);
+----
+Conflict on update!
+
+# the statement is rolled back and the database stays usable
+query II
+SELECT * FROM t;
+----
+1	0
+
+statement ok
+INSERT INTO t VALUES (2, 0);
+
+query II
+SELECT * FROM t ORDER BY id;
+----
+1	0
+2	0
