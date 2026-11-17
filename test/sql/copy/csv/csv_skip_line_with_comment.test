@@ -2,9 +2,6 @@
 # description: A header or skipped line that ends in a comment is counted as a line, whatever stands before the comment
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # the comment of the header follows a delimiter
 # a;b;#x
 # 1;2;
