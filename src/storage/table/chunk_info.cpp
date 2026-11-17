@@ -68,7 +68,8 @@ static bool IsDeleteId(transaction_t id) {
 	return id < UPDATE_MARKER_BIT;
 }
 
-//! Whether writing new_id into a row conflicts with its id: a write by a transaction that the writer does not see
+//! Whether writing new_id into a row conflicts with its id: a write by a transaction that the writer does not see,
+//! or a delete that it sees
 static bool IsConflictingId(TransactionData transaction, transaction_t id, transaction_t new_id) {
 	if (id == NOT_DELETED_ID || id == new_id) {
 		return false;
@@ -76,11 +77,9 @@ static bool IsConflictingId(TransactionData transaction, transaction_t id, trans
 	if (!transaction.view.Sees(GetWriter(id))) {
 		return true;
 	}
-	if (IsDeleteId(id)) {
-		// a transaction cannot see a row whose delete it sees, so it never writes it
-		throw InternalException("ChunkVectorInfo: write of a row whose delete the transaction sees");
-	}
-	return false;
+	// a transaction cannot see a row whose delete it sees, so no statement writes it: only the replay of a WAL that
+	// writes a row after its delete gets here, and its write must not replace the delete id
+	return IsDeleteId(id);
 }
 
 ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
