@@ -104,19 +104,21 @@ public:
 	//! new page, and writes nothing. Paired with Prepare consuming precomputed ParquetCdcBoundaries.
 	vector<idx_t> RollCdcChunk(Vector &vector, idx_t count) override;
 	bool CutsByContent() const override {
-		return cdc_cut_pages;
+		// the type predicate lives here, not in Prepare, so the scan that takes the cuts and the prepare that
+		// reads them cannot disagree about whether a column is cut
+		return cdc_cut_pages && ParquetCdcSupportedType(Type());
 	}
 	void SetContentDefinedCuts(ColumnWriterState &state_p, const vector<vector<idx_t>> *cuts_per_chunk) const override {
 		state_p.Cast<PrimitiveColumnWriterState>().cdc_cuts_per_chunk = cuts_per_chunk;
 	}
 
 protected:
-	//! Whether the file asked for content-defined page boundaries at all. Whether this particular column gets
-	//! them additionally depends on it being a top-level column of a type the chunker can read - see Prepare.
+	//! Whether the file asked for content-defined page boundaries at all, for a column of a type the chunker can
+	//! read - see CutsByContent. That a column gets them still additionally depends on it being a top-level one.
 	bool cdc_cut_pages = false;
 	//! Decides where this column's content-defined pages end (see writer/parquet_cdc_chunker.hpp). One per column
 	//! per file, so its state carries over from one row group to the next, as in Arrow. Only the ordered boundary
-	//! scan advances it - batched prepares consume its output and run off the ordered path without touching it.
+	//! scan advances it - every prepare, batched or not, only reads the cuts that scan left behind.
 	ParquetContentDefinedChunker cdc_chunker;
 
 	static void WriteLevels(Allocator &allocator, WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,

@@ -132,7 +132,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	// Content-defined boundaries are only applied to top-level columns. A column under a list or a struct has its
 	// page membership entangled with the parent's level/`is_empty` bookkeeping, and Arrow cuts those at record
 	// boundaries (repetition level 0) rather than per value, which this loop does not track.
-	const bool cut_by_content = cdc_cut_pages && parent == nullptr && ParquetCdcSupportedType(vector.GetType());
+	const bool cut_by_content = CutsByContent() && parent == nullptr;
 	if (!cut_by_content && !check_parent_empty && validity.CannotHaveNull() &&
 	    TypeIsConstantSize(vector.GetType().InternalType()) &&
 	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount < page_size_limit) {
@@ -210,10 +210,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 vector<idx_t> PrimitiveColumnWriter::RollCdcChunk(Vector &vector, idx_t count) {
 	duckdb::vector<idx_t> cuts;
-	// the same type predicate Prepare uses for cut_by_content, on the same chunk, gives the same answer
-	if (!ParquetCdcSupportedType(vector.GetType())) {
-		return cuts;
-	}
+	// only called where CutsByContent said yes, which is this type predicate plus the file asking for it
+	D_ASSERT(ParquetCdcSupportedType(vector.GetType()));
 	auto &validity = FlatVector::ValidityMutable(vector);
 	const bool feed_levels = MaxDefine() > 0;
 	for (idx_t i = 0; i < count; i++) {
