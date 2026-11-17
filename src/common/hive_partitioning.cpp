@@ -49,38 +49,141 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 	return result;
 }
 
-// Takes an expression and converts a list of known column_refs to constants
-static void
-ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
-                              const unordered_map<ProjectionIndex, PartitioningColumnValue> &known_column_values,
-                              TableIndex table_index) {
+// Replaces references to columns of the given table using the replacement callback (nullptr = keep)
+static void ReplaceTableColumns(unique_ptr<Expression> &expr, TableIndex table_index,
+                                const std::function<unique_ptr<Expression>(BoundColumnRefExpression &)> &replace) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-
-		// This bound column ref is for another table
-		if (table_index != bound_colref.Binding().table_index) {
+		if (bound_colref.Depth() != 0 || bound_colref.Binding().table_index != table_index) {
 			return;
 		}
+		auto replacement = replace(bound_colref);
+		if (replacement) {
+			expr = std::move(replacement);
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceTableColumns(child, table_index, replace); });
+}
 
-		auto lookup = known_column_values.find(bound_colref.Binding().column_index);
-		if (lookup != known_column_values.end()) {
-			auto &partition_val = lookup->second;
-			Value result_val;
+enum class PartitionFilterResult : uint8_t { NOT_EVALUATED, KEEP_FILE, PRUNE_FILE };
+
+//! A filter rewritten to read the partition columns it references from an input chunk
+struct PartitionFilter {
+	unique_ptr<Expression> expr;
+	vector<ProjectionIndex> columns;
+	vector<LogicalType> types;
+};
+
+static unique_ptr<PartitionFilter> PreparePartitionFilter(const Expression &filter,
+                                                          const HivePartitioningFilterInfo &filter_info,
+                                                          TableIndex table_index) {
+	unordered_set<ProjectionIndex> partition_columns;
+	for (auto &entry : filter_info.column_map) {
+		if (filter_info.hive_enabled || (filter_info.filename_enabled && entry.first == filter_info.filename_column)) {
+			partition_columns.insert(ProjectionIndex(entry.second));
+		}
+	}
+
+	// the filter can only be evaluated if it becomes foldable once the partition columns are known
+	auto check = filter.Copy();
+	ReplaceTableColumns(check, table_index, [&](BoundColumnRefExpression &colref) -> unique_ptr<Expression> {
+		if (partition_columns.find(colref.Binding().column_index) == partition_columns.end()) {
+			return nullptr;
+		}
+		return make_uniq<BoundConstantExpression>(Value(colref.GetReturnType()));
+	});
+	if (!check->IsScalar() || !check->IsFoldable()) {
+		return nullptr;
+	}
+
+	auto result = make_uniq<PartitionFilter>();
+	result->expr = filter.Copy();
+	ReplaceTableColumns(result->expr, table_index, [&](BoundColumnRefExpression &colref) {
+		auto column_index = colref.Binding().column_index;
+		idx_t slot;
+		for (slot = 0; slot < result->columns.size(); slot++) {
+			if (result->columns[slot] == column_index) {
+				break;
+			}
+		}
+		if (slot == result->columns.size()) {
+			result->columns.push_back(column_index);
+			result->types.push_back(colref.GetReturnType());
+		}
+		return make_uniq<BoundReferenceExpression>(colref.GetReturnType(), slot);
+	});
+	return result;
+}
+
+//! Evaluates the filter over a chunk of files - if the filter throws, the files in the chunk are not pruned
+static void EvaluatePartitionFilterChunk(ExpressionExecutor &executor, DataChunk &chunk,
+                                         const vector<idx_t> &file_indexes,
+                                         vector<PartitionFilterResult> &file_results) {
+	SelectionVector true_sel(chunk.size());
+	idx_t true_count;
+	try {
+		true_count = executor.SelectExpression(chunk, true_sel);
+	} catch (InternalException &) {
+		throw;
+	} catch (...) {
+		return;
+	}
+	for (auto &file_idx : file_indexes) {
+		file_results[file_idx] = PartitionFilterResult::PRUNE_FILE;
+	}
+	for (idx_t i = 0; i < true_count; i++) {
+		file_results[file_indexes[true_sel.get_index(i)]] = PartitionFilterResult::KEEP_FILE;
+	}
+}
+
+static vector<PartitionFilterResult>
+EvaluatePartitionFilter(ClientContext &context, const PartitionFilter &filter,
+                        const vector<unordered_map<ProjectionIndex, PartitioningColumnValue>> &known_values) {
+	vector<PartitionFilterResult> file_results(known_values.size(), PartitionFilterResult::NOT_EVALUATED);
+	ExpressionExecutor executor(context, *filter.expr);
+	DataChunk chunk;
+	chunk.Initialize(context, filter.types);
+	vector<idx_t> file_indexes;
+	auto flush = [&]() {
+		chunk.SetChildCardinality(file_indexes.size());
+		EvaluatePartitionFilterChunk(executor, chunk, file_indexes, file_results);
+		chunk.Reset();
+		file_indexes.clear();
+	};
+	for (idx_t file_idx = 0; file_idx < known_values.size(); file_idx++) {
+		auto &file_values = known_values[file_idx];
+		bool has_all_columns = true;
+		for (auto &column : filter.columns) {
+			if (file_values.find(column) == file_values.end()) {
+				has_all_columns = false;
+				break;
+			}
+		}
+		if (!has_all_columns) {
+			continue;
+		}
+		auto row = file_indexes.size();
+		for (idx_t col = 0; col < filter.columns.size(); col++) {
+			auto &partition_val = file_values.find(filter.columns[col])->second;
 			if (partition_val.key.empty()) {
 				// filename column - use directly
-				result_val = Value(partition_val.value);
+				chunk.data[col].SetValue(row, Value(partition_val.value));
 			} else {
-				// hive partitioning column - cast the value to the target type
-				result_val = HivePartitioning::GetValue(context, partition_val.key, partition_val.value,
-				                                        bound_colref.GetReturnType());
+				chunk.data[col].SetValue(row, HivePartitioning::GetValue(context, partition_val.key,
+				                                                         partition_val.value, filter.types[col]));
 			}
-			expr = make_uniq<BoundConstantExpression>(std::move(result_val));
 		}
-	} else {
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			ConvertKnownColRefToConstants(context, child, known_column_values, table_index);
-		});
+		file_indexes.push_back(file_idx);
+		if (file_indexes.size() == STANDARD_VECTOR_SIZE) {
+			flush();
+		}
 	}
+	if (!file_indexes.empty()) {
+		flush();
+	}
+	return file_results;
 }
 
 string HivePartitioning::Escape(const string &input) {
@@ -197,38 +300,47 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 		info.extra_info.file_filter_expressions = vector<unique_ptr<Expression>>();
 	}
 
-	for (idx_t i = 0; i < files.size(); i++) {
-		auto &file = files[i];
-		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file.path, filter_info);
+	vector<unordered_map<ProjectionIndex, PartitioningColumnValue>> known_values;
+	known_values.reserve(files.size());
+	for (auto &file : files) {
+		known_values.push_back(GetKnownColumnValues(file.path, filter_info));
+	}
+	vector<vector<PartitionFilterResult>> filter_results;
+	for (auto &filter : filters) {
+		auto partition_filter = PreparePartitionFilter(*filter, filter_info, table_index);
+		if (!partition_filter) {
+			filter_results.emplace_back(files.size(), PartitionFilterResult::NOT_EVALUATED);
+			continue;
+		}
+		filter_results.push_back(EvaluatePartitionFilter(context, *partition_filter, known_values));
+	}
 
+	for (idx_t i = 0; i < files.size(); i++) {
+		bool should_prune_file = false;
 		for (idx_t j = 0; j < filters.size(); j++) {
 			auto &filter = filters[j];
-			unique_ptr<Expression> filter_copy = filter->Copy();
-			ConvertKnownColRefToConstants(context, filter_copy, known_values, table_index);
-			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
-			Value result_value;
-
-			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
-			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
+			switch (filter_results[j][i]) {
+			case PartitionFilterResult::NOT_EVALUATED:
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
 				if (!have_preserved_filter[j]) {
 					pruned_filters.emplace_back(filter->Copy());
 					have_preserved_filter[j] = true;
 				}
-			} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
-				// filter evaluates to false
+				break;
+			case PartitionFilterResult::PRUNE_FILE:
 				should_prune_file = true;
-				// convert the filter to a table filter.
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
 					info.extra_info.file_filters += filter->ToString();
 					filters_applied_to_files.insert(j);
 				}
+				break;
+			case PartitionFilterResult::KEEP_FILE:
+				break;
 			}
 		}
 
 		if (!should_prune_file) {
-			pruned_files.push_back(file);
+			pruned_files.push_back(files[i]);
 		}
 	}
 

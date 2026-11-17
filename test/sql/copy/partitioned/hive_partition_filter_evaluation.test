@@ -1,0 +1,81 @@
+# name: test/sql/copy/partitioned/hive_partition_filter_evaluation.test
+# description: Hive partition filters are evaluated over all files with a single executor per filter
+# group: [partitioned]
+
+require parquet
+
+statement ok
+COPY (SELECT (DATE '2000-01-01' + i::INTEGER) AS date, i AS a FROM range(100) t(i))
+TO '{TEST_DIR}/hive_filter_eval_dates' (FORMAT parquet, PARTITION_BY (date));
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE day(date) = 40;
+----
+0
+
+query I
+SELECT sum(a) FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE day(date) = 15;
+----
+133
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE month(date) IN (2, 3);
+----
+60
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE month(date) = 2;
+----
+physical_plan	<REGEX>:.*Scanning Files:.*29\/100.*
+
+# a filter on a mix of partition and regular columns is kept
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE day(date) + a = 29;
+----
+1
+
+# volatile filters are not used for pruning
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_dates/*/*.parquet', hive_partitioning=true) WHERE day(date) > 0 OR random() < 0;
+----
+100
+
+# a filter that throws for some partitions still prunes the remaining files
+statement ok
+COPY (SELECT i AS a, CASE WHEN i = 3 THEN 'abc' ELSE i::VARCHAR END AS p FROM range(10) t(i))
+TO '{TEST_DIR}/hive_filter_eval_mixed' (FORMAT parquet, PARTITION_BY (p));
+
+query I
+SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_mixed/*/*.parquet', hive_partitioning=true)
+WHERE p <> 'abc' AND p::INTEGER > 5 ORDER BY a;
+----
+6
+7
+8
+9
+
+statement error
+SELECT a FROM read_parquet('{TEST_DIR}/hive_filter_eval_mixed/*/*.parquet', hive_partitioning=true) WHERE p::INTEGER > 5;
+----
+Conversion Error
+
+# NULL partitions
+statement ok
+COPY (SELECT i AS a, CASE WHEN i % 3 = 0 THEN NULL ELSE i % 3 END AS p FROM range(9) t(i))
+TO '{TEST_DIR}/hive_filter_eval_null' (FORMAT parquet, PARTITION_BY (p));
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_null/*/*.parquet', hive_partitioning=true) WHERE p IS NULL;
+----
+3
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_null/*/*.parquet', hive_partitioning=true) WHERE p <> 1;
+----
+3
+
+# filename filters
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_filter_eval_null/*/*.parquet', filename=true) WHERE filename LIKE '%p=2%';
+----
+3
