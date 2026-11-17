@@ -42,6 +42,7 @@ CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const
 
 	if (!write_newline.empty()) {
 		newline = TransformNewLine(write_newline);
+		requires_quotes[static_cast<uint8_t>(newline[0])] = true;
 	}
 }
 

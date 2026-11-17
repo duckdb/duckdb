@@ -92,7 +92,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 			                       duckdb_capi_version, major, max_minor, max_patch);
 		}
 	} else {
-		throw InternalException("Unknown ABI type for extension: '%s'", extension_abi_metadata);
+		return StringUtil::Format("Unknown ABI type for extension: '%s'", PrettyPrintString(extension_abi_metadata));
 	}
 
 	if (engine_platform != platform) {
