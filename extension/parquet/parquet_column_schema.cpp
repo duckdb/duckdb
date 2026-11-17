@@ -60,7 +60,7 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 		throw DataCorruptionException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
 		                              metadata.num_values);
 	}
-	if (max_define == 0 && metadata.__isset.statistics && metadata.statistics.__isset.null_count &&
+	if (children.empty() && max_define == 0 && metadata.__isset.statistics && metadata.statistics.__isset.null_count &&
 	    metadata.statistics.null_count > 0) {
 		// the column has no definition levels, so its values cannot be NULL
 		if (file_name) {
