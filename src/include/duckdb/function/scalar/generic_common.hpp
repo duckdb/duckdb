@@ -39,8 +39,8 @@ struct ExportAggregateFunction {
 	static void GetSortedStateOrders(const LogicalType &state_type, vector<SortedAggregateStateOrder> &orders);
 	//! The state layout of the aggregate whose states a bound combine_aggr accumulates. Returns false for any other
 	//! function, and for an aggregate whose state the field layout alone does not describe
-	static bool TryGetCombinedStateLayout(const BoundAggregateFunction &function, optional_ptr<FunctionData> bind_data,
-	                                      AggregateStateLayout &layout);
+	static bool TryGetCombinedStateLayout(const BoundAggregateFunction &function,
+	                                      optional_ptr<const FunctionData> bind_data, AggregateStateLayout &layout);
 };
 
 } // namespace duckdb

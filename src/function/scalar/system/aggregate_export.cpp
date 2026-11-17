@@ -934,7 +934,7 @@ void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type
 }
 
 bool ExportAggregateFunction::TryGetCombinedStateLayout(const BoundAggregateFunction &function,
-                                                        optional_ptr<FunctionData> bind_data,
+                                                        optional_ptr<const FunctionData> bind_data,
                                                         AggregateStateLayout &layout) {
 	if (!bind_data || function.GetStateCombineCallback() != CombineAggrStateCombine) {
 		return false;
