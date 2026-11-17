@@ -147,7 +147,7 @@ ErrorData MetaTransaction::Commit(ClientContext &context) {
 		try {
 			if (!error.HasError()) {
 				// Commit the transaction.
-				error = transaction_manager.CommitTransaction(context, transaction);
+				error = db.ScopeFatalError(transaction_manager.CommitTransaction(context, transaction));
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
 				// Rollback due to previous error.
@@ -155,7 +155,7 @@ ErrorData MetaTransaction::Commit(ClientContext &context) {
 				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
+			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 			transaction_ref.state = TransactionState::ROLLED_BACK;
 		}
 	}
@@ -182,7 +182,7 @@ void MetaTransaction::Rollback() {
 			auto &transaction = transaction_ref.transaction;
 			transaction_manager.RollbackTransaction(transaction);
 		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
+			error.Merge(db.ScopeFatalError(ErrorData(ex)));
 		}
 		transaction_ref.state = TransactionState::ROLLED_BACK;
 	}

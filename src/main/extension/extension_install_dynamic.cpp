@@ -206,16 +206,6 @@ static void VerifyCanDownloadExtension(DatabaseInstance &db, const string &url) 
 	if (Settings::Get<EnableExternalAccessSetting>(db) || ExtensionRepository::IsOfficialRepositoryUrl(url)) {
 		return;
 	}
-	// urls are matched against allowed_directories by prefix without being normalized, so reject dot segments
-	// (also percent-encoded) that the server could resolve to a location outside of the allowed directory
-	auto lower_url = StringUtil::Lower(url);
-	for (auto &segment : StringUtil::Split(lower_url, '/')) {
-		if (segment == "." || segment == ".." || StringUtil::Contains(segment, "%2e")) {
-			throw PermissionException("Cannot download extension from \"%s\" - urls with dot segments are not "
-			                          "allowed when external access is disabled",
-			                          url);
-		}
-	}
 	if (db.config.CanAccessFile(url, FileType::FILE_TYPE_REGULAR)) {
 		return;
 	}
@@ -437,11 +427,12 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
 	string install_path = local_path;
 	if (options.repository && options.repository->type == ExtensionRepositoryType::USER_PROVIDED) {
 		// the opt-in gates adding a repository, i.e. trusting a new signing key. An existing repository stays trusted
-		// while 'undecided' or 'allowed', as it does for LOAD
-		if (!ExtensionRepositoryManager::TrustsExistingRepositories(db)) {
+		// while 'hosts' or 'allowed', as it does for LOAD
+		if (!ExtensionRepositoryManager::TrustsRepository(db, *options.repository)) {
 			throw PermissionException(
-			    "Installing extensions from a user-provided repository is not permitted while "
+			    "Installing extensions from the user-provided repository '%s' is not permitted while "
 			    "allow_extension_repositories='%s'",
+			    options.repository->name,
 			    ExtensionRepositoryManager::AccessToString(ExtensionRepositoryManager::GetAccess(db)));
 		}
 		install_path = fs.JoinPath(fs.JoinPath(local_path, "repositories"), options.repository->name);

@@ -18,6 +18,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "json_common.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "json_functions.hpp"
 #include "json_geojson.hpp"
 
@@ -82,7 +83,7 @@ struct JSONCopyFormatOptions {
 	JSONGeometryFormat geometry_format = JSONGeometryFormat::WKT;
 	mutable optional_ptr<StrfTimeFormat> date_format;
 	mutable optional_ptr<StrfTimeFormat> timestamp_format;
-	mutable optional_ptr<ClientContext> context;
+	mutable optional_ptr<Context> context;
 	optional_ptr<const Expression> timestamptz_format_expression;
 	optional_ptr<const Expression> timestamptz_ns_format_expression;
 };
@@ -108,7 +109,7 @@ void JSONFunctions::ValidateGeometryFormat(ClientContext &, SetScope, Value &par
 
 //! GEOMETRY is written as WKT unless the json_geometry_format setting says otherwise. COPY ... TO ...
 //! (FORMAT GEOJSON) writes GeoJSON regardless, by overriding this afterwards.
-static JSONGeometryFormat ClientGeometryFormat(ClientContext &context) {
+static JSONGeometryFormat ClientGeometryFormat(Context &context) {
 	Value value;
 	if (!context.TryGetCurrentSetting("json_geometry_format", value)) {
 		return JSONGeometryFormat::WKT;
@@ -116,7 +117,7 @@ static JSONGeometryFormat ClientGeometryFormat(ClientContext &context) {
 	return ParseGeometryFormat(value);
 }
 
-static JSONCopyFormatOptions ClientFormatOptions(ClientContext &context) {
+static JSONCopyFormatOptions ClientFormatOptions(Context &context) {
 	JSONCopyFormatOptions result;
 	result.context = context;
 	result.geometry_format = ClientGeometryFormat(context);
@@ -154,7 +155,7 @@ public:
 		       const_struct_names.Equals(other.const_struct_names);
 	}
 
-	JSONCopyFormatOptions GetFormatOptions(ClientContext &context) {
+	JSONCopyFormatOptions GetFormatOptions(Context &context) {
 		JSONCopyFormatOptions result;
 		result.geometry_format = ClientGeometryFormat(context);
 		result.date_format = has_date_format ? optional_ptr<StrfTimeFormat>(&date_format) : nullptr;
@@ -255,6 +256,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::DECIMAL:
 	// GEOMETRY is emitted as either WKT or GeoJSON, so it must reach CreateValues untouched
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return type;
 	case LogicalTypeId::VARIANT:
 		return LogicalType::JSON();
@@ -609,6 +611,33 @@ static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const V
 		} else {
 			const auto &str = values[val_idx];
 			vals[i] = yyjson_mut_rawncpy(doc, str.GetData(), str.GetSize());
+		}
+		D_ASSERT(vals[i] != nullptr);
+	}
+}
+
+// DECIMAL(w, s) with w == s has no digits before the decimal point, so its VARCHAR form has no leading zero
+// (e.g., ".5" or "-.5"). That is not a valid JSON number, so we add the zero before inserting it as a raw value.
+static void CreateRawDecimalValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
+	const auto values = value_v.Values<string_t>();
+	string buffer;
+	for (idx_t i = 0; i < count; i++) {
+		const auto entry = values[i];
+		if (!entry.IsValid()) {
+			vals[i] = yyjson_mut_null(doc);
+			continue;
+		}
+		const auto &str = entry.GetValue();
+		const auto data = str.GetData();
+		const auto size = str.GetSize();
+		const idx_t point_pos = (size > 0 && data[0] == '-') ? 1 : 0;
+		if (point_pos < size && data[point_pos] == '.') {
+			buffer.assign(data, point_pos);
+			buffer += '0';
+			buffer.append(data + point_pos, size - point_pos);
+			vals[i] = yyjson_mut_rawncpy(doc, buffer.c_str(), buffer.size());
+		} else {
+			vals[i] = yyjson_mut_rawncpy(doc, data, size);
 		}
 		D_ASSERT(vals[i] != nullptr);
 	}
@@ -1033,7 +1062,8 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		break;
 	}
-	case LogicalTypeId::GEOMETRY: {
+	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY: {
 		if (options.geometry_format == JSONGeometryFormat::GEOJSON) {
 			CreateValuesGeometry(doc, vals, value_v, count);
 		} else {
@@ -1057,7 +1087,11 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		if (DecimalType::GetWidth(type) > 15) {
 			Vector string_vector(LogicalTypeId::VARCHAR, count);
 			VectorOperations::DefaultCast(value_v, string_vector, count);
-			CreateRawValues(doc, vals, string_vector, count);
+			if (DecimalType::GetWidth(type) == DecimalType::GetScale(type)) {
+				CreateRawDecimalValues(doc, vals, string_vector, count);
+			} else {
+				CreateRawValues(doc, vals, string_vector, count);
+			}
 		} else {
 			Vector double_vector(LogicalType::DOUBLE, count);
 			VectorOperations::DefaultCast(value_v, double_vector, count);
@@ -1571,17 +1605,17 @@ ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 
 struct NestedToJSONCastData : public BoundCastData {
 public:
-	explicit NestedToJSONCastData(optional_ptr<ClientContext> client) : client(client) {
+	explicit NestedToJSONCastData(Context &context_p) : context(context_p) {
 	}
 
 	unique_ptr<BoundCastData> Copy() const override {
-		auto result = make_uniq<NestedToJSONCastData>(client);
+		auto result = make_uniq<NestedToJSONCastData>(context);
 		result->const_struct_names = const_struct_names.Copy();
 		return std::move(result);
 	}
 
 public:
-	optional_ptr<ClientContext> client;
+	Context &context;
 	StructNames const_struct_names;
 };
 
@@ -1593,16 +1627,14 @@ static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParam
 	const auto &names = cast_data.const_struct_names;
 
 	JSONCopyFormatOptions options;
-	options.context = cast_data.client;
-	if (cast_data.client) {
-		options.geometry_format = ClientGeometryFormat(*cast_data.client);
-	}
+	options.context = cast_data.context;
+	options.geometry_format = ClientGeometryFormat(cast_data.context);
 	ToJSONFunctionInternal(names, source, count, result, alc, options);
 	return true;
 }
 
 static BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	auto cast_data = make_uniq<NestedToJSONCastData>(input.context);
+	auto cast_data = make_uniq<NestedToJSONCastData>(input.GetContext());
 	GetJSONType(cast_data->const_struct_names, source);
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }
@@ -1630,6 +1662,8 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 		case LogicalTypeId::ARRAY:
 			source_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
+		case LogicalTypeId::VARIANT:
+			continue;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
 			continue;

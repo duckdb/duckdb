@@ -73,6 +73,10 @@ public:
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
+	//! Returns what the partial block manager writes for.
+	PartialBlockType GetPartialBlockType() const {
+		return partial_block_type;
+	}
 
 private:
 	//! Remove the smallest fitting block from the map, or return nullptr if none fits.
