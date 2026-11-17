@@ -544,12 +544,6 @@ public:
 		D_ASSERT(entry);
 		D_ASSERT(shadow_index);
 	}
-	~PendingIndexPublication() override {
-		if (shadow_index) {
-			// the checkpoint failed: the live index stays
-			entry->InstallShadow(nullptr);
-		}
-	}
 
 	void Publish() override {
 		D_ASSERT(shadow_index);
