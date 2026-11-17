@@ -1525,6 +1525,8 @@ typedef struct {
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_stats_set_value)
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_from_v1_database)
+	(void *v1_database, duckdb_v2_connection_handle *out_conn, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2219,6 +2221,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_stats_assign = duckdb_v2_stats_assign;
 	result.duckdb_v2_stats_get_value = duckdb_v2_stats_get_value;
 	result.duckdb_v2_stats_set_value = duckdb_v2_stats_set_value;
+	result.duckdb_v2_connection_create_from_v1_database = duckdb_v2_connection_create_from_v1_database;
 	return result;
 }
 
