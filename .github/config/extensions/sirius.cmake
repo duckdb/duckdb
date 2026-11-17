@@ -4,7 +4,7 @@ endif()
 
 duckdb_extension_load(sirius
     GIT_URL https://github.com/sirius-db/sirius
-    GIT_TAG 83d6c0ee01f2a98b97ce04c74141e2881f49438e
+    GIT_TAG e6a43ebcde9d04524a80aa059e06727c03da578d
     SOURCE_DIR sirius-duckdb/loader
     INCLUDE_DIR sirius-duckdb/loader/src
     SUBMODULES ""
