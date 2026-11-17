@@ -299,7 +299,7 @@ FROM all_types;
 query II
 SELECT count(expected), count(*) - count(expected) FROM all_types_expected;
 ----
-76	42
+78	42
 
 statement ok
 CREATE MACRO value_mismatch(actual, expected) AS
