@@ -11,6 +11,7 @@ subgroup window
 argument rows 1_000_000
 argument k 10
 argument disabled ''
+argument order i
 
 load
 SET disabled_optimizers=${disabled};
@@ -21,4 +22,4 @@ CREATE OR REPLACE TABLE t AS (
 	
 run
 FROM t
-QUALIFY row_number() OVER (ORDER BY v DESC) <= ${k};
+QUALIFY row_number() OVER (ORDER BY ${order} DESC) <= ${k};
