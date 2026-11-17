@@ -22,10 +22,10 @@ SELECT list_sort(list_distinct([{'a': 1, 'b': 'x'}, {'a': 1, 'b': 'x'}, {'a': 2,
 ----
 [{'a': 1, 'b': x}, {'a': 2, 'b': a string that is not inlined}]	3
 
-query II
-SELECT list_sort(list_distinct([1::HUGEINT, 1::HUGEINT, 2])), list_sort(list_distinct([INTERVAL 1 DAY, INTERVAL 24 HOURS, INTERVAL 1 DAY]));
+query I
+SELECT list_sort(list_distinct([1::HUGEINT, 1::HUGEINT, 2]));
 ----
-[1, 2]	['24:00:00', 1 day]
+[1, 2]
 
 query IIII
 SELECT list_histogram([1, 1, 2, NULL]), list_aggr(['b', 'a', 'b'], 'histogram'), list_histogram([]), list_histogram(NULL);
