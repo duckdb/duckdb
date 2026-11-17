@@ -207,6 +207,8 @@ public:
 	vector<unique_ptr<AsyncTask>> CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const;
 	//! Collects the async I/O tasks of the remaining assignment, leaving out the vectors the zonemaps reject
 	vector<unique_ptr<AsyncTask>> CollectAssignmentIOTasks(CollectionScanState &state) const;
+	//! Collects the on-disk blocks needed by the remaining assignment without scheduling reads.
+	void CollectAssignmentBlocks(CollectionScanState &state, PrefetchState &blocks) const;
 	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
 	bool PrepareScan(ScanOptions options, CollectionScanState &state);
 	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished
@@ -311,10 +313,9 @@ public:
 	ColumnData &GetRawColumnData(storage_t c) const;
 
 private:
-	//! Registers prefetch candidates for the rows in [start_row, end_row), returns false when prefetching is not
-	//! supported
-	bool RegisterScanIO(CollectionScanState &state, idx_t start_row, idx_t end_row,
-	                    PrefetchState &prefetch_state) const;
+	//! Collects prefetch candidates for the rows in [start_row, end_row)
+	void CollectScanBlocks(CollectionScanState &state, idx_t start_row, idx_t end_row,
+	                       PrefetchState &prefetch_state) const;
 	//! Shared scan-state setup for InitializeScan and InitializeScanWithOffset
 	bool InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Advances the scan past the current vector, clearing the prepared state

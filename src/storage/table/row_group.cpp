@@ -383,26 +383,13 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 }
 
 bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
-	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
-		return false;
-	}
-	if (!RefersToSameObject(node.GetNode(), *this)) {
+	auto payload = node.ReferenceNode();
+	if (!RefersToSameObject(*payload, *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
-	state.prepared_vector.Reset();
-	state.assignment_io_registered = false;
-	state.SetRowGroup(node);
-	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
-	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
-	if (state.max_row_group_row == 0) {
-		// exceeded row groups to scan
-		return false;
-	}
-	D_ASSERT(!state.column_scans.empty());
-	return true;
+	const auto end_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
+	return state.InitializeRowGroupScan(node, std::move(payload), vector_offset, end_row);
 }
 
 bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
@@ -848,33 +835,31 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t start_row, idx_t end_row,
-                              PrefetchState &prefetch_state) const {
-	if (!GetBlockManager().Prefetch()) {
-		return false;
-	}
+void RowGroup::CollectScanBlocks(CollectionScanState &state, idx_t start_row, idx_t end_row,
+                                 PrefetchState &prefetch_state) const {
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		GetColumn(column_ids[i]).InitializePrefetch(prefetch_state, state.column_scans[i], start_row, end_row);
 	}
-	return true;
 }
 
 void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) const {
-	PrefetchState prefetch_state;
-	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
-	if (!RegisterScanIO(state, start_row, start_row + row_count, prefetch_state)) {
+	if (!GetBlockManager().Prefetch()) {
 		return;
 	}
+	PrefetchState prefetch_state;
+	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
+	CollectScanBlocks(state, start_row, start_row + row_count, prefetch_state);
 	GetBlockManager().buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 }
 
 vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const {
-	PrefetchState prefetch_state;
-	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
-	if (!RegisterScanIO(state, start_row, start_row + row_count, prefetch_state)) {
+	if (!GetBlockManager().Prefetch()) {
 		return vector<unique_ptr<AsyncTask>>();
 	}
+	PrefetchState prefetch_state;
+	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
+	CollectScanBlocks(state, start_row, start_row + row_count, prefetch_state);
 	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
@@ -883,6 +868,11 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectAssignmentIOTasks(CollectionScanS
 		return vector<unique_ptr<AsyncTask>>();
 	}
 	PrefetchState prefetch_state;
+	CollectAssignmentBlocks(state, prefetch_state);
+	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
+}
+
+void RowGroup::CollectAssignmentBlocks(CollectionScanState &state, PrefetchState &prefetch_state) const {
 	const auto &filters = state.GetFilterInfo().GetFilterList();
 	const idx_t end_row = state.max_row_group_row;
 	idx_t row = state.vector_index * STANDARD_VECTOR_SIZE;
@@ -914,10 +904,9 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectAssignmentIOTasks(CollectionScanS
 		D_ASSERT(accepted_end > row);
 		const idx_t run_start = row - row % STANDARD_VECTOR_SIZE;
 		const idx_t run_end = MinValue<idx_t>(AlignValue<idx_t, STANDARD_VECTOR_SIZE>(accepted_end), end_row);
-		RegisterScanIO(state, run_start, run_end, prefetch_state);
+		CollectScanBlocks(state, run_start, run_end, prefetch_state);
 		row = run_end;
 	}
-	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
