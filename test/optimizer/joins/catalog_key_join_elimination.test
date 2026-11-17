@@ -167,29 +167,6 @@ SELECT count(*) FROM fact f LEFT JOIN nullable_key d ON f.k IS NOT DISTINCT FROM
 ----
 6
 
-# Deferred constraints allow duplicates until commit.
-statement ok
-CREATE TABLE deferred_key(k INTEGER PRIMARY KEY DEFERRED);
-
-statement ok
-BEGIN;
-
-statement ok
-INSERT INTO deferred_key VALUES (1), (1);
-
-query II
-EXPLAIN SELECT f.id FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
-----
-physical_plan	<REGEX>:.*JOIN.*
-
-query I
-SELECT count(*) FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
-----
-7
-
-statement ok
-ROLLBACK;
-
 # A referenced inner column prevents removal even when the key is complete.
 query II
 EXPLAIN SELECT f.id, d.payload FROM fact f LEFT JOIN dim d ON f.k = d.k;
@@ -274,3 +251,28 @@ query I
 SELECT id FROM fact WHERE k IN (SELECT k FROM dim WHERE payload > 7);
 ----
 12
+
+# Temporary tables support deferred constraints with v1 storage.
+# Keep this last so earlier cases can still exercise forced restarts.
+# Deferred constraints allow duplicates until commit.
+statement ok
+CREATE TEMP TABLE deferred_key(k INTEGER PRIMARY KEY DEFERRED);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO deferred_key VALUES (1), (1);
+
+query II
+EXPLAIN SELECT f.id FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+SELECT count(*) FROM fact f LEFT JOIN deferred_key d ON f.k = d.k;
+----
+7
+
+statement ok
+ROLLBACK;
