@@ -484,8 +484,6 @@ jobs:
           fetch_depth: 0
           ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
-      - uses: ./.github/actions/ccache-action
-
       - uses: actions/download-artifact@v8
         name: Download all extensions
         with:
@@ -544,61 +542,40 @@ jobs:
         run: |
           make upload-extensions EXTENSION_REPOSITORY_PATH="$RUNNER_TEMP/repository_generation"
 
-      - name: Build DuckDB
+      - name: Download DuckDB shell
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        uses: duckdb/duckdb-ci/build-duckdb@main
-        env:
-          GEN: ninja
-          EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
-          EXTENSION_TESTS_ONLY: 1
-          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
-          DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
-          DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
+        uses: actions/download-artifact@v8
         with:
-          build-type: release
-          build: python3 scripts/ci/retry.py -- make release
+          name: duckdb-cli-linux-amd64.tar.gz
+          path: ${{ runner.temp }}/duckdb-cli
 
-      - name: Run Tests
+      - name: Extract DuckDB shell
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        env:
-          LOCAL_EXTENSION_REPO: ${{ runner.temp }}/repository_generation
-          DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
-        run: make unittest_release SKIP_BUILD=1 T="--test-flags='--autoloading available --skip-compiled'"
-
-      - name: Build other repository
-        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        env:
-          GENERATE_EXTENSION_ENTRIES: 1
-          LOCAL_EXTENSION_REPO: build/release/repository_other
-          DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
-          DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
         run: |
-          python3 scripts/ci/retry.py -- make release
+          mkdir -p build/release
+          tar -xzf "$RUNNER_TEMP/duckdb-cli/duckdb-cli-linux-amd64.tar.gz" -C build/release
 
       - name: Copy over local extension repository
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: |
-          cp -r "$RUNNER_TEMP/repository_generation" build/release/repository
-          tree build/release/repository
-          find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
+          mkdir -p build/release/repository
+          for version_dir in "$RUNNER_TEMP"/repository_generation/*; do
+            if [ -d "$version_dir/linux_amd64" ]; then
+              destination="build/release/repository/$(basename "$version_dir")"
+              mkdir -p "$destination"
+              cp -a "$version_dir/linux_amd64" "$destination/"
+            fi
+          done
           tree build/release/repository
 
-      # Disable downloading release because extension_entries.hpp check fails
-      # in CI because some extensions are not available.
-      - name: Download linux release artifact
-        if: ${{ false && !fromJson(needs.prepare.outputs.skip_tests) }}
-        id: linux_release_artifact
-        continue-on-error: true
-        uses: actions/download-artifact@v8
-        with:
-          name: linux-release-build.tar.gz
-          path: build
-
-      - name: Extract linux release artifact
-        if: ${{ steps.linux_release_artifact.outcome == 'success' }}
+      - name: Run extension SQL tests with autoloading
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+        env:
+          EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
+          LOCAL_EXTENSION_REPO: ${{ github.workspace }}/build/release/repository
+          DUCKDB_TEST_DESCRIPTION: 'Running extension SQL tests with available extension autoloading. Add require no_extension_autoloading to skip the test'
         run: |
-          rm -rf build/release
-          tar -xzf build/linux-release-build.tar.gz -C build
+          python3 scripts/ci/run_extension_autoload_tests.py
 
       - name: Install parser tools
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
