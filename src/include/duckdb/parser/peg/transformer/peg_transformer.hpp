@@ -2673,6 +2673,8 @@ public:
 	                                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeVariableListTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeVariableOnTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeBeginTransactionTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeRollbackTransactionTrampoline(PEGTransformer &transformer,
@@ -4563,6 +4565,7 @@ public:
 	TransformSetAssignment(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> variable_list);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  vector<unique_ptr<ParsedExpression>> expression);
+	static unique_ptr<ParsedExpression> TransformVariableOn(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformBeginTransaction(PEGTransformer &transformer, const bool &has_result,
 	                                                          const optional<TransactionModifierType> &read_or_write);
 	static unique_ptr<SQLStatement> TransformRollbackTransaction(PEGTransformer &transformer, const bool &has_result);

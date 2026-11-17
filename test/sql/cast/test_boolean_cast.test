@@ -73,6 +73,16 @@ SELECT CAST('nO' AS BOOLEAN)
 ----
 0
 
+query TT
+SELECT CAST('on' AS BOOLEAN), CAST('ON' AS BOOLEAN)
+----
+1	1
+
+query TT
+SELECT CAST('off' AS BOOLEAN), CAST('Off' AS BOOLEAN)
+----
+0	0
+
 query T
 SELECT CAST('n' AS BOOLEAN)
 ----

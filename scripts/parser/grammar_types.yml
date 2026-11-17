@@ -517,6 +517,8 @@ Expression:
     - ZoneIntervalWithPrecision
     - ZoneLocal
     - ZoneDefault
+    - VariableValue
+    - VariableOn
     - ZoneStringLiteral
     - ZoneIdentifier
     - DefArg
