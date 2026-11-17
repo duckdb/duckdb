@@ -272,20 +272,10 @@ index 57a7a79..90ed091 100644
  	size.free_blocks = 0;
  	size.total_blocks = 0;
 diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
-index 51b8c3a..82f8554 100644
+index 51b8c3a..529fa31 100644
 --- a/src/storage/mysql_catalog_set.cpp
 +++ b/src/storage/mysql_catalog_set.cpp
-@@ -13,7 +13,8 @@ namespace duckdb {
- MySQLCatalogSet::MySQLCatalogSet(Catalog &catalog) : catalog(catalog), is_loaded(false) {
- }
- 
--optional_ptr<CatalogEntry> MySQLCatalogSet::TryGetEntry(MySQLTransaction &transaction, const string &name) {
-+optional_ptr<CatalogEntry> MySQLCatalogSet::TryGetEntry(ClientContext &context, MySQLTransaction &transaction,
-+                                                        const string &name) {
- 	lock_guard<mutex> l2(entry_lock);
- 	auto entry = entries.find(name);
- 	if (entry == entries.end()) {
-@@ -22,29 +23,30 @@ optional_ptr<CatalogEntry> MySQLCatalogSet::TryGetEntry(MySQLTransaction &transa
+@@ -22,29 +22,30 @@ optional_ptr<CatalogEntry> MySQLCatalogSet::TryGetEntry(MySQLTransaction &transa
  	return transaction.ReferenceEntry(entry->second);
  }
  
@@ -322,7 +312,7 @@ index 51b8c3a..82f8554 100644
  	string drop_query = "DROP ";
  	drop_query += CatalogTypeToString(info.type) + " ";
  	if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
-@@ -56,8 +58,7 @@ void MySQLCatalogSet::DropEntry(MySQLTransaction &transaction, DropInfo &info) {
+@@ -56,8 +57,7 @@ void MySQLCatalogSet::DropEntry(MySQLTransaction &transaction, DropInfo &info) {
  			drop_query += " CASCADE";
  		}
  	}
@@ -332,7 +322,7 @@ index 51b8c3a..82f8554 100644
  
  	// erase the entry from the catalog set
  	EraseEntryInternal(info.GetQualifiedName().Name().GetIdentifierName());
-@@ -68,9 +69,10 @@ void MySQLCatalogSet::EraseEntryInternal(const string &name) {
+@@ -68,9 +68,10 @@ void MySQLCatalogSet::EraseEntryInternal(const string &name) {
  	entries.erase(name);
  }
  

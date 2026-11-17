@@ -310,9 +310,18 @@ index f38ade9..550eb73 100644
  	optional_ptr<SchemaCatalogEntry> lookup_schema;
  	if (type_schema == schema->name) {
 diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
-index 5c57881..9b7fd57 100644
+index 5c57881..ff83059 100644
 --- a/src/storage/postgres_catalog.cpp
 +++ b/src/storage/postgres_catalog.cpp
+@@ -482,7 +482,7 @@ PostgresCatalog::PostgresCatalog(ClientContext &ctx, AttachedDatabase &db_p, str
+ 
+ 	PostgresPoolConnection connection;
+ 	{
+-		auto oauth_token_holder = SetThreadLocalOAuthTokenFromSessionOption(ctx);
++		auto oauth_token_holder = SetThreadLocalOAuthTokenFromSessionOption(ctx.GetContext());
+ 		connection = connection_pool->Acquire();
+ 	}
+ 	this->version = connection.GetConnection().GetPostgresVersion(ctx);
 @@ -606,7 +606,7 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
  			try_drop.SetName(info.GetQualifiedName().Schema());
  			try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
