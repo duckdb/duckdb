@@ -21,6 +21,31 @@ SET enable_progress_bar=true;
 statement ok
 SET enable_progress_bar=false;
 
+# Like Postgres, ON and OFF are accepted too
+statement ok
+SET enable_progress_bar = on
+
+query I
+SELECT current_setting('enable_progress_bar')
+----
+true
+
+statement ok
+SET enable_progress_bar TO OFF
+
+query I
+SELECT current_setting('enable_progress_bar')
+----
+false
+
+statement ok
+SET SESSION enable_progress_bar = ON
+
+query I
+SELECT current_setting('enable_progress_bar')
+----
+true
+
 statement ok
 SET enable_progress_bar_print=true;
 
