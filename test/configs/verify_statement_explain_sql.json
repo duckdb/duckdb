@@ -72,6 +72,12 @@
       ]
     },
     {
+      "reason": "The generated SQL does not push a filter on a VARIANT field into the Parquet scan, so the scan writes no prefetch log",
+      "paths": [
+        "test/sql/copy/parquet/parquet_prefetch_nested.test"
+      ]
+    },
+    {
       "reason": "Generated SQL exposes a native IEJoin payload type mismatch with debug_verification_projection, reproducible with SQL export disabled",
       "paths": [
         "test/optimizer/projection_placement_results.test"

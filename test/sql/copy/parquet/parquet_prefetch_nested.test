@@ -1,0 +1,249 @@
+# name: test/sql/copy/parquet/parquet_prefetch_nested.test
+# description: The column-wise prefetch registers nested columns like flat columns
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=1
+
+statement ok
+SET read_ahead_depth=1
+
+statement ok
+SET parquet_prefetch_column_gap=16384
+
+statement ok
+SET enable_external_file_cache=false
+
+# a read of a column that is not registered overlaps the reads around it
+# the footer read is left out: it has the largest offset, because the last column (pad) is never read
+statement ok
+CREATE MACRO no_byte_read_twice(file) AS (
+    WITH reads AS (
+        SELECT pos, bytes FROM duckdb_logs_parsed('FileSystem') WHERE op = 'READ' AND parse_filename(path) = file
+    )
+    SELECT coalesce(bool_and(pos >= prev_end), false)
+    FROM (
+        SELECT pos, lag(pos + bytes, 1, 0) OVER (ORDER BY pos) AS prev_end
+        FROM reads WHERE pos < (SELECT max(pos) FROM reads)
+    )
+)
+
+# the only row with k = 'hit' is in the second row group
+statement ok
+CREATE TABLE nested_data AS
+    SELECT CASE WHEN i = 3000 THEN 'hit' WHEN i % 2 = 0 THEN 'aaa' ELSE 'zzz' END AS k,
+        {'a': i, 'b': md5(i::VARCHAR)} AS s,
+        [md5((i + 1)::VARCHAR), md5((i + 2)::VARCHAR)] AS l,
+        MAP {'x': md5((i + 3)::VARCHAR)} AS m,
+        {'y': [i, i + 1], 'z': md5((i + 4)::VARCHAR)} AS sl,
+        md5((i + 5)::VARCHAR) || md5((i + 6)::VARCHAR) AS pad
+    FROM range(4096) t(i)
+
+statement ok
+COPY nested_data TO '{TEST_DIR}/prefetch_nested.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging(['FileSystem', 'ParquetPrefetch'])
+
+# columns are fetched before the filter runs: struct, list and map columns are fetched with the filter column
+query IT
+SELECT count(*), bit_xor(hash(s, l, m, sl)) = (SELECT bit_xor(hash(s, l, m, sl)) FROM nested_data WHERE k = 'aaa')
+FROM read_parquet('{TEST_DIR}/prefetch_nested.parquet') WHERE k = 'aaa'
+----
+2047	true
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%prefetch_nested.parquet' ORDER BY row_group_id
+----
+0	false	column_wise_eager	[[k, s.a, s.b, l.list.element, m.key_value.key, m.key_value.value, sl.y.list.element, sl.z]]
+1	false	column_wise_eager	[[k, s.a, s.b, l.list.element, m.key_value.key, m.key_value.value, sl.y.list.element, sl.z]]
+
+query T
+SELECT no_byte_read_twice('prefetch_nested.parquet')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# the first row group has no match, so the second one fetches the filter column first
+# the nested columns are fetched together after the filter
+query TTTT
+SELECT s, l, m, sl FROM read_parquet('{TEST_DIR}/prefetch_nested.parquet') WHERE k = 'hit'
+----
+{'a': 3000, 'b': e93028bdc1aacdfb3687181f2031765d}	[908c9a564a86426585b29f5335b619bc, d806ca13ca3449af72a1ea5aedbed26a]	{x=a4380923dd651c195b1631af7c829187}	{'y': [3000, 3001], 'z': 20479c788fb27378c2c99eadcf207e7f}
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%prefetch_nested.parquet' ORDER BY row_group_id
+----
+0	true	column_wise_eager	[[k, s.a, s.b, l.list.element, m.key_value.key, m.key_value.value, sl.y.list.element, sl.z]]
+1	false	prefetch_filters	[[k], [s.a, s.b, l.list.element, m.key_value.key, m.key_value.value, sl.y.list.element, sl.z]]
+
+query T
+SELECT no_byte_read_twice('prefetch_nested.parquet')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# without a filter the nested columns are registered too
+query T
+SELECT bit_xor(hash(s, l, m, sl)) = (SELECT bit_xor(hash(s, l, m, sl)) FROM nested_data)
+FROM read_parquet('{TEST_DIR}/prefetch_nested.parquet')
+----
+true
+
+query T
+SELECT no_byte_read_twice('prefetch_nested.parquet')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# two fields of one variant column read the same column chunks
+# only the second row group has rows with v.a = 1
+statement ok
+COPY (
+    SELECT {'a': CASE WHEN i < 2048 THEN 50 + i % 50 ELSE i % 100 END, 'b': (i % 10)::VARCHAR}::VARIANT AS v,
+        md5(i::VARCHAR) || md5((i + 1)::VARCHAR) || md5((i + 2)::VARCHAR) || md5((i + 3)::VARCHAR) AS payload,
+        md5((i + 4)::VARCHAR) || md5((i + 5)::VARCHAR) AS pad
+    FROM range(4096) t(i)
+) TO '{TEST_DIR}/prefetch_nested_variant.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE, SHREDDING {v: 'INTEGER'})
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query II
+SELECT count(*), count(*) FILTER (WHERE v.b::VARCHAR = '1' AND length(payload) = 128)
+FROM read_parquet('{TEST_DIR}/prefetch_nested_variant.parquet') WHERE v.a::INT = 1
+----
+20	20
+
+# each chunk is registered one time
+# in the second row group the filter step fetches the chunks, the second field does not fetch them again
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%prefetch_nested_variant.parquet' ORDER BY row_group_id
+----
+0	true	column_wise_eager	[[v.metadata, v.value, v.typed_value, payload]]
+1	false	prefetch_filters	[[v.metadata, v.value, v.typed_value], [payload]]
+
+query T
+SELECT no_byte_read_twice('prefetch_nested_variant.parquet')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# a GEOMETRY column is read through an expression reader, which has no column chunk of its own either
+statement ok
+COPY (
+    SELECT CASE WHEN i % 2 = 0 THEN 'aaa' ELSE 'zzz' END AS k,
+        ('POINT(' || i || ' ' || (i + 1) || ')')::GEOMETRY AS g,
+        md5(i::VARCHAR) || md5((i + 1)::VARCHAR) AS pad
+    FROM range(4096) t(i)
+) TO '{TEST_DIR}/prefetch_nested_geometry.parquet'
+    (ROW_GROUP_SIZE 2048, COMPRESSION 'uncompressed', WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query IT
+SELECT count(*), max(g::VARCHAR) FROM read_parquet('{TEST_DIR}/prefetch_nested_geometry.parquet') WHERE k = 'aaa'
+----
+2048	POINT (998 999)
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%prefetch_nested_geometry.parquet' ORDER BY row_group_id
+----
+0	false	column_wise_eager	[[k, g]]
+1	false	column_wise_eager	[[k, g]]
+
+query T
+SELECT no_byte_read_twice('prefetch_nested_geometry.parquet')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# with the page index only the pages of a struct column that may match are fetched
+# the first page of every column is ruled out, and the struct fields have no dictionary page
+statement ok
+COPY (
+    SELECT i AS id, {'a': i * 3, 'b': 'v' || lpad(i::VARCHAR, 7, '0')} AS s FROM range(200000) t(i)
+) TO '{TEST_DIR}/prefetch_nested_pages.parquet'
+    (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true)
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query IT
+SELECT id, s FROM read_parquet('{TEST_DIR}/prefetch_nested_pages.parquet') WHERE id = 177777
+----
+177777	{'a': 533331, 'b': v0177777}
+
+# the log lists the struct fields at the first page they registered
+query ITT
+SELECT row_group_id, strategy, prefetch_groups FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%prefetch_nested_pages.parquet' ORDER BY row_group_id
+----
+1	column_wise_eager_pages	[[id], [s.a], [s.b]]
+
+# each struct field has more than 400000 bytes in a row group, the scan reads one page of each
+query T
+SELECT sum(bytes) < 100000 FROM duckdb_logs_parsed('FileSystem')
+WHERE op = 'READ' AND parse_filename(path) = 'prefetch_nested_pages.parquet'
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# the list page is larger than the 1,000,000 byte fallback read
+statement ok
+COPY (
+    SELECT CASE WHEN i % 4 = 0 THEN 'match' ELSE 'other' END AS f,
+        [md5(i::VARCHAR), md5((i + 1)::VARCHAR), md5((i + 2)::VARCHAR), md5((i + 3)::VARCHAR),
+         md5((i + 4)::VARCHAR), md5((i + 5)::VARCHAR), md5((i + 6)::VARCHAR), md5((i + 7)::VARCHAR)] AS l,
+        md5((i + 8)::VARCHAR) AS pad
+    FROM range(8192) t(i)
+) TO '{TEST_DIR}/prefetch_nested_large.parquet' (ROW_GROUP_SIZE 8192, COMPRESSION 'uncompressed')
+
+# with the external file cache, a second scan reads nothing from the file
+statement ok
+SET enable_external_file_cache=true
+
+statement ok
+SET cache_local_files=true
+
+query II
+SELECT count(*), sum(len(l)) FROM read_parquet('{TEST_DIR}/prefetch_nested_large.parquet') WHERE f = 'match'
+----
+2048	16384
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query II
+SELECT count(*), sum(len(l)) FROM read_parquet('{TEST_DIR}/prefetch_nested_large.parquet') WHERE f = 'match'
+----
+2048	16384
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('FileSystem')
+WHERE parse_filename(path) = 'prefetch_nested_large.parquet' AND op = 'READ'
+----
+0
