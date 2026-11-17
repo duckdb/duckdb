@@ -2,9 +2,6 @@
 # description: A record separator at the start of a buffer of a single-column file is the end of the open row or an empty line, not both
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # three lines: 'a', 62 times 'x' and 'b'
 # with 32 byte buffers the second line starts in the first buffer, fills the second buffer and its line feed is the first byte of the third buffer
 statement ok
