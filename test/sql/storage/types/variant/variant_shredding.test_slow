@@ -171,11 +171,14 @@ insert into fully_shredded_array select ['a', 'this is a long string', 'b'] from
 statement ok
 checkpoint
 
+restart
+
 # typed_value does not contain any NULLs now, because all values are of type VARCHAR[]
+# after the restart the stats are read from the v1.5.0 file, which stores only 8-byte min/max string prefixes
 query III
 select s.min, s.max, s.max_string_length from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from fully_shredded_array limit 1));
 ----
-a	this is a lo	21
+a	this is 	21
 
 # ------------------------------ Partially shredded ARRAY ------------------------------
 
