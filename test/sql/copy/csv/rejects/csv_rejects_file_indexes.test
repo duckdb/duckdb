@@ -1,0 +1,112 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_file_indexes.test
+# description: Allocate rejects file IDs lazily while preserving file order and distinguishing scans
+# group: [rejects]
+
+require skip_reload
+
+loop i 0 10
+
+statement ok
+COPY (SELECT '{i}' AS value UNION ALL SELECT 'bad_{i}' WHERE {i} > 0)
+TO '{TEST_DIR}/file_{i}.csv' (HEADER false);
+
+endloop
+
+foreach threads 1 4
+
+statement ok
+SET threads={threads};
+
+# File IDs follow the input order, including the first file that has no errors.
+query I
+SELECT sum(value)
+FROM read_csv(list_transform(range(10), lambda i: '{TEST_DIR}/file_' || i || '.csv'),
+              auto_detect=false, header=false, columns={'value': 'INTEGER'}, store_rejects=true);
+----
+45
+
+query ITT
+SELECT file_id, parse_filename(file_path), csv_line
+FROM reject_errors JOIN reject_scans USING (scan_id, file_id)
+ORDER BY file_id;
+----
+1	file_1.csv	bad_1
+2	file_2.csv	bad_2
+3	file_3.csv	bad_3
+4	file_4.csv	bad_4
+5	file_5.csv	bad_5
+6	file_6.csv	bad_6
+7	file_7.csv	bad_7
+8	file_8.csv	bad_8
+9	file_9.csv	bad_9
+
+statement ok
+DELETE FROM reject_errors;
+
+statement ok
+DELETE FROM reject_scans;
+
+# Both scans read the same files, in opposite orders, into the same rejects tables.
+query III
+SELECT count(*), sum(a.value), sum(b.value)
+FROM read_csv(list_transform(range(10), lambda i: '{TEST_DIR}/file_' || i || '.csv'),
+              auto_detect=false, header=false, columns={'value': 'INTEGER'}, store_rejects=true) a
+CROSS JOIN read_csv(list_transform(range(9, -1, -1), lambda i: '{TEST_DIR}/file_' || i || '.csv'),
+                    auto_detect=false, header=false, columns={'value': 'INTEGER'}, store_rejects=true) b;
+----
+100	450	450
+
+query III
+SELECT count(*), count(DISTINCT file_id), count(DISTINCT scan_id) FROM reject_scans;
+----
+18	18	1
+
+query III
+SELECT count(*), count(DISTINCT file_id), count(DISTINCT scan_id) FROM reject_errors;
+----
+18	18	1
+
+query TTI
+SELECT parse_filename(file_path), csv_line, count(*)
+FROM reject_errors JOIN reject_scans USING (scan_id, file_id)
+GROUP BY ALL ORDER BY ALL;
+----
+file_1.csv	bad_1	2
+file_2.csv	bad_2	2
+file_3.csv	bad_3	2
+file_4.csv	bad_4	2
+file_5.csv	bad_5	2
+file_6.csv	bad_6	2
+file_7.csv	bad_7	2
+file_8.csv	bad_8	2
+file_9.csv	bad_9	2
+
+statement ok
+DELETE FROM reject_errors;
+
+statement ok
+DELETE FROM reject_scans;
+
+# Repeated paths within a scan are distinct file occurrences, and a new query starts at zero.
+query I
+SELECT sum(value)
+FROM read_csv(['{TEST_DIR}/file_1.csv', '{TEST_DIR}/file_1.csv'],
+              auto_detect=false, header=false, columns={'value': 'INTEGER'}, store_rejects=true);
+----
+2
+
+query ITT
+SELECT file_id, parse_filename(file_path), csv_line
+FROM reject_errors JOIN reject_scans USING (scan_id, file_id)
+ORDER BY file_id;
+----
+0	file_1.csv	bad_1
+1	file_1.csv	bad_1
+
+statement ok
+DELETE FROM reject_errors;
+
+statement ok
+DELETE FROM reject_scans;
+
+endloop
