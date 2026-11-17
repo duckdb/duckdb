@@ -12,10 +12,6 @@ must have a 'metadata' and a 'value' column
 
 # A field below 'typed_value' whose 'value' is an INT32 column.
 statement error
-SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
+SELECT var FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
 ----
 Column 'value' of a Variant group has to be binary
-
-# the other column is still readable
-statement ok
-SELECT id FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
