@@ -200,6 +200,8 @@ enum class DebugVerificationMode : uint8_t;
 
 enum class DecimalBitWidth : uint8_t;
 
+enum class DecimalRounding : uint8_t;
+
 enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
@@ -291,6 +293,8 @@ enum class FunctionParameterKind : uint8_t;
 enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
+
+enum class GeometryModel : uint8_t;
 
 enum class GeometryStorageType : uint8_t;
 
@@ -960,6 +964,9 @@ template<>
 const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
 
 template<>
+const char* EnumUtil::ToChars<DecimalRounding>(DecimalRounding value);
+
+template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
 
 template<>
@@ -1096,6 +1103,9 @@ const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
 
 template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
+
+template<>
+const char* EnumUtil::ToChars<GeometryModel>(GeometryModel value);
 
 template<>
 const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value);
@@ -1972,6 +1982,9 @@ template<>
 DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
 
 template<>
+DecimalRounding EnumUtil::FromString<DecimalRounding>(const char *value);
+
+template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
 
 template<>
@@ -2108,6 +2121,9 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
 
 template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value);
+
+template<>
+GeometryModel EnumUtil::FromString<GeometryModel>(const char *value);
 
 template<>
 GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value);
