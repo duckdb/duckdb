@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -72,7 +74,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	hugeint_t outer_value = IntegralValue::Get(outer_constant.GetValue());
 	hugeint_t inner_value = IntegralValue::Get(inner_constant.GetValue());
 
-	idx_t arithmetic_child_index = arithmetic.GetChildrenMutable()[0].get() == &inner_constant ? 1 : 0;
+	idx_t arithmetic_child_index = arithmetic.GetChildren()[0].get() == &inner_constant ? 1 : 0;
 	auto &op_type = arithmetic.Function().GetName();
 	if (op_type == "+") {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
@@ -226,8 +228,8 @@ static unique_ptr<Expression> CreateIsNanCall(ClientContext &context, const Expr
 }
 
 static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {
-	auto not_isnan = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-	not_isnan->GetChildrenMutable().push_back(CreateIsNanCall(context, expr));
+	auto not_isnan = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN,
+	                                                    CreateIsNanCall(context, expr));
 	return std::move(not_isnan);
 }
 
@@ -314,6 +316,14 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 			return nullptr;
 		}
 		new_constant = std::move(*result_value);
+	} else if (constant_type.id() == LogicalTypeId::DECIMAL && constant_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal, negate the BIGNUM blob of the unscaled value
+		const auto unscaled = outer_constant.GetValue().GetValueUnsafe<bignum_t>();
+		const BignumIntermediate intermediate(unscaled);
+		StringHeap heap;
+		auto negated = bignum_t(intermediate.Negate(heap));
+		new_constant =
+		    Value::DECIMAL(negated, DecimalType::GetWidth(constant_type), DecimalType::GetScale(constant_type));
 	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
 		// negate the unscaled integer and reconstruct with the same width/scale
 		hugeint_t negated_value;

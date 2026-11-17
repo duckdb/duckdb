@@ -99,6 +99,7 @@ static bool TryGetBuiltinPhysicalType(LogicalTypeId id, PhysicalType &result) no
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::TYPE:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		result = PhysicalType::VARCHAR;
 		return true;
 	case LogicalTypeId::INTERVAL:
@@ -156,17 +157,18 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 			break;
 		}
 		auto width = info.Cast<DecimalTypeInfo>().width;
-		if (width <= Decimal::MAX_WIDTH_INT16) {
+		if (Decimal::IsWide(width)) {
+			// wide decimals hold their unscaled value as a BIGNUM blob
+			result = PhysicalType::VARCHAR;
+		} else if (width <= Decimal::MAX_WIDTH_INT16) {
 			result = PhysicalType::INT16;
 		} else if (width <= Decimal::MAX_WIDTH_INT32) {
 			result = PhysicalType::INT32;
 		} else if (width <= Decimal::MAX_WIDTH_INT64) {
 			result = PhysicalType::INT64;
-		} else if (width <= Decimal::MAX_WIDTH_INT128) {
-			result = PhysicalType::INT128;
 		} else {
-			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
-			                        width, DecimalType::MaxWidth());
+			D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
+			result = PhysicalType::INT128;
 		}
 		return true;
 	}
@@ -213,10 +215,31 @@ const LogicalTypeInfo *LogicalType::TryGetBuiltinTypeInfo(LogicalTypeId id) noex
 	return builtins->infos[static_cast<uint8_t>(id)];
 }
 
+static unique_ptr<LogicalTypeInfo> CreateVariantTypeInfo() {
+	child_list_t<LogicalType> children;
+	//! keys
+	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
+	//! children
+	children.emplace_back("children",
+	                      LogicalType::LIST(LogicalType::STRUCT(
+	                          {{"keys_index", LogicalType::UINTEGER}, {"values_index", LogicalType::UINTEGER}})));
+	//! values
+	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
+	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));
+	//! data
+	children.emplace_back("data", LogicalType::BLOB);
+
+	return make_uniq<StructTypeInfo>(std::move(children));
+}
+
 const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
 	auto info = TryGetBuiltinTypeInfo(id);
 	if (!info) {
 		throw InternalException("Invalid LogicalType %d", static_cast<uint8_t>(id));
+	}
+	if (id == LogicalTypeId::VARIANT) {
+		static const auto variant_type = CreateImmortal(LogicalTypeId::VARIANT, CreateVariantTypeInfo());
+		return variant_type.GetTypeInfo();
 	}
 	return *info;
 }
@@ -228,10 +251,9 @@ LogicalType::LogicalType(LogicalTypeId id) : type_info_(GetBuiltinTypeInfo(id)) 
 }
 
 const LogicalTypeInfo &LogicalType::AdoptNewTypeInfo(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info) {
-	// validates the id - and ensures the builtin infos exist before any type does
-	auto &builtin_type_info = GetBuiltinTypeInfo(id);
+	// Only resolve built-in info when none was supplied, to avoid recursive initialization.
 	if (!type_info) {
-		return builtin_type_info;
+		return GetBuiltinTypeInfo(id);
 	}
 	if (!TryGetPhysicalType(id, *type_info, type_info->physical_type)) {
 		throw InternalException("Invalid LogicalType %d", static_cast<uint8_t>(id));
@@ -297,6 +319,7 @@ bool LogicalType::HasParameters() const {
 	case LogicalTypeId::TEMPLATE:
 		return info_type == LogicalTypeInfoType::TEMPLATE_TYPE_INFO;
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return info_type == LogicalTypeInfoType::GEO_TYPE_INFO;
 	case LogicalTypeId::UNBOUND:
 		return info_type == LogicalTypeInfoType::UNBOUND_TYPE_INFO;
@@ -393,10 +416,10 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIMESTAMP_TZ_NS,
 	    LogicalTypeId::TIME_TZ,   LogicalTypeId::TIME_NS,       LogicalTypeId::BIT,
 	    LogicalTypeId::BIGNUM,    LogicalTypeId::UHUGEINT,      LogicalTypeId::HUGEINT,
-	    LogicalTypeId::UUID,      LogicalTypeId::GEOMETRY,      LogicalTypeId::STRUCT,
-	    LogicalTypeId::TUPLE,     LogicalTypeId::LIST,          LogicalTypeId::MAP,
-	    LogicalTypeId::ENUM,      LogicalTypeId::UNION,         LogicalTypeId::ARRAY,
-	    LogicalTypeId::VARIANT,
+	    LogicalTypeId::UUID,      LogicalTypeId::GEOMETRY,      LogicalTypeId::GEOGRAPHY,
+	    LogicalTypeId::STRUCT,    LogicalTypeId::TUPLE,         LogicalTypeId::LIST,
+	    LogicalTypeId::MAP,       LogicalTypeId::ENUM,          LogicalTypeId::UNION,
+	    LogicalTypeId::ARRAY,     LogicalTypeId::VARIANT,
 	};
 	return types;
 }
@@ -696,6 +719,15 @@ string LogicalType::ToString() const {
 			result += StringUtil::Format("GEOMETRY(%s)", SQLString(crs.GetDefinition()));
 			break;
 		}
+		case LogicalTypeId::GEOGRAPHY: {
+			if (!GeoType::HasCRS(type)) {
+				result += "GEOGRAPHY";
+				break;
+			}
+			auto &crs = GeoType::GetCRS(type);
+			result += StringUtil::Format("GEOGRAPHY(%s)", SQLString(crs.GetDefinition()));
+			break;
+		}
 		case LogicalTypeId::VARCHAR: {
 			// a collation is part of the type's identity: the constructor form parses in type position
 			auto &string_type_info = type.GetTypeInfo();
@@ -727,8 +759,9 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	return type;
 }
 
-LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	return TypeManager::Get(context).ParseLogicalType(str, context);
+LogicalType TransformStringToLogicalType(const string &str, ClientContext &context,
+                                         optional_ptr<const DecimalWidthLimit> decimal_width_limit) {
+	return TypeManager::Get(context).ParseLogicalType(str, context, decimal_width_limit);
 }
 
 bool LogicalType::IsIntegral() const {
@@ -871,9 +904,7 @@ bool LogicalType::IsComplete() const {
 			return type.GetTypeInfo().Cast<StructTypeInfo>().child_types.empty();
 		case LogicalTypeInfoType::DECIMAL_TYPE_INFO: {
 			// A well-formed decimal is not incomplete
-			auto is_well_formed = DecimalType::GetWidth(type) >= 1 &&
-			                      DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
-			                      DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+			auto is_well_formed = Decimal::IsValidWidthScale(DecimalType::GetWidth(type), DecimalType::GetScale(type));
 			return !is_well_formed;
 		}
 		default:
@@ -893,7 +924,8 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
-	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
+	case LogicalTypeId::GEOMETRY:  // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
+	case LogicalTypeId::GEOGRAPHY: // Same shredded storage as geometry.
 		return false;
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::TUPLE: {
@@ -989,13 +1021,14 @@ bool LogicalType::GetDecimalProperties(uint32_t &width, uint32_t &scale) const {
 }
 
 //! Grows Decimal width/scale when appropriate
-static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &right) {
+static LogicalType DecimalSizeCheck(const LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                    const LogicalType &right) {
 	D_ASSERT(left.id() == LogicalTypeId::DECIMAL || right.id() == LogicalTypeId::DECIMAL);
 	D_ASSERT(left.id() != right.id());
 
 	//! Make sure the 'right' is the DECIMAL type
 	if (left.id() == LogicalTypeId::DECIMAL) {
-		return DecimalSizeCheck(right, left);
+		return DecimalSizeCheck(logical_type_resolver, right, left);
 	}
 	auto width = DecimalType::GetWidth(right);
 	auto scale = DecimalType::GetScale(right);
@@ -1009,12 +1042,13 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
-		uint32_t new_width = other_width + scale;
+		idx_t new_width = idx_t(other_width) + scale;
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
-		if (new_width > DecimalType::MaxWidth()) {
-			new_width = DecimalType::MaxWidth();
+		const idx_t width_limit = logical_type_resolver.GetDecimalWidthLimit().ResultWidth(width);
+		if (new_width > width_limit) {
+			new_width = width_limit;
 		}
-		return LogicalType::DECIMAL(new_width, scale);
+		return LogicalType::DECIMAL(NumericCast<uint32_t>(new_width), scale);
 	}
 	return right;
 }
@@ -1067,14 +1101,16 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                          const LogicalType &right, LogicalType &result);
+static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> context, const LogicalType &left,
+                                               const LogicalType &right,
+                                               optional_ptr<const DecimalWidthLimit> decimal_width_limit);
 
 class ForceLogicalTypeResolver : public LogicalTypeResolver {
 public:
 	using LogicalTypeResolver::LogicalTypeResolver;
 
 	bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) override {
-		result = context ? LogicalType::ForceMaxLogicalType(*context, left, right)
-		                 : LogicalType::DefaultForceMaxLogicalType(left, right);
+		result = ForceMaxLogicalTypeInternal(context, left, right, decimal_width_limit);
 		return true;
 	}
 };
@@ -1107,7 +1143,7 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 				//! Prefer VARIANT always
 				result = left;
 			} else {
-				result = DecimalSizeCheck(left, right);
+				result = DecimalSizeCheck(logical_type_resolver, left, right);
 			}
 		} else {
 			result = right;
@@ -1122,7 +1158,7 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 				//! Prefer VARIANT always
 				result = right;
 			} else {
-				result = DecimalSizeCheck(right, left);
+				result = DecimalSizeCheck(logical_type_resolver, right, left);
 			}
 		} else {
 			result = left;
@@ -1179,13 +1215,25 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 	return true;
 }
 
-bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
-                                       LogicalType &result) {
+static bool TryGetMaxLogicalTypeChecked(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                        LogicalType &result,
+                                        optional_ptr<const DecimalWidthLimit> decimal_width_limit) {
 	if (Settings::Get<OldImplicitCastingSetting>(context)) {
-		result = LogicalType::ForceMaxLogicalType(context, left, right);
+		result = ForceMaxLogicalTypeInternal(&context, left, right, decimal_width_limit);
 		return true;
 	}
-	return TryGetMaxLogicalTypeUnchecked(context, left, right, result);
+	TryGetLogicalTypeResolver logical_type_resolver(&context, decimal_width_limit);
+	return TryGetMaxLogicalTypeInternal(logical_type_resolver, left, right, result);
+}
+
+bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                       LogicalType &result) {
+	return TryGetMaxLogicalTypeChecked(context, left, right, result, nullptr);
+}
+
+bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                       LogicalType &result, const DecimalWidthLimit &decimal_width_limit) {
+	return TryGetMaxLogicalTypeChecked(context, left, right, result, &decimal_width_limit);
 }
 
 bool LogicalType::TryGetMaxLogicalTypeUnchecked(ClientContext &context, const LogicalType &left,
@@ -1277,6 +1325,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 103;
 	case LogicalTypeId::GEOMETRY:
 		return 104;
+	case LogicalTypeId::GEOGRAPHY:
+		return 106;
 	// nested types
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::TUPLE:
@@ -1303,9 +1353,10 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 }
 
 static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> context, const LogicalType &left,
-                                               const LogicalType &right) {
+                                               const LogicalType &right,
+                                               optional_ptr<const DecimalWidthLimit> decimal_width_limit) {
 	LogicalType result;
-	ForceLogicalTypeResolver logical_type_resolver(context);
+	ForceLogicalTypeResolver logical_type_resolver(context, decimal_width_limit);
 	if (TryGetMaxLogicalTypeInternal(logical_type_resolver, left, right, result)) {
 		return result;
 	}
@@ -1321,28 +1372,42 @@ static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> conte
 
 LogicalType LogicalType::ForceMaxLogicalType(ClientContext &context, const LogicalType &left,
                                              const LogicalType &right) {
-	return ForceMaxLogicalTypeInternal(&context, left, right);
+	return ForceMaxLogicalTypeInternal(&context, left, right, nullptr);
+}
+
+LogicalType LogicalType::ForceMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                             const DecimalWidthLimit &decimal_width_limit) {
+	return ForceMaxLogicalTypeInternal(&context, left, right, &decimal_width_limit);
 }
 
 LogicalType LogicalType::DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	return ForceMaxLogicalTypeInternal(nullptr, left, right);
+	return ForceMaxLogicalTypeInternal(nullptr, left, right, nullptr);
 }
 
-LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right) {
+static LogicalType MaxLogicalTypeChecked(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                         optional_ptr<const DecimalWidthLimit> decimal_width_limit) {
 	LogicalType result;
-	if (!TryGetMaxLogicalType(context, left, right, result)) {
+	if (!TryGetMaxLogicalTypeChecked(context, left, right, result, decimal_width_limit)) {
 		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(),
 		                              right.ToString());
 	}
 	return result;
 }
 
+LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right) {
+	return MaxLogicalTypeChecked(context, left, right, nullptr);
+}
+
+LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                        const DecimalWidthLimit &decimal_width_limit) {
+	return MaxLogicalTypeChecked(context, left, right, &decimal_width_limit);
+}
+
 void LogicalType::Verify() const {
 #ifdef DEBUG
 	switch (id()) {
 	case LogicalTypeId::DECIMAL:
-		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		D_ASSERT(Decimal::IsValidWidthScale(DecimalType::GetWidth(*this), DecimalType::GetScale(*this)));
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
@@ -1413,6 +1478,12 @@ void LogicalType::Serialize(Serializer &serializer) const {
 		auto legacy_geom = Geometry::GetSpatialGeometryType();
 		legacy_geom.Serialize(serializer);
 		return;
+	}
+
+	// GEOGRAPHY has no legacy representation, so it cannot be downgraded to older storage versions.
+	if (id() == LogicalTypeId::GEOGRAPHY && !serializer.ShouldSerialize(Geometry::GEOGRAPHY_VERSION_ADDED)) {
+		throw NotImplementedException("The GEOGRAPHY type cannot be written to a storage version older than %s",
+		                              GetStorageVersionName(Geometry::GEOGRAPHY_VERSION_ADDED, false));
 	}
 
 	// This is a UNBOUND type and we are writing to older storage.
@@ -1562,7 +1633,7 @@ uint32_t DecimalType::GetScale(const LogicalType &type) {
 }
 
 uint32_t DecimalType::MaxWidth() {
-	return DecimalWidth<hugeint_t>::max;
+	return NumericLimits<uint32_t>::Maximum();
 }
 
 static constexpr idx_t DecimalTypeInfoIndex(idx_t width, idx_t scale) {
@@ -1570,16 +1641,17 @@ static constexpr idx_t DecimalTypeInfoIndex(idx_t width, idx_t scale) {
 }
 
 LogicalType LogicalType::DECIMAL(uint32_t width, uint32_t scale) {
+	// width 0 and scale > width stay constructible and are reported by IsComplete
 	D_ASSERT(width >= scale);
-	if (!Decimal::IsValidWidthScale(width, scale)) {
+	// the shared infos cover the fixed-size tiers: wide decimals have too many widths to share, and are rare
+	if (!Decimal::IsValidWidthScale(width, scale) || Decimal::IsWide(width)) {
 		return LogicalType(LogicalTypeId::DECIMAL, make_uniq<DecimalTypeInfo>(width, scale));
 	}
-	static constexpr idx_t TYPE_COUNT =
-	    DecimalTypeInfoIndex(Decimal::MAX_WIDTH_DECIMAL, Decimal::MAX_WIDTH_DECIMAL) + 1;
+	static constexpr idx_t TYPE_COUNT = DecimalTypeInfoIndex(Decimal::MAX_WIDTH_INT128, Decimal::MAX_WIDTH_INT128) + 1;
 	static const auto decimal_types = []() {
 		// Finish allocation before immortalizing any info so failed initialization releases partial allocations.
 		array<unique_ptr<LogicalTypeInfo>, TYPE_COUNT> infos;
-		for (uint32_t width = 1; width <= Decimal::MAX_WIDTH_DECIMAL; width++) {
+		for (uint32_t width = 1; width <= Decimal::MAX_WIDTH_INT128; width++) {
 			for (uint32_t scale = 0; scale <= width; scale++) {
 				infos[DecimalTypeInfoIndex(width, scale)] = make_uniq<DecimalTypeInfo>(width, scale);
 			}
@@ -2066,26 +2138,8 @@ const string &TemplateType::GetName(const LogicalType &type) {
 // Variant Type
 //===--------------------------------------------------------------------===//
 
-static unique_ptr<LogicalTypeInfo> CreateVariantTypeInfo() {
-	child_list_t<LogicalType> children;
-	//! keys
-	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
-	//! children
-	children.emplace_back("children",
-	                      LogicalType::LIST(LogicalType::STRUCT(
-	                          {{"keys_index", LogicalType::UINTEGER}, {"values_index", LogicalType::UINTEGER}})));
-	//! values
-	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
-	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));
-	//! data
-	children.emplace_back("data", LogicalType::BLOB);
-
-	return make_uniq<StructTypeInfo>(std::move(children));
-}
-
 LogicalType LogicalType::VARIANT() {
-	static const auto variant_type = CreateImmortal(LogicalTypeId::VARIANT, CreateVariantTypeInfo());
-	return variant_type;
+	return LogicalType(LogicalTypeId::VARIANT);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2111,8 +2165,27 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
+LogicalType LogicalType::GEOGRAPHY() {
+	return LogicalType(LogicalTypeId::GEOGRAPHY);
+}
+
+LogicalType LogicalType::GEOGRAPHY(const string &crs) {
+	if (crs.empty()) {
+		return LogicalType::GEOGRAPHY();
+	}
+	auto info = make_uniq<GeoTypeInfo>();
+	info->crs = CoordinateReferenceSystem(crs);
+	return LogicalType(LogicalTypeId::GEOGRAPHY, std::move(info));
+}
+
+LogicalType LogicalType::GEOGRAPHY(const CoordinateReferenceSystem &crs) {
+	auto info = make_uniq<GeoTypeInfo>();
+	info->crs = crs;
+	return LogicalType(LogicalTypeId::GEOGRAPHY, std::move(info));
+}
+
 bool GeoType::HasCRS(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY);
 	auto &info = type.GetTypeInfo();
 	if (info.type != LogicalTypeInfoType::GEO_TYPE_INFO) {
 		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
@@ -2125,7 +2198,7 @@ bool GeoType::HasCRS(const LogicalType &type) {
 }
 
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY);
 	auto &info = type.GetTypeInfo();
 	if (info.type != LogicalTypeInfoType::GEO_TYPE_INFO) {
 		throw InternalException("Geometry type has no CRS information");

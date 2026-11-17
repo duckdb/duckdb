@@ -1,0 +1,130 @@
+# name: test/sql/storage/compression/select_bitpacking_sparse.test
+# description: Sparse FOR selections, clustered fallbacks and packed-word boundaries
+# group: [compression]
+
+require block_size 262144
+
+statement ok
+ATTACH '{TEST_DIR}/sparse_bitpacking.db' AS db;
+
+statement ok
+SET threads=1;
+
+statement ok
+SET force_bitpacking_mode='for';
+
+# Frequent NULLs keep validity uncompressed so storage selection remains available.
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
+
+statement ok
+CREATE OR REPLACE MACRO expected(i) AS CASE WHEN i%3=0 THEN NULL ELSE (hash(i)%127)::BIGINT + CASE WHEN '{type}' LIKE 'U%' THEN 0 ELSE -63 END END;
+
+statement ok
+CREATE TABLE db.t(id INTEGER, k32 INTEGER, k97 INTEGER, k1024 INTEGER, v {type} USING COMPRESSION bitpacking);
+
+statement ok
+INSERT INTO db.t SELECT i, i%32, i%97, i%1024, expected(i)::{type} FROM range(8197) t(i);
+
+statement ok
+CHECKPOINT db;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/sparse_bitpacking.db' AS db;
+
+query I
+SELECT count(*)>0 FROM pragma_storage_info('db.t') WHERE column_name='v' AND compression='BitPacking';
+----
+true
+
+query I
+SELECT bool_and(compression='Uncompressed') FROM pragma_storage_info('db.t') WHERE column_name='v' AND segment_type='VALIDITY';
+----
+true
+
+# Selections around the sparse/dense cutoff, plus dense groups.
+foreach selected 1 2 4 5 16 31
+
+query I
+SELECT count(*)>0 AND bool_and(v IS NOT DISTINCT FROM expected(id)::{type}) FROM db.t WHERE k32 < {selected};
+----
+true
+
+endloop
+
+# Low overall density with dense clusters must use the normal group decoder.
+query I
+SELECT count(*)>0 AND bool_and(v IS NOT DISTINCT FROM expected(id)::{type}) FROM db.t WHERE k1024 < 16;
+----
+true
+
+# Reused scans visit every offset, metadata boundaries and the ragged final group.
+statement ok
+PREPARE sparse AS SELECT count(*)>0 AND bool_and(v IS NOT DISTINCT FROM expected(id)::{type}) FROM db.t WHERE k97=$1;
+
+foreach offset 0 1 31 32 44 96
+
+query I
+EXECUTE sparse({offset});
+----
+true
+
+endloop
+
+statement ok
+DEALLOCATE sparse;
+
+statement ok
+DROP TABLE db.t;
+
+endloop
+
+# Include zero-width payloads and values spanning up to five packed 32-bit words.
+foreach width 0 1 31 32 33 63 64 65 95 111 127 128
+
+statement ok
+CREATE OR REPLACE MACRO mask() AS (~0::UHUGEINT) >> (128-{width})::UHUGEINT;
+
+statement ok
+CREATE OR REPLACE MACRO expected(i) AS CASE WHEN i%1024=1 THEN mask() WHEN i%1024=2 THEN 0 WHEN i%3=0 THEN NULL ELSE ((hash(i)::UHUGEINT << 64::UHUGEINT) | hash(i+1)) & mask() END;
+
+statement ok
+CREATE TABLE db.wide(id INTEGER, k32 INTEGER, k97 INTEGER, v UHUGEINT USING COMPRESSION bitpacking);
+
+statement ok
+INSERT INTO db.wide SELECT i,i%32,i%97,expected(i) FROM range(8197) t(i);
+
+statement ok
+CHECKPOINT db;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/sparse_bitpacking.db' AS db;
+
+query I
+SELECT bool_and(compression='Uncompressed') FROM pragma_storage_info('db.wide') WHERE column_name='v' AND segment_type='VALIDITY';
+----
+true
+
+foreach offset 0 1 31 32 44 96
+
+query I
+SELECT count(*)>0 AND bool_and(v IS NOT DISTINCT FROM expected(id)) FROM db.wide WHERE k97={offset};
+----
+true
+
+endloop
+
+query I
+SELECT count(*)>0 AND bool_and(v IS NOT DISTINCT FROM expected(id)) FROM db.wide WHERE k32<4;
+----
+true
+
+statement ok
+DROP TABLE db.wide;
+
+endloop
