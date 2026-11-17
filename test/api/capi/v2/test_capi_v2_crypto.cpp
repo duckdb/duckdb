@@ -107,6 +107,14 @@ TEST_CASE("V2 crypto: hashing and HMAC", "[capi_v2][crypto]") {
 	REQUIRE(Hmac(fx.instance, DUCKDB_V2_CRYPTO_HASH_SHA256, ToBytes("Jefe"), ToBytes("what do ya want for nothing?")) ==
 	        "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
 
+	// An empty key needs no key pointer (and no data), per RFC 2104.
+	uint8_t mac[32];
+	REQUIRE(duckdb_v2_crypto_hmac(fx.instance, DUCKDB_V2_CRYPTO_HASH_SHA256, nullptr, 0, nullptr, 0, mac, sizeof(mac),
+	                              &length, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ToHex(mac, length) == "b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad");
+	REQUIRE(duckdb_v2_crypto_hmac(fx.instance, DUCKDB_V2_CRYPTO_HASH_SHA256, nullptr, 3, nullptr, 0, mac, sizeof(mac),
+	                              &length, nullptr) != DUCKDB_V2_ERROR_NONE);
+
 	// Digest sizes, and support.
 	idx_t size = 0;
 	REQUIRE(duckdb_v2_crypto_hash_digest_size(DUCKDB_V2_CRYPTO_HASH_MD5, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -253,6 +261,7 @@ struct ProviderStats {
 	DUCKDB_V2_CRYPTO_MODE last_mode = DUCKDB_V2_CRYPTO_MODE_ENCRYPT;
 	DUCKDB_V2_CRYPTO_CIPHER last_cipher = DUCKDB_V2_CRYPTO_CIPHER_AES_GCM;
 	idx_t last_aad_length = 0;
+	bool fail_init = false;
 	bool *destroyed = nullptr;
 };
 
@@ -283,8 +292,13 @@ void XorCreate(void *user_data, DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO
 }
 
 void XorInit(void *user_data, void *stream, const uint8_t *iv, idx_t, const uint8_t *, idx_t aad_length,
-             duckdb_v2_error_info_handle *) {
-	static_cast<ProviderStats *>(user_data)->last_aad_length = aad_length;
+             duckdb_v2_error_info_handle *err) {
+	auto &stats = *static_cast<ProviderStats *>(user_data);
+	stats.last_aad_length = aad_length;
+	if (stats.fail_init) {
+		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
+		return;
+	}
 	static_cast<XorStream *>(stream)->iv = iv[0];
 }
 
@@ -415,6 +429,49 @@ TEST_CASE("V2 crypto provider: the primitives run on a registered provider", "[c
 	// SQL goes through the provider as well.
 	REQUIRE(RunSql(fx.conn, "SELECT sha256('abc')") == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(stats->hash_calls == 2);
+}
+
+TEST_CASE("V2 crypto provider: force_mbedtls_unsafe overrides the registered provider", "[capi_v2][crypto]") {
+	EnvFixture fx;
+	auto stats = new ProviderStats();
+	auto provider = MakeProvider(fx.factory, stats);
+	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_provider_destroy(&provider);
+
+	REQUIRE(Hash(fx.instance, DUCKDB_V2_CRYPTO_HASH_SHA256, ToBytes("abc")) == std::string(64, '1'));
+	REQUIRE(stats->hash_calls == 1);
+
+	AllowBuiltInWrites(fx);
+	REQUIRE(Hash(fx.instance, DUCKDB_V2_CRYPTO_HASH_SHA256, ToBytes("abc")) ==
+	        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+	REQUIRE(stats->hash_calls == 1);
+
+	Bytes iv(12, 5), ciphertext, tag;
+	REQUIRE(RunAes(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128, iv, Bytes(),
+	               ToBytes("hello"), ciphertext, tag) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(stats->creates == 0);
+}
+
+TEST_CASE("V2 crypto provider: misuse and callback failures", "[capi_v2][crypto]") {
+	EnvFixture fx;
+	auto stats = new ProviderStats();
+	auto provider = MakeProvider(fx.factory, stats);
+	REQUIRE(duckdb_v2_instance_register_crypto_provider(fx.instance, provider, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_provider_destroy(&provider);
+
+	// Invalid IV and tag lengths are rejected before the provider sees them.
+	Bytes out, tag;
+	REQUIRE(RunAes(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128, Bytes(11, 5),
+	               Bytes(), ToBytes("hello"), out, tag) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(stats->creates == 0);
+
+	// A failing init releases the stream the provider created.
+	stats->fail_init = true;
+	Bytes iv(12, 5);
+	REQUIRE(RunAes(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128, iv, Bytes(),
+	               ToBytes("hello"), out, tag) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(stats->creates == 1);
+	REQUIRE(stats->destroys == 1);
 }
 
 TEST_CASE("V2 crypto provider: registration rules", "[capi_v2][crypto]") {

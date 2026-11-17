@@ -405,9 +405,11 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_hmac(duckdb_v2_instance_handle instance, DUCKDB
                                       uint8_t *mac, idx_t mac_capacity, idx_t *mac_length,
                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(key);
 	DUCKDB_CHECK_ARG(mac);
 	DUCKDB_CHECK_ARG(mac_length);
+	if (key_length > 0) {
+		DUCKDB_CHECK_ARG(key);
+	}
 	if (length > 0) {
 		DUCKDB_CHECK_ARG(data);
 	}
