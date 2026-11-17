@@ -158,6 +158,7 @@ struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
+	void Initialize(ClientContext &context);
 
 	ProjectionIndex filter_idx;
 	TableFilter &filter;
@@ -393,6 +394,7 @@ public:
 
 	mutable CachingFileSystem fs;
 	Allocator &allocator;
+	BufferManager &buffer_manager;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;

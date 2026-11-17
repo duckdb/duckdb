@@ -209,6 +209,10 @@ void RadixHTGlobalSinkState::Destroy() {
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
     : sink(sink_p), row_width(sink.radix_ht.GetLayout().GetRowWidth()), sink_capacity(SinkCapacity()),
       sink_radix_bits(InitialSinkRadixBits(sink.number_of_threads)), maximum_sink_radix_bits(MaximumSinkRadixBits()) {
+	static_assert(MAXIMUM_INITIAL_SINK_RADIX_BITS <= MAXIMUM_FINAL_SINK_RADIX_BITS,
+	              "Initial sink radix bits exceed the final limit");
+	static_assert(MAXIMUM_FINAL_SINK_RADIX_BITS <= RadixPartitioning::MAX_RADIX_BITS,
+	              "Sink radix bits exceed radix partitioning support");
 }
 
 void RadixHTConfig::ResetForNewIteration(const idx_t scheduled_workers) {
@@ -282,7 +286,10 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 	// Because we'll have too many pages in memory to do the partitioning in the first place
 
 	// Budget row blocks and optional heap or exported-state blocks, with headroom for repartitioning.
-	const auto memory_limit = dynamic ? sink.temporary_memory_state->GetReservation() : sink.memory_limit / 2;
+	const auto reservation = sink.temporary_memory_state->GetReservation();
+	// An unspillable arena cannot fund a larger partitioning working set.
+	const auto use_reservation = dynamic && (sink.spill_plan || reservation <= sink.memory_limit);
+	const auto memory_limit = use_reservation ? reservation : sink.memory_limit / 2;
 	const idx_t pages_per_partition = sink.radix_ht.GetLayout().AllConstant() && !sink.spill_plan ? 2 : 4;
 	const auto max_partitions = memory_limit / sink.number_of_threads / sink.block_alloc_size / pages_per_partition;
 
@@ -311,6 +318,10 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 		bits = MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	} else {
 		bits = MAXIMUM_FINAL_SINK_RADIX_BITS;
+	}
+	if (sink.radix_ht.GetLayout().AllConstant()) {
+		// Allow enough fixed-width partitions to keep the available workers busy.
+		bits = MaxValue(bits, RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(sink.number_of_threads)));
 	}
 	// Capped by external radix bits
 	return MinValue(bits, ExternalRadixBits(false));
@@ -357,6 +368,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	}
 	registered = false;
 	spilling = false;
+	size_after_abandon = 0;
 	abandoned_data.reset();
 	abandoned_exported_data.clear();
 	if (!ht) {
@@ -573,6 +585,14 @@ bool RadixHTGlobalSinkState::StatePressureExceeded(GroupedAggregateHashTable &ht
 	       GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
 }
 
+idx_t RadixHTGlobalSinkState::SpillableSize(GroupedAggregateHashTable &ht) const {
+	const auto total_size = ht.GetSizeInBytes();
+	if (spill_plan) {
+		return total_size;
+	}
+	return total_size - MinValue(total_size, ht.GetAggregateAllocator()->AllocationSize());
+}
+
 // Whether this thread's aggregate states should be exported to spillable storage
 bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate, GroupedAggregateHashTable &ht) {
 	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
@@ -587,6 +607,38 @@ bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &l
 		return false;
 	}
 	return arena_size >= gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR;
+}
+
+idx_t SpillableLimit(RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht) {
+	const auto thread_limit = gstate.GetThreadLimit();
+	if (gstate.spill_plan || ht.GetAggregateAllocator()->AllocationSize() == 0 ||
+	    !BufferManager::GetBufferManager(gstate.context).HasTemporaryDirectory()) {
+		return thread_limit;
+	}
+	// The arena's minimum reservation can exceed the memory limit.
+	return MinValue(thread_limit, gstate.memory_limit / gstate.number_of_threads / 10 * 8);
+}
+
+// Without a spill plan, arena pressure alone must not repeatedly abandon and re-create the same states.
+bool MemoryPressure(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate, GroupedAggregateHashTable &ht,
+                    idx_t total_size) {
+	const auto thread_limit = gstate.GetThreadLimit();
+	if (gstate.spill_plan) {
+		return total_size > thread_limit || gstate.StatePressureExceeded(ht);
+	}
+	if (total_size <= thread_limit) {
+		return false;
+	}
+	if (ht.GetAggregateAllocator()->AllocationSize() == 0) {
+		// abandoning duplicates nothing that cannot spill
+		return true;
+	}
+	const auto spillable_size = gstate.SpillableSize(ht);
+	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
+	// Preserve growth opportunities when spilling rows would reclaim little compared with the arena.
+	const auto growth_limit =
+	    gstate.external || spillable_size > arena_size / 4 ? SpillableLimit(gstate, ht) : thread_limit;
+	return spillable_size > lstate.size_after_abandon + growth_limit / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR;
 }
 
 void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht,
@@ -623,7 +675,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto total_size = ht.GetSizeInBytes();
 	UpdateSinkReservation(context, gstate, ht, total_size);
 
-	if (total_size > gstate.GetThreadLimit()) {
+	if (gstate.SpillableSize(ht) > SpillableLimit(gstate, ht)) {
 		if (gstate.config.SetRadixBitsToExternal()) {
 			lstate.PrepareForSpill(gstate);
 			// We're approaching the memory limit, unpin the data
@@ -649,9 +701,14 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto current_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
-	const auto row_size_per_partition =
-	    ht.GetMaterializedCount() * ht.GetPartitionedData().GetLayout().GetRowWidth() / partition_count;
-	if (row_size_per_partition >
+	const auto &layout = ht.GetPartitionedData().GetLayout();
+	auto data_size = ht.GetMaterializedCount() * layout.GetRowWidth();
+	if (!layout.AllConstant() && partition_count < gstate.number_of_threads) {
+		// Include heap bytes when additional partitions can expose more parallelism.
+		data_size = ht.GetMaterializedSize();
+	}
+	const auto size_per_partition = data_size / partition_count;
+	if (size_per_partition >
 	    LossyNumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(gstate.block_alloc_size))) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
@@ -695,8 +752,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	// Row width and aggregate state size can increase without filling the pointer table.
 	const auto total_size = ht.GetSizeInBytes();
 	UpdateSinkReservation(context.client, gstate, ht, total_size);
-	const auto memory_pressure =
-	    total_size > gstate.GetThreadLimit() || (gstate.spill_plan && gstate.StatePressureExceeded(ht));
+	const auto memory_pressure = MemoryPressure(gstate, lstate, ht, total_size);
 	if (!memory_pressure &&
 	    ht.Count() + STANDARD_VECTOR_SIZE < GroupedAggregateHashTable::ResizeThreshold(lstate.local_sink_capacity)) {
 		return;
@@ -709,11 +765,13 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		RadixHTAdaptivity::MaybeSkipLookups(gstate, lstate);
 	}
 
+	bool abandoned = false;
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
 		// Keep the materialized rows and clear only the local pointer table
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
 		gstate.any_abandoned = true;
 		ht.Abandon();
+		abandoned = true;
 		if (!memory_pressure) {
 			RadixHTAdaptivity::MaybeResumeLookups(gstate, lstate);
 		}
@@ -728,6 +786,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
 		gstate.any_abandoned = true;
 		ht.Abandon();
+		abandoned = true;
 		if (gstate.external) {
 			ht.Resize(lstate.local_sink_capacity);
 		}
@@ -755,6 +814,10 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		ht.AcquirePartitionedData()->Repartition(context.client, *lstate.abandoned_data);
 		ExportAbandonedData(context.client, gstate, lstate);
 		ht.GetAggregateAllocator()->FreeAll();
+		abandoned = true;
+	}
+	if (abandoned) {
+		lstate.size_after_abandon = gstate.SpillableSize(ht);
 	}
 
 	// TODO: combine early and often
@@ -1356,6 +1419,10 @@ ProgressData RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkS
                                                     GlobalSourceState &gstate_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSourceState>();
+
+	if (sink.count_before_combining == 0) {
+		return ProgressData {gstate.finished ? 1.0 : 0.0, 1.0, false};
+	}
 
 	// Get partition combine progress, weigh it 2x
 	ProgressData progress;

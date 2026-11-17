@@ -68,6 +68,8 @@ enum class AlterDatabaseType : uint8_t;
 
 enum class AlterForeignKeyType : uint8_t;
 
+enum class AlterMacroType : uint8_t;
+
 enum class AlterScalarFunctionType : uint8_t;
 
 enum class AlterSchemaType : uint8_t;
@@ -198,6 +200,8 @@ enum class DebugVerificationMode : uint8_t;
 
 enum class DecimalBitWidth : uint8_t;
 
+enum class DecimalRounding : uint8_t;
+
 enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
@@ -289,6 +293,8 @@ enum class FunctionParameterKind : uint8_t;
 enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
+
+enum class GeometryModel : uint8_t;
 
 enum class GeometryStorageType : uint8_t;
 
@@ -478,6 +484,8 @@ enum class PipelineScheduleMode : uint8_t;
 
 enum class PipelineScheduleStageType : uint8_t;
 
+enum class PlanningMode : uint8_t;
+
 enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
@@ -539,8 +547,6 @@ enum class ResultModifierType : uint8_t;
 enum class ResultOrdering : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
-
-enum class RowIdHandling : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -760,6 +766,9 @@ template<>
 const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
 
 template<>
+const char* EnumUtil::ToChars<AlterMacroType>(AlterMacroType value);
+
+template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
 
 template<>
@@ -955,6 +964,9 @@ template<>
 const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
 
 template<>
+const char* EnumUtil::ToChars<DecimalRounding>(DecimalRounding value);
+
+template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
 
 template<>
@@ -1091,6 +1103,9 @@ const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
 
 template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
+
+template<>
+const char* EnumUtil::ToChars<GeometryModel>(GeometryModel value);
 
 template<>
 const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value);
@@ -1375,6 +1390,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineScheduleStageType>(PipelineScheduleStageType value);
 
 template<>
+const char* EnumUtil::ToChars<PlanningMode>(PlanningMode value);
+
+template<>
 const char* EnumUtil::ToChars<PragmaType>(PragmaType value);
 
 template<>
@@ -1466,9 +1484,6 @@ const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
-
-template<>
-const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1769,6 +1784,9 @@ template<>
 AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);
 
 template<>
+AlterMacroType EnumUtil::FromString<AlterMacroType>(const char *value);
+
+template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
 
 template<>
@@ -1964,6 +1982,9 @@ template<>
 DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
 
 template<>
+DecimalRounding EnumUtil::FromString<DecimalRounding>(const char *value);
+
+template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
 
 template<>
@@ -2100,6 +2121,9 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
 
 template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value);
+
+template<>
+GeometryModel EnumUtil::FromString<GeometryModel>(const char *value);
 
 template<>
 GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value);
@@ -2384,6 +2408,9 @@ template<>
 PipelineScheduleStageType EnumUtil::FromString<PipelineScheduleStageType>(const char *value);
 
 template<>
+PlanningMode EnumUtil::FromString<PlanningMode>(const char *value);
+
+template<>
 PragmaType EnumUtil::FromString<PragmaType>(const char *value);
 
 template<>
@@ -2475,9 +2502,6 @@ ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
-
-template<>
-RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);

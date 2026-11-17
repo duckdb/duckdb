@@ -1,3 +1,4 @@
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
@@ -39,13 +40,13 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	}
 }
 
-void PopulateChildFallback(DataChunk &args, Vector &result) {
+void PopulateChildFallback(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
 	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		const auto entry_offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
+			auto val = args.GetValue(col_idx, i).CastAs(state.GetContext(), child_type);
 			ListVector::PushBack(result, val);
 		}
 		result_data.WriteValue(list_entry_t(entry_offset, args.ColumnCount()));
@@ -226,7 +227,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	auto &result_child = ListVector::GetChildMutable(result);
 
 	if (!PopulateChild(args, result_child)) {
-		PopulateChildFallback(args, result);
+		PopulateChildFallback(args, state, result);
 	}
 
 	const idx_t column_count = args.ColumnCount();
@@ -246,7 +247,8 @@ void UnpivotResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type,
+		                                       input.GetDecimalWidthLimit())) {
 			string list_arguments = "Full list: ";
 			idx_t error_index = list_arguments.size();
 			for (idx_t k = 0; k < arguments.size(); k++) {
