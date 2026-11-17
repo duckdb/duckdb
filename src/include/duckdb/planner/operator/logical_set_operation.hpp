@@ -36,13 +36,18 @@ public:
 	bool setop_all;
 	//! Whether or not UNION statements can be executed out of order
 	bool allow_out_of_order;
+	//! EXCEPT / INTERSECT: the types the binder resolved for the columns. The columns are compared as these types,
+	//! that is under their collations. The children do not tell: a UNION child has the types of its first child, and
+	//! a cast to VARCHAR does not carry a collation
+	vector<LogicalType> comparison_types;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}
 
-	//! The types the columns of an EXCEPT / INTERSECT are compared with: a collation of either child applies
+	//! The types the columns of an EXCEPT / INTERSECT are compared as: comparison_types, or for a set operation that
+	//! was not planned by the binder what the children say (a collation of either child applies)
 	vector<LogicalType> GetComparisonTypes(ClientContext &context);
 	//! How an EXCEPT / INTERSECT compares the columns of its children: IS NOT DISTINCT FROM (NULLs are equal) on every
 	//! column, under its collation. These are the conditions of the join CreateJoin builds, without the row numbers.

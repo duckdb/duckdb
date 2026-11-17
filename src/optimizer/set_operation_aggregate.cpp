@@ -27,12 +27,18 @@
 // a type whose comparison normalizes (INTERVAL, TIME WITH TIME ZONE), also not nested. Every other EXCEPT ALL /
 // INTERSECT ALL becomes the join.
 //
+// The join is also kept where the left child is estimated to have few distinct rows with many copies each: the few
+// groups of the aggregate cannot feed all threads, so the expansion and what follows it would run on one thread.
+//
 // The pass runs before the join order, statistics propagation and compressed materialization, which then see an
 // ordinary aggregate or join.
 #include "duckdb/optimizer/set_operation_aggregate.hpp"
 
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
@@ -54,6 +60,149 @@ namespace {
 //! The copies of a group are generated in blocks of this many rows
 constexpr int64_t COPY_BLOCK_SIZE = STANDARD_VECTOR_SIZE;
 
+//! The aggregate plan is not used for fewer groups than this per thread: the scan of the aggregate's result is the
+//! source of everything above the set operation, and with few groups it cannot keep the threads busy
+constexpr idx_t MIN_GROUPS_PER_THREAD = STANDARD_VECTOR_SIZE;
+//! .. if every group has at least this many rows on average, so that there is work above to be spread
+constexpr idx_t MIN_COPIES_PER_GROUP = 128;
+//! How deep the estimate of the distinct values of a column follows the plan
+constexpr idx_t MAX_DISTINCT_COUNT_DEPTH = 64;
+
+optional_idx MultiplyCounts(optional_idx left, optional_idx right) {
+	if (!left.IsValid() || !right.IsValid()) {
+		return optional_idx();
+	}
+	const idx_t limit = NumericLimits<uint32_t>::Maximum();
+	if (left.GetIndex() > limit || right.GetIndex() > limit) {
+		// as good as unknown
+		return optional_idx();
+	}
+	return left.GetIndex() * right.GetIndex();
+}
+
+optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, const ColumnBinding &binding,
+                                 idx_t depth);
+
+//! An estimate of the number of distinct values of an expression over the columns of op, if there is one: a constant
+//! has one value, a column what the scan it comes from says, and another expression at most as many as the
+//! combinations of the columns it reads
+optional_idx ExpressionDistinctCount(ClientContext &context, LogicalOperator &op, const Expression &expr, idx_t depth) {
+	if (expr.IsFoldable()) {
+		return 1;
+	}
+	if (expr.IsVolatile()) {
+		return optional_idx();
+	}
+	optional_idx result = 1;
+	bool has_column = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		has_column = true;
+		result = colref.Depth() == 0
+		             ? MultiplyCounts(result, ColumnDistinctCount(context, op, colref.Binding(), depth + 1))
+		             : optional_idx();
+	});
+	if (!has_column) {
+		return optional_idx();
+	}
+	// few values by type
+	optional_idx domain;
+	switch (expr.GetReturnType().id()) {
+	case LogicalTypeId::BOOLEAN:
+		domain = 3;
+		break;
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::UTINYINT:
+		domain = 257;
+		break;
+	case LogicalTypeId::ENUM:
+		domain = EnumType::GetSize(expr.GetReturnType()) + 1;
+		break;
+	default:
+		break;
+	}
+	if (domain.IsValid() && (!result.IsValid() || result.GetIndex() > domain.GetIndex())) {
+		return domain;
+	}
+	return result;
+}
+
+//! An estimate of the number of distinct values of a column that op produces, if there is one
+optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, const ColumnBinding &binding,
+                                 idx_t depth) {
+	if (depth > MAX_DISTINCT_COUNT_DEPTH) {
+		return optional_idx();
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		if (binding.table_index != get.table_index || !get.children.empty()) {
+			return optional_idx();
+		}
+		auto &column_index = get.GetColumnIndex(binding);
+		if (column_index.IsVirtualColumn()) {
+			return optional_idx();
+		}
+		unique_ptr<BaseStatistics> stats;
+		if (get.bind_data && get.function.statistics_extended) {
+			TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
+			stats = get.function.statistics_extended(context, input);
+		} else if (get.bind_data && get.function.statistics) {
+			stats = get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
+		}
+		if (!stats || stats->GetDistinctCount() == 0) {
+			return optional_idx();
+		}
+		// one more for NULL
+		return stats->GetDistinctCount() + 1;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		if (binding.table_index != projection.table_index || binding.column_index >= op.expressions.size()) {
+			return optional_idx();
+		}
+		return ExpressionDistinctCount(context, *op.children[0], *op.expressions[binding.column_index], depth);
+	}
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (binding.table_index != setop.table_index) {
+			return optional_idx();
+		}
+		idx_t result = 0;
+		for (auto &child : op.children) {
+			auto child_bindings = child->GetColumnBindings();
+			if (binding.column_index >= child_bindings.size()) {
+				return optional_idx();
+			}
+			auto child_count = ColumnDistinctCount(context, *child, child_bindings[binding.column_index], depth + 1);
+			if (!child_count.IsValid()) {
+				return optional_idx();
+			}
+			result += child_count.GetIndex();
+		}
+		return result;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		// the values of a column come from the child that has it (an outer join adds NULL, which is counted)
+		for (auto &child : op.children) {
+			for (auto &child_binding : child->GetColumnBindings()) {
+				if (child_binding == binding) {
+					return ColumnDistinctCount(context, *child, binding, depth + 1);
+				}
+			}
+		}
+		return optional_idx();
+	}
+	default:
+		return optional_idx();
+	}
+}
+
 } // namespace
 
 SetOperationAggregate::SetOperationAggregate(Optimizer &optimizer, bool use_aggregate)
@@ -73,7 +222,29 @@ bool SetOperationAggregate::CanUseAggregate(LogicalSetOperation &setop) {
 			return false;
 		}
 	}
-	return true;
+	return !FewGroupsOfManyRows(setop);
+}
+
+//! Whether the left child, whose rows the set operation returns, is estimated to have few distinct rows with many
+//! copies each. The aggregate plan then expands a few groups into many rows, and since the scan of its few groups
+//! is the source of that pipeline, the expansion and everything above it up to the next pipeline breaker run on
+//! one thread, where the rows of the join plan come from all threads. Without an estimate the aggregate is used.
+bool SetOperationAggregate::FewGroupsOfManyRows(LogicalSetOperation &setop) {
+	auto &context = optimizer.context;
+	auto threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	if (threads <= 1) {
+		return false;
+	}
+	auto &left = *setop.children[0];
+	optional_idx groups = 1;
+	for (auto &binding : left.GetColumnBindings()) {
+		groups = MultiplyCounts(groups, ColumnDistinctCount(context, left, binding, 0));
+	}
+	if (!groups.IsValid()) {
+		return false;
+	}
+	auto rows = left.EstimateCardinality(context);
+	return groups.GetIndex() < threads * MIN_GROUPS_PER_THREAD && groups.GetIndex() * MIN_COPIES_PER_GROUP <= rows;
 }
 
 //! The columns of a child followed by its side markers: in_left is TRUE for the rows of the left child and NULL for

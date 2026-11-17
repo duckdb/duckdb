@@ -43,6 +43,10 @@ static JoinCondition CreateNotDistinctComparison(ClientContext &context, const L
 static vector<LogicalType> GetComparisonTypes(ClientContext &context, const LogicalSetOperation &op,
                                               const vector<LogicalType> &left_types,
                                               const vector<LogicalType> &right_types) {
+	if (op.comparison_types.size() == left_types.size()) {
+		// the types the binder resolved
+		return op.comparison_types;
+	}
 	// the types only differ in their collations here, but a collation can be missing from a child (e.g. when the
 	// projection applying a COLLATE was removed) or from the operator (it takes the types of the left child)
 	vector<LogicalType> types;

@@ -18,6 +18,15 @@ statement ok
 CREATE TABLE empty(k INTEGER, s VARCHAR);
 
 statement ok
+CREATE TABLE ul AS SELECT * FROM (VALUES ('a')) t(s);
+
+statement ok
+CREATE TABLE ub AS SELECT * FROM (VALUES ('b')) t(s);
+
+statement ok
+CREATE TABLE ur AS SELECT * FROM (VALUES ('A')) t(s);
+
+statement ok
 CREATE TABLE nested_l AS SELECT [k, NULL] AS ks, {'k': k, 's': [s]} AS st, [k, k]::INTEGER[2] AS arr FROM l;
 
 statement ok
@@ -142,6 +151,61 @@ query II
 EXPLAIN SELECT d FROM dbl_a EXCEPT ALL SELECT d FROM dbl_b WHERE d = 7
 ----
 physical_plan	<!REGEX>:.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+# ---- Few distinct rows with many copies keep the join ---------------------------------------------------------------
+
+# the few groups of the aggregate could not feed all threads with the rows they expand to
+statement ok
+CREATE TABLE few_groups AS SELECT (range % 3)::INTEGER AS g, range AS u FROM range(100000);
+
+statement ok
+SET threads = 4;
+
+query II
+EXPLAIN SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT g, g + 1, 'x' FROM few_groups INTERSECT ALL SELECT g, g + 1, 'x' FROM few_groups WHERE u < 10
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# many groups, or one thread: the aggregate
+query II
+EXPLAIN SELECT u FROM few_groups EXCEPT ALL SELECT u FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT g, u FROM few_groups EXCEPT ALL SELECT g, u FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+statement ok
+SET threads = 1;
+
+query II
+EXPLAIN SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT g, count(*) FROM (SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10) GROUP BY g ORDER BY g
+----
+0	33330
+1	33330
+2	33330
+
+statement ok
+RESET threads;
+
+query II
+SELECT g, count(*) FROM (SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10) GROUP BY g ORDER BY g
+----
+0	33330
+1	33330
+2	33330
 
 # ---- Set operations that become the join -------------------------------------------------------------------------
 
@@ -284,12 +348,17 @@ EXPLAIN WITH l2 AS (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FRO
 ----
 physical_plan	<!REGEX>:.*Unnest.*
 
-# ---- The answers are the same with the optimizer off and on --------------------------------------------------------
+# ---- The answers are the same for every way the set operation is planned -----------------------------------------
 
-loop i 0 2
+# 0: the join plan, 1: the aggregate plan, 2 / 3: without the filters moving around the set operation,
+# 4: without the optimizer, where the physical planner runs the set operation
+loop i 0 5
 
 statement ok
-SET disabled_optimizers = CASE WHEN {i} = 0 THEN 'set_operation_aggregate' ELSE '' END;
+SET disabled_optimizers = CASE {i} WHEN 0 THEN 'set_operation_aggregate' WHEN 2 THEN 'filter_pushdown' WHEN 3 THEN 'filter_pullup' ELSE '' END;
+
+statement ok
+SET enable_optimizer = ({i} <> 4);
 
 # a row that occurs n times on the left and m times on the right: n - m times (EXCEPT ALL), min(n, m) times
 # (INTERSECT ALL); NULLs are equal to each other
@@ -856,6 +925,48 @@ query I
 EXECUTE p(1, 10)
 ----
 1
+
+# the columns are compared under the collations the binder resolved, which a UNION child does not show (it has the
+# types of its first branch) and a cast to VARCHAR does not carry
+query T
+SELECT * FROM ((SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT 'A'::VARCHAR);
+----
+a
+
+query T
+SELECT * FROM ((SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub) EXCEPT ALL SELECT 'A'::VARCHAR) ORDER BY ALL;
+----
+b
+
+query T
+SELECT * FROM ((SELECT s FROM ul EXCEPT ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT s FROM ur) q WHERE s COLLATE "binary" = 'a';
+----
+a
+
+# the collation of the right side only, of a nested set operation, below a cast, in a correlated subquery
+query T
+SELECT * FROM (SELECT s FROM ul INTERSECT ALL (SELECT s FROM ub UNION ALL SELECT s COLLATE nocase FROM ur))
+----
+a
+
+query T
+SELECT * FROM (SELECT s FROM ul EXCEPT ALL (SELECT s FROM ur INTERSECT ALL SELECT s COLLATE nocase FROM ul))
+----
+
+query T
+SELECT * FROM (SELECT 1::VARCHAR EXCEPT ALL (SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub)) t(s)
+----
+1
+
+query TI rowsort
+SELECT o.s, (SELECT count(*) FROM ((SELECT s FROM ul WHERE o.s IS NOT NULL UNION ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT upper(o.s))) FROM (SELECT * FROM ul UNION ALL SELECT * FROM ub UNION ALL SELECT * FROM ur) o
+----
+A	1
+a	1
+b	1
+
+statement ok
+SET enable_optimizer = true;
 
 endloop
 

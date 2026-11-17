@@ -43,6 +43,9 @@ LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_co
 
 vector<LogicalType> LogicalSetOperation::GetComparisonTypes(ClientContext &context) {
 	D_ASSERT(type == LogicalOperatorType::LOGICAL_EXCEPT || type == LogicalOperatorType::LOGICAL_INTERSECT);
+	if (comparison_types.size() == column_count) {
+		return comparison_types;
+	}
 	ResolveOperatorTypes();
 	auto &left_types = children[0]->types;
 	auto &right_types = children[1]->types;
@@ -57,12 +60,14 @@ vector<LogicalType> LogicalSetOperation::GetComparisonTypes(ClientContext &conte
 
 vector<JoinCondition> LogicalSetOperation::GetComparisons(ClientContext &context) {
 	auto comparison_types = GetComparisonTypes(context);
+	D_ASSERT(comparison_types.size() == column_count);
 	auto left_bindings = children[0]->GetColumnBindings();
 	auto right_bindings = children[1]->GetColumnBindings();
 	vector<JoinCondition> result;
 	for (idx_t i = 0; i < column_count; i++) {
-		JoinCondition condition(make_uniq<BoundColumnRefExpression>(children[0]->types[i], left_bindings[i]),
-		                        make_uniq<BoundColumnRefExpression>(children[1]->types[i], right_bindings[i]),
+		// both sides as the type they are compared as, which is also the type of the column of the set operation
+		JoinCondition condition(make_uniq<BoundColumnRefExpression>(comparison_types[i], left_bindings[i]),
+		                        make_uniq<BoundColumnRefExpression>(comparison_types[i], right_bindings[i]),
 		                        ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		ExpressionBinder::PushCollation(context, condition.LeftReference(), comparison_types[i]);
 		ExpressionBinder::PushCollation(context, condition.RightReference(), comparison_types[i]);

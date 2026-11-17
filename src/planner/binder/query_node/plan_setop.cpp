@@ -96,8 +96,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		if (node.setop_all) {
 			// EXCEPT ALL and INTERSECT ALL stay a set operation until the optimizer has moved the filters around
 			// it and chooses how to run it (see SetOperationAggregate)
-			root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children),
-			                                      logical_type, true);
+			auto setop = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children),
+			                                            logical_type, true);
+			// the types of the set operation carry the collations its columns are compared under
+			setop->comparison_types = node.types;
+			root = std::move(setop);
 		} else {
 			// EXCEPT is an ANTI join and INTERSECT a SEMI join on all columns
 			root = LogicalSetOperation::CreateJoin(*this, node.types, node.setop_index, logical_type, false,

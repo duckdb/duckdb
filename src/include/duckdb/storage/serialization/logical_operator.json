@@ -648,6 +648,11 @@
         "name": "allow_out_of_order",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "comparison_types",
+        "type": "vector<LogicalType>"
       }
     ],
     "constructor": [
