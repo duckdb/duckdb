@@ -42,8 +42,9 @@ INSTALL nonexistent_extension FROM unknown.example
 ----
 <REGEX>:Binder Error.*not a known repository name.*
 
-# The conflict is decided before any host is contacted: IF NOT EXISTS returns the stored definition and a plain CREATE
-# reports the duplicate, neither reaching for 'https://pointing.example'.
+# The conflict is decided before any host is contacted: IF NOT EXISTS returns the stored definition, and a plain CREATE
+# of the host form reports that the stored repository was added with a prefix instead, neither reaching for
+# 'https://pointing.example'.
 statement ok
 CREATE EXTENSION REPOSITORY IF NOT EXISTS pointing.example
 
@@ -53,7 +54,12 @@ CREATE EXTENSION REPOSITORY IF NOT EXISTS 'POINTING.example'
 statement error
 CREATE EXTENSION REPOSITORY pointing.example
 ----
-<REGEX>:Catalog Error.*already exists.*
+<REGEX>:Catalog Error.*already exists, added with prefix '.*' rather than resolved from its host.*
+
+# the other way round: naming the stored prefix does not make it the same repository as one resolved from its host
+# (see the api tests for a stored host); here a plain CREATE with the same prefix is simply the same repository
+statement ok
+CREATE EXTENSION REPOSITORY pointing.example WITH PREFIX '{TEST_DIR}/repo'
 
 # OR REPLACE does resolve; here that fails (no httpfs to reach the host, or no such host), and the old definition stays.
 statement error
@@ -157,6 +163,16 @@ statement error
 INSTALL nonexistent_extension FROM byprefix
 ----
 <REGEX>:Permission Error.*'byprefix' is not permitted while allow_extension_repositories='hosts_only'.*
+
+# a plain CREATE that asks for the stored repository adds nothing, so it passes under 'hosts_only' too; one that asks
+# for something else reports the difference, not the opt-in
+statement ok
+CREATE EXTENSION REPOSITORY byprefix WITH PREFIX '{TEST_DIR}/repo'
+
+statement error
+CREATE EXTENSION REPOSITORY byprefix WITH PREFIX '{TEST_DIR}/other'
+----
+<REGEX>:Catalog Error.*already exists, with prefix.*
 
 # the ratchet only tightens
 statement error

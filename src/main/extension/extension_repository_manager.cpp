@@ -15,6 +15,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "yyjson.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 using namespace duckdb_yyjson; // NOLINT
@@ -670,6 +671,47 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	return result;
 }
 
+//! How a stored repository differs from what a plain CREATE asks for, or empty when the request describes the stored
+//! repository: a repeated CREATE then passes without fetching anything. Without a prefix the request only names a host,
+//! so it describes the stored repository when that was resolved from the host; with a prefix, the prefix must match
+//! and so must the keys when the request gives any (keys that were not given were fetched from the prefix, and are not
+//! fetched again to compare). Nothing here reaches the network: what the host or the prefix serve today is checked
+//! only by OR REPLACE
+static string DescribeDifference(const ExtensionRepository &stored, const ExtensionRepository &requested,
+                                 bool from_host) {
+	if (from_host) {
+		if (!stored.host.empty()) {
+			return string();
+		}
+		return StringUtil::Format("added with prefix '%s' rather than resolved from its host", stored.path);
+	}
+	if (!stored.host.empty()) {
+		return StringUtil::Format("resolved from its host (prefix '%s') rather than added with a prefix", stored.path);
+	}
+	auto requested_path = requested.path;
+	StringUtil::RTrim(requested_path, "/");
+	auto stored_path = stored.path;
+	StringUtil::RTrim(stored_path, "/");
+	if (requested_path != stored_path) {
+		return StringUtil::Format("with prefix '%s'", stored.path);
+	}
+	if (requested.public_keys.empty()) {
+		return string();
+	}
+	auto requested_keys = ExtensionRepositoryManager::NormalizePublicKeys(requested.public_keys);
+	std::sort(requested_keys.begin(), requested_keys.end());
+	auto stored_keys = stored.public_keys;
+	std::sort(stored_keys.begin(), stored_keys.end());
+	if (requested_keys != stored_keys) {
+		vector<string> fingerprints;
+		for (auto &key : stored.public_keys) {
+			fingerprints.push_back(ExtensionRepositoryManager::GetPublicKeyFingerprint(key));
+		}
+		return StringUtil::Format("with other public keys (%s)", StringUtil::Join(fingerprints, ", "));
+	}
+	return string();
+}
+
 ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstance &db, FileSystem &fs,
                                                                  optional_ptr<ClientContext> context,
                                                                  const ExtensionRepository &requested,
@@ -677,7 +719,9 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	// no prefix: the name is the host, and the host names the prefix. The host is derived here, never taken from the
 	// caller, so a stored host always means the repository was resolved from it
 	bool from_host = requested.path.empty();
-	CheckCanCreate(db, from_host);
+	// a locked configuration freezes the trust store, whatever the statement; the opt-in is checked once it is known
+	// that the statement would add something (see below)
+	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(requested.name);
 	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
@@ -694,21 +738,32 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		    name);
 	}
 
-	// the conflict is decided before anything is fetched: IF NOT EXISTS returns the stored definition, a plain CREATE
-	// reports the duplicate, and only OR REPLACE goes on to resolve - keeping the old definition if that fails
+	// the conflict is decided before anything is fetched, and before the opt-in: IF NOT EXISTS returns the stored
+	// definition, a plain CREATE returns it too when it asks for the same repository and reports the difference
+	// otherwise, and only OR REPLACE goes on to resolve - keeping the old definition if that fails. Returning what is
+	// stored adds no trust, so it needs no opt-in, and a difference is a difference whatever the access level
 	auto directory = GetRepositoryDirectory(db, fs);
 	auto file_path = fs.JoinPath(directory, name + FILE_EXTENSION);
 	if (fs.FileExists(file_path)) {
 		switch (on_conflict) {
-		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException(
-			    "Extension repository with name \"%s\" already exists!\nUse CREATE OR REPLACE to overwrite it", name);
+		case OnCreateConflict::ERROR_ON_CONFLICT: {
+			auto stored = ReadRepository(fs, file_path);
+			auto difference = DescribeDifference(stored, requested, from_host);
+			if (difference.empty()) {
+				return stored;
+			}
+			throw CatalogException("Extension repository with name \"%s\" already exists, %s\nUse CREATE OR REPLACE to "
+			                       "overwrite it",
+			                       name, difference);
+		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
 			return ReadRepository(fs, file_path);
 		default:
 			break;
 		}
 	}
+	// from here on something is added: the opt-in applies
+	CheckCanCreate(db, from_host);
 
 	ExtensionRepository repository(name, requested.path, requested.public_keys);
 	vector<string> public_keys;

@@ -256,6 +256,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::DECIMAL:
 	// GEOMETRY is emitted as either WKT or GeoJSON, so it must reach CreateValues untouched
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		return type;
 	case LogicalTypeId::VARIANT:
 		return LogicalType::JSON();
@@ -610,6 +611,33 @@ static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const V
 		} else {
 			const auto &str = values[val_idx];
 			vals[i] = yyjson_mut_rawncpy(doc, str.GetData(), str.GetSize());
+		}
+		D_ASSERT(vals[i] != nullptr);
+	}
+}
+
+// DECIMAL(w, s) with w == s has no digits before the decimal point, so its VARCHAR form has no leading zero
+// (e.g., ".5" or "-.5"). That is not a valid JSON number, so we add the zero before inserting it as a raw value.
+static void CreateRawDecimalValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
+	const auto values = value_v.Values<string_t>();
+	string buffer;
+	for (idx_t i = 0; i < count; i++) {
+		const auto entry = values[i];
+		if (!entry.IsValid()) {
+			vals[i] = yyjson_mut_null(doc);
+			continue;
+		}
+		const auto &str = entry.GetValue();
+		const auto data = str.GetData();
+		const auto size = str.GetSize();
+		const idx_t point_pos = (size > 0 && data[0] == '-') ? 1 : 0;
+		if (point_pos < size && data[point_pos] == '.') {
+			buffer.assign(data, point_pos);
+			buffer += '0';
+			buffer.append(data + point_pos, size - point_pos);
+			vals[i] = yyjson_mut_rawncpy(doc, buffer.c_str(), buffer.size());
+		} else {
+			vals[i] = yyjson_mut_rawncpy(doc, data, size);
 		}
 		D_ASSERT(vals[i] != nullptr);
 	}
@@ -1034,7 +1062,8 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		break;
 	}
-	case LogicalTypeId::GEOMETRY: {
+	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY: {
 		if (options.geometry_format == JSONGeometryFormat::GEOJSON) {
 			CreateValuesGeometry(doc, vals, value_v, count);
 		} else {
@@ -1058,7 +1087,11 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		if (DecimalType::GetWidth(type) > 15) {
 			Vector string_vector(LogicalTypeId::VARCHAR, count);
 			VectorOperations::DefaultCast(value_v, string_vector, count);
-			CreateRawValues(doc, vals, string_vector, count);
+			if (DecimalType::GetWidth(type) == DecimalType::GetScale(type)) {
+				CreateRawDecimalValues(doc, vals, string_vector, count);
+			} else {
+				CreateRawValues(doc, vals, string_vector, count);
+			}
 		} else {
 			Vector double_vector(LogicalType::DOUBLE, count);
 			VectorOperations::DefaultCast(value_v, double_vector, count);

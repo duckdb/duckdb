@@ -422,6 +422,10 @@ void PhysicalBatchCopyToFile::AddRawBatchData(ClientContext &context, GlobalSink
 
 static bool CorrectSizeForBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
                                 const optional_idx &batch_size_bytes) {
+	if (!batch_size.IsValid()) {
+		// no row target (only ROW_GROUP_SIZE_BYTES): the byte target alone decides
+		return CopyFunctionBatchAnalyzer(batch, batch_size, batch_size_bytes).IsAcceptable();
+	}
 	if (batch_size.GetIndex() == 0) {
 		// a batch size of 0 indicates we are happy with any batch size
 		return true;

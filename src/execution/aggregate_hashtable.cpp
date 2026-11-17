@@ -322,6 +322,10 @@ idx_t GroupedAggregateHashTable::GetMaterializedCount() const {
 	return result;
 }
 
+idx_t GroupedAggregateHashTable::GetMaterializedSize() const {
+	return partitioned_data->GetDataSize() + (unpartitioned_data ? unpartitioned_data->GetDataSize() : 0);
+}
+
 void GroupedAggregateHashTable::SkipLookups() {
 	adaptivity.SkipLookups();
 }

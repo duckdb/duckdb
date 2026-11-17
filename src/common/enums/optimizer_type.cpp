@@ -59,13 +59,14 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"distinct_aggregate_rewrite", OptimizerType::DISTINCT_AGGREGATE_REWRITE},
     {"aggregate_reuse", OptimizerType::AGGREGATE_REUSE},
     {"duplicate_eliminated_domain", OptimizerType::DUPLICATE_ELIMINATED_DOMAIN},
-    {"group_by_top_key", OptimizerType::GROUP_BY_TOP_KEY},
     {"projection_placement", OptimizerType::PROJECTION_PLACEMENT},
     {"redundant_order_keys", OptimizerType::REDUNDANT_ORDER_KEYS},
     {"disjunctive_join_rewriter", OptimizerType::DISJUNCTIVE_JOIN_REWRITER},
     {"redundant_order", OptimizerType::REDUNDANT_ORDER},
     {"self_join_aggregate", OptimizerType::SELF_JOIN_AGGREGATE},
     {"scalar_aggregate_merge", OptimizerType::SCALAR_AGGREGATE_MERGE},
+    {"redundant_distinct", OptimizerType::REDUNDANT_DISTINCT},
+    {"group_by_top_key", OptimizerType::GROUP_BY_TOP_KEY},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
