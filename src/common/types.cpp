@@ -1532,6 +1532,7 @@ static bool RequiresTypeInfo(LogicalTypeId id) {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::ENUM:
 		return true;
