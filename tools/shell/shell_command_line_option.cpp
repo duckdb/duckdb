@@ -87,6 +87,12 @@ MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult DisableBuiltinExtensions(ShellState &state, const vector<string> &args) {
+	state.config.options.load_extensions = false;
+	state.config.options.register_extension_overloads = false;
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
 	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
 	       duckdb::DuckDB::SourceID());
@@ -381,6 +387,8 @@ static const CommandLineOption command_line_options[] = {
     {"markdown", 0, "", MarkOutputModeFlag, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
     {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
     {"no-agent", 0, "", SetAgentMode<OptionType::OFF>, nullptr, "never render output for an AI coding agent"},
+    {"no-builtin-extensions", 0, "", DisableBuiltinExtensions, nullptr,
+     "skip loading built-in extensions and registering autoload placeholders"},
     {"no-init", 0, "", SkipInit, nullptr, "skip processing the init file"},
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},

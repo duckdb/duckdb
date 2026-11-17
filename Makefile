@@ -938,7 +938,7 @@ parser-grammar: parser-grammar-tools
 	PYTHON="$(FORMAT_PYTHON)" ./scripts/parser/build_grammar.sh
 
 .PHONY: check-extension-entries
-check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
+check-extension-entries: $(if $(strip $(EXTENSION_ENTRIES)),,extension_configuration) $(FORMAT_SETUP_DEPS)
 	$(PYTHON) scripts/generate_extensions_function.py $(if $(EXTENSION_ENTRIES),--extensions "$(EXTENSION_ENTRIES)")
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
 	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
