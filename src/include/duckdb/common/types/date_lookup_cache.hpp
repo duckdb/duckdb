@@ -23,8 +23,10 @@ public:
 	constexpr static int32_t CACHE_MAX_DATE = 29584; // 2050-12-31
 
 public:
-	DateLookupCache() {
-		BuildCache();
+	//! Returns the cache, which is built on first use
+	static const DateLookupCache &Get() {
+		static const DateLookupCache cache;
+		return cache;
 	}
 
 	//! Extracts the component, or returns nullopt if the date is infinite
@@ -42,13 +44,16 @@ public:
 	}
 
 private:
+	DateLookupCache() {
+		BuildCache();
+	}
+
 	static idx_t GetDateCacheEntry(date_t day) {
 		return UnsafeNumericCast<idx_t>(day.days - DateLookupCache::CACHE_MIN_DATE);
 	}
 
 	void BuildCache() {
 		D_ASSERT(CACHE_MAX_DATE > CACHE_MIN_DATE);
-		cache = make_unsafe_uniq_array_uninitialized<CACHE_TYPE>(CACHE_MAX_DATE - CACHE_MIN_DATE);
 		for (int32_t d = CACHE_MIN_DATE; d < CACHE_MAX_DATE; d++) {
 			date_t date(d);
 			auto cache_entry = OP::template Operation<date_t, int64_t>(date);
@@ -57,7 +62,8 @@ private:
 	}
 
 private:
-	unsafe_unique_array<CACHE_TYPE> cache;
+	//! A plain array keeps the static trivially destructible
+	CACHE_TYPE cache[CACHE_MAX_DATE - CACHE_MIN_DATE];
 };
 
 } // namespace duckdb
