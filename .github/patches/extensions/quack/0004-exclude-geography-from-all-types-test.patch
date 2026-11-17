@@ -1,0 +1,13 @@
+diff --git a/test/sql/rpc.test b/test/sql/rpc.test
+index 68433cc..da84c05 100644
+--- a/test/sql/rpc.test
++++ b/test/sql/rpc.test
+@@ -83,7 +83,7 @@ select max(range) from quack_query({server}, 'from range(100000)')
+ 99999
+ 
+ statement ok
+-from quack_query({server}, 'from test_all_types()')
++from quack_query({server}, 'select * exclude (geography) from test_all_types()')
+ 
+ 
+ statement ok

@@ -85,10 +85,11 @@ struct TableFunctionFileInitInput {
 	//! (Optional) The virtual columns among the column indexes, as a map of the index they are projected in to the
 	//! virtual column id wanted there. A virtual column gets an index of its own, past the columns the function bound
 	optional_ptr<const unordered_map<column_t, column_t>> virtual_columns;
-	//! The index of the file this function reads within the scan, and the number of files the scan reads in total.
+	//! The index of the file this function reads within the scan.
 	//! TableFunctionInitInput::op is the operator all those files are read for
 	optional_idx file_index;
-	idx_t file_count = 1;
+	//! (Optional) The scan's file list. Use GetFileCount for a bounded count without expanding every file
+	optional_ptr<const MultiFileList> file_list;
 
 	//! The multi-file input of an initialization - an empty one when the function is not read as part of a
 	//! multi-file scan
@@ -233,7 +234,7 @@ public:
 	//! kept afterwards so that the bind that reads the file can reuse what this one read from it
 	shared_ptr<FunctionData> bind_data;
 	//! The statistics callback of the wrapped function, which reads the statistics of this file from its bind data
-	table_statistics_t statistics = nullptr;
+	table_statistics_extended_t statistics = nullptr;
 
 	optional_idx TryGetCardinalityEstimate() const override {
 		return cardinality;
@@ -302,9 +303,9 @@ public:
 	unordered_map<column_t, column_t> virtual_columns;
 	//! The key-value metadata the wrapped function reported for this file
 	InsertionOrderPreservingMap<Value> metadata;
-	//! The operator this file is scanned for, and the number of files that scan reads
+	//! The operator and file list of the scan this file is read for
 	optional_ptr<const PhysicalOperator> scan_op;
-	idx_t scan_file_count = 1;
+	optional_ptr<const MultiFileList> scan_file_list;
 
 public:
 	//! The state of the wrapped function for this file, if it has been initialized
@@ -317,7 +318,7 @@ public:
 	}
 
 private:
-	//! Take the operator and file count of the scan this file is read for from its state
+	//! Take the operator and file list of the scan this file is read for from its state
 	void SetScanState(GlobalTableFunctionState &gstate);
 	//! The input the wrapped function is initialized with - "file_input" receives what the scan adds to it
 	TableFunctionInitInput GetInitInput(TableFunctionFileInitInput &file_input) const;

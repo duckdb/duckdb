@@ -112,7 +112,7 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 }
 
 string QueryProfiler::GetSaveLocation() const {
-	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location;
+	return is_explain_analyze ? string() : Settings::Get<ProfilingOutputSetting>(context);
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
@@ -182,8 +182,7 @@ void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t star
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
-	const auto &config = ClientConfig::GetConfig(context);
-	if (config.profiling_coverage == ProfilingCoverage::ALL) {
+	if (Settings::Get<ProfilingCoverageSetting>(context) == ProfilingCoverage::ALL) {
 		return true;
 	}
 
@@ -1164,7 +1163,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 
 void QueryProfiler::Render(const ProfilingNode &node, BaseTreeRenderer &ss) const {
 	TextTreeRenderer renderer;
-	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
+	renderer.Configure(TreeRenderer::GetRendererSettings(context));
 	renderer.Render(node, ss);
 }
 
