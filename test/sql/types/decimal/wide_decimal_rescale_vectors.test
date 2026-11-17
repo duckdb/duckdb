@@ -1,0 +1,59 @@
+# name: test/sql/types/decimal/wide_decimal_rescale_vectors.test
+# description: Wide decimal rescaling retains results across values and vectors
+# group: [decimal]
+
+statement ok
+CREATE TABLE rescale_input AS
+SELECT i, CASE WHEN i % 17 = 0 THEN NULL
+               ELSE (CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
+                     '123456789012345678901234567890123456789' || i || '.0050')::DECIMAL(60,4) END v
+FROM range(4103) t(i)
+
+statement ok
+CREATE TABLE rescale_output AS
+SELECT i, v::DECIMAL(60,2) rounded, v::DECIMAL(70,8) expanded, v::DECIMAL(70,4) same_scale
+FROM rescale_input
+
+query I
+SELECT count(*) FROM rescale_output
+WHERE rounded::VARCHAR IS DISTINCT FROM
+      CASE WHEN i % 17 = 0 THEN NULL ELSE
+           CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
+           '123456789012345678901234567890123456789' || i || '.01' END
+----
+0
+
+query I
+SELECT count(*) FROM rescale_output
+WHERE expanded::VARCHAR IS DISTINCT FROM
+      CASE WHEN i % 17 = 0 THEN NULL ELSE
+           CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
+           '123456789012345678901234567890123456789' || i || '.00500000' END
+----
+0
+
+query I
+SELECT count(*) FROM rescale_output o JOIN rescale_input i USING (i)
+WHERE o.same_scale IS DISTINCT FROM i.v
+----
+0
+
+query I
+SELECT count(*) FROM rescale_input
+WHERE TRY_CAST(v AS DECIMAL(39,2)) IS NOT NULL
+----
+0
+
+query I
+SELECT count(*) FROM
+  (SELECT i, v::DECIMAL(60,2) rounded FROM rescale_input WHERE i % 7 <> 0 ORDER BY i DESC) s
+JOIN rescale_output o USING (i)
+WHERE s.rounded IS DISTINCT FROM o.rounded
+----
+0
+
+statement ok
+DROP TABLE rescale_output
+
+statement ok
+DROP TABLE rescale_input

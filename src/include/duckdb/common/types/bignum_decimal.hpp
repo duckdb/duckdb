@@ -10,8 +10,10 @@
 
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -35,6 +37,21 @@ struct DecimalHelper<bignum_t> {
 
 		StringHeap &heap;
 		BignumArithmeticState state;
+	};
+
+	//! Scratch reused across rescaled values; returned blobs own their bytes.
+	struct RescaleState {
+		explicit RescaleState(optional_ptr<ClientContext> context = nullptr) : arithmetic(context) {
+		}
+
+		const string &GetPowerOfTen(idx_t exponent);
+
+		StringHeap heap;
+		BignumArithmeticState arithmetic;
+
+	private:
+		optional_idx cached_exponent;
+		string cached_power;
 	};
 
 	//! 10^exponent as a BIGNUM blob, the powers of everyday widths are cached; a long computation checks for
@@ -84,11 +101,15 @@ struct DecimalHelper<bignum_t> {
 	//! rescaled value
 	DUCKDB_API static string Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
 	                                 optional_ptr<ClientContext> context = nullptr);
+	DUCKDB_API static string Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+	                                 uint32_t target_scale);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width, the
 	//! result is the BIGNUM blob of the rescaled value
 	DUCKDB_API static bool TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
 	                                  uint32_t target_scale, string &result,
 	                                  optional_ptr<ClientContext> context = nullptr);
+	DUCKDB_API static bool TryRescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+	                                  uint32_t target_width, uint32_t target_scale, string &result);
 
 	//! Converts an unscaled value with the given scale to a FLOAT or DOUBLE, rounding once (through the decimal
 	//! string), returns false if the value is out of range

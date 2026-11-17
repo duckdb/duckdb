@@ -450,25 +450,25 @@ bool DecimalHelper<bignum_t>::TryParse(const char *data, idx_t size, uint32_t wi
 	return true;
 }
 
-string DecimalHelper<bignum_t>::Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
-                                        optional_ptr<ClientContext> context) {
-	if (target_scale == source_scale) {
-		return value.data.GetString();
+const string &DecimalHelper<bignum_t>::RescaleState::GetPowerOfTen(idx_t exponent) {
+	if (cached_exponent != exponent) {
+		cached_power = PowerOfTen(exponent, Context::TryGetClientContext(arithmetic.context));
+		cached_exponent = exponent;
 	}
+	return cached_power;
+}
+
+static string RescaleBignum(const bignum_t &value, uint32_t source_scale, uint32_t target_scale, const string &power,
+                            StringHeap &heap, BignumArithmeticState &state) {
 	BorrowedBignum source(value);
-	StringHeap heap;
-	BignumArithmeticState state(context);
+	BorrowedBignum factor(power);
 	if (target_scale > source_scale) {
-		const auto power = PowerOfTen(target_scale - source_scale, context);
-		BorrowedBignum factor(power);
 		return BignumIntermediate::Multiply(heap, state, source.intermediate, factor.intermediate).GetString();
 	}
 	// scaling down divides by the power of ten and rounds half away from zero
-	const auto power = PowerOfTen(source_scale - target_scale, context);
-	BorrowedBignum divisor(power);
 	string_t quotient;
 	string_t remainder;
-	if (!BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, quotient, remainder)) {
+	if (!BignumIntermediate::TryDivMod(heap, state, source.intermediate, factor.intermediate, quotient, remainder)) {
 		throw InternalException("DecimalHelper<bignum_t>::Rescale: division by a power of ten failed");
 	}
 	const bignum_t remainder_bignum(remainder);
@@ -477,7 +477,7 @@ string DecimalHelper<bignum_t>::Rescale(const bignum_t &value, uint32_t source_s
 	    BignumIntermediate::Multiply(heap, state, remainder_value.intermediate, BignumConstant(2).intermediate);
 	const bignum_t twice_remainder_bignum(twice_remainder);
 	BorrowedBignum twice_remainder_value(twice_remainder_bignum);
-	if (twice_remainder_value.intermediate.IsAbsoluteBigger(divisor.intermediate) != SMALLER) {
+	if (twice_remainder_value.intermediate.IsAbsoluteBigger(factor.intermediate) != SMALLER) {
 		// |remainder| >= divisor / 2 rounds away from zero
 		auto &one = BignumConstant(source.intermediate.is_negative ? -1 : 1);
 		const bignum_t quotient_bignum(quotient);
@@ -487,14 +487,45 @@ string DecimalHelper<bignum_t>::Rescale(const bignum_t &value, uint32_t source_s
 	return quotient.GetString();
 }
 
-bool DecimalHelper<bignum_t>::TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
-                                         uint32_t target_scale, string &result, optional_ptr<ClientContext> context) {
-	auto rescaled = Rescale(value, source_scale, target_scale, context);
-	if (!FitsWidth(bignum_t(string_t(rescaled)), target_width)) {
+string DecimalHelper<bignum_t>::Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
+                                        optional_ptr<ClientContext> context) {
+	if (target_scale == source_scale) {
+		return value.data.GetString();
+	}
+	StringHeap heap;
+	BignumArithmeticState state(context);
+	const auto exponent = target_scale > source_scale ? target_scale - source_scale : source_scale - target_scale;
+	const auto power = PowerOfTen(exponent, context);
+	return RescaleBignum(value, source_scale, target_scale, power, heap, state);
+}
+
+string DecimalHelper<bignum_t>::Rescale(RescaleState &scratch, const bignum_t &value, uint32_t source_scale,
+                                        uint32_t target_scale) {
+	if (target_scale == source_scale) {
+		return value.data.GetString();
+	}
+	scratch.heap.GetAllocator().Reset();
+	const auto exponent = target_scale > source_scale ? target_scale - source_scale : source_scale - target_scale;
+	return RescaleBignum(value, source_scale, target_scale, scratch.GetPowerOfTen(exponent), scratch.heap,
+	                     scratch.arithmetic);
+}
+
+static bool TryStoreRescaledDecimal(string rescaled, uint32_t target_width, string &result) {
+	if (!DecimalHelper<bignum_t>::FitsWidth(bignum_t(string_t(rescaled)), target_width)) {
 		return false;
 	}
 	result = std::move(rescaled);
 	return true;
+}
+
+bool DecimalHelper<bignum_t>::TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
+                                         uint32_t target_scale, string &result, optional_ptr<ClientContext> context) {
+	return TryStoreRescaledDecimal(Rescale(value, source_scale, target_scale, context), target_width, result);
+}
+
+bool DecimalHelper<bignum_t>::TryRescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+                                         uint32_t target_width, uint32_t target_scale, string &result) {
+	return TryStoreRescaledDecimal(Rescale(state, value, source_scale, target_scale), target_width, result);
 }
 
 DecimalHelper<bignum_t>::RoundState::RoundState(Vector &result, Context &context)
