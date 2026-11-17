@@ -341,6 +341,9 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Rolls back the active transaction (if any) without throwing, while the context is still fully alive
+	void RollbackActiveTransaction();
+
 	friend class Parser;
 	friend class ParseIterator;
 	ParserOptions GetParserOptions();

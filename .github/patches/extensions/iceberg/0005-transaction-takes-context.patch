@@ -312,7 +312,7 @@ index ea63d0961..3f8a0e7e6 100644
  	auto data_manifest_metadata =
  	    IcebergManifestMetadata::FromTableMetadata(table_metadata, IcebergManifestContentType::DATA);
 diff --git a/src/catalog/rest/transaction/iceberg_transaction_manager.cpp b/src/catalog/rest/transaction/iceberg_transaction_manager.cpp
-index 6230eed92..5dca23756 100644
+index 6230eed92..b7782cfca 100644
 --- a/src/catalog/rest/transaction/iceberg_transaction_manager.cpp
 +++ b/src/catalog/rest/transaction/iceberg_transaction_manager.cpp
 @@ -7,7 +7,7 @@ IcebergTransactionManager::IcebergTransactionManager(AttachedDatabase &db_p, Ice
@@ -320,7 +320,7 @@ index 6230eed92..5dca23756 100644
  }
  
 -Transaction &IcebergTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &IcebergTransactionManager::StartTransaction(Context &context) {
++Transaction &IcebergTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
  	auto transaction = make_uniq<IcebergTransaction>(ic_catalog, *this, context);
  	transaction->Start();
  	auto &result = *transaction;
@@ -333,6 +333,15 @@ index 6230eed92..5dca23756 100644
  	} catch (std::exception &ex) {
  		return ErrorData(ex);
  	}
+@@ -28,7 +28,7 @@ ErrorData IcebergTransactionManager::CommitTransaction(ClientContext &context, T
+ 	return ErrorData();
+ }
+ 
+-void IcebergTransactionManager::RollbackTransaction(Transaction &transaction) {
++void IcebergTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &ic_transaction = transaction.Cast<IcebergTransaction>();
+ 	ic_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
 diff --git a/src/catalog/rest/transaction/iceberg_transaction_update.cpp b/src/catalog/rest/transaction/iceberg_transaction_update.cpp
 index 5f466bd6f..3bdd4d920 100644
 --- a/src/catalog/rest/transaction/iceberg_transaction_update.cpp
@@ -622,17 +631,20 @@ index bba75926f..600074dbe 100644
  	const IcebergTable &table_info;
  	//! Transaction-wide invalidated file paths, tagged with the alter that first invalidated them
 diff --git a/src/include/catalog/rest/transaction/iceberg_transaction_manager.hpp b/src/include/catalog/rest/transaction/iceberg_transaction_manager.hpp
-index 620976aa8..4c5abadbe 100644
+index 620976aa8..a7fb4eb8e 100644
 --- a/src/include/catalog/rest/transaction/iceberg_transaction_manager.hpp
 +++ b/src/include/catalog/rest/transaction/iceberg_transaction_manager.hpp
-@@ -11,7 +11,7 @@ class IcebergTransactionManager : public TransactionManager {
+@@ -11,9 +11,9 @@ class IcebergTransactionManager : public TransactionManager {
  public:
  	IcebergTransactionManager(AttachedDatabase &db_p, IcebergCatalog &ic_catalog);
  
 -	Transaction &StartTransaction(ClientContext &context) override;
-+	Transaction &StartTransaction(Context &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
  	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
- 	void RollbackTransaction(Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
  
 diff --git a/src/include/catalog/rest/transaction/iceberg_transaction_update.hpp b/src/include/catalog/rest/transaction/iceberg_transaction_update.hpp
 index 75660c230..6fdd5e429 100644

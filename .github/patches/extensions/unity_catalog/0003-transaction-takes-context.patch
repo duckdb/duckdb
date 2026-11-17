@@ -12,17 +12,20 @@ index 7cecb3e..3feac3d 100644
  
  	void Start();
 diff --git a/src/include/storage/uc_transaction_manager.hpp b/src/include/storage/uc_transaction_manager.hpp
-index d279f83..16580aa 100644
+index d279f83..f1e6fce 100644
 --- a/src/include/storage/uc_transaction_manager.hpp
 +++ b/src/include/storage/uc_transaction_manager.hpp
-@@ -18,7 +18,7 @@ class UCTransactionManager : public TransactionManager {
+@@ -18,9 +18,9 @@ class UCTransactionManager : public TransactionManager {
  public:
  	UCTransactionManager(AttachedDatabase &db_p, UnityCatalog &unity_catalog);
  
 -	Transaction &StartTransaction(ClientContext &context) override;
-+	Transaction &StartTransaction(Context &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &) override;
  	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
- 	void RollbackTransaction(Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
  
 diff --git a/src/storage/uc_transaction.cpp b/src/storage/uc_transaction.cpp
 index 913d92c..f81b4d9 100644
@@ -38,7 +41,7 @@ index 913d92c..f81b4d9 100644
  	//	connection = UCConnection::Open(unity_catalog.path);
  }
 diff --git a/src/storage/uc_transaction_manager.cpp b/src/storage/uc_transaction_manager.cpp
-index d8b4eec..fa74c38 100644
+index d8b4eec..73cd074 100644
 --- a/src/storage/uc_transaction_manager.cpp
 +++ b/src/storage/uc_transaction_manager.cpp
 @@ -10,7 +10,7 @@ UCTransactionManager::UCTransactionManager(AttachedDatabase &db_p, UnityCatalog
@@ -46,7 +49,16 @@ index d8b4eec..fa74c38 100644
  }
  
 -Transaction &UCTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &UCTransactionManager::StartTransaction(Context &context) {
++Transaction &UCTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
  	auto transaction = make_uniq<UCTransaction>(unity_catalog, *this, context);
  	transaction->Start();
  	auto &result = *transaction;
+@@ -27,7 +27,7 @@ ErrorData UCTransactionManager::CommitTransaction(ClientContext &context, Transa
+ 	return ErrorData();
+ }
+ 
+-void UCTransactionManager::RollbackTransaction(Transaction &transaction) {
++void UCTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &uc_transaction = transaction.Cast<UCTransaction>();
+ 	uc_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);

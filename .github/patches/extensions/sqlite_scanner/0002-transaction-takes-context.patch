@@ -18,7 +18,7 @@ index a1a054c..6fd994b 100644
  	void TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name);
  };
 diff --git a/src/include/storage/sqlite_transaction.hpp b/src/include/storage/sqlite_transaction.hpp
-index d068441..7c3c0af 100644
+index d068441..ed472a0 100644
 --- a/src/include/storage/sqlite_transaction.hpp
 +++ b/src/include/storage/sqlite_transaction.hpp
 @@ -9,6 +9,7 @@
@@ -50,18 +50,34 @@ index d068441..7c3c0af 100644
  	void ClearTableEntry(const string &table_name);
  	//! Remove all cached catalog entries - after a statement that was executed in SQLite modified them
  	void ClearCatalogCache();
+@@ -48,9 +49,9 @@ private:
+ 	SQLiteDB owned_db;
+ 	unique_ptr<SQLiteCatalogMap> catalog_map;
+ 
+-	// Remote (HTTP/S3) databases defer their connection open + BEGIN to first use (GetDB()) so no
+-	// network I/O runs while the MetaTransaction lock is held in StartTransaction(). Local and
+-	// in-memory databases open eagerly in the constructor. `initialized` is atomic for the
++	// On-disk (local and remote) databases defer their connection open + BEGIN to first use (GetDB()) so
++	// no I/O runs while the MetaTransaction lock is held in StartTransaction(). In-memory databases
++	// are initialized in the constructor. `initialized` is atomic for the
+ 	// lock-free fast path in GetDB(); `started` is written in Start() (before any scan thread) or under
+ 	// init_lock in GetDB(), and read in Start(), Commit, and Rollback (the latter two after the scans
+ 	// join), so it needs no atomic.
 diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
-index b6a736d..8c28c5f 100644
+index b6a736d..441d0db 100644
 --- a/src/include/storage/sqlite_transaction_manager.hpp
 +++ b/src/include/storage/sqlite_transaction_manager.hpp
-@@ -19,7 +19,7 @@ class SQLiteTransactionManager : public TransactionManager {
+@@ -19,9 +19,9 @@ class SQLiteTransactionManager : public TransactionManager {
  public:
  	SQLiteTransactionManager(AttachedDatabase &db_p, SQLiteCatalog &sqlite_catalog);
  
 -	Transaction &StartTransaction(ClientContext &context) override;
-+	Transaction &StartTransaction(Context &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
  	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
- 	void RollbackTransaction(Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
  
 diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
 index b8565fd..fe1b183 100644
@@ -376,10 +392,10 @@ index e1a2dc0..f4a70f0 100644
  
  	RowIdInfo info;
 diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
-index f7015fe..a03eb90 100644
+index f7015fe..27c72c2 100644
 --- a/src/storage/sqlite_transaction.cpp
 +++ b/src/storage/sqlite_transaction.cpp
-@@ -78,14 +78,18 @@ void SQLiteCatalogMap::ClearRowIdInfo(const string &table_name) {
+@@ -78,18 +78,13 @@ void SQLiteCatalogMap::ClearRowIdInfo(const string &table_name) {
  	}
  }
  
@@ -389,27 +405,39 @@ index f7015fe..a03eb90 100644
  	if (sqlite_catalog.InMemory()) {
  		db = sqlite_catalog.GetInMemoryDatabase();
  		initialized.store(true, std::memory_order_release);
- 	} else if (!FileSystem::IsRemoteFile(sqlite_catalog.path)) {
- 		// local on-disk database - open eagerly (cheap; surfaces open errors at attach time)
+-	} else if (!FileSystem::IsRemoteFile(sqlite_catalog.path)) {
+-		// local on-disk database - open eagerly (cheap; surfaces open errors at attach time)
 -		owned_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, context, true);
-+		auto client_context = context.TryGetClientContext();
-+		if (!client_context) {
-+			throw InternalException("Opening a SQLite database requires a client context");
-+		}
-+		owned_db = SQLiteDB::Open(sqlite_catalog.path, sqlite_catalog.options, *client_context, true);
- 		db = &owned_db;
- 		initialized.store(true, std::memory_order_release);
+-		db = &owned_db;
+-		initialized.store(true, std::memory_order_release);
  	}
-@@ -120,7 +124,7 @@ void SQLiteTransaction::Rollback() {
+-	// remote database - defer the connection open and BEGIN to the first GetDB(). A remote open
++	// on-disk database - defer the connection open and BEGIN to the first GetDB(). A remote open
+ 	// issues uncached network probes (the -wal/-journal sidecar HEADs); deferring runs that I/O on
+ 	// first use rather than eagerly in StartTransaction, and skips it for a database that is attached
+ 	// but never accessed.
+@@ -101,7 +96,7 @@ SQLiteTransaction::~SQLiteTransaction() {
+ }
+ 
+ void SQLiteTransaction::Start() {
+-	// Local/in-memory transactions begin here; remote transactions are deferred (db is not yet
++	// In-memory transactions begin here; on-disk transactions are deferred (db is not yet
+ 	// open) so this is a no-op for them and BEGIN runs in GetDB() on first use.
+ 	if (initialized.load(std::memory_order_acquire) && !started) {
+ 		db->Execute("BEGIN TRANSACTION");
+@@ -120,20 +115,16 @@ void SQLiteTransaction::Rollback() {
  	}
  }
  
 -SQLiteDB &SQLiteTransaction::GetDB() {
+-	// Fast path: local and in-memory databases are initialized in the constructor.
 +SQLiteDB &SQLiteTransaction::GetDB(ClientContext &context) {
- 	// Fast path: local and in-memory databases are initialized in the constructor.
++	// Fast path: in-memory databases are initialized in the constructor.
  	if (initialized.load(std::memory_order_acquire)) {
  		return *db;
-@@ -129,11 +133,7 @@ SQLiteDB &SQLiteTransaction::GetDB() {
+ 	}
+-	// Slow path (remote only): open the connection and begin the transaction on first use, outside
++	// Slow path (on-disk only): open the connection and begin the transaction on first use, outside
  	// the MetaTransaction lock. A per-transaction lock guards the init (parallel scans may race it).
  	lock_guard<mutex> guard(init_lock);
  	if (!initialized.load(std::memory_order_relaxed)) {
@@ -422,7 +450,7 @@ index f7015fe..a03eb90 100644
  		new_db.Execute("BEGIN TRANSACTION");
  		owned_db = std::move(new_db);
  		db = &owned_db;
-@@ -205,13 +205,13 @@ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalog
+@@ -205,13 +196,13 @@ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalog
  	return info;
  }
  
@@ -438,7 +466,7 @@ index f7015fe..a03eb90 100644
  	if (type == CatalogType::INVALID) {
  		// no table or view found
  		return nullptr;
-@@ -220,20 +220,19 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+@@ -220,20 +211,19 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	switch (type) {
  	case CatalogType::TABLE_ENTRY: {
  		CreateTableInfo info(sqlite_catalog.GetMainSchema(), Identifier(entry_name));
@@ -464,7 +492,7 @@ index f7015fe..a03eb90 100644
  			table->has_pushdown_info = true;
  		}
  		result = std::move(table);
-@@ -241,18 +240,18 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+@@ -241,18 +231,18 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	}
  	case CatalogType::VIEW_ENTRY: {
  		string sql;
@@ -486,7 +514,7 @@ index f7015fe..a03eb90 100644
  		}
  		view_info->internal = false;
  		result = make_uniq<ViewCatalogEntry>(sqlite_catalog, sqlite_catalog.GetMainSchema(), *view_info);
-@@ -261,12 +260,12 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+@@ -261,12 +251,12 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
  	case CatalogType::INDEX_ENTRY: {
  		string table_name;
  		string sql;
@@ -502,7 +530,7 @@ index f7015fe..a03eb90 100644
  		index_info->SetQualifiedName(QualifiedName(sqlite_catalog.GetName(), index_info->GetQualifiedName().Schema(),
  		                                           index_info->GetQualifiedName().Name()));
  
-@@ -317,9 +316,9 @@ string GetDropSQL(CatalogType type, const string &table_name, bool cascade) {
+@@ -317,9 +307,9 @@ string GetDropSQL(CatalogType type, const string &table_name, bool cascade) {
  	return result;
  }
  
@@ -515,7 +543,7 @@ index f7015fe..a03eb90 100644
  
  } // namespace duckdb
 diff --git a/src/storage/sqlite_transaction_manager.cpp b/src/storage/sqlite_transaction_manager.cpp
-index 84183b2..8d71ab9 100644
+index 84183b2..1d7119b 100644
 --- a/src/storage/sqlite_transaction_manager.cpp
 +++ b/src/storage/sqlite_transaction_manager.cpp
 @@ -7,7 +7,7 @@ SQLiteTransactionManager::SQLiteTransactionManager(AttachedDatabase &db_p, SQLit
@@ -523,10 +551,19 @@ index 84183b2..8d71ab9 100644
  }
  
 -Transaction &SQLiteTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &SQLiteTransactionManager::StartTransaction(Context &context) {
++Transaction &SQLiteTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
  	auto transaction = make_uniq<SQLiteTransaction>(sqlite_catalog, *this, context);
  	transaction->Start();
  	auto &result = *transaction;
+@@ -33,7 +33,7 @@ ErrorData SQLiteTransactionManager::CommitTransaction(ClientContext &context, Tr
+ 	return error;
+ }
+ 
+-void SQLiteTransactionManager::RollbackTransaction(Transaction &transaction) {
++void SQLiteTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &sqlite_transaction = transaction.Cast<SQLiteTransaction>();
+ 	sqlite_transaction.Rollback();
+ 	ExtractAndCloseAfterUnlock(transaction);
 @@ -58,7 +58,7 @@ void SQLiteTransactionManager::ExtractAndCloseAfterUnlock(Transaction &transacti
  
  void SQLiteTransactionManager::Checkpoint(ClientContext &context, bool force) {

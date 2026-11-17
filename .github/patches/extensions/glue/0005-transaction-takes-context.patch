@@ -33,7 +33,7 @@ index 09f8369..5deb6d3 100644
  	} else {
  		cache = make_shared_ptr<GlueTransactionCache>();
 diff --git a/src/catalog/glue_transaction_manager.cpp b/src/catalog/glue_transaction_manager.cpp
-index 9f53af1..112a4d6 100644
+index 9f53af1..b5b6778 100644
 --- a/src/catalog/glue_transaction_manager.cpp
 +++ b/src/catalog/glue_transaction_manager.cpp
 @@ -11,7 +11,7 @@ GlueTransactionManager::GlueTransactionManager(AttachedDatabase &db_p, GlueCatal
@@ -41,10 +41,19 @@ index 9f53af1..112a4d6 100644
  }
  
 -Transaction &GlueTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &GlueTransactionManager::StartTransaction(Context &context) {
++Transaction &GlueTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
  	auto transaction = make_uniq<GlueTransaction>(glue_catalog, *this, context);
  	transaction->Start();
  	auto &result = *transaction;
+@@ -31,7 +31,7 @@ ErrorData GlueTransactionManager::CommitTransaction(ClientContext &context, Tran
+ 	return ErrorData();
+ }
+ 
+-void GlueTransactionManager::RollbackTransaction(Transaction &transaction) {
++void GlueTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &glue_transaction = transaction.Cast<GlueTransaction>();
+ 	glue_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
 diff --git a/src/include/catalog/glue_transaction.hpp b/src/include/catalog/glue_transaction.hpp
 index 68bb793..db37941 100644
 --- a/src/include/catalog/glue_transaction.hpp
@@ -59,15 +68,18 @@ index 68bb793..db37941 100644
  
  	void Start();
 diff --git a/src/include/catalog/glue_transaction_manager.hpp b/src/include/catalog/glue_transaction_manager.hpp
-index e37e655..c6c4c97 100644
+index e37e655..bc17782 100644
 --- a/src/include/catalog/glue_transaction_manager.hpp
 +++ b/src/include/catalog/glue_transaction_manager.hpp
-@@ -12,7 +12,7 @@ class GlueTransactionManager : public TransactionManager {
+@@ -12,9 +12,9 @@ class GlueTransactionManager : public TransactionManager {
  public:
  	GlueTransactionManager(AttachedDatabase &db_p, GlueCatalog &glue_catalog);
  
 -	Transaction &StartTransaction(ClientContext &context) override;
-+	Transaction &StartTransaction(Context &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &) override;
  	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
- 	void RollbackTransaction(Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
  

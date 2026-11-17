@@ -157,8 +157,21 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #endif
 }
 
+void ClientContext::RollbackActiveTransaction() {
+	if (!transaction.HasActiveTransaction()) {
+		return;
+	}
+	// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
+	try {
+		transaction.Rollback(nullptr);
+	} catch (...) { // NOLINT
+	}
+}
+
 ClientContext::~ClientContext() {
 	if (Exception::UncaughtException()) {
+		// no clean-up while unwinding, but the transaction must not outlive the connection
+		RollbackActiveTransaction();
 		return;
 	}
 	// destroy the client context and rollback if there is an active transaction
@@ -224,11 +237,7 @@ void ClientContext::Destroy() {
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
-			// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
-			try {
-				transaction.Rollback(nullptr);
-			} catch (...) { // NOLINT
-			}
+			RollbackActiveTransaction();
 		}
 	}
 	CleanupInternal(lock);

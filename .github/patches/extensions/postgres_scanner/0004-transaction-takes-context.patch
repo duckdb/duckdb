@@ -133,7 +133,7 @@ index 2e1c32c..8108673 100644
  private:
  	string GetAlterTablePrefix(ClientContext &context, PostgresTransaction &transaction, const string &name);
 diff --git a/src/include/storage/postgres_transaction.hpp b/src/include/storage/postgres_transaction.hpp
-index f8f0c56..7d7f8a5 100644
+index f8f0c56..8773ee0 100644
 --- a/src/include/storage/postgres_transaction.hpp
 +++ b/src/include/storage/postgres_transaction.hpp
 @@ -10,6 +10,7 @@
@@ -154,8 +154,9 @@ index f8f0c56..7d7f8a5 100644
  
  	void Start();
 -	void Commit();
+-	void Rollback();
 +	void Commit(ClientContext &context);
- 	void Rollback();
++	void Rollback(ClientContext &context);
  
  	PostgresConnection &GetConnectionWithoutTransaction();
 -	PostgresConnection &GetConnection();
@@ -181,10 +182,10 @@ index f8f0c56..7d7f8a5 100644
  	PostgresTransactionState GetTransactionState() const {
  		return transaction_state;
 diff --git a/src/include/storage/postgres_transaction_manager.hpp b/src/include/storage/postgres_transaction_manager.hpp
-index 023831f..c8945c9 100644
+index 023831f..b4f0fca 100644
 --- a/src/include/storage/postgres_transaction_manager.hpp
 +++ b/src/include/storage/postgres_transaction_manager.hpp
-@@ -8,13 +8,74 @@
+@@ -8,13 +8,75 @@
  
  #pragma once
  
@@ -195,6 +196,7 @@ index 023831f..c8945c9 100644
 +#include "duckdb/main/attached_database.hpp"
 +#include "duckdb/main/client_context.hpp"
 +#include "duckdb/main/context.hpp"
++#include "duckdb/transaction/meta_transaction.hpp"
 +#include "duckdb/transaction/transaction_manager.hpp"
  
  #include "storage/postgres_catalog.hpp"
@@ -209,7 +211,7 @@ index 023831f..c8945c9 100644
 +	    : TransactionManager(db_p), catalog(catalog_p) {
 +	}
 +
-+	Transaction &StartTransaction(Context &context) override {
++	Transaction &StartTransaction(Context &context, MetaTransaction &) override {
 +		auto transaction = make_uniq<PostgresTransaction>(catalog, *this, context);
 +		transaction->Start();
 +		auto &result = *transaction;
@@ -232,10 +234,10 @@ index 023831f..c8945c9 100644
 +		return error;
 +	}
 +
-+	void RollbackTransaction(Transaction &transaction) override {
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override {
 +		auto &db_transaction = transaction.Cast<PostgresTransaction>();
 +		try {
-+			db_transaction.Rollback();
++			db_transaction.Rollback(context);
 +		} catch (...) {
 +			DestroyTransaction(transaction);
 +			throw;
@@ -908,7 +910,7 @@ index 66a0661..9465732 100644
  
  void PostgresTableSet::AlterTable(ClientContext &context, PostgresTransaction &transaction, AlterTableInfo &alter) {
 diff --git a/src/storage/postgres_transaction.cpp b/src/storage/postgres_transaction.cpp
-index d6b58a3..4cd2fdf 100644
+index d6b58a3..d1e1280 100644
 --- a/src/storage/postgres_transaction.cpp
 +++ b/src/storage/postgres_transaction.cpp
 @@ -12,7 +12,7 @@
@@ -940,12 +942,16 @@ index d6b58a3..4cd2fdf 100644
  	}
  	vector<pair<reference<PostgresCatalogSet>, string>> to_promote;
  	{
-@@ -45,7 +41,7 @@ void PostgresTransaction::Commit() {
- void PostgresTransaction::Rollback() {
+@@ -42,10 +38,10 @@ void PostgresTransaction::Commit() {
+ 		entry.first.get().PromoteStalenessSignature(std::move(entry.second));
+ 	}
+ }
+-void PostgresTransaction::Rollback() {
++void PostgresTransaction::Rollback(ClientContext &context) {
  	if (transaction_state == PostgresTransactionState::TRANSACTION_STARTED) {
  		transaction_state = PostgresTransactionState::TRANSACTION_FINISHED;
 -		GetConnectionRaw().Execute(GetContext(), "ROLLBACK");
-+		GetConnectionRaw().Execute(nullptr, "ROLLBACK");
++		GetConnectionRaw().Execute(context, "ROLLBACK");
  	}
  	lock_guard<mutex> l(pending_signatures_lock);
  	pending_signatures.clear();

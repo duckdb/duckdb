@@ -1,20 +1,3 @@
-diff --git a/src/include/mysql_connection.hpp b/src/include/mysql_connection.hpp
-index ba2d09d..64cc9f2 100644
---- a/src/include/mysql_connection.hpp
-+++ b/src/include/mysql_connection.hpp
-@@ -69,9 +69,9 @@ public:
- public:
- 	static MySQLConnection Open(MySQLTypeConfig type_config, const string &connection_string,
- 	                            const string &attach_path);
--	void Initialize(ClientContext &context, const MySQLConnectionInitOptions &options);
--	void Execute(ClientContext &context, const string &query);
--	void Execute(ClientContext &context, const string &query, const vector<Value> &params);
-+	void Initialize(optional_ptr<ClientContext> context, const MySQLConnectionInitOptions &options);
-+	void Execute(optional_ptr<ClientContext> context, const string &query);
-+	void Execute(optional_ptr<ClientContext> context, const string &query, const vector<Value> &params);
- 	//! Not streamed result is read eagerly into a buffer-managed collection
- 	unique_ptr<MySQLResult> Query(ClientContext &context, const string &query,
- 	                              MySQLResultStreaming streaming = MySQLResultStreaming::FORCE_MATERIALIZATION);
 diff --git a/src/include/mysql_types.hpp b/src/include/mysql_types.hpp
 index bacb77d..06ac6f4 100644
 --- a/src/include/mysql_types.hpp
@@ -136,7 +119,7 @@ index 7e01552..96b69fe 100644
  	static void AddColumn(MySQLTransaction &transaction, MySQLResult &result, MySQLTableInfo &table_info,
  	                      idx_t column_offset = 0);
 diff --git a/src/include/storage/mysql_transaction.hpp b/src/include/storage/mysql_transaction.hpp
-index 1e630b1..22038b5 100644
+index 1e630b1..3164cf5 100644
 --- a/src/include/storage/mysql_transaction.hpp
 +++ b/src/include/storage/mysql_transaction.hpp
 @@ -11,6 +11,7 @@
@@ -147,7 +130,7 @@ index 1e630b1..22038b5 100644
  #include "duckdb/transaction/transaction.hpp"
  
  #include "mysql_connection.hpp"
-@@ -25,7 +26,7 @@ enum class MySQLTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STAR
+@@ -25,29 +26,30 @@ enum class MySQLTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STAR
  
  class MySQLTransaction : public Transaction {
  public:
@@ -155,8 +138,16 @@ index 1e630b1..22038b5 100644
 +	MySQLTransaction(MySQLCatalog &mysql_catalog, TransactionManager &manager, Context &context);
  
  	void Start();
- 	void Commit();
-@@ -38,16 +39,17 @@ public:
+-	void Commit();
+-	void Rollback();
++	void Commit(ClientContext &context);
++	void Rollback(ClientContext &context);
+ 
+-	MySQLConnection &GetConnection();
++	MySQLConnection &GetConnection(ClientContext &context);
+ 	uint64_t GetConnectionId();
+ 	static MySQLTransaction &Get(ClientContext &context, Catalog &catalog);
+ 	AccessMode GetAccessMode() const {
  		return access_mode;
  	}
  
@@ -179,10 +170,10 @@ index 1e630b1..22038b5 100644
  	MySQLCatalog &catalog;
  	const bool transactions_enabled = true;
 diff --git a/src/include/storage/mysql_transaction_manager.hpp b/src/include/storage/mysql_transaction_manager.hpp
-index 72bab8d..200f548 100644
+index 72bab8d..81ef953 100644
 --- a/src/include/storage/mysql_transaction_manager.hpp
 +++ b/src/include/storage/mysql_transaction_manager.hpp
-@@ -8,13 +8,74 @@
+@@ -8,13 +8,75 @@
  
  #pragma once
  
@@ -193,6 +184,7 @@ index 72bab8d..200f548 100644
 +#include "duckdb/main/attached_database.hpp"
 +#include "duckdb/main/client_context.hpp"
 +#include "duckdb/main/context.hpp"
++#include "duckdb/transaction/meta_transaction.hpp"
 +#include "duckdb/transaction/transaction_manager.hpp"
  
  #include "storage/mysql_catalog.hpp"
@@ -207,7 +199,7 @@ index 72bab8d..200f548 100644
 +	    : TransactionManager(db_p), catalog(catalog_p) {
 +	}
 +
-+	Transaction &StartTransaction(Context &context) override {
++	Transaction &StartTransaction(Context &context, MetaTransaction &) override {
 +		auto transaction = make_uniq<MySQLTransaction>(catalog, *this, context);
 +		transaction->Start();
 +		auto &result = *transaction;
@@ -220,7 +212,7 @@ index 72bab8d..200f548 100644
 +		auto &db_transaction = transaction.Cast<MySQLTransaction>();
 +		ErrorData error;
 +		try {
-+			db_transaction.Commit();
++			db_transaction.Commit(context);
 +		} catch (const std::exception &ex) {
 +			error = ErrorData(ex);
 +		} catch (...) {
@@ -230,10 +222,10 @@ index 72bab8d..200f548 100644
 +		return error;
 +	}
 +
-+	void RollbackTransaction(Transaction &transaction) override {
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override {
 +		auto &db_transaction = transaction.Cast<MySQLTransaction>();
 +		try {
-+			db_transaction.Rollback();
++			db_transaction.Rollback(context);
 +		} catch (...) {
 +			DestroyTransaction(transaction);
 +			throw;
@@ -243,7 +235,7 @@ index 72bab8d..200f548 100644
 +
 +	void Checkpoint(ClientContext &context, bool force = false) override {
 +		auto &transaction = MySQLTransaction::Get(context, db.GetCatalog());
-+		auto &conn = transaction.GetConnection();
++		auto &conn = transaction.GetConnection(context);
 +		conn.Execute(context, "CHECKPOINT");
 +	}
 +
@@ -259,33 +251,37 @@ index 72bab8d..200f548 100644
 +};
  
  } // namespace duckdb
-diff --git a/src/mysql_connection.cpp b/src/mysql_connection.cpp
-index 9372654..492f914 100644
---- a/src/mysql_connection.cpp
-+++ b/src/mysql_connection.cpp
-@@ -217,7 +217,7 @@ unique_ptr<MySQLStatement> MySQLConnection::Prepare(const string &query) {
- 	return make_uniq<MySQLStatement>(query, stmt.release(), std::move(fields));
- }
- 
--void MySQLConnection::Initialize(ClientContext &context, const MySQLConnectionInitOptions &options) {
-+void MySQLConnection::Initialize(optional_ptr<ClientContext> context, const MySQLConnectionInitOptions &options) {
- 	SetTypeConfig(options.type_config);
- 
- 	vector<Value> params;
-@@ -227,11 +227,11 @@ void MySQLConnection::Initialize(ClientContext &context, const MySQLConnectionIn
+diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
+index a6d747b..8dd05de 100644
+--- a/src/mysql_scanner.cpp
++++ b/src/mysql_scanner.cpp
+@@ -105,7 +105,7 @@ static void MySQLScan(ClientContext &context, TableFunctionInput &data, DataChun
+ 		auto attached_table = MySQLTableEntry::Lookup(context, bdata.table_name);
+ 		MySQLTableEntry &table_entry = attached_table.Get<MySQLTableEntry>();
+ 		auto &transaction = MySQLTransaction::Get(context, table_entry.ParentCatalog());
+-		auto &con = transaction.GetConnection();
++		auto &con = transaction.GetConnection(context);
+ 		gstate.result = con.Query(context, gstate.scan_query, bdata.optimizer_streaming);
+ 		gstate.exec_state = MySQLQueryExecState::EXECUTED;
  	}
- }
- 
--void MySQLConnection::Execute(ClientContext &context, const string &query) {
-+void MySQLConnection::Execute(optional_ptr<ClientContext> context, const string &query) {
- 	Execute(context, query, vector<Value>());
- }
- 
--void MySQLConnection::Execute(ClientContext &context, const string &query, const vector<Value> &params) {
-+void MySQLConnection::Execute(optional_ptr<ClientContext> context, const string &query, const vector<Value> &params) {
- 	if (params.empty()) {
- 		QueryInternal(context, query, params, MySQLResultStreaming::ALLOW_STREAMING, MySQLConnectorInterface::BASIC);
- 		return;
+@@ -374,7 +374,7 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
+ 			prepare_connection_id = pinned_connection.Id();
+ 		} else {
+ 			MySQLTransaction &transaction = MySQLTransaction::Get(context, catalog);
+-			MySQLConnection &conn = transaction.GetConnection();
++			MySQLConnection &conn = transaction.GetConnection(context);
+ 			conn_ptr = &conn;
+ 			prepare_connection_id = transaction.GetConnectionId();
+ 			tran_restrict_dml = transaction.GetAccessMode() == AccessMode::READ_ONLY;
+@@ -527,7 +527,7 @@ static void MySQLQueryScan(ClientContext &context, TableFunctionInput &data, Dat
+ 			auto attached_catalog = MySQLCatalog::Lookup(context, bdata.catalog_name);
+ 			MySQLCatalog &catalog = attached_catalog.Get<MySQLCatalog>();
+ 			auto &transaction = MySQLTransaction::Get(context, catalog);
+-			MySQLConnection &conn = transaction.GetConnection();
++			MySQLConnection &conn = transaction.GetConnection(context);
+ 			conn_ptr = &conn;
+ 			current_connection_id = transaction.GetConnectionId();
+ 		}
 diff --git a/src/mysql_types.cpp b/src/mysql_types.cpp
 index 4f8de93..66467ab 100644
 --- a/src/mysql_types.cpp
@@ -312,7 +308,7 @@ index 4f8de93..66467ab 100644
        tinyint1_as_boolean(GetBoolOption(context, "mysql_tinyint1_as_boolean")),
        time_as_time(GetBoolOption(context, "mysql_time_as_time")),
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index 57a7a79..228e2ae 100644
+index 57a7a79..90ed091 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -471,19 +471,19 @@ optional_ptr<CatalogEntry> MySQLCatalog::CreateSchema(CatalogTransaction transac
@@ -348,8 +344,17 @@ index 57a7a79..228e2ae 100644
  	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
  		throw BinderException("Schema with name \"%s\" not found", schema_name);
  	}
+@@ -550,7 +550,7 @@ FROM information_schema.tables
+ WHERE table_schema = ${SCHEMA_NAME};
+ )",
+ 	                                 "${SCHEMA_NAME}", MySQLUtils::WriteLiteral(default_schema));
+-	auto result = postgres_transaction.GetConnection().Query(context, query);
++	auto result = postgres_transaction.GetConnection(context).Query(context, query);
+ 	DatabaseSize size;
+ 	size.free_blocks = 0;
+ 	size.total_blocks = 0;
 diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
-index 51b8c3a..4d216ba 100644
+index 51b8c3a..82f8554 100644
 --- a/src/storage/mysql_catalog_set.cpp
 +++ b/src/storage/mysql_catalog_set.cpp
 @@ -13,7 +13,8 @@ namespace duckdb {
@@ -405,7 +410,7 @@ index 51b8c3a..4d216ba 100644
  	}
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, drop_query);
-+	transaction.GetConnection().Execute(context, drop_query);
++	transaction.GetConnection(context).Execute(context, drop_query);
  
  	// erase the entry from the catalog set
  	EraseEntryInternal(info.GetQualifiedName().Name().GetIdentifierName());
@@ -422,8 +427,21 @@ index 51b8c3a..4d216ba 100644
  	lock_guard<mutex> l2(entry_lock);
  	for (auto &entry : entries) {
  		callback(*entry.second);
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index 4f231a2..aaa19b9 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -49,7 +49,7 @@ SinkFinalizeType MySQLExecuteQuery::Finalize(Pipeline &pipeline, Event &event, C
+                                              OperatorSinkFinalizeInput &input) const {
+ 	auto &gstate = input.global_state.Cast<MySQLExecuteQueryGlobalState>();
+ 	auto &transaction = MySQLTransaction::Get(context, table.catalog);
+-	auto &connection = transaction.GetConnection();
++	auto &connection = transaction.GetConnection(context);
+ 	auto result = connection.Query(context, query, MySQLResultStreaming::FORCE_MATERIALIZATION);
+ 	gstate.affected_rows = result->AffectedRows();
+ 	return SinkFinalizeType::READY;
 diff --git a/src/storage/mysql_index_set.cpp b/src/storage/mysql_index_set.cpp
-index ed3b40f..438657a 100644
+index ed3b40f..2a9bdea 100644
 --- a/src/storage/mysql_index_set.cpp
 +++ b/src/storage/mysql_index_set.cpp
 @@ -13,8 +13,8 @@ namespace duckdb {
@@ -443,7 +461,7 @@ index ed3b40f..438657a 100644
  	drop_query += MySQLUtils::WriteIdentifier(mysql_index.table_name);
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, drop_query);
-+	transaction.GetConnection().Execute(context, drop_query);
++	transaction.GetConnection(context).Execute(context, drop_query);
  
  	EraseEntryInternal(info.GetQualifiedName().Name().GetIdentifierName());
  }
@@ -459,12 +477,34 @@ index ed3b40f..438657a 100644
  
 -	auto context = transaction.GetContext();
 -	auto result = transaction.GetConnection().Query(*context, query);
-+	auto result = transaction.GetConnection().Query(context, query);
++	auto result = transaction.GetConnection(context).Query(context, query);
  	while (result->Next()) {
  		auto table_name = result->GetString(0);
  		auto index_name = result->GetString(1);
+diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
+index e8a0c3d..40f656b 100644
+--- a/src/storage/mysql_insert.cpp
++++ b/src/storage/mysql_insert.cpp
+@@ -151,7 +151,7 @@ SinkResultType MySQLInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
+ 
+ 	auto &gstate = input.global_state.Cast<MySQLInsertGlobalState>();
+ 	auto &transaction = MySQLTransaction::Get(context.client, gstate.table.catalog);
+-	auto &con = transaction.GetConnection();
++	auto &con = transaction.GetConnection(context.client);
+ 	// cast to varchar
+ 	D_ASSERT(chunk.ColumnCount() == gstate.varchar_chunk.ColumnCount());
+ 	chunk.Flatten();
+@@ -253,7 +253,7 @@ SinkFinalizeType MySQLInsert::Finalize(Pipeline &pipeline, Event &event, ClientC
+ 	if (!gstate.insert_values.empty()) {
+ 		// perform the final insert
+ 		auto &transaction = MySQLTransaction::Get(context, gstate.table.catalog);
+-		auto &con = transaction.GetConnection();
++		auto &con = transaction.GetConnection(context);
+ 		con.Execute(context, gstate.base_insert_query + gstate.insert_values);
+ 	}
+ 	return SinkFinalizeType::READY;
 diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
-index 3db323d..3372bbb 100644
+index 3db323d..7bcf95a 100644
 --- a/src/storage/mysql_schema_entry.cpp
 +++ b/src/storage/mysql_schema_entry.cpp
 @@ -47,7 +47,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateTable(CatalogTransaction tran
@@ -476,16 +516,29 @@ index 3db323d..3372bbb 100644
  }
  
  optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-@@ -140,7 +140,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
+@@ -97,7 +97,8 @@ string GetMySQLCreateIndex(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+                                                          TableCatalogEntry &table) {
+ 	auto &mysql_transaction = MySQLTransaction::Get(transaction.GetContext(), table.catalog);
+-	mysql_transaction.GetConnection().Execute(transaction.GetContext(), GetMySQLCreateIndex(info, table));
++	mysql_transaction.GetConnection(transaction.GetContext())
++	    .Execute(transaction.GetContext(), GetMySQLCreateIndex(info, table));
+ 	return nullptr;
+ }
+ 
+@@ -139,8 +140,9 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
+ 		}
  	}
  	auto &mysql_transaction = GetMySQLTransaction(transaction);
- 	mysql_transaction.GetConnection().Execute(transaction.GetContext(), GetMySQLCreateView(info));
+-	mysql_transaction.GetConnection().Execute(transaction.GetContext(), GetMySQLCreateView(info));
 -	return tables.RefreshTable(mysql_transaction, info.GetViewName().GetIdentifierName());
++	mysql_transaction.GetConnection(transaction.GetContext())
++	    .Execute(transaction.GetContext(), GetMySQLCreateView(info));
 +	return tables.RefreshTable(transaction.GetContext(), mysql_transaction, info.GetViewName().GetIdentifierName());
  }
  
  optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-@@ -177,7 +177,7 @@ void MySQLSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+@@ -177,7 +179,7 @@ void MySQLSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
  	}
  	auto &alter = info.Cast<AlterTableInfo>();
  	auto &mysql_transaction = GetMySQLTransaction(transaction);
@@ -494,7 +547,7 @@ index 3db323d..3372bbb 100644
  }
  
  bool CatalogTypeIsSupported(CatalogType type) {
-@@ -197,7 +197,7 @@ void MySQLSchemaEntry::Scan(ClientContext &context, CatalogType type,
+@@ -197,7 +199,7 @@ void MySQLSchemaEntry::Scan(ClientContext &context, CatalogType type,
  		return;
  	}
  	auto &transaction = MySQLTransaction::Get(context, catalog);
@@ -503,7 +556,7 @@ index 3db323d..3372bbb 100644
  }
  void MySQLSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
  	throw NotImplementedException("Scan without context not supported");
-@@ -205,7 +205,7 @@ void MySQLSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEn
+@@ -205,7 +207,7 @@ void MySQLSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEn
  
  void MySQLSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
  	auto &transaction = MySQLTransaction::Get(context, catalog);
@@ -512,7 +565,7 @@ index 3db323d..3372bbb 100644
  }
  
  optional_ptr<CatalogEntry> MySQLSchemaEntry::LookupEntry(CatalogTransaction transaction,
-@@ -215,7 +215,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::LookupEntry(CatalogTransaction tran
+@@ -215,7 +217,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::LookupEntry(CatalogTransaction tran
  		return nullptr;
  	}
  	auto &mysql_transaction = GetMySQLTransaction(transaction);
@@ -522,7 +575,7 @@ index 3db323d..3372bbb 100644
  
  MySQLCatalogSet &MySQLSchemaEntry::GetCatalogSet(CatalogType type) {
 diff --git a/src/storage/mysql_schema_set.cpp b/src/storage/mysql_schema_set.cpp
-index 4580966..0904797 100644
+index 4580966..53faf76 100644
 --- a/src/storage/mysql_schema_set.cpp
 +++ b/src/storage/mysql_schema_set.cpp
 @@ -20,7 +20,7 @@ MySQLSchemaSet::MySQLSchemaSet(Catalog &catalog, vector<string> schemas_to_load_
@@ -540,7 +593,7 @@ index 4580966..0904797 100644
  
 -	auto context = transaction.GetContext();
 -	auto result = transaction.GetConnection().Query(*context, query);
-+	auto result = transaction.GetConnection().Query(context, query);
++	auto result = transaction.GetConnection(context).Query(context, query);
  	while (result->Next()) {
  		CreateSchemaInfo info;
  		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), Identifier(result->GetString(0)),
@@ -555,12 +608,12 @@ index 4580966..0904797 100644
  	    "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.GetQualifiedName().Schema().GetIdentifierName());
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, create_sql);
-+	transaction.GetConnection().Execute(context, create_sql);
++	transaction.GetConnection(context).Execute(context, create_sql);
  	auto schema_entry = make_shared_ptr<MySQLSchemaEntry>(catalog, info);
  	return CreateEntry(transaction, std::move(schema_entry));
  }
 diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
-index 530b4fe..7158bec 100644
+index 530b4fe..ec6afad 100644
 --- a/src/storage/mysql_table_entry.cpp
 +++ b/src/storage/mysql_table_entry.cpp
 @@ -122,7 +122,7 @@ static bool GetBoolSetting(ClientContext &context, const std::string &name) {
@@ -572,8 +625,17 @@ index 530b4fe..7158bec 100644
  	for (auto &col : columns.Logical()) {
  		result->types.push_back(col.GetType());
  		result->names.emplace_back(col.GetName().GetIdentifierName());
+@@ -139,7 +139,7 @@ TableFunction MySQLTableEntry::GetScanFunction(ClientContext &context, unique_pt
+ 
+ TableStorageInfo MySQLTableEntry::GetStorageInfo(ClientContext &context) {
+ 	auto &transaction = Transaction::Get(context, catalog).Cast<MySQLTransaction>();
+-	auto &db = transaction.GetConnection();
++	auto &db = transaction.GetConnection(context);
+ 	TableStorageInfo result;
+ 	result.cardinality = 0;
+ 	result.index_info = db.GetIndexInfo(name.GetIdentifierName());
 diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
-index 567db68..cc3ace1 100644
+index 567db68..314ec2f 100644
 --- a/src/storage/mysql_table_set.cpp
 +++ b/src/storage/mysql_table_set.cpp
 @@ -34,7 +34,7 @@ void MySQLTableSet::AddColumn(MySQLTransaction &transaction, MySQLResult &result
@@ -600,7 +662,7 @@ index 567db68..cc3ace1 100644
  
 -	auto context = transaction.GetContext();
 -	auto result = transaction.GetConnection().Query(*context, query);
-+	auto result = transaction.GetConnection().Query(context, query);
++	auto result = transaction.GetConnection(context).Query(context, query);
  
  	vector<unique_ptr<MySQLTableInfo>> tables;
  	unique_ptr<MySQLTableInfo> info;
@@ -615,7 +677,7 @@ index 567db68..cc3ace1 100644
  	auto query = GetTableInfoQuery(schema.name.GetIdentifierName(), table_name);
 -	auto context = transaction.GetContext();
 -	auto result = transaction.GetConnection().Query(*context, query);
-+	auto result = transaction.GetConnection().Query(context, query);
++	auto result = transaction.GetConnection(context).Query(context, query);
  	auto table_info = make_uniq<MySQLTableInfo>(schema, table_name);
  	bool first = true;
  	while (result->Next()) {
@@ -650,7 +712,7 @@ index 567db68..cc3ace1 100644
  	auto create_sql = GetMySQLCreateTable(transaction, info.Base());
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, create_sql);
-+	transaction.GetConnection().Execute(context, create_sql);
++	transaction.GetConnection(context).Execute(context, create_sql);
  	auto tbl_entry = make_shared_ptr<MySQLTableEntry>(catalog, schema, info.Base());
  	return CreateEntry(transaction, std::move(tbl_entry));
  }
@@ -663,7 +725,7 @@ index 567db68..cc3ace1 100644
  	sql += MySQLUtils::WriteIdentifier(info.new_table_name.GetIdentifierName());
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, sql);
-+	transaction.GetConnection().Execute(context, sql);
++	transaction.GetConnection(context).Execute(context, sql);
  }
  
 -void MySQLTableSet::AlterTable(MySQLTransaction &transaction, RenameColumnInfo &info) {
@@ -677,7 +739,7 @@ index 567db68..cc3ace1 100644
  
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, sql);
-+	transaction.GetConnection().Execute(context, sql);
++	transaction.GetConnection(context).Execute(context, sql);
  }
  
 -void MySQLTableSet::AlterTable(MySQLTransaction &transaction, AddColumnInfo &info) {
@@ -691,7 +753,7 @@ index 567db68..cc3ace1 100644
  	sql += info.new_column.Type().ToString();
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, sql);
-+	transaction.GetConnection().Execute(context, sql);
++	transaction.GetConnection(context).Execute(context, sql);
  }
  
 -void MySQLTableSet::AlterTable(MySQLTransaction &transaction, RemoveColumnInfo &info) {
@@ -705,7 +767,7 @@ index 567db68..cc3ace1 100644
  	sql += MySQLUtils::WriteIdentifier(info.removed_column.GetIdentifierName());
 -	auto context = transaction.GetContext();
 -	transaction.GetConnection().Execute(*context, sql);
-+	transaction.GetConnection().Execute(context, sql);
++	transaction.GetConnection(context).Execute(context, sql);
  }
  
 -void MySQLTableSet::AlterTable(MySQLTransaction &transaction, AlterTableInfo &alter) {
@@ -730,7 +792,7 @@ index 567db68..cc3ace1 100644
  	default:
  		throw BinderException("Unsupported ALTER TABLE type - MySQL tables only "
 diff --git a/src/storage/mysql_transaction.cpp b/src/storage/mysql_transaction.cpp
-index 609681d..6561251 100644
+index 609681d..66ba5d0 100644
 --- a/src/storage/mysql_transaction.cpp
 +++ b/src/storage/mysql_transaction.cpp
 @@ -4,7 +4,7 @@
@@ -742,16 +804,34 @@ index 609681d..6561251 100644
      : Transaction(manager, context), catalog(mysql_catalog), transactions_enabled(GetTransactionsEnabled(context)),
        access_mode(mysql_catalog.access_mode), conn_init_opts(GetConnectionInitOptions(context)) {
  }
+@@ -13,7 +13,7 @@ void MySQLTransaction::Start() {
+ 	// no-op
+ }
+ 
+-void MySQLTransaction::Commit() {
++void MySQLTransaction::Commit(ClientContext &context) {
+ 	if (!pooled_connection || !transactions_enabled) {
+ 		return;
+ 	}
 @@ -22,8 +22,7 @@ void MySQLTransaction::Commit() {
  
  	if (transaction_state == MySQLTransactionState::TRANSACTION_STARTED) {
  		try {
 -			auto client_context = GetContext();
 -			pooled_connection.GetConnection().Execute(*client_context, "COMMIT");
-+			pooled_connection.GetConnection().Execute(nullptr, "COMMIT");
++			pooled_connection.GetConnection().Execute(context, "COMMIT");
  			transaction_state = MySQLTransactionState::TRANSACTION_FINISHED;
  		} catch (...) {
  			pooled_connection.Invalidate();
+@@ -32,7 +31,7 @@ void MySQLTransaction::Commit() {
+ 	}
+ }
+ 
+-void MySQLTransaction::Rollback() {
++void MySQLTransaction::Rollback(ClientContext &context) {
+ 	if (!pooled_connection || !transactions_enabled) {
+ 		return;
+ 	}
 @@ -41,10 +40,7 @@ void MySQLTransaction::Rollback() {
  
  	if (transaction_state == MySQLTransactionState::TRANSACTION_STARTED) {
@@ -760,17 +840,26 @@ index 609681d..6561251 100644
 -			// the connection is invalidated in this case, the server rolls back the transaction when it is closed
 -			auto client_context = GetContext();
 -			pooled_connection.GetConnection().Execute(*client_context, "ROLLBACK");
-+			pooled_connection.GetConnection().Execute(nullptr, "ROLLBACK");
++			pooled_connection.GetConnection().Execute(context, "ROLLBACK");
  			transaction_state = MySQLTransactionState::TRANSACTION_FINISHED;
  		} catch (...) {
  			pooled_connection.Invalidate();
+@@ -53,7 +49,7 @@ void MySQLTransaction::Rollback() {
+ 	}
+ }
+ 
+-MySQLConnection &MySQLTransaction::GetConnection() {
++MySQLConnection &MySQLTransaction::GetConnection(ClientContext &context) {
+ 	lock_guard<mutex> guard(transaction_lock);
+ 
+ 	if (!pooled_connection) {
 @@ -63,8 +59,7 @@ MySQLConnection &MySQLTransaction::GetConnection() {
  		}
  		this->pooled_connection = catalog.GetConnectionPool().Acquire();
  		try {
 -			auto client_context = GetContext();
 -			pooled_connection.GetConnection().Initialize(*client_context, conn_init_opts);
-+			pooled_connection.GetConnection().Initialize(nullptr, conn_init_opts);
++			pooled_connection.GetConnection().Initialize(context, conn_init_opts);
  		} catch (...) {
  			pooled_connection.Invalidate();
  			throw;
@@ -780,7 +869,7 @@ index 609681d..6561251 100644
  		try {
 -			auto client_context = GetContext();
 -			pooled_connection.GetConnection().Execute(*client_context, query);
-+			pooled_connection.GetConnection().Execute(nullptr, query);
++			pooled_connection.GetConnection().Execute(context, query);
  			transaction_state = MySQLTransactionState::TRANSACTION_STARTED;
  		} catch (...) {
  			pooled_connection.Invalidate();

@@ -389,18 +389,29 @@ index ec9b3c3c..5b259b5e 100644
  	mutex connection_lock;
  	bool metadata_transaction_released = false;
 diff --git a/src/include/storage/ducklake_transaction_manager.hpp b/src/include/storage/ducklake_transaction_manager.hpp
-index 599951de..85b80eb3 100644
+index 599951de..286b9587 100644
 --- a/src/include/storage/ducklake_transaction_manager.hpp
 +++ b/src/include/storage/ducklake_transaction_manager.hpp
-@@ -19,7 +19,7 @@ class DuckLakeTransactionManager : public TransactionManager {
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/transaction/transaction_manager.hpp"
++#include "duckdb/transaction/meta_transaction.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "storage/ducklake_transaction.hpp"
+ #include "storage/ducklake_catalog.hpp"
+@@ -19,9 +20,9 @@ class DuckLakeTransactionManager : public TransactionManager {
  public:
  	DuckLakeTransactionManager(AttachedDatabase &db_p, DuckLakeCatalog &ducklake_catalog);
  
 -	Transaction &StartTransaction(ClientContext &context) override;
-+	Transaction &StartTransaction(Context &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
  	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
- 	void RollbackTransaction(Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
  
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 	void GetWrittenFiles(vector<string> &result);
 diff --git a/src/include/storage/ducklake_view_entry.hpp b/src/include/storage/ducklake_view_entry.hpp
 index edf8d5a7..0e52f3bd 100644
 --- a/src/include/storage/ducklake_view_entry.hpp
@@ -1082,7 +1093,7 @@ index 55304f04..d80e957a 100644
  	case CatalogType::VIEW_ENTRY:
  		DropView(entry.Cast<DuckLakeViewEntry>());
 diff --git a/src/storage/ducklake_transaction_manager.cpp b/src/storage/ducklake_transaction_manager.cpp
-index b52fccec..fbbb6c6f 100644
+index b52fccec..4670b97b 100644
 --- a/src/storage/ducklake_transaction_manager.cpp
 +++ b/src/storage/ducklake_transaction_manager.cpp
 @@ -9,11 +9,11 @@ DuckLakeTransactionManager::DuckLakeTransactionManager(AttachedDatabase &db_p, D
@@ -1090,7 +1101,7 @@ index b52fccec..fbbb6c6f 100644
  }
  
 -Transaction &DuckLakeTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &DuckLakeTransactionManager::StartTransaction(Context &context) {
++Transaction &DuckLakeTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
  	auto transaction = make_shared_ptr<DuckLakeTransaction>(ducklake_catalog, *this, context);
  	transaction->Start();
  	if (Settings::Get<ImmediateTransactionModeSetting>(context) && get_snapshot && ducklake_catalog.IsInitialized() &&
@@ -1108,6 +1119,15 @@ index b52fccec..fbbb6c6f 100644
  	} catch (std::exception &ex) {
  		return ErrorData(ex);
  	}
+@@ -44,7 +44,7 @@ void DuckLakeTransactionManager::GetWrittenFiles(vector<string> &result) {
+ 	}
+ }
+ 
+-void DuckLakeTransactionManager::RollbackTransaction(Transaction &transaction) {
++void DuckLakeTransactionManager::RollbackTransaction(ClientContext &, Transaction &transaction) {
+ 	auto &ducklake_transaction = transaction.Cast<DuckLakeTransaction>();
+ 	ducklake_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
 diff --git a/src/storage/ducklake_view_entry.cpp b/src/storage/ducklake_view_entry.cpp
 index 663b04dd..d82fb808 100644
 --- a/src/storage/ducklake_view_entry.cpp

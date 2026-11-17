@@ -42,11 +42,11 @@ public:
 	static DuckTransactionManager &Get(AttachedDatabase &db);
 
 	//! Start a new transaction
-	Transaction &StartTransaction(Context &context) override;
+	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
 	//! Commit the given transaction
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
-	void RollbackTransaction(Transaction &transaction) override;
+	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
