@@ -3,6 +3,8 @@ import json
 import os
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -541,6 +543,50 @@ class JobStagesTest(unittest.TestCase):
             extra_in_summary,
             f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
         )
+
+    def _run_summary_status_check(self, results: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "Main.yml"
+        commands = [
+            command
+            for _, command in self._extract_run_commands(workflow_path.read_text(encoding="utf-8"))
+            if "NEEDS_JSON='${{ toJSON(needs) }}'" in command
+        ]
+        self.assertEqual(len(commands), 1, "failed to locate the Summary status check")
+        needs = {job_id: {"result": result} for job_id, result in results.items()}
+        command = commands[0].replace("${{ toJSON(needs) }}", json.dumps(needs))
+        return subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", command],
+            capture_output=True,
+            text=True,
+        )
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_requires_successful_prepare(self):
+        for prepare_result in ("failure", "cancelled", "skipped", None):
+            with self.subTest(prepare_result=prepare_result):
+                results = {job_id: "skipped" for job_id in self._main_workflow_job_ids() - {"summary", "prepare"}}
+                if prepare_result is not None:
+                    results["prepare"] = prepare_result
+                proc = self._run_summary_status_check(results)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("The prepare job did not succeed.", proc.stdout)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_allows_intentionally_skipped_jobs(self):
+        results = {job_id: "skipped" for job_id in self._main_workflow_job_ids() - {"summary"}}
+        results.update({"prepare": "success", "linux-release": "success", "linux-release-tests": "success"})
+        proc = self._run_summary_status_check(results)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "requires Bash and jq")
+    def test_summary_rejects_failed_or_cancelled_jobs(self):
+        for job_result in ("failure", "cancelled"):
+            with self.subTest(job_result=job_result):
+                results = {job_id: "success" for job_id in self._main_workflow_job_ids() - {"summary"}}
+                results["linux-release-tests"] = job_result
+                proc = self._run_summary_status_check(results)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn(f"linux-release-tests: {job_result}", proc.stdout)
 
     def test_workflow_unittest_commands_use_wrapped_runner(self):
         violations: list[str] = []
