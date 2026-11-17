@@ -291,9 +291,14 @@ static bool IsLosslessExactNumericToFloatingCast(const LogicalType &source_type,
 	}
 }
 
-bool BoundCastExpression::IsLosslessIntegralToFloatingCast(const LogicalType &source_type,
-                                                           const LogicalType &target_type) {
-	return source_type.IsIntegral() && IsLosslessExactNumericToFloatingCast(source_type, target_type);
+bool BoundCastExpression::CastIsOrderPreserving(const LogicalType &source_type, const LogicalType &target_type) {
+	if (IsExactNumeric(source_type) && IsExactNumeric(target_type)) {
+		return CastIsInvertible(source_type, target_type);
+	}
+	if (IsLosslessExactNumericToFloatingCast(source_type, target_type)) {
+		return true;
+	}
+	return source_type.id() == LogicalTypeId::FLOAT && target_type.id() == LogicalTypeId::DOUBLE;
 }
 
 //! Whether every value of the type has a unique VARCHAR representation that casts back to the same value
@@ -325,20 +330,10 @@ bool BoundCastExpression::CastIsInvertibleForEquality(const LogicalType &source_
 		// a collation can make distinct strings equal
 		return HasCanonicalVarcharRepresentation(source_type) && StringType::GetCollation(target_type).empty();
 	}
-	if (IsExactNumeric(source_type) && IsExactNumeric(target_type)) {
-		return CastIsInvertible(source_type, target_type);
-	}
-	if (IsLosslessExactNumericToFloatingCast(source_type, target_type)) {
+	if (CastIsOrderPreserving(source_type, target_type)) {
 		return true;
 	}
-	switch (source_type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return target_type.IsIntegral();
-	case LogicalTypeId::FLOAT:
-		return target_type.id() == LogicalTypeId::DOUBLE;
-	default:
-		return false;
-	}
+	return source_type.id() == LogicalTypeId::BOOLEAN && target_type.IsIntegral();
 }
 
 optional<Value> BoundCastExpression::TryInvertConstant(ClientContext &context, const BoundFunctionExpression &cast_expr,
