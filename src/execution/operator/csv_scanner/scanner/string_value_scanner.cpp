@@ -1030,6 +1030,10 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position.buffer_pos++;
 	}
+	// The line that follows starts behind this one, the empty lines before a row are not part of its size
+	result.current_line_position.begin = result.current_line_position.end;
+	result.current_line_position.end = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
+	                                    result.buffer_size};
 	if (result.number_of_columns == 1) {
 		bool empty_is_null = false;
 		for (idx_t i = 0; i < result.null_str_count && !empty_is_null; i++) {

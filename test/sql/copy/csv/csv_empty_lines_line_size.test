@@ -1,0 +1,55 @@
+# name: test/sql/copy/csv/csv_empty_lines_line_size.test
+# description: Empty lines are not part of the size of the line that follows them
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# two rows with 3 MB of empty lines between them, more than the default maximum line size of 2 MB
+statement ok
+COPY (SELECT CASE WHEN i = 0 OR i = 3000000 THEN '1,2' END AS a FROM range(3000001) t(i)) TO '{TEST_DIR}/empty_lines_two_columns.csv' (HEADER false, DELIM '|', QUOTE '');
+
+query III
+SELECT count(*), sum(column0), sum(column1) FROM read_csv('{TEST_DIR}/empty_lines_two_columns.csv', header = false);
+----
+2	2	4
+
+foreach parallel true false
+
+query III
+SELECT count(*), sum(a), sum(b) FROM read_csv('{TEST_DIR}/empty_lines_two_columns.csv', columns = {'a': 'BIGINT', 'b': 'BIGINT'}, header = false, auto_detect = false, parallel = {parallel});
+----
+2	2	4
+
+endloop
+
+# with a single column an empty line is a NULL row
+statement ok
+COPY (SELECT CASE WHEN i = 0 OR i = 3000000 THEN 'x' END AS a FROM range(3000001) t(i)) TO '{TEST_DIR}/empty_lines_one_column.csv' (HEADER false);
+
+query II
+SELECT count(*), count(column0) FROM read_csv('{TEST_DIR}/empty_lines_one_column.csv', header = false);
+----
+3000001	2
+
+# small buffers: 40 empty lines between two rows, the maximum line size follows the buffer size
+statement ok
+COPY (SELECT CASE WHEN i = 0 OR i = 41 THEN 'x' END AS a FROM range(42) t(i)) TO '{TEST_DIR}/empty_lines_small.csv' (HEADER false);
+
+loop buffer_size 16 32
+
+query II
+SELECT count(*), count(a) FROM read_csv('{TEST_DIR}/empty_lines_small.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, buffer_size = {buffer_size}, parallel = false);
+----
+42	2
+
+endloop
+
+# a line that is too long is still reported, also behind empty lines
+statement ok
+COPY (SELECT CASE WHEN i = 0 THEN 'x' WHEN i = 41 THEN repeat('x', 20) END AS a FROM range(42) t(i)) TO '{TEST_DIR}/empty_lines_long_line.csv' (HEADER false);
+
+statement error
+SELECT count(*), count(a) FROM read_csv('{TEST_DIR}/empty_lines_long_line.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, buffer_size = 32, max_line_size = 16, parallel = false);
+----
+Maximum line size of 16 bytes exceeded
