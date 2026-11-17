@@ -16682,10 +16682,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_h
  *
  * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..255, the
  * range of the uint8_t parameter; scale is the number of digits after the point and must not exceed width. Violating
- * either returns ERROR_INPUT_INVALID, as does a value too wide for the storage tier the width selects. Widths above 38
- * build a wide decimal stored as BIGNUM, for which the 128-bit backing integer always fits. The value itself is not
- * range-checked against the width; value_cast is the validating path, and the one that reaches decimals wider than 255
- * digits.
+ * either returns ERROR_INPUT_INVALID, as does a value that does not fit in width digits. Widths above 38 build a wide
+ * decimal stored as BIGNUM, for which the 128-bit backing integer always fits. value_cast reaches decimals wider than
+ * 255 digits.
  *
  * history:
  * - unstable: v2.0.0
