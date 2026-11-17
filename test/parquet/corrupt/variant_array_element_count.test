@@ -9,12 +9,12 @@ require parquet
 statement error
 SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_array_element_count.parquet');
 ----
-IO Error: Data corruption detected, read of length_in_bytes
+Data Corruption Error: Corrupted VARIANT 'value' buffer, read of
 
 statement error
 SELECT var FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_array_element_count.parquet') WHERE id > 0;
 ----
-IO Error: Data corruption detected, read of length_in_bytes
+Data Corruption Error: Corrupted VARIANT 'value' buffer, read of
 
 # the other column is still readable
 statement ok
