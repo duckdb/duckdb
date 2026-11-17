@@ -419,6 +419,14 @@ struct RLEScanState : public SegmentScanState {
 		return position_in_entry >= run_length;
 	}
 
+	SelectionVector &GetSelectionBuffer(idx_t count) {
+		// A previous result may still reference the selected rows.
+		if (selected_rows.Capacity() < count || selected_rows.sel_data().use_count() > 1) {
+			selected_rows.Initialize(count);
+		}
+		return selected_rows;
+	}
+
 	BufferHandle handle;
 	//! Segment row count loaded from the file and used to validate runs as they are reached.
 	const idx_t segment_count;
@@ -428,6 +436,7 @@ struct RLEScanState : public SegmentScanState {
 	//! If we are running a filter over the column - the runs that match the filter
 	unique_ptr<TableFilterCache> filter_cache;
 	SelectionVector run_indices;
+	SelectionVector selected_rows;
 	vector<idx_t> run_offsets;
 	vector<idx_t> run_row_counts;
 };
@@ -616,7 +625,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 	}
 	if (!sel.IsSet()) {
 		if (const auto matches = scan_state.filter_cache->GetPureMask()) {
-			SelectionVector selected_rows(sel_count);
+			auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto writer = FlatVector::ScatterWriter<T>(result);
 			idx_t offset = 0;
@@ -669,7 +678,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		    scan_state.run_indices,
 		    array_ptr<const idx_t>(scan_state.run_row_counts.data(), scan_state.run_row_counts.size()), selected_runs,
 		    selected_run_count);
-		SelectionVector selected_rows(sel_count);
+		auto &selected_rows = scan_state.GetSelectionBuffer(sel_count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto writer = FlatVector::ScatterWriter<T>(result);
 		idx_t accepted_rows = 0;
