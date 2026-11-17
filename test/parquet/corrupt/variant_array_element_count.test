@@ -1,0 +1,21 @@
+# name: test/parquet/corrupt/variant_array_element_count.test
+# description: Reject a VARIANT array whose element count does not fit in its value
+# group: [corrupt]
+
+require parquet
+
+# The header of an array in the 'value' column declares far more elements than the value has bytes for their
+# offsets. The element count sized the conversion of the array before an element was read.
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_array_element_count.parquet');
+----
+IO Error: Data corruption detected, read of length_in_bytes
+
+statement error
+SELECT var FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_array_element_count.parquet') WHERE id > 0;
+----
+IO Error: Data corruption detected, read of length_in_bytes
+
+# the other column is still readable
+statement ok
+SELECT id FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_array_element_count.parquet');

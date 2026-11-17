@@ -62,6 +62,8 @@ struct BinaryObjectReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The field ids and offsets of 'count' fields must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, (count * field_id_size) + (NumericCast<idx_t>(count + 1) * field_offset_size), end);
 		field_ids = data;
 		field_offsets = data + (count * field_id_size);
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
@@ -108,6 +110,8 @@ struct BinaryArrayReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The offsets of 'count' elements must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, NumericCast<idx_t>(count + 1) * field_offset_size, end);
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
