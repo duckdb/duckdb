@@ -236,14 +236,14 @@ void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
 	const auto reserve_bits = MinValue(requested_bits, RadixPartitioning::RadixBits(workers) - 1);
 	const auto required = RadixPartitioning::NumberOfPartitions(reserve_bits) * PartitioningBytesPerPartition(sink);
 	auto &memory = *sink.temporary_memory_state;
-	const auto can_reserve = [&](const idx_t bits) {
+	const auto should_reserve = [&](const idx_t bits) {
 		return reserve_bits > bits && !sink.any_combined && !sink.external && required > memory.GetRemainingSize();
 	};
 	auto available_bits = ExternalRadixBits(true);
-	if (can_reserve(available_bits)) {
+	if (should_reserve(available_bits)) {
 		const annotated_lock_guard<annotated_mutex> guard {sink.lock};
 		available_bits = ExternalRadixBits(true);
-		if (can_reserve(available_bits)) {
+		if (should_reserve(available_bits)) {
 			// Request more space when the current reservation limits parallelism.
 			memory.SetRemainingSizeAndUpdateReservation(sink.context.GetContext(), required);
 			available_bits = ExternalRadixBits(true);
