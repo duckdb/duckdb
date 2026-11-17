@@ -680,20 +680,22 @@ SELECT nextval('seq')
 ----
 7
 
-# values that compare equal but are not identical: every row unnests its own value, as in the select list
+# values that compare equal but are not identical: every row unnests its own value, as in the select list.
+# No two such values follow each other in a result: the sequence_operator vector verification of the test runner
+# emits a run of values that are not distinct from each other as a constant vector of the first one
 statement ok
 CREATE TABLE z(id INTEGER, a DOUBLE, f FLOAT);
 
 statement ok
-INSERT INTO z VALUES (1, '0', '-0'), (2, '-0', '0'), (3, 'nan', 'nan'), (4, '-nan', 'nan'), (5, NULL, NULL), (6, 1.5, 1.5), (7, 1.5, 1.5);
+INSERT INTO z VALUES (1, '0', 1), (2, 'nan', '-0'), (3, '-0', 2), (4, '-nan', '0'), (5, NULL, NULL), (6, 1.5, 1.5), (7, 1.5, 1.5);
 
 # 34: DOUBLE and FLOAT: signed zeros and NaNs
 query IRT
 SELECT id, v, signbit(v) FROM z, UNNEST([a]) AS u(v) ORDER BY id
 ----
 1	0.0	false
-2	-0.0	true
-3	nan	false
+2	nan	false
+3	-0.0	true
 4	-nan	true
 5	NULL	NULL
 6	1.5	false
@@ -703,23 +705,23 @@ query IRT
 SELECT id, v, signbit(v) FROM (SELECT id, unnest([a]) AS v FROM z) ORDER BY id
 ----
 1	0.0	false
-2	-0.0	true
-3	nan	false
+2	nan	false
+3	-0.0	true
 4	-nan	true
 5	NULL	NULL
 6	1.5	false
 7	1.5	false
 
 query IRT
-SELECT id, v, signbit(v) FROM z, UNNEST([a, f]) AS u(v) ORDER BY id, signbit(v)
+SELECT id, v, signbit(v) FROM z, UNNEST([a, f]) AS u(v) ORDER BY id, signbit(v), v
 ----
 1	0.0	false
-1	-0.0	true
-2	0.0	false
+1	1.0	false
+2	nan	false
 2	-0.0	true
-3	nan	false
-3	nan	false
-4	nan	false
+3	2.0	false
+3	-0.0	true
+4	0.0	false
 4	-nan	true
 5	NULL	NULL
 5	NULL	NULL
@@ -732,11 +734,11 @@ query IT
 SELECT id, v FROM z, UNNEST([signbit(a), signbit(f)]) AS u(v) ORDER BY ALL
 ----
 1	false
-1	true
+1	false
 2	false
 2	true
 3	false
-3	false
+3	true
 4	false
 4	true
 5	NULL
@@ -749,8 +751,8 @@ SELECT id, v FROM z, UNNEST([signbit(a), signbit(f)]) AS u(v) ORDER BY ALL
 query IR
 SELECT id, v FROM z, LATERAL (SELECT unnest([a, f]) AS v) WHERE signbit(v) ORDER BY id
 ----
-1	-0.0
 2	-0.0
+3	-0.0
 4	-nan
 
 # 35: INTERVAL: 1 month, 30 days and 720 hours compare equal
@@ -827,22 +829,27 @@ SELECT id, count(*) FROM cz, UNNEST([s, upper(s)]) AS u(v) WHERE v = 'A' GROUP B
 
 # 37: nested lists and structs with such values
 query ITT
-SELECT id, v, signbit(v.x) FROM z, UNNEST([{'x': a}, {'x': f::DOUBLE}]) AS u(v) WHERE id < 3 ORDER BY id, 3
+SELECT id, v, signbit(v.x) FROM z, UNNEST([{'x': a}, {'x': f::DOUBLE}]) AS u(v) WHERE id < 4 ORDER BY id, 3, v.x
 ----
 1	{'x': 0.0}	false
-1	{'x': -0.0}	true
-2	{'x': 0.0}	false
+1	{'x': 1.0}	false
+2	{'x': nan}	false
 2	{'x': -0.0}	true
+3	{'x': 2.0}	false
+3	{'x': -0.0}	true
 
 query ITR
-SELECT id, v, w FROM z, UNNEST([[a], [f::DOUBLE, a]]) AS u(v), UNNEST(v) AS x(w) WHERE id < 3 ORDER BY id, len(v), signbit(w)
+SELECT id, v, w FROM z, UNNEST([[a], [f::DOUBLE, a]]) AS u(v), UNNEST(v) AS x(w) WHERE id < 4 ORDER BY id, len(v), signbit(w), w
 ----
 1	[0.0]	0.0
-1	[-0.0, 0.0]	0.0
-1	[-0.0, 0.0]	-0.0
-2	[-0.0]	-0.0
-2	[0.0, -0.0]	0.0
-2	[0.0, -0.0]	-0.0
+1	[1.0, 0.0]	0.0
+1	[1.0, 0.0]	1.0
+2	[nan]	nan
+2	[-0.0, nan]	nan
+2	[-0.0, nan]	-0.0
+3	[-0.0]	-0.0
+3	[2.0, -0.0]	2.0
+3	[2.0, -0.0]	-0.0
 
 # 38: a filter on the left columns guards the list expression: the rows it removes are not unnested
 statement ok
