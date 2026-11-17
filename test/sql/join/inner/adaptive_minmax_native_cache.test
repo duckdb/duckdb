@@ -74,6 +74,21 @@ SELECT DISTINCT compression FROM pragma_storage_info('rle_segments') WHERE colum
 RLE
 
 query T
+SELECT DISTINCT compression FROM pragma_storage_info('rle_segments') WHERE column_name='k' AND segment_type='VALIDITY';
+----
+Constant
+
+query III
+SELECT count(*),count(k),sum(k) FROM rle_segments WHERE k IS NULL OR k=3000;
+----
+61440	61440	184320000
+
+query III
+SELECT count(*),count(k),sum(k) FROM rle_segments WHERE k IS NOT NULL AND k=3000;
+----
+61440	61440	184320000
+
+query T
 SELECT DISTINCT compression FROM pragma_storage_info('dict_frequency') WHERE column_name='k' AND segment_type<>'VALIDITY';
 ----
 DICT_FSST
