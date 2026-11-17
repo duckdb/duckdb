@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -63,14 +64,21 @@ void VariantEncodeNumber(SINK &sink, const VariantNumberKey &key) {
 	};
 
 	// adjusted exponent (order-preserving signed encoding) orders magnitude
-	data_t exp_buffer[sizeof(int64_t)];
-	Radix::EncodeData<int64_t>(exp_buffer, key.adjusted_exponent);
-	for (idx_t i = 0; i < sizeof(int64_t); i++) {
-		emit(exp_buffer[i]);
+	// common exponents use a single byte in 1..254; 0x00 / 0xFF escape to the full 8 bytes (keeps keys short)
+	if (key.adjusted_exponent >= -127 && key.adjusted_exponent <= 126) {
+		emit(static_cast<data_t>(key.adjusted_exponent + 128));
+	} else {
+		data_t exp_buffer[sizeof(int64_t)];
+		Radix::EncodeData<int64_t>(exp_buffer, key.adjusted_exponent);
+		emit(key.adjusted_exponent < 0 ? 0x00 : 0xFF);
+		for (idx_t i = 0; i < sizeof(int64_t); i++) {
+			emit(exp_buffer[i]);
+		}
 	}
 	// significant digits (1..10 so the 0x00 terminator is smaller than any digit -> prefix sorts first)
-	for (auto c : key.digits) {
-		emit(static_cast<data_t>((c - '0') + 1));
+	auto digits = key.GetDigits();
+	for (idx_t i = 0; i < key.digit_count; i++) {
+		emit(static_cast<data_t>((digits[i] - '0') + 1));
 	}
 	emit(0); // terminator
 }
@@ -118,8 +126,24 @@ void VariantEncodeString(SINK &sink, const string_t &str, bool is_varchar) {
 	sink.Write(STRING_DELIMITER);
 }
 
+//! An ARRAY or OBJECT being encoded, and the position of its next child. The open containers are kept on an explicit
+//! stack, so that deeply nested values cannot overflow the call stack
+struct VariantEncodeFrame {
+	explicit VariantEncodeFrame(const VariantNode &array) {
+		elements.emplace(array.GetArrayChildren());
+	}
+	VariantEncodeFrame(const VariantNode &object, VariantIterationOrder order) {
+		entries.emplace(object, order);
+	}
+
+	optional<VariantArrayIterator> elements;
+	optional<VariantObjectIterator> entries;
+	idx_t next_child = 0;
+};
+
+//! Encodes a single value, or opens the frame of an ARRAY or OBJECT and returns true
 template <class SINK>
-void EncodeVariantValue(const VariantNode &it, SINK &sink) {
+bool EncodeVariantNode(const VariantNode &it, SINK &sink, vector<VariantEncodeFrame> &frames) {
 	const auto type_id = it.GetTypeId();
 	const auto comparison_type = GetVariantComparisonType(type_id);
 	// write the type rank - this guarantees values are ordered by type first
@@ -169,6 +193,7 @@ void EncodeVariantValue(const VariantNode &it, SINK &sink) {
 		break;
 	case VariantComparisonType::BLOB:
 	case VariantComparisonType::GEOMETRY:
+	case VariantComparisonType::GEOGRAPHY:
 		VariantEncodeString(sink, it.GetString(), false);
 		break;
 	case VariantComparisonType::BITSTRING: {
@@ -183,26 +208,57 @@ void EncodeVariantValue(const VariantNode &it, SINK &sink) {
 		sink.Write(STRING_DELIMITER);
 		break;
 	}
-	case VariantComparisonType::ARRAY: {
-		for (auto child : it.GetArrayChildren()) {
-			EncodeVariantValue(child, sink);
-		}
-		sink.Write(LIST_DELIMITER);
-		break;
-	}
-	case VariantComparisonType::OBJECT: {
+	case VariantComparisonType::ARRAY:
+		frames.emplace_back(it);
+		return true;
+	case VariantComparisonType::OBJECT:
 		// process the children in string-sorted key order so that objects that only differ in key order
 		// compare equal
-		for (auto &entry : it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
-			VariantEncodeString(sink, entry.key, true);
-			EncodeVariantValue(entry.value, sink);
-		}
-		sink.Write(LIST_DELIMITER);
-		break;
-	}
+		frames.emplace_back(it, VariantIterationOrder::LEXICOGRAPHIC);
+		return true;
 	default:
 		throw NotImplementedException("Variant type %s is not supported in variant_comparator",
 		                              EnumUtil::ToString(type_id));
+	}
+	return false;
+}
+
+//! Encodes the children of the frame on top, until one of them opens a frame. Returns whether the frame is done
+template <class SINK>
+bool EncodeVariantChildren(VariantEncodeFrame &frame, SINK &sink, vector<VariantEncodeFrame> &frames) {
+	if (frame.elements) {
+		auto &elements = *frame.elements;
+		while (frame.next_child < elements.size()) {
+			auto element = elements[frame.next_child++];
+			if (EncodeVariantNode(element, sink, frames)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	auto &entries = frame.entries->GetOrderedEntries();
+	while (frame.next_child < entries.size()) {
+		auto entry = entries[frame.next_child++];
+		VariantEncodeString(sink, entry.key, true);
+		if (EncodeVariantNode(entry.value, sink, frames)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+template <class SINK>
+void EncodeVariantValue(const VariantNode &root, SINK &sink, vector<VariantEncodeFrame> &frames) {
+	frames.clear();
+	if (!EncodeVariantNode(root, sink, frames)) {
+		return;
+	}
+	while (!frames.empty()) {
+		// the frame is not used after one of its children opened another, which may move it
+		if (EncodeVariantChildren(frames.back(), sink, frames)) {
+			frames.pop_back();
+			sink.Write(LIST_DELIMITER);
+		}
 	}
 }
 
@@ -217,8 +273,9 @@ void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<string_t>(result, count);
 
-	//! reused growable buffer - the key is encoded once and then copied into the result vector
+	//! reused growable buffer, so encoding a chunk does not allocate once per value
 	string buffer;
+	vector<VariantEncodeFrame> frames;
 	for (idx_t r = 0; r < count; r++) {
 		auto root = variant[r];
 		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
@@ -231,7 +288,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 		// NULLs are handled via validity above, so no NULL/validity prefix byte is needed in the key.
 		buffer.clear();
 		VariantComparatorBufferSink sink(buffer);
-		EncodeVariantValue(root, sink);
+		EncodeVariantValue(root, sink, frames);
 		writer.WriteValue(string_t(buffer.data(), NumericCast<uint32_t>(buffer.size())));
 	}
 }
@@ -293,6 +350,12 @@ void GetTypedBounds(const BaseStatistics &typed_stats, Value &min_bound, Value &
 		}
 		if (NumericStats::HasMax(typed_stats)) {
 			max_bound = NumericStats::Max(typed_stats);
+		}
+		break;
+	case StatisticsType::BIGNUM_STATS:
+		if (BignumStats::HasMinMax(typed_stats)) {
+			min_bound = BignumStats::Min(typed_stats);
+			max_bound = BignumStats::Max(typed_stats);
 		}
 		break;
 	case StatisticsType::STRING_STATS:

@@ -35,6 +35,15 @@ USE "trampoline_use_catalog"."main"
 statement ok
 USE "my""db"
 
+statement ok
+USE 'main'
+
+statement ok
+USE 'my"db'
+
+statement ok
+USE 'trampoline_use_catalog'
+
 statement error
 USE temp
 ----
@@ -53,4 +62,4 @@ Catalog Error: SET schema: No catalog + schema named "main.extra" found.
 statement error
 USE main.main.extra
 ----
-Parser Error: Expected "USE database" or "USE database.schema"
+Catalog Error: SET schema: No catalog + schema named "main.main.extra" found.

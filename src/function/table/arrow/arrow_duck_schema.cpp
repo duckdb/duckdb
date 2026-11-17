@@ -114,22 +114,27 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 			// We have a bit-width defined
 			bitwidth = std::stoull(parameters[2]);
 		}
-		if (width > 38 || bitwidth > 128) {
+		// decimal256 holds up to 76 digits, above 38 digits it becomes a wide (BIGNUM-backed) DuckDB decimal
+		if (width > 76 || bitwidth > 256 || (width > 38 && bitwidth < 256) || scale > width) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
 		switch (bitwidth) {
 		case 32:
-			return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)),
-			                            make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_32));
+			return make_uniq<ArrowType>(
+			    LogicalType::DECIMAL(NumericCast<uint32_t>(width), NumericCast<uint32_t>(scale)),
+			    make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_32));
 		case 64:
-			return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)),
-			                            make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_64));
+			return make_uniq<ArrowType>(
+			    LogicalType::DECIMAL(NumericCast<uint32_t>(width), NumericCast<uint32_t>(scale)),
+			    make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_64));
 		case 128:
-			return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)),
-			                            make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_128));
+			return make_uniq<ArrowType>(
+			    LogicalType::DECIMAL(NumericCast<uint32_t>(width), NumericCast<uint32_t>(scale)),
+			    make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_128));
 		case 256:
-			return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)),
-			                            make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_256));
+			return make_uniq<ArrowType>(
+			    LogicalType::DECIMAL(NumericCast<uint32_t>(width), NumericCast<uint32_t>(scale)),
+			    make_uniq<ArrowDecimalInfo>(DecimalBitWidth::DECIMAL_256));
 		default:
 			throw NotImplementedException("Unsupported bit-width value of %d  for Arrow Decimal type", bitwidth);
 		}

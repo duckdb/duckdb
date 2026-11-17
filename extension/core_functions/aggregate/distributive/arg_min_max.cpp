@@ -210,9 +210,7 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -379,9 +377,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -545,6 +541,9 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type, null_handling);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type, null_handling);
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs
+		return GetArgMinMaxFunctionBy<OP, string_t>(by_type, type, null_handling);
 	default:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type, null_handling);
 	}
@@ -886,6 +885,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
 unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
@@ -893,6 +893,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
+	ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
 	const auto arg_type = arguments[1]->GetReturnType().InternalType();
@@ -917,6 +918,7 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	    .AddParameter("arg", LogicalTypeId::ANY)
 	    .AddParameter("val", LogicalTypeId::ANY)
 	    .AddParameter("N", LogicalType::BIGINT);
+	function.SetFallible(); // the update callback rejects NULL and out-of-range n values at runtime
 
 	set.AddFunction(function);
 }

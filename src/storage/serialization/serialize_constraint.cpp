@@ -55,6 +55,9 @@ void ForeignKeyConstraint::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(204, "table", info.table);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", info.pk_keys);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", info.fk_keys);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (referenced_table.Path().size() > 2)) {
+		serializer.WriteProperty<QualifiedName>(207, "referenced_table", referenced_table);
+	}
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deserializer) {
@@ -66,6 +69,7 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deseriali
 	deserializer.ReadPropertyWithDefault<Identifier>(204, "table", result->info.table);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", result->info.pk_keys);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", result->info.fk_keys);
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(207, "referenced_table", result->referenced_table, QualifiedName());
 	return std::move(result);
 }
 
@@ -85,6 +89,9 @@ void UniqueConstraint::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(200, "is_primary_key", is_primary_key);
 	serializer.WriteProperty<LogicalIndex>(201, "index", index);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "columns", columns);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<ConstraintCheckMode>(203, "check_mode", check_mode, ConstraintCheckMode::DEFAULT);
+	}
 }
 
 unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &deserializer) {
@@ -92,6 +99,7 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &deserializer)
 	deserializer.ReadPropertyWithDefault<bool>(200, "is_primary_key", result->is_primary_key);
 	deserializer.ReadProperty<LogicalIndex>(201, "index", result->index);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "columns", result->columns);
+	deserializer.ReadPropertyWithExplicitDefault<ConstraintCheckMode>(203, "check_mode", result->check_mode, ConstraintCheckMode::DEFAULT);
 	return std::move(result);
 }
 

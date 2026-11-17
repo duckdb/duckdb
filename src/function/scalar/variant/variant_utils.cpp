@@ -16,7 +16,10 @@
 namespace duckdb {
 
 PhysicalType VariantDecimalData::GetPhysicalType() const {
-	if (width > DecimalWidth<int64_t>::max) {
+	if (width > DecimalWidth<hugeint_t>::max) {
+		// decimals wider than 38 digits are BIGNUM blobs
+		return PhysicalType::VARCHAR;
+	} else if (width > DecimalWidth<int64_t>::max) {
 		return PhysicalType::INT128;
 	} else if (width > DecimalWidth<int32_t>::max) {
 		return PhysicalType::INT64;
@@ -24,6 +27,13 @@ PhysicalType VariantDecimalData::GetPhysicalType() const {
 		return PhysicalType::INT32;
 	} else {
 		return PhysicalType::INT16;
+	}
+}
+
+void VariantUtils::Available(idx_t blob_size, idx_t offset, idx_t size) {
+	if (offset > blob_size || size > blob_size - offset) {
+		throw DataCorruptionException("Variant byte_offset (%d) with size (%d) is out of bounds for a blob of size %d",
+		                              offset, size, blob_size);
 	}
 }
 
@@ -36,21 +46,41 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
                                                    uint32_t value_index) {
 	D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto width = VarintDecode<uint32_t>(ptr);
 	auto scale = VarintDecode<uint32_t>(ptr);
 	auto value_ptr = ptr;
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(value_ptr - data), 0);
 	return VariantDecimalData(width, scale, value_ptr);
+}
+
+string_t VariantUtils::DecodeWideDecimalData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto decimal = DecodeDecimalData(variant, row, value_index);
+	D_ASSERT(decimal.GetPhysicalType() == PhysicalType::VARCHAR);
+	auto &blob = variant.GetData(row);
+	auto data = const_data_ptr_cast(blob.GetData());
+	auto ptr = decimal.value_ptr;
+	VariantUtils::Available(blob.GetSize(), NumericCast<idx_t>(ptr - data), 1);
+	auto length = VarintDecode<uint32_t>(ptr);
+	VariantUtils::Available(blob.GetSize(), NumericCast<idx_t>(ptr - data), length);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto length = VarintDecode<uint32_t>(ptr);
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), length);
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
@@ -58,12 +88,16 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
                                                  uint32_t value_index) {
 	D_ASSERT(IsNestedType(variant, row, value_index));
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	VariantNestedData result;
 	result.child_count = VarintDecode<uint32_t>(ptr);
 	if (result.child_count) {
+		VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), 1);
 		result.children_idx = VarintDecode<uint32_t>(ptr);
 	} else {
 		result.children_idx = 0;
@@ -215,7 +249,7 @@ void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const v
 }
 
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
-	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
+	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx, 0);
 }
 
 void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
@@ -438,11 +472,20 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::DECIMAL:
 		return true;
 	default:
 		return false;
 	}
+}
+
+bool VariantUtils::ShreddedCastMatchesVariantCast(const LogicalType &shredded_type, const LogicalType &target) {
+	if (target.id() == LogicalTypeId::VARIANT || shredded_type == target) {
+		return true;
+	}
+	// casts to JSON serialize the VARIANT, and the VARIANT cast has no conversion to e.g. ENUM or UNION
+	return VariantSupportsType(target);
 }
 
 //===--------------------------------------------------------------------===//

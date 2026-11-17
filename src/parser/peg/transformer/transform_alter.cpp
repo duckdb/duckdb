@@ -156,10 +156,9 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
 	return alter_sequence_options;
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransformer &transformer,
-                                                                    const optional<Identifier> &catalog_qualification,
-                                                                    const optional<Identifier> &schema_qualification,
-                                                                    const Identifier &sequence_name) {
+QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(
+    PEGTransformer &transformer, const optional<Identifier> &catalog_qualification,
+    const optional<vector<Identifier>> &schema_qualification, const Identifier &sequence_name) {
 	// The grammar greedily fills the catalog qualifier first, so a 2-part name "a.b" arrives as catalog="a"
 	// with no schema. Store the qualifiers as a plain schema path: a lone qualifier becomes the schema, and the
 	// binder's BindSchemaOrCatalog promotes it to a catalog if it names an attached database.
@@ -168,7 +167,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 		schema_path.push_back(*catalog_qualification);
 	}
 	if (schema_qualification) {
-		schema_path.push_back(*schema_qualification);
+		schema_path.insert(schema_path.end(), schema_qualification->begin(), schema_qualification->end());
 	}
 	return QualifiedName(std::move(schema_path), sequence_name);
 }
@@ -317,7 +316,7 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 	if (column_constraint) {
 		for (auto &constraint : *column_constraint) {
 			auto constraint_type =
-			    constraint.constraint ? constraint.constraint->type : constraint.constraint_type_info.second;
+			    constraint.constraint ? constraint.constraint->type : constraint.constraint_type_info.type;
 			if (constraint.constraint_name == "DefaultValue") {
 				if (new_column.default_value) {
 					throw ParserException("Cannot define a default value twice");
@@ -325,10 +324,13 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				new_column.default_value = std::move(constraint.expression);
 			} else if (constraint_type == ConstraintType::NOT_NULL) {
 				new_column.add_column_constraints.add_not_null = true;
-			} else if (constraint_type == ConstraintType::UNIQUE && !constraint.constraint_type_info.first) {
-				new_column.add_column_constraints.add_unique = true;
-			} else if (constraint_type == ConstraintType::UNIQUE) {
+			} else if (constraint_type == ConstraintType::UNIQUE && constraint.constraint_type_info.is_primary_key) {
 				throw ParserException("Adding columns with PRIMARY KEY constraints is not supported yet");
+			} else if (constraint_type == ConstraintType::UNIQUE &&
+			           constraint.constraint_type_info.check_mode != ConstraintCheckMode::DEFAULT) {
+				throw ParserException("Adding columns with UNIQUE constraints with a check mode is not supported yet");
+			} else if (constraint_type == ConstraintType::UNIQUE) {
+				new_column.add_column_constraints.add_unique = true;
 			} else if (constraint_type == ConstraintType::CHECK) {
 				throw ParserException("Adding columns with CHECK constraints is not supported yet");
 			} else if (constraint_type == ConstraintType::FOREIGN_KEY) {

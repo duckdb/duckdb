@@ -2,6 +2,7 @@
 
 #include "test_config.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
@@ -18,6 +19,15 @@
 #include <thread>
 
 namespace duckdb {
+
+TEST_CASE("PUT requests retain their content type", "[http_transport_manager]") {
+	HTTPUtil http;
+	HTTPParams params(http);
+	string content_type = "application/json";
+	PutRequestInfo request("http://localhost/upload", HTTPHeaders(), params, nullptr, 0, content_type);
+	content_type = "text/plain";
+	CHECK(request.content_type == "application/json");
+}
 
 enum class MockResponseMode : uint8_t {
 	SUCCESS,
@@ -287,8 +297,9 @@ public:
 		if (state->callback) {
 			state->callback();
 		}
-		state->initialized_paths.push_back(info ? info->file_path : string());
-		state->initialized_with_context.push_back(bool(FileOpener::TryGetClientContext(opener)));
+		state->initialized_paths.push_back(info ? info->file.path : string());
+		state->initialized_with_context.push_back(
+		    bool(Context::TryGetClientContext(FileOpener::TryGetContext(opener))));
 		auto result = make_uniq<MockHTTPParams>(*this);
 		result->Initialize(opener);
 		result->retries = state->retries;
@@ -1068,7 +1079,7 @@ static string ReadExtensionBinary(const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto size = NumericCast<idx_t>(handle->GetFileSize());
 	string result(size, '\0');
-	handle->Read(data_ptr_cast(result.data()), size);
+	handle->Read(data_ptr_cast(result.data()), size, 0);
 	return result;
 }
 
@@ -1232,6 +1243,69 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	TestDeleteDirectory(extension_directory);
 }
 
+TEST_CASE("UPDATE EXTENSIONS does not send an etag to a moved repository", "[http_transport_manager]") {
+	static constexpr const char *PUBLIC_KEY =
+	    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8"
+	    "vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnH"
+	    "AHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmox"
+	    "kTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB";
+	auto extension_directory = TestCreatePath("upd_etag_ext");
+	auto repository_directory = TestCreatePath("upd_etag_repos");
+	TestDeleteDirectory(extension_directory);
+	TestDeleteDirectory(repository_directory);
+	DBConfig config;
+	config.SetOptionByName("allow_unsigned_extensions", true);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
+	config.SetOptionByName("extension_directories", Value::LIST({Value(extension_directory)}));
+	config.SetOptionByName("extension_repository_directory", repository_directory);
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	auto build_directory = TestConfiguration::Get().GetTestEnv("BUILD_DIR", "build/reldebug");
+	auto extension_body =
+	    ReadExtensionBinary(build_directory + "/test/extension/loadable_extension_demo.duckdb_extension");
+
+	// the mock serves every url under the same etag
+	auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
+	provider->state->response_body = extension_body;
+	db.instance->config.SetHTTPUtil(provider);
+	auto create_repository = [&](const string &prefix) {
+		REQUIRE_NO_FAIL(connection.Query(
+		    StringUtil::Format("CREATE OR REPLACE EXTENSION REPOSITORY my_repo WITH PREFIX '%s' USING PUBLIC KEY '%s'",
+		                       prefix, PUBLIC_KEY)));
+	};
+
+	auto update = [&]() {
+		provider->state->observed_if_none_match.clear();
+		REQUIRE_NO_FAIL(connection.Query("UPDATE EXTENSIONS"));
+		REQUIRE(!provider->state->request_urls.empty());
+		auto url = provider->state->request_urls.back();
+		auto scheme_end = url.find("://");
+		REQUIRE(scheme_end != string::npos);
+		return url.substr(scheme_end + 3);
+	};
+	create_repository("http://old.test/repo");
+	REQUIRE_NO_FAIL(connection.Query("INSTALL loadable_extension_demo FROM my_repo"));
+
+	// the repository still points where the extension came from: the etag is sent
+	auto url = update();
+	CHECK(StringUtil::StartsWith(url, "old.test/repo/"));
+	CHECK(provider->state->observed_if_none_match == "mock-etag");
+
+	// the repository moved: the etag of the old url is not sent, so the new binary is downloaded
+	create_repository("http://new.test/repo");
+	url = update();
+	CHECK(StringUtil::StartsWith(url, "new.test/repo/"));
+	CHECK(provider->state->observed_if_none_match.empty());
+
+	// the install info now records the new url, so the etag is sent again
+	url = update();
+	CHECK(StringUtil::StartsWith(url, "new.test/repo/"));
+	CHECK(provider->state->observed_if_none_match == "mock-etag");
+
+	TestDeleteDirectory(extension_directory);
+	TestDeleteDirectory(repository_directory);
+}
+
 TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transport_manager]") {
 	// statically linked extensions, such as httpfs, may replace the provider when they load
 	DBConfig config;
@@ -1279,6 +1353,118 @@ TEST_CASE("Extension downloads without an HTTP client", "[http_transport_manager
 	CHECK(StringUtil::Contains(error, "HTTP provider 'none' has no HTTP client"));
 	CHECK(StringUtil::Contains(error, extension_url));
 	CHECK(StringUtil::Contains(error, "ENABLE_BUILTIN_HTTPLIB=ON"));
+	TestDeleteDirectory(extension_directory);
+}
+
+TEST_CASE("HTTP transport manager enforces enable_external_access", "[http_transport_manager]") {
+	auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::EPHEMERAL);
+
+	// with external access enabled (the default), the request goes through to the provider
+	{
+		DuckDB db(nullptr);
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		REQUIRE(RunManagedRequest(session, session.Parameters(), "https://example.com/"));
+	}
+
+	// with external access disabled, the request is rejected before it is sent, even though it does not go through
+	// the file system
+	{
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET enable_external_access=false"));
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		CHECK_THROWS_AS(RunManagedRequest(session, session.Parameters(), "https://example.com/"), PermissionException);
+	}
+
+	// a caller that performs its own access control (e.g. extension installation) can skip the check
+	{
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET enable_external_access=false"));
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		auto &params = session.Parameters();
+		params.skip_external_access_check = true;
+		REQUIRE(RunManagedRequest(session, params, "https://example.com/"));
+	}
+}
+
+TEST_CASE("Extension downloads respect enable_external_access", "[http_transport_manager]") {
+	auto extension_directory = TestCreatePath("http_transport_manager_external_access");
+	TestDeleteDirectory(extension_directory);
+	TestCreateDirectory(extension_directory);
+	DBConfig config;
+	config.SetOptionByName("extension_directory", extension_directory);
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::EPHEMERAL);
+	db.instance->config.SetHTTPUtil(provider);
+	REQUIRE_NO_FAIL(
+	    connection.Query("SET allowed_directories=['" + extension_directory + "', 'http://mock.test/allowed/']"));
+	REQUIRE_NO_FAIL(connection.Query("SET enable_external_access=false"));
+
+	// returns whether the install was denied by the access check
+	auto install_denied = [&](const string &url) {
+		ExtensionInstallOptions options;
+		options.force_install = true;
+		try {
+			ExtensionHelper::InstallExtension(*connection.context, url, options);
+		} catch (PermissionException &ex) {
+			// the extension directory is allowed, so only the url can be denied
+			REQUIRE(StringUtil::Contains(ex.what(), "Cannot download extension"));
+			return true;
+		} catch (std::exception &) {
+			return false;
+		}
+		return false;
+	};
+	auto requested = [&](const string &url) {
+		auto &paths = provider->state->initialized_paths;
+		return std::find(paths.begin(), paths.end(), url) != paths.end();
+	};
+
+	SECTION("urls outside of allowed_directories are rejected before any request is made") {
+		const vector<string> rejected_urls {"http://mock.test/ext.duckdb_extension",
+		                                    "http://mock.test/allowed_not/ext.duckdb_extension",
+		                                    "http://extensions.duckdb.org.mock.test/ext.duckdb_extension",
+		                                    "http://mock.test/extensions.duckdb.org/ext.duckdb_extension",
+		                                    "http://extensions.duckdb.org@mock.test/ext.duckdb_extension",
+		                                    "http://mock.test/allowed/../ext.duckdb_extension",
+		                                    "http://mock.test/allowed/%2E%2E/ext.duckdb_extension"};
+		for (auto &url : rejected_urls) {
+			CHECK(install_denied(url));
+		}
+		CHECK(provider->state->initialized_paths.empty());
+	}
+	SECTION("a custom repository outside of allowed_directories is rejected") {
+		REQUIRE_NO_FAIL(connection.Query("SET custom_extension_repository='http://mock.test/repository'"));
+		auto result = connection.Query("INSTALL ext");
+		REQUIRE(result->HasError());
+		CHECK(result->GetErrorType() == ExceptionType::PERMISSION);
+		result = connection.Query("INSTALL ext FROM 'http://mock.test/repository'");
+		REQUIRE(result->HasError());
+		CHECK(result->GetErrorType() == ExceptionType::PERMISSION);
+		CHECK(provider->state->initialized_paths.empty());
+	}
+	SECTION("urls inside allowed_directories are requested") {
+		const string url = "http://mock.test/allowed/ext.duckdb_extension";
+		CHECK(!install_denied(url));
+		CHECK(requested(url));
+	}
+	SECTION("the official repositories are requested") {
+		const vector<string> official_urls {"http://extensions.duckdb.org/v/osx/ext.duckdb_extension",
+		                                    "http://community-extensions.duckdb.org/v/osx/ext.duckdb_extension",
+		                                    "http://extensions.duckdb-backup.org/v/osx/ext.duckdb_extension"};
+		for (auto &url : official_urls) {
+			CHECK(!install_denied(url));
+			CHECK(requested(url));
+		}
+	}
 	TestDeleteDirectory(extension_directory);
 }
 
