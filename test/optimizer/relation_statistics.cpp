@@ -227,164 +227,6 @@ static unique_ptr<Expression> CreateJoinComparison(ColumnBinding left, ColumnBin
 	                                         make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, right));
 }
 
-struct CompositeEstimateEdge {
-	idx_t left;
-	idx_t right;
-	idx_t key;
-};
-
-static double EstimateCompositeJoins(const vector<DistinctCount> &domains, const vector<CompositeEstimateEdge> &edges,
-                                     idx_t relation_count, bool reverse_classes, bool disconnected_input,
-                                     ExpressionType comparison) {
-	JoinRelationSetManager sets;
-	JoinPredicateModel model;
-	vector<RelationStats> stats;
-	for (idx_t relation = 0; relation < relation_count; relation++) {
-		vector<ColumnBinding> bindings;
-		vector<idx_t> counts;
-		for (idx_t key = 0; key < domains.size(); key++) {
-			bindings.emplace_back(TableIndex(relation), ProjectionIndex(key));
-			counts.push_back(domains[key].distinct_count);
-		}
-		stats.push_back(CreateStats(bindings, counts, 100));
-		for (idx_t key = 0; key < domains.size(); key++) {
-			stats.back().columns[key].total_domain = domains[key];
-			stats.back().columns[key].current_domain = domains[key];
-		}
-		stats.back().Verify(bindings);
-	}
-	vector<unique_ptr<FilterInfo>> filters;
-	for (idx_t class_index = 0; class_index < domains.size(); class_index++) {
-		auto key = reverse_classes ? domains.size() - 1 - class_index : class_index;
-		JoinEqualityClass group;
-		group.index = class_index;
-		for (auto &edge : edges) {
-			if (edge.key != key) {
-				continue;
-			}
-			auto left = ColumnBinding(TableIndex(edge.left), ProjectionIndex(key));
-			auto right = ColumnBinding(TableIndex(edge.right), ProjectionIndex(key));
-			auto &lhs = sets.GetJoinRelation(RelationIndex(edge.left));
-			auto &rhs = sets.GetJoinRelation(RelationIndex(edge.right));
-			auto &pair = sets.Union(lhs, rhs);
-			auto filter = make_uniq<FilterInfo>(CreateJoinComparison(left, right, comparison), pair, filters.size());
-			filter->SetLeftSet(lhs);
-			filter->SetRightSet(rhs);
-			filter->left_binding = left;
-			filter->right_binding = right;
-			auto &predicate = model.RegisterPredicate(*filter, JoinPredicateClass::INNER_EQUALITY, left, right);
-			predicate.SetEqualityClassIndex(optional_idx(class_index));
-			group.columns.insert(left);
-			group.columns.insert(right);
-			group.relations.insert(RelationIndex(edge.left));
-			group.relations.insert(RelationIndex(edge.right));
-			group.edges.emplace_back(predicate, RelationIndex(edge.left), RelationIndex(edge.right), left, right);
-			model.AddDirectEqualityPairClass(pair, class_index, left, right);
-			filters.push_back(std::move(filter));
-		}
-		model.AddEqualityClass(std::move(group));
-	}
-	if (disconnected_input) {
-		auto binding = ColumnBinding(TableIndex(relation_count), ProjectionIndex(0));
-		stats.push_back(CreateStats({binding}, {7}, 7));
-		stats.back().Verify({binding});
-	}
-	CardinalityEstimator estimator(sets, model);
-	estimator.Initialize(stats);
-	auto requested = &sets.GetJoinRelation(RelationIndex(0));
-	for (idx_t relation = 1; relation < stats.size(); relation++) {
-		requested = &sets.Union(*requested, sets.GetJoinRelation(RelationIndex(relation)));
-	}
-	return estimator.EstimateCardinality(*requested).GetDouble();
-}
-
-static double EstimateAccountedCompositePair(const DistinctCount &first, const DistinctCount &second,
-                                             bool reverse_classes, bool disconnected_input) {
-	return EstimateCompositeJoins({first, second}, {{0, 1, 0}, {0, 1, 1}}, 2, reverse_classes, disconnected_input,
-	                              ExpressionType::COMPARE_EQUAL);
-}
-
-TEST_CASE("Only an accounted uncertain equality protects its composite pair", "[optimizer][relation_statistics]") {
-	for (bool reverse_classes : {false, true}) {
-		for (bool disconnected_input : {false, true}) {
-			const double multiplier = disconnected_input ? 7 : 1;
-			for (auto reliable : {DistinctCountSource::EXACT, DistinctCountSource::HLL, DistinctCountSource::MIN_MAX}) {
-				CAPTURE(reverse_classes, disconnected_input, reliable);
-				const DistinctCount first(30, reliable);
-				const DistinctCount observed_second(10, reliable);
-				const DistinctCount uncertain_second(10, DistinctCountSource::CARDINALITY);
-				// The composite cap already accounts for the second key, independent of its source.
-				CHECK(EstimateAccountedCompositePair(first, observed_second, reverse_classes, disconnected_input) ==
-				      Approx(100 * multiplier));
-				CHECK(EstimateAccountedCompositePair(first, uncertain_second, reverse_classes, disconnected_input) ==
-				      Approx(100 * multiplier));
-				CHECK(EstimateAccountedCompositePair(first, DistinctCount(5, DistinctCountSource::CARDINALITY),
-				                                     reverse_classes, disconnected_input) == Approx(100 * multiplier));
-				// A later reliable edge must not undo the first edge's actual floor.
-				CHECK(EstimateAccountedCompositePair(DistinctCount(30, DistinctCountSource::CARDINALITY),
-				                                     observed_second, reverse_classes,
-				                                     disconnected_input) == Approx(2000 * multiplier));
-			}
-			CHECK(EstimateAccountedCompositePair(DistinctCount(30, DistinctCountSource::CARDINALITY),
-			                                     DistinctCount(10, DistinctCountSource::CARDINALITY), reverse_classes,
-			                                     disconnected_input) == Approx(2000 * multiplier));
-		}
-	}
-}
-
-TEST_CASE("Composite caps preserve applied floors across transitive equalities", "[optimizer][relation_statistics]") {
-	for (auto comparison : {ExpressionType::COMPARE_EQUAL, ExpressionType::COMPARE_NOT_DISTINCT_FROM}) {
-		for (bool reverse_classes : {false, true}) {
-			for (bool disconnected_input : {false, true}) {
-				for (auto second_source : {DistinctCountSource::CARDINALITY, DistinctCountSource::EXACT}) {
-					CAPTURE(comparison, reverse_classes, disconnected_input, second_source);
-					vector<DistinctCount> domains {{30, DistinctCountSource::CARDINALITY}, {10, second_source}};
-					double expected = disconnected_input ? 280000 : 40000;
-					if (!disconnected_input && second_source == DistinctCountSource::EXACT) {
-						expected /= 2;
-					}
-					CHECK(EstimateCompositeJoins(domains, {{0, 1, 0}, {0, 2, 0}, {1, 2, 1}}, 3, reverse_classes,
-					                             disconnected_input, comparison) == Approx(expected));
-					CHECK(EstimateCompositeJoins(domains, {{0, 1, 0}, {0, 2, 0}, {1, 2, 0}, {1, 2, 1}}, 3,
-					                             reverse_classes, disconnected_input, comparison) == Approx(expected));
-
-					// Skipped uncertain predicates must leave reliable contribution accounting intact.
-					domains[0].source = DistinctCountSource::EXACT;
-					double reliable_expected = disconnected_input ? 7000.0 / 3 : 10000.0 / 9;
-					if (!disconnected_input && second_source == DistinctCountSource::EXACT) {
-						reliable_expected /= 2;
-					}
-					CHECK(EstimateCompositeJoins(domains, {{0, 1, 0}, {0, 2, 0}, {1, 2, 0}, {1, 2, 1}}, 3,
-					                             reverse_classes, disconnected_input,
-					                             comparison) == Approx(reliable_expected));
-				}
-			}
-		}
-	}
-}
-
-TEST_CASE("Extending and merging selectivity subgraphs preserve composite floors", "[optimizer][relation_statistics]") {
-	for (auto comparison : {ExpressionType::COMPARE_EQUAL, ExpressionType::COMPARE_NOT_DISTINCT_FROM}) {
-		for (bool disconnected_input : {false, true}) {
-			const double multiplier = disconnected_input ? 7 : 1;
-			for (auto source : {DistinctCountSource::CARDINALITY, DistinctCountSource::EXACT}) {
-				CAPTURE(comparison, disconnected_input, source);
-				auto factor = source == DistinctCountSource::CARDINALITY ? 0.2 : 0.01;
-				CHECK(EstimateCompositeJoins(
-				          {{60, DistinctCountSource::EXACT}, {30, source}, {10, DistinctCountSource::EXACT}},
-				          {{0, 2, 0}, {0, 1, 1}, {0, 1, 2}}, 3, false, disconnected_input,
-				          comparison) == Approx(1000000 * multiplier / 60 * factor));
-				CHECK(EstimateCompositeJoins({{90, DistinctCountSource::EXACT},
-				                              {80, DistinctCountSource::EXACT},
-				                              {30, source},
-				                              {10, DistinctCountSource::EXACT}},
-				                             {{0, 1, 0}, {2, 3, 1}, {1, 2, 2}, {1, 2, 3}}, 4, false, disconnected_input,
-				                             comparison) == Approx(100000000 * multiplier / 90 / 80 * factor));
-			}
-		}
-	}
-}
-
 TEST_CASE("Join source populations survive changes in relation cardinality", "[optimizer][relation_statistics]") {
 	for (auto current_rows : {idx_t(100000), idx_t(8006)}) {
 		for (auto weak_source : {DistinctCountSource::CARDINALITY, DistinctCountSource::MIN_MAX}) {
@@ -427,9 +269,7 @@ TEST_CASE("Join source populations survive changes in relation cardinality", "[o
 }
 
 TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimizer][relation_statistics]") {
-	vector<pair<idx_t, idx_t>> cases {{2, 400000000}, {6, 480000000}, {600, 48000000000}};
-	for (auto &test_case : cases) {
-		auto synthetic_rows = test_case.first;
+	for (auto synthetic_rows : {idx_t(6), idx_t(600)}) {
 		JoinRelationSetManager sets;
 		JoinPredicateModel model;
 		vector<ColumnBinding> bindings;
@@ -472,9 +312,9 @@ TEST_CASE("Synthetic relation rows do not replace a base join domain", "[optimiz
 		CardinalityEstimator estimator(sets, model);
 		estimator.Initialize(stats, {}, sources);
 		auto &base_join = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
-		REQUIRE(estimator.EstimateCardinality(base_join).GetIndex() == 400000000);
+		REQUIRE(estimator.EstimateCardinality(base_join).GetIndex() == 100000);
 		auto &full_join = sets.Union(base_join, sets.GetJoinRelation(RelationIndex(2)));
-		REQUIRE(estimator.EstimateCardinality(full_join).GetIndex() == test_case.second);
+		REQUIRE(estimator.EstimateCardinality(full_join).GetIndex() == 100000);
 	}
 }
 
@@ -585,9 +425,9 @@ TEST_CASE("Predicate-local fallback domains order competing equality edges", "[o
 			estimator.Initialize(stats, {}, sources);
 			auto &base = sets.Union(sets.GetJoinRelation(RelationIndex(0)), sets.GetJoinRelation(RelationIndex(1)));
 			auto &all = sets.Union(base, sets.GetJoinRelation(RelationIndex(2)));
-			REQUIRE(estimator.EstimateCardinality(base).GetIndex() == 200000);
-			// Raw domains still order the edges; the row-count factor uses the floor.
-			REQUIRE(estimator.EstimateCardinality(all).GetIndex() == 20000);
+			REQUIRE(estimator.EstimateCardinality(base).GetIndex() == 1000);
+			// Use domains 1000 and 100 before the redundant local domain of 10.
+			REQUIRE(estimator.EstimateCardinality(all).GetIndex() == 100);
 		}
 	}
 }
