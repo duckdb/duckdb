@@ -383,6 +383,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fsum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"fts_analyze_pattern", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"fts_near_tf", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fts_tokenize_opensearch_standard", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fuzz_all_functions", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fuzzyduck", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
