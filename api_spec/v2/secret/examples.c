@@ -97,11 +97,30 @@ static bool GetS3Region(duckdb_v2_context_handle ctx, const char *path, char *ou
 	return found;
 }
 
-/* httpfs and iceberg refresh: replace a secret by its looked-up copy with new values (GenerateRefreshSecretInfo). A
- * looked-up secret is an owned copy, so it is changed and stored back as is. */
-static void RefreshSecret(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret, duckdb_v2_value_handle token) {
-	duckdb_v2_secret_set_value(secret, S("session_token"), token, NULL);
-	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL, NULL);
+/* httpfs and iceberg refresh (GenerateRefreshSecretInfo): create the secret again through its provider, from the
+ * old secret's identity and the refresh options. The keys of the secret given to context_create_secret are the named
+ * parameters of the provider, not the stored values, so the old secret is not stored back as is. */
+static void RefreshSecret(duckdb_v2_context_handle ctx, duckdb_v2_factory_handle factory, duckdb_v2_secret_handle old,
+                          duckdb_v2_value_handle refresh_option) {
+	duckdb_v2_secret_handle request = NULL;
+	duckdb_v2_secret_create(factory, &request, NULL);
+	for (int p = DUCKDB_V2_SECRET_PROPERTY_TYPE; p <= DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE; p++) {
+		sv value;
+		duckdb_v2_secret_get_property(old, (DUCKDB_V2_SECRET_PROPERTY)p, &value.ptr, &value.len, NULL);
+		if (value.len > 0) {
+			duckdb_v2_secret_set_property(request, (DUCKDB_V2_SECRET_PROPERTY)p, value.ptr, value.len, NULL);
+		}
+	}
+	idx_t scopes = 0;
+	duckdb_v2_secret_get_scope_count(old, &scopes, NULL);
+	for (idx_t i = 0; i < scopes; i++) {
+		sv scope;
+		duckdb_v2_secret_get_scope(old, i, &scope.ptr, &scope.len, NULL);
+		duckdb_v2_secret_add_scope(request, scope.ptr, scope.len, NULL);
+	}
+	duckdb_v2_secret_set_value(request, S("token"), refresh_option, NULL);
+	duckdb_v2_context_create_secret(ctx, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL, NULL);
+	duckdb_v2_secret_destroy(&request);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
