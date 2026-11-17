@@ -357,6 +357,13 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 		types.push_back(type);
 	});
 
+	for (auto &type : types) {
+		if (!type.HasPhysicalType()) {
+			throw SerializationException("Failed to deserialize data chunk: a vector cannot hold the type %s",
+			                             type.ToString());
+		}
+	}
+
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));

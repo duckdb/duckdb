@@ -917,6 +917,22 @@ bool LogicalType::IsTemplated() const {
 	return TypeVisitor::Contains(*this, LogicalTypeId::TEMPLATE);
 }
 
+bool LogicalType::HasPhysicalType() const {
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.InternalType()) {
+		case PhysicalType::INVALID:
+			return true;
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
+			// a VARIANT has no child types of its own
+			return type.id() != LogicalTypeId::VARIANT && !type.HasParameters();
+		default:
+			return false;
+		}
+	});
+}
+
 bool LogicalType::SupportsRegularUpdate() const {
 	switch (id()) {
 	case LogicalTypeId::LIST:
