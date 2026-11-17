@@ -378,9 +378,15 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	}
 	if (expression.GetReturnType().IsAggregateState()) {
 		auto storage_type = expression.GetReturnType().WithAlias("").WithExtensionInfo(nullptr);
-		if (BoundCastExpression::IsTryCast(expression)) {
+		auto &source_type = expression.GetChildren()[0]->GetReturnType();
+		// the export reinterprets the storage value, which bypasses a registered cast to the aggregate state
+		if (BoundCastExpression::IsTryCast(expression) || !context.client_context ||
+		    CastFunctionSet::Get(*context.client_context)
+		        .CanOverrideDefaultCast(source_type, expression.GetReturnType()) ||
+		    CastFunctionSet::Get(*context.client_context).CanOverrideDefaultCast(source_type, storage_type)) {
 			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
-			    path, "aggregate_state_try_cast", "Aggregate state TRY_CAST requires a SQL representation")});
+			    path, "aggregate_state_try_cast",
+			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
 		}
 		auto storage = RestoreResultType(storage_type, std::move(child.GetValue()), path);
 		if (storage.HasError()) {

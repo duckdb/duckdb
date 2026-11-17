@@ -112,6 +112,10 @@ void WindowRangeCast::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "source_type", source_type);
 	serializer.WriteProperty(101, "target_type", target_type);
 	serializer.WriteProperty(102, "try_cast", try_cast);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		// readers before v2.1.0 require the removed default-cast flag
+		serializer.WriteProperty(103, "default_cast", false);
+	}
 }
 
 WindowRangeCast WindowRangeCast::Deserialize(Deserializer &deserializer) {
