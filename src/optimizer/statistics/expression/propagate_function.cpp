@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -248,8 +249,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	vector<BaseStatistics> stats;
 	stats.reserve(func.GetChildren().size());
 	bool has_invalidated_parameter = false;
+	bool has_all_null_argument = false;
 	for (auto &child : func.GetChildrenMutable()) {
 		auto stat = PropagateExpression(child);
+		has_all_null_argument = has_all_null_argument || HasNoValidValue(stat.get());
 		// an invalidated parameter has no statistics until it is rebound at execution
 		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
 		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
@@ -267,6 +270,16 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	}
 	if (has_invalidated_parameter) {
 		return nullptr;
+	}
+	if (has_all_null_argument && func.GetReturnType().id() == LogicalTypeId::BOOLEAN &&
+	    !BoundCastExpression::IsCast(func) &&
+	    func.Function().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING &&
+	    !func.Function().HasBindLambdaCallback() && IsRemovable(func)) {
+		// a predicate with default NULL handling (LIKE, contains, ...) is NULL for every row when an argument holds
+		// only NULLs
+		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
+		return PropagateExpression(expr_ptr);
 	}
 	auto constant_stats = PropagateConstantInputs(context, func, stats);
 	if (constant_stats) {
