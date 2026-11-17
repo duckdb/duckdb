@@ -6,34 +6,26 @@
 namespace duckdb {
 
 //! Verifies that the values of an ENUM vector are positions in the dictionary of its type.
-//! The values are not checked against the type when they are read from storage, so this is what stands between
-//! corrupt data and a read past the dictionary. This is done once per vector to keep the check out of the cast loops.
+//! This is done once per vector to keep the check out of the cast loops.
 template <class T>
-static void VerifyEnumValues(Vector &source, idx_t count, idx_t dictionary_size) {
+static void VerifyEnumValues(const Vector &source, idx_t count, idx_t dictionary_size) {
 	if (dictionary_size > NumericLimits<T>::Maximum()) {
 		// every value of the physical type is a position in the dictionary
 		return;
 	}
-	UnifiedVectorFormat format;
-	source.ToUnifiedFormat(format);
-	auto data = UnifiedVectorFormat::GetData<T>(format);
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		count = 1;
+	// the entry of a NULL can hold anything: only look at the validity if an entry is out of range
+	auto values = source.Values<T>();
+	T max_value = 0;
+	for (idx_t i = 0; i < count; i++) {
+		max_value = MaxValue<T>(max_value, values.GetValueUnsafe(i));
 	}
-	if (!format.sel->IsSet() && format.validity.AllValid()) {
-		T max_value = 0;
-		for (idx_t i = 0; i < count; i++) {
-			max_value = MaxValue<T>(max_value, data[i]);
-		}
-		if (max_value >= dictionary_size) {
-			EnumType::ThrowValueOutOfRange(max_value, dictionary_size);
-		}
+	if (max_value < dictionary_size) {
 		return;
 	}
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = format.sel->get_index(i);
-		if (format.validity.RowIsValid(idx) && data[idx] >= dictionary_size) {
-			EnumType::ThrowValueOutOfRange(data[idx], dictionary_size);
+		auto entry = values[i];
+		if (entry.IsValid() && entry.GetValue() >= dictionary_size) {
+			EnumType::ThrowValueOutOfRange(entry.GetValue(), dictionary_size);
 		}
 	}
 }
