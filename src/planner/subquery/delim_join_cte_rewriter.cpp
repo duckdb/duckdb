@@ -9,6 +9,7 @@
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
@@ -949,6 +950,58 @@ static bool ReferencesDomain(Expression &expression, const GeneratedDomainRef &d
 	       ExpressionReferencesBinding(expression, domain.source_bindings);
 }
 
+static bool CanSubstituteDomainKeys(const GeneratedDomainRef &domain) {
+	// Parent expressions are rebound too; equal keys must have indistinguishable representations.
+	for (auto &expression : domain.output_expressions) {
+		if (TypeVisitor::Contains(expression->GetReturnType(), [](const LogicalType &type) {
+			    return type.IsFloating() || type.id() == LogicalTypeId::INTERVAL;
+		    })) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool CanEvaluateUnmatchedRows(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		break;
+	case LogicalOperatorType::LOGICAL_GET:
+		if (!op.Cast<LogicalGet>().GetTable()) {
+			return false;
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		if (op.Cast<LogicalComparisonJoin>().join_type == JoinType::SINGLE) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+	bool safe = true;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](optional_ptr<const unique_ptr<Expression>> expression) {
+		safe &= !ExpressionBarrier::Required(**expression) && !ExpressionBarrier::Contains(**expression);
+		ExpressionIterator::VisitExpression<BoundFunctionExpression>(
+		    **expression,
+		    [&](const BoundFunctionExpression &function) { safe &= !function.Function().RequiresOrderedExecution(); });
+	});
+	if (!safe) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!CanEvaluateUnmatchedRows(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 struct GeneratedDomainReplacement {
 	BindingReplacementGraph bindings;
 	vector<unique_ptr<Expression>> outputs;
@@ -1435,11 +1488,25 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 	auto domain = left_domain ? std::move(left_domain) : std::move(right_domain);
 	vector<JoinCondition> conditions;
 	vector<bool> consumed;
+	vector<idx_t> domain_filter_indices;
 	if (filter) {
 		filter->SplitPredicates();
 		consumed.resize(filter->expressions.size(), false);
 		for (idx_t index = 0; index < filter->expressions.size(); index++) {
 			auto &expression = *filter->expressions[index];
+			column_binding_set_t bindings;
+			if (GetExpressionColumnBindings(expression, bindings) && !bindings.empty() &&
+			    ChildContainsBindings(*join_op->children[domain_side], bindings)) {
+				// Removing the domain can expose unrelated rows to every operator above it.
+				if (domain_filter_indices.empty() &&
+				    (!CanSubstituteDomainKeys(*domain) || !CanEvaluateUnmatchedRows(*delim_join.children[1]))) {
+					return false;
+				}
+				domain->filters.push_back(expression.Copy());
+				domain_filter_indices.push_back(index);
+				consumed[index] = true;
+				continue;
+			}
 			if (!BoundComparisonExpression::IsComparison(expression)) {
 				continue;
 			}
@@ -1473,6 +1540,9 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 	if (!replacement.Analyze(conditions, *domain, action)) {
 		return false;
 	}
+	if (!domain_filter_indices.empty() && !replacement.all_equality) {
+		return false;
+	}
 	if (!replacement.all_equality &&
 	    (action != GeneratedDomainAction::REMOVE || !RemoveInequalityJoinConditions(*op, conditions, domain_side))) {
 		return false;
@@ -1481,6 +1551,9 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		join->conditions = std::move(conditions);
 		join->children = std::move(join_op->children);
+		for (auto index : domain_filter_indices) {
+			AddFilterToOperator(join->children[domain_side], std::move(filter->expressions[index]));
+		}
 		vector<unique_ptr<Expression>> remaining;
 		for (idx_t index = 0; index < consumed.size(); index++) {
 			if (!consumed[index]) {
