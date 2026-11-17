@@ -1571,21 +1571,14 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_key_count)
 	(duckdb_v2_secret_handle secret, idx_t *count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_name)
-	(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_persist_type)
-	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PERSIST_TYPE *persist_type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_provider)
-	(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_property)
+	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property, const char **value, idx_t *value_length,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_scope)
 	(duckdb_v2_secret_handle secret, idx_t index, const char **scope, idx_t *scope_length,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_scope_count)
 	(duckdb_v2_secret_handle secret, idx_t *count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_storage)
-	(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_type)
-	(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_get_value)
 	(duckdb_v2_secret_handle secret, const char *key, idx_t key_length, duckdb_v2_value_handle *value,
 	 duckdb_v2_error_info_handle *err);
@@ -1597,16 +1590,9 @@ typedef struct {
 	(duckdb_v2_secret_list_handle list, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_list_get_secret)
 	(duckdb_v2_secret_list_handle list, idx_t index, duckdb_v2_secret_handle *secret, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_name)
-	(duckdb_v2_secret_handle secret, const char *name, idx_t name_length, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_persist_type)
-	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PERSIST_TYPE persist_type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_provider)
-	(duckdb_v2_secret_handle secret, const char *provider, idx_t provider_length, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_storage)
-	(duckdb_v2_secret_handle secret, const char *storage, idx_t storage_length, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_type)
-	(duckdb_v2_secret_handle secret, const char *type, idx_t type_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_property)
+	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property, const char *value, idx_t value_length,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_value)
 	(duckdb_v2_secret_handle secret, const char *key, idx_t key_length, duckdb_v2_value_handle value,
 	 duckdb_v2_error_info_handle *err);
@@ -2325,23 +2311,15 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_secret_function_set_user_data = duckdb_v2_secret_function_set_user_data;
 	result.duckdb_v2_secret_get_key = duckdb_v2_secret_get_key;
 	result.duckdb_v2_secret_get_key_count = duckdb_v2_secret_get_key_count;
-	result.duckdb_v2_secret_get_name = duckdb_v2_secret_get_name;
-	result.duckdb_v2_secret_get_persist_type = duckdb_v2_secret_get_persist_type;
-	result.duckdb_v2_secret_get_provider = duckdb_v2_secret_get_provider;
+	result.duckdb_v2_secret_get_property = duckdb_v2_secret_get_property;
 	result.duckdb_v2_secret_get_scope = duckdb_v2_secret_get_scope;
 	result.duckdb_v2_secret_get_scope_count = duckdb_v2_secret_get_scope_count;
-	result.duckdb_v2_secret_get_storage = duckdb_v2_secret_get_storage;
-	result.duckdb_v2_secret_get_type = duckdb_v2_secret_get_type;
 	result.duckdb_v2_secret_get_value = duckdb_v2_secret_get_value;
 	result.duckdb_v2_secret_is_key_redacted = duckdb_v2_secret_is_key_redacted;
 	result.duckdb_v2_secret_list_destroy = duckdb_v2_secret_list_destroy;
 	result.duckdb_v2_secret_list_get_count = duckdb_v2_secret_list_get_count;
 	result.duckdb_v2_secret_list_get_secret = duckdb_v2_secret_list_get_secret;
-	result.duckdb_v2_secret_set_name = duckdb_v2_secret_set_name;
-	result.duckdb_v2_secret_set_persist_type = duckdb_v2_secret_set_persist_type;
-	result.duckdb_v2_secret_set_provider = duckdb_v2_secret_set_provider;
-	result.duckdb_v2_secret_set_storage = duckdb_v2_secret_set_storage;
-	result.duckdb_v2_secret_set_type = duckdb_v2_secret_set_type;
+	result.duckdb_v2_secret_set_property = duckdb_v2_secret_set_property;
 	result.duckdb_v2_secret_set_value = duckdb_v2_secret_set_value;
 	return result;
 }

@@ -118,7 +118,7 @@ static duckdb_v2_secret_handle QuackFindSingleSecret(duckdb_v2_context_handle ct
 		duckdb_v2_secret_handle secret = NULL;
 		duckdb_v2_secret_list_get_secret(list, i, &secret, NULL);
 		sv type;
-		duckdb_v2_secret_get_type(secret, &type.ptr, &type.len, NULL);
+		duckdb_v2_secret_get_property(secret, DUCKDB_V2_SECRET_PROPERTY_TYPE, &type.ptr, &type.len, NULL);
 		if (type.len != 5 || strncasecmp(type.ptr, "quack", 5) != 0) {
 			duckdb_v2_secret_destroy(&secret);
 			continue;
@@ -137,7 +137,7 @@ static duckdb_v2_secret_handle QuackFindSingleSecret(duckdb_v2_context_handle ct
 static duckdb_v2_secret_handle QuackFindByName(duckdb_v2_context_handle ctx, const char *name) {
 	duckdb_v2_secret_handle secret = NULL;
 	duckdb_v2_context_get_secret_by_name(ctx, S(name), &secret, NULL);
-	return secret; /* NULL: the caller reports "not found"; the type is checked with duckdb_v2_secret_get_type */
+	return secret; /* NULL: the caller reports "not found"; the type is checked with duckdb_v2_secret_get_property */
 }
 
 /* quack's CreateDefault: a persistent secret, ignoring a name that is taken */
@@ -145,10 +145,10 @@ static void QuackCreateDefault(duckdb_v2_context_handle ctx, duckdb_v2_factory_h
                                duckdb_v2_value_handle token) {
 	duckdb_v2_secret_handle secret = NULL;
 	duckdb_v2_secret_create(factory, &secret, NULL);
-	duckdb_v2_secret_set_type(secret, S("quack"), NULL);
-	duckdb_v2_secret_set_name(secret, S("__default_quack"), NULL);
+	duckdb_v2_secret_set_property(secret, DUCKDB_V2_SECRET_PROPERTY_TYPE, S("quack"), NULL);
+	duckdb_v2_secret_set_property(secret, DUCKDB_V2_SECRET_PROPERTY_NAME, S("__default_quack"), NULL);
 	duckdb_v2_secret_set_value(secret, S("token"), token, NULL);
-	duckdb_v2_secret_set_persist_type(secret, DUCKDB_V2_SECRET_PERSIST_TYPE_PERSISTENT, NULL);
+	duckdb_v2_secret_set_property(secret, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, S("persistent"), NULL);
 	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, NULL, NULL);
 	duckdb_v2_secret_destroy(&secret);
 }
@@ -185,10 +185,10 @@ static void IcebergCreateVendedSecret(duckdb_v2_context_handle ctx, duckdb_v2_fa
                                       const char *table_location, duckdb_v2_value_handle key_id) {
 	duckdb_v2_secret_handle secret = NULL;
 	duckdb_v2_secret_create(factory, &secret, NULL);
-	duckdb_v2_secret_set_type(secret, S("s3"), NULL);
+	duckdb_v2_secret_set_property(secret, DUCKDB_V2_SECRET_PROPERTY_TYPE, S("s3"), NULL);
 	duckdb_v2_secret_add_scope(secret, S(table_location), NULL);
 	duckdb_v2_secret_set_value(secret, S("key_id"), key_id, NULL);
-	duckdb_v2_secret_set_persist_type(secret, DUCKDB_V2_SECRET_PERSIST_TYPE_TRANSACTION, NULL);
+	duckdb_v2_secret_set_property(secret, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, S("transaction"), NULL);
 	duckdb_v2_context_create_secret(ctx, secret, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, NULL, NULL);
 	duckdb_v2_secret_destroy(&secret);
 }

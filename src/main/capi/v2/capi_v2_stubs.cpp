@@ -67,29 +67,8 @@ DUCKDB_V2_ERROR duckdb_v2_secret_create(duckdb_v2_factory_handle factory, duckdb
 	return DUCKDB_V2_ERROR_API; // Not yet implemented
 }
 
-DUCKDB_V2_ERROR duckdb_v2_secret_set_type(duckdb_v2_secret_handle secret, const char *type, idx_t type_length,
-                                          duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_set_provider(duckdb_v2_secret_handle secret, const char *provider,
-                                              idx_t provider_length, duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_set_name(duckdb_v2_secret_handle secret, const char *name, idx_t name_length,
-                                          duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_set_storage(duckdb_v2_secret_handle secret, const char *storage, idx_t storage_length,
-                                             duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_set_persist_type(duckdb_v2_secret_handle secret,
-                                                  DUCKDB_V2_SECRET_PERSIST_TYPE persist_type,
-                                                  duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_secret_set_property(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property,
+                                              const char *value, idx_t value_length, duckdb_v2_error_info_handle *err) {
 	return DUCKDB_V2_ERROR_API; // Not yet implemented
 }
 
@@ -116,29 +95,9 @@ DUCKDB_V2_ERROR duckdb_v2_secret_destroy(duckdb_v2_secret_handle *secret) {
 	return DUCKDB_V2_ERROR_API; // Not yet implemented
 }
 
-DUCKDB_V2_ERROR duckdb_v2_secret_get_type(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length,
-                                          duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_get_provider(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length,
+DUCKDB_V2_ERROR duckdb_v2_secret_get_property(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property,
+                                              const char **value, idx_t *value_length,
                                               duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_get_name(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length,
-                                          duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_get_storage(duckdb_v2_secret_handle secret, const char **out, idx_t *out_length,
-                                             duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_get_persist_type(duckdb_v2_secret_handle secret,
-                                                  DUCKDB_V2_SECRET_PERSIST_TYPE *persist_type,
-                                                  duckdb_v2_error_info_handle *err) {
 	return DUCKDB_V2_ERROR_API; // Not yet implemented
 }
 
