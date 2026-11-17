@@ -86,6 +86,8 @@ public:
 	static constexpr idx_t AGGREGATE_STATE_PRESSURE_DIVISOR = 2;
 	//! Estimated memory amplification when importing exported states
 	static constexpr idx_t EXPORTED_STATE_MEMORY_MULTIPLIER = 2;
+	//! Minimum amount of data to combine and scan per thread in the Source phase
+	static constexpr idx_t MINIMUM_SOURCE_BYTES_PER_THREAD = 262144;
 };
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
@@ -108,6 +110,8 @@ public:
 	}
 	//! Whether the aggregate arena alone approaches the thread memory limit
 	bool StatePressureExceeded(GroupedAggregateHashTable &ht) const;
+	//! HT size without the arena when there is no spill plan: the arena then stays in memory whatever the sink does
+	idx_t SpillableSize(GroupedAggregateHashTable &ht) const;
 
 public:
 	ClientContext &context;
@@ -160,6 +164,8 @@ public:
 	TupleDataPinProperties scan_pin_properties;
 	//! Total count before combining
 	idx_t count_before_combining;
+	//! Total size in bytes of the partitions before combining
+	idx_t size_before_combining;
 	//! Maximum partition size if all unique
 	idx_t max_partition_size;
 };
@@ -182,6 +188,8 @@ public:
 	bool spilling = false;
 	//! Sink capacity for this thread
 	idx_t local_sink_capacity;
+	//! Spillable size of the HT after it was last abandoned
+	idx_t size_after_abandon = 0;
 	//! Data that is abandoned ends up here (only if we're doing external aggregation)
 	unique_ptr<PartitionedTupleData> abandoned_data;
 	//! Exported abandoned aggregate states, aligned one-to-one with the partitions of abandoned_data

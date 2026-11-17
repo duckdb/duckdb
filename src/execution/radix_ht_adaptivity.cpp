@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/radix_ht_sink_state.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -31,10 +32,18 @@ bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSink
 	if (next_capacity > NumericLimits<idx_t>::Maximum() / sizeof(ht_entry_t)) {
 		return false;
 	}
-	const auto current_size = ht.GetSizeInBytes();
+	// Without a spill plan the arena stays in memory either way, so it does not count against the growth.
+	const auto current_size = gstate.SpillableSize(ht);
 	const auto table_size = next_capacity * sizeof(ht_entry_t);
 	// Grow only when repeated tuple materialization outweighs the larger pointer table.
-	if (static_cast<double>(materialized_count - hll_count) * static_cast<double>(ht.GetLayout().GetRowWidth()) <
+	// Without a spill plan, a duplicate row also re-creates its states in the arena, which cannot spill,
+	// so count those bytes too.
+	const auto arena_bytes_per_row = gstate.spill_plan
+	                                     ? 0.0
+	                                     : static_cast<double>(ht.GetAggregateAllocator()->AllocationSize()) /
+	                                           static_cast<double>(materialized_count);
+	const auto duplicate_bytes_per_row = static_cast<double>(ht.GetLayout().GetRowWidth()) + arena_bytes_per_row;
+	if (static_cast<double>(materialized_count - hll_count) * duplicate_bytes_per_row <
 	    GROWTH_DUPLICATE_BYTES_FACTOR * static_cast<double>(table_size)) {
 		return false;
 	}
@@ -49,7 +58,7 @@ bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSink
 		auto &memory_state = *gstate.temporary_memory_state;
 		const auto request = desired_size * gstate.number_of_threads;
 		const auto doubled_request = request <= NumericLimits<idx_t>::Maximum() / 2 ? request * 2 : request;
-		memory_state.SetRemainingSizeAndUpdateReservation(gstate.context,
+		memory_state.SetRemainingSizeAndUpdateReservation(gstate.context.GetContext(),
 		                                                  MaxValue(memory_state.GetRemainingSize(), doubled_request));
 	}
 	const auto thread_limit = gstate.GetThreadLimit();

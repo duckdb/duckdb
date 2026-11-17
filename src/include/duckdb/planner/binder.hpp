@@ -17,6 +17,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -43,6 +44,7 @@ class RE2;
 
 namespace duckdb {
 class BoundResultModifier;
+struct PreparedExecution;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
@@ -61,6 +63,7 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionArgument;
 class FunctionSignature;
 class TableFunction;
 class BoundTableFunction;
@@ -97,6 +100,8 @@ struct TrySubqueryPlanIndexes {
 	bool recorded = false;
 	//! The select list projection
 	TableIndex projection_index;
+	//! The projection that restores the select list above the aggregate of a DISTINCT, only set for DISTINCT
+	TableIndex distinct_index;
 	//! The prune projection above the result modifiers, only set when pruning is needed
 	TableIndex prune_index;
 	//! The aggregate node of the select node
@@ -217,6 +222,8 @@ struct GlobalBinderState {
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
+	//! The parameters declared by the statement text, as found by the parser
+	identifier_map_t<idx_t> statement_parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
 	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
@@ -272,6 +279,11 @@ public:
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
+
+	//! Resolve the prepared statement and the parameter values of an EXECUTE statement
+	PreparedExecution ResolveExecute(ExecuteStatement &stmt);
+	//! Plan the prepared statement of an EXECUTE from its unbound statement, using the resolved parameter values
+	BoundStatement BindExecute(PreparedExecution &execution);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
@@ -417,6 +429,9 @@ public:
 	}
 	optional_ptr<BoundParameterMap> GetParameters();
 	void SetParameters(BoundParameterMap &parameters);
+	void SetStatementParameters(const identifier_map_t<idx_t> &statement_parameters);
+	//! Whether the statement text declares a parameter with this identifier
+	bool StatementHasParameter(const Identifier &identifier) const;
 	//! Returns a ColumnRefExpression after it was resolved (i.e. past the STAR expression/USING clauses)
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
@@ -428,6 +443,12 @@ public:
 	//! Set while binding the key expressions of an index
 	void SetBindingIndexKey(bool binding_index_key);
 	bool IsBindingIndexKey() const;
+	//! The widest DECIMAL the binder constructs: the max_decimal_width setting, or the fixed limit of the keys of an
+	//! index while they are bound
+	DecimalWidthLimit GetDecimalWidthLimit() const;
+	optional_ptr<const DecimalWidthLimit> GetFixedDecimalWidthLimit() const;
+	//! Binds decimals within the limit instead of the setting while it is set, the limit outlives the binding
+	void SetDecimalWidthLimit(optional_ptr<const DecimalWidthLimit> limit);
 	void SetBindingTrySubquery();
 	bool IsBindingTrySubquery() const;
 	const TrySubqueryPlanIndexes &GetTrySubqueryPlanIndexes() const;
@@ -466,6 +487,8 @@ private:
 	bool inside_subquery = false;
 	//! Whether the key expressions of an index are being bound
 	bool binding_index_key = false;
+	//! The fixed limit of the DECIMAL widths this binder constructs, set while the keys of an index are bound
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
 	//! Whether this binder binds a TRY subquery, which lowers TRY onto the bound plan after binding
 	bool binding_try_subquery = false;
 	//! The plan indexes of the TRY subquery's top select node, recorded while planning it
@@ -603,6 +626,9 @@ private:
 	BoundStatement BindNode(CopyQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
+	//! Plans a DISTINCT (ON) as an aggregate that groups on the targets and takes the first value of other columns
+	unique_ptr<LogicalOperator> PlanDistinct(BoundDistinctModifier &distinct, optional_ptr<BoundOrderModifier> order,
+	                                         unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
@@ -635,8 +661,7 @@ private:
 
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
-	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function, vector<FunctionArgument> &arguments,
 	                                 vector<unique_ptr<Expression>> &positional_arguments,
 	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
 	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);

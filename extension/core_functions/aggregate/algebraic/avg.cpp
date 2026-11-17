@@ -1,11 +1,19 @@
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/sum_helpers.hpp"
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/decimal_helper.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
@@ -49,24 +57,26 @@ struct KahanAvgState {
 	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
 		KahanAddInternal(other.value, this->value, this->err);
-		KahanAddInternal(-other.err, this->value, this->err);
+		this->err += other.err;
 	}
 };
 
 struct AverageDecimalBindData : public FunctionData {
-	explicit AverageDecimalBindData(double scale) : scale(scale) {
+	AverageDecimalBindData(double scale, uint32_t decimal_scale) : scale(scale), decimal_scale(decimal_scale) {
 	}
 
+	//! 10^decimal_scale, the divisor of the unscaled sum
 	double scale;
+	uint32_t decimal_scale;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<AverageDecimalBindData>(scale);
+		return make_uniq<AverageDecimalBindData>(scale, decimal_scale);
 	};
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<AverageDecimalBindData>();
-		return scale == other.scale;
+		return scale == other.scale && decimal_scale == other.decimal_scale;
 	}
 };
 
@@ -229,6 +239,92 @@ struct TimestampAverageOperation : public DiscreteAverageOperation {
 	}
 };
 
+//! The average of timestamps in nanosecond resolution - mirrors TimestampAverageOperation, but
+//! interprets the state value as a nanosecond timestamp so infinity is the ns infinity
+template <class NS_TIMESTAMP>
+struct TimestampNSAverageOperation : public DiscreteAverageOperation {
+	static constexpr uint64_t INFINITE_COUNT = NumericLimits<uint64_t>::Maximum();
+	static constexpr uint64_t POSITIVE_INFINITY = 1;
+	static constexpr uint64_t NEGATIVE_INFINITY = 2;
+	static constexpr uint64_t BOTH_INFINITIES = POSITIVE_INFINITY | NEGATIVE_INFINITY;
+
+	template <class STATE>
+	static void AddInfinities(STATE &state, uint64_t infinities) {
+		if (state.count != INFINITE_COUNT) {
+			state.count = INFINITE_COUNT;
+			state.value = hugeint_t(0);
+		}
+		state.value.lower |= infinities;
+	}
+
+	static uint64_t GetInfinity(int64_t input) {
+		return input > 0 ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.count == INFINITE_COUNT) {
+			AddInfinities(target, source.value.lower);
+		} else if (source.count != 0 && target.count != INFINITE_COUNT) {
+			if (target.count == 0) {
+				// an empty target holds no sum
+				target.value = hugeint_t(0);
+			}
+			if (!TryAddOperator::Operation(target.count, source.count, target.count) ||
+			    target.count == INFINITE_COUNT) {
+				throw OutOfRangeException("Overflow in aggregate state combine");
+			}
+			CombineSumStateValue(target.value, source.value);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (source.count == INFINITE_COUNT) {
+			if (count > 0) {
+				AddInfinities(target, source.value.lower);
+			}
+		} else if (target.count != INFINITE_COUNT) {
+			DiscreteAverageOperation::RepeatedCombine<STATE, OP>(source, target, input, count);
+			if (target.count == INFINITE_COUNT) {
+				throw OutOfRangeException("Overflow in repeated aggregate state combine");
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (DUCKDB_UNLIKELY(!NS_TIMESTAMP(input).IsFinite())) {
+			AddInfinities(state, GetInfinity(input));
+		} else if (state.count != INFINITE_COUNT) {
+			DiscreteAverageOperation::Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		if (DUCKDB_UNLIKELY(!NS_TIMESTAMP(input).IsFinite())) {
+			AddInfinities(state, GetInfinity(input));
+		} else if (state.count != INFINITE_COUNT) {
+			DiscreteAverageOperation::ConstantOperation<INPUT_TYPE, STATE, OP>(state, input, unary_input, count);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count != INFINITE_COUNT) {
+			DiscreteAverageOperation::Finalize<T, STATE>(state, target, finalize_data);
+		} else if (state.value == hugeint_t(POSITIVE_INFINITY)) {
+			target = NS_TIMESTAMP::infinity().value;
+		} else if (state.value == hugeint_t(NEGATIVE_INFINITY)) {
+			target = NS_TIMESTAMP::ninfinity().value;
+		} else {
+			finalize_data.ReturnNull();
+		}
+	}
+};
+
 //! A state with the maximum count holds only infinities, reject imported ones that hold other values
 void ValidateTimestampAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
 	for (idx_t i = 0; i < count; i++) {
@@ -271,6 +367,27 @@ AggregateStateLayout TimeAverageStateLayout(AggregateLayoutInput &input) {
 	return layout;
 }
 
+//! The average of TIME_NS values is within a day - reject imported states that average outside of it
+void ValidateTimeNSAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
+	for (idx_t i = 0; i < count; i++) {
+		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
+		if (state.count == 0) {
+			continue;
+		}
+		const auto max_value = hugeint_t(0, state.count) * hugeint_t(Interval::NANOS_PER_DAY);
+		if (state.value < 0 || state.value > max_value) {
+			throw InvalidInputException("Invalid avg state - the average of %s over %llu values is not a valid time",
+			                            state.value.ToString(), state.count);
+		}
+	}
+}
+
+AggregateStateLayout TimeNSAverageStateLayout(AggregateLayoutInput &input) {
+	auto layout = AggregateFunction::StructStateLayout<AvgState<hugeint_t>>(input);
+	layout.validate_state = ValidateTimeNSAverageStates;
+	return layout;
+}
+
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class STATE, class OP>
 	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
@@ -310,7 +427,7 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			target = (state.value / state.count) - (state.err / state.count);
+			target = KahanFinalize(state.value, state.err) / static_cast<double>(state.count);
 		}
 	}
 };
@@ -388,9 +505,204 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
+//! The average of the bignum_t tier of decimals: an exact BIGNUM sum, divided once at the end like the hugeint tier
+struct BignumAvgState {
+	uint64_t count;
+	BignumIntermediate value;
+};
+
+//! The sum as a long double: through a hugeint when it fits, so that the same values in a fixed-size and a wide
+//! decimal average to the same result
+static long double BignumSumToLongDouble(const BignumIntermediate &value) {
+	const auto start = value.GetStartDataPos();
+	const auto size = value.size - start;
+	if (size <= sizeof(hugeint_t)) {
+		uhugeint_t magnitude = 0;
+		for (idx_t i = start; i < value.size; i++) {
+			magnitude = (magnitude << 8) | uhugeint_t(value.GetAbsoluteByte(NumericCast<int64_t>(i)));
+		}
+		if (magnitude <= uhugeint_t(NumericLimits<hugeint_t>::Maximum())) {
+			auto sum = hugeint_t(magnitude.upper, magnitude.lower);
+			return Hugeint::Cast<long double>(value.is_negative ? -sum : sum);
+		}
+	}
+	long double result = 0;
+	for (idx_t i = start; i < value.size; i++) {
+		result = result * 256 + value.GetAbsoluteByte(NumericCast<int64_t>(i));
+	}
+	return value.is_negative ? -result : result;
+}
+
+//! The digits a quotient carries beyond the 17 significant digits of a DOUBLE, so that the quotient and a sticky
+//! digit for a nonzero remainder round to the DOUBLE nearest to the exact average
+static constexpr idx_t AVERAGE_GUARD_DIGITS = 40;
+
+//! The average as the DOUBLE nearest to the exact quotient: the sum is scaled up by enough digits for the quotient to
+//! carry the guard digits beyond those of the count, a nonzero remainder (which lies strictly between two quotients)
+//! is kept as a trailing nonzero digit, and the decimal text is parsed once, so the result is rounded once
+static double BignumExactAverage(const BignumIntermediate &sum, uint64_t count, uint32_t scale) {
+	StringHeap heap;
+	BignumArithmeticState state;
+	const idx_t extra_digits = AVERAGE_GUARD_DIGITS + std::to_string(count).size();
+	const string power_blob = DecimalHelper<bignum_t>::PowerOfTen(extra_digits);
+	const bignum_t power_value {string_t(power_blob)};
+	const BignumIntermediate power(power_value);
+	const bignum_t scaled_value {BignumIntermediate::Multiply(heap, state, sum, power)};
+	const BignumIntermediate scaled_sum(scaled_value);
+	const string count_blob = DecimalHelper<bignum_t>::FromInteger(uhugeint_t(count));
+	const bignum_t count_value {string_t(count_blob)};
+	const BignumIntermediate divisor(count_value);
+	string_t quotient;
+	string_t remainder;
+	if (!BignumIntermediate::TryDivMod(heap, state, scaled_sum, divisor, quotient, remainder)) {
+		throw InternalException("avg: division of the wide decimal sum by the count failed");
+	}
+	auto text = Bignum::BignumToVarchar(bignum_t(quotient));
+	text += DecimalHelper<bignum_t>::IsZero(bignum_t(remainder)) ? "0" : "1";
+	text += "e-" + std::to_string(idx_t(scale) + extra_digits + 1);
+	double result;
+	if (!TryCast::Operation(string_t(text), result, false)) {
+		throw InternalException("avg: could not convert the wide decimal average '%s' to a DOUBLE", text);
+	}
+	return result;
+}
+
+struct BignumAverageOperation {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.value = BignumIntermediate();
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (state.count == 0) {
+			state.value.Initialize(unary_input.input.allocator);
+		}
+		state.count++;
+		BignumIntermediate rhs(input);
+		state.value.AddInPlace(unary_input.input.allocator, rhs);
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
+		if (source.count == 0) {
+			return;
+		}
+		if (target.count == 0) {
+			target.value.Initialize(input.allocator);
+		}
+		target.count += source.count;
+		target.value.AddInPlace(input.allocator, source.value);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		long double divident = GetAverageDivident<long double>(state.count, finalize_data.input.bind_data);
+		const auto sum = BignumSumToLongDouble(state.value);
+		if (std::isfinite(sum) && std::isfinite(divident)) {
+			target = sum / divident;
+			return;
+		}
+		// beyond the range of a long double (a sum or a scale factor near the DOUBLE range) the exact sum is divided
+		// by the count instead, so that the average stays finite and a subnormal average keeps its value
+		auto &bind_data = finalize_data.input.bind_data->Cast<AverageDecimalBindData>();
+		target = BignumExactAverage(state.value, state.count, bind_data.decimal_scale);
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+//! The states are exported as STRUCT(count UBIGINT, value BIGNUM), the value is NULL for an empty state
+static LogicalType BignumAvgStateType() {
+	return LogicalType::STRUCT({{"count", LogicalType::UBIGINT}, {"value", LogicalType::BIGNUM}});
+}
+
+AggregateStateLayout BignumAvgStateLayout(AggregateLayoutInput &input) {
+	return AggregateStateLayout(BignumAvgStateType(), AlignValue<idx_t>(sizeof(BignumAvgState)));
+}
+
+void BignumAvgExportState(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                          idx_t offset) {
+	auto states = state_vector.Values<BignumAvgState *>();
+	auto &entries = StructVector::GetEntries(result);
+	auto count_data = FlatVector::GetDataMutable<uint64_t>(entries[0]);
+	auto value_data = FlatVector::GetDataMutable<string_t>(entries[1]);
+	auto &value_validity = FlatVector::ValidityMutable(entries[1]);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[i].GetValue();
+		count_data[offset + i] = state.count;
+		if (state.count == 0) {
+			value_validity.SetInvalid(offset + i);
+			continue;
+		}
+		value_data[offset + i] = BignumAggregates::WriteBignum(state.value, entries[1]);
+	}
+}
+
+void BignumAvgImportState(AggregateImportInputData &input) {
+	auto &input_vec = input.input_vec;
+	auto count = input_vec.size();
+	UnifiedVectorFormat struct_format;
+	input_vec.ToUnifiedFormat(struct_format);
+	auto &entries = StructVector::GetEntries(input_vec);
+	UnifiedVectorFormat count_format;
+	UnifiedVectorFormat value_format;
+	entries[0].ToUnifiedFormat(count_format);
+	entries[1].ToUnifiedFormat(value_format);
+	auto count_data = count_format.GetData<uint64_t>(count_format);
+	auto value_data = value_format.GetData<string_t>(value_format);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<BignumAvgState *>(input.dest_buffer + i * input.layout.total_state_size);
+		BignumAverageOperation::Initialize(state);
+		const auto struct_idx = struct_format.sel->get_index(i);
+		const auto count_idx = count_format.sel->get_index(i);
+		const auto value_idx = value_format.sel->get_index(i);
+		if (!struct_format.validity.RowIsValid(struct_idx) || !count_format.validity.RowIsValid(count_idx) ||
+		    count_data[count_idx] == 0) {
+			// an empty state, e.g. to_aggregate_state(NULL, ...)
+			continue;
+		}
+		if (!value_format.validity.RowIsValid(value_idx)) {
+			throw InvalidInputException("Invalid avg state - the value cannot be NULL when the count is not 0");
+		}
+		state.count = count_data[count_idx];
+		state.value = BignumAggregates::ImportBignum(value_data[value_idx], input.allocator);
+	}
+}
+
+AggregateFunction GetBignumAverageAggregate() {
+	auto function = AggregateFunction::UnaryAggregate<BignumAvgState, bignum_t, double, BignumAverageOperation>(
+	    LogicalTypeId::DECIMAL, LogicalType::DOUBLE);
+	function.SetStateExportCallbacks(BignumAvgStateLayout, BignumAvgExportState, BignumAvgImportState);
+	return function;
+}
+
 static AggregateFunction NameXParameter(AggregateFunction fun) {
 	fun.GetSignature().GetParameter(0).SetName("x");
 	return fun;
+}
+
+unique_ptr<BaseStatistics> AveragePropagateStats(ClientContext &context, BoundAggregateExpression &expr,
+                                                 AggregateStatisticsInput &input) {
+	auto bounds = SumAccumulatorBounds::TryGet(input);
+	expr.FunctionMutable().SetErrorMode(bounds ? FunctionErrors::CANNOT_ERROR
+	                                           : FunctionErrors::CAN_THROW_RUNTIME_ERROR);
+	return nullptr;
 }
 
 AggregateFunction GetAverageAggregate(PhysicalType type) {
@@ -415,6 +727,7 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
 		        LogicalType::HUGEINT, LogicalType::DOUBLE);
 		function.SetFallible(); // adding HUGEINT values to the HUGEINT accumulator throws on overflow
+		function.SetStatisticsCallback(AveragePropagateStats);
 		return NameXParameter(std::move(function));
 	}
 	case PhysicalType::INTERVAL: {
@@ -424,21 +737,68 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 		function.SetFallible(); // interval addition throws on overflow of any field
 		return NameXParameter(std::move(function));
 	}
+	case PhysicalType::DOUBLE: {
+		return NameXParameter(
+		    AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
+		        LogicalType::DOUBLE, LogicalType::DOUBLE));
+	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
+}
+
+//! 10^scale as a double, through the hugeint table where it reaches so that both decimal tiers divide identically
+static double DecimalScaleFactor(uint32_t scale) {
+	if (scale < Hugeint::CACHED_POWERS_OF_TEN) {
+		return Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[scale]);
+	}
+	return std::pow(10.0, static_cast<double>(scale));
 }
 
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "avg");
-	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
+	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
+		// the bignum_t tier of decimals sums its BIGNUM blobs
+		function.ReplaceImplementation(GetBignumAverageAggregate());
+	} else {
+		function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
+	}
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DOUBLE);
-	return make_uniq<AverageDecimalBindData>(
-	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
+	const auto scale = DecimalType::GetScale(decimal_type);
+	return make_uniq<AverageDecimalBindData>(DecimalScaleFactor(scale), scale);
+}
+
+AggregateFunction GetTimestampAverage() {
+	auto timestamp_avg =
+	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimestampAverageOperation>(
+	        LogicalType::TIMESTAMP, LogicalType::TIMESTAMP);
+	timestamp_avg.GetSignature().GetParameter(0).SetName("x");
+	timestamp_avg.SetStructStateExport(TimestampAverageStateLayout);
+	return timestamp_avg;
+}
+
+//! Averages the argument as a TIMESTAMP, whose range holds every ordinary date of the lower precisions
+unique_ptr<FunctionData> BindWidenedTimestampAvg(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	function.ReplaceImplementation(GetTimestampAverage());
+	function.SetName("avg");
+	function.GetArguments()[0] = LogicalType::TIMESTAMP;
+	function.SetReturnType(LogicalType::TIMESTAMP);
+	return nullptr;
+}
+
+//! Without an overload of their own, TIMESTAMP_S, TIMESTAMP_MS and DATE would widen to TIMESTAMP_NS, the cheapest
+//! implicit cast, whose range is far smaller than theirs
+AggregateFunction GetWidenedTimestampAverage(const LogicalType &type) {
+	// stub function, the bind sets the TIMESTAMP implementation and the argument type it casts to
+	AggregateFunction fun({}, LogicalType::TIMESTAMP, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindWidenedTimestampAvg);
+	fun.GetSignature().AddParameter("x", type);
+	return fun;
 }
 
 } // namespace
@@ -456,17 +816,12 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
-	auto numeric_avg = AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	numeric_avg.GetSignature().GetParameter(0).SetName("x");
-	avg.AddFunction(numeric_avg);
+	avg.AddFunction(GetAverageAggregate(PhysicalType::DOUBLE));
 
-	auto timestamp_avg =
-	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimestampAverageOperation>(
-	        LogicalType::TIMESTAMP, LogicalType::TIMESTAMP);
-	timestamp_avg.GetSignature().GetParameter(0).SetName("x");
-	timestamp_avg.SetStructStateExport(TimestampAverageStateLayout);
-	avg.AddFunction(timestamp_avg);
+	avg.AddFunction(GetTimestampAverage());
+	for (auto &type : {LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_MS, LogicalType::DATE}) {
+		avg.AddFunction(GetWidenedTimestampAverage(type));
+	}
 
 	auto timestamp_tz_avg =
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimestampAverageOperation>(
@@ -487,6 +842,27 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	time_tz_avg.GetSignature().GetParameter(0).SetName("x");
 	time_tz_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_tz_avg);
+
+	auto timestamp_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                          TimestampNSAverageOperation<timestamp_ns_t>>(
+	    LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_NS);
+	timestamp_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	timestamp_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
+	avg.AddFunction(timestamp_ns_avg);
+
+	auto timestamp_tz_ns_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t,
+	                                                             TimestampNSAverageOperation<timestamp_tz_ns_t>>(
+	    LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_TZ_NS);
+	timestamp_tz_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	timestamp_tz_ns_avg.SetStructStateExport(TimestampAverageStateLayout);
+	avg.AddFunction(timestamp_tz_ns_avg);
+
+	auto time_ns_avg =
+	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	        LogicalType::TIME_NS, LogicalType::TIME_NS);
+	time_ns_avg.GetSignature().GetParameter(0).SetName("x");
+	time_ns_avg.SetStructStateExport(TimeNSAverageStateLayout);
+	avg.AddFunction(time_ns_avg);
 
 	return avg;
 }

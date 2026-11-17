@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -21,6 +22,18 @@ static bool IsVolatile(LogicalProjection &proj, const Expression &expr) {
 	return is_volatile;
 }
 
+// A compress expression only holds where it was placed, so a filter must not inline it into a position below
+static bool ReferencesCompressExpression(LogicalProjection &proj, const Expression &expr) {
+	bool references_compress_expression = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		D_ASSERT(colref.Depth() == 0);
+		if (CMUtils::CompressesInput(proj.GetExpression(colref.Binding()))) {
+			references_compress_expression = true;
+		}
+	});
+	return references_compress_expression;
+}
+
 static bool ReferencesComputedExpression(LogicalProjection &proj, const Expression &expr) {
 	bool references_computed_expression = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
@@ -34,10 +47,7 @@ static bool ReferencesComputedExpression(LogicalProjection &proj, const Expressi
 }
 
 static unique_ptr<Expression> CreateColumnReference(const Expression &expr, ColumnBinding binding) {
-	unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
-	if (!expr.GetAlias().empty()) {
-		result->SetAlias(expr.GetAlias());
-	}
+	unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>(expr.GetAlias(), expr.GetReturnType(), binding);
 	return result;
 }
 
@@ -67,31 +77,31 @@ static void CollectReferencedProjections(LogicalProjection &proj, const Expressi
 
 static void ReplaceFilterBindings(LogicalProjection &proj, unique_ptr<Expression> &expr, TableIndex lower_table_index,
                                   const vector<ProjectionIndex> &lower_projection_indexes) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+	expr = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(expr), [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.Depth() == 0);
 		    D_ASSERT(colref.Binding().table_index == proj.table_index);
 		    const auto projection_index = lower_projection_indexes[colref.Binding().column_index];
 		    D_ASSERT(projection_index.IsValid());
-		    colref.BindingMutable() = ColumnBinding(lower_table_index, projection_index);
+		    return colref.WithBinding(ColumnBinding(lower_table_index, projection_index));
 	    });
 }
 
 static void AddPassThroughColumns(unique_ptr<Expression> &expr, TableIndex lower_table_index,
                                   vector<unique_ptr<Expression>> &lower_expressions,
                                   column_binding_map_t<ProjectionIndex> &pass_through_indexes) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &colref_expr) {
+	expr = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(expr), [&](const BoundColumnRefExpression &colref) -> unique_ptr<Expression> {
 		    if (colref.Depth() != 0) {
-			    return;
+			    return nullptr;
 		    }
 		    auto entry = pass_through_indexes.find(colref.Binding());
 		    if (entry == pass_through_indexes.end()) {
 			    const auto projection_index = ProjectionIndex(lower_expressions.size());
 			    entry = pass_through_indexes.emplace(colref.Binding(), projection_index).first;
-			    lower_expressions.push_back(colref_expr->Copy());
+			    lower_expressions.push_back(colref.Copy());
 		    }
-		    colref.BindingMutable() = ColumnBinding(lower_table_index, entry->second);
+		    return colref.WithBinding(ColumnBinding(lower_table_index, entry->second));
 	    });
 }
 
@@ -158,7 +168,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	vector<unique_ptr<Expression>> remain_expressions;
 	vector<unique_ptr<Expression>> split_expressions;
 	auto stays_on_top = [&](const Filter &f) {
-		return IsVolatile(proj, *f.filter) || (f.filter->CanThrow() && !f.has_barrier);
+		return IsVolatile(proj, *f.filter) || ReferencesCompressExpression(proj, *f.filter) ||
+		       (f.filter->CanThrow() && !f.has_barrier);
 	};
 	auto splits_off = [&](const Filter &f) {
 		return projection_mode == ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS &&
@@ -176,9 +187,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		auto &f = *filter;
 		D_ASSERT(f.bindings.size() <= 1);
 		if (stays_on_top(f) || (f.has_barrier && hold_back_barriers)) {
-			// Volatile and throwing expressions cannot move across the projection. Expressions carrying a barrier
-			// are the exception: a projection does not remove any rows, so pushing them through it does not
-			// change which rows they are evaluated on - unless another filter stays behind, see above.
+			// Volatile and throwing expressions and filters over compressed columns cannot move across the
+			// projection. Expressions carrying a barrier are the exception: a projection does not remove any rows,
+			// so pushing them through it does not change which rows they are evaluated on - unless another filter
+			// stays behind, see above.
 			remain_expressions.push_back(std::move(f.filter));
 		} else if (splits_off(f)) {
 			// Compute filter-dependent projection expressions once, below the filter.

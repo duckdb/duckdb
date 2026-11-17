@@ -27,6 +27,8 @@ enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DE
 enum class AggregateDistinctDependent : uint8_t { DISTINCT_DEPENDENT = 1, NOT_DISTINCT_DEPENDENT = 2 };
 //! Whether or not the combiner needs to preserve the source
 enum class AggregateCombineType : uint8_t { PRESERVE_INPUT = 1, ALLOW_DESTRUCTIVE = 2 };
+//! Whether a combined target can keep referencing the source state's memory (e.g. by splicing it)
+enum class AggregateCombineSourceRetention : uint8_t { MAY_RETAIN = 1, NEVER_RETAINS = 2 };
 //! Whether or not we are exporting the state of the aggregate
 enum class AggregateStateExportMode : uint8_t { NONE = 1, STATE_EXPORT = 2 };
 
@@ -88,6 +90,11 @@ struct AggregateFinalizeInputData : public AggregateInputData {
 
 	//! The local state of the finalize (set if the function defines an "init_local_state_finalize" callback)
 	optional_ptr<FunctionLocalState> local_state;
+
+	//! Whether the local state is owned by this input (and so does not outlive the finalize call)
+	bool OwnsLocalState() const {
+		return owned_state != nullptr;
+	}
 
 private:
 	//! Initializes the local state when the caller did not pass in an external one

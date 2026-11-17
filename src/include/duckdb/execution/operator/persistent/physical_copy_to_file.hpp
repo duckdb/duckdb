@@ -31,6 +31,8 @@ struct CopyToFileInfo {
 	Value partition_keys;
 };
 
+class CopyOutputLifecycle;
+
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
@@ -47,7 +49,10 @@ public:
 public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
-	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
+	//! Creates or checks the directory a COPY writes several files into
+	static void PrepareOutputDirectory(ClientContext &context, const string &directory,
+	                                   CopyOverwriteMode overwrite_mode, CopyOutputLifecycle &output_lifecycle);
+	static void ReturnStatistics(Context &context, DataChunk &chunk, CopyToFileInfo &written_file_info);
 	//! Adds the RETURN_STATS row of a COPY that wrote no file, so that RETURN_COLUMN_TYPES can still return the types
 	static void ReturnNoFileStatistics(DataChunk &chunk);
 	//! Sets the last column of every row in the chunk to the RETURN_COLUMN_TYPES value

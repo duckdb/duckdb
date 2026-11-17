@@ -149,7 +149,8 @@ public:
 
 public:
 	//! The registry is guarded by CopyToFileGlobalState::lock.
-	PendingFileState ReserveFile(string output_path, optional_ptr<const vector<Value>> partition_values);
+	PendingFileState ReserveFile(Context &context, string output_path,
+	                             optional_ptr<const vector<Value>> partition_values);
 	void PublishCreatedPath(PendingFileState &pending_file_state, string output_path);
 
 	idx_t WrittenFileCount() const {
@@ -1927,7 +1928,7 @@ bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	return created;
 }
 
-PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
+PendingFileState CopyOutputFileRegistry::ReserveFile(Context &context, string output_path,
                                                      optional_ptr<const vector<Value>> partition_values) {
 	PendingFileState result;
 	result.output_path = std::move(output_path);
@@ -1944,7 +1945,7 @@ PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
 			const auto &partition_col_name = op.names[op.partition_columns[i]];
 			const auto &partition_value = (*partition_values)[i];
 			partition_keys.emplace_back(partition_col_name);
-			partition_values_as_varchar.push_back(partition_value.DefaultCastAs(LogicalType::VARCHAR));
+			partition_values_as_varchar.push_back(partition_value.CastAs(context, LogicalType::VARCHAR));
 		}
 		result.written_file_info->partition_keys =
 		    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(partition_keys),
@@ -4513,29 +4514,35 @@ void CopyToFileGlobalState::Initialize() {
 	initialized = true;
 }
 
-void CopyToFileGlobalState::PrepareOutputDirectory() {
+void PhysicalCopyToFile::PrepareOutputDirectory(ClientContext &context, const string &directory,
+                                                CopyOverwriteMode overwrite_mode,
+                                                CopyOutputLifecycle &output_lifecycle) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	if (!fs.IsRemoteFile(op.file_path)) {
-		if (fs.FileExists(op.file_path)) {
-			if (op.overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-				fs.RemoveFile(op.file_path);
+	if (!fs.IsRemoteFile(directory)) {
+		if (fs.FileExists(directory)) {
+			if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
+				fs.RemoveFile(directory);
 			} else {
 				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
 				                  "OVERWRITE option to overwrite the file",
-				                  op.file_path);
+				                  directory);
 			}
 		}
 	}
 
-	if (!fs.DirectoryExists(op.file_path)) {
-		if (fs.CreateDirectoryExtended(op.file_path, {CreateDirectoryMode::SINGLE})) {
-			output_lifecycle.RegisterCreatedDirectory(op.file_path);
+	if (!fs.DirectoryExists(directory)) {
+		if (fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
+			output_lifecycle.RegisterCreatedDirectory(directory);
 		} else {
-			CheckDirectory(fs, op.file_path, op.overwrite_mode);
+			CheckDirectory(fs, directory, overwrite_mode);
 		}
 	} else {
-		CheckDirectory(fs, op.file_path, op.overwrite_mode);
+		CheckDirectory(fs, directory, overwrite_mode);
 	}
+}
+
+void CopyToFileGlobalState::PrepareOutputDirectory() {
+	PhysicalCopyToFile::PrepareOutputDirectory(context, op.file_path, op.overwrite_mode, output_lifecycle);
 }
 
 void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
@@ -4572,7 +4579,7 @@ PendingFileState CopyToFileGlobalState::PrepareFileStateLocked(string output_pat
 	if (output_path.empty()) {
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
 	}
-	auto result = output_files.ReserveFile(std::move(output_path), partition_values);
+	auto result = output_files.ReserveFile(context.GetContext(), std::move(output_path), partition_values);
 	output_files.PublishCreatedPath(result, result.output_path);
 	return result;
 }
@@ -4623,7 +4630,8 @@ CopyToFileGlobalState::CreatePartitionFileStateOpenLocked(FileStateHandle &file_
 		return PendingFileStateOpen();
 	}
 	PendingFileStateOpen result;
-	result.pending_file_state = output_files.ReserveFile(std::move(output_path), partition_values);
+	result.pending_file_state =
+	    output_files.ReserveFile(context.GetContext(), std::move(output_path), partition_values);
 	result.open_job = make_shared_ptr<FileStateOpenJob>();
 	file_state.open_job = result.open_job;
 	return result;
@@ -4882,7 +4890,7 @@ void PhysicalCopyToFile::ReturnColumnTypes(DataChunk &chunk, const vector<Identi
 	}
 }
 
-void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
+void PhysicalCopyToFile::ReturnStatistics(Context &context, DataChunk &chunk, CopyToFileInfo &info) {
 	auto &file_stats = *info.file_stats;
 
 	// filename VARCHAR
@@ -4907,7 +4915,7 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 	vector<Value> extra_values;
 	for (auto &entry : file_stats.extra_info) {
 		extra_keys.emplace_back(entry.first);
-		extra_values.push_back(entry.second.DefaultCastAs(LogicalType::VARIANT()));
+		extra_values.push_back(entry.second.CastAs(context, LogicalType::VARIANT()));
 	}
 	chunk.data[6].Append(
 	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), std::move(extra_keys), std::move(extra_values)));
@@ -5305,7 +5313,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			if (use_tmp_file) {
 				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
 			}
-			ReturnStatistics(chunk, file_entry);
+			ReturnStatistics(context.client.GetContext(), chunk, file_entry);
 		}
 		if (return_column_types) {
 			if (gstate.output_files.WrittenFileCount() == 0) {

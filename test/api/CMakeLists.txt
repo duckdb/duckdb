@@ -8,6 +8,7 @@ add_subdirectory(cpp)
 set(TEST_API_OBJECTS
     test_api.cpp
     test_multi_file_column_mapper.cpp
+    test_multi_file_lazy_initialization.cpp
     test_process_util.cpp
     test_random_after_clone.cpp
     test_remove_directory_extended.cpp
@@ -15,11 +16,14 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_context.cpp
     test_connect_prepare.cpp
+    test_nested_schema_capability.cpp
     test_remote_pushdown_macro_arguments.cpp
     test_remote_pushdown_merge.cpp
     test_os_util.cpp
@@ -65,6 +69,7 @@ set(TEST_API_OBJECTS
     test_extension_metrics.cpp
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
+    test_native_scan.cpp
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
@@ -72,7 +77,9 @@ set(TEST_API_OBJECTS
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
     test_query_node_copy.cpp
+    test_statement_tostring.cpp
     test_grammar_extension.cpp
+    test_parser_query_completeness.cpp
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
@@ -80,6 +87,7 @@ set(TEST_API_OBJECTS
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp
+    test_persistent_secret_write_failure.cpp
     test_threads.cpp
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
@@ -90,7 +98,9 @@ set(TEST_API_OBJECTS
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
     test_rollback_delete_checkpoint_flag.cpp
+    test_constant_vector_reference.cpp
     test_group_commit_bound.cpp
+    test_deferred_checkpoint_publication.cpp
     test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)

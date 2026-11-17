@@ -41,8 +41,11 @@ class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
+class TableStatistics;
 class ConflictManager;
 class TableScanState;
+struct TableScanAssignment;
+struct CollectionCheckpointResult;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
@@ -102,6 +105,9 @@ public:
 	                            const vector<ColumnIndex> &column_indexes);
 	optional_idx NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
 	                              bool initialize_columns = true);
+	//! Claims a range without column initialization and retains it for another worker
+	bool NextParallelScanAssignment(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                                TableScanAssignment &assignment);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -233,6 +239,8 @@ public:
 
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
+	//! Install checkpointed row groups.
+	void PublishCheckpoint(CollectionCheckpointResult result, TableStatistics &checkpoint_stats);
 	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
 	void CommitDropTable(CommitDropState &drop_state);
 	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
@@ -242,6 +250,10 @@ public:
 	idx_t GetTotalRows() const;
 	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
+	//! The number of row groups, including the ones that are not loaded yet, without loading them
+	idx_t GetRowGroupCountWithoutLoading() const;
+	//! The same, including the row groups of the transaction-local storage
+	idx_t GetRowGroupCountWithoutLoading(ClientContext &context);
 	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo>
@@ -296,8 +308,12 @@ public:
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
 
 private:
+	optional_idx NextParallelScanInternal(ClientContext &context, ParallelTableScanState &state,
+	                                      TableScanState &scan_state, bool initialize_columns,
+	                                      optional_ptr<TableScanAssignment> assignment);
 	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(ClientContext &context, LocalStorage &local_storage, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,

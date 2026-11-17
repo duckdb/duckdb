@@ -82,6 +82,7 @@ struct ParquetStatisticsUtils {
 	GetBloomFilterHashStrategy(const ParquetColumnSchema &schema,
 	                           ParquetIntervalBloomFilterVersion interval_bloom_filter_version);
 
+	static bool HasBloomFilterConstants(const TableFilter &filter, ParquetBloomFilterHashStrategy hash_strategy);
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator,
 	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy);
@@ -124,7 +125,7 @@ public:
 	static unique_ptr<ParquetBloomFilter> Create(Allocator &allocator, idx_t num_entries, double target);
 	static optional_idx EstimateSize(idx_t num_entries, double target);
 	static unique_ptr<ParquetBloomFilter> TryCreate(Allocator &allocator, idx_t num_entries, double target,
-	                                                shared_ptr<ParquetBloomFilterMemory> memory);
+	                                                const shared_ptr<ParquetBloomFilterMemory> &memory);
 	void FilterInsert(uint64_t x);
 	bool FilterCheck(uint64_t x);
 	void Shrink(Allocator &allocator, idx_t new_block_count);

@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -30,6 +31,12 @@ StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, unique_ptr<Lo
                                            StatisticsPropagationMode mode_p)
     : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(root_p) {
 	root->ResolveOperatorTypes();
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpressionStatistics(
+    unique_ptr<Expression> &expr, column_binding_map_t<unique_ptr<BaseStatistics>> column_statistics) {
+	statistics_map = std::move(column_statistics);
+	return PropagateExpression(expr);
 }
 
 void StatisticsPropagator::ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node) {
@@ -55,12 +62,14 @@ void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &
 	}
 }
 
-void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+void StatisticsPropagator::RelaxJoinConditionVerificationStats(Expression &expr) {
 	auto &stats = expr.GetVerificationStats();
 	if (stats) {
 		stats->ResetAdditiveStatistics();
+		// the candidate pairs still hold the NULLs that the comparison rejects
+		stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RelaxJoinConditionVerificationStats(child); });
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
@@ -120,9 +129,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST:
-		result = PropagateChildren(node, node_ptr);
-		// unnest emits its input row once per unnested entry
-		ResetAdditiveStatistics(node.children[0]->GetColumnBindings());
+		result = PropagateStatistics(node.Cast<LogicalUnnest>(), node_ptr);
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);

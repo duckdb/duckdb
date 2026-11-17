@@ -161,8 +161,8 @@ class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context.GetContext()).Register(context.GetContext())),
+	      sorted_tuples(0), sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0),
 	      partition_size(0) {
 	}
 
@@ -193,7 +193,7 @@ public:
 		}
 
 		// Send the request
-		temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, request);
+		temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.GetContext(), request);
 
 		// If we got less than we required, we have to go external
 		if (temporary_memory_state->GetReservation() < required) {
@@ -261,6 +261,11 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 }
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
+idx_t Sort::GetLocalSizeInBytes(LocalSinkState &lstate_p) const {
+	auto &lstate = lstate_p.Cast<SortLocalSinkState>();
+	return lstate.sorted_run ? lstate.sorted_run->SizeInBytesForSorting() : 0;
+}
+
 static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) {
 	// Check if we exceed the limit (sorting the run needs a merge buffer on top of the run itself)
 	const auto sorted_run_size = lstate.sorted_run->SizeInBytesForSorting();
@@ -382,14 +387,14 @@ SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInpu
 		gstate.total_count += sorted_run->Count();
 		maximum_run_count = MaxValue(maximum_run_count, sorted_run->Count());
 	}
-	if (context.config.verify_parallelism) {
+	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		gstate.partition_size = STANDARD_VECTOR_SIZE;
 	} else {
 		gstate.partition_size = MinValue<idx_t>(gstate.total_count, DEFAULT_ROW_GROUP_SIZE);
 	}
 
 	// Amortize external boundary searches while keeping enough parallel work and estimated memory headroom.
-	if (gstate.external && !is_index_sort && !context.config.verify_parallelism) {
+	if (gstate.external && !is_index_sort && !ClientConfig::GetConfig(context).verify_parallelism) {
 		const auto partition_size = gstate.partition_size * 4;
 		if (gstate.total_count / gstate.num_threads >= partition_size &&
 		    CanUseLargerPartitions(gstate, partition_size)) {

@@ -26,10 +26,12 @@
 
 namespace duckdb {
 
+class Context;
 class String;
 class CastFunctionSet;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
+struct bignum_t;
 
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
@@ -170,6 +172,8 @@ public:
 	DUCKDB_API static Value DECIMAL(int32_t value, uint32_t width, uint32_t scale);
 	DUCKDB_API static Value DECIMAL(int64_t value, uint32_t width, uint32_t scale);
 	DUCKDB_API static Value DECIMAL(hugeint_t value, uint32_t width, uint32_t scale);
+	//! Create a decimal Value from the BIGNUM blob of its unscaled value, the storage of widths above 38
+	DUCKDB_API static Value DECIMAL(bignum_t value, uint32_t width, uint32_t scale);
 	//! Create a float Value from a specified value
 	DUCKDB_API static Value FLOAT(float value);
 	//! Create a double Value from a specified value
@@ -220,6 +224,8 @@ public:
 
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
+	DUCKDB_API static Value GEOGRAPHY(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value GEOGRAPHY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
 
 	DUCKDB_API static Value TYPE(const LogicalType &type);
 	DUCKDB_API static Value TYPE(const string_t &serialized_type);
@@ -264,6 +270,7 @@ public:
 	DUCKDB_API Value CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
 	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
+	DUCKDB_API Value CastAs(Context &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast this value to another type - returns the result, or nullopt if the cast is not possible.
 	//! Never throws on a failed cast; pass "error_message" to obtain the reason for the failure
@@ -271,6 +278,8 @@ public:
 	                                     const LogicalType &target_type, string *error_message = nullptr,
 	                                     bool strict = false) const;
 	DUCKDB_API optional<Value> TryCastAs(ClientContext &context, const LogicalType &target_type,
+	                                     string *error_message = nullptr, bool strict = false) const;
+	DUCKDB_API optional<Value> TryCastAs(Context &context, const LogicalType &target_type,
 	                                     string *error_message = nullptr, bool strict = false) const;
 	DUCKDB_API optional<Value> DefaultTryCastAs(const LogicalType &target_type, string *error_message = nullptr,
 	                                            bool strict = false) const;

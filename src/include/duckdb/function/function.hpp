@@ -41,6 +41,9 @@ class FunctionProperties;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
+class Binder;
+class DecimalWidthLimit;
+class FunctionBinder;
 
 struct PragmaInfo;
 
@@ -154,6 +157,15 @@ public:
 		}
 	}
 
+	//! A positional-only parameter declared without a name. It is named "col<index>" internally, as every parameter
+	//! needs one, but prints as its bare type: the name was never declared, so a caller cannot use it
+	static FunctionParameter Unnamed(LogicalType type, idx_t index) {
+		FunctionParameter result(Identifier(StringUtil::Format("col%d", index)), std::move(type), {},
+		                         FunctionParameterKind::POSITIONAL_ONLY);
+		result.named = false;
+		return result;
+	}
+
 	string ToString() const;
 
 	bool operator==(const FunctionParameter &other) const;
@@ -164,6 +176,11 @@ public:
 	}
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
+		named = true;
+	}
+	//! Whether the parameter was declared with a name, see Unnamed
+	auto IsNamed() const -> bool {
+		return named;
 	}
 
 	auto GetType() const -> const LogicalType & {
@@ -204,6 +221,7 @@ private:
 	LogicalType type;
 	shared_ptr<Value> default_value;
 	FunctionParameterKind kind;
+	bool named = true;
 };
 
 //! An option a function receives through its "**kwargs" parameter
@@ -343,11 +361,10 @@ public:
 		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value), kind);
 		return *this;
 	}
-	//! Adds a positional-only parameter named "col<N>", after its position - a caller cannot pass it by a name that
-	//! was never declared
+	//! Adds a positional-only parameter declared without a name, see FunctionParameter::Unnamed
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
-		auto name = Identifier(StringUtil::Format("col%d", parameters.size()));
-		return AddPositionalOnly(std::move(name), std::move(type));
+		parameters.push_back(FunctionParameter::Unnamed(std::move(type), parameters.size()));
+		return *this;
 	}
 	auto AddKeywordOnly(Identifier name, LogicalType type, optional<Value> default_value = {}) -> FunctionSignature & {
 		return AddParameter(std::move(name), std::move(type), std::move(default_value),
@@ -698,13 +715,27 @@ public:
 class BindFunctionInput {
 public:
 	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
-	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p)
-	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p) {
+	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p,
+	                  optional_ptr<Binder> binder_p = nullptr,
+	                  optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr)
+	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p), binder(binder_p),
+	      decimal_width_limit(decimal_width_limit_p) {
 	}
 
 	ClientContext &GetClientContext() const {
 		return context;
 	}
+	//! The binder of the query the function is bound in, if any: a rebind outside of a query has none
+	bool HasBinder() const {
+		return binder != nullptr;
+	}
+	DUCKDB_API Binder &GetBinder();
+	//! A binder for the functions the bind nests: it binds as this function is bound, within its query or within its
+	//! fixed decimal width
+	DUCKDB_API FunctionBinder NestedFunctionBinder();
+	//! The widest DECIMAL the bind constructs: the limit of the binder, the fixed limit of a bind outside of a query
+	//! (a deserialized function is rebound within the width it was bound in), or the max_decimal_width setting
+	DUCKDB_API DecimalWidthLimit GetDecimalWidthLimit() const;
 	vector<unique_ptr<Expression>> &GetArguments() const {
 		return arguments;
 	}
@@ -745,6 +776,9 @@ private:
 	const BoundSimpleFunction &function;
 	const FunctionSignature &signature;
 	vector<unique_ptr<Expression>> &arguments;
+	optional_ptr<Binder> binder;
+	//! The fixed limit of a bind outside of a query, if any
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
 };
 
 } // namespace duckdb

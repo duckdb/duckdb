@@ -18,6 +18,7 @@
 
 namespace duckdb {
 class ClientContext;
+class Context;
 class ErrorData;
 class MetaTransaction;
 class PreparedStatementData;
@@ -82,9 +83,9 @@ public:
 	}
 	virtual void WriteProfilingInformation(std::ostream &ss) {
 	}
-	virtual void OnTaskStart(ClientContext &context) {
+	virtual void OnTaskStart(Context &context) {
 	}
-	virtual void OnTaskStop(ClientContext &context) {
+	virtual void OnTaskStop(Context &context) {
 	}
 
 public:
