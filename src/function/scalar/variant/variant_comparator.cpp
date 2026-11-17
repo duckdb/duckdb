@@ -193,6 +193,7 @@ bool EncodeVariantNode(const VariantNode &it, SINK &sink, vector<VariantEncodeFr
 		break;
 	case VariantComparisonType::BLOB:
 	case VariantComparisonType::GEOMETRY:
+	case VariantComparisonType::GEOGRAPHY:
 		VariantEncodeString(sink, it.GetString(), false);
 		break;
 	case VariantComparisonType::BITSTRING: {
@@ -349,6 +350,12 @@ void GetTypedBounds(const BaseStatistics &typed_stats, Value &min_bound, Value &
 		}
 		if (NumericStats::HasMax(typed_stats)) {
 			max_bound = NumericStats::Max(typed_stats);
+		}
+		break;
+	case StatisticsType::BIGNUM_STATS:
+		if (BignumStats::HasMinMax(typed_stats)) {
+			min_bound = BignumStats::Min(typed_stats);
+			max_bound = BignumStats::Max(typed_stats);
 		}
 		break;
 	case StatisticsType::STRING_STATS:

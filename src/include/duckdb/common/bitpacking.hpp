@@ -78,6 +78,18 @@ public:
 		return UnPackGroup<T>(dst, src, width, skip_sign_extension);
 	}
 
+	// Unpack unsigned 32/64-bit residuals and add the frame.
+	template <class T, class T_U = typename MakeUnsigned<T>::type>
+	inline static void UnPackBufferWithFrame(data_ptr_t dst, const_data_ptr_t src, idx_t count,
+	                                         bitpacking_width_t width, T frame) {
+		static_assert(sizeof(T) == sizeof(uint32_t) || sizeof(T) == sizeof(uint64_t),
+		              "Fused frame unpacking requires 32/64-bit values");
+		D_ASSERT(count % BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+		duckdb_fastpforlib::fastunpack_with_frame(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<T_U *>(dst),
+		                                          width, static_cast<T_U>(frame),
+		                                          count / BITPACKING_ALGORITHM_GROUP_SIZE);
+	}
+
 	// Calculates the minimum required number of bits per value that can store all values
 	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T value) {
