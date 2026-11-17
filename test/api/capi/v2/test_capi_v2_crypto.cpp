@@ -35,28 +35,29 @@ const Bytes KEY_256(32, 0x24);
 DUCKDB_V2_ERROR RunAes(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO_MODE mode,
                        const Bytes &key, const Bytes &iv, const Bytes &aad, const Bytes &input, Bytes &output,
                        Bytes &tag) {
-	duckdb_v2_crypto_aes_handle aes = nullptr;
-	auto rc = duckdb_v2_crypto_aes_create(instance, cipher, mode, key.data(), key.size(), &aes, nullptr);
+	duckdb_v2_crypto_cipher_handle stream = nullptr;
+	auto rc = duckdb_v2_crypto_cipher_create(instance, cipher, mode, key.data(), key.size(), &stream, nullptr);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
-	rc = duckdb_v2_crypto_aes_init(aes, iv.data(), iv.size(), aad.empty() ? nullptr : aad.data(), aad.size(), nullptr);
+	rc = duckdb_v2_crypto_cipher_init(stream, iv.data(), iv.size(), aad.empty() ? nullptr : aad.data(), aad.size(),
+	                                  nullptr);
 	if (rc == DUCKDB_V2_ERROR_NONE) {
 		output.assign(input.size(), 0);
 		idx_t written = 0;
-		rc = duckdb_v2_crypto_aes_update(aes, input.data(), input.size(), output.data(), output.size(), &written,
-		                                 nullptr);
+		rc = duckdb_v2_crypto_cipher_update(stream, input.data(), input.size(), output.data(), output.size(), &written,
+		                                    nullptr);
 		output.resize(written);
 	}
 	if (rc == DUCKDB_V2_ERROR_NONE) {
 		if (cipher == DUCKDB_V2_CRYPTO_CIPHER_AES_GCM) {
 			tag.resize(16, 0);
-			rc = duckdb_v2_crypto_aes_finalize(aes, tag.data(), tag.size(), nullptr);
+			rc = duckdb_v2_crypto_cipher_finalize(stream, tag.data(), tag.size(), nullptr);
 		} else {
-			rc = duckdb_v2_crypto_aes_finalize(aes, nullptr, 0, nullptr);
+			rc = duckdb_v2_crypto_cipher_finalize(stream, nullptr, 0, nullptr);
 		}
 	}
-	duckdb_v2_crypto_aes_destroy(&aes);
+	duckdb_v2_crypto_cipher_destroy(&stream);
 	return rc;
 }
 
@@ -175,62 +176,67 @@ TEST_CASE("V2 crypto: AES-CTR round trip, in-place and in chunks", "[capi_v2][cr
 	REQUIRE(ciphertext != plaintext);
 
 	// Decrypt in two chunks, in place.
-	duckdb_v2_crypto_aes_handle aes = nullptr;
-	REQUIRE(duckdb_v2_crypto_aes_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_CTR, DUCKDB_V2_CRYPTO_MODE_DECRYPT,
-	                                    KEY_128.data(), KEY_128.size(), &aes, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_init(aes, iv.data(), iv.size(), nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_cipher_handle stream = nullptr;
+	REQUIRE(duckdb_v2_crypto_cipher_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_CTR, DUCKDB_V2_CRYPTO_MODE_DECRYPT,
+	                                       KEY_128.data(), KEY_128.size(), &stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_init(stream, iv.data(), iv.size(), nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto buffer = ciphertext;
 	idx_t first = 0, second = 0;
-	REQUIRE(duckdb_v2_crypto_aes_update(aes, buffer.data(), 10, buffer.data(), 10, &first, nullptr) ==
+	REQUIRE(duckdb_v2_crypto_cipher_update(stream, buffer.data(), 10, buffer.data(), 10, &first, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_update(aes, buffer.data() + 10, buffer.size() - 10, buffer.data() + 10,
-	                                    buffer.size() - 10, &second, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_update(stream, buffer.data() + 10, buffer.size() - 10, buffer.data() + 10,
+	                                       buffer.size() - 10, &second, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(first + second == buffer.size());
-	REQUIRE(duckdb_v2_crypto_aes_finalize(aes, nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(stream, nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(buffer == plaintext);
-	duckdb_v2_crypto_aes_destroy(&aes);
-	REQUIRE(aes == nullptr);
-	REQUIRE(duckdb_v2_crypto_aes_destroy(&aes) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_cipher_destroy(&stream);
+	REQUIRE(stream == nullptr);
+	REQUIRE(duckdb_v2_crypto_cipher_destroy(&stream) == DUCKDB_V2_ERROR_NONE);
 }
 
 TEST_CASE("V2 crypto: invalid AES usage is reported", "[capi_v2][crypto]") {
 	EnvFixture fx;
 	AllowBuiltInWrites(fx);
-	duckdb_v2_crypto_aes_handle aes = nullptr;
+	duckdb_v2_crypto_cipher_handle stream = nullptr;
 	Bytes bad_key(15, 1);
-	REQUIRE(duckdb_v2_crypto_aes_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT,
-	                                    bad_key.data(), bad_key.size(), &aes, nullptr) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(aes == nullptr);
+	REQUIRE(duckdb_v2_crypto_cipher_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT,
+	                                       bad_key.data(), bad_key.size(), &stream, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(stream == nullptr);
 
-	REQUIRE(duckdb_v2_crypto_aes_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT,
-	                                    KEY_128.data(), KEY_128.size(), &aes, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_create(fx.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT,
+	                                       KEY_128.data(), KEY_128.size(), &stream, nullptr) == DUCKDB_V2_ERROR_NONE);
 	Bytes buffer(16, 0);
 	idx_t written = 0;
 	// Updating before initializing.
-	REQUIRE(duckdb_v2_crypto_aes_update(aes, buffer.data(), 16, buffer.data(), 16, &written, nullptr) !=
+	REQUIRE(duckdb_v2_crypto_cipher_update(stream, buffer.data(), 16, buffer.data(), 16, &written, nullptr) !=
 	        DUCKDB_V2_ERROR_NONE);
 	// A CTR-sized IV for GCM.
 	Bytes iv16(16, 0);
-	REQUIRE(duckdb_v2_crypto_aes_init(aes, iv16.data(), iv16.size(), nullptr, 0, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_init(stream, iv16.data(), iv16.size(), nullptr, 0, nullptr) !=
+	        DUCKDB_V2_ERROR_NONE);
 	Bytes iv12(12, 0);
-	REQUIRE(duckdb_v2_crypto_aes_init(aes, iv12.data(), iv12.size(), nullptr, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_init(aes, iv12.data(), iv12.size(), nullptr, 0, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_init(stream, iv12.data(), iv12.size(), nullptr, 0, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_init(stream, iv12.data(), iv12.size(), nullptr, 0, nullptr) !=
+	        DUCKDB_V2_ERROR_NONE);
 	// An output buffer smaller than the input.
-	REQUIRE(duckdb_v2_crypto_aes_update(aes, buffer.data(), 16, buffer.data(), 8, &written, nullptr) !=
+	REQUIRE(duckdb_v2_crypto_cipher_update(stream, buffer.data(), 16, buffer.data(), 8, &written, nullptr) !=
 	        DUCKDB_V2_ERROR_NONE);
 	// A tag of the wrong size.
-	REQUIRE(duckdb_v2_crypto_aes_finalize(aes, buffer.data(), 8, nullptr) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_finalize(aes, buffer.data(), 16, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_finalize(aes, buffer.data(), 16, nullptr) != DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_crypto_aes_destroy(&aes);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(stream, buffer.data(), 8, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(stream, buffer.data(), 16, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_finalize(stream, buffer.data(), 16, nullptr) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_cipher_destroy(&stream);
 
 	// Without a secure provider, encrypting fails but decrypting works.
 	EnvFixture other;
-	REQUIRE(duckdb_v2_crypto_aes_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_ENCRYPT,
-	                                    KEY_128.data(), KEY_128.size(), &aes, nullptr) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_crypto_aes_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM, DUCKDB_V2_CRYPTO_MODE_DECRYPT,
-	                                    KEY_128.data(), KEY_128.size(), &aes, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_crypto_aes_destroy(&aes);
+	REQUIRE(duckdb_v2_crypto_cipher_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM,
+	                                       DUCKDB_V2_CRYPTO_MODE_ENCRYPT, KEY_128.data(), KEY_128.size(), &stream,
+	                                       nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_crypto_cipher_create(other.instance, DUCKDB_V2_CRYPTO_CIPHER_AES_GCM,
+	                                       DUCKDB_V2_CRYPTO_MODE_DECRYPT, KEY_128.data(), KEY_128.size(), &stream,
+	                                       nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_crypto_cipher_destroy(&stream);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -338,8 +344,8 @@ duckdb_v2_crypto_provider_handle MakeProvider(duckdb_v2_factory_handle factory, 
 	duckdb_v2_opaque data = {stats, DestroyStats, nullptr};
 	REQUIRE(duckdb_v2_crypto_provider_set_user_data(provider, &data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	if (with_aes) {
-		REQUIRE(duckdb_v2_crypto_provider_set_aes_callbacks(provider, XorCreate, XorInit, XorUpdate, XorFinalize,
-		                                                    XorDestroy, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_crypto_provider_set_cipher_callbacks(provider, XorCreate, XorInit, XorUpdate, XorFinalize,
+		                                                       XorDestroy, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	DUCKDB_V2_CRYPTO_HASH_FUNCTION hashes[] = {DUCKDB_V2_CRYPTO_HASH_SHA256};
 	REQUIRE(duckdb_v2_crypto_provider_set_hash_callback(provider, FixedHash, hashes, 1, nullptr) ==

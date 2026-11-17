@@ -19,7 +19,7 @@ module: crypto
 
 enums:
   CRYPTO_CIPHER:
-    description: The AES mode of operation.
+    description: A cipher, meaning an algorithm together with its mode of operation. New ciphers are new values.
     # The values match duckdb::EncryptionTypes::CipherType
     values:
       CRYPTO_CIPHER_AES_GCM:
@@ -30,7 +30,7 @@ enums:
         description: AES-CTR. 16-byte IV (initial counter block), no authentication tag.
 
   CRYPTO_MODE:
-    description: The direction of an AES stream.
+    description: The direction of a cipher stream.
     values:
       CRYPTO_MODE_ENCRYPT:
         value: 0
@@ -54,11 +54,11 @@ enums:
         description: SHA-256, 32-byte digest.
 
 handles:
-  crypto_aes:
+  crypto_cipher:
     description: |
-      An owned opaque handle to a streaming AES cipher. Created with `[[crypto_aes_create]]`, initialized with
-      `[[crypto_aes_init]]`, fed with `[[crypto_aes_update]]`, completed with `[[crypto_aes_finalize]]`, and destroyed
-      with `[[crypto_aes_destroy]]`. Not safe for concurrent use.
+      An owned opaque handle to a streaming cipher (see `CRYPTO_CIPHER`). Created with `[[crypto_cipher_create]]`, initialized with
+      `[[crypto_cipher_init]]`, fed with `[[crypto_cipher_update]]`, completed with `[[crypto_cipher_finalize]]`, and destroyed
+      with `[[crypto_cipher_destroy]]`. Not safe for concurrent use.
 
   crypto_provider:
     description: |
@@ -67,7 +67,7 @@ handles:
       `[[extension_register_crypto_provider]]`, and destroyed with `[[crypto_provider_destroy]]`.
 
 callbacks:
-  crypto_provider_aes_create_callback:
+  crypto_provider_cipher_create_callback:
     parameters:
       user_data:
         type: void
@@ -75,7 +75,7 @@ callbacks:
         description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
       cipher:
         type: CRYPTO_CIPHER
-        description: "The AES mode."
+        description: "The cipher."
       mode:
         type: CRYPTO_MODE
         description: "Whether the stream encrypts or decrypts."
@@ -99,7 +99,7 @@ callbacks:
         description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
     return_type: void
 
-  crypto_provider_aes_init_callback:
+  crypto_provider_cipher_init_callback:
     parameters:
       user_data:
         type: void
@@ -133,7 +133,7 @@ callbacks:
         description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
     return_type: void
 
-  crypto_provider_aes_update_callback:
+  crypto_provider_cipher_update_callback:
     parameters:
       user_data:
         type: void
@@ -171,7 +171,7 @@ callbacks:
         description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
     return_type: void
 
-  crypto_provider_aes_finalize_callback:
+  crypto_provider_cipher_finalize_callback:
     parameters:
       user_data:
         type: void
@@ -195,7 +195,7 @@ callbacks:
         description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
     return_type: void
 
-  crypto_provider_aes_destroy_callback:
+  crypto_provider_cipher_destroy_callback:
     parameters:
       user_data:
         type: void
@@ -479,22 +479,22 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_aes_create:
+  crypto_cipher_create:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Creates a streaming AES cipher.
+      Creates a streaming cipher.
 
-      The key is copied and wiped when the cipher is destroyed. Encrypting requires a provider DuckDB considers secure for writing; decrypting does not. The cipher must be initialized with `[[crypto_aes_init]]` before use.
+      The key is copied and wiped when the cipher is destroyed. Encrypting requires a provider DuckDB considers secure for writing; decrypting does not. The cipher must be initialized with `[[crypto_cipher_init]]` before use.
     role: constructor
-    belongs_to: crypto_aes
+    belongs_to: crypto_cipher
     parameters:
       instance:
         type: instance
         description: "The instance whose provider to use."
       cipher:
         type: CRYPTO_CIPHER
-        description: "The AES mode."
+        description: "The cipher."
       mode:
         type: CRYPTO_MODE
         description: "Whether to encrypt or decrypt."
@@ -507,8 +507,8 @@ functions:
       key_length:
         type: idx
         description: "The key length in bytes: 16, 24 or 32."
-      aes:
-        type: crypto_aes
+      stream:
+        type: crypto_cipher
         indirection: 1
         kind: OUT
         description: "On success, receives the new cipher. Owned by the caller."
@@ -518,16 +518,16 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_aes_init:
+  crypto_cipher_init:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
       Starts the stream with an IV and, for GCM, additional authenticated data.
 
-      The IV must be 12 bytes for GCM and 16 bytes for CTR. AAD is only valid for GCM. May be called once per cipher.
+      The IV length and AAD support depend on the cipher: AES-GCM takes a 12-byte IV and optional AAD, AES-CTR a 16-byte IV and no AAD. May be called once per cipher.
     parameters:
-      aes:
-        type: crypto_aes
+      stream:
+        type: crypto_cipher
         description: "The cipher."
       iv:
         type: u8
@@ -553,16 +553,16 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_aes_update:
+  crypto_cipher_update:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
       Processes the next chunk of the stream.
 
-      `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the plaintext must not be trusted before `[[crypto_aes_finalize]]` succeeds.
+      `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the plaintext must not be trusted before `[[crypto_cipher_finalize]]` succeeds.
     parameters:
-      aes:
-        type: crypto_aes
+      stream:
+        type: crypto_cipher
         description: "The cipher."
       in:
         type: u8
@@ -592,7 +592,7 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_aes_finalize:
+  crypto_cipher_finalize:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
@@ -600,8 +600,8 @@ functions:
 
       GCM encryption: writes the 16-byte authentication tag into `tag`. GCM decryption: verifies the 16-byte `tag`, failing with an input error when it does not match. CTR: `tag` must be null and `tag_length` 0.
     parameters:
-      aes:
-        type: crypto_aes
+      stream:
+        type: crypto_cipher
         description: "The cipher."
       tag:
         type: u8
@@ -617,14 +617,14 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_aes_destroy:
+  crypto_cipher_destroy:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
       Destroys the cipher, wiping its key. Null-safe; the handle is set to null on return.
     parameters:
-      aes:
-        type: crypto_aes
+      stream:
+        type: crypto_cipher
         indirection: 1
         description: "The cipher to destroy."
     return_type: ERROR
@@ -672,31 +672,31 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  crypto_provider_set_aes_callbacks:
+  crypto_provider_set_cipher_callbacks:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-11-17" ]
     description: |
-      Sets the streaming AES callbacks. All but `destroy` are required.
+      Sets the streaming cipher callbacks. All but `destroy` are required.
 
-      The provider's AES implementation must support GCM and CTR with 16-, 24- and 32-byte keys.
+      The provider's implementation must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
     parameters:
       provider:
         type: crypto_provider
         description: "The provider."
       create:
-        type: crypto_provider_aes_create_callback
+        type: crypto_provider_cipher_create_callback
         description: "Creates a stream."
       init:
-        type: crypto_provider_aes_init_callback
+        type: crypto_provider_cipher_init_callback
         description: "Starts a stream."
       update:
-        type: crypto_provider_aes_update_callback
+        type: crypto_provider_cipher_update_callback
         description: "Processes a chunk."
       finalize:
-        type: crypto_provider_aes_finalize_callback
+        type: crypto_provider_cipher_finalize_callback
         description: "Completes a stream."
       destroy:
-        type: crypto_provider_aes_destroy_callback
+        type: crypto_provider_cipher_destroy_callback
         description: "Optional. Releases a stream."
       err:
         type: error_info
@@ -782,7 +782,7 @@ functions:
     description: |
       Registers the provider as the instance's crypto provider, used by encrypted databases, Parquet encryption and the primitives above.
 
-      Requires the AES callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it. The caller still owns the handle and must destroy it with `[[crypto_provider_destroy]]`.
+      Requires the cipher callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it. The caller still owns the handle and must destroy it with `[[crypto_provider_destroy]]`.
     role: method
     belongs_to: instance
     parameters:

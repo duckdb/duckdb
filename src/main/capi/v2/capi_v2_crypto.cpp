@@ -37,11 +37,11 @@ static CryptoHashFunction ConvertHashFunction(DUCKDB_V2_CRYPTO_HASH_FUNCTION fun
 }
 
 struct CV2CryptoCallbacks {
-	duckdb_v2_crypto_provider_aes_create_callback_fn aes_create = nullptr;
-	duckdb_v2_crypto_provider_aes_init_callback_fn aes_init = nullptr;
-	duckdb_v2_crypto_provider_aes_update_callback_fn aes_update = nullptr;
-	duckdb_v2_crypto_provider_aes_finalize_callback_fn aes_finalize = nullptr;
-	duckdb_v2_crypto_provider_aes_destroy_callback_fn aes_destroy = nullptr;
+	duckdb_v2_crypto_provider_cipher_create_callback_fn cipher_create = nullptr;
+	duckdb_v2_crypto_provider_cipher_init_callback_fn cipher_init = nullptr;
+	duckdb_v2_crypto_provider_cipher_update_callback_fn cipher_update = nullptr;
+	duckdb_v2_crypto_provider_cipher_finalize_callback_fn cipher_finalize = nullptr;
+	duckdb_v2_crypto_provider_cipher_destroy_callback_fn cipher_destroy = nullptr;
 	duckdb_v2_crypto_provider_hash_callback_fn hash = nullptr;
 	duckdb_v2_crypto_provider_hmac_callback_fn hmac = nullptr;
 	//! Bit masks of the CryptoHashFunction values the callbacks serve
@@ -50,7 +50,7 @@ struct CV2CryptoCallbacks {
 	duckdb_v2_crypto_provider_random_callback_fn random = nullptr;
 };
 
-//! The AES stream of a provider: created on initialization, once key, direction and IV are known
+//! The cipher stream of a provider: created on initialization, once key, direction and IV are known
 class CV2ProviderEncryptionState final : public EncryptionState {
 public:
 	CV2ProviderEncryptionState(unique_ptr<EncryptionStateMetadata> metadata, const CV2CryptoCallbacks &callbacks,
@@ -60,8 +60,8 @@ public:
 	}
 
 	~CV2ProviderEncryptionState() override {
-		if (stream && callbacks.aes_destroy) {
-			callbacks.aes_destroy(GetUserData(), stream);
+		if (stream && callbacks.cipher_destroy) {
+			callbacks.cipher_destroy(GetUserData(), stream);
 		}
 	}
 
@@ -79,7 +79,7 @@ public:
 		CheckInitialized();
 		idx_t written = 0;
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.aes_update(GetUserData(), stream, in, in_len, out, out_len, &written, err);
+			callbacks.cipher_update(GetUserData(), stream, in, in_len, out, out_len, &written, err);
 		});
 		return written;
 	}
@@ -88,7 +88,7 @@ public:
 		CheckInitialized();
 		auto is_gcm = GetCipher() == EncryptionTypes::GCM;
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.aes_finalize(GetUserData(), stream, is_gcm ? tag : nullptr, is_gcm ? tag_len : 0, err);
+			callbacks.cipher_finalize(GetUserData(), stream, is_gcm ? tag : nullptr, is_gcm ? tag_len : 0, err);
 		});
 		return 0;
 	}
@@ -108,21 +108,21 @@ private:
 
 	void CheckInitialized() const {
 		if (!stream) {
-			throw InvalidInputException("The AES stream has not been initialized");
+			throw InvalidInputException("The cipher stream has not been initialized");
 		}
 	}
 
 	void Initialize(DUCKDB_V2_CRYPTO_MODE mode, EncryptionNonce &nonce, const_data_ptr_t key, const_data_ptr_t aad,
 	                idx_t aad_len) {
 		if (stream) {
-			throw InvalidInputException("The AES stream has already been initialized");
+			throw InvalidInputException("The cipher stream has already been initialized");
 		}
 		auto cipher = static_cast<DUCKDB_V2_CRYPTO_CIPHER>(GetCipher());
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.aes_create(GetUserData(), cipher, mode, key, metadata->GetKeyLen(), &stream, err);
+			callbacks.cipher_create(GetUserData(), cipher, mode, key, metadata->GetKeyLen(), &stream, err);
 		});
 		InvokeCallback([&](duckdb_v2_error_info_handle *err) {
-			callbacks.aes_init(GetUserData(), stream, nonce.data(), nonce.total_size(), aad, aad_len, err);
+			callbacks.cipher_init(GetUserData(), stream, nonce.data(), nonce.total_size(), aad, aad_len, err);
 		});
 	}
 
@@ -200,8 +200,9 @@ public:
 
 	void Register(DatabaseInstance &target) {
 		CheckRegistrationTarget(db, target, "crypto provider");
-		if (!callbacks.aes_create || !callbacks.aes_init || !callbacks.aes_update || !callbacks.aes_finalize) {
-			throw InvalidInputException("The AES callbacks must be set for the crypto provider.");
+		if (!callbacks.cipher_create || !callbacks.cipher_init || !callbacks.cipher_update ||
+		    !callbacks.cipher_finalize) {
+			throw InvalidInputException("The cipher callbacks must be set for the crypto provider.");
 		}
 		auto &config = DBConfig::GetConfig(target);
 		if (config.encryption_util) {
@@ -227,11 +228,11 @@ static auto Convert(CV2CryptoProvider *provider) -> duckdb_v2_crypto_provider_ha
 //----------------------------------------------------------------------------------------------------------------------
 // Primitives
 //----------------------------------------------------------------------------------------------------------------------
-//! A streaming AES cipher on the instance's crypto provider
-class CV2Aes {
+//! A streaming cipher on the instance's crypto provider
+class CV2Cipher {
 public:
-	CV2Aes(DatabaseInstance &db, DUCKDB_V2_CRYPTO_CIPHER cipher_p, DUCKDB_V2_CRYPTO_MODE mode_p, const uint8_t *key_p,
-	       idx_t key_length)
+	CV2Cipher(DatabaseInstance &db, DUCKDB_V2_CRYPTO_CIPHER cipher_p, DUCKDB_V2_CRYPTO_MODE mode_p,
+	          const uint8_t *key_p, idx_t key_length)
 	    : mode(mode_p) {
 		switch (cipher_p) {
 		case DUCKDB_V2_CRYPTO_CIPHER_AES_GCM:
@@ -241,10 +242,10 @@ public:
 			cipher = EncryptionTypes::CTR;
 			break;
 		default:
-			throw InvalidInputException("Unknown AES cipher");
+			throw InvalidInputException("Unknown cipher");
 		}
 		if (mode != DUCKDB_V2_CRYPTO_MODE_ENCRYPT && mode != DUCKDB_V2_CRYPTO_MODE_DECRYPT) {
-			throw InvalidInputException("Unknown AES mode");
+			throw InvalidInputException("Unknown cipher mode");
 		}
 		if (key_length != 16 && key_length != 24 && key_length != 32) {
 			throw InvalidInputException("AES keys must be 16, 24 or 32 bytes, got %llu",
@@ -257,7 +258,7 @@ public:
 		key.assign(reinterpret_cast<const char *>(key_p), key_length);
 	}
 
-	~CV2Aes() {
+	~CV2Cipher() {
 		// volatile writes so the wipe is not optimized away
 		volatile char *volatile_key = key.empty() ? nullptr : &key[0];
 		for (idx_t i = 0; i < key.size(); i++) {
@@ -267,7 +268,7 @@ public:
 
 	void Init(const uint8_t *iv, idx_t iv_length, const uint8_t *aad, idx_t aad_length) {
 		if (initialized) {
-			throw InvalidInputException("The AES cipher has already been initialized");
+			throw InvalidInputException("The cipher has already been initialized");
 		}
 		auto expected_iv_length = cipher == EncryptionTypes::GCM ? 12 : 16;
 		if (iv_length != expected_iv_length) {
@@ -313,10 +314,10 @@ public:
 private:
 	void CheckActive() const {
 		if (!initialized) {
-			throw InvalidInputException("The AES cipher has not been initialized");
+			throw InvalidInputException("The cipher has not been initialized");
 		}
 		if (finalized) {
-			throw InvalidInputException("The AES cipher has already been finalized");
+			throw InvalidInputException("The cipher has already been finalized");
 		}
 	}
 
@@ -329,11 +330,11 @@ private:
 	bool finalized = false;
 };
 
-static auto Convert(duckdb_v2_crypto_aes_handle aes) -> CV2Aes * {
-	return reinterpret_cast<CV2Aes *>(aes);
+static auto Convert(duckdb_v2_crypto_cipher_handle stream) -> CV2Cipher * {
+	return reinterpret_cast<CV2Cipher *>(stream);
 }
-static auto Convert(CV2Aes *aes) -> duckdb_v2_crypto_aes_handle {
-	return reinterpret_cast<duckdb_v2_crypto_aes_handle>(aes);
+static auto Convert(CV2Cipher *stream) -> duckdb_v2_crypto_cipher_handle {
+	return reinterpret_cast<duckdb_v2_crypto_cipher_handle>(stream);
 }
 
 static DatabaseInstance &GetInstance(duckdb_v2_instance_handle instance) {
@@ -438,53 +439,54 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_random_bytes(duckdb_v2_instance_handle instance
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_aes_create(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_CIPHER cipher,
-                                            DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key, idx_t key_length,
-                                            duckdb_v2_crypto_aes_handle *aes, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_create(duckdb_v2_instance_handle instance, DUCKDB_V2_CRYPTO_CIPHER cipher,
+                                               DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key, idx_t key_length,
+                                               duckdb_v2_crypto_cipher_handle *stream,
+                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(key);
-	DUCKDB_CHECK_ARG(aes);
-	*aes = nullptr;
+	DUCKDB_CHECK_ARG(stream);
+	*stream = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto result = duckdb::make_uniq<CV2Aes>(GetInstance(instance), cipher, mode, key, key_length);
-		*aes = Convert(result.release());
+		auto result = duckdb::make_uniq<CV2Cipher>(GetInstance(instance), cipher, mode, key, key_length);
+		*stream = Convert(result.release());
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_aes_init(duckdb_v2_crypto_aes_handle aes, const uint8_t *iv, idx_t iv_length,
-                                          const uint8_t *aad, idx_t aad_length, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(aes);
+DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_init(duckdb_v2_crypto_cipher_handle stream, const uint8_t *iv, idx_t iv_length,
+                                             const uint8_t *aad, idx_t aad_length, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stream);
 	DUCKDB_CHECK_ARG(iv);
-	return WithErrorHandler(err, [&]() { Convert(aes)->Init(iv, iv_length, aad, aad_length); });
+	return WithErrorHandler(err, [&]() { Convert(stream)->Init(iv, iv_length, aad, aad_length); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_aes_update(duckdb_v2_crypto_aes_handle aes, const uint8_t *in, idx_t in_length,
-                                            uint8_t *out, idx_t out_capacity, idx_t *out_length,
-                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(aes);
+DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_update(duckdb_v2_crypto_cipher_handle stream, const uint8_t *in,
+                                               idx_t in_length, uint8_t *out, idx_t out_capacity, idx_t *out_length,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stream);
 	DUCKDB_CHECK_ARG(out_length);
 	if (in_length > 0) {
 		DUCKDB_CHECK_ARG(in);
 		DUCKDB_CHECK_ARG(out);
 	}
 	*out_length = 0;
-	return WithErrorHandler(err, [&]() { *out_length = Convert(aes)->Update(in, in_length, out, out_capacity); });
+	return WithErrorHandler(err, [&]() { *out_length = Convert(stream)->Update(in, in_length, out, out_capacity); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_aes_finalize(duckdb_v2_crypto_aes_handle aes, uint8_t *tag, idx_t tag_length,
-                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(aes);
-	return WithErrorHandler(err, [&]() { Convert(aes)->Finalize(tag, tag_length); });
+DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_finalize(duckdb_v2_crypto_cipher_handle stream, uint8_t *tag, idx_t tag_length,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stream);
+	return WithErrorHandler(err, [&]() { Convert(stream)->Finalize(tag, tag_length); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_aes_destroy(duckdb_v2_crypto_aes_handle *aes) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_destroy(duckdb_v2_crypto_cipher_handle *stream) {
 	return WithErrorHandler(nullptr, [&]() {
-		if (!aes) {
+		if (!stream) {
 			return;
 		}
-		if (*aes) {
-			delete Convert(*aes);
-			*aes = nullptr;
+		if (*stream) {
+			delete Convert(*stream);
+			*stream = nullptr;
 		}
 	});
 }
@@ -510,13 +512,11 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_crypto_provide
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(duckdb_v2_crypto_provider_handle provider,
-                                                            duckdb_v2_crypto_provider_aes_create_callback_fn create,
-                                                            duckdb_v2_crypto_provider_aes_init_callback_fn init,
-                                                            duckdb_v2_crypto_provider_aes_update_callback_fn update,
-                                                            duckdb_v2_crypto_provider_aes_finalize_callback_fn finalize,
-                                                            duckdb_v2_crypto_provider_aes_destroy_callback_fn destroy,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_callbacks(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn create,
+    duckdb_v2_crypto_provider_cipher_init_callback_fn init, duckdb_v2_crypto_provider_cipher_update_callback_fn update,
+    duckdb_v2_crypto_provider_cipher_finalize_callback_fn finalize,
+    duckdb_v2_crypto_provider_cipher_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(provider);
 	DUCKDB_CHECK_ARG(create);
 	DUCKDB_CHECK_ARG(init);
@@ -524,11 +524,11 @@ DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(duckdb_v2_crypto_pro
 	DUCKDB_CHECK_ARG(finalize);
 	return WithErrorHandler(err, [&]() {
 		auto &callbacks = Convert(provider)->callbacks;
-		callbacks.aes_create = create;
-		callbacks.aes_init = init;
-		callbacks.aes_update = update;
-		callbacks.aes_finalize = finalize;
-		callbacks.aes_destroy = destroy;
+		callbacks.cipher_create = create;
+		callbacks.cipher_init = init;
+		callbacks.cipher_update = update;
+		callbacks.cipher_finalize = finalize;
+		callbacks.cipher_destroy = destroy;
 	});
 }
 

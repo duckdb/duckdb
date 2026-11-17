@@ -2039,7 +2039,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connect
 
 /* --- Enums for crypto --- */
 
-//! The AES mode of operation.
+//! A cipher, meaning an algorithm together with its mode of operation. New ciphers are new values.
 typedef enum DUCKDB_V2_CRYPTO_CIPHER {
 	//! AES-GCM. 12-byte IV, optional additional authenticated data, 16-byte authentication tag.
 	DUCKDB_V2_CRYPTO_CIPHER_AES_GCM = 1,
@@ -2049,7 +2049,7 @@ typedef enum DUCKDB_V2_CRYPTO_CIPHER {
 	DUCKDB_V2_CRYPTO_CIPHER_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_CRYPTO_CIPHER;
 
-//! The direction of an AES stream.
+//! The direction of a cipher stream.
 typedef enum DUCKDB_V2_CRYPTO_MODE {
 	//! Encrypt plaintext into ciphertext.
 	DUCKDB_V2_CRYPTO_MODE_ENCRYPT = 0,
@@ -2077,13 +2077,14 @@ typedef enum DUCKDB_V2_CRYPTO_HASH_FUNCTION {
 /* --- Types for crypto --- */
 
 /*!
- * An owned opaque handle to a streaming AES cipher. Created with `duckdb_v2_crypto_aes_create()`, initialized with
- * `duckdb_v2_crypto_aes_init()`, fed with `duckdb_v2_crypto_aes_update()`, completed with
- * `duckdb_v2_crypto_aes_finalize()`, and destroyed with `duckdb_v2_crypto_aes_destroy()`. Not safe for concurrent use.
+ * An owned opaque handle to a streaming cipher (see `CRYPTO_CIPHER`). Created with `duckdb_v2_crypto_cipher_create()`,
+ * initialized with `duckdb_v2_crypto_cipher_init()`, fed with `duckdb_v2_crypto_cipher_update()`, completed with
+ * `duckdb_v2_crypto_cipher_finalize()`, and destroyed with `duckdb_v2_crypto_cipher_destroy()`. Not safe for concurrent
+ * use.
  */
-typedef struct _duckdb_v2_crypto_aes {
+typedef struct _duckdb_v2_crypto_cipher {
 	void *internal_ptr;
-} * duckdb_v2_crypto_aes_handle;
+} * duckdb_v2_crypto_cipher_handle;
 
 /*!
  * An owned opaque handle to a crypto provider being built. Created with `duckdb_v2_crypto_provider_create()`,
@@ -2098,23 +2099,25 @@ typedef struct _duckdb_v2_crypto_provider {
 
 /* --- Function pointer typedefs for crypto --- */
 
-typedef void (*duckdb_v2_crypto_provider_aes_create_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_CIPHER cipher,
-                                                                 DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key,
-                                                                 idx_t key_length, void **stream,
-                                                                 duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_cipher_create_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_CIPHER cipher,
+                                                                    DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key,
+                                                                    idx_t key_length, void **stream,
+                                                                    duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_crypto_provider_aes_init_callback_fn)(void *user_data, void *stream, const uint8_t *iv,
-                                                               idx_t iv_length, const uint8_t *aad, idx_t aad_length,
-                                                               duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_cipher_init_callback_fn)(void *user_data, void *stream, const uint8_t *iv,
+                                                                  idx_t iv_length, const uint8_t *aad, idx_t aad_length,
+                                                                  duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_crypto_provider_aes_update_callback_fn)(void *user_data, void *stream, const uint8_t *in,
-                                                                 idx_t in_length, uint8_t *out, idx_t out_capacity,
-                                                                 idx_t *out_length, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_cipher_update_callback_fn)(void *user_data, void *stream, const uint8_t *in,
+                                                                    idx_t in_length, uint8_t *out, idx_t out_capacity,
+                                                                    idx_t *out_length,
+                                                                    duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_crypto_provider_aes_finalize_callback_fn)(void *user_data, void *stream, uint8_t *tag,
-                                                                   idx_t tag_length, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_crypto_provider_cipher_finalize_callback_fn)(void *user_data, void *stream, uint8_t *tag,
+                                                                      idx_t tag_length,
+                                                                      duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_crypto_provider_aes_destroy_callback_fn)(void *user_data, void *stream);
+typedef void (*duckdb_v2_crypto_provider_cipher_destroy_callback_fn)(void *user_data, void *stream);
 
 typedef void (*duckdb_v2_crypto_provider_hash_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
                                                            const uint8_t *in, idx_t in_length, uint8_t *out,
@@ -2262,41 +2265,42 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_random_bytes(duckdb_v2_instance_ha
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Creates a streaming AES cipher.
+ * Creates a streaming cipher.
  *
  * The key is copied and wiped when the cipher is destroyed. Encrypting requires a provider DuckDB considers secure for
- * writing; decrypting does not. The cipher must be initialized with `duckdb_v2_crypto_aes_init()` before use.
+ * writing; decrypting does not. The cipher must be initialized with `duckdb_v2_crypto_cipher_init()` before use.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param instance The instance whose provider to use.
- * @param cipher The AES mode.
+ * @param cipher The cipher.
  * @param mode Whether to encrypt or decrypt.
  * @param key The key. Borrowed and copied.
  * @param key_length The key length in bytes: 16, 24 or 32.
- * @param aes On success, receives the new cipher. Owned by the caller.
+ * @param stream On success, receives the new cipher. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_create(duckdb_v2_instance_handle instance,
-                                                         DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO_MODE mode,
-                                                         const uint8_t *key, idx_t key_length,
-                                                         duckdb_v2_crypto_aes_handle *aes,
-                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_create(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO_MODE mode,
+                                                            const uint8_t *key, idx_t key_length,
+                                                            duckdb_v2_crypto_cipher_handle *stream,
+                                                            duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Starts the stream with an IV and, for GCM, additional authenticated data.
  *
- * The IV must be 12 bytes for GCM and 16 bytes for CTR. AAD is only valid for GCM. May be called once per cipher.
+ * The IV length and AAD support depend on the cipher: AES-GCM takes a 12-byte IV and optional AAD, AES-CTR a 16-byte IV
+ * and no AAD. May be called once per cipher.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param aes The cipher.
+ * @param stream The cipher.
  * @param iv The IV. Borrowed.
  * @param iv_length The IV length in bytes.
  * @param aad The additional authenticated data, or null. Borrowed.
@@ -2305,9 +2309,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_create(duckdb_v2_instance_hand
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_init(duckdb_v2_crypto_aes_handle aes, const uint8_t *iv,
-                                                       idx_t iv_length, const uint8_t *aad, idx_t aad_length,
-                                                       duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_init(duckdb_v2_crypto_cipher_handle stream, const uint8_t *iv,
+                                                          idx_t iv_length, const uint8_t *aad, idx_t aad_length,
+                                                          duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2315,12 +2319,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_init(duckdb_v2_crypto_aes_hand
  * Processes the next chunk of the stream.
  *
  * `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the
- * plaintext must not be trusted before `duckdb_v2_crypto_aes_finalize()` succeeds.
+ * plaintext must not be trusted before `duckdb_v2_crypto_cipher_finalize()` succeeds.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param aes The cipher.
+ * @param stream The cipher.
  * @param in The input bytes.
  * @param in_length The number of input bytes.
  * @param out Receives the output bytes.
@@ -2330,9 +2334,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_init(duckdb_v2_crypto_aes_hand
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_update(duckdb_v2_crypto_aes_handle aes, const uint8_t *in,
-                                                         idx_t in_length, uint8_t *out, idx_t out_capacity,
-                                                         idx_t *out_length, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_update(duckdb_v2_crypto_cipher_handle stream, const uint8_t *in,
+                                                            idx_t in_length, uint8_t *out, idx_t out_capacity,
+                                                            idx_t *out_length, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2345,15 +2349,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_update(duckdb_v2_crypto_aes_ha
  * history:
  * - unstable: v2.0.0
  *
- * @param aes The cipher.
+ * @param stream The cipher.
  * @param tag The tag buffer (GCM), or null.
  * @param tag_length The tag length in bytes - 16 for GCM, 0 for CTR.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_finalize(duckdb_v2_crypto_aes_handle aes, uint8_t *tag,
-                                                           idx_t tag_length, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_finalize(duckdb_v2_crypto_cipher_handle stream, uint8_t *tag,
+                                                              idx_t tag_length, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2363,10 +2367,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_finalize(duckdb_v2_crypto_aes_
  * history:
  * - unstable: v2.0.0
  *
- * @param aes The cipher to destroy.
+ * @param stream The cipher to destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_aes_destroy(duckdb_v2_crypto_aes_handle *aes);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_destroy(duckdb_v2_crypto_cipher_handle *stream);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2411,9 +2415,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_c
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Sets the streaming AES callbacks. All but `destroy` are required.
+ * Sets the streaming cipher callbacks. All but `destroy` are required.
  *
- * The provider's AES implementation must support GCM and CTR with 16-, 24- and 32-byte keys.
+ * The provider's implementation must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24-
+ * and 32-byte keys.
  *
  * history:
  * - unstable: v2.0.0
@@ -2428,11 +2433,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_c
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_aes_callbacks(
-    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_aes_create_callback_fn create,
-    duckdb_v2_crypto_provider_aes_init_callback_fn init, duckdb_v2_crypto_provider_aes_update_callback_fn update,
-    duckdb_v2_crypto_provider_aes_finalize_callback_fn finalize,
-    duckdb_v2_crypto_provider_aes_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_callbacks(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn create,
+    duckdb_v2_crypto_provider_cipher_init_callback_fn init, duckdb_v2_crypto_provider_cipher_update_callback_fn update,
+    duckdb_v2_crypto_provider_cipher_finalize_callback_fn finalize,
+    duckdb_v2_crypto_provider_cipher_destroy_callback_fn destroy, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -2500,7 +2505,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_random_callback(
  * Registers the provider as the instance's crypto provider, used by encrypted databases, Parquet encryption and the
  * primitives above.
  *
- * Requires the AES callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the
+ * Requires the cipher callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the
  * provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it.
  * The caller still owns the handle and must destroy it with `duckdb_v2_crypto_provider_destroy()`.
  *
