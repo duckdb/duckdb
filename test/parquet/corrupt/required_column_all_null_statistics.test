@@ -20,6 +20,21 @@ WHERE x = 1;
 ----
 Column "x" cannot hold NULL values but its statistics count 6001 NULL values
 
+# The same for a REQUIRED column in a REQUIRED struct: the statistics of the struct are built from those of the
+# column, and a filter on it pruned the row group (6001 rows with s.x = 1).
+statement error
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_nested_column_all_null_statistics.parquet')
+WHERE s.x = 1;
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
+statement error
+SELECT count(s.x), sum(s.x)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_nested_column_all_null_statistics.parquet');
+----
+Column "x" cannot hold NULL values but its statistics count 6001 NULL values
+
 # the unchanged file
 query III
 SELECT count(*), count(x), sum(x)

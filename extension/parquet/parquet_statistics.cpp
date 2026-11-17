@@ -764,6 +764,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// the statistics of nested columns are built from their leaf columns, which are validated here
+	schema.ValidateColumnMetadata(column_chunk, 0, false);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);
