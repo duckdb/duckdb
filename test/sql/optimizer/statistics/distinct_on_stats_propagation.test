@@ -300,12 +300,6 @@ statement ok
 INSERT INTO nullable_unique SELECT CASE WHEN id = 7 THEN NULL ELSE id END, x FROM unique_list_values;
 
 statement ok
-CREATE TABLE deferred_unique(id INTEGER PRIMARY KEY DEFERRED, x INTEGER);
-
-statement ok
-INSERT INTO deferred_unique SELECT id, x FROM unique_list_values;
-
-statement ok
 CREATE TABLE composite_unique(a INTEGER NOT NULL, b INTEGER NOT NULL, x INTEGER, UNIQUE(a, b));
 
 statement ok
@@ -321,20 +315,13 @@ JOIN (SELECT first(x) AS k FROM nonnull_unique GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
 
-# Nullable and deferred keys do not certify singleton groups.
+# Nullable keys do not certify singleton groups.
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
 FROM (SELECT first(x) AS k FROM nullable_unique GROUP BY id) l
 JOIN (SELECT first(x) AS k FROM nullable_unique GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "7".*
-
-query II
-EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM deferred_unique GROUP BY id) l
-JOIN (SELECT first(x) AS k FROM deferred_unique GROUP BY id) r ON l.k = r.k;
-----
-logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "8".*
 
 # A composite key must be completely covered by the grouping expressions.
 query II
@@ -454,3 +441,22 @@ WITH lhs AS MATERIALIZED (SELECT id, id % 2 AS k FROM ids_left),
 SELECT count(*) FROM (SELECT first(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON s.k = r.k;
 ----
 16
+
+# Temporary tables support deferred constraints with v1 storage.
+# Keep this last so earlier cases can still exercise forced restarts.
+statement ok
+CREATE TEMP TABLE deferred_unique(id INTEGER PRIMARY KEY DEFERRED, x INTEGER);
+
+statement ok
+INSERT INTO deferred_unique SELECT id, x FROM unique_list_values;
+
+statement ok
+ANALYZE deferred_unique;
+
+# Deferred keys do not certify singleton groups.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*)
+FROM (SELECT first(x) AS k FROM deferred_unique GROUP BY id) l
+JOIN (SELECT first(x) AS k FROM deferred_unique GROUP BY id) r ON l.k = r.k;
+----
+logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "8".*
