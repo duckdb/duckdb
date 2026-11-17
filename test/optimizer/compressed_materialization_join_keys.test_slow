@@ -1,0 +1,99 @@
+# name: test/optimizer/compressed_materialization_join_keys.test_slow
+# description: compress_join_keys turns on compressed materialization of a comparison join's keys
+# group: [optimizer]
+
+# A build side of at least 1,048,576 rows and a join of at most 8 times it, so a release build compresses the keys
+# when compress_join_keys is on. The integer keys start at 10^10: no narrower integer holds them, so they compress by
+# an offset rather than a cast. The string keys are 8 bytes long.
+statement ok
+CREATE TABLE probe AS SELECT range + 10000000000 AS k, 'k' || lpad(range::VARCHAR, 7, '0') AS s FROM range(4400000);
+
+statement ok
+CREATE TABLE build AS
+SELECT range + 10000000000 AS k, 'k' || lpad(range::VARCHAR, 7, '0') AS s, range * 3 AS payload
+FROM range(1100000);
+
+query I
+SELECT current_setting('compress_join_keys');
+----
+false
+
+statement ok
+SET explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT probe.k, build.k FROM probe JOIN build ON probe.k = build.k;
+----
+logical_opt	<!REGEX>:.*__internal_compress.*
+
+query II
+EXPLAIN SELECT probe.s, build.s FROM probe JOIN build ON probe.s = build.s;
+----
+logical_opt	<!REGEX>:.*__internal_compress.*
+
+# The build side's other columns are still compressed
+query II
+EXPLAIN SELECT probe.k, build.payload FROM probe JOIN build ON probe.k = build.k;
+----
+logical_opt	<REGEX>:.*CAST\(.* AS INTEGER\).*
+
+statement ok
+SET explain_output = PHYSICAL_ONLY;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM probe JOIN build ON probe.k = build.k;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
+
+query II
+SELECT count(*), sum(build.payload) FROM probe JOIN build ON probe.k = build.k;
+----
+1100000	1814998350000
+
+query I
+SELECT count(*) FROM probe JOIN build ON probe.s = build.s;
+----
+1100000
+
+statement ok
+SET compress_join_keys = true;
+
+statement ok
+SET explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT probe.k, build.k FROM probe JOIN build ON probe.k = build.k;
+----
+logical_opt	<REGEX>:.*__internal_compress_integral_uinteger.*
+
+query II
+EXPLAIN SELECT probe.s, build.s FROM probe JOIN build ON probe.s = build.s;
+----
+logical_opt	<REGEX>:.*__internal_compress_string.*
+
+# The probe side's key is compressed above its scan, so the join's filter cannot reach the scan
+statement ok
+SET explain_output = PHYSICAL_ONLY;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM probe JOIN build ON probe.k = build.k;
+----
+analyzed_plan	<!REGEX>:.*Dynamic Filters.*
+
+query II
+SELECT count(*), sum(build.payload) FROM probe JOIN build ON probe.k = build.k;
+----
+1100000	1814998350000
+
+query I
+SELECT count(*) FROM probe JOIN build ON probe.s = build.s;
+----
+1100000
+
+statement ok
+RESET compress_join_keys;
+
+query I
+SELECT current_setting('compress_join_keys');
+----
+false

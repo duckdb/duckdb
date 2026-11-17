@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/function/cast/cast_statistics.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -163,6 +164,10 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		}
 	}
 
+	// With compress_join_keys off, column keys are not compressed: their bindings are marked as referenced below, so
+	// they stay the columns they compare. Fully shredded VARIANT keys are still lowered to integral casts, which the
+	// join's filter passes through
+	const bool compress_keys = Settings::Get<CompressJoinKeysSetting>(context);
 	for (auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			const bool compressed_variant_key =
@@ -170,7 +175,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 			if (compressed_variant_key) {
 				// The comparator wrapper has been lowered to casts over the VARIANT columns.
 				// The referenced bindings are marked below, so no child projection compression is needed.
-			} else if (condition.IsComparison() &&
+			} else if (compress_keys && condition.IsComparison() &&
 			           condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
 			           condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				// We only try to compress the join condition cols if there's one join condition.

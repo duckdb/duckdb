@@ -254,6 +254,13 @@
         ]
     },
     {
+        "name": "compress_join_keys",
+        "description": "Whether compressed materialization compresses the keys of a comparison join. When off, the keys stay the columns they compare, and the join's other columns can still be compressed.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "current_dialect",
         "description": "The SQL dialect used by the parser.",
         "type": "VARCHAR",
@@ -565,6 +572,14 @@
     {
         "name": "debug_verify_stats",
         "description": "Verify that statistics are correct during execution.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
+        "name": "debug_verify_table_names",
+        "description": "Verify names-only binding.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false",

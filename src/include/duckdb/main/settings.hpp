@@ -520,6 +520,20 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CompressJoinKeysSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "compress_join_keys";
+	static constexpr const char *Description =
+	    "Whether compressed materialization compresses the keys of a comparison join. When off, the keys stay the "
+	    "columns they compare, and the join's other columns can still be compressed.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct CurrentDialectSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "current_dialect";
@@ -947,18 +961,6 @@ struct DebugVerifySerializerSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugVerifyTableNamesSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_verify_table_names";
-	static constexpr const char *Description = "Verify names-only binding.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct DebugVerifyStatementSetting {
 	using RETURN_TYPE = DebugStatementVerification;
 	static constexpr const char *Name = "debug_verify_statement";
@@ -976,6 +978,18 @@ struct DebugVerifyStatsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_stats";
 	static constexpr const char *Description = "Verify that statistics are correct during execution.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyTableNamesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_table_names";
+	static constexpr const char *Description = "Verify names-only binding.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = true;
 	static constexpr bool IsDeprecated = false;
