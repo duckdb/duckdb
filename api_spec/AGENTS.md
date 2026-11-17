@@ -26,7 +26,7 @@ The C++ API in `tools/cpp/` (`duckdb_cpp.hpp`) is written on top of V2. Its test
 A change to the C API starts in the specification. Edit the YAML, regenerate, and bring every link
 in line in the same change:
 
-1. the YAML under `api_spec/`, with a `lifecycle` entry for anything new;
+1. the YAML under `api_spec/`, with a `lifecycle` entry for anything new (see below);
 2. the generated files, whose diff is part of the change;
 3. the implementation under `src/main/capi/v1/` or `src/main/capi/v2/`;
 4. for V2, the C++ API in `tools/cpp/` when it exposes the function;
@@ -34,10 +34,22 @@ in line in the same change:
    is added by name to `test/api/capi/v2/CMakeLists.txt` or `test/api/cpp/CMakeLists.txt`.
 
 Before you finish, regenerate once more: it must leave no difference. CI fails when the committed
-V1 headers do not match the specification.
+V1 headers do not match the specification. Each regeneration script ends by formatting what it
+generated. When only that last step fails, the generation itself has completed: check that the
+generated files changed as you expect, and format them before you commit.
+
+## Lifecycle of an entry
+
+A new entry is `unstable`. A pull request that changes the lifecycle of an existing entry, or
+adds a V2 entry in any other state than `unstable`, says so in its description and argues why.
 
 ## Rules for V2
 
+- **Add to C only what cannot be composed.** Before adding a C function, ask whether a client
+  could compose it from the existing functions without knowledge of the engine. If it could, the
+  function belongs in the C++ API in `tools/cpp/`, or nowhere. An exception, for performance or to
+  cover every kind of type with one function, is argued in the function's description in the
+  specification.
 - **C types only.** A V2 function takes and returns the primitives listed in
   `api_spec/v2/metadata.yaml`, opaque handles, enums, plain structs and callbacks. Conveniences
   such as overloads, owning classes, exceptions and containers belong in the C++ API in
@@ -52,7 +64,9 @@ V1 headers do not match the specification.
   the error info take no `err`. `DUCKDB_V2_ERROR_NONE` is the only success. After any other
   code a caller reads `err`, and only those out parameters that the function's documentation
   says are set on that failure: the functions that write text into a caller's buffer report the
-  required length this way.
+  required length this way. A successful call leaves the slot behind `err` untouched, so an
+  error info from an earlier failure can still be there: read success from the returned code,
+  never from the slot. A callback that receives an `err` slot fills it and never destroys it.
 - **Out parameters follow one pattern.** A handle out parameter is set to null before the work.
   Any other out parameter follows the function's documentation. `err` and a caller's buffer are
   never cleared: a caller may pass an error info handle for reuse, and a buffer is documented as
@@ -62,6 +76,12 @@ V1 headers do not match the specification.
   `src/main/capi/v2/capi_v2_expression.cpp`. A new engine value enters V2 only when the
   specification is meant to expose it. The log level, log scope and logical type id enums are
   converted with a plain cast and have no such assertion in `src/main/capi/v2/` yet.
+
+## Tests for V2
+
+A V2 test builds its fixtures with the V2 API wherever V2 can express them, also when that takes
+more code. V1 calls in a V2 test are for checking that the two APIs work together, or for what V2
+cannot express yet. Never change the API to make a test easier to write.
 
 ## V1 keeps working
 
