@@ -16,47 +16,57 @@ SELECT (CASE WHEN i % 2 = 0 THEN i::DECIMAL(4,1)::VARIANT ELSE i::DECIMAL(4,2)::
 0.0
 1.00
 
-require no_alternative_verify
-
 load {TEST_DIR}/variant_stats_merge_decimal.db
+
+# small row groups so that each DECIMAL type fills its own row group with few rows
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_decimal_data.db' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 SET variant_minimum_shredding_size = 0
 
 statement ok
-CREATE TABLE t (id BIGINT, v VARIANT)
+CREATE TABLE db.t (id BIGINT, v VARIANT)
 
 statement ok
-INSERT INTO t SELECT i, (i % 10)::DECIMAL(4,1)::VARIANT FROM range(122880) r(i)
+INSERT INTO db.t SELECT i, (i % 10)::DECIMAL(4,1)::VARIANT FROM range(2048) r(i)
 
 statement ok
-INSERT INTO t SELECT i, ((i % 10) / 1000)::DECIMAL(9,3)::VARIANT FROM range(122880, 200000) r(i)
+INSERT INTO db.t SELECT i, ((i % 10) / 1000)::DECIMAL(9,3)::VARIANT FROM range(2048, 4096) r(i)
 
 statement ok
-CREATE TABLE t2 (v VARIANT)
+CREATE TABLE db.t2 (v VARIANT)
 
 statement ok
-INSERT INTO t2 SELECT (i % 10)::DECIMAL(4,1)::VARIANT FROM range(122880) r(i)
+INSERT INTO db.t2 SELECT (i % 10)::DECIMAL(4,1)::VARIANT FROM range(2048) r(i)
 
 statement ok
-INSERT INTO t2 SELECT (i % 10)::DECIMAL(4,2)::VARIANT FROM range(122880, 200000) r(i)
+INSERT INTO db.t2 SELECT (i % 10)::DECIMAL(4,2)::VARIANT FROM range(2048, 4096) r(i)
 
 statement ok
 CHECKPOINT
 
 query II
-SELECT count(*), count(DISTINCT v::VARCHAR) FROM t
+SELECT count(*), count(DISTINCT v::VARCHAR) FROM db.t
 ----
-200000	20
+4096	20
 
 query I
-SELECT count(*) FROM t2 WHERE v::DECIMAL(4,2) = 9.00
+SELECT count(*) FROM db.t2 WHERE v::DECIMAL(4,2) = 9.00
 ----
-20000
+409
 
 restart
 
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_decimal_data.db' AS db
+
 query II
-SELECT count(*), count(DISTINCT v::VARCHAR) FROM t
+SELECT count(*), count(DISTINCT v::VARCHAR) FROM db.t
 ----
-200000	20
+4096	20
+
+query I
+SELECT count(*) FROM db.t2 WHERE v::DECIMAL(4,2) = 9.00
+----
+409
