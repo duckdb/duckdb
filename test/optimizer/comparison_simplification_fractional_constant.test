@@ -5,25 +5,22 @@
 statement ok
 CREATE TABLE ints AS SELECT * FROM (VALUES (2), (3), (4), (NULL)) v(i);
 
-statement ok
-SET explain_output='optimized_only';
-
 # DECIMAL rounds half away from zero: 3.5 -> 4, 3.4 -> 3
 query II
-EXPLAIN SELECT * FROM ints WHERE i < 3.5;
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 3.5;
 ----
-logical_opt	<REGEX>:.*Filters: i < 4.*
+analyzed_plan	<REGEX>:.*Filters: i < 4.*
 
 query II
-EXPLAIN SELECT * FROM ints WHERE i < 3.4;
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 3.4;
 ----
-logical_opt	<REGEX>:.*Filters: i <= 3.*
+analyzed_plan	<REGEX>:.*Filters: i <= 3.*
 
 # DOUBLE rounds half to even, so 2.5 rounds down to 2
 query II
-EXPLAIN SELECT * FROM ints WHERE i < 2.5::DOUBLE;
+EXPLAIN ANALYZE SELECT * FROM ints WHERE i < 2.5::DOUBLE;
 ----
-logical_opt	<REGEX>:.*Filters: i <= 2.*
+analyzed_plan	<REGEX>:.*Filters: i <= 2.*
 
 query IIIIIIII
 SELECT
@@ -53,9 +50,9 @@ statement ok
 INSERT INTO fracs VALUES (0.01, 0.25), (0.02, 0.5), (NULL, NULL);
 
 query II
-EXPLAIN SELECT * FROM fracs WHERE d < 0.015 AND d < 0.015::DOUBLE AND f < 0.3::DOUBLE;
+EXPLAIN ANALYZE SELECT * FROM fracs WHERE d < 0.015 AND d < 0.015::DOUBLE AND f < 0.3::DOUBLE;
 ----
-logical_opt	<!REGEX>:.*CAST.*
+analyzed_plan	<!REGEX>:.*CAST.*
 
 query IIIII
 SELECT
@@ -88,14 +85,14 @@ statement ok
 INSERT INTO g VALUES (-1), ('-0.0'), (0), (1), ('nan');
 
 query II
-EXPLAIN SELECT * FROM g WHERE f < -1e-50;
+EXPLAIN ANALYZE SELECT * FROM g WHERE f < -1e-50;
 ----
-logical_opt	<!REGEX>:.*CAST.*
+analyzed_plan	<!REGEX>:.*CAST.*
 
 query II
-EXPLAIN SELECT * FROM g WHERE f < 1e300;
+EXPLAIN ANALYZE SELECT * FROM g WHERE f < 1e300;
 ----
-logical_opt	<REGEX>:.*CAST.*
+analyzed_plan	<REGEX>:.*CAST.*
 
 query IIIII
 SELECT
@@ -113,9 +110,9 @@ statement ok
 CREATE TABLE w AS SELECT range::BIGINT AS bi FROM range(-5, 6);
 
 query II
-EXPLAIN SELECT * FROM w WHERE bi < 2.5::DOUBLE;
+EXPLAIN ANALYZE SELECT * FROM w WHERE bi < 2.5::DOUBLE;
 ----
-logical_opt	<REGEX>:.*CAST.*
+analyzed_plan	<REGEX>:.*CAST.*
 
 # exact numeric casts that are order preserving: DECIMAL(4,0) -> INTEGER
 statement ok
@@ -125,9 +122,9 @@ statement ok
 INSERT INTO e VALUES (-9999), (0), (9999);
 
 query II
-EXPLAIN SELECT * FROM e WHERE e::INTEGER < 5;
+EXPLAIN ANALYZE SELECT * FROM e WHERE e::INTEGER < 5;
 ----
-logical_opt	<!REGEX>:.*CAST.*
+analyzed_plan	<!REGEX>:.*CAST.*
 
 query II
 SELECT count(*) FILTER (WHERE e::INTEGER < 5), count(*) FILTER (WHERE e::INTEGER < 10000) FROM e;
