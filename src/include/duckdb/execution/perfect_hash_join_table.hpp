@@ -38,7 +38,7 @@ public:
 	virtual void MergeBounds(const PerfectHashJoinTable &other) = 0;
 	//! Allocation size including match tracking, or zero for an unaffordable domain.
 	virtual idx_t EstimateSize(idx_t build_count, idx_t pointer_table_size) const = 0;
-	virtual bool Initialize(Allocator &allocator, idx_t build_count, idx_t pointer_table_size) = 0;
+	virtual bool Initialize(BufferAllocator &allocator, idx_t build_count, idx_t pointer_table_size) = 0;
 	//! Returns whether duplicate keys produced a chain.
 	virtual bool Insert(const Vector &rows, const TupleDataLayout &layout, idx_t pointer_offset, bool parallel) = 0;
 	virtual void GetRowPointers(const Vector &keys, optional_ptr<const SelectionVector> sel, idx_t &count,
@@ -83,8 +83,8 @@ protected:
 	}
 
 	static constexpr idx_t MAX_BYTES = 8 * 1024 * 1024;
-	AllocatedData entries;
-	mutable AllocatedData match_entries;
+	HugeAllocation entries;
+	mutable HugeAllocation match_entries;
 	const bool nulls_equal;
 	const bool track_matches;
 

@@ -107,16 +107,16 @@ public:
 		return bytes * (track_matches ? 2 : 1);
 	}
 
-	bool Initialize(Allocator &allocator, idx_t build_count, idx_t pointer_table_size) override {
+	bool Initialize(BufferAllocator &allocator, idx_t build_count, idx_t pointer_table_size) override {
 		const auto size = EstimateSize(build_count, pointer_table_size);
 		if (!size) {
 			return false;
 		}
 		domain_size = has_bounds ? KeyDistance(max, min).lower + 1 : 0;
 		const auto bytes = size / (track_matches ? 2 : 1);
-		entries = allocator.Allocate(bytes);
+		entries = allocator.AllocateHuge(bytes);
 		if (track_matches) {
-			match_entries = allocator.Allocate(bytes);
+			match_entries = allocator.AllocateHuge(bytes);
 		}
 		return true;
 	}
