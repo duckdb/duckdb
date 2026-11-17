@@ -91,7 +91,7 @@ TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
 	std::atomic<bool> opened {false};
 	std::atomic<bool> settled {false};
 	{
-		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		ScanReadAhead read_ahead(*con.context, ScanReadAheadPolicy::ORDERED, 1, nullptr);
 		read_ahead.PushError(ErrorData("injected read-ahead error"));
 		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
 		// leaving the scope cancels and drains, retiring the open without running it
@@ -120,7 +120,7 @@ TEST_CASE("Automatic read-ahead grows its backlog within the memory budget", "[a
 		expect_overlap = false;
 	}
 
-	auto read_ahead = ScanReadAhead::Create(*con.context);
+	auto read_ahead = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::ORDERED);
 	REQUIRE(read_ahead);
 	struct JobState {};
 	const idx_t job_count = 32;
@@ -171,11 +171,9 @@ TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]"
 	observer->SetRemainingSizeAndUpdateReservation(context, 770ULL * 1000 * 1000);
 	const auto full_reservation = observer->GetReservation();
 
-	auto read_ahead = ScanReadAhead::Create(*con.context);
+	auto policy = use_affinity ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
+	auto read_ahead = ScanReadAhead::Create(*con.context, policy, true, 2, 8);
 	REQUIRE(read_ahead);
-	if (use_affinity) {
-		read_ahead->EnableAffinity(2, 8);
-	}
 	struct JobState {};
 	const idx_t job_count = 8;
 	idx_t produced = 0;

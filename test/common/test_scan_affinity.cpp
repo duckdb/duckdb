@@ -237,7 +237,7 @@ TEST_CASE("Scan affinity schedules bounded cached work without async workers", "
 #ifndef DUCKDB_NO_THREADS
 	REQUIRE_NO_FAIL(con.Query("SET async_threads=0"));
 #endif
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 3);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 3);
 	idx_t produced = 0;
 	const idx_t count = 513;
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
@@ -276,7 +276,7 @@ TEST_CASE("Scan affinity executes pending reads when no worker is available", "[
 	bool produced = false;
 	bool read = false;
 	bool discovered = false;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &tasks) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced) {
 			return nullptr;
@@ -301,7 +301,7 @@ TEST_CASE("Scan affinity propagates readiness errors and releases reservations",
 	DuckDB db(nullptr);
 	Connection con(db);
 	idx_t destroyed = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		auto job = make_uniq<ReadyTestJob>(0);
 		job->on_ready = []() -> optional_idx {
@@ -330,7 +330,7 @@ TEST_CASE("Scan affinity retires pending reads after cancellation or an I/O erro
 	idx_t produced = 0;
 	idx_t destroyed = 0;
 	idx_t executed = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &tasks) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 3) {
 			return nullptr;
@@ -368,6 +368,39 @@ TEST_CASE("Scan affinity retires pending reads after cancellation or an I/O erro
 }
 
 #ifndef DUCKDB_NO_THREADS
+TEST_CASE("Scan affinity scheduling does not enable prefetch", "[api][storage]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=4"));
+	bool prefetch = true;
+	SECTION("Reader declines prefetch") {
+		prefetch = false;
+	}
+	SECTION("Read-ahead is disabled") {
+		REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=0"));
+	}
+	SECTION("Async workers are disabled") {
+		REQUIRE_NO_FAIL(con.Query("SET async_threads=0"));
+	}
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, prefetch, 2, 2);
+	REQUIRE(scan);
+	REQUIRE_FALSE(scan->PrefetchEnabled());
+	REQUIRE_FALSE(scan->CanScheduleOpen(0));
+	REQUIRE_FALSE(ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::ORDERED, prefetch));
+	idx_t produced = 0;
+	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
+		return produced++ == 0 ? make_uniq<ReadyTestJob>(42) : nullptr;
+	};
+	TableFunctionInput input(nullptr, nullptr, nullptr);
+	duckdb::unique_ptr<ScanReadAheadJob> job;
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::ACQUIRED);
+	REQUIRE(job->batch_index == 42);
+	job.reset();
+	REQUIRE(scan->AcquireReadyJob(*con.context, input, produce, job, 0) == ScanReadAheadAcquire::EXHAUSTED);
+}
+
 TEST_CASE("Scan affinity preserves worker demand with shallow read-ahead", "[api][storage]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -378,9 +411,8 @@ TEST_CASE("Scan affinity preserves worker demand with shallow read-ahead", "[api
 	idx_t produced = 0;
 	idx_t destroyed = 0;
 	idx_t executed = 0;
-	ScanReadAhead scan(*con.context, depth, nullptr);
 	// This pipeline has only three useful workers, independent of the database's thread count.
-	scan.EnableAffinity(2, 3);
+	ScanReadAhead scan(*con.context, ScanReadAheadPolicy::AFFINITY, depth, nullptr, true, 2, 3);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &tasks) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		auto job = make_uniq<ReadyTestJob>(produced++);
 		job->on_destroy = [&]() {
@@ -410,9 +442,8 @@ TEST_CASE("Scan affinity releases its memory charge before producing more work",
 	REQUIRE_NO_FAIL(con.Query("SET memory_limit='256MB'"));
 	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=-1"));
 	REQUIRE_NO_FAIL(con.Query("CALL enable_logging('ReadAheadBudget')"));
-	auto scan = ScanReadAhead::Create(*con.context);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, true, 2, 2);
 	REQUIRE(scan);
-	scan->EnableAffinity(2, 2);
 	idx_t produced = 0;
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 17) {
@@ -446,7 +477,7 @@ TEST_CASE("Scan affinity releases its memory charge before producing more work",
 TEST_CASE("Read-ahead keeps ordered jobs in batch order", "[api][storage]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ScanReadAhead scan(*con.context, 4, nullptr);
+	ScanReadAhead scan(*con.context, ScanReadAheadPolicy::ORDERED, 4, nullptr);
 	idx_t produced = 0;
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 19) {
@@ -479,7 +510,7 @@ TEST_CASE("Scan affinity wakes every parked consumer after the final ready job",
 		task = make_shared_ptr<ScanReadyCallbackTask>(rescheduled);
 	}
 	idx_t produced = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	ScanReadyReadGuard release_on_exit(con, gate);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &reads) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 2) {
@@ -551,7 +582,7 @@ TEST_CASE("Scan affinity resumes queued reads inline after the last running read
 	std::atomic<idx_t> second_reads {0};
 	std::thread::id first_reader, second_reader;
 	idx_t produced = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &reads) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 2) {
 			return nullptr;
@@ -641,7 +672,7 @@ TEST_CASE("Scan affinity reschedule errors reach the active submitted query", "[
 	auto task = make_shared_ptr<ScanReadyCallbackTask>(rescheduled, true);
 	std::atomic<idx_t> destroyed {0};
 	idx_t produced = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	ScanReadyReadGuard release_on_exit(con, gate);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &reads) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 2) {
@@ -721,7 +752,7 @@ TEST_CASE("Scan affinity consumes cached work while a read is pending", "[api][s
 	bool removal_requested = false;
 	std::atomic<bool> read_done {false};
 	idx_t produced = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &tasks) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 2) {
 			return nullptr;
@@ -811,7 +842,7 @@ TEST_CASE("Scan affinity teardown joins readiness publication", "[api][storage]"
 	bool release = false;
 	std::atomic<bool> drained {false};
 	idx_t produced = 0;
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	auto produce = [&](duckdb::vector<duckdb::unique_ptr<AsyncTask>> &tasks) -> duckdb::unique_ptr<ScanReadAheadJob> {
 		if (produced == 2) {
 			return nullptr;
@@ -877,7 +908,7 @@ TEST_CASE("Scan affinity delivers every assignment from concurrent producers", "
 	SECTION("Immediate asynchronous completion") {
 		reads = true;
 	}
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 3);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 3);
 	std::atomic<idx_t> next {0};
 	std::array<duckdb::vector<idx_t>, 4> received;
 	std::array<std::thread, 4> workers;

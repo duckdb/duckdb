@@ -2616,7 +2616,7 @@ TEST_CASE("Native scan affinity routes jobs by distinct loaded pool blocks", "[a
 	cached.blocks = {shards[0][0], shards[0][0], shards[0][0], shards[1][0], shards[1][1], unloaded, outside_pool};
 	REQUIRE(cached.GetCachedShard(allocator) == optional_idx(1));
 
-	auto scan = ScanReadAhead::CreateForAffinity(*con.context, 2);
+	auto scan = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::AFFINITY, false, 2);
 	idx_t produced = 0;
 	auto produce = [&](vector<unique_ptr<AsyncTask>> &) -> unique_ptr<ScanReadAheadJob> {
 		if (produced == 3) {

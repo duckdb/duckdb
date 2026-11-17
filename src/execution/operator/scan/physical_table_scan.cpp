@@ -88,6 +88,10 @@ public:
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
+			if (context.pipeline && context.pipeline->GetSource().get() == &op && context.pipeline->GetSink()) {
+				input.execution_order = context.pipeline->GetExecutionOrder();
+				input.max_threads = context.pipeline->GetMaxThreads();
+			}
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

@@ -1,6 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/function/table/native_scan_job.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -60,14 +59,6 @@ struct TableScanJobState {
 	unique_ptr<TableScanState> scan_state;
 };
 using TableScanJob = ScanReadAheadJobWrapper<TableScanJobState>;
-
-//! Create the read-ahead driver, returns null when read-ahead is disabled or prefetching is not beneficial
-static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context, DataTable &storage) {
-	if (!storage.GetTableIOManager().GetBlockManagerForRowData().Prefetch()) {
-		return nullptr;
-	}
-	return ScanReadAhead::Create(context);
-}
 
 //! Tracks how many rows of a scan assignment have been consumed, for reporting progress
 struct ScanAssignmentProgress {
@@ -391,8 +382,6 @@ private:
 	//! Preallocated counters spread progress updates without registering local states
 	vector<PaddedAtomic<idx_t>> progress;
 	TableScanScheduling scheduling = TableScanScheduling::UNINITIALIZED;
-	//! Prefetch policy is independent of whether affinity needs a scheduling driver.
-	bool prefetch_assignments = false;
 
 private:
 	void InitializeScheduling(ExecutionContext &context, TableFunctionInitInput &input) {
@@ -400,16 +389,11 @@ private:
 		if (scheduling != TableScanScheduling::UNINITIALIZED) {
 			return;
 		}
-		prefetch_assignments = bool(read_ahead);
-		auto pipeline = context.pipeline;
-		const bool native_source = pipeline && input.op && input.op.get() == pipeline->GetSource().get();
-		const bool unordered = native_source && !pipeline->IsOrderDependent() && pipeline->GetSink() &&
-		                       !pipeline->GetSink()->RequiredPartitionInfo().AnyRequired();
+		auto &blocks = storage.GetTableIOManager().GetBlockManagerForRowData();
 		idx_t affinity_shards = 0;
-		if (unordered) {
-			auto &blocks = storage.GetTableIOManager().GetBlockManagerForRowData();
-			const bool supported_scan = pipeline->GetMaxThreads() > 1 && !blocks.InMemory() &&
-			                            !bind_data.is_create_index && !bind_data.order_options && !sample_options;
+		if (input.execution_order == PipelineExecutionOrder::UNORDERED) {
+			const bool supported_scan = input.max_threads > 1 && !blocks.InMemory() && !bind_data.is_create_index &&
+			                            !bind_data.order_options && !sample_options;
 			if (supported_scan &&
 			    CollectionScanState::SupportsAssignmentBlockDiscovery(storage_ids, storage.GetTypes())) {
 				const auto shard_count = BlockAllocator::Get(storage.GetAttached()).GetPoolShardCount();
@@ -418,16 +402,15 @@ private:
 				}
 			}
 		}
-		if (affinity_shards) {
-			if (read_ahead) {
-				read_ahead->EnableAffinity(affinity_shards, pipeline->GetMaxThreads());
-			} else {
-				read_ahead = ScanReadAhead::CreateForAffinity(context.client, affinity_shards);
-			}
-			scheduling = TableScanScheduling::AFFINITY;
-		} else {
-			scheduling = read_ahead ? TableScanScheduling::ORDERED : TableScanScheduling::DIRECT;
-		}
+		const bool repeatable_percentage_sample =
+		    sample_options && sample_options->repeatable && sample_options->is_percentage;
+		const bool prefetch = !bind_data.is_create_index && !repeatable_percentage_sample && blocks.Prefetch();
+		const auto policy = affinity_shards ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
+		read_ahead = ScanReadAhead::Create(context.client, policy, prefetch, MaxValue<idx_t>(affinity_shards, 1),
+		                                   input.max_threads);
+		scheduling = affinity_shards ? TableScanScheduling::AFFINITY
+		             : read_ahead    ? TableScanScheduling::ORDERED
+		                             : TableScanScheduling::DIRECT;
 	}
 
 public:
@@ -487,7 +470,7 @@ public:
 			return nullptr;
 		}
 		if (job->assignment.source == TableScanSource::PERSISTENT) {
-			prepare.table_state.PrepareAssignmentBlocks(job->blocks, io_tasks, prefetch_assignments);
+			prepare.table_state.PrepareAssignmentBlocks(job->blocks, io_tasks, read_ahead->PrefetchEnabled());
 		}
 		prepare.ReleasePins();
 		return std::move(job);
@@ -508,7 +491,7 @@ public:
 		}
 		auto job = unique_ptr_cast<ScanReadAheadJob, NativeScanJob>(std::move(claimed));
 		l_state.assignment_progress.Start(job->assignment.row_group.RowCount());
-		if (l_state.scan_state.StartAssignment(job->assignment, prefetch_assignments)) {
+		if (l_state.scan_state.StartAssignment(job->assignment, read_ahead->PrefetchEnabled())) {
 			l_state.row_groups_scanned++;
 		}
 		job->assignment = TableScanAssignment();
@@ -827,11 +810,6 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);
-	const bool repeatable_percentage_sample =
-	    input.sample_options && input.sample_options->repeatable && input.sample_options->is_percentage;
-	if (!bind_data.is_create_index && !repeatable_percentage_sample) {
-		g_state->read_ahead = CreateTableScanReadAhead(context, storage);
-	}
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}

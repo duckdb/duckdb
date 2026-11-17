@@ -160,22 +160,26 @@ enum class ScanReadAheadAcquire : uint8_t {
 	PARKED     //! the scan task parked until work becomes ready, the caller must yield
 };
 
+enum class ScanReadAheadPolicy : uint8_t { ORDERED, AFFINITY };
+
 //! Shares the I/O executor, budget and cancellation lifecycle between ordered and affinity scans.
 //! Ordered consumers claim jobs before I/O completes and may park on the job's completion.
 //! Affinity completions own unfinished jobs; consumers claim only ready jobs and park on scan progress.
 class ScanReadAhead {
 public:
-	ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
-	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p);
+	ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
+	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor, bool prefetch_enabled = true,
+	              idx_t shard_count = 1, idx_t scan_concurrency = 0);
 	~ScanReadAhead();
 
-	//! Create the read-ahead driver from the read_ahead_depth setting, returns null when read-ahead is disabled.
+	//! Create a driver with a fixed scheduling policy; prefetch also requires async threads and read_ahead_depth.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
-	static unique_ptr<ScanReadAhead> Create(ClientContext &context);
-	//! A cached scan uses the same scheduling lifecycle without enabling prefetch.
-	static unique_ptr<ScanReadAhead> CreateForAffinity(ClientContext &context, idx_t shard_count);
-	//! Select unordered ready-work scheduling before any producer or consumer starts.
-	void EnableAffinity(idx_t shard_count, idx_t scan_concurrency);
+	//! Without prefetch, ordered scans need no driver; affinity scans retain their fixed assignment window.
+	static unique_ptr<ScanReadAhead> Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch = true,
+	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	bool PrefetchEnabled() const {
+		return prefetch_enabled;
+	}
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
@@ -212,6 +216,7 @@ public:
 	void CancelAndDrain();
 
 private:
+	static idx_t JobWindow(ScanReadAheadPolicy policy, idx_t read_ahead_depth, idx_t scan_concurrency);
 	//! Settles the reservation taken by TryReserveSlot
 	struct ProducerReservation {
 		explicit ProducerReservation(ScanReadAhead &read_ahead, idx_t count)
@@ -300,8 +305,9 @@ private:
 
 private:
 	ClientContext &context;
-	//! Admission window, finalized by affinity setup before any producer or consumer starts
-	idx_t job_window;
+	const bool prefetch_enabled;
+	//! Admission window, fixed together with the scheduling policy at construction.
+	const idx_t job_window;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
 	//! Maximum files opening or open ahead of decoding
@@ -313,7 +319,7 @@ private:
 
 	mutable mutex lock;
 	deque<unique_ptr<ScanReadAheadJob>> ready_queue;
-	unique_ptr<ScanAffinityQueue> affinity;
+	const unique_ptr<ScanAffinityQueue> affinity;
 	//! Jobs pushed out of order, held back until all earlier batch indexes are admitted to the queue
 	map<idx_t, unique_ptr<ScanReadAheadJob>> pending_jobs;
 	//! The batch index the queue admits next

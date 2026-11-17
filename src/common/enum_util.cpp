@@ -63,6 +63,7 @@
 #include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/pipeline_execution_order.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
@@ -5220,6 +5221,25 @@ PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchange
 	return static_cast<PipelineBroadcastExchangeScanMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeScanModeValues(), 2, "PipelineBroadcastExchangeScanMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPipelineExecutionOrderValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineExecutionOrder::PARTITIONED), "PARTITIONED" },
+		{ static_cast<uint32_t>(PipelineExecutionOrder::ORDERED), "ORDERED" },
+		{ static_cast<uint32_t>(PipelineExecutionOrder::UNORDERED), "UNORDERED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineExecutionOrder>(PipelineExecutionOrder value) {
+	return StringUtil::EnumToString(GetPipelineExecutionOrderValues(), 3, "PipelineExecutionOrder", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineExecutionOrder EnumUtil::FromString<PipelineExecutionOrder>(const char *value) {
+	return static_cast<PipelineExecutionOrder>(StringUtil::StringToEnum(GetPipelineExecutionOrderValues(), 3, "PipelineExecutionOrder", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPipelineInputModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PipelineInputMode::SCHEDULED_SOURCE), "SCHEDULED_SOURCE" },
@@ -6023,6 +6043,24 @@ const char* EnumUtil::ToChars<ScanReadAheadAcquire>(ScanReadAheadAcquire value) 
 template<>
 ScanReadAheadAcquire EnumUtil::FromString<ScanReadAheadAcquire>(const char *value) {
 	return static_cast<ScanReadAheadAcquire>(StringUtil::StringToEnum(GetScanReadAheadAcquireValues(), 3, "ScanReadAheadAcquire", value));
+}
+
+const StringUtil::EnumStringLiteral *GetScanReadAheadPolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ScanReadAheadPolicy::ORDERED), "ORDERED" },
+		{ static_cast<uint32_t>(ScanReadAheadPolicy::AFFINITY), "AFFINITY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ScanReadAheadPolicy>(ScanReadAheadPolicy value) {
+	return StringUtil::EnumToString(GetScanReadAheadPolicyValues(), 2, "ScanReadAheadPolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+ScanReadAheadPolicy EnumUtil::FromString<ScanReadAheadPolicy>(const char *value) {
+	return static_cast<ScanReadAheadPolicy>(StringUtil::StringToEnum(GetScanReadAheadPolicyValues(), 2, "ScanReadAheadPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {

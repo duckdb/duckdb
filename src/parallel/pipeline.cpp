@@ -217,6 +217,16 @@ idx_t Pipeline::GetMaxThreads() {
 	return max_threads;
 }
 
+PipelineExecutionOrder Pipeline::GetExecutionOrder() const {
+	if (!sink) {
+		return PipelineExecutionOrder::ORDERED;
+	}
+	if (sink->RequiredPartitionInfo().AnyRequired()) {
+		return PipelineExecutionOrder::PARTITIONED;
+	}
+	return IsOrderDependent() ? PipelineExecutionOrder::ORDERED : PipelineExecutionOrder::UNORDERED;
+}
+
 bool Pipeline::IsOrderDependent() const {
 	if (source) {
 		auto source_order = source->SourceOrder();

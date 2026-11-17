@@ -197,13 +197,28 @@ static idx_t GetOpenFileBudget(ClientContext &context) {
 	return FileSystem::GetFileDescriptorShare(file_descriptor_limit);
 }
 
-ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
-                             unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-    : context(context), job_window(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)),
+idx_t ScanReadAhead::JobWindow(ScanReadAheadPolicy policy, idx_t read_ahead_depth, idx_t scan_concurrency) {
+	if (policy == ScanReadAheadPolicy::ORDERED) {
+		return read_ahead_depth;
+	}
+	// Pending reads also occupy slots for work that would otherwise be held by scan workers.
+	const auto depth = MinValue<idx_t>(read_ahead_depth, AFFINITY_WINDOW);
+	return depth + MinValue<idx_t>(scan_concurrency, AFFINITY_WINDOW - depth);
+}
+
+ScanReadAhead::ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
+                             unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p, bool prefetch_enabled_p,
+                             idx_t shard_count, idx_t scan_concurrency)
+    : context(context), prefetch_enabled(prefetch_enabled_p),
+      job_window(JobWindow(policy, read_ahead_depth, scan_concurrency)), memory_governor(std::move(memory_governor_p)),
       open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
-                                  memory_governor ? 0 : job_window)),
-      open_file_budget(GetOpenFileBudget(context)) {
-	D_ASSERT(read_ahead_depth_p > 0);
+                                  memory_governor ? 0 : read_ahead_depth)),
+      open_file_budget(GetOpenFileBudget(context)),
+      affinity(policy == ScanReadAheadPolicy::AFFINITY ? make_uniq<ScanAffinityQueue>(shard_count) : nullptr) {
+	D_ASSERT(read_ahead_depth > 0);
+	if (affinity && memory_governor) {
+		memory_governor->UpdateReservation(MINIMUM_AFFINITY_JOB_CHARGE * AFFINITY_WINDOW);
+	}
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
@@ -217,39 +232,25 @@ void ScanReadAhead::CancelAndDrain() {
 	executor->CancelAndDrain();
 }
 
-unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context) {
-	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
-		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
-		return nullptr;
-	}
+unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch,
+                                                idx_t shard_count, idx_t scan_concurrency) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == 0) {
+	prefetch = prefetch && TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() > 0 && configured_depth != 0;
+	if (!prefetch) {
+		if (policy == ScanReadAheadPolicy::AFFINITY) {
+			return make_uniq<ScanReadAhead>(context, policy, AFFINITY_WINDOW, nullptr, false, shard_count,
+			                                scan_concurrency);
+		}
 		return nullptr;
 	}
 	if (configured_depth < 0) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
-		return make_uniq<ScanReadAhead>(context, NumericLimits<idx_t>::Maximum(),
-		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()));
+		return make_uniq<ScanReadAhead>(context, policy, NumericLimits<idx_t>::Maximum(),
+		                                make_uniq<ManagedAsyncMemoryGovernor>(context.GetContext()), true, shard_count,
+		                                scan_concurrency);
 	}
-	return make_uniq<ScanReadAhead>(context, NumericCast<idx_t>(configured_depth), nullptr);
-}
-
-unique_ptr<ScanReadAhead> ScanReadAhead::CreateForAffinity(ClientContext &context, idx_t shard_count) {
-	auto result = make_uniq<ScanReadAhead>(context, AFFINITY_WINDOW, nullptr);
-	result->EnableAffinity(shard_count, 0);
-	return result;
-}
-
-void ScanReadAhead::EnableAffinity(idx_t shard_count, idx_t scan_concurrency) {
-	D_ASSERT(!affinity && active_jobs == 0 && active_producers == 0 && !done);
-	affinity = make_uniq<ScanAffinityQueue>(shard_count);
-	// Pending reads occupy queue slots, including work that would otherwise be held by scan workers.
-	job_window = MinValue<idx_t>(job_window, AFFINITY_WINDOW);
-	job_window += MinValue<idx_t>(scan_concurrency, AFFINITY_WINDOW - job_window);
-	if (memory_governor) {
-		memory_governor->UpdateReservation(MINIMUM_AFFINITY_JOB_CHARGE * AFFINITY_WINDOW);
-		backlog_budget = memory_governor->BackpressureBudget();
-	}
+	return make_uniq<ScanReadAhead>(context, policy, NumericCast<idx_t>(configured_depth), nullptr, true, shard_count,
+	                                scan_concurrency);
 }
 
 idx_t ScanReadAhead::MinimumJobCharge() const {
@@ -663,11 +664,12 @@ void ScanReadAhead::PushError(ErrorData error) {
 }
 
 void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn) {
+	D_ASSERT(prefetch_enabled);
 	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, std::move(open_fn), std::move(cancel_fn)));
 }
 
 bool ScanReadAhead::CanScheduleOpen(idx_t files_ahead) const {
-	return files_ahead < open_window && ReadAheadOpenFile::Count() < open_file_budget;
+	return prefetch_enabled && files_ahead < open_window && ReadAheadOpenFile::Count() < open_file_budget;
 }
 
 bool ScanReadAhead::TryRunPendingTask() {

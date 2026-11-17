@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/pipeline_execution_order.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -223,6 +224,8 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
+	//! Execution order required by the pipeline, independent of operator caching.
+	PipelineExecutionOrder GetExecutionOrder() const;
 	//! Marks this pipeline as fed externally instead of by scheduled source tasks
 	void SetExternalInput(const vector<reference<Pipeline>> &producer_pipelines);
 	bool IsExternalInput() const {

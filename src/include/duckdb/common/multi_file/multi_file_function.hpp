@@ -409,7 +409,7 @@ public:
 				can_skip_file = true;
 			} else {
 				current_reader_data.reader->PrepareReader(context, *global_state.global_state);
-				if (global_state.read_ahead) {
+				if (global_state.read_ahead && global_state.read_ahead->PrefetchEnabled()) {
 					current_reader_data.reader->PrepareReadAhead(context, *global_state.global_state);
 				}
 			}
@@ -754,7 +754,7 @@ public:
 				continue;
 			}
 
-			if (gstate.read_ahead) {
+			if (gstate.read_ahead && gstate.read_ahead->PrefetchEnabled()) {
 				// read-ahead: open files on the async pool ahead of decoding, then wait for the front one
 				ScheduleFileOpens(context, bind_data, gstate, parallel_lock);
 			} else if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
@@ -763,7 +763,7 @@ public:
 
 			// Check if the current file is being opened, in that case we need to wait for it.
 			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
-				if (gstate.read_ahead) {
+				if (gstate.read_ahead && gstate.read_ahead->PrefetchEnabled()) {
 					WaitForAsyncOpen(context, gstate, parallel_lock);
 				} else {
 					WaitForFile(gstate.file_index, gstate, parallel_lock);
@@ -810,7 +810,7 @@ public:
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = ScanReadAhead::Create(context);
+		gstate.read_ahead = ScanReadAhead::Create(context, ScanReadAheadPolicy::ORDERED);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
