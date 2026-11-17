@@ -30,7 +30,7 @@ SELECT count(*), count(a), sum(length(a)) FROM read_csv('{TEST_DIR}/empty_lines_
 ----
 200	100	745
 
-loop buffer_size 20 60
+loop buffer_size 20 61
 
 query III
 SELECT count(*), count(a), sum(length(a)) FROM read_csv('{TEST_DIR}/empty_lines_crlf.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, buffer_size = {buffer_size}, parallel = false);
@@ -38,3 +38,33 @@ SELECT count(*), count(a), sum(length(a)) FROM read_csv('{TEST_DIR}/empty_lines_
 200	100	745
 
 endloop
+
+# a comment that fills two buffers, its line feed is the first byte of the third buffer: the comment ends there
+statement ok
+COPY (FROM (VALUES ('#' || repeat('x', 63)), ('7'), ('8')) t(a)) TO '{TEST_DIR}/comment_fills_buffers.csv' (HEADER false, QUOTE '');
+
+query I
+SELECT a FROM read_csv('{TEST_DIR}/comment_fills_buffers.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, comment = '#', buffer_size = 32, parallel = false);
+----
+7
+8
+
+query I
+SELECT a FROM read_csv('{TEST_DIR}/comment_fills_buffers.csv', columns = {'a': 'VARCHAR'}, header = false, auto_detect = false, comment = '#', nullstr = 'NULL', buffer_size = 32, parallel = false);
+----
+7
+8
+
+# an empty line whose line break starts a buffer is counted as a line: the error is on line 3 at every buffer size
+statement ok
+COPY (FROM (VALUES (repeat('0', 30) || '1'), (NULL), ('oops')) t(a)) TO '{TEST_DIR}/empty_line_before_error.csv' (HEADER false, NEW_LINE '\r\n');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/empty_line_before_error.csv', columns = {'a': 'INTEGER'}, header = false, auto_detect = false, new_line = '\r\n');
+----
+CSV Error on Line: 3
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/empty_line_before_error.csv', columns = {'a': 'INTEGER'}, header = false, auto_detect = false, new_line = '\r\n', buffer_size = 32, parallel = false);
+----
+CSV Error on Line: 3
