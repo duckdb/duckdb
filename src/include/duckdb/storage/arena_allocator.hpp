@@ -190,7 +190,7 @@ public:
 	}
 
 private:
-	void AllocateNewBlock(idx_t min_size);
+	DUCKDB_API void AllocateNewBlock(idx_t min_size);
 	//! Rewind to a position in an older chunk, or to the position of an arena that was empty
 	DUCKDB_API void RewindSlow(const Position &position);
 
