@@ -1,0 +1,500 @@
+module: context state
+#
+# State an extension keeps per connection. It is an object of the extension's, registered on a client context under a
+# key. It lives as long as the connection does, is told when queries and transactions begin and end, can add to the
+# query profile, and is destroyed with the connection. It is the counterpart of DuckDB's `ClientContextState`.
+
+handles:
+  context_state:
+    description: |
+      A borrowed opaque handle to connection state being set up, received by the init callback of
+      `[[context_get_or_create_state]]` or `[[connection_get_or_create_state]]` and valid only for the duration of
+      that call. Configure it with `[[context_state_set_user_data]]` and the callback setters; whatever is not set
+      stays inert.
+
+  context_state_profile:
+    description: |
+      A borrowed opaque handle to the profile of the query that just ended, received by a connection state's profiling
+      callback and valid only for the duration of that call. Add text to it with `[[context_state_profile_write]]`.
+
+callbacks:
+  context_state_init_callback:
+    description: |
+      Sets up the connection state of a key that has none yet.
+
+      Runs at most once per key and connection, while the connection's registered states are locked: it must not
+      create, get or remove connection state itself. A failure reported through `err` leaves the key unregistered
+      and fails the call that triggered the init.
+    parameters:
+      context:
+        type: context
+        description: Borrowed handle to the context the state is created for.
+      user_data:
+        type: void
+        indirection: 1
+        description: The pointer handed to `[[context_get_or_create_state]]`, passed through untouched.
+      state:
+        type: context_state
+        description: Borrowed handle to the state to configure.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure to set the state up through.
+    return_type: void
+
+  context_state_query_begin_callback:
+    description: |
+      Called when a query starts on the connection, before any of it runs. Called at most once per query, also for
+      the queries DuckDB runs on behalf of another. No transaction is guaranteed to be active.
+
+      An error reported through `err` fails the query.
+    parameters:
+      context:
+        type: context
+        description: Borrowed handle to the context of the query.
+      user_data:
+        type: void
+        indirection: 1
+        description: The data set via `[[context_state_set_user_data]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through.
+    return_type: void
+
+  context_state_query_end_callback:
+    description: |
+      Called when a query ends on the connection, whether it succeeded, failed or was cancelled. The place to drop
+      what was only meant to last for one query. No transaction is guaranteed to be active.
+
+      The callback cannot fail: there is nothing left to fail.
+    parameters:
+      context:
+        type: context
+        description: Borrowed handle to the context of the query.
+      user_data:
+        type: void
+        indirection: 1
+        description: The data set via `[[context_state_set_user_data]]`.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The message of the error that ended the query, or null if it succeeded. Borrowed for the duration of the call.
+      error_length:
+        type: idx
+        description: The length of `error` in bytes. `error` need not be null-terminated, and is NULL together with a length of 0.
+    return_type: void
+
+  context_state_transaction_begin_callback:
+    description: |
+      Called when a transaction starts on the connection, explicitly or automatically. The transaction is active.
+
+      An error reported through `err` fails the statement starting the transaction.
+    parameters:
+      context:
+        type: context
+        description: Borrowed handle to the context of the transaction.
+      user_data:
+        type: void
+        indirection: 1
+        description: The data set via `[[context_state_set_user_data]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through.
+    return_type: void
+
+  context_state_transaction_end_callback:
+    description: |
+      Called when a transaction ends on the connection: after it committed, or after it was rolled back, either
+      explicitly or because its statement failed. A transaction whose commit fails is reported as rolled back. No
+      transaction is active any longer.
+
+      The callback cannot fail: the transaction has already ended, and its fate does not depend on the callback.
+    parameters:
+      context:
+        type: context
+        description: Borrowed handle to the context of the transaction.
+      user_data:
+        type: void
+        indirection: 1
+        description: The data set via `[[context_state_set_user_data]]`.
+    return_type: void
+
+  context_state_profiling_callback:
+    description: |
+      Called when the text rendering of the profile of a query is written, as `EXPLAIN ANALYZE` does, to let the state
+      add to it. What the state writes comes out next to what other connection states wrote.
+    parameters:
+      profile:
+        type: context_state_profile
+        description: Borrowed handle to the profile being written.
+      user_data:
+        type: void
+        indirection: 1
+        description: The data set via `[[context_state_set_user_data]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error is dropped.
+    return_type: void
+
+functions:
+  context_get_or_create_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Gets the state registered under a key on the connection of a context, creating it first if there is none.
+
+      The init callback sets up a new state; it runs at most once per key and connection, also when several threads
+      race to get the same key. The state lives until `[[context_remove_state]]` or until the connection is
+      destroyed, and then releases its user data through the destructor bundled with it. The data pointer received is
+      the state's user data, valid for as long as the state is.
+
+      Keys are case-sensitive and shared by everything that registers state on the connection, DuckDB's extensions
+      included: prefix them with the name of the extension. A key held by something that is not state of this API
+      fails the call.
+    parameters:
+      context:
+        type: context
+        description: The context whose connection to take the state from.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed and copied.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      init:
+        type: context_state_init_callback
+        description: Sets up the state if the key has none yet.
+      init_user_data:
+        type: void
+        indirection: 1
+        description: Handed to the init callback. Borrowed for the duration of the call.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data of the state, or null if it set none. Optional.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  connection_get_or_create_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Gets the state registered under a key on a connection, creating it first if there is none. The same as
+      `[[context_get_or_create_state]]`, for a connection that is not seen from inside DuckDB.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to take the state from.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed and copied.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      init:
+        type: context_state_init_callback
+        description: Sets up the state if the key has none yet.
+      init_user_data:
+        type: void
+        indirection: 1
+        description: Handed to the init callback. Borrowed for the duration of the call.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data of the state, or null if it set none. Optional.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_get_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Looks up the state registered under a key on the connection of a context, without creating it.
+
+      `found` receives false if there is no state under the key, and `data` is then left untouched. The data pointer
+      is valid until the state is removed or the connection is destroyed.
+    parameters:
+      context:
+        type: context
+        description: The context whose connection to look the state up on.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      found:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the key has state.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data of the state, or null if it set none. Optional.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  connection_get_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Looks up the state registered under a key on a connection. The same as `[[context_get_state]]`.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to look the state up on.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      found:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the key has state.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data of the state, or null if it set none. Optional.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_remove_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Removes the state registered under a key on the connection of a context, destroying its user data. Removing a
+      key that has no state is not an error.
+
+      The callbacks of the state do not run for the query or transaction that is under way, and the data pointer
+      handed out earlier is not valid any longer.
+    parameters:
+      context:
+        type: context
+        description: The context whose connection to remove the state from.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  connection_remove_state:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Removes the state registered under a key on a connection. The same as `[[context_remove_state]]`.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to remove the state from.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The key of the state. Borrowed for the duration of the call.
+      key_length:
+        type: idx
+        description: The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the user data of the state, handed to all of its callbacks.
+
+      The opaque handle bundles the pointer with an optional destructor, invoked when the state is removed or its
+      connection is destroyed. If the state could not be created after all, because its init callback reported an
+      error, the destructor is invoked right away.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the user data pointer plus an optional destructor.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_query_begin_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when a query starts on the connection.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_query_begin_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_query_end_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when a query ends on the connection.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_query_end_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_transaction_begin_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when a transaction starts on the connection.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_transaction_begin_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_transaction_commit_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when a transaction on the connection committed.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_transaction_end_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_transaction_rollback_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when a transaction on the connection was rolled back.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_transaction_end_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_set_profiling_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Sets the callback called when the profile of a query is written, to let the state add to it.
+    parameters:
+      state:
+        type: context_state
+        description: The state to set the callback of.
+      callback:
+        type: context_state_profiling_callback
+        description: The callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_state_profile_write:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: Adds text to the profile being written. The text is borrowed and copied.
+    parameters:
+      profile:
+        type: context_state_profile
+        description: The profile to add to.
+      text:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The text to add.
+      text_length:
+        type: idx
+        description: The length of `text` in bytes. `text` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR

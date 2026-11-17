@@ -44,6 +44,7 @@ add_library_unity(
   capi_v2_schema.cpp
   capi_v2_secret.cpp
   capi_v2_object_cache.cpp
+  capi_v2_context_state.cpp
   capi_v2_statement.cpp
   capi_v2_stats.cpp
   capi_v2_tokenizer.cpp

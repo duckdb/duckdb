@@ -2034,6 +2034,394 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connect
 /* --- Struct definitions for connection --- */
 
 /* ============================================================================
+ * MODULE: context state
+ * ============================================================================ */
+
+/* --- Enums for context state --- */
+
+/* --- Struct forward declarations for context state --- */
+
+/* --- Types for context state --- */
+
+/*!
+ * A borrowed opaque handle to connection state being set up, received by the init callback of
+ * `duckdb_v2_context_get_or_create_state()` or `duckdb_v2_connection_get_or_create_state()` and valid only for the
+ * duration of that call. Configure it with `duckdb_v2_context_state_set_user_data()` and the callback setters; whatever
+ * is not set stays inert.
+ */
+typedef struct _duckdb_v2_context_state {
+	void *internal_ptr;
+} * duckdb_v2_context_state_handle;
+
+/*!
+ * A borrowed opaque handle to the profile of the query that just ended, received by a connection state's profiling
+ * callback and valid only for the duration of that call. Add text to it with `duckdb_v2_context_state_profile_write()`.
+ */
+typedef struct _duckdb_v2_context_state_profile {
+	void *internal_ptr;
+} * duckdb_v2_context_state_profile_handle;
+
+/* --- Constants for context state --- */
+
+/* --- Function pointer typedefs for context state --- */
+
+/*!
+ * Sets up the connection state of a key that has none yet.
+ *
+ * Runs at most once per key and connection, while the connection's registered states are locked: it must not create,
+ * get or remove connection state itself. A failure reported through `err` leaves the key unregistered and fails the
+ * call that triggered the init.
+ */
+typedef void (*duckdb_v2_context_state_init_callback_fn)(duckdb_v2_context_handle context, void *user_data,
+                                                         duckdb_v2_context_state_handle state,
+                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Called when a query starts on the connection, before any of it runs. Called at most once per query, also for the
+ * queries DuckDB runs on behalf of another. No transaction is guaranteed to be active.
+ *
+ * An error reported through `err` fails the query.
+ */
+typedef void (*duckdb_v2_context_state_query_begin_callback_fn)(duckdb_v2_context_handle context, void *user_data,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Called when a query ends on the connection, whether it succeeded, failed or was cancelled. The place to drop what was
+ * only meant to last for one query. No transaction is guaranteed to be active.
+ *
+ * The callback cannot fail: there is nothing left to fail.
+ */
+typedef void (*duckdb_v2_context_state_query_end_callback_fn)(duckdb_v2_context_handle context, void *user_data,
+                                                              const char *error, idx_t error_length);
+
+/*!
+ * Called when a transaction starts on the connection, explicitly or automatically. The transaction is active.
+ *
+ * An error reported through `err` fails the statement starting the transaction.
+ */
+typedef void (*duckdb_v2_context_state_transaction_begin_callback_fn)(duckdb_v2_context_handle context, void *user_data,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Called when a transaction ends on the connection: after it committed, or after it was rolled back, either explicitly
+ * or because its statement failed. A transaction whose commit fails is reported as rolled back. No transaction is
+ * active any longer.
+ *
+ * The callback cannot fail: the transaction has already ended, and its fate does not depend on the callback.
+ */
+typedef void (*duckdb_v2_context_state_transaction_end_callback_fn)(duckdb_v2_context_handle context, void *user_data);
+
+/*!
+ * Called when the text rendering of the profile of a query is written, as `EXPLAIN ANALYZE` does, to let the state add
+ * to it. What the state writes comes out next to what other connection states wrote.
+ */
+typedef void (*duckdb_v2_context_state_profiling_callback_fn)(duckdb_v2_context_state_profile_handle profile,
+                                                              void *user_data, duckdb_v2_error_info_handle *err);
+
+/* --- Functions for context state --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Gets the state registered under a key on the connection of a context, creating it first if there is none.
+ *
+ * The init callback sets up a new state; it runs at most once per key and connection, also when several threads race to
+ * get the same key. The state lives until `duckdb_v2_context_remove_state()` or until the connection is destroyed, and
+ * then releases its user data through the destructor bundled with it. The data pointer received is the state's user
+ * data, valid for as long as the state is.
+ *
+ * Keys are case-sensitive and shared by everything that registers state on the connection, DuckDB's extensions
+ * included: prefix them with the name of the extension. A key held by something that is not state of this API fails the
+ * call.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context whose connection to take the state from.
+ * @param key The key of the state. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param init Sets up the state if the key has none yet.
+ * @param init_user_data Handed to the init callback. Borrowed for the duration of the call.
+ * @param data Receives the user data of the state, or null if it set none. Optional.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_or_create_state(duckdb_v2_context_handle context, const char *key,
+                                                                   idx_t key_length,
+                                                                   duckdb_v2_context_state_init_callback_fn init,
+                                                                   void *init_user_data, void **data,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Gets the state registered under a key on a connection, creating it first if there is none. The same as
+ * `duckdb_v2_context_get_or_create_state()`, for a connection that is not seen from inside DuckDB.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to take the state from.
+ * @param key The key of the state. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param init Sets up the state if the key has none yet.
+ * @param init_user_data Handed to the init callback. Borrowed for the duration of the call.
+ * @param data Receives the user data of the state, or null if it set none. Optional.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_or_create_state(duckdb_v2_connection_handle conn, const char *key,
+                                                                      idx_t key_length,
+                                                                      duckdb_v2_context_state_init_callback_fn init,
+                                                                      void *init_user_data, void **data,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up the state registered under a key on the connection of a context, without creating it.
+ *
+ * `found` receives false if there is no state under the key, and `data` is then left untouched. The data pointer is
+ * valid until the state is removed or the connection is destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context whose connection to look the state up on.
+ * @param key The key of the state. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param found Receives whether the key has state.
+ * @param data Receives the user data of the state, or null if it set none. Optional.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_state(duckdb_v2_context_handle context, const char *key,
+                                                         idx_t key_length, bool *found, void **data,
+                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up the state registered under a key on a connection. The same as `duckdb_v2_context_get_state()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to look the state up on.
+ * @param key The key of the state. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param found Receives whether the key has state.
+ * @param data Receives the user data of the state, or null if it set none. Optional.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_state(duckdb_v2_connection_handle conn, const char *key,
+                                                            idx_t key_length, bool *found, void **data,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Removes the state registered under a key on the connection of a context, destroying its user data. Removing a key
+ * that has no state is not an error.
+ *
+ * The callbacks of the state do not run for the query or transaction that is under way, and the data pointer handed out
+ * earlier is not valid any longer.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param context The context whose connection to remove the state from.
+ * @param key The key of the state. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_remove_state(duckdb_v2_context_handle context, const char *key,
+                                                            idx_t key_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Removes the state registered under a key on a connection. The same as `duckdb_v2_context_remove_state()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to remove the state from.
+ * @param key The key of the state. Borrowed for the duration of the call.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
+ * 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_remove_state(duckdb_v2_connection_handle conn, const char *key,
+                                                               idx_t key_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the user data of the state, handed to all of its callbacks.
+ *
+ * The opaque handle bundles the pointer with an optional destructor, invoked when the state is removed or its
+ * connection is destroyed. If the state could not be created after all, because its init callback reported an error,
+ * the destructor is invoked right away.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_user_data(duckdb_v2_context_state_handle state,
+                                                                   duckdb_v2_opaque *data,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when a query starts on the connection.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_query_begin_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_query_begin_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when a query ends on the connection.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_query_end_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_query_end_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when a transaction starts on the connection.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_transaction_begin_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_transaction_begin_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when a transaction on the connection committed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_transaction_commit_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_transaction_end_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when a transaction on the connection was rolled back.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_transaction_rollback_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_transaction_end_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback called when the profile of a query is written, to let the state add to it.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param state The state to set the callback of.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_set_profiling_callback(
+    duckdb_v2_context_state_handle state, duckdb_v2_context_state_profiling_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Adds text to the profile being written. The text is borrowed and copied.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param profile The profile to add to.
+ * @param text The text to add.
+ * @param text_length The length of `text` in bytes. `text` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_state_profile_write(duckdb_v2_context_state_profile_handle profile,
+                                                                   const char *text, idx_t text_length,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+/* --- Struct definitions for context state --- */
+
+/* ============================================================================
  * MODULE: crypto
  * ============================================================================ */
 

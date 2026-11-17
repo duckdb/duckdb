@@ -37,6 +37,7 @@ add_library_unity(
   test_capi_v2_scalar_function.cpp
   test_capi_v2_secret.cpp
   test_capi_v2_object_cache.cpp
+  test_capi_v2_context_state.cpp
   test_capi_v2_statement_collection.cpp
   test_capi_v2_statement.cpp
   test_capi_v2_stats.cpp
