@@ -164,3 +164,160 @@ COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_order_by'
 (FORMAT PARQUET, ORDER_BY (id), FILE_SIZE_BYTES '200kB', PRESERVE_ORDER);
 ----
 PRESERVE_ORDER is not supported with these parameters
+
+# RETURN_STATS lists the files in the order they were written, with their row counts
+statement ok
+CREATE TABLE returned_stats AS
+WITH written AS (
+	COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_stats'
+	(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', FILENAME_PATTERN 'part_{uuid}', RETURN_STATS)
+)
+SELECT filename AS file, count AS row_count, row_number() OVER () AS position FROM written;
+
+query II
+SELECT count(*) > 2, sum(row_count) FROM returned_stats;
+----
+true	300000
+
+query II
+SELECT count(*), count(*) FILTER (WHERE k < prev)
+FROM (
+	SELECT k, lag(k) OVER (ORDER BY position, file_row_number) AS prev
+	FROM read_parquet('{TEST_DIR}/rotate_order_stats/*.parquet', filename = true, file_row_number = true)
+	JOIN returned_stats ON (filename = file)
+);
+----
+300000	0
+
+# the reported row counts are the files' own
+query I
+SELECT count(*) = (SELECT count(*) FROM returned_stats)
+FROM returned_stats
+JOIN (
+	SELECT filename AS file, count(*) AS row_count
+	FROM read_parquet('{TEST_DIR}/rotate_order_stats/*.parquet', filename = true)
+	GROUP BY ALL
+) USING (file, row_count);
+----
+true
+
+# no file rotates before it holds rows, and none is left empty
+query I
+SELECT min(row_count) > 0 FROM returned_stats;
+----
+true
+
+# an existing directory is checked as for any directory output
+statement error
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_many'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+----
+is not empty
+
+statement ok
+COPY (SELECT k, id FROM src WHERE id < 5000 ORDER BY k) TO '{TEST_DIR}/rotate_order_many'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', OVERWRITE);
+
+query III
+FROM order_breaks('{TEST_DIR}/rotate_order_many');
+----
+1	5000	0
+
+statement ok
+COPY (SELECT k, id FROM src WHERE id >= 5000 ORDER BY k) TO '{TEST_DIR}/rotate_order_many'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', FILENAME_PATTERN 'more_{uuid}', APPEND);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/rotate_order_many/*.parquet';
+----
+300000
+
+# WRITE_EMPTY_FILE false: rows get their files, no rows get none
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_skip_empty'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB', WRITE_EMPTY_FILE false);
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_skip_empty');
+----
+true	300000	0
+
+statement ok
+COPY (SELECT k, id FROM src WHERE id < 0 ORDER BY k) TO '{TEST_DIR}/rotate_order_skip_empty_none'
+(FORMAT PARQUET, FILE_SIZE_BYTES '200kB', WRITE_EMPTY_FILE false);
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/rotate_order_skip_empty_none/*');
+----
+0
+
+# CSV rotates in order too
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_csv'
+(FORMAT CSV, HEADER, FILE_SIZE_BYTES '500kB');
+
+# each file continues where the one before it stopped
+query III
+SELECT count(*) > 2, sum(row_count), count(*) FILTER (WHERE min_k <= prev_max_k)
+FROM (
+	SELECT min_k, row_count, lag(max_k) OVER (ORDER BY file_idx) AS prev_max_k
+	FROM (
+		SELECT regexp_extract(filename, 'data_(\d+)\.csv', 1)::BIGINT AS file_idx, min(k) AS min_k, max(k) AS max_k,
+		       count(*) AS row_count
+		FROM read_csv('{TEST_DIR}/rotate_order_csv/*.csv', filename = true, header = true)
+		GROUP BY ALL
+	)
+);
+----
+true	300000	0
+
+# a single thread has no batch indexes: the rows are sunk sequentially, and the order holds
+statement ok
+SET threads=1;
+
+statement ok
+COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_order_single_thread'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_single_thread');
+----
+true	300000	0
+
+statement ok
+SET threads=8;
+
+# a window over the sorted rows keeps their order
+statement ok
+COPY (SELECT k, id, row_number() OVER () AS rn FROM (SELECT k, id FROM src ORDER BY k)) TO '{TEST_DIR}/rotate_order_window'
+(FORMAT PARQUET, ROW_GROUP_SIZE 2048, FILE_SIZE_BYTES '200kB');
+
+query III
+SELECT files > 2, row_count, breaks FROM order_breaks('{TEST_DIR}/rotate_order_window');
+----
+true	300000	0
+
+# the plans: a sorted source keeps the parallel batch writer, an unsorted one the unordered parallel writer
+query II
+EXPLAIN COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_plan' (FORMAT PARQUET, FILE_SIZE_BYTES '200kB');
+----
+physical_plan	<REGEX>:.*Batch Copy To File.*
+
+query II
+EXPLAIN COPY src TO '{TEST_DIR}/rotate_plan' (FORMAT PARQUET, FILE_SIZE_BYTES '200kB');
+----
+physical_plan	<!REGEX>:.*Batch Copy To File.*
+
+query II
+EXPLAIN COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_plan' (FORMAT PARQUET, FILE_SIZE_BYTES '200kB', PRESERVE_ORDER false);
+----
+physical_plan	<!REGEX>:.*Batch Copy To File.*
+
+# without batch indexes the rotating writer sinks sequentially
+statement ok
+SET threads=1;
+
+query II
+EXPLAIN COPY (SELECT k, id FROM src ORDER BY k) TO '{TEST_DIR}/rotate_plan' (FORMAT PARQUET, FILE_SIZE_BYTES '200kB');
+----
+physical_plan	<!REGEX>:.*Batch Copy To File.*

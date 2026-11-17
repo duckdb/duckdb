@@ -33,12 +33,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, Physi
 		preserve_insertion_order = false;
 		supports_batch_index = false;
 	} else if (op.file_size_bytes.IsValid() || op.rotate) {
-		// rotated files are written one after another, so a sequential sink keeps the order across them
-		// only a required order is kept: the insertion order of an unordered source still writes in parallel
+		// rotated files are written one after another, so a required order is kept across them: by the batch
+		// writer, or by sinking sequentially. An unordered source's insertion order still writes in parallel
 		if (op.preserve_order == PreserveOrderType::AUTOMATIC) {
 			preserve_insertion_order = OrderPreservationRecursive(plan) == OrderPreservationType::FIXED_ORDER;
 		}
-		supports_batch_index = false;
+		if (op.use_tmp_file || !op.function.file_size_bytes) {
+			supports_batch_index = false;
+		}
 	}
 	auto mode = CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
 	if (op.function.execution_mode) {
@@ -63,6 +65,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, Physi
 
 		cast_copy.batch_size = op.batch_size;
 		cast_copy.batch_size_bytes = op.batch_size_bytes;
+		cast_copy.batches_per_file = op.batches_per_file;
+		cast_copy.file_size_bytes = op.file_size_bytes;
+		cast_copy.overwrite_mode = op.overwrite_mode;
+		cast_copy.filename_pattern = op.filename_pattern;
+		cast_copy.file_extension = op.file_extension;
 
 		return copy;
 	}
