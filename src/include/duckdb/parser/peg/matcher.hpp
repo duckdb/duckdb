@@ -302,7 +302,20 @@ struct MatcherFirstSet {
 	//! Merge other into this set, returns whether anything changed
 	DUCKDB_API bool Merge(const MatcherFirstSet &other);
 	//! False only if the matcher certainly cannot match at the current token
-	DUCKDB_API bool MightMatch(MatchState &state) const;
+	bool MightMatch(MatchState &state) const {
+		if (!computed || any || nullable) {
+			return true;
+		}
+		auto token = state.token_iterator.Current();
+		if (!token) {
+			return false;
+		}
+		if (token->token_class & class_mask) {
+			return true;
+		}
+		auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
+		return literal_id && HasLiteral(literal_id);
+	}
 };
 
 class Matcher {
