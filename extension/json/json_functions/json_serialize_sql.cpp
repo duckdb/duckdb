@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "json_deserializer.hpp"
@@ -11,12 +10,6 @@
 #include "json_serializer.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/literal.hpp"
-#include "duckdb/parser/common_table_expression_info.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -315,42 +308,6 @@ struct ExecuteSqlTableFunction {
 		return make_uniq<State>();
 	}
 
-	//! Binds a copy of the statement, rewritten as it will be when it runs, so the columns are the ones it returns
-	static void BindColumns(Binder &binder, ClientContext &context, BindData &data) {
-		unique_ptr<SQLStatement> statement = make_uniq<SelectStatement>();
-		statement->Cast<SelectStatement>().node = data.node->Copy();
-		Optimizer(binder, context).OptimizeStatement(statement);
-		auto bound = binder.Bind(*statement);
-		data.names = std::move(bound.names);
-		data.types = std::move(bound.types);
-	}
-
-	//! Pins each object a replacement scan found outside the catalog as a CTE around the statement, so that every
-	//! execution reads the object this bind found. Returns whether anything was pinned.
-	static bool PinReplacementScans(Binder &binder, BindData &data) {
-		bool pinned_any = false;
-		for (auto &replacement : binder.GetReplacementScans()) {
-			if (!replacement.second->external_dependency) {
-				continue;
-			}
-			pinned_any = true;
-			auto pinned = make_uniq<SelectNode>();
-			pinned->select_list.push_back(make_uniq<StarExpression>());
-			pinned->from_table = std::move(replacement.second);
-			auto cte_info = make_uniq<CommonTableExpressionInfo>();
-			cte_info->query_node = std::move(pinned);
-
-			auto outer = make_uniq<SelectNode>();
-			outer->select_list.push_back(make_uniq<StarExpression>());
-			auto inner = make_uniq<SelectStatement>();
-			inner->node = std::move(data.node);
-			outer->from_table = make_uniq<SubqueryRef>(std::move(inner), "query_relation");
-			outer->cte_map.map[replacement.first] = std::move(cte_info);
-			data.node = std::move(outer);
-		}
-		return pinned_any;
-	}
-
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		JSONFunctionLocalState local_state(context.GetContext());
@@ -370,18 +327,19 @@ struct ExecuteSqlTableFunction {
 		result->query = stmts[0]->ToString();
 		result->node = std::move(stmts[0]->node);
 
-		auto &inner_context = *result->con->context;
-		inner_context.RunFunctionInTransaction([&]() {
-			auto binder = Binder::CreateBinder(inner_context);
-			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-			BindColumns(*binder, inner_context, *result);
-			// the remote rewrite can push a pinned object down with the rest of the statement, where its unresolved
-			// name kept the statement local, so the columns come from the statement that runs
-			if (PinReplacementScans(*binder, *result) &&
-			    DatabaseManager::Get(inner_context).GetRemoteCatalogCount() > 0) {
-				BindColumns(*Binder::CreateBinder(inner_context), inner_context, *result);
-			}
-		});
+		// without query text, a prepare error keeps its position for the outer query to report
+		auto statement = make_uniq<SelectStatement>();
+		statement->node = result->node->Copy();
+		auto prepared = result->con->Prepare(std::move(statement));
+		if (prepared->HasError()) {
+			prepared->GetErrorObject().Throw();
+		}
+		// a parameter whose type stays open leaves the result unknown, one with a type shows as an expected type
+		if (!prepared->MetadataAvailable() || !prepared->GetExpectedParameterTypes().empty()) {
+			throw BinderException("json_execute_serialized_sql cannot execute a statement with parameters");
+		}
+		result->names = prepared->GetNames();
+		result->types = prepared->GetTypes();
 		return_types = result->types;
 		names = result->names;
 		return std::move(result);

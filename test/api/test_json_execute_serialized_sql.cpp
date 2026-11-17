@@ -61,6 +61,7 @@ TEST_CASE("json_execute_serialized_sql refuses a result that changed since the o
 }
 
 static std::atomic<idx_t> replacement_calls {0};
+static std::atomic<int32_t> outside_answer {42};
 
 static unique_ptr<TableRef> ReplaceWithOutsideObject(ClientContext &context, ReplacementScanInput &input,
                                                      optional_ptr<ReplacementScanData> data) {
@@ -69,26 +70,29 @@ static unique_ptr<TableRef> ReplaceWithOutsideObject(ClientContext &context, Rep
 	}
 	replacement_calls++;
 	Parser parser(context);
-	parser.ParseQuery("SELECT 42 AS answer");
+	parser.ParseQuery(StringUtil::Format("SELECT %d AS answer", outside_answer.load()));
 	auto select = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 	auto ref = make_uniq<SubqueryRef>(std::move(select), "outside_object");
 	ref->external_dependency = make_shared_ptr<ExternalDependency>();
 	return std::move(ref);
 }
 
-TEST_CASE("json_execute_serialized_sql looks up an object outside the catalog once", "[api][json]") {
+// A single lookup was a property of the relational API, which served a client that built relations and no longer does
+TEST_CASE("json_execute_serialized_sql looks up an object outside the catalog at bind and at every scan start",
+          "[api][json]") {
 	DuckDB db(nullptr);
 	if (!db.ExtensionIsLoaded("json")) {
 		return;
 	}
 	DBConfig::GetConfig(*db.instance).replacement_scans.emplace_back(ReplaceWithOutsideObject);
 	Connection con(db);
+	const string query =
+	    "SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM outside_object'))";
 
 	replacement_calls = 0;
-	auto result =
-	    con.Query("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM outside_object'))");
+	auto result = con.Query(query);
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-	REQUIRE(replacement_calls == 1);
+	REQUIRE(replacement_calls == 1 + 1);
 
 	// every iteration of the recursive query starts the scan again
 	replacement_calls = 0;
@@ -96,7 +100,15 @@ TEST_CASE("json_execute_serialized_sql looks up an object outside the catalog on
 	                   "FROM outside_object'))), walk(depth) AS (SELECT 0 UNION ALL SELECT depth + 1 FROM walk WHERE "
 	                   "depth < (SELECT count(*) + 2 FROM c)) SELECT max(depth) FROM walk");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-	REQUIRE(replacement_calls == 1);
+	REQUIRE(replacement_calls == 1 + 4);
+
+	// with one thread nothing of the submitted query runs before Complete, so its scan starts after the object changed
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	auto pending = con.Submit(query);
+	outside_answer = 43;
+	pending->Complete();
+	outside_answer = 42;
+	REQUIRE(CHECK_COLUMN(pending, 0, {43}));
 }
 
 static std::atomic<idx_t> second_outside_calls {0};
@@ -127,8 +139,7 @@ static unique_ptr<TableRef> ReplaceWithOtherObjects(ClientContext &context, Repl
 	return std::move(ref);
 }
 
-TEST_CASE("json_execute_serialized_sql looks up an object without an external dependency at every scan start",
-          "[api][json]") {
+TEST_CASE("json_execute_serialized_sql looks up objects with and without an external dependency alike", "[api][json]") {
 	DuckDB db(nullptr);
 	if (!db.ExtensionIsLoaded("json")) {
 		return;
@@ -143,7 +154,7 @@ TEST_CASE("json_execute_serialized_sql looks up an object without an external de
 	                        "outside_object, dependency_free_object'))");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7}));
-	REQUIRE(replacement_calls == 1);
+	REQUIRE(replacement_calls == 1 + 1);
 	REQUIRE(dependency_free_calls == 1 + 1);
 
 	replacement_calls = 0;
@@ -153,11 +164,13 @@ TEST_CASE("json_execute_serialized_sql looks up an object without an external de
 	              "FROM outside_object, dependency_free_object'))), walk(depth) AS (SELECT 0 UNION ALL SELECT depth + "
 	              "1 FROM walk WHERE depth < (SELECT count(*) + 2 FROM c)) SELECT max(depth) FROM walk");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-	REQUIRE(replacement_calls == 1);
+	REQUIRE(replacement_calls == 1 + 4);
 	REQUIRE(dependency_free_calls == 1 + 4);
 }
 
-TEST_CASE("json_execute_serialized_sql looks up each of two objects outside the catalog once", "[api][json]") {
+TEST_CASE(
+    "json_execute_serialized_sql looks up each of two objects outside the catalog at bind and at every scan start",
+    "[api][json]") {
 	DuckDB db(nullptr);
 	if (!db.ExtensionIsLoaded("json")) {
 		return;
@@ -172,8 +185,8 @@ TEST_CASE("json_execute_serialized_sql looks up each of two objects outside the 
 	                        "outside_object JOIN second_outside_object ON answer + 1 = second_answer'))");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {43}));
-	REQUIRE(replacement_calls == 1);
-	REQUIRE(second_outside_calls == 1);
+	REQUIRE(replacement_calls == 1 + 1);
+	REQUIRE(second_outside_calls == 1 + 1);
 
 	replacement_calls = 0;
 	second_outside_calls = 0;
@@ -182,8 +195,8 @@ TEST_CASE("json_execute_serialized_sql looks up each of two objects outside the 
 	                   "AS (SELECT 0 UNION ALL SELECT depth + 1 FROM walk WHERE depth < (SELECT count(*) + 2 FROM c)) "
 	                   "SELECT max(depth) FROM walk");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-	REQUIRE(replacement_calls == 1);
-	REQUIRE(second_outside_calls == 1);
+	REQUIRE(replacement_calls == 1 + 4);
+	REQUIRE(second_outside_calls == 1 + 4);
 }
 
 TEST_CASE("json_execute_serialized_sql logs the text of its statement once for every scan start", "[api][json]") {
@@ -300,11 +313,15 @@ TEST_CASE("json_execute_serialized_sql runs its statement as any SELECT when a r
 		REQUIRE(result->GetNames() == direct->GetNames());
 		REQUIRE(json_pushed_nodes.empty());
 	}
-	SECTION("an object pinned from a replacement scan joined with a remote table is bound as the statement that runs") {
-		replacement_calls = 0;
+	SECTION("an object from a replacement scan joined with a remote table runs locally, as in a direct SELECT") {
+		json_pushed_nodes.clear();
+		auto direct = con.Query("SELECT answer, i FROM outside_object, s.tbl ORDER BY i");
 		auto result = con.Query("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT answer, i FROM "
-		                        "outside_object, s.tbl'))");
+		                        "outside_object, s.tbl')) ORDER BY i");
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE(replacement_calls == 1);
+		REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42, 42, 42}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
+		REQUIRE(result->GetNames() == direct->GetNames());
+		REQUIRE(json_pushed_nodes.empty());
 	}
 }
