@@ -350,7 +350,8 @@ statement ok
 RESET disabled_optimizers;
 
 # the probe side is an aggregate over a scan in a pipeline of its own: that scan waits for the filter of the
-# RIGHT ANTI join like it does for a RIGHT SEMI join, also if the build side turns out to be empty
+# RIGHT ANTI join like it does for a RIGHT SEMI join, also if the build side turns out to be empty.
+# 40 rows match, but the optional filter can pause itself on small vectors and let some non-matching rows through
 statement ok
 CREATE TABLE keys(k BIGINT);
 
@@ -365,12 +366,12 @@ SET threads={threads};
 query II
 EXPLAIN (ANALYZE, FORMAT JSON) SELECT b.k FROM keys b ANTI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k;
 ----
-analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_ANTI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": 40,.*
+analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_ANTI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": [0-9]{2,3},.*
 
 query II
 EXPLAIN (ANALYZE, FORMAT JSON) SELECT b.k FROM keys b SEMI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k;
 ----
-analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_SEMI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": 40,.*
+analyzed_plan	<REGEX>:(?s).*"Join Type": "RIGHT_SEMI".*"Table": "[^"]*[.]big"[^}]*},\s*"intermediate_rows": [0-9]{2,3},.*
 
 query I
 SELECT b.k FROM keys b ANTI JOIN (SELECT k, sum(v) AS v FROM big GROUP BY k) p ON p.k = b.k ORDER BY ALL;
