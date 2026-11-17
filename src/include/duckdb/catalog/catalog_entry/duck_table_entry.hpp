@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class CommitDropState;
+class ColumnDataCollection;
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
@@ -44,6 +45,9 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 
 	unique_ptr<BlockingSample> GetSample() override;
+	//! Fetch projected rows for filter estimation, or nullptr if sampling is too costly or unsupported.
+	unique_ptr<ColumnDataCollection> SampleRows(ClientContext &context, const vector<ColumnIndex> &column_indexes,
+	                                            idx_t requested_rows);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 

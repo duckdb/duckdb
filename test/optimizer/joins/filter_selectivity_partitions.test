@@ -1,0 +1,114 @@
+# name: test/optimizer/joins/filter_selectivity_partitions.test
+# description: Bound filter estimates using whole surviving storage partitions
+# group: [joins]
+
+require parquet
+
+statement ok
+ATTACH '{TEST_DIR}/filter_partitions.db' AS parts (ROW_GROUP_SIZE 2048);
+
+statement ok
+SET filter_selectivity_sample_size = 0;
+
+statement ok
+SET explain_output = 'optimized_only';
+
+statement ok
+CREATE TABLE parts.t AS SELECT -100000 AS unused, i, i % 2 AS other FROM range(40960) r(i);
+
+statement ok
+ALTER TABLE parts.t DROP unused;
+
+statement ok
+CHECKPOINT parts;
+
+# The logical filter column differs from its physical storage column.
+# One qualifying row remains in a group of 2048; do not interpolate within that group.
+query II
+EXPLAIN (FORMAT JSON) SELECT i FROM parts.t WHERE i >= 40959;
+----
+logical_opt	<REGEX>:.*"Table":\s*"parts.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"2048".*
+
+query I
+SELECT count(*) FROM parts.t WHERE i >= 40959;
+----
+1
+
+# An unpushed expression is estimated after the scan's partition bound.
+query II
+EXPLAIN (FORMAT JSON) SELECT i FROM parts.t WHERE i >= 40959 AND i + other > 40959;
+----
+logical_opt	<REGEX>:.*"Table":\s*"parts.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"2048".*
+
+query I
+SELECT count(*) FROM parts.t WHERE i >= 40959 AND i + other > 40959;
+----
+1
+
+# A single Parquet file already exposes its row-group statistics.
+statement ok
+COPY (SELECT i FROM parts.t ORDER BY i) TO '{TEST_DIR}/filter_partitions.parquet' (ROW_GROUP_SIZE 2048);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM '{TEST_DIR}/filter_partitions.parquet' WHERE i >= 40959;
+----
+logical_opt	<REGEX>:.*"Estimated Cardinality":\s*"2048".*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/filter_partitions.parquet' WHERE i >= 40959;
+----
+1
+
+# Approximate counts for transaction-local rows retain the heuristic estimate.
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO parts.t SELECT i, 0 FROM range(50000, 51000) r(i);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT i FROM parts.t WHERE i >= 40959;
+----
+logical_opt	<REGEX>:.*"Table":\s*"parts.main.t",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"8392".*
+
+query I
+SELECT count(*) FROM parts.t WHERE i >= 40959;
+----
+1001
+
+statement ok
+ROLLBACK;
+
+# Global min/max overlap the predicate, but no partition can contain a matching row.
+statement ok
+CREATE TABLE parts.gaps AS SELECT (i // 2048) * 10000 + i % 2048 AS i FROM range(40960) r(i);
+
+statement ok
+CHECKPOINT parts;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM parts.gaps WHERE i BETWEEN 2100 AND 9999;
+----
+logical_opt	<REGEX>:.*"Table":\s*"parts.main.gaps",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"0".*
+
+query I
+SELECT count(*) FROM parts.gaps WHERE i BETWEEN 2100 AND 9999;
+----
+0
+
+statement ok
+CREATE TABLE parts.strings AS
+SELECT CASE WHEN i >= 40958 THEN 'z' ELSE 'a' END AS s FROM range(40960) r(i);
+
+statement ok
+CHECKPOINT parts;
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM parts.strings WHERE s = 'z';
+----
+logical_opt	<REGEX>:.*"Table":\s*"parts.main.strings",\s*"Type":\s*"Sequential Scan",\s*"Estimated Cardinality":\s*"2048".*
+
+query I
+SELECT count(*) FROM parts.strings WHERE s = 'z';
+----
+2

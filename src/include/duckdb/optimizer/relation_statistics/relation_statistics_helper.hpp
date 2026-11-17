@@ -45,6 +45,15 @@ struct SemiAntiJoinCardinalityEstimate {
 	bool used_domain_evidence;
 };
 
+struct FilterSampleCounts {
+	//! Rows entering and passing the final filter stage.
+	idx_t evaluated_count = 0;
+	idx_t passing_count = 0;
+	//! Rows matching the condition before and after all filter stages.
+	idx_t condition_count = 0;
+	idx_t filtered_condition_count = 0;
+};
+
 class RelationStatisticsHelper {
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
@@ -69,7 +78,8 @@ public:
 	                                                       RelationStatsExtractor &extractor,
 	                                                       bool use_operator_cardinality = false);
 	static optional<RelationStats> ExtractWindowStats(LogicalWindow &window, const RelationStats &child_stats);
-	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats);
+	static optional<RelationStats> ExtractFilterStats(LogicalFilter &filter, const RelationStats &child_stats,
+	                                                  ClientContext &context);
 	static optional<RelationStats> ExtractLimitStats(LogicalLimit &limit, const RelationStats &child_stats);
 	static RelationStats ExtractEmptyResultStats(LogicalEmptyResult &empty);
 	static optional<RelationStats> ProjectOutputStats(const RelationStats &stats, LogicalOperator &op);
@@ -107,7 +117,23 @@ public:
 	static optional_idx EstimateDirectFilterDomain(const Expression &expression, optional<ColumnBinding> target_binding,
 	                                               idx_t maximum_domain);
 
+	//! Copy a filter, treating optional terms in conjunctions as TRUE.
+	static unique_ptr<Expression> CopyMandatoryFilter(const Expression &filter);
+	//! Evaluate the scan filters and residual stages on one sample.
+	static FilterSampleCounts SampleFilterPassCounts(ClientContext &context, LogicalGet &get,
+	                                                 const vector<vector<reference<const Expression>>> &filter_stages,
+	                                                 optional_ptr<const Expression> conditioning = nullptr);
+	//! Correct for filters correlated with a joining population's key range.
+	static optional<double> ConditionalFilterFactor(ClientContext &context, LogicalGet &filtered,
+	                                                ProjectionIndex filtered_key, LogicalGet &population,
+	                                                ProjectionIndex population_key);
+
 private:
+	//! The selectivity of a filter chain on top of a scan, estimated on a row sample of the scan
+	static optional<double> SampleFilterSelectivity(ClientContext &context, LogicalFilter &filter,
+	                                                double prior_selectivity);
+	static double SampledSelectivity(idx_t passing_count, idx_t evaluated_count, double prior_selectivity);
+
 	static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalGet &get, ClientContext &context,
 	                                                      const ColumnIndex &column_id);
 };

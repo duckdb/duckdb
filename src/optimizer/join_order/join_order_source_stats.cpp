@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/join_order/join_order_source_stats.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/optimizer/join_order/join_predicate.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -14,41 +16,6 @@ namespace duckdb {
 
 JoinOrderSourceStats::JoinOrderSourceStats(ClientContext &context, LogicalOperator &root) {
 	AddPlan(context, root);
-}
-
-void JoinOrderSourceStats::AddPlan(ClientContext &context, LogicalOperator &root) {
-	vector<reference<LogicalOperator>> pending {root};
-	vector<reference<LogicalProjection>> pending_projections;
-	while (!pending.empty()) {
-		auto &op = pending.back().get();
-		pending.pop_back();
-		if (op.type == LogicalOperatorType::LOGICAL_GET && op.children.empty()) {
-			auto &get = op.Cast<LogicalGet>();
-			if (scans.find(get.table_index) == scans.end()) {
-				auto cardinality = get.EstimateSourceCardinality(context);
-				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, cardinality);
-				scans.emplace(get.table_index, ScanStats {cardinality, std::move(stats)});
-			}
-		}
-		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			pending_projections.push_back(op.Cast<LogicalProjection>());
-		}
-		for (auto &child : op.children) {
-			pending.push_back(*child);
-		}
-	}
-	// Capture children first, reusing their summaries when resolving each parent.
-	for (auto it = pending_projections.rbegin(); it != pending_projections.rend(); ++it) {
-		auto &projection = it->get();
-		if (projections.find(projection.table_index) == projections.end()) {
-			projections.emplace(projection.table_index, Resolve(projection));
-		}
-	}
-}
-
-optional_ptr<const RelationStats> JoinOrderSourceStats::FindScanStats(const LogicalGet &get) const {
-	auto entry = scans.find(get.table_index);
-	return entry == scans.end() ? nullptr : optional_ptr<const RelationStats>(entry->second.stats);
 }
 
 static idx_t SourceChildCount(LogicalOperator &op) {
@@ -76,6 +43,86 @@ static idx_t SourceChildCount(LogicalOperator &op) {
 	default:
 		return 0;
 	}
+}
+
+void JoinOrderSourceStats::AddPlan(ClientContext &context, LogicalOperator &root) {
+	const auto sample_size = Settings::Get<FilterSelectivitySampleSizeSetting>(context);
+	bool has_sampled_filter = false;
+	bool has_inner_join = false;
+	vector<reference<LogicalOperator>> pending {root};
+	vector<reference<LogicalProjection>> pending_projections;
+	vector<reference<LogicalOperator>> source_roots {root};
+	unordered_map<TableIndex, reference<LogicalGet>> new_scans;
+	while (!pending.empty()) {
+		auto &op = pending.back().get();
+		pending.pop_back();
+		if (op.type == LogicalOperatorType::LOGICAL_GET && op.children.empty()) {
+			auto &get = op.Cast<LogicalGet>();
+			if (scans.find(get.table_index) == scans.end()) {
+				auto cardinality = get.EstimateSourceCardinality(context);
+				auto stats = RelationStatisticsHelper::ExtractGetStats(get, context, cardinality);
+				scans.emplace(get.table_index, ScanStats {cardinality, std::move(stats)});
+				new_scans.emplace(get.table_index, get);
+				auto table = get.GetTable();
+				if (sample_size && table && table->TryGetDuckTableEntry()) {
+					for (auto &entry : get.table_filters) {
+						has_sampled_filter |= !ExpressionFilter::IsOptionalFilter(entry.Filter());
+					}
+				}
+			}
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			pending_projections.push_back(op.Cast<LogicalProjection>());
+		}
+		has_inner_join |= op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		                  op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
+		auto source_child_count = SourceChildCount(op);
+		for (idx_t i = 0; i < op.children.size(); i++) {
+			auto &child = *op.children[i];
+			pending.push_back(child);
+			if (i >= source_child_count) {
+				source_roots.push_back(child);
+			}
+		}
+	}
+	vector<pair<ColumnBinding, ColumnBinding>> join_pairs;
+	if (has_sampled_filter && has_inner_join) {
+		for (auto &source_root : source_roots) {
+			ResolveInternal(source_root, join_pairs);
+		}
+	}
+	column_binding_map_t<column_binding_set_t> considered;
+	for (auto &join_pair : join_pairs) {
+		for (bool reverse : {false, true}) {
+			auto filtered = reverse ? join_pair.second : join_pair.first;
+			auto population = reverse ? join_pair.first : join_pair.second;
+			auto filtered_get = new_scans.find(filtered.table_index);
+			auto population_get = new_scans.find(population.table_index);
+			// Previously captured scans may already have been optimized.
+			if (filtered_get == new_scans.end() || population_get == new_scans.end() ||
+			    !considered[filtered].insert(population).second) {
+				continue;
+			}
+			auto factor = RelationStatisticsHelper::ConditionalFilterFactor(
+			    context, filtered_get->second.get(), filtered.column_index, population_get->second.get(),
+			    population.column_index);
+			if (factor) {
+				scans.at(filtered.table_index).filter_factors[filtered].emplace(population, *factor);
+			}
+		}
+	}
+	// Capture children first, reusing their summaries when resolving each parent.
+	for (auto it = pending_projections.rbegin(); it != pending_projections.rend(); ++it) {
+		auto &projection = it->get();
+		if (projections.find(projection.table_index) == projections.end()) {
+			projections.emplace(projection.table_index, Resolve(projection));
+		}
+	}
+}
+
+optional_ptr<const RelationStats> JoinOrderSourceStats::FindScanStats(const LogicalGet &get) const {
+	auto entry = scans.find(get.table_index);
+	return entry == scans.end() ? nullptr : optional_ptr<const RelationStats>(entry->second.stats);
 }
 
 static void AddSourceEquality(JoinEqualityGroups &groups, ExpressionType type, const Expression &left,
@@ -150,6 +197,12 @@ static void MergeEquivalentSources(LogicalOperator &op, join_column_sources_t &i
 }
 
 join_column_sources_t JoinOrderSourceStats::Resolve(LogicalOperator &root) const {
+	return ResolveInternal(root, nullptr);
+}
+
+join_column_sources_t
+JoinOrderSourceStats::ResolveInternal(LogicalOperator &root,
+                                      optional_ptr<vector<pair<ColumnBinding, ColumnBinding>>> join_pairs) const {
 	struct Frame {
 		explicit Frame(LogicalOperator &op) : op(op) {
 		}
@@ -171,6 +224,19 @@ join_column_sources_t JoinOrderSourceStats::Resolve(LogicalOperator &root) const
 			stack.emplace_back(child);
 			continue;
 		}
+		if (join_pairs && op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		    op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER) {
+			for (auto &condition : op.Cast<LogicalComparisonJoin>().conditions) {
+				if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+					continue;
+				}
+				auto left = frame.inputs.find(JoinOrderUtil::GetEquivalenceBinding(condition.GetLHS()));
+				auto right = frame.inputs.find(JoinOrderUtil::GetEquivalenceBinding(condition.GetRHS()));
+				if (left != frame.inputs.end() && right != frame.inputs.end()) {
+					join_pairs->emplace_back(left->second.direct.binding, right->second.direct.binding);
+				}
+			}
+		}
 		MergeEquivalentSources(op, frame.inputs);
 		join_column_sources_t output;
 		if (cached != projections.end()) {
@@ -181,8 +247,13 @@ join_column_sources_t JoinOrderSourceStats::Resolve(LogicalOperator &root) const
 			if (entry != scans.end() && !get.extra_info.sample_options) {
 				auto &scan = entry->second;
 				for (auto &column : scan.stats.columns) {
-					output.emplace(column.binding, JoinColumnSources({column.binding, scan.cardinality,
-					                                                  scan.stats.cardinality, column.total_domain}));
+					JoinColumnSources source(
+					    {column.binding, scan.cardinality, scan.stats.cardinality, column.total_domain});
+					auto factors = scan.filter_factors.find(column.binding);
+					if (factors != scan.filter_factors.end()) {
+						source.filter_factors = factors->second;
+					}
+					output.emplace(column.binding, std::move(source));
 				}
 			}
 		} else if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
