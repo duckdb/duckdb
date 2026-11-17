@@ -143,25 +143,6 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ct
 	return DUCKDB_V2_ERROR_API; // Not yet implemented
 }
 
-DUCKDB_V2_ERROR duckdb_v2_context_list_secrets(duckdb_v2_context_handle ctx, duckdb_v2_secret_list_handle *list,
-                                               duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_list_get_count(duckdb_v2_secret_list_handle list, idx_t *count,
-                                                duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_list_get_secret(duckdb_v2_secret_list_handle list, idx_t index,
-                                                 duckdb_v2_secret_handle *secret, duckdb_v2_error_info_handle *err) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
-DUCKDB_V2_ERROR duckdb_v2_secret_list_destroy(duckdb_v2_secret_list_handle *list) {
-	return DUCKDB_V2_ERROR_API; // Not yet implemented
-}
-
 DUCKDB_V2_ERROR duckdb_v2_context_create_secret(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret,
                                                 DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
                                                 duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err) {

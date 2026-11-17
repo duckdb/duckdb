@@ -1607,8 +1607,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_secret_by_name)
 	(duckdb_v2_context_handle ctx, const char *name, idx_t name_length, duckdb_v2_secret_handle *secret,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_context_list_secrets)
-	(duckdb_v2_context_handle ctx, duckdb_v2_secret_list_handle *list, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_lookup_secret)
 	(duckdb_v2_context_handle ctx, const char *path, idx_t path_length, const char *type, idx_t type_length,
 	 duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err);
@@ -1659,11 +1657,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_is_key_redacted)
 	(duckdb_v2_secret_handle secret, const char *key, idx_t key_length, bool *redacted,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_secret_list_destroy)(duckdb_v2_secret_list_handle *list);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_list_get_count)
-	(duckdb_v2_secret_list_handle list, idx_t *count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_list_get_secret)
-	(duckdb_v2_secret_list_handle list, idx_t index, duckdb_v2_secret_handle *secret, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_property)
 	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property, const char *value, idx_t value_length,
 	 duckdb_v2_error_info_handle *err);
@@ -3733,9 +3726,6 @@ typedef struct {
 #define duckdb_v2_context_get_secret_by_name duckdb_ext_api.duckdb_v2_context_get_secret_by_name
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_context_list_secrets duckdb_ext_api.duckdb_v2_context_list_secrets
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_context_lookup_secret duckdb_ext_api.duckdb_v2_context_lookup_secret
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3800,15 +3790,6 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_secret_is_key_redacted duckdb_ext_api.duckdb_v2_secret_is_key_redacted
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_secret_list_destroy duckdb_ext_api.duckdb_v2_secret_list_destroy
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_secret_list_get_count duckdb_ext_api.duckdb_v2_secret_list_get_count
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_secret_list_get_secret duckdb_ext_api.duckdb_v2_secret_list_get_secret
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_secret_set_property duckdb_ext_api.duckdb_v2_secret_set_property

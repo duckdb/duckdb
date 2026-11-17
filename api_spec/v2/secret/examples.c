@@ -127,32 +127,8 @@ static void RefreshSecret(duckdb_v2_context_handle ctx, duckdb_v2_factory_handle
  * quack: a secret by name, or the single secret of the type. (quack_secret.cpp)
  * ---------------------------------------------------------------------------------------------------------------- */
 
-static duckdb_v2_secret_handle QuackFindSingleSecret(duckdb_v2_context_handle ctx) {
-	duckdb_v2_secret_list_handle list = NULL;
-	duckdb_v2_context_list_secrets(ctx, &list, NULL);
-	idx_t count = 0;
-	duckdb_v2_secret_list_get_count(list, &count, NULL);
-	duckdb_v2_secret_handle result = NULL;
-	for (idx_t i = 0; i < count; i++) {
-		duckdb_v2_secret_handle secret = NULL;
-		duckdb_v2_secret_list_get_secret(list, i, &secret, NULL);
-		sv type;
-		duckdb_v2_secret_get_property(secret, DUCKDB_V2_SECRET_PROPERTY_TYPE, &type.ptr, &type.len, NULL);
-		if (type.len != 5 || strncasecmp(type.ptr, "quack", 5) != 0) {
-			duckdb_v2_secret_destroy(&secret);
-			continue;
-		}
-		if (result) { /* ambiguous: the caller falls back to its defaults */
-			duckdb_v2_secret_destroy(&secret);
-			duckdb_v2_secret_destroy(&result);
-			break;
-		}
-		result = secret;
-	}
-	duckdb_v2_secret_list_destroy(&list);
-	return result;
-}
-
+/* The single secret of the type is found by listing with SQL (SELECT name FROM duckdb_secrets() WHERE type = ...) and
+ * then reading it by name. */
 static duckdb_v2_secret_handle QuackFindByName(duckdb_v2_context_handle ctx, const char *name) {
 	duckdb_v2_secret_handle secret = NULL;
 	duckdb_v2_context_get_secret_by_name(ctx, S(name), &secret, NULL);

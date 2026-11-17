@@ -4883,24 +4883,15 @@ typedef struct _duckdb_v2_secret_function {
 
 /*!
  * A handle to a key/value secret. Owned when built with `duckdb_v2_secret_create()` or returned by
- * `duckdb_v2_context_lookup_secret()`, `duckdb_v2_context_get_secret_by_name()`, `duckdb_v2_secret_list_get_secret()`
- * and `duckdb_v2_context_create_secret()`: the caller destroys it with `duckdb_v2_secret_destroy()` and may change it
- * with the setters, which never affects a stored secret. Borrowed when received by a create callback, valid only for
- * the duration of the call: the `input` is read-only, describing the `CREATE SECRET` statement with its options as
- * keys, and the `output` is the secret to fill, with its type, provider, name and scope already set from the statement.
+ * `duckdb_v2_context_lookup_secret()`, `duckdb_v2_context_get_secret_by_name()` and
+ * `duckdb_v2_context_create_secret()`: the caller destroys it with `duckdb_v2_secret_destroy()` and may change it with
+ * the setters, which never affects a stored secret. Borrowed when received by a create callback, valid only for the
+ * duration of the call: the `input` is read-only, describing the `CREATE SECRET` statement with its options as keys,
+ * and the `output` is the secret to fill, with its type, provider, name and scope already set from the statement.
  */
 typedef struct _duckdb_v2_secret {
 	void *internal_ptr;
 } * duckdb_v2_secret_handle;
-
-/*!
- * An owned opaque handle to the secrets visible to a context at the time of `duckdb_v2_context_list_secrets()`. Read it
- * with `duckdb_v2_secret_list_get_count()` and `duckdb_v2_secret_list_get_secret()`, and destroy it with
- * `duckdb_v2_secret_list_destroy()`.
- */
-typedef struct _duckdb_v2_secret_list {
-	void *internal_ptr;
-} * duckdb_v2_secret_list_handle;
 
 /* --- Constants for secret --- */
 
@@ -5491,82 +5482,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_h
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_context_handle ctx, const char *name,
                                                                   idx_t name_length, duckdb_v2_secret_handle *secret,
                                                                   duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Lists the secrets visible to the context, of every type, across all storages.
- *
- * The list is a snapshot owned by the caller, to destroy via `duckdb_v2_secret_list_destroy()`. To find the secrets of
- * one type, compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()` while iterating.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param ctx The context to list in.
- * @param list Receives the list. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_list_secrets(duckdb_v2_context_handle ctx,
-                                                            duckdb_v2_secret_list_handle *list,
-                                                            duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Retrieves the number of secrets in the list.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param list The secret list.
- * @param count Receives the number of secrets.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_list_get_count(duckdb_v2_secret_list_handle list, idx_t *count,
-                                                             duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Retrieves a secret of the list.
- *
- * The secret is a copy owned by the caller, to destroy via `duckdb_v2_secret_destroy()`; it stays valid when the list
- * is destroyed. Fails with `ERROR_INPUT_OUT_OF_RANGE` when the index is not below `duckdb_v2_secret_list_get_count()`.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param list The secret list.
- * @param index The index of the secret.
- * @param secret Receives the secret. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_list_get_secret(duckdb_v2_secret_list_handle list, idx_t index,
-                                                              duckdb_v2_secret_handle *secret,
-                                                              duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Destroys the secret list, releasing its resources. Secrets retrieved from it are not affected.
- *
- * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
- * double-destruction.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param list The secret list to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_list_destroy(duckdb_v2_secret_list_handle *list);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

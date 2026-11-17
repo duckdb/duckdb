@@ -1533,8 +1533,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_secret_by_name)
 	(duckdb_v2_context_handle ctx, const char *name, idx_t name_length, duckdb_v2_secret_handle *secret,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_context_list_secrets)
-	(duckdb_v2_context_handle ctx, duckdb_v2_secret_list_handle *list, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_lookup_secret)
 	(duckdb_v2_context_handle ctx, const char *path, idx_t path_length, const char *type, idx_t type_length,
 	 duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err);
@@ -1585,11 +1583,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_is_key_redacted)
 	(duckdb_v2_secret_handle secret, const char *key, idx_t key_length, bool *redacted,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_secret_list_destroy)(duckdb_v2_secret_list_handle *list);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_list_get_count)
-	(duckdb_v2_secret_list_handle list, idx_t *count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_secret_list_get_secret)
-	(duckdb_v2_secret_list_handle list, idx_t index, duckdb_v2_secret_handle *secret, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_set_property)
 	(duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property, const char *value, idx_t value_length,
 	 duckdb_v2_error_info_handle *err);
@@ -2293,7 +2286,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_connection_register_secret_function = duckdb_v2_connection_register_secret_function;
 	result.duckdb_v2_context_create_secret = duckdb_v2_context_create_secret;
 	result.duckdb_v2_context_get_secret_by_name = duckdb_v2_context_get_secret_by_name;
-	result.duckdb_v2_context_list_secrets = duckdb_v2_context_list_secrets;
 	result.duckdb_v2_context_lookup_secret = duckdb_v2_context_lookup_secret;
 	result.duckdb_v2_extension_register_secret_function = duckdb_v2_extension_register_secret_function;
 	result.duckdb_v2_secret_add_redacted_key = duckdb_v2_secret_add_redacted_key;
@@ -2316,9 +2308,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_secret_get_scope_count = duckdb_v2_secret_get_scope_count;
 	result.duckdb_v2_secret_get_value = duckdb_v2_secret_get_value;
 	result.duckdb_v2_secret_is_key_redacted = duckdb_v2_secret_is_key_redacted;
-	result.duckdb_v2_secret_list_destroy = duckdb_v2_secret_list_destroy;
-	result.duckdb_v2_secret_list_get_count = duckdb_v2_secret_list_get_count;
-	result.duckdb_v2_secret_list_get_secret = duckdb_v2_secret_list_get_secret;
 	result.duckdb_v2_secret_set_property = duckdb_v2_secret_set_property;
 	result.duckdb_v2_secret_set_value = duckdb_v2_secret_set_value;
 	return result;
