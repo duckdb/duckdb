@@ -77,7 +77,6 @@ static unique_ptr<TableRef> ReplaceWithOutsideObject(ClientContext &context, Rep
 	return std::move(ref);
 }
 
-// A single lookup was a property of the relational API, which served a client that built relations and no longer does
 TEST_CASE("json_execute_serialized_sql looks up an object outside the catalog at bind and at every scan start",
           "[api][json]") {
 	DuckDB db(nullptr);
@@ -214,10 +213,12 @@ TEST_CASE("json_execute_serialized_sql logs the text of its statement once for e
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	REQUIRE_NO_FAIL(con.Query("CALL disable_logging()"));
 
-	result = con.Query("SELECT message, count(*) FROM duckdb_logs_parsed('QueryLog') WHERE message IN ('SELECT 7 AS "
-	                   "seven', '(SELECT 1) UNION ALL (SELECT 2)') GROUP BY ALL ORDER BY ALL");
-	REQUIRE(CHECK_COLUMN(result, 0, {"(SELECT 1) UNION ALL (SELECT 2)", "SELECT 7 AS seven"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {3, 1}));
+	// the prepare at each of the two binds writes one entry without text
+	result =
+	    con.Query("SELECT message, count(*) FROM duckdb_logs_parsed('QueryLog') WHERE message IN ('', 'SELECT 7 AS "
+	              "seven', '(SELECT 1) UNION ALL (SELECT 2)') GROUP BY ALL ORDER BY ALL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "(SELECT 1) UNION ALL (SELECT 2)", "SELECT 7 AS seven"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 3, 1}));
 }
 
 namespace {
@@ -323,5 +324,33 @@ TEST_CASE("json_execute_serialized_sql runs its statement as any SELECT when a r
 		REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
 		REQUIRE(result->GetNames() == direct->GetNames());
 		REQUIRE(json_pushed_nodes.empty());
+	}
+	SECTION("a statement with a parameter is refused at bind before anything is sent to the remote catalog") {
+		for (auto inner :
+		     {"SELECT $1 FROM s.tbl", "SELECT i FROM s.tbl WHERE i = $1", "SELECT $1::INTEGER AS p FROM s.tbl"}) {
+			const string query =
+			    StringUtil::Format("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('%s'))", inner);
+			json_pushed_nodes.clear();
+			auto prepared = con.Prepare(query);
+			REQUIRE(prepared->HasError());
+			REQUIRE(StringUtil::Contains(prepared->GetError(), "cannot execute a statement with parameters"));
+			auto result = con.Query(query);
+			REQUIRE_FAIL(result);
+			REQUIRE(StringUtil::Contains(result->GetError(), "cannot execute a statement with parameters"));
+			REQUIRE(json_pushed_nodes.empty());
+		}
+	}
+	SECTION("an unaliased column over now() fails the column check, an aliased one does not") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE ev(id INTEGER, created TIMESTAMPTZ)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO ev VALUES (1, TIMESTAMPTZ '2026-01-01 00:00:00+00')"));
+		// the remote rewrite names an unaliased column after the value now() has in its transaction, and the bind and
+		// the scan start run in two
+		auto result = con.Query(
+		    "SELECT id FROM json_execute_serialized_sql(json_serialize_sql('SELECT id, now() - created FROM ev'))");
+		REQUIRE_FAIL(result);
+		REQUIRE(StringUtil::Contains(result->GetError(), "Result mismatch in query!"));
+		result = con.Query("SELECT id FROM json_execute_serialized_sql(json_serialize_sql('SELECT id, now() - created "
+		                   "AS age FROM ev'))");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
 }

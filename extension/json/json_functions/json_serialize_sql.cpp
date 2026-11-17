@@ -324,6 +324,10 @@ struct ExecuteSqlTableFunction {
 		if (stmts.size() != 1) {
 			throw BinderException("json_execute_serialized_sql expects exactly one statement");
 		}
+		// a remote catalog can take the statement whole before the prepare binds any of its parameters
+		if (!stmts[0]->named_param_map.empty()) {
+			throw BinderException("json_execute_serialized_sql cannot execute a statement with parameters");
+		}
 		result->query = stmts[0]->ToString();
 		result->node = std::move(stmts[0]->node);
 
