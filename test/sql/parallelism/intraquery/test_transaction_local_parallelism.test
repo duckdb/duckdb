@@ -105,6 +105,10 @@ PRAGMA disable_verify_parallelism
 statement ok
 SET storage_block_prefetch='always_prefetch'
 
+# progress of the ORDER_BY pipeline can stall while the insert reads and writes the same table
+statement ok
+SET debug_verify_progress_ignore='STALLED:ORDER_BY'
+
 statement ok
 BEGIN
 
