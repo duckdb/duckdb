@@ -1,0 +1,27 @@
+# name: test/sql/storage/corrupt/block_id_out_of_range.test
+# description: Reject block ids read from a database file that cannot be the id of a block in the file
+# group: [corrupt]
+
+require vector_size 2048
+
+# a metadata block points to a next block with an id for which the block location overflows
+unzip data/storage/corrupt/block_id_location_overflow.db.gz {TEST_DIR}/block_id_location_overflow.db
+
+statement error
+ATTACH '{TEST_DIR}/block_id_location_overflow.db' AS corrupt_db (READ_ONLY)
+----
+Data Corruption Error: Corrupt database file: block id 1125899906842623 is out of range
+
+# the list of metadata blocks stored with the free list contains an id in the range of in-memory blocks
+unzip data/storage/corrupt/metadata_block_id_transient.db.gz {TEST_DIR}/metadata_block_id_transient.db
+
+statement error
+ATTACH '{TEST_DIR}/metadata_block_id_transient.db' AS corrupt_db (READ_ONLY)
+----
+Data Corruption Error: Corrupt database file: invalid metadata block id 7566329295669322753
+
+# the errors do not invalidate the instance
+query I
+SELECT 42
+----
+42

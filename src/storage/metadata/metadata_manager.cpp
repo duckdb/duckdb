@@ -338,6 +338,9 @@ void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Read(source);
+		if (block.block_id < 0 || block.block_id >= MAXIMUM_BLOCK) {
+			throw DataCorruptionException("Corrupt database file: invalid metadata block id %lld", block.block_id);
+		}
 
 		unique_lock<mutex> guard(block_lock);
 		auto entry = blocks.find(block.block_id);
