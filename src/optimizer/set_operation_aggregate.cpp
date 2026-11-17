@@ -61,8 +61,11 @@ namespace {
 constexpr int64_t COPY_BLOCK_SIZE = STANDARD_VECTOR_SIZE;
 
 //! The aggregate plan is not used for fewer groups than this per thread: the scan of the aggregate's result is the
-//! source of everything above the set operation, and with few groups it cannot keep the threads busy
-constexpr idx_t MIN_GROUPS_PER_THREAD = STANDARD_VECTOR_SIZE;
+//! source of everything above the set operation, and with few groups it cannot keep the threads busy. This is a
+//! number of groups, measured with the default vector size (few groups lose, some thousands per thread do not), and
+//! deliberately not STANDARD_VECTOR_SIZE: how the scan of the groups is split among the threads is not a matter of
+//! the vector size, and the choice of the plan should not change with it
+constexpr idx_t MIN_GROUPS_PER_THREAD = 2048;
 //! .. if every group has at least this many rows on average, so that there is work above to be spread
 constexpr idx_t MIN_COPIES_PER_GROUP = 128;
 //! How deep the estimate of the distinct values of a column follows the plan
