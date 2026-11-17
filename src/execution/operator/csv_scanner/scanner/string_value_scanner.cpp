@@ -225,8 +225,7 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 		result.first_line_is_comment = true;
 	}
 	result.comment = false;
-	// the next line starts behind the line break that ended the comment, as it does behind the line break of a row:
-	// with new_line = '\r\n' that is one byte further only when the comment ended at a carriage return
+	// The next line starts behind the line break that ended the comment
 	result.SetLastPositionAfterNewline(buffer_pos);
 	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
 	                                   result.buffer_size};
