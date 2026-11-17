@@ -1481,7 +1481,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		if (!iterator.IsBoundarySet()) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+			// Skip the line feed of a \r\n that the buffer end split, a line feed of its own ends a line
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' && previous_buffer_handle->actual_size > 0 &&
+			    previous_buffer[previous_buffer_handle->actual_size - 1] == '\r') {
 				iterator.pos.buffer_pos++;
 			}
 		} else {

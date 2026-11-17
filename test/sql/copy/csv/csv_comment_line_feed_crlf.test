@@ -23,7 +23,7 @@ xyz	d
 
 foreach parallel true false
 
-loop buffer_size 11 30
+loop buffer_size 11 31
 
 query II
 FROM read_csv('{TEST_DIR}/comment_line_feed_crlf.csv', auto_detect = false, delim = ',', quote = '', escape = '', new_line = '\r\n', comment = '#', header = true, columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, buffer_size = {buffer_size}, parallel = {parallel});
@@ -44,3 +44,16 @@ FROM read_csv('{TEST_DIR}/comment_crlf.csv', comment = '#');
 ----
 xyz	d
 1	2
+
+# 201 rows, every third row is followed by a comment that ends in a line feed: the line feed can start a buffer
+statement ok
+COPY (SELECT string_agg('row' || i || ',v' || i || chr(13) || chr(10) || CASE WHEN i % 3 = 0 THEN '#comment number ' || i || chr(10) ELSE '' END, '') || 'row200,v200' || chr(13) FROM range(200) t(i)) TO '{TEST_DIR}/comments_line_feed_crlf.csv' (HEADER false, QUOTE '', DELIM '|');
+
+loop buffer_size 21 81
+
+query III
+SELECT count(*), count(DISTINCT a), count(DISTINCT b) FROM read_csv('{TEST_DIR}/comments_line_feed_crlf.csv', auto_detect = false, delim = ',', quote = '', escape = '', new_line = '\r\n', comment = '#', header = false, columns = {'a': 'VARCHAR', 'b': 'VARCHAR'}, buffer_size = {buffer_size}, parallel = false);
+----
+201	201	201
+
+endloop
