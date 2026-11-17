@@ -144,14 +144,13 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	} else {
 		// A nullable column's definition levels are part of what the chunker sees, exactly as they are in Arrow -
 		// which means a null moves the hash, so null density shifts boundaries - and a non-nullable column has no
-		// levels to feed, in Arrow either.
-		const bool feed_levels = MaxDefine() > 0;
-		// boundaries may have been computed up front, in file order, by ComputeCdcBoundaries - then the chunker
-		// has already rolled through this chunk and the cut positions below are its answers
-		const duckdb::vector<idx_t> *precomputed_cuts = nullptr;
-		idx_t precomputed_pos = 0;
-		if (cut_by_content && state.cdc_cuts_per_chunk && state.cdc_cut_chunk_idx < state.cdc_cuts_per_chunk->size()) {
-			precomputed_cuts = &(*state.cdc_cuts_per_chunk)[state.cdc_cut_chunk_idx];
+		// levels to feed, in Arrow either. The chunker is never rolled here: ComputeCdcBoundaries rolled it through
+		// this chunk in file order and the cut positions below are its answers.
+		const duckdb::vector<idx_t> *cuts = nullptr;
+		idx_t cut_pos = 0;
+		if (cut_by_content) {
+			D_ASSERT(state.cdc_cuts_per_chunk && state.cdc_cut_chunk_idx < state.cdc_cuts_per_chunk->size());
+			cuts = &(*state.cdc_cuts_per_chunk)[state.cdc_cut_chunk_idx];
 		}
 		for (idx_t i = 0; i < vcount; i++) {
 			if (check_parent_empty && parent->is_empty[parent_index + i]) {
@@ -166,23 +165,10 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			// chunk after. Matching it is not a detail - a value counted on one side and not the other moves every
 			// following page's first value, which is the whole thing this is trying to keep still.
 			bool cut_before = false;
-			if (cut_by_content) {
-				if (precomputed_cuts) {
-					cut_before =
-					    precomputed_pos < precomputed_cuts->size() && (*precomputed_cuts)[precomputed_pos] == i;
-					if (cut_before) {
-						precomputed_pos++;
-					}
-				} else {
-					if (feed_levels) {
-						cdc_chunker.RollLevel(state.definition_levels[parent_index + i]);
-					}
-					if (is_valid) {
-						ParquetCdcHashValue(cdc_chunker, vector, vector_index);
-					}
-					// the minimum is enforced inside the chunker, where the bytes are counted, and the maximum is its
-					// hard stop for the case where no boundary is hit at all - a long run of identical values, say
-					cut_before = cdc_chunker.NeedNewChunk();
+			if (cuts) {
+				cut_before = cut_pos < cuts->size() && (*cuts)[cut_pos] == i;
+				if (cut_before) {
+					cut_pos++;
 				}
 			}
 			// a vector that cannot span multiple pages stays on the page it started on, and a page that is still
@@ -224,7 +210,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 vector<idx_t> PrimitiveColumnWriter::RollCdcChunk(Vector &vector, idx_t count) {
 	duckdb::vector<idx_t> cuts;
-	// the same predicate as Prepare's cut_by_content, on the same chunk, gives the same answer
+	// the same type predicate Prepare uses for cut_by_content, on the same chunk, gives the same answer
 	if (!ParquetCdcSupportedType(vector.GetType())) {
 		return cuts;
 	}

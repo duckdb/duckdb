@@ -760,9 +760,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 				// ComputeCdcBoundaries rolled these cuts in file order, so Prepare page-cuts from them
 				// without touching the chunker
 				auto *cuts = cdc_boundaries->FindColumn(column_ids.back());
-				if (cuts) {
-					write_states.back()->cdc_cuts_per_chunk = &cuts->cuts_per_chunk;
-				}
+				col_writers.back().get().SetContentDefinedCuts(*write_states.back(),
+				                                               cuts ? &cuts->cuts_per_chunk : nullptr);
 			}
 		}
 
@@ -826,6 +825,8 @@ unique_ptr<ParquetCdcBoundaries> ParquetWriter::ComputeCdcBoundaries(ColumnDataC
 		if (!col_writer.CutsByContent()) {
 			continue;
 		}
+		// a transform rewrites the values Prepare sees, and these cuts are taken from the values before it
+		D_ASSERT(!col_writer.HasTransform());
 		ParquetCdcBoundaries::ColumnCuts cuts;
 		cuts.column_index = col_idx;
 		vector<column_t> column_ids = {NumericCast<column_t>(col_idx)};
@@ -925,7 +926,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 	}
 
 	PreparedRowGroup prepared_row_group;
-	PrepareRowGroup(buffer, prepared_row_group, transform_data);
+	if (ContentDefinedChunking()) {
+		// this thread is the only one writing row groups, so rolling the chunkers here sees the values in the
+		// order the file sees them in - the batched path does the same in ParquetWritePrepareBatch
+		auto boundaries = ComputeCdcBoundaries(buffer);
+		PrepareRowGroup(buffer, prepared_row_group, transform_data, boundaries.get());
+	} else {
+		PrepareRowGroup(buffer, prepared_row_group, transform_data);
+	}
 	buffer.Reset();
 
 	FlushRowGroup(prepared_row_group);

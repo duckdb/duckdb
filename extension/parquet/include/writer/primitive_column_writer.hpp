@@ -70,6 +70,10 @@ public:
 	vector<PageWriteInformation> write_info;
 	unique_ptr<ColumnWriterStatistics> stats_state;
 	idx_t current_page = 0;
+	//! This column's content-defined page cuts, computed up front in file order: the value indices opening a
+	//! new page, per input chunk, consumed in the order Prepare is called (see SetContentDefinedCuts)
+	const vector<vector<idx_t>> *cdc_cuts_per_chunk = nullptr;
+	idx_t cdc_cut_chunk_idx = 0;
 
 	unique_ptr<ParquetBloomFilter> bloom_filter;
 };
@@ -101,6 +105,9 @@ public:
 	vector<idx_t> RollCdcChunk(Vector &vector, idx_t count) override;
 	bool CutsByContent() const override {
 		return cdc_cut_pages;
+	}
+	void SetContentDefinedCuts(ColumnWriterState &state_p, const vector<vector<idx_t>> *cuts_per_chunk) const override {
+		state_p.Cast<PrimitiveColumnWriterState>().cdc_cuts_per_chunk = cuts_per_chunk;
 	}
 
 protected:

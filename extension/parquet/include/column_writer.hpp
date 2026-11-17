@@ -58,10 +58,6 @@ public:
 	unsafe_vector<uint8_t> is_empty;
 	idx_t parent_null_count = 0;
 	idx_t null_count = 0;
-	//! Content-defined page cuts, computed up front in file order for this column's row group: the value
-	//! indices opening a new page, per input chunk. Null when the writer rolls the chunker inline instead.
-	const vector<vector<idx_t>> *cdc_cuts_per_chunk = nullptr;
-	idx_t cdc_cut_chunk_idx = 0;
 
 public:
 	template <class TARGET>
@@ -218,6 +214,11 @@ public:
 	}
 	virtual vector<idx_t> RollCdcChunk(Vector &vector, idx_t count) {
 		return {};
+	}
+	//! Hand this column's write state the cuts rolled for it, one list of value indices per input chunk.
+	//! Nothing outside a writer that cuts by content looks at them, so the base does nothing with them.
+	virtual void SetContentDefinedCuts(ColumnWriterState &state,
+	                                   const vector<vector<idx_t>> *cuts_per_chunk) const {
 	}
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;
