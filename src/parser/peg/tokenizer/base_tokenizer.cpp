@@ -291,16 +291,24 @@ bool Tokenizer::IsUnterminatedState(TokenizeState state) {
 bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
 	auto &sql = behavior.sql;
 	auto &tokens = behavior.tokens;
+	auto first_token = tokens.size();
+	bool autocomplete = false;
 	if (TokenizeInputInternal(behavior)) {
 		auto terminator = behavior.GetTerminator();
 		tokens.emplace_back("", sql.size(), terminator);
-		if (terminator == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			return true;
-		}
+		autocomplete = terminator == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	} else {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
-	return false;
+	// look every token up once here instead of lazily inside the matcher loop
+	auto &table = keyword_helper.GetLiteralTable();
+	for (idx_t i = first_token; i < tokens.size(); i++) {
+		auto &token = tokens[i];
+		if (!token.HasLiteralInfo(table)) {
+			token.SetLiteralInfo(table, table.Lookup(token.text));
+		}
+	}
+	return autocomplete;
 }
 
 void Tokenizer::PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) const {
