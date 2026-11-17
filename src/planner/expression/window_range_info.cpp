@@ -31,7 +31,8 @@ bool WindowRangeCast::Capture(const Expression &expression, const Expression &op
 		if (!BoundCastExpression::HasValidBindData(cast)) {
 			return false;
 		}
-		casts.push_back({BoundCastExpression::SourceType(cast), cast.GetReturnType(), BoundCastExpression::IsTryCast(cast)});
+		casts.push_back(
+		    {BoundCastExpression::SourceType(cast), cast.GetReturnType(), BoundCastExpression::IsTryCast(cast)});
 		current = &BoundCastExpression::Child(cast);
 	}
 	return true;
