@@ -8,6 +8,63 @@
 
 namespace duckdb {
 
+static bool IsSimpleUserSettingValue(const Value &value) {
+	const auto &type = value.type();
+	if (type.HasAlias() || type.HasExtensionInfo()) {
+		return false;
+	}
+	if (type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(type).empty()) {
+		return false;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsNaNUserSettingValue(const Value &value) {
+	if (value.IsNull()) {
+		return false;
+	}
+	switch (value.type().id()) {
+	case LogicalTypeId::FLOAT:
+		return Value::IsNan(value.GetValueUnsafe<float>());
+	case LogicalTypeId::DOUBLE:
+		return Value::IsNan(value.GetValueUnsafe<double>());
+	default:
+		return false;
+	}
+}
+
 void UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
 	if (setting_index >= settings.size()) {
 		settings.resize(setting_index + 1);
@@ -68,6 +125,13 @@ GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &othe
 
 void GlobalUserSettings::SetUserSetting(idx_t setting_index, Value target_value) {
 	lock_guard<mutex> guard(lock);
+	Value current_value;
+	if (IsSimpleUserSettingValue(target_value) && !IsNaNUserSettingValue(target_value) &&
+	    settings_map.TryGetSetting(setting_index, current_value) && IsSimpleUserSettingValue(current_value) &&
+	    current_value.type().EqualsIncludingCollation(target_value.type()) &&
+	    Value::NotDistinctFrom(current_value, target_value)) {
+		return;
+	}
 	settings_map.SetUserSetting(setting_index, std::move(target_value));
 	++settings_version;
 }

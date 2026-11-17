@@ -3,11 +3,137 @@
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/main/user_settings.hpp"
 
 #include <set>
 #include <map>
+#include <limits>
 
 using namespace duckdb;
+
+#ifndef __MINGW32__
+TEST_CASE("Repeated simple global settings keep the read cache valid", "[api]") {
+	GlobalUserSettings settings;
+	auto expect_same_simple_value = [&](Value value) {
+		settings.SetUserSetting(0, value);
+		const auto version = settings.GetSettings().version;
+		settings.SetUserSetting(0, std::move(value));
+		REQUIRE(settings.GetSettings().version == version);
+	};
+	auto expect_changed_value = [&](Value value) {
+		settings.SetUserSetting(0, value);
+		const auto version = settings.GetSettings().version;
+		settings.SetUserSetting(0, std::move(value));
+		REQUIRE(settings.GetSettings().version == version + 1);
+	};
+
+	expect_same_simple_value(Value::BOOLEAN(false));
+	expect_same_simple_value(Value::TINYINT(1));
+	expect_same_simple_value(Value::SMALLINT(1));
+	expect_same_simple_value(Value::INTEGER(1));
+	expect_same_simple_value(Value::BIGINT(1));
+	expect_same_simple_value(Value::HUGEINT(hugeint_t(1)));
+	expect_same_simple_value(Value::UTINYINT(1));
+	expect_same_simple_value(Value::USMALLINT(1));
+	expect_same_simple_value(Value::UINTEGER(1));
+	expect_same_simple_value(Value::UBIGINT(1));
+	expect_same_simple_value(Value::UHUGEINT(uhugeint_t(1)));
+	expect_same_simple_value(Value::FLOAT(1.5F));
+	expect_same_simple_value(Value::DOUBLE(1.5));
+	expect_same_simple_value(Value::DECIMAL(125, 9, 2));
+	expect_same_simple_value(Value("value"));
+	expect_same_simple_value(Value::BLOB(string("blob")));
+	expect_same_simple_value(Value::DATE(date_t(1)));
+	expect_same_simple_value(Value::TIME(dtime_t(1)));
+	expect_same_simple_value(Value::TIME_NS(dtime_ns_t(1)));
+	expect_same_simple_value(Value::TIMETZ(dtime_tz_t(dtime_t(1), 0)));
+	expect_same_simple_value(Value::TIMESTAMP(timestamp_t(1)));
+	expect_same_simple_value(Value::TIMESTAMPSEC(timestamp_sec_t(1)));
+	expect_same_simple_value(Value::TIMESTAMPMS(timestamp_ms_t(1)));
+	expect_same_simple_value(Value::TIMESTAMPNS(timestamp_ns_t(1)));
+	expect_same_simple_value(Value::TIMESTAMPTZ(timestamp_tz_t(1)));
+	expect_same_simple_value(Value::TIMESTAMPTZNS(timestamp_tz_ns_t(1)));
+	expect_same_simple_value(Value::UUID(hugeint_t(1)));
+	expect_same_simple_value(Value::INTERVAL(1, 1, 1));
+	expect_same_simple_value(Value(LogicalType::BOOLEAN));
+	expect_same_simple_value(Value(LogicalType::TINYINT));
+	expect_same_simple_value(Value(LogicalType::SMALLINT));
+	expect_same_simple_value(Value(LogicalType::INTEGER));
+	expect_same_simple_value(Value(LogicalType::BIGINT));
+	expect_same_simple_value(Value(LogicalType::HUGEINT));
+	expect_same_simple_value(Value(LogicalType::UTINYINT));
+	expect_same_simple_value(Value(LogicalType::USMALLINT));
+	expect_same_simple_value(Value(LogicalType::UINTEGER));
+	expect_same_simple_value(Value(LogicalType::UBIGINT));
+	expect_same_simple_value(Value(LogicalType::UHUGEINT));
+	expect_same_simple_value(Value(LogicalType::FLOAT));
+	expect_same_simple_value(Value(LogicalType::DOUBLE));
+	expect_same_simple_value(Value(LogicalType::DECIMAL(9, 2)));
+	expect_same_simple_value(Value(LogicalType::VARCHAR));
+	expect_same_simple_value(Value(LogicalType::BLOB));
+	expect_same_simple_value(Value(LogicalType::DATE));
+	expect_same_simple_value(Value(LogicalType::TIME));
+	expect_same_simple_value(Value(LogicalType::TIME_NS));
+	expect_same_simple_value(Value(LogicalType::TIME_TZ));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP_S));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP_MS));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP_NS));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP_TZ));
+	expect_same_simple_value(Value(LogicalType::TIMESTAMP_TZ_NS));
+	expect_same_simple_value(Value(LogicalType::UUID));
+	expect_same_simple_value(Value(LogicalType::INTERVAL));
+
+	expect_changed_value(Value::FLOAT(std::numeric_limits<float>::quiet_NaN()));
+	expect_changed_value(Value::DOUBLE(std::numeric_limits<double>::quiet_NaN()));
+
+	settings.SetUserSetting(0, Value(LogicalType::VARCHAR));
+	Value value;
+	REQUIRE(static_cast<bool>(settings.TryGetSetting(0, value)));
+	REQUIRE(value.type() == LogicalType::VARCHAR);
+	REQUIRE(value.IsNull());
+
+	settings.SetUserSetting(2, Value::INTEGER(1));
+	const auto before_type_change = settings.GetSettings().version;
+	settings.SetUserSetting(2, Value::BIGINT(1));
+	REQUIRE(settings.GetSettings().version == before_type_change + 1);
+	settings.SetUserSetting(3, Value::DECIMAL(125, 9, 2));
+	const auto before_decimal_type_change = settings.GetSettings().version;
+	settings.SetUserSetting(3, Value::DECIMAL(125, 10, 2));
+	REQUIRE(settings.GetSettings().version == before_decimal_type_change + 1);
+	const auto before_unset = settings.GetSettings().version;
+	settings.SetUserSetting(1, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_unset + 1);
+	settings.SetUserSetting(1, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_unset + 1);
+
+	expect_changed_value(Value(LogicalType(LogicalTypeId::CHAR)));
+	expect_changed_value(Value("{\"key\": 1}").WithType(LogicalType::JSON()));
+	expect_changed_value(Value("value").WithType(LogicalType::VARCHAR_COLLATION("nocase")));
+	auto extension_info = make_uniq<ExtensionTypeInfo>();
+	extension_info->modifiers.emplace_back(Value::INTEGER(1));
+	auto extended_integer = LogicalType(LogicalType::INTEGER).WithExtensionInfo(std::move(extension_info));
+	expect_changed_value(Value::INTEGER(1).WithType(extended_integer));
+	settings.SetUserSetting(4, Value::INTEGER(1).WithType(extended_integer));
+	const auto before_plain_integer = settings.GetSettings().version;
+	settings.SetUserSetting(4, Value::INTEGER(1));
+	REQUIRE(settings.GetSettings().version == before_plain_integer + 1);
+	expect_changed_value(Value(LogicalType::LIST(LogicalType::INTEGER)));
+	expect_changed_value(Value(LogicalType::STRUCT({{"a", LogicalType::INTEGER}})));
+	expect_changed_value(Value(LogicalType::MAP(LogicalType::INTEGER, LogicalType::VARCHAR)));
+	expect_changed_value(Value(LogicalType::UNION({{"a", LogicalType::INTEGER}})));
+	expect_changed_value(Value(LogicalType::ARRAY(LogicalType::INTEGER, 1)));
+	expect_changed_value(Value(LogicalType::VARIANT()));
+
+	const auto before_clear = settings.GetSettings().version;
+	settings.ClearSetting(0);
+	REQUIRE(settings.GetSettings().version == before_clear + 1);
+	REQUIRE_FALSE(static_cast<bool>(settings.TryGetSetting(0, value)));
+	settings.ClearSetting(0);
+	REQUIRE(settings.GetSettings().version == before_clear + 2);
+}
+#endif
 
 class FileCleaner {
 public:
