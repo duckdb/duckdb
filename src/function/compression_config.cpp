@@ -206,9 +206,8 @@ reference<const CompressionFunction> DBConfig::GetCompressionFunction(Compressio
                                                                       const PhysicalType physical_type) const {
 	auto result = compression_functions->GetCompressionFunction(type, physical_type);
 	if (!result) {
-		throw InternalException(
-		    "Could not find compression function \"%s\" for physical type \"%s\". Load result: %s. %s",
-		    EnumUtil::ToString(type), EnumUtil::ToString(physical_type));
+		throw InternalException("Could not find compression function \"%s\" for physical type \"%s\"",
+		                        EnumUtil::ToString(type), EnumUtil::ToString(physical_type));
 	}
 	return *result;
 }
