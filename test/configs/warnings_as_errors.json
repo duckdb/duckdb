@@ -45,6 +45,7 @@
         "test/sql/binder/old_implicit_cast.test",
         "test/sql/binder/old_implicit_cast_template.test",
         "test/sql/copy/copy_column_identifier_conversion.test",
+        "test/sql/cte/trampoline/trampoline_frontier_delim_join.test",
         "test/sql/function/numeric/test_fdiv_fmod.test",
         "test/sql/function/numeric/test_mod.test",
         "test/sql/function/operator/test_division_by_zero.test",

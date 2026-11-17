@@ -1,0 +1,20 @@
+# name: test/sql/cte/trampoline/trampoline_frontier_delim_join.test
+# description: frontier.t under a physical delim join, reachable only through the deprecated delim_join_as_cte setting
+# group: [trampoline]
+
+# Frontier scans under a physical delim join are rebound per round: the frozen
+# seed frontier is visible to the correlated aggregate.
+statement ok
+SET delim_join_as_cte = false;
+
+statement ok
+SET disabled_optimizers = 'deliminator';
+
+query I
+WITH RECURSIVE t(b, n) USING TRAMPOLINE (b) AS (
+	(VALUES (1, 1), (1, 2))
+	BRANCH 1: (SELECT 0, (SELECT count(*)::INTEGER FROM frontier.t f WHERE f.n <= w.n) FROM t w)
+) SELECT n FROM t ORDER BY n;
+----
+1
+2
