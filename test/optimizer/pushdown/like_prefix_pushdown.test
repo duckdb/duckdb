@@ -1,0 +1,28 @@
+# name: test/optimizer/pushdown/like_prefix_pushdown.test
+# description: A LIKE with a prefix followed by more wildcards is evaluated in the scan, not only its prefix bounds
+# group: [pushdown]
+
+require parquet
+
+statement ok
+COPY (SELECT 'k' || (i % 50) AS s FROM range(1000) t(i)) TO '{TEST_DIR}/like_prefix.parquet';
+
+statement ok
+SET explain_output='optimized_only';
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/like_prefix.parquet' WHERE s LIKE 'k_7%';
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/like_prefix.parquet' WHERE s ILIKE 'K_7%';
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+SELECT
+	(SELECT count(*) FROM '{TEST_DIR}/like_prefix.parquet' WHERE s LIKE 'k_7%'),
+	(SELECT count(*) FROM '{TEST_DIR}/like_prefix.parquet' WHERE s ILIKE 'K_7%');
+----
+80	80

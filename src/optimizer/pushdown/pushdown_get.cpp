@@ -2,6 +2,7 @@
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -10,6 +11,19 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
+
+static bool IsColumnLikeConstant(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	auto &function_name = func.Function().GetName();
+	if (function_name != "~~" && function_name != "~~*") {
+		return false;
+	}
+	return func.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	       func.GetChildren()[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+}
 
 static unique_ptr<Expression> RenameColumnRef(const BoundColumnRefExpression &ref, Identifier alias) {
 	return make_uniq<BoundColumnRefExpression>(std::move(alias), ref.GetReturnType(), ref.Binding(), ref.Depth(),
@@ -180,11 +194,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	for (idx_t i = 0; i < filters.size(); ++i) {
 		// get the previous pushdown result
 		auto pushdown_result = pushdown_results[i];
-		if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
-			// this has already been (partially) pushed down - skip
+		auto &expr = *filters[i]->filter;
+		// a LIKE only pushed down the bounds of its prefix - also push the LIKE itself, so the scan evaluates it
+		// (e.g. once per Parquet dictionary) instead of emitting every row within the bounds
+		const bool partial_like =
+		    pushdown_result == FilterPushdownResult::PUSHED_DOWN_PARTIALLY && IsColumnLikeConstant(expr);
+		if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN && !partial_like) {
 			continue;
 		}
-		auto &expr = *filters[i]->filter;
 		if (expr.IsVolatile()) {
 			continue;
 		}
