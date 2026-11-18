@@ -71,9 +71,9 @@ private:
 };
 
 vector<data_t> ReadGZipTestFile(const string &name) {
-	auto file_system = FileSystem::CreateLocal();
+	auto &file_system = TestLocalFileSystem();
 	auto path = TestJoinPath(TestGetCurrentDirectory(), "data/csv/test/" + name);
-	auto handle = file_system->OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	auto handle = file_system.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = NumericCast<idx_t>(handle->GetFileSize());
 	vector<data_t> result(file_size);
 	handle->Read(QueryContext(), result.data(), file_size, 0);

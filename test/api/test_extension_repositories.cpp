@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/extension.hpp"
@@ -202,8 +203,9 @@ TEST_CASE("Test that adding trusted extension repositories must be opted into", 
 }
 
 static void WriteTextFile(const string &path, const string &contents) {
-	auto fs = FileSystem::CreateLocal();
-	auto handle = fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	// the database file system refuses to write *.duckdb_extension* files, so write through a raw local file system
+	LocalFileSystem fs;
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	handle->Write(QueryContext(), (void *)contents.data(), contents.size(), 0);
 	handle->Sync();
 }
@@ -211,12 +213,12 @@ static void WriteTextFile(const string &path, const string &contents) {
 TEST_CASE("Test that a stored repository file is only believed about a host it is named after", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_host_mismatch");
 	auto prefix = TestCreatePath("extension_repositories_host_mismatch_prefix");
-	auto fs = FileSystem::CreateLocal();
-	fs->CreateDirectory(repository_directory);
-	fs->CreateDirectory(prefix);
+	auto &fs = TestLocalFileSystem();
+	fs.CreateDirectory(repository_directory);
+	fs.CreateDirectory(prefix);
 	// a file that claims a host it is not named after was not written by DuckDB: under 'hosts_only' a stored host is
 	// what gets a repository trusted, so the claim is refused rather than believed
-	WriteTextFile(fs->JoinPath(repository_directory, "mismatch.example.duckdb_extension.repo.json"),
+	WriteTextFile(fs.JoinPath(repository_directory, "mismatch.example.duckdb_extension.repo.json"),
 	              StringUtil::Format("{\"version\": 1, \"name\": \"mismatch.example\", \"url\": \"%s\", \"host\": "
 	                                 "\"other.example\", \"public_keys\": [\"%s\"]}",
 	                                 prefix, TEST_PUBLIC_KEY));
@@ -243,13 +245,13 @@ TEST_CASE("Test that a stored repository file is only believed about a host it i
 TEST_CASE("Test that a repository resolved from its host does not need the opt-in", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_from_host");
 	auto prefix = TestCreatePath("extension_repositories_from_host_prefix");
-	auto fs = FileSystem::CreateLocal();
-	fs->CreateDirectory(repository_directory);
-	fs->CreateDirectory(prefix);
+	auto &fs = TestLocalFileSystem();
+	fs.CreateDirectory(repository_directory);
+	fs.CreateDirectory(prefix);
 	// a repository as the host form stores it: resolving one needs httpfs and a live host, which this test has not,
 	// so the stored file stands in for the resolution.
 	// TODO: resolve one for real once duckdb.org serves a .well-known/duckdb-extension-repo.json
-	WriteTextFile(fs->JoinPath(repository_directory, "listed.example.duckdb_extension.repo.json"),
+	WriteTextFile(fs.JoinPath(repository_directory, "listed.example.duckdb_extension.repo.json"),
 	              StringUtil::Format("{\"version\": 1, \"name\": \"listed.example\", \"url\": \"%s\", \"host\": "
 	                                 "\"listed.example\", \"public_keys\": [\"%s\"]}",
 	                                 prefix, TEST_PUBLIC_KEY));
@@ -393,13 +395,13 @@ static void WriteExtensionFile(FileSystem &fs, const string &path, void *data, i
 // Stage an extension plus a .info recording a user-provided origin, in the flat layout a bare load resolves. The
 // binary is a stub: these tests assert the origin handling, not a real load
 static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name, const string &repository_name) {
-	auto fs = FileSystem::CreateLocal();
-	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
-	fs->CreateDirectoriesRecursive(dir);
+	auto &fs = TestLocalFileSystem();
+	string dir = ExtensionHelper::ExtensionDirectory(db, fs);
+	fs.CreateDirectoriesRecursive(dir);
 
-	string ext_path = fs->JoinPath(dir, name + ".duckdb_extension");
+	string ext_path = fs.JoinPath(dir, name + ".duckdb_extension");
 	vector<data_t> stub(ParsedExtensionMetaData::FOOTER_SIZE, 0);
-	WriteExtensionFile(*fs, ext_path, stub.data(), stub.size());
+	WriteExtensionFile(fs, ext_path, stub.data(), stub.size());
 
 	ExtensionInstallInfo info;
 	info.mode = ExtensionInstallMode::REPOSITORY;
@@ -408,7 +410,7 @@ static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name,
 	info.version = "";
 	MemoryStream stream;
 	BinarySerializer::Serialize(info, stream);
-	WriteExtensionFile(*fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
+	WriteExtensionFile(fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
 }
 
 TEST_CASE("Test that a user repository does not block an unsigned load", "[api]") {
@@ -439,13 +441,13 @@ TEST_CASE("Test that a user repository does not block an unsigned load", "[api]"
 
 // Stage a stub extension in the per-repository subfolder that INSTALL ... FROM a user-provided repository writes to
 static void StageUserRepoExtension(DatabaseInstance &db, const string &name, const string &repository_name) {
-	auto fs = FileSystem::CreateLocal();
-	string dir = fs->JoinPath(ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db)), "repositories");
-	dir = fs->JoinPath(dir, repository_name);
-	fs->CreateDirectoriesRecursive(dir);
+	auto &fs = TestLocalFileSystem();
+	string dir = fs.JoinPath(ExtensionHelper::ExtensionDirectory(db, fs), "repositories");
+	dir = fs.JoinPath(dir, repository_name);
+	fs.CreateDirectoriesRecursive(dir);
 
 	vector<data_t> stub(ParsedExtensionMetaData::FOOTER_SIZE, 0);
-	WriteExtensionFile(*fs, fs->JoinPath(dir, name + ".duckdb_extension"), stub.data(), stub.size());
+	WriteExtensionFile(fs, fs.JoinPath(dir, name + ".duckdb_extension"), stub.data(), stub.size());
 }
 
 TEST_CASE("Test that a bare load names the user repository an extension is installed from", "[api]") {
@@ -506,20 +508,20 @@ TEST_CASE("Test that a bare load names the user repository an extension is insta
 // per-repository subfolder of folder_repository. The binary is a stub: duckdb_extensions only reads the .info
 static void StageInstalledExtension(DatabaseInstance &db, const string &name, const string &folder_repository,
                                     const ExtensionInstallInfo &info) {
-	auto fs = FileSystem::CreateLocal();
-	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
+	auto &fs = TestLocalFileSystem();
+	string dir = ExtensionHelper::ExtensionDirectory(db, fs);
 	if (!folder_repository.empty()) {
-		dir = fs->JoinPath(fs->JoinPath(dir, "repositories"), folder_repository);
+		dir = fs.JoinPath(fs.JoinPath(dir, "repositories"), folder_repository);
 	}
-	fs->CreateDirectoriesRecursive(dir);
+	fs.CreateDirectoriesRecursive(dir);
 
-	string ext_path = fs->JoinPath(dir, name + ".duckdb_extension");
+	string ext_path = fs.JoinPath(dir, name + ".duckdb_extension");
 	vector<data_t> stub(ParsedExtensionMetaData::FOOTER_SIZE, 0);
-	WriteExtensionFile(*fs, ext_path, stub.data(), stub.size());
+	WriteExtensionFile(fs, ext_path, stub.data(), stub.size());
 
 	MemoryStream stream;
 	BinarySerializer::Serialize(info, stream);
-	WriteExtensionFile(*fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
+	WriteExtensionFile(fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
 }
 
 static ExtensionInstallInfo UserRepositoryInstallInfo(const string &repository_name, const string &version) {
@@ -614,15 +616,11 @@ TEST_CASE("Test that duckdb_extensions lists extensions installed from user-prov
 	REQUIRE(ExtensionRows(con, "invalid_ext").empty());
 
 	// an unreadable repository file does not fail the listing, nor hide any installed extension
-	auto fs = FileSystem::CreateLocal();
-	auto broken_path = fs->JoinPath(repository_directory, "broken.duckdb_extension.repo.json");
-	{
-		auto handle = fs->OpenFile(broken_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-		string garbage = "not json";
-		handle->Write((void *)garbage.data(), garbage.size());
-	}
+	auto &fs = TestLocalFileSystem();
+	auto broken_path = fs.JoinPath(repository_directory, "broken.duckdb_extension.repo.json");
+	WriteTextFile(broken_path, "not json");
 	REQUIRE(ExtensionRows(con, "dns").size() == 3);
-	fs->RemoveFile(broken_path);
+	fs.RemoveFile(broken_path);
 
 	// dropping a repository leaves its installed files on disk, so they are still listed
 	REQUIRE_NO_FAIL(con.Query("DROP EXTENSION REPOSITORY other"));
@@ -639,23 +637,23 @@ TEST_CASE("Test that duckdb_extensions lists extensions installed from user-prov
 static string CopyInstalledExtension(DatabaseInstance &db, const string &source, const string &name,
                                      const string &folder_repository, const string &repository_name,
                                      const string &version) {
-	auto fs = FileSystem::CreateLocal();
-	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
+	auto &fs = TestLocalFileSystem();
+	string dir = ExtensionHelper::ExtensionDirectory(db, fs);
 	if (!folder_repository.empty()) {
-		dir = fs->JoinPath(fs->JoinPath(dir, "repositories"), folder_repository);
+		dir = fs.JoinPath(fs.JoinPath(dir, "repositories"), folder_repository);
 	}
-	fs->CreateDirectoriesRecursive(dir);
+	fs.CreateDirectoriesRecursive(dir);
 
-	auto source_handle = fs->OpenFile(source, FileFlags::FILE_FLAGS_READ);
+	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	auto size = source_handle->GetFileSize();
 	auto buffer = make_unsafe_uniq_array<data_t>(size);
 	source_handle->Read(buffer.get(), size);
-	string ext_path = fs->JoinPath(dir, name + ".duckdb_extension");
-	WriteExtensionFile(*fs, ext_path, buffer.get(), size);
+	string ext_path = fs.JoinPath(dir, name + ".duckdb_extension");
+	WriteExtensionFile(fs, ext_path, buffer.get(), size);
 
 	MemoryStream stream;
 	BinarySerializer::Serialize(UserRepositoryInstallInfo(repository_name, version), stream);
-	WriteExtensionFile(*fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
+	WriteExtensionFile(fs, ext_path + ".info", stream.GetData(), stream.GetPosition());
 	return ext_path;
 }
 
@@ -677,9 +675,9 @@ TEST_CASE("Test that duckdb_extensions marks the loaded copy", "[api]") {
 	// short names: the test name is part of the path, and LoadLibrary rejects paths over MAX_PATH on Windows
 	auto repository_directory = TestCreatePath("lc_repo");
 	auto extension_directory = TestCreatePath("lc_ext");
-	auto fs = FileSystem::CreateLocal();
-	auto demo = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
-	if (!fs->FileExists(demo)) {
+	auto &fs = TestLocalFileSystem();
+	auto demo = fs.JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
+	if (!fs.FileExists(demo)) {
 		return;
 	}
 	const string name = "loadable_extension_demo";
@@ -763,9 +761,9 @@ static vector<string> UpdateRows(Connection &con, const string &statement) {
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
-	auto fs = FileSystem::CreateLocal();
-	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
-	if (!fs->FileExists(demo_extension)) {
+	auto &fs = TestLocalFileSystem();
+	auto demo_extension = fs.JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
+	if (!fs.FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");
 		return;
 	}
@@ -775,9 +773,9 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 	// a local repository serving the demo extension, in the <prefix>/<version>/<platform>/ layout
 	auto prefix = TestCreatePath("upd_prefix");
 	auto served_directory =
-	    fs->JoinPath(fs->JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
-	fs->CreateDirectoriesRecursive(served_directory);
-	CopyExtensionFile(*fs, demo_extension, fs->JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
+	    fs.JoinPath(fs.JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
+	fs.CreateDirectoriesRecursive(served_directory);
+	CopyExtensionFile(fs, demo_extension, fs.JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
 
 	DBConfig config;
 	config.SetOptionByName("extension_repository_directory", repository_directory);
@@ -802,21 +800,21 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 	REQUIRE(StringUtil::Contains(single->GetError(), "the extension is not installed"));
 
 	// the update reinstalls into the per-repository folder, not the flat one
-	auto flat_directory = ExtensionHelper::ExtensionDirectory(*db.instance, FileSystem::GetLocal(*db.instance));
-	auto flat_path = fs->JoinPath(flat_directory, "loadable_extension_demo.duckdb_extension");
-	auto repo_path = fs->JoinPath(fs->JoinPath(fs->JoinPath(flat_directory, "repositories"), "my_repo"),
-	                              "loadable_extension_demo.duckdb_extension");
-	REQUIRE(fs->FileExists(repo_path));
-	REQUIRE(!fs->FileExists(flat_path));
+	auto flat_directory = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
+	auto flat_path = fs.JoinPath(flat_directory, "loadable_extension_demo.duckdb_extension");
+	auto repo_path = fs.JoinPath(fs.JoinPath(fs.JoinPath(flat_directory, "repositories"), "my_repo"),
+	                             "loadable_extension_demo.duckdb_extension");
+	REQUIRE(fs.FileExists(repo_path));
+	REQUIRE(!fs.FileExists(flat_path));
 
 	// a copy in the flat folder that records my_repo as its origin, as the reproducer's mv creates, is updated from
 	// my_repo as well
-	CopyExtensionFile(*fs, repo_path, flat_path);
-	CopyExtensionFile(*fs, repo_path + ".info", flat_path + ".info");
+	CopyExtensionFile(fs, repo_path, flat_path);
+	CopyExtensionFile(fs, repo_path + ".info", flat_path + ".info");
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {repo_row, repo_row});
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS (loadable_extension_demo)") == vector<string> {repo_row});
-	fs->RemoveFile(flat_path);
-	fs->RemoveFile(flat_path + ".info");
+	fs.RemoveFile(flat_path);
+	fs.RemoveFile(flat_path + ".info");
 
 	// a folder that no repository backs is reported rather than updated
 	CopyInstalledExtension(*db.instance, demo_extension, "stray_ext", "not_a_repository", "not_a_repository",
@@ -829,8 +827,8 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 
 	// once repositories are forbidden, their extensions are reported rather than failing the update, also when the
 	// copy is in the flat folder
-	CopyExtensionFile(*fs, repo_path, flat_path);
-	CopyExtensionFile(*fs, repo_path + ".info", flat_path + ".info");
+	CopyExtensionFile(fs, repo_path, flat_path);
+	CopyExtensionFile(fs, repo_path + ".info", flat_path + ".info");
 	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='forbidden'"));
 	const string not_trusted_row =
 	    "loadable_extension_demo|my_repo|REPOSITORY_NOT_TRUSTED|default-version|default-version";
@@ -839,9 +837,9 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
-	auto fs = FileSystem::CreateLocal();
-	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
-	if (!fs->FileExists(demo_extension)) {
+	auto &fs = TestLocalFileSystem();
+	auto demo_extension = fs.JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
+	if (!fs.FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");
 		return;
 	}
@@ -851,9 +849,9 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 
 	auto prefix = TestCreatePath("updd_prefix");
 	auto served_directory =
-	    fs->JoinPath(fs->JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
-	fs->CreateDirectoriesRecursive(served_directory);
-	CopyExtensionFile(*fs, demo_extension, fs->JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
+	    fs.JoinPath(fs.JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
+	fs.CreateDirectoriesRecursive(served_directory);
+	CopyExtensionFile(fs, demo_extension, fs.JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
 
 	auto make_config = [&](DBConfig &config, const string &extension_directory) {
 		config.SetOptionByName("extension_repository_directory", repository_directory);
@@ -872,7 +870,7 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
 		    "CREATE EXTENSION REPOSITORY my_repo WITH PREFIX '%s' USING PUBLIC KEY '%s'", prefix, TEST_PUBLIC_KEY)));
 		REQUIRE_NO_FAIL(con.Query("INSTALL loadable_extension_demo FROM my_repo"));
-		secondary_install = ExtensionHelper::ExtensionDirectory(*db.instance, FileSystem::GetLocal(*db.instance));
+		secondary_install = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
 	}
 
 	DBConfig config;
@@ -880,7 +878,7 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 	config.SetOptionByName("extension_directories", Value::LIST({Value(secondary_directory)}));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
-	auto primary_install = ExtensionHelper::ExtensionDirectory(*db.instance, FileSystem::GetLocal(*db.instance));
+	auto primary_install = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
 	REQUIRE(primary_install != secondary_install);
 
 	const string repo_row = "loadable_extension_demo|my_repo|NO_UPDATE_AVAILABLE|default-version|default-version";
@@ -888,11 +886,11 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 
 	// the update stays in the secondary directory, nothing is written to the primary one
 	auto repo_file = [&](const string &directory) {
-		return fs->JoinPath(fs->JoinPath(fs->JoinPath(directory, "repositories"), "my_repo"),
-		                    "loadable_extension_demo.duckdb_extension");
+		return fs.JoinPath(fs.JoinPath(fs.JoinPath(directory, "repositories"), "my_repo"),
+		                   "loadable_extension_demo.duckdb_extension");
 	};
-	REQUIRE(fs->FileExists(repo_file(secondary_install)));
-	REQUIRE(!fs->FileExists(repo_file(primary_install)));
+	REQUIRE(fs.FileExists(repo_file(secondary_install)));
+	REQUIRE(!fs.FileExists(repo_file(primary_install)));
 
 	// a dropped repository can no longer be updated from, which the update reports
 	REQUIRE_NO_FAIL(con.Query("DROP EXTENSION REPOSITORY my_repo"));
@@ -900,37 +898,32 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 	        vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_NOT_FOUND|default-version|default-version"});
 
 	// a repository file that cannot be read is reported rather than failing the update
-	auto repository_file = fs->JoinPath(repository_directory, "my_repo.duckdb_extension.repo.json");
-	{
-		auto handle =
-		    fs->OpenFile(repository_file, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-		string garbage = "not json";
-		handle->Write((void *)garbage.data(), garbage.size());
-	}
+	auto repository_file = fs.JoinPath(repository_directory, "my_repo.duckdb_extension.repo.json");
+	WriteTextFile(repository_file, "not json");
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") ==
 	        vector<string> {"loadable_extension_demo|my_repo|REPOSITORY_UNREADABLE|default-version|default-version"});
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
-	auto fs = FileSystem::CreateLocal();
-	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
-	if (!fs->FileExists(demo_extension)) {
+	auto &fs = TestLocalFileSystem();
+	auto demo_extension = fs.JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
+	if (!fs.FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");
 		return;
 	}
 	auto repository_directory = TestCreatePath("updh_repos");
 	auto extension_directory = TestCreatePath("updh_ext");
-	fs->CreateDirectory(repository_directory);
+	fs.CreateDirectory(repository_directory);
 
 	auto serve = [&](const string &prefix) {
 		auto served_directory =
-		    fs->JoinPath(fs->JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
-		fs->CreateDirectoriesRecursive(served_directory);
-		CopyExtensionFile(*fs, demo_extension,
-		                  fs->JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
+		    fs.JoinPath(fs.JoinPath(prefix, ExtensionHelper::GetVersionDirectoryName()), DuckDB::Platform());
+		fs.CreateDirectoriesRecursive(served_directory);
+		CopyExtensionFile(fs, demo_extension,
+		                  fs.JoinPath(served_directory, "loadable_extension_demo.duckdb_extension"));
 	};
 	auto host_repository = [&](const string &prefix) {
-		WriteTextFile(fs->JoinPath(repository_directory, "host.example.duckdb_extension.repo.json"),
+		WriteTextFile(fs.JoinPath(repository_directory, "host.example.duckdb_extension.repo.json"),
 		              StringUtil::Format("{\"version\": 1, \"name\": \"host.example\", \"url\": \"%s\", \"host\": "
 		                                 "\"host.example\", \"public_keys\": [\"%s\"]}",
 		                                 prefix, TEST_PUBLIC_KEY));
@@ -967,12 +960,9 @@ TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
 	// a repository that now points elsewhere is updated from where it points now, which the install info records
 	host_repository(new_prefix);
 	REQUIRE(UpdateRows(con, "UPDATE EXTENSIONS") == vector<string> {host_row, prefix_row});
-	auto info_path = fs->JoinPath(
-	    fs->JoinPath(fs->JoinPath(ExtensionHelper::ExtensionDirectory(*db.instance, FileSystem::GetLocal(*db.instance)),
-	                              "repositories"),
-	                 "host.example"),
+	auto info_path = fs.JoinPath(
+	    fs.JoinPath(fs.JoinPath(ExtensionHelper::ExtensionDirectory(*db.instance, fs), "repositories"), "host.example"),
 	    "loadable_extension_demo.duckdb_extension.info");
-	auto info =
-	    ExtensionInstallInfo::TryReadInfoFile(FileSystem::GetLocal(*db.instance), info_path, "loadable_extension_demo");
+	auto info = ExtensionInstallInfo::TryReadInfoFile(fs, info_path, "loadable_extension_demo");
 	REQUIRE(info->repository_url == new_prefix);
 }

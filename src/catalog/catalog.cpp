@@ -134,10 +134,8 @@ optional_ptr<CatalogEntry> Catalog::CreateSchema(ClientContext &context, CreateS
 	return CreateSchema(GetCatalogTransaction(context), info);
 }
 
-void Catalog::CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const {
-	if (SupportsNestedSchemas()) {
-		return;
-	}
+//! The end of the schema path of name if that path is nested, or 0 if it is not
+static idx_t NestedSchemaPathEnd(const QualifiedName &name, CatalogType type) {
 	auto &path = name.Path();
 	auto end = path.size();
 	if (type != CatalogType::SCHEMA_ENTRY && end > 0) {
@@ -149,11 +147,33 @@ void Catalog::CheckNestedSchemaSupport(const QualifiedName &name, CatalogType ty
 			while (path[end - 1].empty()) {
 				end--;
 			}
-			auto schema_path =
-			    QualifiedName::FromPath(vector<Identifier>(path.begin() + 1, path.begin() + NumericCast<int64_t>(end)));
-			throw BinderException("Catalog %s does not support nested schemas: %s", GetName(), schema_path.ToString());
+			return end;
 		}
 	}
+	return 0;
+}
+
+bool Catalog::SupportsSchemaPath(const QualifiedName &name, CatalogType type) const {
+	return SupportsNestedSchemas() || NestedSchemaPathEnd(name, type) == 0;
+}
+
+void Catalog::CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const {
+	if (SupportsSchemaPath(name, type)) {
+		return;
+	}
+	auto end = NestedSchemaPathEnd(name, type);
+	auto &path = name.Path();
+	auto schema_path =
+	    QualifiedName::FromPath(vector<Identifier>(path.begin() + 1, path.begin() + NumericCast<int64_t>(end)));
+	throw BinderException("Catalog %s does not support nested schemas: %s", GetName(), schema_path.ToString());
+}
+
+static optional_ptr<SchemaCatalogEntry> UnsupportedSchemaPath(const EntryLookupInfo &schema_lookup,
+                                                              OnEntryNotFound if_not_found) {
+	if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw CatalogException::MissingEntry(schema_lookup, string());
+	}
+	return nullptr;
 }
 
 CatalogTransaction Catalog::GetCatalogTransaction(ClientContext &context) {
@@ -443,7 +463,11 @@ struct CatalogLookup {
 void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
-		CheckNestedSchemaSupport(info.GetQualifiedName(), CatalogType::SCHEMA_ENTRY);
+		if (!SupportsSchemaPath(info.GetQualifiedName(), CatalogType::SCHEMA_ENTRY)) {
+			UnsupportedSchemaPath(EntryLookupInfo(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName()),
+			                      info.if_not_found);
+			return;
+		}
 		DropSchema(context, info);
 		return;
 	}
@@ -489,7 +513,9 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogTransaction transacti
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup,
                                                     OnEntryNotFound if_not_found) {
-	CheckNestedSchemaSupport(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY);
+	if (!SupportsSchemaPath(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY)) {
+		return UnsupportedSchemaPath(schema_lookup, if_not_found);
+	}
 	return LookupSchema(GetCatalogTransaction(context), schema_lookup, if_not_found);
 }
 
@@ -589,7 +615,9 @@ optional_ptr<SchemaCatalogEntry>
 Catalog::LookupSchemaPath(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found,
                           const std::function<optional_ptr<CatalogEntry>(const EntryLookupInfo &)> &lookup_root) {
-	CheckNestedSchemaSupport(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY);
+	if (!SupportsSchemaPath(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY)) {
+		return UnsupportedSchemaPath(schema_lookup, if_not_found);
+	}
 	auto &path = schema_lookup.GetQualifiedName().Path();
 	optional_ptr<SchemaCatalogEntry> schema;
 	// Bound schema lookups lead with the catalog; bare lookups contain just the schema name.
@@ -651,7 +679,9 @@ SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const Identifier 
 }
 
 SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup) {
-	CheckNestedSchemaSupport(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY);
+	if (!SupportsSchemaPath(schema_lookup.GetQualifiedName(), CatalogType::SCHEMA_ENTRY)) {
+		return *UnsupportedSchemaPath(schema_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	}
 	return *LookupSchema(transaction, schema_lookup, OnEntryNotFound::THROW_EXCEPTION);
 }
 
@@ -1021,7 +1051,9 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
-	CheckNestedSchemaSupport(lookup_info.GetQualifiedName(), lookup_info.GetCatalogType());
+	if (!SupportsSchemaPath(lookup_info.GetQualifiedName(), lookup_info.GetCatalogType())) {
+		return {nullptr, nullptr, ErrorData()};
+	}
 	return TryLookupEntryInternal(transaction, lookup_info);
 }
 

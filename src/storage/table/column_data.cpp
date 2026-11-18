@@ -1388,7 +1388,7 @@ unique_ptr<ExtraPersistentColumnData> ExtraPersistentColumnData::Deserialize(Des
 	case ExtraPersistentColumnDataType::LIST:
 		return ListPersistentColumnData::Deserialize(deserializer);
 	default:
-		throw InternalException("Unknown PersistentColumnData type");
+		throw DataCorruptionException("Column data with extra data of an unknown type");
 	}
 }
 

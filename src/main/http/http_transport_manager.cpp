@@ -261,7 +261,7 @@ void HTTPTransportManager::Initialize(const DBConfig &config) {
 }
 
 idx_t HTTPTransportManager::AutomaticCapacity(const DBConfig &config, optional_idx async_threads) {
-	auto fs = config.GetSystemFileSystem();
+	auto fs = config.GetBootstrapFileSystem();
 	if (!async_threads.IsValid()) {
 		async_threads = NumericCast<idx_t>(Settings::Get<AsyncThreadsSetting>(config));
 	}

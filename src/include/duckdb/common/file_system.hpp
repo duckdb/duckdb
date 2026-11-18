@@ -32,8 +32,6 @@ public:
 
 public:
 	//! Static helpers that do not depend on a file system instance
-	//! Create a local file system without an opener
-	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 	//! Whether or not a file is remote or local, based only on file path
 	DUCKDB_API static bool IsRemoteFile(const string &path);
 	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
@@ -238,25 +236,6 @@ public:
 
 private:
 	BaseFileSystem &file_system;
-	optional_ptr<FileOpener> opener;
-};
-
-//! Binds a BaseFileSystem that it owns to an (optional) FileOpener
-class OwningFileSystem : public FileSystem {
-public:
-	explicit OwningFileSystem(unique_ptr<BaseFileSystem> file_system_p, optional_ptr<FileOpener> opener_p = nullptr)
-	    : file_system(std::move(file_system_p)), opener(opener_p) {
-	}
-
-	BaseFileSystem &GetFileSystem() const override {
-		return *file_system;
-	}
-	optional_ptr<FileOpener> GetOpener() const override {
-		return opener;
-	}
-
-private:
-	unique_ptr<BaseFileSystem> file_system;
 	optional_ptr<FileOpener> opener;
 };
 

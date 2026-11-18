@@ -56,6 +56,7 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
+	bootstrap_file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
@@ -477,18 +478,12 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static BaseFileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<BaseFileSystem> &owned) {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	auto &default_fs = vfs.GetDefaultFileSystem();
-	if (default_fs.IsLocalFileSystem()) {
-		return default_fs;
-	}
-	owned = make_uniq<LocalFileSystem>();
-	return *owned;
+static BaseFileSystem &ResolveLocalFileSystem(DatabaseInstance &db) {
+	return static_cast<VirtualFileSystem &>(*db.config.file_system).GetLocalFileSystem();
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p)), database_opener(db_p) {
 }
 
 BaseFileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
@@ -559,7 +554,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(BaseFileSystem::CreateLocal());
+		config.file_system = make_uniq<VirtualFileSystem>();
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
@@ -574,7 +569,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
-	auto system_fs = config.GetSystemFileSystem();
+	auto system_fs = config.GetBootstrapFileSystem();
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();

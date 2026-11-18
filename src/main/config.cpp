@@ -692,12 +692,16 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 	return *index_types;
 }
 
+unique_ptr<FileSystem> DBConfig::GetBootstrapFileSystem() const {
+	return make_uniq<BoundFileSystem>(file_system ? *file_system : *bootstrap_file_system, nullptr);
+}
+
 idx_t DBConfig::GetDefaultMaxMemory() const {
 	auto default_memory = default_max_memory.load();
 	if (default_memory != 0) {
 		return default_memory;
 	}
-	auto system_fs = GetSystemFileSystem();
+	auto system_fs = GetBootstrapFileSystem();
 	auto memory = GetSystemAvailableMemory(*system_fs);
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
@@ -786,20 +790,13 @@ idx_t DBConfig::GetDefaultThreads() const {
 	if (threads != 0) {
 		return threads;
 	}
-	auto system_fs = GetSystemFileSystem();
+	auto system_fs = GetBootstrapFileSystem();
 	threads = GetSystemMaxThreads(*system_fs);
 	// not started yet: do not cache, the database may still install another file system
 	if (file_system) {
 		default_threads = threads;
 	}
 	return threads;
-}
-
-unique_ptr<FileSystem> DBConfig::GetSystemFileSystem() const {
-	if (!file_system) {
-		return FileSystem::CreateLocal();
-	}
-	return make_uniq<BoundFileSystem>(*file_system, nullptr);
 }
 
 idx_t DBConfig::GetDefaultAsyncThreads() const {

@@ -72,6 +72,8 @@ public:
 	vector<string> ListSubSystems() override;
 
 	BaseFileSystem &GetDefaultFileSystem();
+	//! The local file system: the default file system if it is local, otherwise one owned by this VirtualFileSystem
+	BaseFileSystem &GetLocalFileSystem();
 
 	std::string GetName() const override;
 
@@ -116,6 +118,8 @@ private:
 	                                                       bool for_writing);
 
 private:
+	//! Only set if the default file system is not local
+	unique_ptr<BaseFileSystem> owned_local_file_system;
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
 	vector<unique_ptr<BaseFileSystem>> unregistered_file_systems;

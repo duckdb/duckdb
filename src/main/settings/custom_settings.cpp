@@ -93,12 +93,6 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	return LossyNumericCast<idx_t>(result);
 }
 
-//! The available system memory
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	auto system_fs = config.GetSystemFileSystem();
-	return DBConfig::GetSystemAvailableMemory(*system_fs);
-}
-
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -1275,8 +1269,9 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 			throw InvalidInputException("%s setting cannot be NULL", MaxMemorySetting::Name);
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-		maximum_memory =
-		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(info.config); });
+		maximum_memory = ParseMemoryLimitOrPercentage(input.ToString(), [&]() {
+			return DBConfig::GetSystemAvailableMemory(*info.config.GetBootstrapFileSystem());
+		});
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);
