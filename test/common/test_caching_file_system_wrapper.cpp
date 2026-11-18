@@ -1064,7 +1064,7 @@ TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NO
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 
 	auto missing_path = TestCreatePath("test_caching_missing_file.bin");
-	FileSystem::CreateLocal()->TryRemoveFile(missing_path);
+	TestLocalFileSystem().TryRemoveFile(missing_path);
 
 	auto validate = GENERATE(true, false);
 	OpenFileInfo file_info(missing_path);
