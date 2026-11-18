@@ -32,3 +32,9 @@ query I
 SELECT uuid()
 ----
 098fbc2e-a802-4459-ad75-ee51e5a1a256
+
+# large enough to replace sampled rows through the reservoir weights
+query I
+SELECT sum(i) FROM (FROM range(200000) t(i) USING SAMPLE 5000 ROWS (reservoir, 42))
+----
+499420862
