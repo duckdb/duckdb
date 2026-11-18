@@ -405,6 +405,11 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		if (join.HasProjectionMap()) {
 			return false;
 		}
+		// Keep constant membership filters local instead of expanding the join search.
+		if ((join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) &&
+		    join.children[1]->type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
+			return false;
+		}
 		// Preserve the input rows on which volatile condition operands are evaluated.
 		for (auto &cond : join.conditions) {
 			bool is_volatile = cond.IsComparison() ? cond.GetLHS().IsVolatile() || cond.GetRHS().IsVolatile()

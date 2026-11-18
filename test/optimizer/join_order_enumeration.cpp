@@ -2,13 +2,60 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
+#include "duckdb/optimizer/mark_join_simplifier.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
+
+TEST_CASE("Constant membership filters stay outside the join search", "[optimizer][join_order]") {
+	const auto predicate = GENERATE(string("IN"), string("NOT IN"));
+	DuckDB db;
+	Connection connection(db);
+	for (auto sql : {"CREATE TABLE a(k INTEGER, v VARCHAR NOT NULL)",
+	                 "INSERT INTO a SELECT i%10, (i%100)::VARCHAR FROM range(1000)t(i)",
+	                 "CREATE TABLE c AS SELECT i%10 k FROM range(50)t(i)"}) {
+		REQUIRE_NO_FAIL(connection.Query(sql));
+	}
+	const auto query =
+	    "SELECT count(*) FROM a JOIN c ON a.k=c.k WHERE a.v " + predicate + " ('0','1','2','3','4','5','6','7','0')";
+	connection.BeginTransaction();
+	Parser parser(*connection.context);
+	parser.ParseQuery(query);
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	Optimizer optimizer(*planner.binder, *connection.context);
+	FilterPushdown pushdown(optimizer);
+	auto plan = pushdown.Rewrite(std::move(planner.plan));
+	InClauseRewriter in_rewriter(*connection.context, optimizer);
+	plan = in_rewriter.Rewrite(std::move(plan));
+	MarkJoinSimplifier simplifier(optimizer);
+	simplifier.Optimize(plan);
+	optional_ptr<LogicalOperator> root = plan.get();
+	while (root->children.size() == 1) {
+		root = root->children[0].get();
+	}
+	optional_ptr<LogicalOperator> membership = root->children[0].get();
+	while (membership->children.size() == 1) {
+		membership = membership->children[0].get();
+	}
+	REQUIRE(membership->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+	REQUIRE(membership->Cast<LogicalComparisonJoin>().join_type ==
+	        (predicate == "IN" ? JoinType::SEMI : JoinType::ANTI));
+	JoinOrderOptimizer join_optimizer(*connection.context);
+	QueryGraphManager graph(*connection.context);
+	REQUIRE(graph.Build(join_optimizer, *root));
+	REQUIRE(graph.relation_manager.NumRelations() == 2);
+	auto result = connection.Query(query);
+	REQUIRE_NO_FAIL(*result);
+	CHECK_COLUMN(result, 0, {predicate == "IN" ? 400 : 4600});
+	connection.Rollback();
+}
 
 TEST_CASE("External INNER predicates remain available beside a filtering join", "[optimizer][join_order]") {
 	const auto join_type = GENERATE(string("SEMI"), string("ANTI"));
