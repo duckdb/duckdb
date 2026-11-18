@@ -871,8 +871,8 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 			left.Slice(*sel, tail_count);
 			right.Slice(*sel, tail_count);
 		}
-		tail_count =
-		    op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel, tail_count, match_sel);
+		tail_count = op.SelectJoinTail(left_executor.GetContext(), *op.condition_comparisons[cmp_idx + 2], left, right,
+		                               sel, tail_count, match_sel);
 		sel = match_sel;
 	}
 

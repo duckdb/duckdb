@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -25,6 +26,15 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, Logi
 
 	if (!arbitrary_conditions.empty()) {
 		predicate = JoinCondition::CreateExpression(std::move(arbitrary_conditions));
+	}
+	CreateConditionComparisons();
+}
+
+void PhysicalComparisonJoin::CreateConditionComparisons() {
+	condition_comparisons.clear();
+	for (auto &condition : conditions) {
+		condition_comparisons.push_back(BoundComparisonExpression::CreateOnColumns(
+		    condition.GetComparisonType(), condition.GetLHS().GetReturnType(), condition.GetRHS().GetReturnType()));
 	}
 }
 

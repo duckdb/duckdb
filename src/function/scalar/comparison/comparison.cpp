@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -180,6 +181,12 @@ ScalarFunction IsNotDistinctFromFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // BoundComparisonExpression
 //===--------------------------------------------------------------------===//
+unique_ptr<Expression> BoundComparisonExpression::CreateOnColumns(ExpressionType type, const LogicalType &left_type,
+                                                                  const LogicalType &right_type) {
+	return Create(type, make_uniq<BoundReferenceExpression>(left_type, 0),
+	              make_uniq<BoundReferenceExpression>(right_type, 1));
+}
+
 unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, unique_ptr<Expression> left,
                                                          unique_ptr<Expression> right) {
 	vector<unique_ptr<Expression>> children;

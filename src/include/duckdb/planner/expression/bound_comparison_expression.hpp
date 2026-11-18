@@ -26,6 +26,10 @@ struct BoundComparisonExpression {
 	static unique_ptr<Expression> &RightMutable(BoundFunctionExpression &between_expr);
 	static unique_ptr<Expression> Create(ExpressionType type, unique_ptr<Expression> left,
 	                                     unique_ptr<Expression> right);
+	//! Create the comparison "left <op> right" of the columns 0 and 1 of a binary input (for ExpressionExecutor's
+	//! ExecuteBinaryExpression/SelectBinaryExpression), without casts
+	static unique_ptr<Expression> CreateOnColumns(ExpressionType type, const LogicalType &left_type,
+	                                              const LogicalType &right_type);
 	//! Create a comparison, casting both sides to a common type within the limit of the binder, if any - throws if
 	//! they cannot be compared
 	static unique_ptr<Expression> Bind(ClientContext &context, ExpressionType type, unique_ptr<Expression> left,

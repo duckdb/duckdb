@@ -17,8 +17,13 @@ static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state,
 	return idx;
 }
 
-PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<LogicalType> &key_types_p)
+PartitionKeyTracker::PartitionKeyTracker(Context &context, Allocator &allocator_p,
+                                         const vector<LogicalType> &key_types_p,
+                                         const vector<unique_ptr<Expression>> &distinct_from_p)
     : key_count(key_types_p.size()) {
+	for (auto &comparison : distinct_from_p) {
+		distinct_from.push_back(make_uniq<ExpressionExecutor>(context, *comparison));
+	}
 	single_value_sel.Initialize();
 	candidate_input_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
 	candidate_rep_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
@@ -174,8 +179,8 @@ void PartitionKeyTracker::CompareCandidates(DataChunk &keys, idx_t candidate_cou
 	for (idx_t col_idx = 0; col_idx < key_count && candidate_count; col_idx++) {
 		Vector input_slice(keys.data[col_idx], candidate_input_sel, candidate_count);
 		Vector representative_slice(representatives.data[col_idx], candidate_rep_sel, candidate_count);
-		const auto mismatch_count = VectorOperations::DistinctFrom(input_slice, representative_slice, nullptr,
-		                                                           candidate_count, &mismatch_sel, nullptr);
+		const auto mismatch_count = distinct_from[col_idx]->SelectBinaryExpression(
+		    input_slice, representative_slice, nullptr, candidate_count, &mismatch_sel, nullptr);
 		for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
 			const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
 			MarkMixed(candidate_rep_sel.get_index_unsafe(candidate_idx));
@@ -228,8 +233,8 @@ void PartitionKeyTracker::CompareTrackerCandidates(const PartitionKeyTracker &so
 	for (idx_t col_idx = 0; col_idx < key_count && candidate_count; col_idx++) {
 		Vector target_slice(representatives.data[col_idx], candidate_input_sel, candidate_count);
 		Vector source_slice(source.representatives.data[col_idx], candidate_rep_sel, candidate_count);
-		const auto mismatch_count = VectorOperations::DistinctFrom(target_slice, source_slice, nullptr, candidate_count,
-		                                                           &mismatch_sel, nullptr);
+		const auto mismatch_count = distinct_from[col_idx]->SelectBinaryExpression(
+		    target_slice, source_slice, nullptr, candidate_count, &mismatch_sel, nullptr);
 		for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
 			const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
 			MarkMixed(candidate_input_sel.get_index_unsafe(candidate_idx));

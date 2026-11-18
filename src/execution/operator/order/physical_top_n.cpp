@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/atomic.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -17,6 +18,11 @@ PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> type
                            idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality),
       orders(std::move(orders)), limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)) {
+	for (auto &order : this->orders) {
+		auto &type = order.expression->GetReturnType();
+		not_distinct_from.push_back(
+		    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, type));
+	}
 }
 
 PhysicalTopN::~PhysicalTopN() {
@@ -85,11 +91,13 @@ struct TopNBoundaryValue {
 class TopNHeap {
 public:
 	TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders,
-	         idx_t limit, idx_t offset);
+	         const vector<unique_ptr<Expression>> &not_distinct_from, idx_t limit, idx_t offset);
 	TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
-	         const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset);
+	         const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	         idx_t limit, idx_t offset);
 	TopNHeap(ClientContext &context, Allocator &allocator, const vector<LogicalType> &payload_types,
-	         const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset);
+	         const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	         idx_t limit, idx_t offset);
 
 	Allocator &allocator;
 	BufferManager &buffer_manager;
@@ -102,6 +110,8 @@ public:
 	idx_t offset;
 	idx_t heap_size;
 	ExpressionExecutor executor;
+	//! NOT DISTINCT FROM comparison of every sort column
+	vector<unique_ptr<ExpressionExecutor>> not_distinct_from;
 	DataChunk sort_chunk;
 	DataChunk heap_data;
 	DataChunk payload_chunk;
@@ -176,7 +186,8 @@ private:
 // TopNHeap
 //===--------------------------------------------------------------------===//
 TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<LogicalType> &payload_types_p,
-                   const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
+                   const vector<BoundOrderByNode> &orders_p, const vector<unique_ptr<Expression>> &not_distinct_from_p,
+                   idx_t limit, idx_t offset)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), arena_allocator(allocator),
       heap(arena_allocator), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset),
       heap_size(limit + offset), executor(context), sort_key_heap(allocator), matching_sel(STANDARD_VECTOR_SIZE),
@@ -188,6 +199,8 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 		auto &expr = order.expression;
 		sort_types.push_back(expr->GetReturnType());
 		executor.AddExpression(*expr);
+		not_distinct_from.push_back(
+		    make_uniq<ExpressionExecutor>(executor.GetContext(), *not_distinct_from_p[not_distinct_from.size()]));
 		modifiers.emplace_back(order.type, order.null_order);
 	}
 	heap.reserve(InitialHeapAllocSize());
@@ -201,13 +214,16 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 }
 
 TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(context, BufferAllocator::Get(context), payload_types, orders, limit, offset) {
+                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+                   idx_t limit, idx_t offset)
+    : TopNHeap(context, BufferAllocator::Get(context), payload_types, orders, not_distinct_from, limit, offset) {
 }
 
 TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, limit, offset) {
+                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+                   idx_t limit, idx_t offset)
+    : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, not_distinct_from, limit,
+               offset) {
 }
 
 void TopNHeap::AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec) {
@@ -337,9 +353,8 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 		idx_t false_count = remaining_count - true_count;
 		if (!is_last && false_count > 0) {
 			// check what we should continue to check
-			compare_chunk.data[i].Slice(sort_chunk.data[i], false_sel, false_count);
-			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], boundary_values.data[i],
-			                                                    &false_sel, false_count, &new_remaining_sel, nullptr);
+			remaining_count = not_distinct_from[i]->SelectBinaryExpression(
+			    sort_chunk.data[i], boundary_values.data[i], &false_sel, false_count, &new_remaining_sel, nullptr);
 			remaining_sel.Initialize(new_remaining_sel);
 		} else {
 			break;
@@ -486,7 +501,7 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos) {
 class TopNGlobalSinkState : public GlobalSinkState {
 public:
 	TopNGlobalSinkState(ClientContext &context, const PhysicalTopN &op)
-	    : heap(context, op.types, op.orders, op.limit, op.offset), boundary_value(op) {
+	    : heap(context, op.types, op.orders, op.not_distinct_from, op.limit, op.offset), boundary_value(op) {
 	}
 
 	mutex lock;
@@ -497,15 +512,16 @@ public:
 class TopNLocalSinkState : public LocalSinkState {
 public:
 	TopNLocalSinkState(ExecutionContext &context, const vector<LogicalType> &payload_types,
-	                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-	    : heap(context, payload_types, orders, limit, offset) {
+	                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	                   idx_t limit, idx_t offset)
+	    : heap(context, payload_types, orders, not_distinct_from, limit, offset) {
 	}
 
 	TopNHeap heap;
 };
 
 unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<TopNLocalSinkState>(context, types, orders, limit, offset);
+	return make_uniq<TopNLocalSinkState>(context, types, orders, not_distinct_from, limit, offset);
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {

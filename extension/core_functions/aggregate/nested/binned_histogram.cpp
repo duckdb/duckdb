@@ -1,3 +1,7 @@
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
@@ -240,6 +244,51 @@ Value OtherBucketValue(const LogicalType &type) {
 	}
 }
 
+struct IsHistogramOtherBinData : public FunctionData {
+	explicit IsHistogramOtherBinData(LogicalType type_p)
+	    : type(std::move(type_p)), not_distinct_from(BoundComparisonExpression::CreateOnColumns(
+	                                   ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, type)) {
+	}
+
+	//! The type of the input
+	LogicalType type;
+	//! The comparison with the "other" bucket value
+	unique_ptr<Expression> not_distinct_from;
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<IsHistogramOtherBinData>(type);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return type == other_p.Cast<IsHistogramOtherBinData>().type;
+	}
+
+	static void Serialize(Serializer &serializer, optional_ptr<const FunctionData> bind_data_p,
+	                      const BoundScalarFunction &) {
+		serializer.WriteProperty(100, "type", bind_data_p->Cast<IsHistogramOtherBinData>().type);
+	}
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
+		return make_uniq<IsHistogramOtherBinData>(deserializer.ReadProperty<LogicalType>(100, "type"));
+	}
+};
+
+struct IsHistogramOtherBinLocalState : public FunctionLocalState {
+	IsHistogramOtherBinLocalState(Context &context, const IsHistogramOtherBinData &data)
+	    : not_distinct_from(context, *data.not_distinct_from) {
+	}
+
+	ExpressionExecutor not_distinct_from;
+};
+
+unique_ptr<FunctionData> IsHistogramOtherBinBind(BindScalarFunctionInput &input) {
+	return make_uniq<IsHistogramOtherBinData>(input.GetArguments()[0]->GetReturnType());
+}
+
+unique_ptr<FunctionLocalState> IsHistogramOtherBinInitLocalState(ExpressionState &state,
+                                                                 const BoundFunctionExpression &,
+                                                                 optional_ptr<const FunctionData> bind_data) {
+	return make_uniq<IsHistogramOtherBinLocalState>(state.GetContext(), bind_data->Cast<IsHistogramOtherBinData>());
+}
+
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
@@ -248,7 +297,9 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v, count_t(args.size()));
-	VectorOperations::NotDistinctFrom(args.data[0], ref, result);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<IsHistogramOtherBinLocalState>();
+	lstate.not_distinct_from.ExecuteBinaryExpression(args.data[0], ref, result);
+	result.Flatten();
 
 	// Set NULL if input is NULL.
 	UnifiedVectorFormat input_data;
@@ -420,8 +471,12 @@ AggregateFunction HistogramExactFun::GetFunction() {
 }
 
 ScalarFunction IsHistogramOtherBinFun::GetFunction() {
-	ScalarFunction fun("is_histogram_other_bin", {}, LogicalType::BOOLEAN, IsHistogramOtherBinFunction);
+	ScalarFunction fun("is_histogram_other_bin", {}, LogicalType::BOOLEAN, IsHistogramOtherBinFunction,
+	                   IsHistogramOtherBinBind);
 	fun.GetSignature().AddParameter("val", LogicalType::ANY);
+	fun.SetInitStateCallback(IsHistogramOtherBinInitLocalState);
+	fun.SetSerializeCallback(IsHistogramOtherBinData::Serialize);
+	fun.SetDeserializeCallback(IsHistogramOtherBinData::Deserialize);
 	return fun;
 }
 

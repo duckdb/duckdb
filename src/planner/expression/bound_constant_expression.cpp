@@ -49,7 +49,9 @@ static bool SameRepresentation(const Value &left, const Value &right) {
 	}
 	Vector left_vector(left, count_t(1));
 	Vector right_vector(right, count_t(1));
-	return VectorOperations::NotDistinctFrom(left_vector, right_vector, nullptr, 1, nullptr, nullptr) == 1;
+	Vector comparison(LogicalType::TINYINT);
+	VectorOperations::DistinctComparator(left_vector, right_vector, comparison);
+	return comparison.GetValue(0) == Value::TINYINT(0);
 }
 
 bool BoundConstantExpression::Equals(const BaseExpression &other_p) const {

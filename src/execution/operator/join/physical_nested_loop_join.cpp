@@ -460,9 +460,9 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	}
 }
 
-static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, DataChunk &input,
-                                       PhysicalNestedLoopJoinState &state, NestedLoopJoinGlobalState &gstate,
-                                       bool found_match[]) {
+static void ResolveSimpleJoinPredicate(ExpressionExecutor &comparison_executor, const vector<JoinCondition> &conditions,
+                                       DataChunk &input, PhysicalNestedLoopJoinState &state,
+                                       NestedLoopJoinGlobalState &gstate, bool found_match[]) {
 	D_ASSERT(conditions.size() == 1);
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	gstate.right_payload_data.InitializeScan(state.payload_scan_state);
@@ -481,8 +481,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 			}
 			ConstantVector::Reference(left_reference, count_t(state.right_condition.size()),
 			                          state.left_condition.data[0], left_row, state.left_condition.size());
-			MarkJoinRowComparison::Compare(left_reference, state.right_condition.data[0],
-			                               conditions[0].GetComparisonType(), comparison);
+			comparison_executor.ExecuteBinaryExpression(left_reference, state.right_condition.data[0], comparison);
 			auto comparisons = comparison.Values<bool>();
 			idx_t candidate_count = 0;
 			for (idx_t right_row = 0; right_row < state.right_condition.size(); right_row++) {
@@ -529,7 +528,8 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 
 	if (predicate) {
 		D_ASSERT(join_type == JoinType::SEMI || join_type == JoinType::ANTI);
-		ResolveSimpleJoinPredicate(conditions, input, state, gstate, found_match);
+		ExpressionExecutor comparison_executor(context.client.GetContext(), *condition_comparisons[0]);
+		ResolveSimpleJoinPredicate(comparison_executor, conditions, input, state, gstate, found_match);
 	} else {
 		NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
 		                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);

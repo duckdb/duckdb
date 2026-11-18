@@ -704,8 +704,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 						left.Slice(*sel, tail_count);
 						right.Slice(*sel, tail_count);
 					}
-					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
-					                            &state.sel);
+					tail_count = SelectJoinTail(context.client.GetContext(), *condition_comparisons[cmp_idx], left,
+					                            right, sel, tail_count, &state.sel);
 					sel = &state.sel;
 				}
 

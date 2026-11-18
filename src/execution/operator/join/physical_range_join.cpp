@@ -381,6 +381,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	unprojected_types = children[0].get().GetTypes();
 	auto &types = children[1].get().GetTypes();
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
+
+	CreateConditionComparisons();
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vector<JoinCondition> &conditions) {
@@ -518,30 +520,18 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	}
 }
 
-idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, const Vector &left, const Vector &right,
-                                        const SelectionVector *sel, idx_t count, SelectionVector *true_sel) {
-	switch (condition) {
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, nullptr);
-	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::Equals(left, right, sel, count, true_sel, nullptr);
-	default:
-		throw InternalException("Unsupported comparison type for PhysicalRangeJoin");
+idx_t PhysicalRangeJoin::SelectJoinTail(Context &context, const Expression &comparison, const Vector &left,
+                                        const Vector &right, const SelectionVector *sel, idx_t count,
+                                        SelectionVector *true_sel) {
+	ExpressionExecutor executor(context, comparison);
+	// the vectors are dense: 'sel' maps their rows to the output rows
+	SelectionVector local_sel(count);
+	const auto true_count = executor.SelectBinaryExpression(left, right, nullptr, count, &local_sel, nullptr);
+	for (idx_t i = 0; i < true_count; i++) {
+		const auto idx = local_sel.get_index(i);
+		true_sel->set_index(i, sel ? sel->get_index(idx) : idx);
 	}
-
-	return count;
+	return true_count;
 }
 
 } // namespace duckdb

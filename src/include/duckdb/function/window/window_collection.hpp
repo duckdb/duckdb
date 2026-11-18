@@ -14,6 +14,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 #include <exception>
 
@@ -201,6 +202,8 @@ public:
 
 	//! Return a struct type for comparing keys
 	LogicalType PrefixStructType(column_t end, column_t begin = 0);
+	//! Return the struct type for comparing the keys [begin, end) of the given column types
+	static LogicalType PrefixStructType(const vector<LogicalType> &types, column_t end, column_t begin = 0);
 	//! Reference the chunk into a struct vector matching the keys
 	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
 
@@ -211,8 +214,9 @@ public:
 };
 
 template <typename OP>
-static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_begin, idx_t block_end,
-                               const vector<column_t> &scan_cols, const idx_t key_count, OP operation) {
+static void WindowDeltaScanner(Context &context, const Expression &distinct_from_expr, ColumnDataCollection &collection,
+                               idx_t block_begin, idx_t block_end, const vector<column_t> &scan_cols,
+                               const idx_t key_count, OP operation) {
 	//	Stop if there is no work to do
 	if (!collection.Count()) {
 		return;
@@ -237,6 +241,7 @@ static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_beg
 	const auto key_type = scanner.PrefixStructType(key_count);
 	Vector compare_curr(key_type);
 	Vector compare_prev(key_type);
+	ExpressionExecutor distinct_from(context, distinct_from_expr);
 
 	bool boundary_compare = (block_begin > 0);
 	idx_t row_idx = 1;
@@ -294,7 +299,7 @@ static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_beg
 		scanner.ReferenceStructColumns(*curr, compare_curr, key_count);
 
 		const auto ndistinct =
-		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, count, &distinct, &matching);
+		    distinct_from.SelectBinaryExpression(compare_curr, compare_prev, nullptr, count, &distinct, &matching);
 
 		//	If n is 0, neither SV has been filled in?
 		auto match_sel = ndistinct ? &matching : FlatVector::IncrementalSelectionVector();

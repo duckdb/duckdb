@@ -28,6 +28,8 @@ public:
 
 	//! The parent executor
 	const WindowAggregateExecutor &executor;
+	//! NOT DISTINCT FROM comparison of every argument
+	vector<unique_ptr<Expression>> arg_not_distinct_from;
 	//! The column indices of any ORDER BY argument expressions
 	vector<column_t> arg_order_idx;
 };

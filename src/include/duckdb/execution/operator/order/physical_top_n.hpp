@@ -26,6 +26,8 @@ public:
 	~PhysicalTopN() override;
 
 	vector<BoundOrderByNode> orders;
+	//! NOT DISTINCT FROM comparison of the boundary value for every order column
+	vector<unique_ptr<Expression>> not_distinct_from;
 	idx_t limit;
 	idx_t offset;
 	//! Dynamic table filter (if any)

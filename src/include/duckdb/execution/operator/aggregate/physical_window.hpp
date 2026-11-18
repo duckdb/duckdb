@@ -34,6 +34,10 @@ public:
 	bool is_order_dependent;
 	//! The partitions over which this is grouped (if any)
 	OperatorPartitionInfo partition_info;
+	//! DISTINCT FROM comparison of the partition keys
+	unique_ptr<Expression> partition_distinct_from;
+	//! DISTINCT FROM comparison of the order keys of every window expression, by the end of its order key prefix
+	unordered_map<idx_t, unique_ptr<Expression>> order_distinct_from;
 
 public:
 	// Source interface

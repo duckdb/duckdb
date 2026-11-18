@@ -96,6 +96,9 @@ RecursiveCTEKeyDeltaState::RecursiveCTEKeyDeltaState(ClientContext &context, con
 	changed_rows.Initialize(Allocator::Get(context), op.GetTypes());
 	previous_scan_rows.Initialize(Allocator::Get(context), GetPreviousStateTypes(op, address_only_previous));
 	key_scan_rows.Initialize(Allocator::Get(context), op.hash_key_types);
+	for (auto &comparison : op.payload_distinct_from) {
+		payload_distinct_from.push_back(make_uniq<ExpressionExecutor>(context, *comparison));
+	}
 	vector<LogicalType> comparison_types;
 	comparison_types.reserve(op.payload_types.size() * 2);
 	comparison_types.insert(comparison_types.end(), op.payload_types.begin(), op.payload_types.end());
@@ -133,25 +136,20 @@ void RecursiveCTEKeyDeltaState::PrepareCollections() {
 	collections_initialized = true;
 }
 
-static idx_t SelectDistinctPayloadRows(const Vector &previous, const Vector &current,
+static idx_t SelectDistinctPayloadRows(ExpressionExecutor &distinct_from, const Vector &previous, const Vector &current,
                                        optional_ptr<SelectionVector> candidates, idx_t candidate_count,
                                        SelectionVector &changed, SelectionVector &unchanged) {
-	if (!candidates) {
-		return VectorOperations::DistinctFrom(previous, current, nullptr, candidate_count, &changed, &unchanged);
-	}
-	Vector previous_candidates(previous, *candidates, candidate_count);
-	Vector current_candidates(current, *candidates, candidate_count);
-	return VectorOperations::DistinctFrom(previous_candidates, current_candidates, candidates.get(), candidate_count,
-	                                      &changed, &unchanged);
+	return distinct_from.SelectBinaryExpression(previous, current, candidates.get(), candidate_count, &changed,
+	                                            &unchanged);
 }
 
 //! Whether the finalized payload of every row equals the candidate payload that produced it
 static bool FinalizedPayloadsEqualCandidates(RecursiveCTEKeyDeltaState &delta, const PhysicalRecursiveCTE &op,
                                              DataChunk &finalized, DataChunk &candidates, idx_t count) {
 	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
-		const auto mismatch_count =
-		    VectorOperations::DistinctFrom(finalized.data[payload_idx], candidates.data[op.payload_idx[payload_idx]],
-		                                   nullptr, count, &delta.changed_column_groups, &delta.equal_groups_a);
+		const auto mismatch_count = delta.payload_distinct_from[payload_idx]->SelectBinaryExpression(
+		    finalized.data[payload_idx], candidates.data[op.payload_idx[payload_idx]], nullptr, count,
+		    &delta.changed_column_groups, &delta.equal_groups_a);
 		if (mismatch_count != 0) {
 			return false;
 		}
@@ -169,9 +167,9 @@ static idx_t CountChangedPayloadRows(RecursiveCTEKeyDeltaState &delta, const Phy
 	optional_ptr<SelectionVector> equal_groups;
 	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
 		auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
-		const auto changed_column_count =
-		    SelectDistinctPayloadRows(previous.data[previous_payload_offset + payload_idx], current.data[payload_idx],
-		                              equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
+		const auto changed_column_count = SelectDistinctPayloadRows(
+		    *delta.payload_distinct_from[payload_idx], previous.data[previous_payload_offset + payload_idx],
+		    current.data[payload_idx], equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
 		changed_count += changed_column_count;
 		equal_count -= changed_column_count;
 		equal_groups = &next_equal_groups;
@@ -527,10 +525,12 @@ idx_t RecursiveCTEKeyedState::FinalizeUsingKeyDelta(bool update_partial_indexes,
 			idx_t changed_column_count;
 			if (payload_comparison_executors[payload_idx]) {
 				changed_column_count = payload_comparison_executors[payload_idx]->SelectExpression(
-				    delta.comparison_rows, delta.changed_column_groups, next_equal_groups, equal_groups, equal_count);
+				    delta.comparison_rows, delta.changed_column_groups, next_equal_groups, equal_groups.get(),
+				    equal_count);
 			} else {
 				changed_column_count =
-				    SelectDistinctPayloadRows(previous_payloads.data[previous_payload_offset + payload_idx],
+				    SelectDistinctPayloadRows(*delta.payload_distinct_from[payload_idx],
+				                              previous_payloads.data[previous_payload_offset + payload_idx],
 				                              delta.result_rows.data[op.payload_idx[payload_idx]], equal_groups,
 				                              equal_count, delta.changed_column_groups, next_equal_groups);
 			}
