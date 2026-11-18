@@ -252,17 +252,17 @@ physical_plan	<!REGEX>:.*Unnest.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM lc EXCEPT ALL SELECT * FROM rc) WHERE s = 'b'
 ----
-physical_plan	<REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+physical_plan	<REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
 
 query II
 EXPLAIN SELECT * FROM lc INTERSECT ALL SELECT * FROM rc WHERE s = 'b'
 ----
-physical_plan	<REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+physical_plan	<REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
 
 query II
 EXPLAIN SELECT * FROM lc EXCEPT ALL SELECT * FROM rc WHERE s = 'b'
 ----
-physical_plan	<!REGEX>:.*Filters: lower\(s\) = 'b'.*Filters: lower\(s\) = 'b'.*
+physical_plan	<!REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
 
 # a filter that tells 'a' and 'A' apart, which the set operation treats as equal, runs after it has chosen its rows
 query II
