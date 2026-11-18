@@ -346,6 +346,8 @@ public:
 class CV2Instance {
 public:
 	CV2Instance(CV2Environment &env, DBConfig &startup_config);
+	//! A handle to a database shared through the environment's instance cache, see instance_open_shared.
+	CV2Instance(CV2Environment &env, shared_ptr<DuckDB> shared_database);
 
 	//! Attaches the database at `path` under `name` (derived from the path when empty), like ATTACH, optionally as
 	//! the default for new connections.

@@ -917,6 +917,26 @@ bool LogicalType::IsTemplated() const {
 	return TypeVisitor::Contains(*this, LogicalTypeId::TEMPLATE);
 }
 
+bool LogicalType::HasPhysicalType() const {
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.InternalType()) {
+		case PhysicalType::INVALID:
+			return true;
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
+			if (!type.HasParameters()) {
+				return true;
+			}
+			// the visitor does not look at the child types of a VARIANT, which are those of its storage layout
+			return type.id() == LogicalTypeId::VARIANT &&
+			       StructType::GetChildTypes(type) != StructType::GetChildTypes(LogicalType::VARIANT());
+		default:
+			return false;
+		}
+	});
+}
+
 bool LogicalType::SupportsRegularUpdate() const {
 	switch (id()) {
 	case LogicalTypeId::LIST:

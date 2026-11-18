@@ -1560,6 +1560,10 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_put)
 	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
 	 duckdb_v2_opaque *data, idx_t size_bytes, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_open_shared)
+	(duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char **option_names,
+	 const idx_t *option_names_lengths, const char **option_values, const idx_t *option_values_lengths,
+	 idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2267,6 +2271,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_object_cache_get = duckdb_v2_object_cache_get;
 	result.duckdb_v2_object_cache_get_or_create = duckdb_v2_object_cache_get_or_create;
 	result.duckdb_v2_object_cache_put = duckdb_v2_object_cache_put;
+	result.duckdb_v2_instance_open_shared = duckdb_v2_instance_open_shared;
 	return result;
 }
 
