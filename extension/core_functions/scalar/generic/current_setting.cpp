@@ -45,14 +45,15 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		ExtensionOption extension_option;
-		if (DBConfig::GetConfig(context).TryGetExtensionOption(key, extension_option)) {
-			// a registered extension option that is unset and has no default
-			val = Value(extension_option.type);
-		} else {
-			auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
+		auto &config = DBConfig::GetConfig(context);
+		if (!config.HasExtensionOption(key)) {
 			// If autoloader didn't throw, the config is now available
-			context.TryGetCurrentSetting(key, val);
+			Catalog::AutoloadExtensionByConfigName(context, key);
+		}
+		ExtensionOption extension_option;
+		if (!context.TryGetCurrentSetting(key, val) && config.TryGetExtensionOption(key, extension_option)) {
+			// an extension option that is unset and has no default
+			val = Value(extension_option.type);
 		}
 	}
 
