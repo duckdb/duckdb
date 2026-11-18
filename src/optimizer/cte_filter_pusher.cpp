@@ -22,6 +22,8 @@ CTEFilterPusher::CTEFilterPusher(Optimizer &optimizer_p) : optimizer(optimizer_p
 
 unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator> op) {
 	FindCandidates(*op);
+	// A join that keeps only the matching rows of a CTE reference filters that reference like a consumer filter.
+	GenerateSemiJoinFilters(*op);
 	if (cte_info_map.empty()) {
 		return op;
 	}

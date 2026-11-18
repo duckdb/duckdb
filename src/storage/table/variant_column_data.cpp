@@ -9,6 +9,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -565,8 +566,9 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 		}
 
 		//! Need to perform the cast here as well
-		auto context = transaction.transaction->context.lock();
-		auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
+		auto &cast_set = CastFunctionSet::Get(GetDatabase());
+		auto cast_input = GetCastFunctionInput::Default();
+		auto fetched_row = extracted_variant.GetValue(0).CastAs(cast_set, cast_input, result.GetType());
 		result.SetValue(result_idx, fetched_row);
 	}
 }
@@ -598,9 +600,9 @@ void VariantColumnData::SetChildData(vector<shared_ptr<ColumnData>> child_data) 
 }
 
 struct VariantColumnCheckpointState : public ColumnCheckpointState {
-	VariantColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	VariantColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                             PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		global_stats = VariantStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -658,9 +660,9 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                            PartialBlockManager &partial_block_manager) {
-	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<VariantColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, VariantShreddedAppendInput &append_data) {
@@ -792,7 +794,8 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
                                                                 ColumnCheckpointInfo &checkpoint_info,
                                                                 const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	auto &table_info = row_group.GetTableInfo();

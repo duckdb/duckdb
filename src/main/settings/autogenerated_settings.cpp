@@ -205,14 +205,6 @@ void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// H T T P Proxy
-//===----------------------------------------------------------------------===//
-Value HTTPProxySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy);
-}
-
-//===----------------------------------------------------------------------===//
 // Lambda Syntax
 //===----------------------------------------------------------------------===//
 void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

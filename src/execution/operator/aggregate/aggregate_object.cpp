@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
-                                 idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
-                                 optional_ptr<const Expression> filter)
+AggregateObject::AggregateObject(BoundAggregateFunction function, optional_ptr<const FunctionData> bind_data,
+                                 idx_t child_count, idx_t payload_size, AggregateType aggr_type,
+                                 PhysicalType return_type, optional_ptr<const Expression> filter)
     : function(std::move(function)),
       bind_data_wrapper(bind_data ? make_shared_ptr<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
       child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
@@ -48,13 +48,18 @@ AggregateFilterData::AggregateFilterData(ClientContext &context, const Expressio
 
 idx_t AggregateFilterData::Select(DataChunk &chunk) {
 	selected_count = filter_executor.SelectExpression(chunk, true_sel);
+	all_selected = selected_count == chunk.size();
 	return selected_count;
 }
 
 idx_t AggregateFilterData::ApplyFilter(DataChunk &payload) {
 	Select(payload);
 	for (auto col_idx : sliced_columns) {
-		filtered_payload.data[col_idx].Slice(payload.data[col_idx], true_sel, selected_count);
+		if (all_selected) {
+			filtered_payload.data[col_idx].Reference(payload.data[col_idx]);
+		} else {
+			filtered_payload.data[col_idx].Slice(payload.data[col_idx], true_sel, selected_count);
+		}
 	}
 	return selected_count;
 }
