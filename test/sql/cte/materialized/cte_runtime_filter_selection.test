@@ -1,0 +1,25 @@
+# name: test/sql/cte/materialized/cte_runtime_filter_selection.test
+# description: CTE runtime filters preserve row mappings across disjunctive branches
+# group: [materialized]
+
+statement ok
+CREATE TABLE t AS
+  SELECT CASE WHEN i = 0 THEN NULL ELSE repeat(chr(97 + (i % 3)::INT), 16) END AS s
+  FROM range(15) r(i);
+
+statement ok
+CREATE TABLE x AS SELECT * FROM (VALUES ('aaaaaaaaaaaaaaaa'), ('cccccccccccccccc')) v(id);
+
+statement ok
+CREATE TABLE y AS SELECT * FROM (VALUES ('bbbbbbbbbbbbbbbb')) v(id);
+
+query TI
+WITH counts AS (SELECT s, count(*) AS n FROM t WHERE s IS NOT NULL GROUP BY s)
+SELECT id, n FROM x LEFT JOIN counts ON s = id
+UNION ALL
+SELECT id, n FROM y LEFT JOIN counts ON s = id
+ORDER BY id;
+----
+aaaaaaaaaaaaaaaa	4
+bbbbbbbbbbbbbbbb	5
+cccccccccccccccc	5
