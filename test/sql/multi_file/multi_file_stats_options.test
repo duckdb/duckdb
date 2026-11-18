@@ -1,0 +1,35 @@
+# name: test/sql/multi_file/multi_file_stats_options.test
+# description: Test skipping files using the column statistics given in the open options of a file
+# group: [multi_file]
+
+require parquet
+
+statement ok
+COPY (SELECT i::BIGINT a FROM range(10) t(i)) TO '{TEST_DIR}/stats_options_1.parquet' (FIELD_IDS {a: 1})
+
+# the file does not exist: it can only be skipped without opening it
+query I
+SELECT a FROM read_parquet([
+	{'filename': '{TEST_DIR}/stats_options_1.parquet', 'column_min.1': 0, 'column_max.1': 9},
+	{'filename': '{TEST_DIR}/stats_options_missing.parquet', 'column_min.1': 100, 'column_max.1': 200}],
+	schema = MAP {1: {name: 'a', type: 'BIGINT', default_value: NULL}}) WHERE a < 3 ORDER BY a
+----
+0
+1
+2
+
+# a file whose statistics may match is opened
+statement error
+SELECT a FROM read_parquet([
+	{'filename': '{TEST_DIR}/stats_options_missing.parquet', 'column_min.1': 100, 'column_max.1': 200}],
+	schema = MAP {1: {name: 'a', type: 'BIGINT', default_value: NULL}}) WHERE a < 150
+----
+stats_options_missing.parquet
+
+# no statistics for the column: the file is opened
+statement error
+SELECT a FROM read_parquet([
+	{'filename': '{TEST_DIR}/stats_options_missing.parquet'}],
+	schema = MAP {1: {name: 'a', type: 'BIGINT', default_value: NULL}}) WHERE a < 3
+----
+stats_options_missing.parquet
