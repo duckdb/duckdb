@@ -489,7 +489,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+	MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
@@ -680,7 +680,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+				MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START

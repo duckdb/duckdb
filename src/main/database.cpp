@@ -335,8 +335,9 @@ void DatabaseInstance::InitializeEmpty(DBConfig *user_config) {
 }
 
 void DatabaseInstance::StartScheduler() {
-	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
-	scheduler->SetAsyncThreads(config.options.async_threads);
+	scheduler->SetThreads(NumericCast<idx_t>(Settings::Get<ThreadsSetting>(config)),
+	                      Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(NumericCast<idx_t>(Settings::Get<AsyncThreadsSetting>(config)));
 	scheduler->RelaunchThreads();
 }
 
@@ -552,10 +553,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetDefaultTempDirectory();
 	}
 
-	if (new_config.options.http_proxy.empty()) {
-		HTTPProxySetting::ResetGlobal(this, config);
-	}
-
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
@@ -576,12 +573,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
-	}
-	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
-		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
-	}
-	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
-		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {

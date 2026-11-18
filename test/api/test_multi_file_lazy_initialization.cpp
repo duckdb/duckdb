@@ -101,7 +101,7 @@ TEST_CASE("CSV initialization only expands the file count it needs", "[api][mult
 		REQUIRE(op->children.size() == 1);
 		op = op->children[0].get();
 	}
-	auto &bind_data = op->Cast<LogicalGet>().bind_data->Cast<MultiFileBindData>();
+	auto &bind_data = op->Cast<LogicalGet>().bind_data.write().Cast<MultiFileBindData>();
 	REQUIRE(bind_data.initial_reader);
 
 	InitializationFileList files(8);

@@ -73,16 +73,14 @@ TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// but we can set another value
 	{
 		DBConfig config;
-		config.options.maximum_threads = 10;
+		Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(10));
 		DuckDB db(nullptr, &config);
 		REQUIRE(db.NumberOfThreads() == 10);
 	}
 	// zero is not erlaubt
 	{
 		DBConfig config;
-		config.options.maximum_threads = 0;
-		DuckDB db;
-		REQUIRE_THROWS(db = DuckDB(nullptr, &config));
+		REQUIRE_THROWS(config.SetOptionByName("threads", Value::BIGINT(0)));
 	}
 }
 
@@ -93,7 +91,7 @@ TEST_CASE("Test external threads", "[api]") {
 	auto options = config.GetOptions();
 
 	con.Query("SET threads=13");
-	REQUIRE(config.options.maximum_threads == 13);
+	REQUIRE(Settings::Get<ThreadsSetting>(config) == 13);
 	REQUIRE(db.NumberOfThreads() == 13);
 	con.Query("SET external_threads=13");
 	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 13);
@@ -121,7 +119,7 @@ TEST_CASE("Test external threads", "[api]") {
 
 	con.Query("RESET threads");
 	auto file_system = make_uniq<VirtualFileSystem>();
-	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(*file_system));
+	REQUIRE(NumericCast<idx_t>(Settings::Get<ThreadsSetting>(config)) == DBConfig().GetSystemMaxThreads(*file_system));
 	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
 }
 
@@ -202,7 +200,7 @@ private:
 // SQL cannot supply a sink callback that raises the accumulated source/operator limit.
 TEST_CASE("Pipeline sink thread limits cannot raise source or operator caps", "[api]") {
 	DBConfig config;
-	config.options.maximum_threads = 8;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(8));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	Executor executor(*con.context);
