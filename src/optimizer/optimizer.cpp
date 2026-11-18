@@ -382,6 +382,14 @@ void Optimizer::RunBuiltInOptimizers() {
 		partial_aggregate_pushdown.VisitOperator(plan);
 	});
 
+	// Rewrites f(CASE WHEN c THEN x END) -> f(x) FILTER (WHERE c). Runs after the rewrites that match aggregates
+	// without a filter (aggregate reuse, partial aggregate pushdown), so that these still see the CASE.
+	RunOptimizer(OptimizerType::CASE_TO_FILTER_AGGREGATE, [&]() {
+		AggregateFunctionRewriter aggregate_function_rewriter(*this);
+		// DML CTEs can invalidate the table statistics captured during planning.
+		aggregate_function_rewriter.RewriteCaseToFilter(plan, !CTEContainsDML(*plan));
+	});
+
 	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
 		RemoveRedundantOrderKeys remove_redundant_order_keys;
 		remove_redundant_order_keys.Optimize(*plan);
