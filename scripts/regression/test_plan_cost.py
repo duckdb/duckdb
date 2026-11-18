@@ -39,6 +39,26 @@ class TestPlanCost(unittest.TestCase):
         new = op_inspect(join('SEMI', 30, scan(100), scan(40)))
         self.assertGreater(new, old)
 
+    def test_lower_output_with_more_join_work_uses_timing(self):
+        old = op_inspect(join('MARK', 20, scan(20), scan(10)))
+        old.time = 1.0
+        for join_type in ('SEMI', 'ANTI'):
+            for probe_rows, build_rows in ((20, 40), (100, 10), (100, 40)):
+                with self.subTest(join_type=join_type, probe_rows=probe_rows, build_rows=build_rows):
+                    new = op_inspect(join(join_type, 5, scan(probe_rows), scan(build_rows)))
+                    new.time = 1.1
+                    self.assertGreater(new, old)
+                    for runtime in (0.9, 1.02):
+                        new.time = runtime
+                        self.assertFalse(new > old)
+
+    def test_lower_output_without_more_join_work_does_not_regress(self):
+        old = op_inspect(join('MARK', 20, scan(20), scan(10)))
+        new = op_inspect(join('SEMI', 5, scan(20), scan(10)))
+        old.time = 1.0
+        new.time = 2.0
+        self.assertFalse(new > old)
+
 
 if __name__ == '__main__':
     unittest.main()
