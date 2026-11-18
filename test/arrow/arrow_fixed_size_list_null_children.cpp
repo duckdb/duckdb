@@ -121,7 +121,7 @@ bool QueryMatches(ArrowSchema &col_schema, ArrowArray &col_array, const string &
 	}
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(stream))->CreateView("arrow_view");
+	ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(stream), "arrow_view", true, false);
 	auto result = con.Query(query);
 	auto expected_result = con.Query(expected);
 	stream.release = nullptr;

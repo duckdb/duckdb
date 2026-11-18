@@ -1826,44 +1826,7 @@ static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 		join_bindings.emplace_back(colref.Binding());
 	}
 
-	reference<LogicalOperator> current_op = *join.children[1];
-	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		if (current_op.get().children.size() != 1) {
-			return false;
-		}
-
-		switch (current_op.get().type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			if (!FindAndReplaceBindings(join_bindings, current_op.get().expressions,
-			                            current_op.get().GetColumnBindings())) {
-				return false;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_FILTER:
-			break;
-		default:
-			return false;
-		}
-		current_op = *current_op.get().children[0];
-	}
-
-	auto &aggr = current_op.get().Cast<LogicalAggregate>();
-	if (!aggr.grouping_functions.empty()) {
-		return false;
-	}
-	if (aggr.grouping_sets.size() > 1) {
-		// multiple grouping sets emit one row per set, so the groups do not determine a unique row
-		return false;
-	}
-
-	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(),
-		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
-			return false;
-		}
-	}
-
-	return true;
+	return LogicalAggregate::KeysAreUnique(*join.children[1], std::move(join_bindings));
 }
 
 static bool HasPartitionedRecursiveReferences(LogicalOperator &op, const LogicalRecursiveCTE &cte) {

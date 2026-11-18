@@ -438,42 +438,10 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 		join_bindings.emplace_back(colref.Binding());
 	}
 
-	// Now try to find an aggr in the RHS such that the join_column_bindings is a superset of the groups
-	reference<LogicalOperator> current_op = *delim_join.children[1];
-	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		if (current_op.get().children.size() != 1) {
-			return;
-		}
-
-		switch (current_op.get().type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			FindAndReplaceBindings(join_bindings, current_op.get().expressions, current_op.get().GetColumnBindings());
-			break;
-		case LogicalOperatorType::LOGICAL_FILTER:
-			break; // Doesn't change bindings
-		default:
-			return;
-		}
-		current_op = *current_op.get().children[0];
-	}
-
-	D_ASSERT(current_op.get().type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
-	const auto &aggr = current_op.get().Cast<LogicalAggregate>();
-	if (!aggr.grouping_functions.empty()) {
+	// Each LHS row finds at most one RHS row: the join cannot fail, and LEFT is equivalent
+	if (!LogicalAggregate::KeysAreUnique(*delim_join.children[1], std::move(join_bindings))) {
 		return;
 	}
-	if (aggr.grouping_sets.size() > 1) {
-		// multiple grouping sets emit one row per set, so the groups do not determine a unique row
-		return;
-	}
-
-	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(),
-		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
-			return;
-		}
-	}
-
 	delim_join.join_type = JoinType::LEFT;
 }
 

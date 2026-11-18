@@ -134,8 +134,12 @@ private:
 	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
 	//! Resolve a (possibly nested) qualified name into the catalog it lives in and its schema path. This runs the
 	//! same catalog/schema ambiguity resolution the binder does, and - unlike Catalog()/Schema() - keeps every
-	//! level of a nested schema path. The catalog is empty when the name is not catalog-qualified
-	void ResolveQualification(const QualifiedName &name, Identifier &catalog_name, vector<Identifier> &schema_path);
+	//! level of a nested schema path. The catalog is empty when the name is not catalog-qualified. Returns false
+	//! when the name is a nested schema path its catalog doesn't support, so it can't name anything there and must
+	//! not be pushed down.
+	[[nodiscard]] bool ResolveQualification(const QualifiedName &name, Identifier &catalog_name,
+	                                        vector<Identifier> &schema_path,
+	                                        CatalogType type = CatalogType::TABLE_ENTRY);
 	//! Look an entry up in a catalog, defaulting to the main schema when the name carries no schema
 	optional_ptr<CatalogEntry> LookupEntry(const Identifier &catalog_name, const EntryLookupInfo &lookup,
 	                                       const vector<Identifier> &schema_path);

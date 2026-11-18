@@ -512,6 +512,8 @@ struct LogicalType {
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
 	DUCKDB_API bool IsTemplated() const;
+	//! True, if a vector can hold the type: it has a physical type and child types, as do its children
+	DUCKDB_API bool HasPhysicalType() const;
 
 	//! True, if this type supports in-place updates.
 	bool SupportsRegularUpdate() const;

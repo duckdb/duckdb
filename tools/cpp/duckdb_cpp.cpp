@@ -605,6 +605,25 @@ Instance::Instance(Environment &env, const std::string &path, const StartupOptio
 	Attach(path, true);
 }
 
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(Environment::Default(), path, options);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options) -> Instance {
+	auto pairs = StartupOptionPairs(options);
+	StringArrays names(pairs.size());
+	StringArrays values(pairs.size());
+	for (auto &[name, value] : pairs) {
+		names.Push(name);
+		values.Push(value);
+	}
+	auto path_str = ToStr(path);
+	duckdb_v2_instance_handle instance = nullptr;
+	CheckedAPICall(duckdb_v2_instance_open_shared, env.handle(), path_str.data(), path_str.size(), names.ptrs(),
+	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), &instance);
+	return Instance(instance);
+}
+
 //---------------------------------------------------------------------------
 // Custom Option
 //---------------------------------------------------------------------------

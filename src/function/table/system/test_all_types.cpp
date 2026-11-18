@@ -58,16 +58,33 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 		result.emplace_back(LogicalType::BIGNUM, "bignum");
 	}
 
-	// Time-types.
-	result.emplace_back(LogicalType::DATE, "date");
+	// Time-types, using the smallest/largest finite values.
+	const auto min_date = Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY);
+	const auto max_date = Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY);
+	const auto min_ts = Timestamp::FromDatetime(
+	    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0));
+	const auto max_ts = timestamp_t(NumericLimits<int64_t>::Maximum() - 1);
+	// Clear the fractional day.
+	const auto min_ns = NumericLimits<int64_t>::Minimum() / Interval::NANOS_PER_DAY * Interval::NANOS_PER_DAY;
+	const auto max_ns = NumericLimits<int64_t>::Maximum() - 1;
+
+	result.emplace_back(LogicalType::DATE, "date", Value::DATE(min_date), Value::DATE(max_date));
 	result.emplace_back(LogicalType::TIME, "time");
-	result.emplace_back(LogicalType::TIMESTAMP, "timestamp");
-	result.emplace_back(LogicalType::TIMESTAMP_S, "timestamp_s");
-	result.emplace_back(LogicalType::TIMESTAMP_MS, "timestamp_ms");
-	result.emplace_back(LogicalType::TIMESTAMP_NS, "timestamp_ns");
+	result.emplace_back(LogicalType::TIMESTAMP, "timestamp", Value::TIMESTAMP(min_ts), Value::TIMESTAMP(max_ts));
+	result.emplace_back(LogicalType::TIMESTAMP_S, "timestamp_s",
+	                    Value::TIMESTAMPSEC(timestamp_sec_t(min_ts.value / Interval::MICROS_PER_SEC)),
+	                    Value::TIMESTAMPSEC(timestamp_sec_t(max_ts.value / Interval::MICROS_PER_SEC)));
+	result.emplace_back(LogicalType::TIMESTAMP_MS, "timestamp_ms",
+	                    Value::TIMESTAMPMS(timestamp_ms_t(min_ts.value / Interval::MICROS_PER_MSEC)),
+	                    Value::TIMESTAMPMS(timestamp_ms_t(max_ts.value / Interval::MICROS_PER_MSEC)));
+	result.emplace_back(LogicalType::TIMESTAMP_NS, "timestamp_ns", Value::TIMESTAMPNS(timestamp_ns_t(min_ns)),
+	                    Value::TIMESTAMPNS(timestamp_ns_t(max_ns)));
 	result.emplace_back(LogicalType::TIME_TZ, "time_tz");
-	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz");
-	result.emplace_back(LogicalType::TIMESTAMP_TZ_NS, "timestamp_tz_ns");
+	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz", Value::TIMESTAMPTZ(timestamp_tz_t(min_ts)),
+	                    Value::TIMESTAMPTZ(timestamp_tz_t(max_ts)));
+	result.emplace_back(LogicalType::TIMESTAMP_TZ_NS, "timestamp_tz_ns",
+	                    Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns)),
+	                    Value::TIMESTAMPTZNS(timestamp_tz_ns_t(max_ns)));
 
 	// More complex numeric types.
 	result.emplace_back(LogicalType::FLOAT, "float", Value::FLOAT(std::numeric_limits<float>::lowest()),
