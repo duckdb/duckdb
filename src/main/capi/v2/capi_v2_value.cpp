@@ -105,8 +105,8 @@ LogicalType RequireValueType(duckdb_v2_logical_type_handle type) {
 
 // The DECIMAL storage tier follows from the width, and the engine's hugeint
 // constructor covers only the widest one, so the narrower tiers go through the
-// int64 form. Width and scale are gated here: an out-of-range pair would build
-// a broken type rather than a bad value. The uint8_t parameters reach widths
+// int64 form. Width, scale and the value's digit count are gated here: either
+// would otherwise build a broken value. The uint8_t parameters reach widths
 // up to 255; wider decimals are built through value_cast.
 Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t scale) {
 	if (width < 1) {
@@ -116,16 +116,17 @@ Value BuildDecimal(const duckdb_v2_hugeint_t *in_value, uint8_t width, uint8_t s
 		throw InvalidInputException(": DECIMAL scale cannot exceed the width");
 	}
 	auto value = Convert(in_value);
+	// a 128-bit value has at most 39 digits, so only narrower widths can be exceeded
+	if (width < Hugeint::CACHED_POWERS_OF_TEN &&
+	    (value >= Hugeint::POWERS_OF_TEN[width] || value <= -Hugeint::POWERS_OF_TEN[width])) {
+		throw InvalidInputException("value does not fit the declared DECIMAL width");
+	}
 	auto type = LogicalType::DECIMAL(width, scale);
 	if (type.InternalType() == PhysicalType::INT128 || type.InternalType() == PhysicalType::VARCHAR) {
 		// the hugeint constructor also builds the BIGNUM storage of a wide decimal (width > 38)
 		return Value::DECIMAL(value, width, scale);
 	}
-	int64_t narrow = 0;
-	if (!Hugeint::TryCast<int64_t>(value, narrow)) {
-		throw InvalidInputException("value does not fit the storage tier of the declared width");
-	}
-	return Value::DECIMAL(narrow, width, scale);
+	return Value::DECIMAL(Hugeint::Cast<int64_t>(value), width, scale);
 }
 
 // BIT carries a mandatory padding-header byte, BIGNUM a header plus at least

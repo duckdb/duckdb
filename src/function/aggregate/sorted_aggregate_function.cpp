@@ -60,7 +60,7 @@ LogicalType BufferStructType(const vector<LogicalType> &column_types) {
 
 struct SortedAggregateBindData : public FunctionData {
 	using Expressions = vector<unique_ptr<Expression>>;
-	using BindInfoPtr = unique_ptr<FunctionData>;
+	using BindInfoPtr = cow_ptr<FunctionData>;
 	using OrderBys = vector<BoundOrderByNode>;
 
 	//! fixed_layout: the buffer struct and per-key columns to use instead of mapping the keys onto the arguments
@@ -189,7 +189,7 @@ struct SortedAggregateBindData : public FunctionData {
 
 	ClientContext &context;
 	BoundAggregateFunction function;
-	unique_ptr<FunctionData> bind_info;
+	cow_ptr<FunctionData> bind_info;
 
 	//! The sort expressions (all references as the expressions have been computed)
 	vector<BoundOrderByNode> orders;
@@ -231,7 +231,8 @@ struct SortedAggregateFinalizeState : FunctionLocalState {
 
 	explicit SortedAggregateFinalizeState(const SortedAggregateBindData &order_bind)
 	    : thread(order_bind.context), context(order_bind.context, thread, nullptr), agg_state(StateSize(order_bind)),
-	      agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1)) {
+	      agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1)),
+	      inner_arena(BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator()) {
 		auto &buffer_allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
 		rows.Initialize(buffer_allocator, {order_bind.buffered_struct_type});
 		scanned.Initialize(buffer_allocator, order_bind.scan_types);
@@ -246,7 +247,8 @@ struct SortedAggregateFinalizeState : FunctionLocalState {
 		}
 	}
 
-	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<FunctionData> bind_data) {
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &,
+	                                           optional_ptr<const FunctionData> bind_data) {
 		return make_uniq<SortedAggregateFinalizeState>(bind_data->Cast<SortedAggregateBindData>());
 	}
 
@@ -268,6 +270,8 @@ struct SortedAggregateFinalizeState : FunctionLocalState {
 	Vector agg_state_vec;
 	//! The local state used by the inner aggregate's finalize (may be null)
 	unique_ptr<FunctionLocalState> inner_local_state;
+	//! The arena of the inner aggregate states, reset per batch of groups
+	ArenaAllocator inner_arena;
 };
 
 struct SortedAggregateFunction {
@@ -369,8 +373,8 @@ struct SortedAggregateFunction {
 		state.linked_list = LinkedList();
 	}
 
-	static void FinalizeGroups(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
-	                           idx_t count, const idx_t offset) {
+	static void FinalizeGroups(Vector &states, AggregateFinalizeInputData &finalize_input_data,
+	                           ArenaAllocator &inner_allocator, Vector &result, idx_t count, const idx_t offset) {
 		auto &order_bind = finalize_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &client = order_bind.context;
 
@@ -388,7 +392,7 @@ struct SortedAggregateFunction {
 		// State variables
 		auto &aggr = order_bind.function;
 		auto bind_info = order_bind.bind_info.get();
-		AggregateFinalizeInputData aggr_bind_info(aggr, bind_info, finalize_input_data.allocator,
+		AggregateFinalizeInputData aggr_bind_info(aggr, bind_info, inner_allocator,
 		                                          finalize_state.inner_local_state.get());
 
 		// Inner aggregate APIs
@@ -545,16 +549,26 @@ struct SortedAggregateFunction {
 
 	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
+		//	The inner states can reference the results they finalized to, so they can only be
+		//	reclaimed when the local state outlives the result
+		D_ASSERT(finalize_input_data.local_state);
+		auto &finalize_state = finalize_input_data.local_state->Cast<SortedAggregateFinalizeState>();
+		const auto reclaim = !finalize_input_data.OwnsLocalState();
+		if (reclaim && offset == 0) {
+			finalize_state.inner_arena.Reset();
+		}
+		auto &inner_allocator = reclaim ? finalize_state.inner_arena : finalize_input_data.allocator;
 		//	Internally we can only handle 2^16 rows, so chunk them up
 		const idx_t group_limit = NumericLimits<uint16_t>::Maximum();
 		if (count <= group_limit) {
-			FinalizeGroups(states, finalize_input_data, result, count, offset);
+			FinalizeGroups(states, finalize_input_data, inner_allocator, result, count, offset);
 			return;
 		}
 		for (idx_t group_offset = 0; group_offset < count; group_offset += group_limit) {
 			const auto group_count = MinValue<idx_t>(group_limit, count - group_offset);
 			Vector group_states(states, group_offset, group_offset + group_count);
-			FinalizeGroups(group_states, finalize_input_data, result, group_count, offset + group_offset);
+			FinalizeGroups(group_states, finalize_input_data, inner_allocator, result, group_count,
+			               offset + group_offset);
 		}
 	}
 };

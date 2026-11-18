@@ -412,6 +412,15 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
+// A request error can be a serialized exception that callers parse back with ErrorData, so it has to stay valid JSON.
+static string AppendToRequestError(const string &request_error, const string &note) {
+	if (request_error.empty() || request_error[0] != '{') {
+		return request_error + note;
+	}
+	ErrorData error(request_error);
+	return Exception::ToJSON(error.ExtraInfo(), error.Type(), error.RawMessage() + note);
+}
+
 // Handlers turn error statuses into exceptions; rebuild the response they saw so it can be judged like a received one.
 static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
 	auto &extra_info = error.ExtraInfo();
@@ -536,12 +545,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	if (request.try_request) {
 		if (!response) {
 			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-			response->request_error =
-			    (exception_error.empty() ? "Unknown error" : std::move(exception_error)) + quota_note;
-		} else if (!quota_note.empty()) {
+			response->request_error = exception_error.empty() ? "Unknown error" : std::move(exception_error);
+		}
+		if (!quota_note.empty()) {
 			// A received error keeps its status; the note goes to the field GetError() reports.
 			if (response->HasRequestError()) {
-				response->request_error += quota_note;
+				response->request_error = AppendToRequestError(response->request_error, quota_note);
 			} else {
 				response->reason += quota_note;
 			}
@@ -571,7 +580,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto &http_proxy_setting = db->config.options.http_proxy;
+		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(db->config);
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;

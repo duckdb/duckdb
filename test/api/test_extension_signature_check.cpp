@@ -19,6 +19,7 @@
 #include <sys/resource.h>
 #include <thread>
 #include <unistd.h>
+#include "duckdb/main/settings.hpp"
 #endif
 
 using namespace duckdb;
@@ -77,8 +78,8 @@ unique_ptr<DuckDB> OpenDatabaseWithSigningKey(DBConfig &config, const string &re
 //! Opens a database without worker threads, which hashes the chunks on the checking thread, as a starting database
 //! does for the extensions it loads
 unique_ptr<DuckDB> OpenDatabaseWithoutWorkers(DBConfig &config, const string &repository_directory) {
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	return OpenDatabaseWithSigningKey(config, repository_directory);
 }
 
