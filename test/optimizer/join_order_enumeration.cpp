@@ -7,6 +7,7 @@
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/optimizer/mark_join_simplifier.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -36,6 +37,8 @@ TEST_CASE("Constant membership filters stay outside the join search", "[optimize
 	plan = in_rewriter.Rewrite(std::move(plan));
 	MarkJoinSimplifier simplifier(optimizer);
 	simplifier.Optimize(plan);
+	ProjectionPullup projection_pullup(optimizer, plan);
+	projection_pullup.Optimize(plan);
 	optional_ptr<LogicalOperator> root = plan.get();
 	while (root->children.size() == 1) {
 		root = root->children[0].get();
