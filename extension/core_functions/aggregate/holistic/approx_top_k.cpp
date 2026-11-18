@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 
 namespace duckdb {
 
@@ -20,21 +21,6 @@ struct ApproxTopKString {
 	string_t str;
 	hash_t hash;
 };
-
-struct ApproxTopKHash {
-	std::size_t operator()(const ApproxTopKString &k) const {
-		return k.hash;
-	}
-};
-
-struct ApproxTopKEquality {
-	bool operator()(const ApproxTopKString &a, const ApproxTopKString &b) const {
-		return Equals::Operation(a.str, b.str);
-	}
-};
-
-template <typename T>
-using approx_topk_map_t = unordered_map<ApproxTopKString, T, ApproxTopKHash, ApproxTopKEquality>;
 
 // approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta
 // distribution" arxiv link -  https://arxiv.org/pdf/1401.0702
@@ -53,35 +39,109 @@ struct ApproxTopKValue {
 };
 
 struct InternalApproxTopKState {
+	explicit InternalApproxTopKState(ArenaAllocator &allocator) : values(allocator), filter(allocator) {
+	}
+
 	// the top-k data structure has two components
 	// a list of k values sorted on "count" (i.e. values[0] has the lowest count)
-	// a lookup map: string_t -> idx in "values" array
-	unsafe_unique_array<ApproxTopKValue> stored_values;
-	unsafe_vector<reference<ApproxTopKValue>> values;
-	approx_topk_map_t<reference<ApproxTopKValue>> lookup_map;
-	unsafe_vector<idx_t> filter;
+	// a lookup table: open addressing over the stored values, 0 = empty, otherwise the stored_values index + 1
+	ApproxTopKValue *stored_values = nullptr;
+	unsafe_arena_vector<reference<ApproxTopKValue>> values;
+	unsafe_arena_vector<idx_t> filter;
+	uint32_t *lookup = nullptr;
+	idx_t lookup_mask = 0;
+	idx_t lookup_count = 0;
 	idx_t k = 0;
 	idx_t capacity = 0;
-	idx_t filter_mask;
+	idx_t filter_mask = 0;
 
-	void Initialize(idx_t kval) {
+	void Initialize(ArenaAllocator &allocator, idx_t kval) {
 		static constexpr idx_t MONITORED_VALUES_RATIO = 3;
 		static constexpr idx_t FILTER_RATIO = 8;
 
 		D_ASSERT(values.empty());
-		D_ASSERT(lookup_map.empty());
 		k = kval;
 		if (k > MAX_APPROX_K) {
 			throw InvalidInputException("Requested 'k' (%d) is bigger than accepted max (%d)", kval, MAX_APPROX_K);
 		}
 		capacity = kval * MONITORED_VALUES_RATIO;
-		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
+		// the stored values are constructed when they are first used
+		stored_values = reinterpret_cast<ApproxTopKValue *>(
+		    allocator.AllocateAligned(MaxValue<idx_t>(capacity, 1) * sizeof(ApproxTopKValue)));
 		values.reserve(capacity);
+
+		// at most half of the lookup table is ever used, so probing always ends at an empty slot
+		const idx_t lookup_size = NextPowerOfTwo(capacity * 2);
+		lookup_mask = lookup_size - 1;
+		lookup = reinterpret_cast<uint32_t *>(allocator.AllocateAligned(lookup_size * sizeof(uint32_t)));
+		memset(lookup, 0, lookup_size * sizeof(uint32_t));
 
 		// we scale the filter based on the amount of values we are monitoring
 		idx_t filter_size = NextPowerOfTwo(capacity * FILTER_RATIO);
 		filter_mask = filter_size - 1;
 		filter.resize(filter_size);
+	}
+
+	uint32_t SlotId(const ApproxTopKValue &value) const {
+		D_ASSERT(&value >= stored_values && &value < stored_values + capacity);
+		return UnsafeNumericCast<uint32_t>(&value - stored_values);
+	}
+
+	ApproxTopKValue *Find(const ApproxTopKString &key) const {
+		for (idx_t pos = key.hash & lookup_mask; lookup[pos] != 0; pos = (pos + 1) & lookup_mask) {
+			auto &entry = stored_values[lookup[pos] - 1];
+			if (entry.str_val.hash == key.hash && Equals::Operation(entry.str_val.str, key.str)) {
+				return &entry;
+			}
+		}
+		return nullptr;
+	}
+
+	//! Insert a value whose key is known to be absent
+	void Insert(ApproxTopKValue &value) {
+		D_ASSERT(lookup_count < capacity);
+		idx_t pos = value.str_val.hash & lookup_mask;
+		while (lookup[pos] != 0) {
+			pos = (pos + 1) & lookup_mask;
+		}
+		lookup[pos] = SlotId(value) + 1;
+		lookup_count++;
+	}
+
+	//! Insert a value, returns false if its key is already present
+	bool TryInsert(ApproxTopKValue &value) {
+		idx_t pos = value.str_val.hash & lookup_mask;
+		for (; lookup[pos] != 0; pos = (pos + 1) & lookup_mask) {
+			auto &entry = stored_values[lookup[pos] - 1];
+			if (entry.str_val.hash == value.str_val.hash && Equals::Operation(entry.str_val.str, value.str_val.str)) {
+				return false;
+			}
+		}
+		lookup[pos] = SlotId(value) + 1;
+		lookup_count++;
+		return true;
+	}
+
+	//! Remove a value (by identity) from the lookup table, backward-shifting the entries after it
+	void Erase(const ApproxTopKValue &value) {
+		const auto id = SlotId(value) + 1;
+		idx_t pos = value.str_val.hash & lookup_mask;
+		while (lookup[pos] != id) {
+			if (lookup[pos] == 0) {
+				throw InternalException("approx_top_k: erased value is not in the lookup table");
+			}
+			pos = (pos + 1) & lookup_mask;
+		}
+		lookup[pos] = 0;
+		lookup_count--;
+		for (idx_t next = (pos + 1) & lookup_mask; lookup[next] != 0; next = (next + 1) & lookup_mask) {
+			const idx_t home = stored_values[lookup[next] - 1].str_val.hash & lookup_mask;
+			if (((next - home) & lookup_mask) >= ((next - pos) & lookup_mask)) {
+				lookup[pos] = lookup[next];
+				lookup[next] = 0;
+				pos = next;
+			}
+		}
 	}
 
 	static void CopyValue(ApproxTopKValue &value, const ApproxTopKString &input, ArenaAllocator &allocator) {
@@ -106,7 +166,7 @@ struct InternalApproxTopKState {
 		if (values.size() < capacity) {
 			D_ASSERT(increment > 0);
 			// we can always add this entry
-			auto &val = stored_values[values.size()];
+			auto &val = *new (stored_values + values.size()) ApproxTopKValue();
 			val.index = values.size();
 			values.push_back(val);
 		}
@@ -127,13 +187,13 @@ struct InternalApproxTopKState {
 				return;
 			}
 			// the filter exceeds the min value - start monitoring this value
-			// erase the existing entry from the map
+			// erase the existing entry from the lookup table (before CopyValue overwrites its hash and data)
 			// and set the filter for the minimum value back to the current minimum value
 			filter[value.str_val.hash & filter_mask] = value.count;
-			lookup_map.erase(value.str_val);
+			Erase(value);
 		}
 		CopyValue(value, input, aggr_input.allocator);
-		lookup_map.insert(make_pair(value.str_val, reference<ApproxTopKValue>(value)));
+		Insert(value);
 		IncrementCount(value, increment);
 	}
 
@@ -152,17 +212,13 @@ struct InternalApproxTopKState {
 
 	void Verify() const {
 #ifdef DEBUG
-		if (values.empty()) {
-			D_ASSERT(lookup_map.empty());
-			return;
-		}
+		D_ASSERT(lookup_count == values.size());
 		D_ASSERT(values.size() <= capacity);
 		for (idx_t k = 0; k < values.size(); k++) {
 			auto &val = values[k].get();
 			D_ASSERT(val.count > 0);
-			// verify map exists
-			auto entry = lookup_map.find(val.str_val);
-			D_ASSERT(entry != lookup_map.end());
+			// verify the lookup table finds exactly this value
+			D_ASSERT(Find(val.str_val) == &val);
 			// verify the index is correct
 			D_ASSERT(val.index == k);
 			if (k > 0) {
@@ -170,35 +226,20 @@ struct InternalApproxTopKState {
 				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
-		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
 };
 
 struct ApproxTopKState {
+	//! nullptr if no value has been added yet
 	InternalApproxTopKState *state;
-
-	InternalApproxTopKState &GetState() {
-		if (!state) {
-			state = new InternalApproxTopKState();
-		}
-		return *state;
-	}
-
-	const InternalApproxTopKState &GetState() const {
-		if (!state) {
-			throw InternalException("No state available");
-		}
-		return *state;
-	}
 };
 
 struct ApproxTopKOperation {
 	template <class TYPE, class STATE>
 	static void Operation(STATE &aggr_state, const TYPE &input, AggregateInputData &aggr_input,
 	                      const Vector &top_k_vector, idx_t offset, idx_t count) {
-		auto &state = aggr_state.GetState();
-		if (state.values.empty()) {
+		if (!aggr_state.state || aggr_state.state->values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
 			auto top_k_format = top_k_vector.Values<int64_t>();
@@ -213,13 +254,18 @@ struct ApproxTopKOperation {
 			if (kval >= MAX_APPROX_K) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d", MAX_APPROX_K);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(kval));
+			// an existing empty state is only reused if its k matches
+			if (!aggr_state.state || aggr_state.state->k != UnsafeNumericCast<idx_t>(kval)) {
+				aggr_state.state = aggr_input.allocator.Make<InternalApproxTopKState>(aggr_input.allocator);
+				aggr_state.state->Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(kval));
+			}
 		}
+		auto &state = *aggr_state.state;
 		ApproxTopKString topk_string(input, Hash(input));
-		auto entry = state.lookup_map.find(topk_string);
-		if (entry != state.lookup_map.end()) {
+		auto entry = state.Find(topk_string);
+		if (entry) {
 			// the input is monitored - increment the count
-			state.IncrementCount(entry->second.get());
+			state.IncrementCount(*entry);
 		} else {
 			// the input is not monitored - replace the first entry with the current entry and increment
 			state.InsertOrReplaceEntry(topk_string, aggr_input);
@@ -228,39 +274,37 @@ struct ApproxTopKOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &aggr_source, STATE &aggr_target, AggregateInputData &aggr_input) {
-		if (!aggr_source.state) {
+		if (!aggr_source.state || aggr_source.state->values.empty()) {
 			// source state is empty
 			return;
 		}
-		auto &source = aggr_source.GetState();
-		auto &target = aggr_target.GetState();
-		if (source.values.empty()) {
-			// source is empty
-			return;
-		}
+		auto &source = *aggr_source.state;
 		source.Verify();
 		auto min_source = source.values.size() < source.capacity ? 0 : source.values.back().get().count;
 		idx_t min_target;
-		if (target.values.empty()) {
+		if (!aggr_target.state || aggr_target.state->values.empty()) {
 			min_target = 0;
-			target.Initialize(source.k);
+			aggr_target.state = aggr_input.allocator.Make<InternalApproxTopKState>(aggr_input.allocator);
+			aggr_target.state->Initialize(aggr_input.allocator, source.k);
 		} else {
-			if (source.k != target.k) {
+			if (source.k != aggr_target.state->k) {
 				throw NotImplementedException("Approx Top K - cannot combine approx_top_K with different k values. "
 				                              "K values must be the same for all entries within the same group");
 			}
-			min_target = target.values.size() < target.capacity ? 0 : target.values.back().get().count;
+			auto &target_values = aggr_target.state->values;
+			min_target = target_values.size() < aggr_target.state->capacity ? 0 : target_values.back().get().count;
 		}
+		auto &target = *aggr_target.state;
 		// for all entries in target
 		// check if they are tracked in source
 		//     if they do - add the tracked count
 		//     if they do not - add the minimum count
 		for (idx_t target_idx = 0; target_idx < target.values.size(); target_idx++) {
 			auto &val = target.values[target_idx].get();
-			auto source_entry = source.lookup_map.find(val.str_val);
+			auto source_entry = source.Find(val.str_val);
 			idx_t increment = min_source;
-			if (source_entry != source.lookup_map.end()) {
-				increment = source_entry->second.get().count;
+			if (source_entry) {
+				increment = source_entry->count;
 			}
 			if (increment == 0) {
 				continue;
@@ -270,8 +314,7 @@ struct ApproxTopKOperation {
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
 		for (auto &source_entry : source.values) {
 			auto &source_val = source_entry.get();
-			auto target_entry = target.lookup_map.find(source_val.str_val);
-			if (target_entry != target.lookup_map.end()) {
+			if (target.Find(source_val.str_val)) {
 				// already tracked - no need to add anything
 				continue;
 			}
@@ -300,11 +343,6 @@ struct ApproxTopKOperation {
 			target.filter[filter_idx] += source.filter[filter_idx];
 		}
 		target.Verify();
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		delete state.state;
 	}
 
 	static bool IgnoreNull() {
@@ -344,10 +382,11 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateFinalizeInputData &, Vect
 	idx_t new_entries = 0;
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = states[i].GetValue()->GetState();
-		if (state.values.empty()) {
+		auto state_ptr = states[i].GetValue()->state;
+		if (!state_ptr || state_ptr->values.empty()) {
 			continue;
 		}
+		auto &state = *state_ptr;
 		// get up to k values for each state
 		// this can be less of fewer unique values were found
 		new_entries += MinValue<idx_t>(state.values.size(), state.k);
@@ -359,11 +398,12 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateFinalizeInputData &, Vect
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = states[i].GetValue()->GetState();
-		if (state.values.empty()) {
+		auto state_ptr = states[i].GetValue()->state;
+		if (!state_ptr || state_ptr->values.empty()) {
 			list_entries.WriteNull();
 			continue;
 		}
+		auto &state = *state_ptr;
 		list_entry_t list_entry;
 		list_entry.offset = current_offset;
 		for (idx_t val_idx = 0; val_idx < MinValue<idx_t>(state.values.size(), state.k); val_idx++) {
@@ -514,9 +554,8 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 		    FlatVector::IsNull(filter_lists, i)) {
 			throw InvalidInputException("Invalid approx_top_k state - the k, values and filter cannot be NULL");
 		}
-		auto internal_state = make_uniq<InternalApproxTopKState>();
-		auto &target = *internal_state;
-		target.Initialize(k_data[i]);
+		auto &target = *allocator.Make<InternalApproxTopKState>(allocator);
+		target.Initialize(allocator, k_data[i]);
 		if (value_entries[i].length > target.capacity || filter_entries[i].length != target.filter.size()) {
 			throw InvalidInputException("Invalid approx_top_k state - "
 			                            "the values/filter sizes do not match the k value");
@@ -529,16 +568,14 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values cannot be NULL");
 			}
 
-			auto &val = target.stored_values[target.values.size()];
+			auto &val = *new (target.stored_values + target.values.size()) ApproxTopKValue();
 			val.index = target.values.size();
 			target.values.push_back(val);
 
 			const auto &str_val = value_strings[sel_idx];
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
-			const bool inserted =
-			    target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val))).second;
-			if (!inserted) {
+			if (!target.TryInsert(val)) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
 			}
 			if (FlatVector::IsNull(value_fields[1], idx)) {
@@ -565,7 +602,7 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			}
 		}
 		target.Verify();
-		state.state = internal_state.release();
+		state.state = &target;
 	}
 }
 
@@ -599,11 +636,13 @@ AggregateFunction ApproxTopKFun::GetFunction() {
 	auto fun = AggregateFunction("approx_top_k", {}, LogicalType::LIST(LogicalType::ANY),
 	                             AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	                             ApproxTopKUpdate, AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize,
-	                             nullptr, ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
+	                             nullptr, ApproxTopKBind, nullptr);
 	fun.GetSignature().AddParameter("val", LogicalTypeId::ANY).AddParameter("k", LogicalType::BIGINT);
 	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKExportState<HistogramGenericFunctor>,
 	                            ApproxTopKImportState<HistogramGenericFunctor>);
 	fun.SetFallible(); // the update callback rejects NULL and out-of-range k values at runtime
+	// combine copies the source values into the caller's arena
+	fun.SetCombineSourceRetention(AggregateCombineSourceRetention::NEVER_RETAINS);
 	return fun;
 }
 

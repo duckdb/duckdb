@@ -14,6 +14,11 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/avg_rewrite_profitability.test",
+        "test/optimizer/case_to_filter_aggregate.test",
+        "test/optimizer/case_to_filter_aggregate_distinct_filter.test",
+        "test/optimizer/case_to_filter_aggregate_exactness.test",
+        "test/optimizer/case_to_filter_aggregate_guards.test",
+        "test/optimizer/case_to_filter_aggregate_statistics.test",
         "test/optimizer/generated_domain_plan.test",
         "test/optimizer/deliminator.test",
         "test/optimizer/pushdown/filter_cannot_pushdown.test",
@@ -32,6 +37,7 @@
         "test/optimizer/partial_aggregate_pushdown_throwing_argument.test",
         "test/optimizer/partial_aggregate_pushdown_wide_decimal.test",
         "test/optimizer/partition_stats_exactness.test",
+        "test/optimizer/redundant_distinct.test",
         "test/optimizer/remove_redundant_order.test",
         "test/optimizer/runtime_key_domain_plan.test",
         "test/optimizer/shared_key_domain_plan.test",
@@ -123,7 +129,9 @@
         "test/sql/variant/variant_comparator.test",
         "test/sql/window/test_window_agg_stats_propagation.test",
         "test/sql/sql_export/call_values.test",
-        "test/sql/sql_export/quantile_constant_arguments.test"
+        "test/sql/sql_export/quantile_constant_arguments.test",
+        "test/sql/aggregate/aggregates/approx_top_k_state_spilling.test_slow",
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
       ]
     },
     {

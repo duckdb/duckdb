@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/test_copy_custom_newline_quote.test
+# description: Values containing a custom NEW_LINE are quoted when writing CSV
+# group: [csv]
+
+statement ok
+COPY (SELECT 'a;b' AS s) TO '{TEST_DIR}/custom_newline.csv' (NEW_LINE ';', HEADER false);
+
+query I
+SELECT content FROM read_text('{TEST_DIR}/custom_newline.csv');
+----
+"a;b";
