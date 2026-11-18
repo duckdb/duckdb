@@ -32,12 +32,13 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	LogicalType max_type = ExpressionBinder::GetExpressionReturnType(*children[0]);
 	bool is_in_operator = (op.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	                       op.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
+	const auto decimal_width_limit = binder.GetDecimalWidthLimit();
 	for (idx_t i = 1; i < children.size(); i++) {
 		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
 			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type,
-			                                                  op.GetExpressionType())) {
+			                                                  op.GetExpressionType(), decimal_width_limit)) {
 				throw BinderException(op,
 				                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
 				                      max_type.ToString(), child_return.ToString(),
@@ -45,7 +46,7 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 			}
 		} else {
 			// If it's COALESCE operator, don't do extra adjustment.
-			if (!LogicalType::TryGetMaxLogicalType(context, max_type, child_return, max_type)) {
+			if (!LogicalType::TryGetMaxLogicalType(context, max_type, child_return, max_type, decimal_width_limit)) {
 				throw BinderException(
 				    op, "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required",
 				    max_type.ToString(), child_return.ToString());
@@ -166,7 +167,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		// by all of its arguments
 		if (!binder.GetEnclosingScopes().empty()) {
 			vector<reference<ParsedExpression>> children;
-			for (auto &child : op.GetChildrenMutable()) {
+			for (auto &child : op.GetChildren()) {
 				children.push_back(*child);
 			}
 			auto owner = ResolveOuterGroup(children, 0);
@@ -182,7 +183,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	ErrorData error;
 	vector<unique_ptr<Expression>> children;
 	if (operator_type == ExpressionType::OPERATOR_TRY) {
-		D_ASSERT(op.GetChildrenMutable().size() == 1);
+		D_ASSERT(op.GetChildren().size() == 1);
 		auto &try_child = op.GetChildrenMutable()[0];
 		if (try_child->GetExpressionClass() == ExpressionClass::SUBQUERY &&
 		    try_child->Cast<SubqueryExpression>().GetSubqueryType() == SubqueryType::SCALAR) {
@@ -191,13 +192,13 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		}
 	}
 	if (operator_type == ExpressionType::OPERATOR_TRY || operator_type == ExpressionType::OPERATOR_HAS_ERROR) {
-		D_ASSERT(op.GetChildrenMutable().size() == 1);
+		D_ASSERT(op.GetChildren().size() == 1);
 		const auto was_inside_try = inside_try;
 		inside_try = true;
 		children.push_back(BindChild(op.GetChildrenMutable()[0], depth, error));
 		inside_try = was_inside_try;
 	} else {
-		for (idx_t i = 0; i < op.GetChildrenMutable().size(); i++) {
+		for (idx_t i = 0; i < op.GetChildren().size(); i++) {
 			children.push_back(BindChild(op.GetChildrenMutable()[i], depth, error));
 		}
 	}
@@ -227,12 +228,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 				if (uinteger_value) {
 					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
 					auto index = UIntegerValue::Get(*uinteger_value);
-					const_exp.SetValue(StringUtil::Format("$[%lld]", index));
-					const_exp.SetReturnType(LogicalType::VARCHAR);
+					children[1] = const_exp.WithValue(Value(StringUtil::Format("$[%lld]", index)));
 				} else if (const_exp.GetReturnType().id() == LogicalType::VARCHAR) {
 					// Field extraction
-					const_exp.SetValue(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString()));
-					const_exp.SetReturnType(LogicalType::VARCHAR);
+					children[1] =
+					    const_exp.WithValue(Value(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString())));
 				}
 			}
 		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && children.size() == 2) {
@@ -241,8 +241,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			if (i_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp.Cast<BoundConstantExpression>();
 				if (!const_exp.GetValue().IsNull() && const_exp.GetReturnType().IsIntegral()) {
-					const_exp.SetValue(const_exp.GetValue().CastAs(context, LogicalType::UINTEGER, true));
-					const_exp.SetReturnType(LogicalType::UINTEGER);
+					children[1] =
+					    const_exp.WithValue(const_exp.GetValue().CastAs(context, LogicalType::UINTEGER, true));
 				}
 			}
 		} else {
@@ -264,7 +264,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
 		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT &&
-		    extract_expr_type.id() != LogicalTypeId::GEOMETRY) {
+		    extract_expr_type.id() != LogicalTypeId::GEOMETRY && extract_expr_type.id() != LogicalTypeId::GEOGRAPHY) {
 			return BindResult(StringUtil::Format("Cannot extract field %s from expression \"%s\" because it is not a "
 			                                     "struct, union, map, json or geometry",
 			                                     name_exp.ToString(), extract_exp.ToString()));
@@ -279,8 +279,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			if (i_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp.Cast<BoundConstantExpression>();
 				if (!const_exp.GetValue().IsNull()) {
-					const_exp.SetValue(StringUtil::Format("%s", const_exp.GetValue().ToString()));
-					const_exp.SetReturnType(LogicalType::VARCHAR);
+					children[1] = const_exp.WithValue(Value(StringUtil::Format("%s", const_exp.GetValue().ToString())));
 				}
 			}
 		} else if (extract_expr_type.IsJSONType()) {
@@ -289,11 +288,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			if (name_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = name_exp.Cast<BoundConstantExpression>();
 				if (!const_exp.GetValue().IsNull()) {
-					const_exp.SetValue(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString()));
-					const_exp.SetReturnType(LogicalType::VARCHAR);
+					children[1] =
+					    const_exp.WithValue(Value(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString())));
 				}
 			}
-		} else if (extract_expr_type.id() == LogicalTypeId::GEOMETRY) {
+		} else if (extract_expr_type.id() == LogicalTypeId::GEOMETRY ||
+		           extract_expr_type.id() == LogicalTypeId::GEOGRAPHY) {
 			function_name = "vertex_extract";
 		} else {
 			function_name = "struct_extract";

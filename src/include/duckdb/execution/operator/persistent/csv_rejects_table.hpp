@@ -14,13 +14,15 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 struct ReadCSVData;
 class TableCatalogEntry;
 class ClientContext;
+class PhysicalOperator;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
@@ -32,7 +34,7 @@ public:
 	mutex file_index_lock;
 	idx_t file_index_query_id = DConstants::INVALID_INDEX;
 	idx_t next_file_index = 0;
-	unordered_map<const void *, idx_t> scan_file_index_base;
+	reference_map_t<const PhysicalOperator, vector<idx_t>> scan_file_indexes;
 	string name;
 	idx_t count;
 	string scan_table;
@@ -42,9 +44,8 @@ public:
 	                                               const string &rejects_error);
 
 	void InitializeTable(ClientContext &context, const ReadCSVData &options);
-	//! The first file index of a scan. The files of a scan get a block of indexes, so that they keep the order they
-	//! have in the scan, and the scans of a query do not report their files under the same indexes
-	idx_t GetFileIndexBase(idx_t query_id, const void *scan_key, idx_t file_count);
+	//! Allocate query-wide file indexes on demand, preserving file order within each scan
+	idx_t GetFileIndex(idx_t query_id, optional_ptr<const PhysicalOperator> scan_op, idx_t file_index);
 	TableCatalogEntry &GetErrorsTable(ClientContext &context);
 	TableCatalogEntry &GetScansTable(ClientContext &context);
 

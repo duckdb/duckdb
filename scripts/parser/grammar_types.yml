@@ -121,6 +121,7 @@ SQLStatement:
     - DestroyExternalResourceStmt
     - ExtensionRepositoryStatement
     - CreateExtensionRepositoryStmt
+    - CreateExtensionRepositoryFromHostStmt
     - DropExtensionRepositoryStmt
 
 SelectStatement:
@@ -155,6 +156,7 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
+    - ShowExternalResourceTypes
     - ShowExternalResources
     - ShowDeprecatedSelect
     - DescribeSelect
@@ -622,6 +624,8 @@ TableRef:
     - SubqueryReference
     - BaseTableRef
     - ParensTableRef
+    - JoinedTableRef
+    - JoinedTableRefChain
     - ValuesRef
     - MergeIntoUsingClause
     - UpdateTarget
@@ -1819,6 +1823,9 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
+    - FromSourceName
     - ShowExternalResourcesType
     - UsingColumnName
     - ColLabelOrString
@@ -2001,6 +2008,7 @@ collapsible_rules:
 packrat_memoized_rules:
   - Expression
   - TableRef
+  - ParensTableRef
   - Identifier
   - ColId
   - CatalogQualification

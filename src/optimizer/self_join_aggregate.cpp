@@ -498,8 +498,8 @@ private:
 		auto scan = std::move(join.children[0]);
 		auto not_null = make_uniq<LogicalFilter>();
 		for (auto &key : keys) {
-			auto check = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-			check->GetChildrenMutable().push_back(
+			auto check = make_uniq<BoundOperatorExpression>(
+			    ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN,
 			    make_uniq<BoundColumnRefExpression>(key.type, ColumnBinding(scan_index, key.left)));
 			not_null->expressions.push_back(std::move(check));
 		}
@@ -539,11 +539,10 @@ private:
 			unique_ptr<Expression> replacement;
 			if (key_of[k] != DConstants::INVALID_INDEX) {
 				replacement = make_uniq<BoundColumnRefExpression>(
-				    expr->GetReturnType(), ColumnBinding(group_index, ProjectionIndex(key_of[k])));
+				    expr->GetAlias(), expr->GetReturnType(), ColumnBinding(group_index, ProjectionIndex(key_of[k])));
 			} else {
-				replacement = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
+				replacement = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()), expr->GetAlias());
 			}
-			replacement->SetAlias(expr->GetAlias());
 			expr = std::move(replacement);
 		}
 		// drops the filters, the join and the other scan

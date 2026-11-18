@@ -1343,7 +1343,8 @@ bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, 
 	return true;
 }
 void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
-	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
+	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT,
+	                                  LogicalType::TIME};
 
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
@@ -1362,7 +1363,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 				continue; // don't update detected_types for this partition/file
 			}
 			LogicalType detected_type = LogicalType::VARCHAR;
-			Value value(part.second);
+			Value value(HivePartitioning::Unescape(part.second));
 			for (auto &candidate : candidates) {
 				const bool success = value.TryCastAs(context, candidate, nullptr, true).has_value();
 				if (success) {

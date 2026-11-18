@@ -20,11 +20,12 @@
 
 namespace duckdb {
 
-static unique_ptr<Expression> CastWindowExpression(unique_ptr<Expression> bound, const LogicalType &type) {
+static unique_ptr<Expression> CastWindowExpression(ClientContext &context, unique_ptr<Expression> bound,
+                                                   const LogicalType &type) {
 	if (!bound) {
 		return nullptr;
 	}
-	return BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
+	return BoundCastExpression::AddCastToType(context, std::move(bound), type);
 }
 
 static bool IsRangeType(const LogicalType &type) {
@@ -43,6 +44,9 @@ static bool IsRangeType(const LogicalType &type) {
 	case PhysicalType::DOUBLE:
 	case PhysicalType::INTERVAL:
 		return true;
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs whose byte order is their numeric order
+		return type.id() == LogicalTypeId::DECIMAL;
 	default:
 		return false;
 	}
@@ -173,7 +177,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	ErrorData error;
 	vector<unique_ptr<Expression>> bound_args;
 	for (auto &child : window.GetArgumentsMutable()) {
-		bound_args.push_back(BindChild(child.GetExpressionMutable(), depth, error));
+		// arguments are aliased by their name, if any (see BindFunction for the rationale)
+		bound_args.push_back(BindChild(child.GetExpressionMutable(), depth, error, child.GetName()));
 	}
 	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &child : window.PartitionsMutable()) {
@@ -238,15 +243,6 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto &arg = window.GetArgumentsMutable()[arg_idx];
 		auto bound_arg = std::move(bound_args[arg_idx]);
 
-		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
-		// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
-		// Only override the alias when the argument actually carries a name, otherwise we would clobber the
-		// display alias the binding assigned (e.g. clearing a column reference's name to its raw binding).
-		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(arg.GetName());
-		}
-
 		if (window.IsLegacyFunctionCall()) {
 			arguments.emplace_back(Identifier(), std::move(bound_arg));
 		} else {
@@ -258,7 +254,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	LogicalType sql_type;
 	unique_ptr<BoundAggregateFunction> aggregate;
 	unique_ptr<BoundWindowFunction> window_func;
-	unique_ptr<FunctionData> bind_info;
+	cow_ptr<FunctionData> bind_info;
 	vector<unique_ptr<Expression>> children;
 
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
@@ -440,11 +436,11 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		result->ArgOrdersMutable().emplace_back(type, null_order, std::move(bound_arg_orders[order_idx]));
 	}
 
-	result->FilterMutable() = CastWindowExpression(std::move(bound_filter), LogicalType::BOOLEAN);
+	result->FilterMutable() = CastWindowExpression(context, std::move(bound_filter), LogicalType::BOOLEAN);
 	optional_ptr<const Expression> original_start = bound_start.get();
 	optional_ptr<const Expression> original_end = bound_end.get();
-	result->StartExprMutable() = CastWindowExpression(std::move(bound_start), start_type);
-	result->EndExprMutable() = CastWindowExpression(std::move(bound_end), end_type);
+	result->StartExprMutable() = CastWindowExpression(context, std::move(bound_start), start_type);
+	result->EndExprMutable() = CastWindowExpression(context, std::move(bound_end), end_type);
 	if (result->SQLRangeStartBoundary() &&
 	    !WindowRangeCast::Capture(*result->StartExpr(), *original_start,
 	                              result->SQLRangeStartBoundaryMutable()->result_casts)) {

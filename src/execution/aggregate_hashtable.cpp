@@ -322,6 +322,10 @@ idx_t GroupedAggregateHashTable::GetMaterializedCount() const {
 	return result;
 }
 
+idx_t GroupedAggregateHashTable::GetMaterializedSize() const {
+	return partitioned_data->GetDataSize() + (unpartitioned_data ? unpartitioned_data->GetDataSize() : 0);
+}
+
 void GroupedAggregateHashTable::SkipLookups() {
 	adaptivity.SkipLookups();
 }
@@ -593,6 +597,10 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 
 optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, DataChunk &payload,
                                                              const unsafe_vector<idx_t> &filter) {
+	if (groups.size() == 0) {
+		// no rows, no group: the constant group below would be added without a row that has it
+		return optional_idx();
+	}
 #ifndef DEBUG
 	if (groups.size() <= 1) {
 		// this only has a point if we have multiple groups

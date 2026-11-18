@@ -138,6 +138,10 @@ public:
 	idx_t Count() const;
 	//! Get the size (in bytes) of this PartitionedTupleData
 	idx_t SizeInBytes() const;
+	//! Materialized row and heap bytes, excluding allocation overhead
+	idx_t GetDataSize() const {
+		return data_size;
+	}
 	//! Buffer-manager memory charged for row and heap blocks, plus allocator metadata
 	idx_t GetAllocatedSizeInBytes() const;
 	//! Get the number of partitions of this PartitionedTupleData

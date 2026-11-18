@@ -9,6 +9,11 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/array.hpp"
+#include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -378,6 +383,142 @@ void CollectionScanState::InitializeColumnScans() {
 	if (column_scans_pending) {
 		pinned_row_group->InitializeColumnScans(*this);
 	}
+}
+
+bool CollectionScanState::InitializeRowGroupScan(SegmentNode<RowGroup> &node, shared_ptr<RowGroup> payload,
+                                                 idx_t vector_offset, idx_t end_row) {
+	if (!payload->CheckZonemap(context.GetClientContext(), GetFilterInfo(), node.GetRowStart())) {
+		return false;
+	}
+	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::NONE);
+	prepared_vector.Reset();
+	assignment_io_registered = false;
+	row_group = node;
+	pinned_row_group = std::move(payload);
+	vector_index = vector_offset;
+	max_row_group_row = end_row;
+	if (max_row_group_row == 0) {
+		return false;
+	}
+	D_ASSERT(!column_scans.empty());
+	return true;
+}
+
+RowGroupScanAssignment CollectionScanState::GetAssignment() const {
+	D_ASSERT(row_group);
+	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::NONE);
+	D_ASSERT(!assignment_io_registered);
+	RowGroupScanAssignment result;
+	result.context = context;
+	result.row_groups = row_groups;
+	result.row_group = row_group;
+	result.pinned_row_group = pinned_row_group;
+	result.vector_index = vector_index;
+	result.max_row_group_row = max_row_group_row;
+	return result;
+}
+
+idx_t RowGroupScanAssignment::RowCount() const {
+	const auto start_row = vector_index * STANDARD_VECTOR_SIZE;
+	return max_row_group_row > start_row ? max_row_group_row - start_row : 0;
+}
+
+TableScanAssignment::TableScanAssignment(const CollectionScanState &scan_state, TableScanSource source_p)
+    : row_group(scan_state.GetAssignment()), source(source_p) {
+}
+
+bool CollectionScanState::SetAssignment(const RowGroupScanAssignment &assignment) {
+	D_ASSERT(assignment.row_group);
+	D_ASSERT(assignment.pinned_row_group);
+	ReleasePins();
+	if (column_scans.empty()) {
+		Initialize(assignment.context, assignment.pinned_row_group->GetCollection().GetTypes());
+	}
+	AssignSharedPointer(row_groups, assignment.row_groups);
+	auto node = assignment.row_group;
+	max_row = node->GetRowStart() + assignment.max_row_group_row;
+	if (!InitializeRowGroupScan(*node, assignment.pinned_row_group, assignment.vector_index,
+	                            assignment.max_row_group_row)) {
+		return false;
+	}
+	column_scans_pending = true;
+	InitializeColumnScans();
+	return true;
+}
+
+bool CollectionScanState::SupportsAssignmentBlockDiscovery(const vector<StorageIndex> &column_ids,
+                                                           const vector<LogicalType> &types) {
+	// Assignment discovery currently supports only flat, non-virtual columns.
+	for (const auto &column : column_ids) {
+		if (IsVirtualColumn(column.GetPrimaryIndex())) {
+			return false;
+		}
+		const auto &type = types[column.GetPrimaryIndex()];
+		if (type.IsNested() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::GEOMETRY) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void CollectionScanState::PrepareAssignmentBlocks(PrefetchState &blocks, vector<unique_ptr<AsyncTask>> &tasks,
+                                                  bool prefetch) {
+	D_ASSERT(GetRowGroup());
+	D_ASSERT(SupportsAssignmentBlockDiscovery(GetColumnIds(), pinned_row_group->GetCollection().GetTypes()));
+	InitializeColumnScans();
+	pinned_row_group->CollectAssignmentBlocks(*this, blocks);
+	if (prefetch) {
+		tasks = pinned_row_group->GetBlockManager().buffer_manager.CreatePrefetchTasks(context, blocks.blocks);
+	}
+}
+
+optional_idx PrefetchState::GetCachedShard(BlockAllocator &allocator) {
+	array<idx_t, 256> weights {};
+	if (allocator.GetPoolShardCount() > weights.size()) {
+		return optional_idx();
+	}
+	// Reuse the retained handles to count each allocation once without temporary hash storage.
+	std::sort(blocks.begin(), blocks.end(),
+	          [](const shared_ptr<BlockHandle> &left, const shared_ptr<BlockHandle> &right) {
+		          return left->BlockId() < right->BlockId();
+	          });
+	block_id_t previous = INVALID_BLOCK;
+	optional_idx best;
+	idx_t best_weight = 0;
+	for (auto &block : blocks) {
+		if (block->BlockId() == previous) {
+			continue;
+		}
+		previous = block->BlockId();
+		auto &memory = block->GetMemory();
+		auto lock = memory.GetLock();
+		if (memory.GetState() != BlockState::BLOCK_LOADED) {
+			continue;
+		}
+		auto shard = allocator.GetAllocationShard(memory.GetBuffer(lock)->InternalBuffer());
+		if (!shard.IsValid()) {
+			continue;
+		}
+		const auto index = shard.GetIndex();
+		D_ASSERT(index < weights.size());
+		if (++weights[index] > best_weight) {
+			best = index;
+			best_weight = weights[index];
+		}
+	}
+	return best;
+}
+
+bool TableScanState::StartAssignment(const TableScanAssignment &assignment, bool prefetch_attempted) {
+	const auto local = assignment.source == TableScanSource::TRANSACTION_LOCAL;
+	auto &inactive = local ? table_state : local_state;
+	inactive.ReleasePins();
+	auto &active = local ? local_state : table_state;
+	if (!active.SetAssignment(assignment.row_group)) {
+		return false;
+	}
+	active.assignment_io_registered = !local && prefetch_attempted;
+	return true;
 }
 
 void TableScanState::InitializeColumnScans() {

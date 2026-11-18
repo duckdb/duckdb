@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
+ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column, Context &context,
                                              PartialBlockManager &partial_block_manager)
-    : row_group(row_group), original_column(original_column), partial_block_manager(partial_block_manager),
-      original_column_mutable(original_column) {
+    : row_group(row_group), original_column(original_column), context(context),
+      partial_block_manager(partial_block_manager), original_column_mutable(original_column) {
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {
@@ -74,7 +74,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		auto source = buffer_manager.Pin(segment->GetBlockHandle());
 
-		if (auto new_block_ptr = partial_block_manager.Write(*segment, std::move(source), byte_size)) {
+		if (auto new_block_ptr = partial_block_manager.Write(context, *segment, std::move(source), byte_size)) {
 			block_ptr = *new_block_ptr;
 		};
 	} else {

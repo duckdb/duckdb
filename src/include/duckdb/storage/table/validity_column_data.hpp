@@ -23,7 +23,7 @@ public:
 
 public:
 	void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group, Context &context,
 	                                                        PartialBlockManager &partial_block_manager) override;
 
 	void Verify(RowGroup &parent) override;
