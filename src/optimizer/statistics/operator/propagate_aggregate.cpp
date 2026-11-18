@@ -125,22 +125,6 @@ bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
 	return true;
 }
 
-//! Empty temporal statistics start at the finite limits of the type, which infinite values never move
-bool IsTemporalStatsSentinel(const Value &value) {
-	switch (value.type().id()) {
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return value == Value::MinimumValue(value.type()) || value == Value::MaximumValue(value.type());
-	default:
-		return false;
-	}
-}
-
 bool TryGetValueFromStats(Context &context, const PartitionStatistics &stats, const StorageIndex &storage_index,
                           const ValueComparator &comparator, const LogicalType &result_type, Value &result) {
 	if (!stats.partition_row_group) {
@@ -175,9 +159,6 @@ bool TryGetValueFromStats(Context &context, const PartitionStatistics &stats, co
 		}
 	}
 	result = comparator.GetVal(*column_stats);
-	if (IsTemporalStatsSentinel(result)) {
-		return false;
-	}
 	if (result.type() == result_type) {
 		return true;
 	}

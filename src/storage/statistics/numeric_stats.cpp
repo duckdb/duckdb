@@ -22,6 +22,11 @@ void InitializeEmptyFloatingPointStats(BaseStatistics &result) {
 	NumericStats::SetMax(result, NumericLimits<T>::Minimum());
 }
 
+void InitializeEmptyTemporalStats(BaseStatistics &result) {
+	NumericStats::SetMin(result, Value::Infinity(result.GetType()));
+	NumericStats::SetMax(result, Value::NegativeInfinity(result.GetType()));
+}
+
 } // namespace
 
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
@@ -54,12 +59,21 @@ static LogicalType GetEmptyStatsLimitType(const LogicalType &type) {
 BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::FLOAT:
+	switch (result.GetType().id()) {
+	case LogicalTypeId::FLOAT:
 		InitializeEmptyFloatingPointStats<float>(result);
 		break;
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		InitializeEmptyFloatingPointStats<double>(result);
+		break;
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		InitializeEmptyTemporalStats(result);
 		break;
 	default: {
 		auto limit_type = GetEmptyStatsLimitType(result.GetType());
