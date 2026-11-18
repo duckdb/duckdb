@@ -61,6 +61,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 			if (deleter) {
 				db_manager.AddPendingTeardown(std::move(deleter));
 			}
+			AttachedDatabase::InvokeCloseIfLastReference(attached_db, DatabaseCloseAction::SKIP_CHECKPOINT);
 		}
 		break;
 	}

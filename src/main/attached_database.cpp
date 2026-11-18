@@ -206,10 +206,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	// FIXME: Theoretically, we should catch all places higher up the call stack where the
-	// FIXME: shared pointer goes out of scope and we need to invoke a checkpoint.
-	// FIXME: However, for now, we keep this to avoid unintentional behavior / oversights.
-	Close(DatabaseCloseAction::TRY_CHECKPOINT);
+	D_ASSERT(is_closed || Exception::UncaughtException());
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -277,6 +274,11 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	}
 
+	InvokeCloseIfLastReference(attached_db, close_action);
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
+                                                  DatabaseCloseAction close_action) {
 	auto close_lock = attached_db->close_lock;
 	{
 		lock_guard<mutex> guard(*close_lock);
