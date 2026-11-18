@@ -1,6 +1,4 @@
 #include "catch.hpp"
-#include "duckdb.hpp"
-#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
@@ -8,9 +6,8 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
-
-#include <chrono>
 
 #include <chrono>
 #include <future>
@@ -121,11 +118,7 @@ TEST_CASE("HTTP retry backoff observes cancellation and deadlines", "[http][intr
 		    [&]() {
 			    if (++attempts == 1) {
 				    if (!interrupt) {
-					    con.context->query_deadline =
-					        NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-					                               std::chrono::steady_clock::now().time_since_epoch())
-					                               .count() +
-					                           200);
+					    con.context->query_deadline = NumericCast<idx_t>(TimePoint::GetTickMs() + 200);
 				    }
 				    attempted.set_value();
 				    auto response = make_uniq<HTTPResponse>(HTTPStatusCode::ServiceUnavailable_503);

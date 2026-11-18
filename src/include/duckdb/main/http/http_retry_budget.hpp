@@ -19,7 +19,6 @@ namespace duckdb {
 
 struct HTTPParams;
 struct BaseRequest;
-class ClientContext;
 
 //! An attempt's decision; constructing one does not consume retry budget.
 //!
