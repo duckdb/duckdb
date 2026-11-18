@@ -1,0 +1,71 @@
+# name: test/sql/types/variant/variant_stats_merge_unshredded_row_group.test
+# description: Statistics of a VARIANT column include row groups that could not be shredded
+# group: [variant]
+
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_unshredded_row_group.db' AS d (ROW_GROUP_SIZE 2048)
+
+statement ok
+SET variant_minimum_shredding_size = 0
+
+statement ok
+CREATE TABLE d.t(v VARIANT)
+
+# keys differing only in case prevent shredding of the first row group
+statement ok
+INSERT INTO d.t VALUES ({'A': 1, 'b': 1}::VARIANT), ({'a': 1, 'b': 1}::VARIANT)
+
+statement ok
+INSERT INTO d.t SELECT {'b': 100}::VARIANT FROM range(2046)
+
+statement ok
+INSERT INTO d.t SELECT {'b': 100}::VARIANT FROM range(2048)
+
+statement ok
+CHECKPOINT d
+
+# the unshredded row group makes the merged stats inconsistent, so they have no min/max for b
+query I
+SELECT stats(v).shredding_state FROM d.t LIMIT 1
+----
+INCONSISTENT
+
+query I
+SELECT count(*) FROM d.t WHERE TRY_CAST(v.b AS INTEGER) < 50
+----
+2
+
+query I
+SELECT v.b::INTEGER AS x FROM d.t GROUP BY x ORDER BY x
+----
+1
+100
+
+statement ok
+DETACH d
+
+statement ok
+ATTACH '{TEST_DIR}/variant_stats_merge_unshredded_row_group.db' AS d (ROW_GROUP_SIZE 2048)
+
+# the existing row groups are reused, so their stats come from the reloaded column data
+statement ok
+INSERT INTO d.t SELECT {'b': 100}::VARIANT FROM range(2048)
+
+statement ok
+CHECKPOINT d
+
+query I
+SELECT stats(v).shredding_state FROM d.t LIMIT 1
+----
+INCONSISTENT
+
+query I
+SELECT count(*) FROM d.t WHERE TRY_CAST(v.b AS INTEGER) < 50
+----
+2
+
+query I
+SELECT v.b::INTEGER AS x FROM d.t GROUP BY x ORDER BY x
+----
+1
+100

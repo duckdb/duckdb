@@ -96,7 +96,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 	SetScope variable_scope = GetSettingScope(*option, scope);
 
 	Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
-	if (option->default_value) {
+	if (option->IsGeneric()) {
 		SettingCallbackInfo info(context, variable_scope);
 		if (option->set_callback) {
 			option->set_callback(info, input_val);

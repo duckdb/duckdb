@@ -2,6 +2,7 @@
 
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb.hpp"
@@ -821,6 +822,47 @@ TEST_CASE("A returned transport error carries the quota exhaustion note where Ge
 	REQUIRE(response->HasRequestError());
 	REQUIRE(StringUtil::Contains(response->GetError(), "Connection reset by peer"));
 	REQUIRE(StringUtil::Contains(response->GetError(), "retry quota for 'http://flaky.example.com' exhausted"));
+	REQUIRE(quota->Available() == 0);
+}
+
+TEST_CASE("A returned HTTP error with the quota exhaustion note still parses as the HTTP error", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 10;
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+	HeadRequestInfo request("http://throttled.example.com/file", headers, params);
+	request.try_request = true;
+	auto quota = http_util.GetRetryQuota("http://throttled.example.com");
+	HTTPResponse throttled(HTTPStatusCode::TooManyRequests_429);
+	throttled.reason = "Too Many Requests";
+	throttled.headers.Insert("ETag", "W/\"bf-0ojpck62M0d8\"");
+	HTTPException error_sent(throttled, "HTTP HEAD error on '%s' (HTTP 429 Too Many Requests)", request.url);
+
+	unique_ptr<HTTPResponse> response;
+	SECTION("The request throws the error") {
+		// Room for exactly one throttled retry
+		REQUIRE(quota->TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST));
+		response = HTTPUtil::RunRequestWithRetry([&]() -> unique_ptr<HTTPResponse> { throw error_sent; }, request, {});
+	}
+	SECTION("The request returns the error") {
+		// Room for exactly one transport-failure retry
+		REQUIRE(quota->TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::TRANSIENT_RETRY_COST));
+		response = HTTPUtil::RunRequestWithRetry(
+		    [&]() {
+			    auto failed = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+			    failed->request_error = error_sent.what();
+			    return failed;
+		    },
+		    request, {});
+	}
+	REQUIRE(response->HasRequestError());
+	ErrorData error(response->GetRequestError());
+	REQUIRE(error.Type() == ExceptionType::HTTP);
+	REQUIRE(error.ExtraInfo().at("status_code") == "429");
+	REQUIRE(error.ExtraInfo().at("header_ETag") == "W/\"bf-0ojpck62M0d8\"");
+	REQUIRE(StringUtil::Contains(error.RawMessage(), "(HTTP 429 Too Many Requests)"));
+	REQUIRE(StringUtil::Contains(error.RawMessage(), "retry quota for 'http://throttled.example.com' exhausted"));
 	REQUIRE(quota->Available() == 0);
 }
 

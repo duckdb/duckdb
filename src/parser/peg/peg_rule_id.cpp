@@ -437,6 +437,7 @@ static const char *const PEG_RULE_NAMES[] = {
     "DescribeStatement",
     "ShowExternalResources",
     "ShowExternalResourcesType",
+    "ShowExternalResourceTypes",
     "ShowDeprecatedSelect",
     "DescribeSelect",
     "ShowAllTables",
