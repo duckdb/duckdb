@@ -29,7 +29,7 @@ BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_
       supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
       serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false),
+      sampling_pushdown(false), late_materialization(false), multi_column_filter_pushdown(false),
       return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
@@ -120,6 +120,7 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	filter_prune = function.filter_prune;
 	sampling_pushdown = function.sampling_pushdown;
 	late_materialization = function.late_materialization;
+	multi_column_filter_pushdown = function.multi_column_filter_pushdown;
 	function_info = function.function_info;
 	BaseTableFunction::return_type = function.return_type;
 	call_return_type = function.call_return_type;
@@ -181,7 +182,8 @@ bool BaseTableFunction::operator==(const BaseTableFunction &rhs) const {
 	       deserialize == rhs.deserialize && verify_serialization == rhs.verify_serialization &&
 	       projection_pushdown == rhs.projection_pushdown && filter_pushdown == rhs.filter_pushdown &&
 	       filter_prune == rhs.filter_prune && sampling_pushdown == rhs.sampling_pushdown &&
-	       late_materialization == rhs.late_materialization && return_type == rhs.return_type &&
+	       late_materialization == rhs.late_materialization &&
+	       multi_column_filter_pushdown == rhs.multi_column_filter_pushdown && return_type == rhs.return_type &&
 	       global_initialization == rhs.global_initialization;
 }
 

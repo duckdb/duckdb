@@ -461,7 +461,10 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	}
 	if (has_multiple_bindings) {
 		auto table = get.GetTable();
-		if (table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr)) {
+		const bool native = table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr);
+		const bool offered = get.function.multi_column_filter_pushdown && expr.IsConsistent() &&
+		                     get.function.pushdown_expression(context, get, expr);
+		if (native || offered) {
 			auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
 			if (filter) {
 				get.table_filters.PushMultiColumnFilter(std::move(filter));

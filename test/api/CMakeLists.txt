@@ -13,6 +13,7 @@ set(TEST_API_OBJECTS
     test_api.cpp
     test_profile_plan_lifetime.cpp
     test_multi_file_column_mapper.cpp
+    test_multi_column_filter_pushdown.cpp
     test_process_util.cpp
     test_remove_directory_extended.cpp
     test_temporary_file_owner.cpp

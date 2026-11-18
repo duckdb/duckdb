@@ -563,6 +563,9 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether multi-column expressions are offered to pushdown_expression; an accepted one is pushed as a partial
+	//! filter that the FILTER above still applies.
+	bool multi_column_filter_pushdown;
 	TableFunctionReturnType return_type;
 	//! The return type used when this function is invoked through a CALL statement
 	//! By default a CALL returns a query result - functions that only have side effects can use NOTHING instead
