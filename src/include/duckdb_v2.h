@@ -4284,8 +4284,9 @@ typedef struct _duckdb_v2_object_cache {
 /*!
  * An owned opaque handle to an entry of an object cache. Obtained from `duckdb_v2_object_cache_get()` or
  * `duckdb_v2_object_cache_get_or_create()`, and destroyed with `duckdb_v2_object_cache_entry_destroy()`. Holding the
- * handle keeps the entry's data alive: the cache may evict or delete the entry meanwhile, but the data is only
- * destroyed once the last handle is.
+ * handle keeps the entry's data alive, but not in the cache: the cache may still evict, replace or delete the entry
+ * meanwhile, and the data is only destroyed once the last handle is. Only entries in the cache count against the memory
+ * limit: data that is held through a handle after its entry was evicted, replaced or deleted no longer does.
  */
 typedef struct _duckdb_v2_object_cache_entry {
 	void *internal_ptr;
@@ -4298,9 +4299,10 @@ typedef struct _duckdb_v2_object_cache_entry {
 /*!
  * Creates the data of a cache entry that does not exist yet.
  *
- * Runs outside the cache lock, but while other creations of the same entry wait for it: it must not use the object
- * cache itself. A failure reported through `err` leaves the entry uncreated and fails the call, as does a `size_bytes`
- * above the cache capacity.
+ * Runs outside the cache lock, while other calls creating the same entry on the same instance wait for it: it must not
+ * use the object cache itself. Calls for other keys, or on other instances, do not wait. A failure reported through
+ * `err` leaves the entry uncreated and fails the call, as does a `size_bytes` above the cache capacity; the waiting
+ * calls then retry, running their own create callback.
  */
 typedef void (*duckdb_v2_object_cache_create_callback_fn)(void *user_data, duckdb_v2_opaque *data, idx_t *size_bytes,
                                                           duckdb_v2_error_info_handle *err);
@@ -4358,8 +4360,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_object_cache(duckdb_v2_contex
  * nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run on any
  * thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0 pins the
  * entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it evictable: the
- * cache counts it against the memory limit, and may drop it, least recently used first, when memory is needed. Sizes
- * above the cache capacity are rejected.
+ * cache counts it against the memory limit while it is in the cache, and may drop it, least recently used first, when
+ * memory is needed, also while it is held. Sizes above the cache capacity are rejected.
  *
  * history:
  * - unstable: v2.0.0
@@ -4416,9 +4418,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get(duckdb_v2_object_cache_h
 /*!
  * Looks an entry up, creating it first with the create callback if there is none.
  *
- * Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others receive
- * its result. The entry is returned as `duckdb_v2_object_cache_get()` does, owned by the caller. Fails if the key holds
- * an entry that was not created through this API.
+ * Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others wait
+ * for it and receive its result. If that creation fails, the call that ran it fails, and each waiting call tries again
+ * with its own create callback. Calls for other keys never wait for a creation. The entry is returned as
+ * `duckdb_v2_object_cache_get()` does, owned by the caller. Fails if the key holds an entry that was not created
+ * through this API.
  *
  * history:
  * - unstable: v2.0.0
@@ -4449,7 +4453,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get_or_create(duckdb_v2_obje
 /*!
  * Deletes an entry from the cache. Deleting an entry that is not there is not an error.
  *
- * Holders of the entry keep its data until they destroy their handle.
+ * Holders of the entry keep its data until they destroy their handle, but from here on it no longer counts against the
+ * memory limit.
  *
  * history:
  * - unstable: v2.0.0

@@ -14,8 +14,9 @@ handles:
     description: |
       An owned opaque handle to an entry of an object cache. Obtained from `[[object_cache_get]]` or
       `[[object_cache_get_or_create]]`, and destroyed with `[[object_cache_entry_destroy]]`. Holding the handle keeps
-      the entry's data alive: the cache may evict or delete the entry meanwhile, but the data is only destroyed once
-      the last handle is.
+      the entry's data alive, but not in the cache: the cache may still evict, replace or delete the entry meanwhile,
+      and the data is only destroyed once the last handle is. Only entries in the cache count against the memory
+      limit: data that is held through a handle after its entry was evicted, replaced or deleted no longer does.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -26,9 +27,10 @@ callbacks:
     description: |
       Creates the data of a cache entry that does not exist yet.
 
-      Runs outside the cache lock, but while other creations of the same entry wait for it: it must not use the
-      object cache itself. A failure reported through `err` leaves the entry uncreated and fails the call, as does a
-      `size_bytes` above the cache capacity.
+      Runs outside the cache lock, while other calls creating the same entry on the same instance wait for it: it
+      must not use the object cache itself. Calls for other keys, or on other instances, do not wait. A failure
+      reported through `err` leaves the entry uncreated and fails the call, as does a `size_bytes` above the cache
+      capacity; the waiting calls then retry, running their own create callback.
     parameters:
       user_data:
         type: void
@@ -119,8 +121,8 @@ functions:
       and nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run
       on any thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0
       pins the entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it
-      evictable: the cache counts it against the memory limit, and may drop it, least recently used first, when
-      memory is needed. Sizes above the cache capacity are rejected.
+      evictable: the cache counts it against the memory limit while it is in the cache, and may drop it, least recently
+      used first, when memory is needed, also while it is held. Sizes above the cache capacity are rejected.
     role: method
     belongs_to: object_cache
     parameters:
@@ -210,7 +212,8 @@ functions:
       Looks an entry up, creating it first with the create callback if there is none.
 
       Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others
-      receive its result. The entry is returned as `[[object_cache_get]]` does, owned by the caller. Fails if the
+      wait for it and receive its result. If that creation fails, the call that ran it fails, and each waiting call
+      tries again with its own create callback. Calls for other keys never wait for a creation. The entry is returned as `[[object_cache_get]]` does, owned by the caller. Fails if the
       key holds an entry that was not created through this API.
     role: method
     belongs_to: object_cache
@@ -260,7 +263,8 @@ functions:
     description: |
       Deletes an entry from the cache. Deleting an entry that is not there is not an error.
 
-      Holders of the entry keep its data until they destroy their handle.
+      Holders of the entry keep its data until they destroy their handle, but from here on it no longer counts against
+      the memory limit.
     role: method
     belongs_to: object_cache
     parameters:

@@ -1,7 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
-#include "duckdb/common/array.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/object_cache.hpp"
 
@@ -87,12 +85,6 @@ static auto Convert(ObjectCache *cache) -> duckdb_v2_object_cache_handle {
 //! them apart from the cache's other users.
 static auto CacheKey(const char *type, idx_t type_length, const char *key, idx_t key_length) -> string {
 	return StringUtil::Format("capi_v2:%llu:%s:%s", type_length, string(type, type_length), string(key, key_length));
-}
-
-//! Serializes the creation of entries per key, without holding the cache lock while a create callback runs.
-static mutex &CreationLock(const string &cache_key) {
-	static array<mutex, 64> locks;
-	return locks[Hash(cache_key.c_str(), cache_key.size()) % locks.size()];
 }
 
 static auto CheckedEntry(shared_ptr<ObjectCacheEntry> entry) -> shared_ptr<CV2ObjectCacheEntry> {
@@ -186,16 +178,9 @@ DUCKDB_V2_ERROR duckdb_v2_object_cache_get_or_create(duckdb_v2_object_cache_hand
 	return WithErrorHandler(err, [&]() {
 		auto &object_cache = *Convert(cache);
 		auto cache_key = CacheKey(type, type_length, key, key_length);
-		auto found = object_cache.GetObject(cache_key);
-		if (!found) {
-			const duckdb::lock_guard<duckdb::mutex> guard(CreationLock(cache_key));
-			found = object_cache.GetObject(cache_key);
-			if (!found) {
-				auto created =
-				    duckdb::make_shared_ptr<CV2ObjectCacheEntry>(create, create_user_data, object_cache.GetMaxMemory());
-				found = object_cache.GetOrPut(cache_key, std::move(created));
-			}
-		}
+		auto found = object_cache.GetOrCreateObject(cache_key, [&]() -> duckdb::shared_ptr<duckdb::ObjectCacheEntry> {
+			return duckdb::make_shared_ptr<CV2ObjectCacheEntry>(create, create_user_data, object_cache.GetMaxMemory());
+		});
 		GiveEntryToCaller(CheckedEntry(std::move(found)), entry);
 	});
 }
