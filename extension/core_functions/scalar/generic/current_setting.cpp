@@ -1,6 +1,7 @@
 #include "core_functions/scalar/generic_functions.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -44,9 +45,15 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
-		// If autoloader didn't throw, the config is now available
-		context.TryGetCurrentSetting(key, val);
+		ExtensionOption extension_option;
+		if (DBConfig::GetConfig(context).TryGetExtensionOption(key, extension_option)) {
+			// a registered extension option that is unset and has no default
+			val = Value(extension_option.type);
+		} else {
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
+			// If autoloader didn't throw, the config is now available
+			context.TryGetCurrentSetting(key, val);
+		}
 	}
 
 	bound_function.SetReturnType(val.type());
