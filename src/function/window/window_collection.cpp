@@ -149,7 +149,7 @@ WindowCursor::WindowCursor(const WindowCollection &paged, column_t col_idx)
 
 LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_t begin) {
 	vector<LogicalType> types;
-	for (auto c = 0; c < end; ++c) {
+	for (column_t c = 0; c < end; ++c) {
 		types.push_back(chunk.data[c].GetType());
 	}
 	return PrefixStructType(types, end, begin);

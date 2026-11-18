@@ -54,7 +54,7 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 	}
 	auto key_type = WindowCollectionChunkScanner::PrefixStructType(key_types, key_types.size());
 	key_distinct_from =
-	    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, key_type, key_type);
+	    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, key_type, 0, key_type, 1);
 
 	sort = make_uniq<Sort>(client, orders, scan_types, scan_cols);
 

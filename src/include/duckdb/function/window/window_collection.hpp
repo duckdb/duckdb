@@ -241,6 +241,8 @@ static void WindowDeltaScanner(Context &context, const Expression &distinct_from
 	const auto key_type = scanner.PrefixStructType(key_count);
 	Vector compare_curr(key_type);
 	Vector compare_prev(key_type);
+	DataChunk compare;
+	compare.InitializeEmpty({key_type, key_type});
 	ExpressionExecutor distinct_from(context, distinct_from_expr);
 
 	bool boundary_compare = (block_begin > 0);
@@ -298,8 +300,10 @@ static void WindowDeltaScanner(Context &context, const Expression &distinct_from
 		scanner.ReferenceStructColumns(*prev, compare_prev, key_count);
 		scanner.ReferenceStructColumns(*curr, compare_curr, key_count);
 
-		const auto ndistinct =
-		    distinct_from.SelectBinaryExpression(compare_curr, compare_prev, nullptr, count, &distinct, &matching);
+		compare.data[0].Slice(compare_curr, 0, count);
+		compare.data[1].Slice(compare_prev, 0, count);
+		compare.CheckCardinality(count);
+		const auto ndistinct = distinct_from.SelectExpression(compare, &distinct, &matching, nullptr, count);
 
 		//	If n is 0, neither SV has been filled in?
 		auto match_sel = ndistinct ? &matching : FlatVector::IncrementalSelectionVector();

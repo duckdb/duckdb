@@ -28,8 +28,8 @@ public:
 
 	//! The parent executor
 	const WindowAggregateExecutor &executor;
-	//! NOT DISTINCT FROM comparison of every argument
-	vector<unique_ptr<Expression>> arg_not_distinct_from;
+	//! Whether two rows have the same arguments, over [left arguments..., right arguments...] (can be nullptr)
+	unique_ptr<Expression> args_equal;
 	//! The column indices of any ORDER BY argument expressions
 	vector<column_t> arg_order_idx;
 };

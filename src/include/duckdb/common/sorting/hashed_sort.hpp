@@ -80,8 +80,8 @@ public:
 	vector<column_t> partition_key_ids;
 	//! The PARTITION BY key types
 	vector<LogicalType> partition_key_types;
-	//! DISTINCT FROM comparison of every partition key
-	vector<unique_ptr<Expression>> partition_distinct_from;
+	//! Whether two partition keys differ, over [keys..., other keys...]
+	unique_ptr<Expression> partition_key_mismatch;
 	//! The number of PARTITION BY keys
 	idx_t partition_key_count = 0;
 	//! Whether single-key hash groups can skip sorting

@@ -76,6 +76,9 @@ public:
 	//! Returns a list of the types of the join conditions
 	vector<LogicalType> GetJoinTypes() const;
 
+	//! The condition "#0 <op> #1" of SEMI/ANTI joins with a predicate (can be nullptr)
+	unique_ptr<Expression> condition_comparison;
+
 private:
 	vector<idx_t> mark_projection_map;
 	bool track_unknown;

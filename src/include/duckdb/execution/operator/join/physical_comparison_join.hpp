@@ -24,8 +24,6 @@ public:
 	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	vector<JoinCondition> conditions;
-	//! The comparison "left <op> right" for every condition (over the columns 0 and 1 of a binary input)
-	vector<unique_ptr<Expression>> condition_comparisons;
 	//! Non-comparison predicate for additional filtering (can be nullptr)
 	unique_ptr<Expression> predicate;
 	//! Scans where we should push generated filters into (if any)
@@ -33,9 +31,6 @@ public:
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
-	//! (Re-)create the comparisons of the conditions
-	void CreateConditionComparisons();
 
 	//! Re-order join conditions so that equality predicates are first, followed by other predicates
 	static void ReorderConditions(vector<JoinCondition> &conditions);

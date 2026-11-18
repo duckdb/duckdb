@@ -14,7 +14,6 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 
 namespace duckdb {
@@ -157,37 +156,6 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<Select
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
 	                               true_sel.get(), false_sel.get());
 	return selected_tuples;
-}
-
-DataChunk &ExpressionExecutor::SetBinaryInput(const Vector &left, const Vector &right, idx_t min_count) {
-	if (binary_input.ColumnCount() == 0) {
-		binary_input.InitializeEmpty({left.GetType(), right.GetType()});
-	}
-	binary_input.data[0].Reference(left);
-	binary_input.data[1].Reference(right);
-	binary_input.SetCardinalityUnsafe(MaxValue<idx_t>(MaxValue<idx_t>(left.size(), right.size()), min_count));
-	return binary_input;
-}
-
-void ExpressionExecutor::ExecuteBinaryExpression(const Vector &left, const Vector &right, Vector &result) {
-	ExecuteExpression(SetBinaryInput(left, right, 0), result);
-}
-
-idx_t ExpressionExecutor::SelectBinaryExpression(const Vector &left, const Vector &right,
-                                                 optional_ptr<const SelectionVector> sel, idx_t count,
-                                                 optional_ptr<SelectionVector> true_sel,
-                                                 optional_ptr<SelectionVector> false_sel) {
-	auto &input = SetBinaryInput(left, right, count);
-	if (!sel) {
-		// without a selection the executor requires the vectors to hold exactly 'count' rows
-		for (auto &column : input.data) {
-			if (column.GetVectorType() != VectorType::CONSTANT_VECTOR && column.size() > count) {
-				column.Slice(*FlatVector::IncrementalSelectionVector(), count);
-			}
-		}
-		input.SetCardinalityUnsafe(count);
-	}
-	return SelectExpression(input, true_sel, false_sel, sel, count);
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {

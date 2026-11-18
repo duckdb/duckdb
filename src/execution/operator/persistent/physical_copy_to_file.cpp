@@ -2294,7 +2294,7 @@ SortStrategyInput::SortStrategyInput(const PartitionedCopy &partitioned_copy_p,
 	}
 	auto key_type = WindowCollectionChunkScanner::PrefixStructType(key_types, key_types.size());
 	partition_distinct_from =
-	    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, key_type, key_type);
+	    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, key_type, 0, key_type, 1);
 }
 
 unique_ptr<PartitionedCopyInputGlobalState> SortStrategyInput::GetGlobalState(ClientContext &context) const {

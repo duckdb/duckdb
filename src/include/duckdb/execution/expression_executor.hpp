@@ -87,15 +87,6 @@ public:
 	                                  optional_ptr<SelectionVector> false_sel,
 	                                  optional_ptr<const SelectionVector> current_sel, idx_t current_count);
 
-	//! Execute the (single) expression on two vectors, which are the columns 0 and 1 referenced by the expression
-	DUCKDB_API void ExecuteBinaryExpression(const Vector &left, const Vector &right, Vector &result);
-	//! Select the rows (the first 'count' entries of 'sel', or all rows without 'sel') of two vectors, which are the
-	//! columns 0 and 1 referenced by the (single, boolean) expression, for which the expression is true
-	DUCKDB_API idx_t SelectBinaryExpression(const Vector &left, const Vector &right,
-	                                        optional_ptr<const SelectionVector> sel, idx_t count,
-	                                        optional_ptr<SelectionVector> true_sel,
-	                                        optional_ptr<SelectionVector> false_sel);
-
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Execute the expression with index `expr_idx` on the rows in 'sel'; the result holds those 'count' rows
@@ -122,8 +113,6 @@ public:
 
 protected:
 	void Initialize(const Expression &expr, ExpressionExecutorState &state);
-	//! References the two vectors in the input chunk of the binary expression methods
-	DataChunk &SetBinaryInput(const Vector &left, const Vector &right, idx_t min_count);
 
 	static unique_ptr<ExpressionState> InitializeState(const BoundReferenceExpression &expr,
 	                                                   ExpressionExecutorState &state);
@@ -191,9 +180,5 @@ private:
 	vector<unique_ptr<ExpressionExecutorState>> states;
 	//! The vector verification (debug setting)
 	DebugVectorVerification debug_vector_verification = DebugVectorVerification::NONE;
-
-private:
-	//! The input of the binary expression methods
-	DataChunk binary_input;
 };
 } // namespace duckdb

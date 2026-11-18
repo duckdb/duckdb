@@ -17,7 +17,7 @@ namespace duckdb {
 class PartitionKeyTracker {
 public:
 	PartitionKeyTracker(Context &context, Allocator &allocator, const vector<LogicalType> &key_types,
-	                    const vector<unique_ptr<Expression>> &distinct_from);
+	                    const Expression &key_mismatch);
 
 	void Reset(idx_t radix_bits);
 	bool CanBypass(idx_t hash_bin) const;
@@ -34,16 +34,15 @@ private:
 	template <bool FIXED, bool USE_PARTITION_SEL>
 	idx_t BuildCandidates(DataChunk &keys, Vector &input_hashes, PartitionedTupleDataAppendState &append_state,
 	                      idx_t count);
-	idx_t CompactCandidates(idx_t candidate_count);
 	void CompareCandidates(DataChunk &keys, idx_t candidate_count);
 	void CombineBin(const PartitionKeyTracker &source, idx_t bin_idx, idx_t &candidate_count);
-	idx_t CompactTrackerCandidates(idx_t candidate_count);
 	void CompareTrackerCandidates(const PartitionKeyTracker &source, idx_t candidate_count);
 
 private:
 	idx_t key_count;
-	//! DISTINCT FROM comparisons of the key columns
-	vector<unique_ptr<ExpressionExecutor>> distinct_from;
+	//! Whether the keys differ, over [keys..., representatives...]
+	ExpressionExecutor key_mismatch;
+	DataChunk compare_keys;
 	idx_t radix_bits = 0;
 	unsafe_vector<PartitionKeyTrackerState> states;
 	unsafe_vector<hash_t> hashes;

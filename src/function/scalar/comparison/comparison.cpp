@@ -182,9 +182,10 @@ ScalarFunction IsNotDistinctFromFun::GetFunction() {
 // BoundComparisonExpression
 //===--------------------------------------------------------------------===//
 unique_ptr<Expression> BoundComparisonExpression::CreateOnColumns(ExpressionType type, const LogicalType &left_type,
-                                                                  const LogicalType &right_type) {
-	return Create(type, make_uniq<BoundReferenceExpression>(left_type, 0),
-	              make_uniq<BoundReferenceExpression>(right_type, 1));
+                                                                  idx_t left_idx, const LogicalType &right_type,
+                                                                  idx_t right_idx) {
+	return Create(type, make_uniq<BoundReferenceExpression>(left_type, left_idx),
+	              make_uniq<BoundReferenceExpression>(right_type, right_idx));
 }
 
 unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, unique_ptr<Expression> left,

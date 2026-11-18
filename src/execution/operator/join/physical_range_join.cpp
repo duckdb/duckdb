@@ -11,6 +11,8 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
@@ -381,8 +383,6 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	unprojected_types = children[0].get().GetTypes();
 	auto &types = children[1].get().GetTypes();
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
-
-	CreateConditionComparisons();
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vector<JoinCondition> &conditions) {
@@ -520,18 +520,31 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	}
 }
 
-idx_t PhysicalRangeJoin::SelectJoinTail(Context &context, const Expression &comparison, const Vector &left,
-                                        const Vector &right, const SelectionVector *sel, idx_t count,
-                                        SelectionVector *true_sel) {
-	ExpressionExecutor executor(context, comparison);
-	// the vectors are dense: 'sel' maps their rows to the output rows
-	SelectionVector local_sel(count);
-	const auto true_count = executor.SelectBinaryExpression(left, right, nullptr, count, &local_sel, nullptr);
-	for (idx_t i = 0; i < true_count; i++) {
-		const auto idx = local_sel.get_index(i);
-		true_sel->set_index(i, sel ? sel->get_index(idx) : idx);
+unique_ptr<Expression> PhysicalRangeJoin::CreateTailPredicate(const vector<JoinCondition> &conditions,
+                                                              idx_t tail_begin) {
+	if (tail_begin >= conditions.size()) {
+		return nullptr;
 	}
-	return true_count;
+	const auto tail_count = conditions.size() - tail_begin;
+	vector<unique_ptr<Expression>> comparisons;
+	for (idx_t tail_idx = 0; tail_idx < tail_count; tail_idx++) {
+		auto &condition = conditions[tail_begin + tail_idx];
+		comparisons.push_back(BoundComparisonExpression::CreateOnColumns(
+		    condition.GetComparisonType(), condition.GetLHS().GetReturnType(), tail_idx,
+		    condition.GetRHS().GetReturnType(), tail_count + tail_idx));
+	}
+	return BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(comparisons));
+}
+
+vector<LogicalType> PhysicalRangeJoin::GetTailTypes(const vector<JoinCondition> &conditions, idx_t tail_begin) {
+	vector<LogicalType> result;
+	for (idx_t cond_idx = tail_begin; cond_idx < conditions.size(); cond_idx++) {
+		result.push_back(conditions[cond_idx].GetLHS().GetReturnType());
+	}
+	for (idx_t cond_idx = tail_begin; cond_idx < conditions.size(); cond_idx++) {
+		result.push_back(conditions[cond_idx].GetRHS().GetReturnType());
+	}
+	return result;
 }
 
 } // namespace duckdb

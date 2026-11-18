@@ -302,7 +302,7 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 	}
 	auto create_distinct_from = [&](idx_t end, idx_t begin) {
 		auto type = WindowCollectionChunkScanner::PrefixStructType(key_types, end, begin);
-		return BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, type, type);
+		return BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, type, 0, type, 1);
 	};
 	partition_distinct_from = create_distinct_from(order_begin, 0);
 	for (auto &expr : select_list) {
@@ -712,8 +712,8 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   } else {
 				                   prefix.SetChildCardinality(nmatch);
 			                   }
-			                   const auto m = distinct_from[order_mask.first]->SelectBinaryExpression(
-			                       order_curr, order_prev, nullptr, nmatch, &distinct, nullptr);
+			                   const auto m = distinct_from[order_mask.first]->SelectExpression(
+			                       prefix, &distinct, nullptr, nullptr, nmatch);
 			                   for (idx_t i = 0; i < m; ++i) {
 				                   const idx_t curr_index = row_idx + matching.get_index(distinct.get_index(i));
 				                   order_mask.second.SetValidUnsafe(curr_index);
