@@ -2136,8 +2136,6 @@ public:
 	FinalizeDropExtensionRepositoryStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeExtensionRepositoryNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue>
-	FinalizeExtensionRepositoryHostNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMergeIntoStatementTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMergeIntoUsingClauseTrampoline(PEGTransformer &transformer,
@@ -3891,8 +3889,6 @@ public:
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,
 	                                                                     const optional<bool> &if_exists,
 	                                                                     const Identifier &col_id_or_string);
-	static Identifier TransformExtensionRepositoryHostName(PEGTransformer &transformer, const Identifier &col_id,
-	                                                       const vector<string> &dot_col_label);
 	static unique_ptr<SQLStatement>
 	TransformMergeIntoStatement(PEGTransformer &transformer, optional<CommonTableExpressionMap> with_clause,
 	                            unique_ptr<BaseTableRef> target_opt_alias, unique_ptr<TableRef> merge_into_using_clause,

@@ -843,7 +843,7 @@ enum class PEGRuleId : uint32_t {
 	CreateExtensionRepositoryFromHostStmt,
 	DropExtensionRepositoryStmt,
 	ExtensionRepositoryName,
-	ExtensionRepositoryHostName,
+	DottedName,
 	MergeIntoStatement,
 	MergeIntoUsingClause,
 	MergeMatch,

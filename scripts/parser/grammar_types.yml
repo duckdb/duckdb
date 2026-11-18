@@ -1773,7 +1773,6 @@ IdentifierType:
     - ColId
     - ColIdOrString
     - ExtensionRepositoryName
-    - ExtensionRepositoryHostName
     - FromSourceName
     - ShowExternalResourcesType
     - UsingColumnName
@@ -1884,6 +1883,8 @@ matcher_rule_overrides:
   NumberLiteral:
     allow_type_overlap: true
     matcher: number_literal
+  DottedName:
+    matcher: dotted_name
   StringLiteral:
     allow_type_overlap: true
     matcher: string_literal
