@@ -1,0 +1,212 @@
+# name: test/sql/join/external/external_join_multi_key_runtime_filter.test
+# description: An external join with several equality keys pushes a bloom filter per key column
+# group: [external]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,compressed_materialization';
+
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+# the build side holds 2% of the tickets, spread over their whole range
+statement ok
+CREATE TABLE probe AS
+SELECT i AS v,
+       (i % 3000)::INTEGER AS item,
+       ((i // 12) * 1000003)::BIGINT AS ticket,
+       CASE WHEN i % 13 = 0 THEN NULL ELSE (i % 3000)::INTEGER END AS null_item,
+       CASE WHEN i % 17 = 0 THEN NULL ELSE ((i // 12) * 1000003)::BIGINT END AS null_ticket
+FROM range(2400000) t(i);
+
+# The pad makes the build side exceed the partition buffers even with four threads, so that the join spills.
+statement ok
+CREATE TABLE build AS
+SELECT item, ticket, null_item, null_ticket, repeat('x', 4000) || v AS pad
+FROM probe
+WHERE (ticket // 1000003) % 50 = 0;
+
+# a build side above the 5% of the probe side up to which a join on several keys builds filters
+statement ok
+CREATE TABLE large_build AS
+SELECT item, ticket, repeat('x', 800) || v AS pad
+FROM probe
+WHERE (ticket // 1000003) % 10 = 0;
+
+# reference results without any join filters
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,compressed_materialization,join_filter_pushdown';
+
+statement ok
+CREATE TABLE e_inner AS
+SELECT p.v, hash(b.pad) AS h FROM probe p JOIN build b ON p.item = b.item AND p.ticket = b.ticket;
+
+statement ok
+CREATE TABLE e_nulls AS
+SELECT p.v, hash(b.pad) AS h FROM probe p JOIN build b ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket;
+
+statement ok
+CREATE TABLE e_ndf AS
+SELECT p.v, hash(b.pad) AS h FROM probe p JOIN build b
+ON p.null_item IS NOT DISTINCT FROM b.null_item AND p.null_ticket IS NOT DISTINCT FROM b.null_ticket;
+
+statement ok
+CREATE TABLE e_right AS
+SELECT p.v, hash(b.pad) AS h FROM probe p RIGHT JOIN build b
+ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket;
+
+statement ok
+CREATE TABLE e_inequality AS
+SELECT p.v, hash(b.pad) AS h FROM probe p JOIN build b
+ON p.item = b.item AND p.ticket = b.ticket AND p.v % 7 >= length(b.pad) % 7;
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side,compressed_materialization';
+
+statement ok
+SET debug_force_external=true;
+
+foreach threads 1 4
+
+statement ok
+SET threads={threads};
+
+# Keep the queries and their in-memory log in one transaction.
+statement ok
+BEGIN;
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# each key column gets a bloom filter next to its min/max range
+query II
+EXPLAIN ANALYZE
+SELECT count(*), max(b.pad) FROM probe p JOIN build b ON p.item = b.item AND p.ticket = b.ticket;
+----
+analyzed_plan	<REGEX>:(?s).*item >= 0.*item <= 2411.*item IN BF\(item\).*ticket >= 0.*ticket <= 199950599850.*ticket IN BF\(ticket\).*
+
+# NULL keys on both sides
+query II
+EXPLAIN ANALYZE
+SELECT count(*), max(b.pad) FROM probe p JOIN build b ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket;
+----
+analyzed_plan	<REGEX>:(?s).*null_item IN BF\(null_item\).*null_ticket IN BF\(null_ticket\).*
+
+# NULL-safe keys keep the probe rows with a NULL key
+query II
+EXPLAIN ANALYZE
+SELECT count(*), max(b.pad) FROM probe p JOIN build b
+ON p.null_item IS NOT DISTINCT FROM b.null_item AND p.null_ticket IS NOT DISTINCT FROM b.null_ticket;
+----
+analyzed_plan	<REGEX>:(?s).*null_item IS NULL.*null_item IN BF\(null_item\).*null_ticket IS NULL.*null_ticket IN BF\(null_ticket\).*
+
+# a build side above 5% of the probe side keeps only the min/max ranges, as it does in memory
+query II
+EXPLAIN ANALYZE
+SELECT count(*), max(b.pad) FROM probe p JOIN large_build b ON p.item = b.item AND p.ticket = b.ticket;
+----
+analyzed_plan	<!REGEX>:.*IN BF.*
+
+statement ok
+CALL disable_logging();
+
+# all four joins spilled
+query I
+SELECT count(*) FILTER (info.external::BOOLEAN)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalHashJoin' AND event='Finalize';
+----
+4
+
+statement ok
+COMMIT;
+
+query I
+SELECT count(*) FROM (
+    (SELECT p.v, hash(b.pad) FROM probe p JOIN build b ON p.item = b.item AND p.ticket = b.ticket
+     EXCEPT ALL TABLE e_inner)
+    UNION ALL
+    (TABLE e_inner EXCEPT ALL
+     SELECT p.v, hash(b.pad) FROM probe p JOIN build b ON p.item = b.item AND p.ticket = b.ticket)
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    (SELECT p.v, hash(b.pad) FROM probe p JOIN build b ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket
+     EXCEPT ALL TABLE e_nulls)
+    UNION ALL
+    (TABLE e_nulls EXCEPT ALL
+     SELECT p.v, hash(b.pad) FROM probe p JOIN build b ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket)
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+    (SELECT p.v, hash(b.pad) FROM probe p JOIN build b
+     ON p.null_item IS NOT DISTINCT FROM b.null_item AND p.null_ticket IS NOT DISTINCT FROM b.null_ticket
+     EXCEPT ALL TABLE e_ndf)
+    UNION ALL
+    (TABLE e_ndf EXCEPT ALL
+     SELECT p.v, hash(b.pad) FROM probe p JOIN build b
+     ON p.null_item IS NOT DISTINCT FROM b.null_item AND p.null_ticket IS NOT DISTINCT FROM b.null_ticket)
+);
+----
+0
+
+# RIGHT join: the build rows without a match are still returned
+query I
+SELECT count(*) FROM (
+    (SELECT p.v, hash(b.pad) FROM probe p RIGHT JOIN build b
+     ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket
+     EXCEPT ALL TABLE e_right)
+    UNION ALL
+    (TABLE e_right EXCEPT ALL
+     SELECT p.v, hash(b.pad) FROM probe p RIGHT JOIN build b
+     ON p.null_item = b.null_item AND p.null_ticket = b.null_ticket)
+);
+----
+0
+
+# two equality keys next to an inequality condition
+query I
+SELECT count(*) FROM (
+    (SELECT p.v, hash(b.pad) FROM probe p JOIN build b
+     ON p.item = b.item AND p.ticket = b.ticket AND p.v % 7 >= length(b.pad) % 7
+     EXCEPT ALL TABLE e_inequality)
+    UNION ALL
+    (TABLE e_inequality EXCEPT ALL
+     SELECT p.v, hash(b.pad) FROM probe p JOIN build b
+     ON p.item = b.item AND p.ticket = b.ticket AND p.v % 7 >= length(b.pad) % 7)
+);
+----
+0
+
+# SEMI join
+query I
+SELECT count(*) FROM probe p SEMI JOIN build b ON p.item = b.item AND p.ticket = b.ticket;
+----
+48000
+
+query I
+SELECT count(*) FROM probe p JOIN large_build b ON p.item = b.item AND p.ticket = b.ticket;
+----
+240000
+
+endloop
+
+# a single-key external join is unaffected
+query II
+EXPLAIN ANALYZE SELECT count(*), max(b.pad) FROM probe p JOIN build b ON p.ticket = b.ticket;
+----
+analyzed_plan	<REGEX>:.*ticket IN BF\(ticket\).*
+
+statement ok
+SET debug_force_external=false;
