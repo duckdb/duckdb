@@ -212,6 +212,17 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 		LogicalOperator &parent_op = parents[parent_idx].get();
 		can_pull_through = true;
 
+		if (parent_op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			// Keep computations below a cross product to avoid multiplying their evaluation.
+			for (auto &entry : projection_map) {
+				auto type = entry.second->GetExpressionType();
+				if (type != ExpressionType::BOUND_COLUMN_REF && type != ExpressionType::VALUE_CONSTANT) {
+					can_pull_through = false;
+					return;
+				}
+			}
+		}
+
 		LogicalOperatorVisitor::EnumerateExpressions(parent_op, [&](unique_ptr<Expression> *expr) {
 			if (keep_throwing_filters_above && IsThrowingProjectionFilter(**expr, projection_map)) {
 				can_pull_through = false;
@@ -268,6 +279,12 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		for (auto &child : op->children) {
 			InsertProjectionBelowOp(op, child, false);
 		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		parents.push_back(*op);
+		VisitOperatorChildren(*op);
+		PopParents(*op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:

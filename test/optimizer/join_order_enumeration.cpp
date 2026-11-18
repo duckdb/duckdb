@@ -17,18 +17,24 @@ using namespace duckdb;
 
 TEST_CASE("Constant membership filters stay outside the join search", "[optimizer][join_order]") {
 	const auto predicate = GENERATE(string("IN"), string("NOT IN"));
+	const auto comma_joins = GENERATE(false, true);
 	DuckDB db;
 	Connection connection(db);
-	for (auto sql : {"CREATE TABLE a(k INTEGER, v VARCHAR NOT NULL)",
-	                 "INSERT INTO a SELECT i%10, (i%100)::VARCHAR FROM range(1000)t(i)",
-	                 "CREATE TABLE c AS SELECT i%10 k FROM range(50)t(i)"}) {
+	for (auto sql :
+	     {"CREATE TABLE a(k INTEGER, v VARCHAR NOT NULL)",
+	      "INSERT INTO a SELECT i%10, (i%100)::VARCHAR FROM range(1000)t(i)",
+	      "CREATE TABLE c AS SELECT i%10 k FROM range(50)t(i)", "CREATE TABLE d AS SELECT i l FROM range(2)t(i)",
+	      "CREATE TABLE e AS SELECT i k, l FROM range(10)t(i), d"}) {
 		REQUIRE_NO_FAIL(connection.Query(sql));
 	}
 	// A CTE reference keeps NOT IN above the scan so it can become an ANTI join.
 	const string prefix = predicate == "IN" ? "" : "WITH input AS MATERIALIZED (SELECT * FROM a) ";
 	const string input = predicate == "IN" ? "a" : "input a";
-	const auto query = prefix + "SELECT count(*) FROM " + input + " JOIN c ON a.k=c.k WHERE a.v " + predicate +
-	                   " ('0','1','2','3','4','5','6','7','0')";
+	// Comma joins leave a cross product below the join to e until join ordering.
+	const string from = comma_joins ? input + ", c, d, e WHERE a.k=c.k AND a.k=e.k AND d.l=e.l AND "
+	                                : input + " JOIN c ON a.k=c.k JOIN e ON a.k=e.k JOIN d ON d.l=e.l WHERE ";
+	const auto query =
+	    prefix + "SELECT count(*) FROM " + from + "a.v " + predicate + " ('0','1','2','3','4','5','6','7','0')";
 	connection.BeginTransaction();
 	Parser parser(*connection.context);
 	parser.ParseQuery(query);
@@ -56,19 +62,29 @@ TEST_CASE("Constant membership filters stay outside the join search", "[optimize
 	while (root->children.size() == 1) {
 		root = root->children[0].get();
 	}
-	optional_ptr<LogicalOperator> membership = root->children[0].get();
-	while (membership->children.size() == 1) {
-		membership = membership->children[0].get();
+	optional_ptr<LogicalComparisonJoin> membership;
+	vector<reference<LogicalOperator>> pending {*root};
+	while (!pending.empty()) {
+		auto &current = pending.back().get();
+		pending.pop_back();
+		if (current.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = current.Cast<LogicalComparisonJoin>();
+			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+				membership = join;
+			}
+		}
+		for (auto &child : current.children) {
+			pending.push_back(*child);
+		}
 	}
-	REQUIRE(membership->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-	REQUIRE(membership->Cast<LogicalComparisonJoin>().join_type ==
-	        (predicate == "IN" ? JoinType::SEMI : JoinType::ANTI));
+	REQUIRE(membership);
+	REQUIRE(membership->join_type == (predicate == "IN" ? JoinType::SEMI : JoinType::ANTI));
 	QueryGraphManager graph(*connection.context);
 	REQUIRE(graph.Build(join_optimizer, *root));
-	REQUIRE(graph.relation_manager.NumRelations() == 2);
+	REQUIRE(graph.relation_manager.NumRelations() == 4);
 	auto result = connection.Query(query);
 	REQUIRE_NO_FAIL(*result);
-	CHECK_COLUMN(result, 0, {predicate == "IN" ? 400 : 4600});
+	CHECK_COLUMN(result, 0, {predicate == "IN" ? 800 : 9200});
 	connection.Rollback();
 }
 
