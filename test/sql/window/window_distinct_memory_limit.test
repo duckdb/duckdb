@@ -8,7 +8,7 @@ statement ok
 SET threads={threads}
 
 statement ok
-PRAGMA memory_limit='64MB'
+SET memory_limit='64MB'
 
 # the DISTINCT aggregate builds two merge sort trees and one aggregate state per tree node,
 # which does not fit in the limit
@@ -24,3 +24,21 @@ SELECT sum(c) FROM (SELECT count(DISTINCT i % 1000) OVER (ORDER BY i ROWS BETWEE
 3024950
 
 endloop
+
+statement ok
+SET threads=1
+
+query I
+SELECT count(x) FROM (SELECT approx_quantile(i, 0.5) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(50000) r(i))
+----
+50000
+
+query I
+SELECT count(x) FROM (SELECT approx_quantile(i, 0.5 ORDER BY i DESC) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(30000) r(i))
+----
+30000
+
+query I
+SELECT count(x) FROM (SELECT histogram(DISTINCT i % 7) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) x FROM range(30000) r(i))
+----
+30000

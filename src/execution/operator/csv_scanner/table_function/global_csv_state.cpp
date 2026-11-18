@@ -14,14 +14,14 @@
 namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data_p,
-                               const vector<Identifier> &column_names_p, idx_t total_file_count_p,
+                               const vector<Identifier> &column_names_p, idx_t file_count,
                                optional_ptr<const PhysicalOperator> scan_op_p)
-    : context(context_p), csv_data(csv_data_p), scan_op(scan_op_p), total_file_count(total_file_count_p),
-      column_names(column_names_p), sniffer_mismatch_error(csv_data_p.options.sniffer_user_mismatch_error) {
+    : context(context_p), csv_data(csv_data_p), scan_op(scan_op_p), column_names(column_names_p),
+      sniffer_mismatch_error(csv_data_p.options.sniffer_user_mismatch_error) {
 	auto &options = csv_data.options;
 	// There are situations where we only support single threaded scanning
 	auto system_threads = context.db->NumberOfThreads();
-	bool many_csv_files = total_file_count > 1 && total_file_count > system_threads * 2;
+	bool many_csv_files = file_count > 1 && file_count > system_threads * 2;
 	single_threaded = many_csv_files || !options.parallel;
 	scanner_idx = 0;
 	initialized = false;
@@ -237,11 +237,7 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	InternalAppender scans_appender(context, scans_table);
 	idx_t scan_idx = context.transaction.GetActiveQuery();
 
-	// the files of a scan report under a block of indexes, so that the index of a file within its scan identifies
-	// it - that keeps the indexes deterministic when files are read in parallel, and keeps the files of one scan
-	// apart from those of another scan in the same query
-	const idx_t rejects_file_idx =
-	    rejects->GetFileIndexBase(scan_idx, scan_op.get(), total_file_count) + scan.GetFileIndex();
+	const idx_t rejects_file_idx = rejects->GetFileIndex(scan_idx, scan_op, scan.GetFileIndex());
 	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, column_names,
 	                                     limit);
 	if (rejects->count != 0) {

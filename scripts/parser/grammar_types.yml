@@ -80,6 +80,7 @@ SQLStatement:
     - DetachStatement
     - DisconnectStatement
     - DropStatement
+    - DropMemberStatement
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
@@ -120,6 +121,7 @@ SQLStatement:
     - DestroyExternalResourceStmt
     - ExtensionRepositoryStatement
     - CreateExtensionRepositoryStmt
+    - CreateExtensionRepositoryFromHostStmt
     - DropExtensionRepositoryStmt
 
 SelectStatement:
@@ -154,6 +156,7 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
+    - ShowExternalResourceTypes
     - ShowExternalResources
     - ShowDeprecatedSelect
     - DescribeSelect
@@ -222,6 +225,9 @@ AlterInfo:
     - AlterSequenceOptions
     - RenameAlterSequenceOptions
     - SetSequenceOption
+    - DropMember
+    - DropTableFunctionMember
+    - DropFunctionMember
 
 AlterTableInfo:
   type: "unique_ptr<AlterTableInfo>"
@@ -618,6 +624,8 @@ TableRef:
     - SubqueryReference
     - BaseTableRef
     - ParensTableRef
+    - JoinedTableRef
+    - JoinedTableRefChain
     - ValuesRef
     - MergeIntoUsingClause
     - UpdateTarget
@@ -1078,6 +1086,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1272,12 +1283,15 @@ LogicalType:
   rules:
     - Type
     - ReturnsType
+    - DropSignatureType
+    - DropSignatureAnyType
 
 LogicalTypeList:
   type: "vector<LogicalType>"
   by_value: false
   rules:
     - TypeList
+    - DropFunctionSignature
 
 TransactionModifierType:
   type: "TransactionModifierType"
@@ -1812,7 +1826,10 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
-    - ShowExternalResourcesType
+    - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
+    - FromSourceName
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
@@ -1921,6 +1938,8 @@ matcher_rule_overrides:
   NumberLiteral:
     allow_type_overlap: true
     matcher: number_literal
+  DottedName:
+    matcher: dotted_name
   StringLiteral:
     allow_type_overlap: true
     matcher: string_literal
@@ -1994,6 +2013,7 @@ collapsible_rules:
 packrat_memoized_rules:
   - Expression
   - TableRef
+  - ParensTableRef
   - Identifier
   - ColId
   - CatalogQualification

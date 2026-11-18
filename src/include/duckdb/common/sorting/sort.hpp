@@ -85,6 +85,8 @@ public:
 	                             const ProgressData source_progress) const;
 	//! The number of tuples that have been sorted so far
 	idx_t GetSortedCount(GlobalSinkState &gstate) const;
+	//! The memory that sorting the tuples sunk into a local state requires
+	idx_t GetLocalSizeInBytes(LocalSinkState &lstate) const;
 	//! Sink progress of a sort: half of the effort is sinking, half is sorting the sunk tuples
 	static ProgressData GetSinkProgress(const ProgressData &source_progress, idx_t sorted_count, idx_t sunk_count,
 	                                    MonotonicProgress &monotonic_progress);

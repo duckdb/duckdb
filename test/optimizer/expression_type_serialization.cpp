@@ -109,7 +109,8 @@ TEST_CASE("Deserialized bind-expression replacements retain result annotations",
 	ScalarFunction function("copy_string", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ScalarFunction::NopFunction);
 	function.SetBindCallback(
 	    [](BindScalarFunctionInput &) -> unique_ptr<FunctionData> { return make_uniq<ReplacementBindData>(false); });
-	function.SetSerializeCallback([](Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {});
+	function.SetSerializeCallback(
+	    [](Serializer &, const optional_ptr<const FunctionData>, const BoundScalarFunction &) {});
 	function.SetDeserializeCallback([](Deserializer &, BoundScalarFunction &) -> unique_ptr<FunctionData> {
 		return make_uniq<ReplacementBindData>(true);
 	});
@@ -194,12 +195,14 @@ TEST_CASE("Constant mutations synchronize result types", "[expression_types]") {
 	base.SetReturnType(type);
 	REQUIRE(expression.GetReturnType().EqualsIncludingCollation(type));
 	REQUIRE(expression.GetValue().type().EqualsIncludingCollation(type));
-	expression.SetValue(Value::BIGINT(42));
-	REQUIRE(expression.GetReturnType() == LogicalType::BIGINT);
-	REQUIRE(expression.GetValue() == Value::BIGINT(42));
-	auto value = expression.TakeValue();
-	REQUIRE(value == Value::BIGINT(42));
-	expression.SetValue(Value(type));
-	REQUIRE(expression.GetValue().IsNull());
-	REQUIRE(expression.GetReturnType().EqualsIncludingCollation(type));
+	auto bigint_expr = expression.WithValue(Value::BIGINT(42));
+	auto &bigint_constant = bigint_expr->Cast<BoundConstantExpression>();
+	REQUIRE(bigint_constant.GetReturnType() == LogicalType::BIGINT);
+	REQUIRE(bigint_constant.GetValue() == Value::BIGINT(42));
+	auto null_expr = bigint_constant.WithValue(Value(type));
+	auto &null_constant = null_expr->Cast<BoundConstantExpression>();
+	REQUIRE(null_constant.GetValue().IsNull());
+	REQUIRE(null_constant.GetReturnType().EqualsIncludingCollation(type));
+	// the original constant is unchanged
+	REQUIRE(expression.GetValue() == Value("A"));
 }

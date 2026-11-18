@@ -1,4 +1,3 @@
-#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -21,8 +20,8 @@
 
 namespace duckdb {
 static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset) {
-	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.IndexMutable() += offset; });
+	root_expr = ExpressionIterator::PreorderReplace<BoundReferenceExpression>(
+	    std::move(root_expr), [&](const BoundReferenceExpression &ref) { return ref.WithIndex(ref.Index() + offset); });
 }
 
 static optional_ptr<PhysicalRecursiveCTEStateScan>
@@ -265,13 +264,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	if (can_iejoin) {
-		return Make<PhysicalIEJoin>(op, left, right, std::move(op.conditions), op.join_type, op.estimated_cardinality,
-		                            std::move(op.filter_pushdown));
+		return Make<PhysicalIEJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
+		                            op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 	if (can_merge) {
 		// range join: use piecewise merge join, which emits full child layouts
 		auto pruned = ExtractPrunedJoinProjection(op, left, right, true, true);
-		auto &join = Make<PhysicalPiecewiseMergeJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalPiecewiseMergeJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
 		                                              op.estimated_cardinality, std::move(op.filter_pushdown));
 		return RestorePrunedJoinProjection(op, join, std::move(pruned));
 	}
@@ -279,7 +278,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		// inequality join: use nested loop, which only applies the left map of a MARK join
 		auto pruned = ExtractPrunedJoinProjection(op, left, right, op.join_type != JoinType::MARK, true);
 		D_ASSERT(op.left_projection_map.empty() || op.join_type == JoinType::MARK);
-		auto &join = Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalNestedLoopJoin>(context, op, left, right, std::move(op.conditions), op.join_type,
 		                                          op.estimated_cardinality, std::move(op.filter_pushdown));
 		return RestorePrunedJoinProjection(op, join, std::move(pruned));
 	}

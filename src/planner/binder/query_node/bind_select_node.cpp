@@ -207,7 +207,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					}
 				}
 			}
-			if (config.options.debug_order_verification == DebugOrderVerification::CREATE_SORT_KEY) {
+			if (Settings::Get<DebugOrderVerificationSetting>(context) == DebugOrderVerification::CREATE_SORT_KEY) {
 				// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
 				// note that we don't enable this during actual verification since it doesn't always work
 				// e.g. it breaks EXPLAIN output on queries
@@ -339,7 +339,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
+	expr = bound_colref.WithReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
@@ -394,18 +394,19 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 				auto null_order = order.orders[0].null_order;
 				order.orders.clear();
 				for (idx_t i = 0; i < sql_types.size(); i++) {
-					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i],
-					                                                ColumnBinding(table_index, ProjectionIndex(i)));
+					Identifier alias;
 					if (i < names.size()) {
-						expr->SetAlias(names[i]);
+						alias = names[i];
 					}
+					auto expr = make_uniq<BoundColumnRefExpression>(std::move(alias), sql_types[i],
+					                                                ColumnBinding(table_index, ProjectionIndex(i)));
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
 			}
-			auto &config = DBConfig::GetConfig(context);
+			auto order_verification = Settings::Get<DebugOrderVerificationSetting>(context);
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
-				if (config.options.debug_order_verification == DebugOrderVerification::VARIANT &&
+				if (order_verification == DebugOrderVerification::VARIANT &&
 				    expr->GetReturnType().id() != LogicalTypeId::VARIANT) {
 					// when this verification is enabled, cast every ORDER BY expression to VARIANT (the
 					// PushCollation below then routes ordering through the VARIANT comparator) to verify it

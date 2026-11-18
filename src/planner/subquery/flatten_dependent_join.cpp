@@ -377,9 +377,6 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 				output.right_payload.erase(right_entry);
 			}
 		}
-		auto left_child_requires_domain = RequiresDomain(*plan->children[0]);
-		auto requires_full_rhs_decorrelation = left_child_requires_domain || op.join_type != JoinType::SINGLE;
-
 		// Phase 1: prepare the left side in the current flattener context.
 		auto outer_state = PrepareDependentJoinLeft(plan, propagate_null_values, std::move(state));
 		// Phase 2: push the active correlated state through the right subtree in a child flattener.
@@ -399,13 +396,6 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 				                                   definition_state.replacement_graph);
 				// the domain probe above cached access entries for definition operators this replaced
 				child_flatten.InvalidateAccessCache();
-				if (requires_full_rhs_decorrelation) {
-					auto result = DecorrelateSubtree(plan, propagate_null_values, std::move(outer_state.bindings));
-					result.replacement_graph.Merge(outer_state.replacement_graph);
-					detached_cte->children[1] = std::move(plan);
-					plan = std::move(detached_cte);
-					return result;
-				}
 			}
 		}
 
@@ -447,7 +437,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
                                                        TableIndex table_index,
                                                        vector<unique_ptr<Expression>> partitions = {},
                                                        vector<BoundOrderByNode> orders = {}) {
-	auto window = make_uniq<LogicalWindow>(table_index);
+	auto window = make_uniq<LogicalWindow>(table_index, optional_idx());
 
 	auto row_number = GetBuiltinWindowFunction(binder.context, RowNumberFun::Name, {})->Bind(binder.context);
 	row_number->PartitionsMutable() = std::move(partitions);
@@ -578,8 +568,21 @@ vector<optional_idx> FlattenDependentJoins::GetCTERefCorrelatedPositions(const L
 void FlattenDependentJoins::AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
                                                     const vector<optional_idx> &positions,
                                                     const vector<ColumnBinding> &state) const {
+	optional_idx identity;
+	auto cte_entry = binder.recursive_ctes.find(cteref.cte_index);
+	if (cte_entry != binder.recursive_ctes.end()) {
+		auto &columns = cte_entry->second->Cast<LogicalCTE>().correlated_columns;
+		auto delim_index = columns.GetDelimIndex();
+		if (delim_index < columns.size()) {
+			auto index = GetCorrelatedIndex(columns[delim_index].binding);
+			if (index.IsValid() && positions[index.GetIndex()].IsValid()) {
+				identity = index;
+			}
+		}
+	}
 	for (idx_t i = 0; i < positions.size(); i++) {
-		if (!positions[i].IsValid()) {
+		// The CTE's row identity determines all its correlation payloads.
+		if (!positions[i].IsValid() || (identity.IsValid() && i != identity.GetIndex())) {
 			continue;
 		}
 		JoinCondition cond(make_uniq<BoundColumnRefExpression>(
@@ -1190,11 +1193,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownFullOuterJo
 		expressions.push_back(make_uniq<BoundColumnRefExpression>(join_types[position], binding));
 	}
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto coalesce =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, correlated_columns[i].type);
-		coalesce->GetChildrenMutable().push_back(
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state.bindings[i]));
-		coalesce->GetChildrenMutable().push_back(
+		auto coalesce = make_uniq<BoundOperatorExpression>(
+		    ExpressionType::OPERATOR_COALESCE, correlated_columns[i].type,
+		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state.bindings[i]),
 		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_state.bindings[i]));
 		expressions.push_back(std::move(coalesce));
 	}
@@ -1478,7 +1479,16 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 	}
 #endif
 	result.bindings = CreateContiguousState(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)));
+	if (setop.comparison_types.size() == setop.column_count) {
+		for (auto &correlated_column : correlated_columns) {
+			setop.comparison_types.push_back(correlated_column.type);
+		}
+	}
 	setop.column_count += correlated_columns.size();
+	if (setop.type != LogicalOperatorType::LOGICAL_UNION) {
+		// EXCEPT / INTERSECT now run per value of the correlated columns, which they compare as they are
+		setop.correlated_column_count += correlated_columns.size();
+	}
 	return result;
 }
 

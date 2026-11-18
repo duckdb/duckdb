@@ -143,7 +143,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		error = ErrorData(ex);
 		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db_inst, error.RawMessage());
+			ValidChecker::Invalidate(db_inst, error);
 		}
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
@@ -269,15 +269,15 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	auto &executor = *active_query->executor;
 
 	auto &config = ClientConfig::GetConfig(*this);
-	if (config.enable_progress_bar) {
+	if (Settings::Get<EnableProgressBarSetting>(*this)) {
 		progress_bar_display_create_func_t display_create_func = nullptr;
-		if (config.print_progress_bar) {
+		if (Settings::Get<EnableProgressBarPrintSetting>(*this)) {
 			// Use either a custom display function, or the default.
 			display_create_func =
 			    config.display_create_func ? config.display_create_func : ProgressBar::DefaultProgressBarDisplay;
 		}
-		active_query->progress_bar =
-		    make_uniq<ProgressBar>(executor, NumericCast<idx_t>(config.wait_time), display_create_func);
+		active_query->progress_bar = make_uniq<ProgressBar>(
+		    executor, NumericCast<idx_t>(Settings::Get<ProgressBarTimeSetting>(*this)), display_create_func);
 		active_query->progress_bar->Start();
 		query_progress.Restart();
 	}
@@ -482,9 +482,9 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 	} else if (!ErrorInvalidatesQueryTransaction(error.Type())) {
 		invalidate_transaction = false;
 	} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-		// fatal exceptions invalidate the entire database
+		// fatal exceptions invalidate the database instance, unless scoped to an attached database
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db_instance, error.RawMessage());
+		ValidChecker::Invalidate(db_instance, error);
 	}
 	ProcessError(error, active_query->query);
 	result.SetError(std::move(error));
@@ -611,7 +611,7 @@ ErrorData ClientContext::EndStatementInternal(ClientContextLock &lock, optional_
 			ErrorData state_error(ex);
 			if (Exception::InvalidatesDatabase(state_error.Type()) || state_error.Type() == ExceptionType::INTERNAL) {
 				// a fatal failure invalidates the database also when another failure is the one reported
-				ValidChecker::Invalidate(DatabaseInstance::GetDatabase(*this), state_error.RawMessage());
+				ValidChecker::Invalidate(DatabaseInstance::GetDatabase(*this), state_error);
 			}
 			if (!end_error.HasError()) {
 				end_error = std::move(state_error);

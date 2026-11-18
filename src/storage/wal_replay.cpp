@@ -489,7 +489,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+	MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
@@ -527,7 +527,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			con.Rollback();
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
@@ -680,7 +680,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+				MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -690,7 +690,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		// serialization failure means a truncated WAL
 		// these failures are ignored unless abort_on_wal_failure is true
 		// other failures always result in an error
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} catch (...) {
@@ -989,6 +989,15 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 				throw DataCorruptionException("Corrupt WAL file: add constraint entry is missing its constraint");
 			}
 		}
+		// the table is altered without binding the entry, so the type of a new column or field is not checked later
+		if (table_info.alter_table_type == AlterTableType::ADD_COLUMN &&
+		    !table_info.Cast<AddColumnInfo>().new_column.Type().HasPhysicalType()) {
+			throw DataCorruptionException("Corrupt WAL file: add column entry with a type that no column can have");
+		}
+		if (table_info.alter_table_type == AlterTableType::ADD_FIELD &&
+		    !table_info.Cast<AddFieldInfo>().new_field.Type().HasPhysicalType()) {
+			throw DataCorruptionException("Corrupt WAL file: add field entry with a type that no column can have");
+		}
 	}
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddUniqueConstraint()) {
@@ -1171,8 +1180,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger %s",
-		                        info.GetQualifiedName().Name());
+		throw DataCorruptionException("Corrupt WAL file: drop trigger entry is missing its base table");
 	}
 	// the trigger lives in the same (possibly nested) schema as its base table
 	auto &table =

@@ -30,8 +30,8 @@ tpcds_append_information::tpcds_append_information(duckdb::ClientContext &contex
 		if (!table_entry) {
 			throw duckdb::InvalidInputException("dsdgen is only supported for DuckDB database files");
 		}
-		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(context_p, table_entry->GetStorage());
-		auto collection = optimistic_writer->CreateCollection(table_entry->GetStorage(), types, partial_manager_type);
+		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(table_entry->GetStorage());
+		auto collection = optimistic_writer->CreateCollection(context.GetContext(), table_entry->GetStorage(), types, partial_manager_type);
 		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		// the transaction id keeps the rows invisible to other transactions until the commit
@@ -143,7 +143,7 @@ void tpcds_append_information::FlushChunk() {
 		auto &row_collection = *optimistic_collection->collection;
 		auto flushed_row_group_idx = row_collection.Append(chunk, append_state);
 		if (flushed_row_group_idx.IsValid()) {
-			optimistic_writer->WriteNewRowGroup(*optimistic_collection, flushed_row_group_idx.GetIndex());
+			optimistic_writer->WriteNewRowGroup(context.GetContext(), *optimistic_collection, flushed_row_group_idx.GetIndex());
 		}
 	}
 	chunk.Reset();
@@ -172,8 +172,8 @@ void tpcds_append_information::PrepareOptimisticWriteToDisk() {
 	auto &storage = table_entry->GetStorage();
 	auto &row_collection = *optimistic_collection->collection;
 	if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
-		optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
-		optimistic_writer->FinalFlush();
+		optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
+		optimistic_writer->FinalFlush(context.GetContext());
 	}
 }
 
@@ -206,10 +206,10 @@ void tpcds_append_information::FlushOptimistic() {
 		storage.FinalizeLocalAppend(local_append_state);
 		ResetOptimisticCollection();
 	} else {
-		optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
+		optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
 		storage.LocalMerge(context, table, *optimistic_collection);
 		auto &storage_writer = storage.GetOptimisticWriter(context);
-		storage_writer.Merge(*optimistic_writer);
+		storage_writer.Merge(context.GetContext(), *optimistic_writer);
 		ResetOptimisticCollection();
 	}
 	optimistic_writer.reset();

@@ -44,21 +44,9 @@ struct ClientConfig {
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
 	string profiler_print_format = "query_tree";
-	//! The file to save query profiling information to, instead of printing it to the console
-	//! (empty = print to console)
-	string profiler_save_location;
-	//! Settings that are passed to the renderer of the profiler output (e.g. 'maximum_render_width' for the text
-	//! renderer). Settings that are not recognized by the active renderer are ignored.
-	unordered_map<string, Value> profiling_renderer_settings;
 
 	//! system-wide progress bar disable.
 	const char *system_progress_bar_disable_reason = nullptr;
-	//! If the progress bar is enabled or not.
-	bool enable_progress_bar = false;
-	//! If the print of the progress bar is enabled
-	bool print_progress_bar = true;
-	//! The wait time before showing the progress bar
-	int wait_time = 2000;
 
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
@@ -69,19 +57,12 @@ struct ClientConfig {
 	//! Held by pointer so that copying a ClientConfig stays possible; a ReplacementScan owns its data uniquely.
 	vector<shared_ptr<ReplacementScan>> replacement_scans;
 
-	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 10mb.
-	idx_t max_streaming_buffer_size = idx_t(10) * 1024 * 1024;
-
 	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
 	//! memory limit.
 	optional_idx operator_memory_limit;
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
-
-	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
-	//! types.
-	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Generic options
 	LocalUserSettings user_settings;
@@ -114,9 +95,6 @@ public:
 	bool GetUserVariable(const Identifier &name, Value &result);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
-
-public:
-	void SetDefaultStreamingBufferSize();
 };
 
 struct ScopedConfigSetting {

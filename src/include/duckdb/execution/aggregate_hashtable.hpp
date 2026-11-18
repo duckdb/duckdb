@@ -163,6 +163,8 @@ public:
 	idx_t GetRadixBits() const;
 	//! Get the total number of tuples materialized currently in this HT
 	idx_t GetMaterializedCount() const;
+	//! Materialized row and heap bytes, including rows awaiting partitioning
+	idx_t GetMaterializedSize() const;
 	//! Read-only adaptivity observations; mutations follow the HT's lifecycle.
 	const AggregateHTAdaptivityState &GetAdaptivityState() const {
 		return adaptivity;
@@ -291,8 +293,10 @@ private:
 	                                 optional_ptr<TupleDataChunkState> source_rows = nullptr);
 	void InitializeLookupState(AggregateHTLookupState &lookup_state) const;
 
-	//! Verify the pointer table of the HT
+	//! Verify the whole pointer table of the HT: a scan of every entry, so only run where the table is rebuilt
 	void Verify();
+	//! Verify the entries of the rows of a chunk after FindOrCreateGroups
+	void VerifyEntries(const Vector &group_hashes, const Vector &addresses, idx_t count);
 };
 
 } // namespace duckdb

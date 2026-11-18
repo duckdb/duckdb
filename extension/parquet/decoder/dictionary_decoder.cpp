@@ -34,8 +34,8 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter,
                                              optional_ptr<TableFilterState> filter_state, bool has_defines) {
 	dictionary_size = new_dictionary_size;
-	filter_result.reset();
-	filter_count = 0;
+	filter_cache.reset();
+	filter_rejects_null = false;
 	can_have_nulls = has_defines;
 
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
@@ -53,31 +53,23 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 		reader.Plain(reader.block, nullptr, dictionary_size, 0, dictionary_data);
 	}
 
-	// immediately filter the dictionary, if applicable
-	if (filter && CanFilter(*filter, *filter_state)) {
-		// no filter result yet - apply filter to the dictionary
-		// initialize the filter result - setting everything to false
-		filter_result = make_unsafe_uniq_array<bool>(duckdb_dictionary_size);
-
-		// apply the filter
-		SelectionVector dict_sel;
-		filter_count = duckdb_dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, dictionary_data, *filter_state, duckdb_dictionary_size, filter_count);
-
-		// now set all matching tuples to true
-		for (idx_t i = 0; i < filter_count; i++) {
-			auto idx = dict_sel.get_index(i);
-			filter_result[idx] = true;
-		}
+	if (filter && CanFilter(*filter_state)) {
+		CreateFilterCache(*filter_state);
 	}
 }
 
 void DictionaryDecoder::InitializePage() {
 	// where is it otherwise??
 	auto &block = reader.block;
-	auto dict_width = block->read<uint8_t>();
-	dict_decoder = make_uniq<RleBpDecoder>(block->ptr, block->len, dict_width);
-	block->inc(block->len);
+	auto dict_width = block->Read<uint8_t>();
+	block_offset = block->GetOffset();
+	idx_t dict_len;
+	auto loc = block->ConsumeRemaining(dict_len);
+	dict_decoder = make_uniq<RleBpDecoder>(loc, dict_len, dict_width);
+}
+
+void DictionaryDecoder::Rebase() {
+	ColumnReader::RebaseDecoder(dict_decoder, *reader.block, block_offset);
 }
 
 void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count) {
@@ -97,10 +89,27 @@ idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_
 	if (defines) {
 		D_ASSERT(can_have_nulls);
 		valid_count = 0;
-		for (idx_t i = 0; i < read_count; i++) {
+		const auto max_define = reader.MaxDefine();
+		const uint64_t valid_defines = max_define * UINT64_C(0x0101010101010101);
+		idx_t i = 0;
+		for (; max_define <= NumericLimits<uint8_t>::Maximum() && i + 8 <= read_count; i += 8) {
+			if (Load<uint64_t>(defines + result_offset + i) == valid_defines) {
+				for (idx_t j = 0; j < 8; j++) {
+					valid_sel.set_index(valid_count + j, i + j);
+				}
+				valid_count += 8;
+			} else {
+				for (idx_t j = 0; j < 8; j++) {
+					valid_sel.set_index(valid_count, i + j);
+					dictionary_selection_vector.set_index(i + j, dictionary_size);
+					valid_count += defines[result_offset + i + j] == max_define;
+				}
+			}
+		}
+		for (; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, dictionary_size);
-			valid_count += defines[result_offset + i] == reader.MaxDefine();
+			valid_count += defines[result_offset + i] == max_define;
 		}
 	}
 	return valid_count;
@@ -125,10 +134,9 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 		}
 	} else if (valid_count > 0) {
 		// for the valid entries - decode the offsets
-		offset_buffer.reset();
-		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
-		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, NumericCast<uint32_t>(valid_count));
-		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count);
+		offset_buffer.Resize(reader.GetAllocator(), sizeof(uint32_t) * valid_count);
+		dict_decoder->GetBatch<uint32_t>(offset_buffer.GetCurrentLoc(), NumericCast<uint32_t>(valid_count));
+		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.GetCurrentLoc()), valid_sel, valid_count);
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + can_have_nulls);
@@ -152,25 +160,35 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	dict_decoder->Skip(NumericCast<uint32_t>(valid_count));
 }
 
-bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, TableFilterState &filter_state) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "DictionaryDecoder::DictionarySupportsFilter");
-	auto &state = filter_state.Cast<ExpressionFilterState>();
-	auto emits_nulls = expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()));
-	return !emits_nulls;
+bool DictionaryDecoder::CanFilter(const TableFilterState &filter_state) {
+	return dictionary_size > 0 && filter_state.can_cache;
 }
 
-bool DictionaryDecoder::CanFilter(const TableFilter &filter, TableFilterState &filter_state) {
-	if (dictionary_size == 0) {
+void DictionaryDecoder::CreateFilterCache(TableFilterState &state) {
+	filter_cache = state.CreateCache(dictionary->data, dictionary_size + can_have_nulls);
+	filter_rejects_null = false;
+	if (filter_cache->CanSkipAll()) {
+		// Skipped pages materialize NULL placeholders on the ordinary-read path.
+		Vector null_value(Value(reader.Type()), count_t(1));
+		auto null_cache = state.CreateCache(null_value, 1);
+		filter_rejects_null = null_cache->CanSkipAll();
+	}
+}
+
+void DictionaryDecoder::ResetFilter(const TableFilterState &state) {
+	if (filter_cache && !filter_cache->IsValidFor(state)) {
+		filter_cache.reset();
+		filter_rejects_null = false;
+	}
+}
+
+bool DictionaryDecoder::HasFilter(TableFilterState &state) {
+	ResetFilter(state);
+	if (!dictionary || dictionary_size == 0 || !state.can_cache) {
 		return false;
 	}
-	if (filter_state.can_throw) {
-		// the dictionary holds the values of every row in the page - evaluating a filter that can throw over it
-		// would raise errors for rows that are never returned
-		return false;
-	}
-	// We can only push the filter if the filter removes NULL values
-	if (!DictionarySupportsFilter(filter, filter_state)) {
-		return false;
+	if (!filter_cache) {
+		CreateFilterCache(state);
 	}
 	return true;
 }
@@ -180,36 +198,9 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 	if (!dictionary) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
-	D_ASSERT(filter_count > 0);
-	// read the dictionary values
-	const auto valid_count = Read(defines, read_count, result, 0);
-	if (valid_count == 0) {
-		// all values are NULL
-		approved_tuple_count = 0;
-		return;
-	}
-
-	// apply the filter by checking the dictionary offsets directly
-	SelectionVector new_sel(valid_count);
-	if (valid_count == read_count) {
-		approved_tuple_count =
-		    SelectionVector::SelectFromBoolean(filter_result.get(), &dictionary_selection_vector, read_count,
-		                                       array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
-	} else {
-		auto offsets = reinterpret_cast<uint32_t *>(offset_buffer.ptr);
-		D_ASSERT(offsets);
-		approved_tuple_count = 0;
-		for (idx_t idx = 0; idx < valid_count; idx++) {
-			auto row_idx = valid_sel.get_index(idx);
-			auto offset = offsets[idx];
-			// avoid a branch per row: always write, advance only on a match
-			new_sel.set_index(approved_tuple_count, row_idx);
-			approved_tuple_count += filter_result[offset];
-		}
-	}
-	if (approved_tuple_count < read_count) {
-		sel.Initialize(new_sel);
-	}
+	D_ASSERT(filter_cache);
+	Read(defines, read_count, result, 0);
+	filter_cache->Filter(dictionary_selection_vector, sel, approved_tuple_count);
 }
 
 } // namespace duckdb
