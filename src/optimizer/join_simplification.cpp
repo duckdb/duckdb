@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
@@ -59,18 +60,34 @@ JoinSimplification::ParentInfo JoinSimplification::PassThroughInfo(const Logical
 	return info;
 }
 
-void JoinSimplification::VisitChild(unique_ptr<LogicalOperator> &child, ParentInfo info) {
+//! Visits `op.children[child_index]` through `visit`; a projection map `op` holds for the child is remapped to the
+//! child's bindings afterwards, as LogicalOperatorVisitor does
+template <class VISIT>
+static void VisitChildWithProjectionMap(LogicalOperator &op, idx_t child_index, const VISIT &visit) {
+	auto &child = op.children[child_index];
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
+	if (!projection_map) {
+		visit(child);
+		return;
+	}
+	const auto child_bindings_before = child->GetColumnBindings();
+	visit(child);
+	LogicalOperatorVisitor::RemapProjectionMap(*projection_map, child_bindings_before, child->GetColumnBindings());
+}
+
+void JoinSimplification::VisitChild(LogicalOperator &op, idx_t child_index, ParentInfo info) {
 	auto saved = std::move(parent);
 	parent = std::move(info);
-	VisitOperator(child);
+	VisitChildWithProjectionMap(op, child_index, [&](unique_ptr<LogicalOperator> &child) { VisitOperator(child); });
 	parent = std::move(saved);
 }
 
-void JoinSimplification::VisitChildInNewContext(unique_ptr<LogicalOperator> &child,
+void JoinSimplification::VisitChildInNewContext(LogicalOperator &op, idx_t child_index,
                                                 column_binding_set_t child_required_columns, ParentInfo info) {
 	JoinSimplification child_simplification(*this, std::move(child_required_columns));
 	child_simplification.parent = std::move(info);
-	child_simplification.VisitOperator(child);
+	VisitChildWithProjectionMap(op, child_index,
+	                            [&](unique_ptr<LogicalOperator> &child) { child_simplification.VisitOperator(child); });
 }
 
 //===--------------------------------------------------------------------===//
@@ -353,18 +370,17 @@ void JoinSimplification::VisitJoinChildren(LogicalOperator &op, bool left_ignore
 	auto left_info = PassThroughInfo(op, left_ignores_duplicates && deterministic);
 	auto right_info = PassThroughInfo(op, right_ignores_duplicates && deterministic);
 	if (keep_context) {
-		VisitChild(op.children[0], std::move(left_info));
-		VisitChild(op.children[1], std::move(right_info));
+		VisitChild(op, 0, std::move(left_info));
+		VisitChild(op, 1, std::move(right_info));
 		return;
 	}
 	// the column sets do not pass through this join: each child starts with all of its columns required
 	for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
-		auto &child = op.children[child_idx];
 		column_binding_set_t child_required_columns;
-		for (const auto &binding : child->GetColumnBindings()) {
+		for (const auto &binding : op.children[child_idx]->GetColumnBindings()) {
 			child_required_columns.insert(binding);
 		}
-		VisitChildInNewContext(child, std::move(child_required_columns),
+		VisitChildInNewContext(op, child_idx, std::move(child_required_columns),
 		                       child_idx == 0 ? std::move(left_info) : std::move(right_info));
 	}
 }
@@ -467,7 +483,7 @@ void JoinSimplification::VisitProjection(LogicalProjection &projection, LogicalO
 	info.ignores_duplicates = parent.ignores_duplicates && !JoinToSemiJoin::HasVolatileExpression(op);
 	info.reads_known = true;
 	JoinToSemiJoin::AddReadTables(op, info.read_tables);
-	VisitChild(op.children[0], std::move(info));
+	VisitChild(op, 0, std::move(info));
 
 	for (const auto &entry : direct_projection_map) {
 		auto col_idx = entry.first;
@@ -490,8 +506,7 @@ void JoinSimplification::VisitFilter(LogicalFilter &filter, LogicalOperator &op)
 	for (const auto &expr : filter.expressions) {
 		HandleFilterExpression(*expr);
 	}
-	VisitChild(op.children[0],
-	           PassThroughInfo(op, parent.ignores_duplicates && !JoinToSemiJoin::HasVolatileExpression(op)));
+	VisitChild(op, 0, PassThroughInfo(op, parent.ignores_duplicates && !JoinToSemiJoin::HasVolatileExpression(op)));
 
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {
 		ColumnBinding binding;
@@ -510,14 +525,14 @@ void JoinSimplification::VisitOrder(LogicalOrder &order, LogicalOperator &op) {
 	for (const auto &order_node : order.orders) {
 		AddRequiredColumns(*order_node.expression);
 	}
-	VisitChild(op.children[0], UnknownInfo());
+	VisitChild(op, 0, UnknownInfo());
 }
 
 void JoinSimplification::VisitTopN(LogicalTopN &top_n, LogicalOperator &op) {
 	for (const auto &order_node : top_n.orders) {
 		AddRequiredColumns(*order_node.expression);
 	}
-	VisitChildInNewContext(op.children[0], required_columns, UnknownInfo());
+	VisitChildInNewContext(op, 0, required_columns, UnknownInfo());
 }
 
 void JoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op) {
@@ -533,7 +548,7 @@ void JoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOper
 	info.ignores_duplicates = aggregate.IgnoresDuplicates();
 	info.reads_known = true;
 	JoinToSemiJoin::AddReadTables(op, info.read_tables);
-	VisitChildInNewContext(op.children[0], std::move(child_required_columns), std::move(info));
+	VisitChildInNewContext(op, 0, std::move(child_required_columns), std::move(info));
 }
 
 void JoinSimplification::VisitUnsupportedOperator(LogicalOperator &op) {
@@ -541,12 +556,12 @@ void JoinSimplification::VisitUnsupportedOperator(LogicalOperator &op) {
 		join_to_semi_join->VisitMaterializedCTE(op);
 	}
 	// these read their children's columns by position, or hold references this traversal does not follow
-	for (auto &child : op.children) {
+	for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
 		column_binding_set_t child_required_columns;
-		for (const auto &binding : child->GetColumnBindings()) {
+		for (const auto &binding : op.children[child_idx]->GetColumnBindings()) {
 			child_required_columns.insert(binding);
 		}
-		VisitChildInNewContext(child, std::move(child_required_columns), UnknownInfo());
+		VisitChildInNewContext(op, child_idx, std::move(child_required_columns), UnknownInfo());
 	}
 }
 
@@ -598,7 +613,7 @@ void JoinSimplification::VisitOperator(unique_ptr<LogicalOperator> &op_ptr) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
-		VisitChildInNewContext(op.children[0], required_columns, UnknownInfo());
+		VisitChildInNewContext(op, 0, required_columns, UnknownInfo());
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {

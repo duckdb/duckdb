@@ -70,9 +70,11 @@ private:
 	JoinSimplification(JoinSimplification &parent, column_binding_set_t required_columns);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op_ptr);
-	//! Visit a child with the column sets of this context / of a new context that requires `required_columns`
-	void VisitChild(unique_ptr<LogicalOperator> &child, ParentInfo info);
-	void VisitChildInNewContext(unique_ptr<LogicalOperator> &child, column_binding_set_t required_columns,
+	//! Visit child `child_index` of `op` with the column sets of this context / of a new context that requires
+	//! `required_columns`. A projection map `op` holds for the child follows the child's bindings, which a rewrite
+	//! below may change
+	void VisitChild(LogicalOperator &op, idx_t child_index, ParentInfo info);
+	void VisitChildInNewContext(LogicalOperator &op, idx_t child_index, column_binding_set_t required_columns,
 	                            ParentInfo info);
 	//! The ParentInfo of the children of `op`, which passes its rows on (a filter, a join): it reads what the
 	//! operators above read and what its own expressions read
