@@ -1480,15 +1480,15 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 #endif
 	result.bindings = CreateContiguousState(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)));
 	if (setop.comparison_types.size() == setop.column_count) {
-		// EXCEPT / INTERSECT: the set operation now runs per value of the correlated columns. These are compared as
-		// they are, not under a collation, which would mix the rows of outer values that it treats as equal
 		for (auto &correlated_column : correlated_columns) {
-			auto &correlated_type = correlated_column.type;
-			setop.comparison_types.push_back(correlated_type.id() == LogicalTypeId::VARCHAR ? LogicalType::VARCHAR
-			                                                                                : correlated_type);
+			setop.comparison_types.push_back(correlated_column.type);
 		}
 	}
 	setop.column_count += correlated_columns.size();
+	if (setop.type != LogicalOperatorType::LOGICAL_UNION) {
+		// EXCEPT / INTERSECT now run per value of the correlated columns, which they compare as they are
+		setop.correlated_column_count += correlated_columns.size();
+	}
 	return result;
 }
 

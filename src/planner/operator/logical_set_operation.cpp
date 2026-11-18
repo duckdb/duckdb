@@ -69,8 +69,10 @@ vector<JoinCondition> LogicalSetOperation::GetComparisons(ClientContext &context
 		JoinCondition condition(make_uniq<BoundColumnRefExpression>(comparison_types[i], left_bindings[i]),
 		                        make_uniq<BoundColumnRefExpression>(comparison_types[i], right_bindings[i]),
 		                        ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		ExpressionBinder::PushCollation(context, condition.LeftReference(), comparison_types[i]);
-		ExpressionBinder::PushCollation(context, condition.RightReference(), comparison_types[i]);
+		if (i + correlated_column_count < column_count) {
+			ExpressionBinder::PushCollation(context, condition.LeftReference(), comparison_types[i]);
+			ExpressionBinder::PushCollation(context, condition.RightReference(), comparison_types[i]);
+		}
 		result.push_back(std::move(condition));
 	}
 	return result;
@@ -78,7 +80,7 @@ vector<JoinCondition> LogicalSetOperation::GetComparisons(ClientContext &context
 
 //! Numbers the rows that are equal in all columns, so that EXCEPT ALL and INTERSECT ALL match the n-th copies of a row
 static unique_ptr<LogicalOperator> AddRowNumber(Binder &binder, const vector<LogicalType> &types,
-                                                unique_ptr<LogicalOperator> child) {
+                                                idx_t correlated_column_count, unique_ptr<LogicalOperator> child) {
 	auto &context = binder.context;
 	auto bindings = child->GetColumnBindings();
 	auto row_number = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
@@ -86,7 +88,9 @@ static unique_ptr<LogicalOperator> AddRowNumber(Binder &binder, const vector<Log
 	row_number->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<Expression> partition = make_uniq<BoundColumnRefExpression>(types[i], bindings[i]);
-		ExpressionBinder::PushCollation(context, partition, types[i]);
+		if (i + correlated_column_count < types.size()) {
+			ExpressionBinder::PushCollation(context, partition, types[i]);
+		}
 		row_number->PartitionsMutable().push_back(std::move(partition));
 	}
 	auto window = make_uniq<LogicalWindow>(binder.GenerateTableIndex());
@@ -98,19 +102,22 @@ static unique_ptr<LogicalOperator> AddRowNumber(Binder &binder, const vector<Log
 unique_ptr<LogicalOperator> LogicalSetOperation::CreateJoin(Binder &binder, const vector<LogicalType> &types,
                                                             TableIndex setop_index, LogicalOperatorType type,
                                                             bool setop_all, unique_ptr<LogicalOperator> left,
-                                                            unique_ptr<LogicalOperator> right) {
+                                                            unique_ptr<LogicalOperator> right,
+                                                            idx_t correlated_column_count) {
 	D_ASSERT(type == LogicalOperatorType::LOGICAL_EXCEPT || type == LogicalOperatorType::LOGICAL_INTERSECT);
+	D_ASSERT(correlated_column_count <= types.size());
 	auto compared_types = types;
 	if (setop_all) {
-		left = AddRowNumber(binder, types, std::move(left));
-		right = AddRowNumber(binder, types, std::move(right));
+		left = AddRowNumber(binder, types, correlated_column_count, std::move(left));
+		right = AddRowNumber(binder, types, correlated_column_count, std::move(right));
 		compared_types.push_back(LogicalType::BIGINT);
 	}
 	auto left_bindings = left->GetColumnBindings();
 	auto right_bindings = right->GetColumnBindings();
 	D_ASSERT(left_bindings.size() == compared_types.size() && right_bindings.size() == compared_types.size());
 
-	// the join compares the columns with the collations of both children and treats NULLs as equal
+	// the join compares the columns with the collations of both children and treats NULLs as equal. The correlated
+	// columns and the row number are compared as they are
 	auto join_type = type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
 	auto join = make_uniq<LogicalComparisonJoin>(join_type);
 	for (idx_t i = 0; i < compared_types.size(); i++) {
@@ -118,8 +125,10 @@ unique_ptr<LogicalOperator> LogicalSetOperation::CreateJoin(Binder &binder, cons
 		JoinCondition condition(make_uniq<BoundColumnRefExpression>(compared_type, left_bindings[i]),
 		                        make_uniq<BoundColumnRefExpression>(compared_type, right_bindings[i]),
 		                        ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		ExpressionBinder::PushCollation(binder.context, condition.LeftReference(), compared_type);
-		ExpressionBinder::PushCollation(binder.context, condition.RightReference(), compared_type);
+		if (i + correlated_column_count < types.size()) {
+			ExpressionBinder::PushCollation(binder.context, condition.LeftReference(), compared_type);
+			ExpressionBinder::PushCollation(binder.context, condition.RightReference(), compared_type);
+		}
 		join->conditions.push_back(std::move(condition));
 	}
 	join->AddChild(std::move(left));

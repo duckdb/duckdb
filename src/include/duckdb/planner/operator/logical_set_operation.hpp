@@ -40,6 +40,10 @@ public:
 	//! that is under their collations. The children do not tell: a UNION child has the types of its first child, and
 	//! a cast to VARCHAR does not carry a collation
 	vector<LogicalType> comparison_types;
+	//! EXCEPT / INTERSECT: how many of the last columns are the correlated columns of a subquery that the set operation
+	//! is part of (FlattenDependentJoins appends them). They are compared as they are, under no collation: the join
+	//! with the outer query compares them so, and a collation would mix the rows of outer values it treats as equal
+	idx_t correlated_column_count = 0;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
@@ -50,14 +54,17 @@ public:
 	//! was not planned by the binder what the children say (a collation of either child applies)
 	vector<LogicalType> GetComparisonTypes(ClientContext &context);
 	//! How an EXCEPT / INTERSECT compares the columns of its children: IS NOT DISTINCT FROM (NULLs are equal) on every
-	//! column, under its collation. These are the conditions of the join CreateJoin builds, without the row numbers.
+	//! column, under its collation except for the correlated columns. These are the conditions of the join CreateJoin
+	//! builds, without the row numbers.
 	vector<JoinCondition> GetComparisons(ClientContext &context);
 	//! Plans EXCEPT as an ANTI join and INTERSECT as a SEMI join on all columns. With setop_all both children get a
 	//! row_number() over all columns that is compared as well, so that the n-th copies of a row match each other.
+	//! The last correlated_column_count columns are compared as they are, the others under their collations.
 	//! The result is a projection of the left columns with the table index of the set operation.
 	static unique_ptr<LogicalOperator> CreateJoin(Binder &binder, const vector<LogicalType> &types,
 	                                              TableIndex setop_index, LogicalOperatorType type, bool setop_all,
-	                                              unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
+	                                              unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                                              idx_t correlated_column_count = 0);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

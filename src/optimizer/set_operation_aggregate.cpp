@@ -216,12 +216,19 @@ bool SetOperationAggregate::CanUseAggregate(LogicalSetOperation &setop) {
 	if (!use_aggregate || !setop.setop_all) {
 		return false;
 	}
-	for (auto &comparison : setop.GetComparisons(optimizer.context)) {
+	auto comparisons = setop.GetComparisons(optimizer.context);
+	D_ASSERT(comparisons.size() == setop.column_count && setop.correlated_column_count <= setop.column_count);
+	for (idx_t i = 0; i < comparisons.size(); i++) {
+		auto &comparison = comparisons[i];
 		// a column that is compared under a collation is not compared as a plain column
 		if (comparison.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 		    comparison.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    comparison.GetLHS().GetReturnType() != comparison.GetRHS().GetReturnType() ||
-		    !comparison.GetLHS().GetReturnType().EqualValuesAreIdentical()) {
+		    comparison.GetLHS().GetReturnType() != comparison.GetRHS().GetReturnType()) {
+			return false;
+		}
+		// the correlated columns hold the distinct values of the outer query, which are compared as they are
+		bool is_correlated = i + setop.correlated_column_count >= setop.column_count;
+		if (!is_correlated && !comparison.GetLHS().GetReturnType().EqualValuesAreIdentical()) {
 			return false;
 		}
 	}
@@ -402,9 +409,9 @@ unique_ptr<LogicalOperator> SetOperationAggregate::Optimize(unique_ptr<LogicalOp
 		result = CreateAggregate(setop);
 	} else {
 		auto types = setop.GetComparisonTypes(optimizer.context);
-		result =
-		    LogicalSetOperation::CreateJoin(optimizer.binder, types, setop.table_index, setop.type, setop.setop_all,
-		                                    std::move(setop.children[0]), std::move(setop.children[1]));
+		result = LogicalSetOperation::CreateJoin(optimizer.binder, types, setop.table_index, setop.type,
+		                                         setop.setop_all, std::move(setop.children[0]),
+		                                         std::move(setop.children[1]), setop.correlated_column_count);
 	}
 	result->ResolveOperatorTypes();
 	return result;
