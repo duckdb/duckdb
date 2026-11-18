@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   test_capi_v2.cpp
   test_capi_v2_basic.cpp
+  test_capi_v2_allocator.cpp
   test_capi_v2_arena.cpp
   test_capi_v2_arrow.cpp
   test_capi_v2_bytes.cpp

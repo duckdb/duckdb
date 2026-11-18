@@ -36,6 +36,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBGrammarExtensionsFun::RegisterFunction(*this);
 	ActiveGrammarExtensionFun::RegisterFunction(*this);
 	DuckDBExtensionsFun::RegisterFunction(*this);
+	DuckDBExtensionMemoryFun::RegisterFunction(*this);
 	DuckDBExtensionRepositoriesFun::RegisterFunction(*this);
 	RegisterExternalResourceTypeFun::RegisterFunction(*this);
 	CreateExternalResourceFun::RegisterFunction(*this);

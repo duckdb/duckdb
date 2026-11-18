@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension/capi_allocator.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -44,6 +45,9 @@ void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
 }
 
+ExtensionManager::~ExtensionManager() {
+}
+
 ExtensionManager &ExtensionManager::Get(DatabaseInstance &db) {
 	return db.GetExtensionManager();
 }
@@ -66,6 +70,25 @@ shared_ptr<ExtensionInfo> ExtensionManager::GetExtensionInfo(const string &name)
 		return nullptr;
 	}
 	return entry->second;
+}
+
+void ExtensionManager::AttachAllocator(CApiAllocator &allocator) {
+	lock_guard<mutex> guard(lock);
+	for (auto &attachment : allocator_attachments) {
+		if (&attachment->GetAllocator() == &allocator) {
+			return;
+		}
+	}
+	allocator_attachments.push_back(make_uniq<CApiAllocatorAttachment>(allocator, DBConfig::GetConfig(db).buffer_pool));
+}
+
+vector<reference<CApiAllocator>> ExtensionManager::GetAllocators() {
+	lock_guard<mutex> guard(lock);
+	vector<reference<CApiAllocator>> result;
+	for (auto &attachment : allocator_attachments) {
+		result.push_back(attachment->GetAllocator());
+	}
+	return result;
 }
 
 vector<string> ExtensionManager::GetExtensions() {

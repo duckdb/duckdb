@@ -1644,11 +1644,21 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_to_string_set)
 	(duckdb_v2_table_function_to_string_info_handle info, const char *key, idx_t key_length, const char *value,
 	 idx_t value_length, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_alloc)
+	(duckdb_v2_allocator_handle allocator, idx_t size, idx_t align, void **out_ptr, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_alloc_zeroed)
+	(duckdb_v2_allocator_handle allocator, idx_t size, idx_t align, void **out_ptr, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_dealloc)(duckdb_v2_allocator_handle allocator, void *ptr, idx_t size, idx_t align);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_get_allocator)
+	(duckdb_v2_extension_handle extension, duckdb_v2_allocator_handle *out_allocator, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_open_shared)
 	(duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
 	 const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
 	 idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
 	 duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_realloc)
+	(duckdb_v2_allocator_handle allocator, void *ptr, idx_t old_size, idx_t align, idx_t new_size, void **out_ptr,
+	 duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3756,7 +3766,22 @@ typedef struct {
 #define duckdb_v2_table_function_to_string_set duckdb_ext_api.duckdb_v2_table_function_to_string_set
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_alloc duckdb_ext_api.duckdb_v2_alloc
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_alloc_zeroed duckdb_ext_api.duckdb_v2_alloc_zeroed
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_dealloc duckdb_ext_api.duckdb_v2_dealloc
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_extension_get_allocator duckdb_ext_api.duckdb_v2_extension_get_allocator
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_instance_open_shared duckdb_ext_api.duckdb_v2_instance_open_shared
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_realloc duckdb_ext_api.duckdb_v2_realloc
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

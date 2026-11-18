@@ -102,6 +102,10 @@ struct DuckDBExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBExtensionMemoryFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExtensionRepositoriesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

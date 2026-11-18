@@ -1,0 +1,186 @@
+module: allocator
+# The memory of an extension's own code, e.g. the heap behind a Rust #[global_allocator], served by DuckDB's allocator
+# so that DuckDB can account for it.
+#
+# Each extension has one allocator for the lifetime of the process, shared by every database that loads the extension.
+# The bytes it holds are counted per extension (see the `duckdb_extension_memory()` table function) and charged to every
+# database the extension is loaded in, under the EXTENSION tag of `duckdb_memory()`. They count towards that database's
+# memory_limit, so DuckDB makes room for them by evicting or spilling its own data, but the limit is never enforced
+# against the extension: an allocation only fails when the system itself is out of memory.
+#
+# Every allocation is described by its size and alignment, and the same pair must be passed back when the memory is
+# reallocated or deallocated. A zero-sized allocation is represented by a NULL pointer.
+handles:
+  allocator:
+    description: |
+      A borrowed handle to an extension's allocator. Obtained with `[[extension_get_allocator]]`, and used with
+      `[[alloc]]`, `[[alloc_zeroed]]`, `[[realloc]]` and `[[dealloc]]`. Valid for the lifetime of the process, from
+      any thread, also after the databases the extension was loaded in have closed. Must not be destroyed.
+
+functions:
+  extension_get_allocator:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Borrows the allocator of the loading extension.
+
+      Every load of the same extension, into any database, yields the same allocator, so the handle can be stored
+      globally once fetched. Fetching it also charges the allocator's memory to the database being loaded into, for as
+      long as that database is open.
+    role: getter
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      out_allocator:
+        type: allocator
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed allocator. Set to NULL on failure.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  alloc:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Allocates `size` uninitialized bytes aligned to `align`.
+
+      The memory must be released with `[[dealloc]]` or resized with `[[realloc]]` on the same allocator, passing the
+      same `size` and `align`. A `size` of 0 succeeds and yields NULL.
+
+      Returns ERROR_INPUT_INVALID if `allocator` or `out_ptr` is NULL or `align` is not a power of two, and
+      ERROR_RESOURCE_OUT_OF_MEMORY if the allocation fails.
+    role: method
+    belongs_to: allocator
+    parameters:
+      allocator:
+        type: allocator
+        description: The allocator to allocate from.
+      size:
+        type: idx
+        description: The number of bytes to allocate. May be 0.
+      align:
+        type: idx
+        description: The alignment of the returned pointer in bytes. Must be a power of two.
+      out_ptr:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the allocated memory, or NULL if `size` is 0. Set to NULL on failure.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  alloc_zeroed:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Allocates `size` zero-initialized bytes aligned to `align`.
+
+      Behaves like `[[alloc]]`, except that the returned memory is zeroed.
+    role: method
+    belongs_to: allocator
+    parameters:
+      allocator:
+        type: allocator
+        description: The allocator to allocate from.
+      size:
+        type: idx
+        description: The number of bytes to allocate. May be 0.
+      align:
+        type: idx
+        description: The alignment of the returned pointer in bytes. Must be a power of two.
+      out_ptr:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the allocated memory, or NULL if `size` is 0. Set to NULL on failure.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  dealloc:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Releases memory obtained from `[[alloc]]`, `[[alloc_zeroed]]` or `[[realloc]]` on the same allocator.
+
+      `size` and `align` must be the ones the memory was allocated with. Passing a NULL `ptr` is a no-op.
+
+      Returns ERROR_INPUT_INVALID if `allocator` is NULL or `align` is not a power of two, in which case `ptr` is not
+      released.
+    role: method
+    belongs_to: allocator
+    parameters:
+      allocator:
+        type: allocator
+        description: The allocator `ptr` was allocated from.
+      ptr:
+        type: void
+        indirection: 1
+        description: The memory to release, or NULL.
+      size:
+        type: idx
+        description: The size `ptr` was allocated with.
+      align:
+        type: idx
+        description: The alignment `ptr` was allocated with.
+    return_type: ERROR
+
+  realloc:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Resizes memory obtained from `[[alloc]]`, `[[alloc_zeroed]]` or `[[realloc]]` on the same allocator to
+      `new_size` bytes, keeping its alignment.
+
+      The first `min(old_size, new_size)` bytes are preserved; any bytes beyond are uninitialized. On success `ptr` is
+      released and must no longer be used, even if `out_ptr` receives the same address. On failure `ptr` is left
+      untouched and remains owned by the caller.
+
+      A NULL `ptr` (with an `old_size` of 0) behaves like `[[alloc]]`. A `new_size` of 0 releases `ptr` and yields NULL.
+
+      Returns ERROR_INPUT_INVALID if `allocator` or `out_ptr` is NULL, `align` is not a power of two, or `ptr` is NULL
+      with a non-zero `old_size` (or vice versa), and ERROR_RESOURCE_OUT_OF_MEMORY if the allocation fails.
+    role: method
+    belongs_to: allocator
+    parameters:
+      allocator:
+        type: allocator
+        description: The allocator `ptr` was allocated from.
+      ptr:
+        type: void
+        indirection: 1
+        description: The memory to resize, or NULL.
+      old_size:
+        type: idx
+        description: The size `ptr` was allocated with. Must be 0 if `ptr` is NULL.
+      align:
+        type: idx
+        description: The alignment `ptr` was allocated with, which the resized memory keeps.
+      new_size:
+        type: idx
+        description: The new size in bytes. May be 0.
+      out_ptr:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the resized memory, or NULL if `new_size` is 0. Set to NULL on failure.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
