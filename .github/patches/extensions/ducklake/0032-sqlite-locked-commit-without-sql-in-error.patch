@@ -7,7 +7,7 @@ index 468970f1..173ad7d3 100644
  
  static bool IsLockedCommit(const string &lower_message) {
 -	return StringUtil::Contains(lower_message, "failed to execute query \"commit\": database is locked");
-+	// sqlite_scanner dropped the SQL from its errors, the commit of the connection is then all that names it
++	// without the SQL in sqlite_scanner's errors, only the "failed to commit: " prefix marks a locked COMMIT
 +	return StringUtil::Contains(lower_message, "failed to execute query \"commit\": database is locked") ||
 +	       StringUtil::Contains(lower_message, "failed to commit: failed to execute query: database is locked");
  }
