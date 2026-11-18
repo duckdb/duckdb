@@ -182,7 +182,13 @@
         "description": "The number of total async threads used by the system for tasks like I/O.",
         "type": "BIGINT",
         "scope": "global",
-        "custom_implementation": true
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ],
+        "default_function": true
     },
     {
         "name": "auto_checkpoint_skip_wal_threshold",
@@ -1143,9 +1149,12 @@
         "scope": "global",
         "struct": "HTTPProxySetting",
         "custom_implementation": [
-            "set",
-            "reset"
-        ]
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ],
+        "default_function": true
     },
     {
         "name": "http_proxy_password",
@@ -1348,19 +1357,31 @@
         "description": "The maximum memory of the system (e.g. 1GB).",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true,
         "aliases": [
             "memory_limit"
-        ]
+        ],
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ],
+        "default_function": true
     },
     {
         "name": "max_streaming_buffer_size",
         "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold, beyond the queue, the units it is still building or handing over from its current chunk.",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true,
         "aliases": [
             "streaming_buffer_size"
+        ],
+        "default_value": "10.0 MiB",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -1667,7 +1688,13 @@
         "description": "Sets the DuckDB version for which data is serialized to the DuckDB file during checkpointing. Can differ from the version of the DuckDB instance.",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "latest",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "table_function_identifier_conversion",
@@ -1702,10 +1729,16 @@
         "description": "The number of total background threads used by the system.",
         "type": "BIGINT",
         "scope": "global",
-        "custom_implementation": true,
         "aliases": [
             "worker_threads"
-        ]
+        ],
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ],
+        "default_function": true
     },
     {
         "name": "tracked_metrics",

@@ -45,6 +45,7 @@ class Setting:
         default_scope: str,
         default_value: str,
         conditional_defaults,
+        default_function: bool = False,
         is_debug: bool = False,
         is_deprecated: bool = False,
     ):
@@ -56,7 +57,10 @@ class Setting:
         self.internal_setting = internal_setting
         self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
-        self.is_generic_setting = default_value is not None
+        if default_function and default_value is not None:
+            raise ValueError(f"Setting {name} - default_value and default_function cannot both be specified")
+        self.default_function = default_function
+        self.is_generic_setting = default_value is not None or default_function
         if self.is_enum and self.is_generic_setting:
             self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
