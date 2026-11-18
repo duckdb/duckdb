@@ -47,7 +47,6 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	if (!context.TryGetCurrentSetting(key, val)) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.HasExtensionOption(key)) {
-			// If autoloader didn't throw, the config is now available
 			Catalog::AutoloadExtensionByConfigName(context, key);
 		}
 		ExtensionOption extension_option;
