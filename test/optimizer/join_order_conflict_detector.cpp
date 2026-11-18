@@ -27,10 +27,9 @@ static unique_ptr<Expression> ThrowingColumn(TableIndex table_index) {
 	CastFunctionSet default_casts;
 	auto cast_input = GetCastFunctionInput::Default();
 	auto narrow_cast = default_casts.GetCastFunction(LogicalType::INTEGER, LogicalType::TINYINT, cast_input);
-	auto narrowed =
-	    BoundCastExpression::CreateDefault(Column(table_index), LogicalType::TINYINT, std::move(narrow_cast));
+	auto narrowed = BoundCastExpression::Create(Column(table_index), LogicalType::TINYINT, std::move(narrow_cast));
 	auto widen_cast = default_casts.GetCastFunction(LogicalType::TINYINT, LogicalType::INTEGER, cast_input);
-	return BoundCastExpression::CreateDefault(std::move(narrowed), LogicalType::INTEGER, std::move(widen_cast));
+	return BoundCastExpression::Create(std::move(narrowed), LogicalType::INTEGER, std::move(widen_cast));
 }
 
 static unique_ptr<Expression> VolatileColumn(TableIndex table_index) {
