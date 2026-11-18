@@ -124,10 +124,10 @@ void CSVEncoder::Reset() {
 
 idx_t CSVEncoder::Decode(const char *input, idx_t input_size, bool is_last, string &decoded) {
 	decode_input.Reset();
+	decode_input.SetChildCardinality(1);
 	FlatVector::GetDataMutable<string_t>(decode_input.data[0])[0] =
 	    string_t(input, UnsafeNumericCast<uint32_t>(input_size));
 	FlatVector::GetDataMutable<bool>(decode_input.data[1])[0] = is_last;
-	decode_input.SetCardinality(1);
 	Vector result(EncodingFunction::StreamResultType(), 1);
 	decode_executor->ExecuteExpression(decode_input, result);
 	auto values = result.Values<VectorStructType<string_t, int64_t>>();
@@ -158,7 +158,7 @@ idx_t CSVEncoder::DecodeBuffer(char *output_buffer, idx_t output_pos, idx_t outp
 		}
 		encoded_buffer.cur_pos += consumed;
 		const idx_t to_copy = MinValue<idx_t>(decoded.size(), output_size - output_pos);
-		memcpy(output_buffer + output_pos, decoded.data(), to_copy);
+		memcpy(output_buffer + output_pos, decoded.data(), to_copy); // NOLINT(bugprone-not-null-terminated-result)
 		output_pos += to_copy;
 		if (to_copy < decoded.size()) {
 			pending_decoded.assign(decoded, to_copy, string::npos);

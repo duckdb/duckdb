@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/encoding_function.hpp"
@@ -93,8 +94,17 @@ void BuiltinFunctions::RegisterEncodingFunctions() {
 	schema.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(transaction, schema);
 
-	for (auto &set : {EncodingFunction::Create("latin-1", DecodeLatin1ToUTF8, 1, 2),
-	                  EncodingFunction::Create("utf-16", DecodeUTF16ToUTF8, 4, 2)}) {
+	// Wrap the decoders in lambdas, a std::function holding a function pointer exports its typeinfo
+	decode_t latin1 = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                     idx_t &written) {
+		DecodeLatin1ToUTF8(input, input_size, is_last, output, consumed, written);
+	};
+	decode_t utf16 = [](const char *input, idx_t input_size, bool is_last, char *output, idx_t &consumed,
+	                    idx_t &written) {
+		DecodeUTF16ToUTF8(input, input_size, is_last, output, consumed, written);
+	};
+	for (auto &set :
+	     {EncodingFunction::Create("latin-1", latin1, 1, 2), EncodingFunction::Create("utf-16", utf16, 4, 2)}) {
 		CreateScalarFunctionInfo info(set);
 		EncodingFunction::SetSchema(info);
 		info.internal = true;
