@@ -1,0 +1,28 @@
+# name: test/sql/alter/alter_type/test_alter_type_deleted_rows_persistent.test
+# description: ALTER TYPE skips permanently deleted rows after checkpoint and restart
+# group: [alter_type]
+
+load {TEST_DIR}/alter_type_deleted.db
+
+statement ok
+CREATE TABLE t(v VARCHAR)
+
+statement ok
+INSERT INTO t VALUES ('1'), ('2'), ('x')
+
+statement ok
+DELETE FROM t WHERE v = 'x'
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+ALTER TABLE t ALTER v TYPE INTEGER
+
+query I
+SELECT v FROM t ORDER BY v
+----
+1
+2
