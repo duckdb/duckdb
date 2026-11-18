@@ -1,7 +1,7 @@
 
 #include "sqllogic_test_runner.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"

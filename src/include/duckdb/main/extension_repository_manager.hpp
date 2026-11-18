@@ -16,7 +16,7 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
-class BaseFileSystem;
+class FileSystem;
 
 //! Manages the trusted extension repositories of a DuckDB installation. Trusted repositories are stored as json files
 //! in the extension repository directory (by default `~/.duckdb/extension_repositories`). Every repository has a

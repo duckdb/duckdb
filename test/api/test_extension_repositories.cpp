@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/extension.hpp"
@@ -372,7 +372,7 @@ TEST_CASE("Test which signing keys a load trusts", "[api]") {
 }
 
 // Stages the on-disk state an install would produce, writing to the reserved '.duckdb_extension' domain like INSTALL
-static void WriteExtensionFile(BaseFileSystem &fs, const string &path, void *data, idx_t size) {
+static void WriteExtensionFile(FileSystem &fs, const string &path, void *data, idx_t size) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	handle->Write(data, size);
@@ -726,7 +726,7 @@ TEST_CASE("Test that duckdb_extensions marks the loaded copy", "[api]") {
 }
 
 // Copy a file into the reserved '.duckdb_extension' domain, as an install does
-static void CopyExtensionFile(BaseFileSystem &fs, const string &source, const string &target) {
+static void CopyExtensionFile(FileSystem &fs, const string &source, const string &target) {
 	auto handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	auto size = handle->GetFileSize();
 	auto buffer = make_unsafe_uniq_array<data_t>(size);

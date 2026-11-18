@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 

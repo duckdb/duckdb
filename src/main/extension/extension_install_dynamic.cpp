@@ -341,9 +341,8 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 	}
 
 	QueryContext query_context(context);
-	auto local_fs = FileSystem::CreateLocal();
-	BoundFileSystem fs(*local_fs, nullptr);
-	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
+	auto fs = FileSystem::CreateLocal();
+	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -375,7 +374,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 		                          backup_url);
 	}
 
-	// Default case, let the BaseFileSystem figure it out
+	// Default case, let the FileSystem figure it out
 	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, options,
 	                              context);
 }

@@ -1,7 +1,6 @@
 #include "duckdb/common/cgroups.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"

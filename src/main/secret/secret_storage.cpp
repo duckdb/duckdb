@@ -1,6 +1,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"

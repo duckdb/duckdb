@@ -1,7 +1,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/config.hpp"

@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-static void WriteExtensionDirectoryFile(BaseFileSystem &fs, const string &path, const string &contents) {
+static void WriteExtensionDirectoryFile(FileSystem &fs, const string &path, const string &contents) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	handle->Write((void *)contents.data(), contents.size());

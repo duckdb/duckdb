@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "test_helpers.hpp"
 
@@ -10,7 +10,7 @@
 using namespace duckdb;
 
 TEST_CASE("Test transactional integrity when facing process aborts", "[persistence][.]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 
 	// shared memory to keep track of insertions
 	size_t *count = (size_t *)mmap(NULL, sizeof(size_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);

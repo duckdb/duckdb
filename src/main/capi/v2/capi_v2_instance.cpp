@@ -1,7 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"

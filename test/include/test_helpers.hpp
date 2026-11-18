@@ -137,7 +137,7 @@ bool DatabaseDestroyFires(bool success);
 //! Materializes $ROOT + $RUN_ID once, at startup (main). Fills error + returns false on failure.
 bool PrepareTempDir(string &error);
 //! Reclaim the owned leaf and any empty ancestors created by the same lifecycle step.
-void ReclaimTestDirectoryLevels(BaseFileSystem &fs, const string &leaf, const vector<string> &created);
+void ReclaimTestDirectoryLevels(FileSystem &fs, const string &leaf, const vector<string> &created);
 //! Executes the run-id-level destroy disposition (recursive, bottom-up "destroy only what I created").
 void DestroyTempDir(bool success);
 //! Executes the TEST_ID destroy disposition using THIS test's pass/fail (called at test end).

@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "json_functions.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"

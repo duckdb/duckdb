@@ -1,5 +1,5 @@
 #include "duckdb/storage/magic_bytes.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/client_context.hpp"

@@ -10,7 +10,6 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb {

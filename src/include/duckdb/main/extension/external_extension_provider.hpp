@@ -16,7 +16,6 @@ namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
 class FileSystem;
-class BaseFileSystem;
 class ExtensionInstallInfo;
 struct ExtensionInstallOptions;
 

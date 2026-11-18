@@ -138,7 +138,7 @@ public:
 } // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), FileSystem::GetWorkingDirectory());
 	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
 
@@ -200,7 +200,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestCreatePath("TEST_DIR");
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
@@ -300,7 +300,8 @@ TEST_CASE("Test directory cleanup preserves a concurrently created sibling", "[f
 	ConcurrentDirectoryFileSystem fs(root);
 	auto leaf = fs.JoinPath(root, "finished_run");
 	fs.CreateDirectoriesRecursive(leaf);
-	ReclaimTestDirectoryLevels(fs, leaf, {root, leaf});
+	BoundFileSystem bound_fs(fs, nullptr);
+	ReclaimTestDirectoryLevels(bound_fs, leaf, {root, leaf});
 	REQUIRE(fs.created_sibling);
 	REQUIRE(!fs.DirectoryExists(leaf));
 	REQUIRE(fs.FileExists(fs.JoinPath(root, "active_run/database.wal")));
@@ -370,7 +371,7 @@ TEST_CASE("Extended directory operations forward the file opener", "[file_system
 	DuckDB db(nullptr);
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	auto home_directory = TestCreatePath("extended_directory_opener");
 	if (fs->DirectoryExists(home_directory)) {
 		fs->RemoveDirectory(home_directory);
@@ -392,7 +393,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 	DuckDB db(nullptr);
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
-	auto fs = FileSystem::CreateLocal();
+	auto fs = BaseFileSystem::CreateLocal();
 	TestContextFileSystem opener_fs(*fs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
 	if (fs->DirectoryExists(base)) {
@@ -413,7 +414,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 #define INTEGER_COUNT 512
 
 TEST_CASE("Test file operations", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<FileHandle> handle, handle2;
 	int64_t test_data[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
@@ -538,7 +539,7 @@ TEST_CASE("absolute paths", "[file_system]") {
 }
 
 TEST_CASE("Test RemoveFiles", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestCreatePath("test_remove_files");
 
 	if (fs->DirectoryExists(dname)) {
@@ -570,7 +571,7 @@ TEST_CASE("Test RemoveFiles", "[file_system]") {
 
 TEST_CASE("extract subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
-	auto local_filesystem = FileSystem::CreateLocal();
+	auto local_filesystem = BaseFileSystem::CreateLocal();
 	auto *local_filesystem_ptr = local_filesystem.get();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
@@ -596,11 +597,11 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
 
 	// First time registration should succeed.
-	auto local_filesystem = FileSystem::CreateLocal();
+	auto local_filesystem = BaseFileSystem::CreateLocal();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
 	// Re-register an already registered subfilesystem should throw.
-	auto second_local_filesystem = FileSystem::CreateLocal();
+	auto second_local_filesystem = BaseFileSystem::CreateLocal();
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
 }
 
@@ -1446,7 +1447,7 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 	idx_t max_dir_path_len = 247;
 	idx_t work_dir_path_len = 240;
 
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string cwd = FileSystem::GetWorkingDirectory();
 	string test_dir = TestDirectoryPath();
 	test_dir = fs->JoinPath(test_dir, "test_long_path");

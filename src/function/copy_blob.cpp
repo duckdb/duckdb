@@ -1,4 +1,3 @@
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"

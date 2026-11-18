@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/client_context.hpp"
 

@@ -3,7 +3,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"

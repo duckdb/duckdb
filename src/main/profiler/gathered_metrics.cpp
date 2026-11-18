@@ -1,6 +1,6 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"

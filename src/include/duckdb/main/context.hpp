@@ -22,7 +22,6 @@ class ClientContext;
 struct CatalogTransaction;
 class DatabaseInstance;
 class FileOpener;
-class BaseFileSystem;
 class FileSystem;
 class Logger;
 class MetricsManager;

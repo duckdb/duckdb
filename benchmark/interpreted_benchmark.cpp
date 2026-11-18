@@ -13,7 +13,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/main/query_result_stream.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 

@@ -1,11 +1,11 @@
 #include "catch.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 
 TEST_CASE("Test functioning of checksum", "[storage]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<DuckDB> database;
 	auto storage_database = TestCreatePath("checksum_test");
 	auto config = GetTestConfig();

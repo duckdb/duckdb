@@ -1,23 +1,23 @@
 #include "catch.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 using namespace duckdb;
 
-static idx_t GetWALFileSize(BaseFileSystem &fs, const string &path) {
+static idx_t GetWALFileSize(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	return fs.GetFileSize(*handle);
 }
 
-static void TruncateWAL(BaseFileSystem &fs, const string &path, idx_t new_size) {
+static void TruncateWAL(FileSystem &fs, const string &path, idx_t new_size) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE);
 	fs.Truncate(*handle, new_size);
 }
 
-static void CopyFile(BaseFileSystem &fs, const string &source, const string &target) {
+static void CopyFile(FileSystem &fs, const string &source, const string &target) {
 	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	auto file_size = source_handle->GetFileSize();
 	auto contents = duckdb::unique_ptr<data_t[]>(new data_t[file_size]);
@@ -27,7 +27,7 @@ static void CopyFile(BaseFileSystem &fs, const string &source, const string &tar
 	target_handle->Write(QueryContext(), contents.get(), file_size, 0);
 }
 
-static pair<idx_t, idx_t> GetWALCommitBoundaries(BaseFileSystem &fs, const string &path) {
+static pair<idx_t, idx_t> GetWALCommitBoundaries(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
@@ -70,7 +70,7 @@ TEST_CASE("Test torn WAL writes", "[storage][.]") {
 	auto source_database = TestCreatePath("storage_test_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -114,7 +114,7 @@ TEST_CASE("Test torn WAL writes followed by successful commits", "[storage][.]")
 	auto storage_database = TestCreatePath("storage_test");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -159,7 +159,7 @@ TEST_CASE("Test torn WAL writes followed by successful commits", "[storage][.]")
 	DeleteDatabase(storage_database);
 }
 
-static void FlipWALByte(BaseFileSystem &fs, const string &path, idx_t byte_pos) {
+static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
@@ -178,7 +178,7 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 	auto source_database = TestCreatePath("wal_checksum_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -234,7 +234,7 @@ TEST_CASE("Test WAL entry size that overflows the bound check", "[storage][.]") 
 	auto source_database = TestCreatePath("wal_size_overflow_source");
 	auto source_wal = source_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
@@ -273,7 +273,7 @@ TEST_CASE("Test encrypted WAL version on an unencrypted database", "[storage][.]
 	auto storage_database = TestCreatePath("wal_version_encrypted");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	DeleteDatabase(storage_database);
@@ -290,7 +290,7 @@ TEST_CASE("Test encrypted WAL version on an unencrypted database", "[storage][.]
 }
 
 //! Renumber the first field (101) of the payload of the first framed WAL entry and fix up its checksum
-static void RenumberFirstEntryField(BaseFileSystem &fs, const string &path) {
+static void RenumberFirstEntryField(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
@@ -331,7 +331,7 @@ TEST_CASE("Test WAL catalog entry without catalog information", "[storage][.]") 
 	auto storage_database = TestCreatePath("wal_missing_info");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	DeleteDatabase(storage_database);
@@ -348,7 +348,7 @@ TEST_CASE("Test WAL catalog entry without catalog information", "[storage][.]") 
 }
 
 //! Change the WAL type of the n-th INSERT_TUPLE entry into an unused value and fix up its checksum
-static void CorruptInsertEntryType(BaseFileSystem &fs, const string &path, idx_t insert_nr) {
+static void CorruptInsertEntryType(FileSystem &fs, const string &path, idx_t insert_nr) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
 	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
@@ -394,7 +394,7 @@ TEST_CASE("Test WAL entry with an unknown entry type", "[storage][.]") {
 	auto storage_database = TestCreatePath("wal_unknown_entry_type");
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));

@@ -11,7 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"

@@ -13,7 +13,7 @@
 #pragma once
 
 namespace duckdb {
-class BaseFileSystem;
+class FileSystem;
 
 enum class ExtensionInstallMode : uint8_t {
 	// Fallback for when install info is missing

@@ -2,7 +2,6 @@
 #include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/exception/catalog_exception.hpp"
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"

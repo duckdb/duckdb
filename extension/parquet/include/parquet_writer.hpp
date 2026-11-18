@@ -57,7 +57,7 @@ class TProtocol;
 } // namespace duckdb_apache
 
 namespace duckdb {
-class BaseFileSystem;
+class FileSystem;
 class FileOpener;
 class ParquetEncryptionConfig;
 class ParquetStatsAccumulator;

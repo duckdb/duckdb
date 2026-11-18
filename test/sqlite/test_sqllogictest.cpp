@@ -17,7 +17,7 @@ using namespace duckdb;
 
 // code below traverses the test directory and makes individual test cases out
 // of each script
-static void listFiles(BaseFileSystem &fs, const string &path, std::function<void(const string &)> cb) {
+static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
 	fs.ListFiles(path, [&](string fname, bool is_dir) {
 		string full_path = fs.JoinPath(path, fname);
 		if (is_dir) {
@@ -302,7 +302,7 @@ static bool PathStartsWith(const string &path, const string &prefix) {
 	return path.size() == prefix.size() || path[prefix.size()] == '/';
 }
 
-static bool IsSQLiteLogicTestPath(BaseFileSystem &fs, const string &path) {
+static bool IsSQLiteLogicTestPath(FileSystem &fs, const string &path) {
 	auto sqlite_test_root = fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test");
 	auto normalized_path = StringUtil::Replace(path, "\\", "/");
 	auto normalized_root = StringUtil::Replace(sqlite_test_root, "\\", "/");
@@ -321,7 +321,7 @@ static bool IsExtensionTestPath(const string &path) {
 }
 
 void RegisterSqllogictests(const vector<string> &test_paths) {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	for (const auto &path : test_paths) {
 		if (IsSQLiteLogicTestPath(*fs, path)) {
 			if (!IsExcludedSQLiteLogicTest(path)) {
@@ -336,7 +336,7 @@ void RegisterSqllogictests(const vector<string> &test_paths) {
 }
 
 void RegisterSqllogictests() {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			if (IsExcludedSQLiteLogicTest(path)) {

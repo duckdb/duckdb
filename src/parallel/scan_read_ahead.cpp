@@ -2,7 +2,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"

@@ -27,7 +27,7 @@ class BufferHandle;
 class ClientContext;
 class DatabaseInstance;
 class FileOpenFlags;
-class BaseFileSystem;
+class FileSystem;
 struct FileHandle;
 struct NetworkThroughputEstimate;
 class QueryContext;
@@ -147,7 +147,7 @@ private:
 	ReadThroughputEstimator throughput_estimator;
 };
 
-//! CachingFileSystem is a read-only file system that closely resembles the BaseFileSystem API.
+//! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
 //! Instead of reading into a designated buffer, it caches reads using the BufferManager,
 //! it returns a BufferHandle and sets a pointer into it
 class CachingFileSystem {
@@ -169,7 +169,7 @@ public:
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
-	//! The Client BaseFileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
+	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
 	FileSystem &file_system;
 	//! The DatabaseInstance.
 	DatabaseInstance &db;

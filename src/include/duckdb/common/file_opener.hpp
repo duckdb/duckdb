@@ -36,7 +36,7 @@ struct FileOpenerInfo {
 	OpenFileInfo file;
 };
 
-//! Abstract type that provide client-specific context to BaseFileSystem.
+//! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
 	FileOpener() {

@@ -7,11 +7,11 @@ using namespace duckdb;
 namespace {
 
 string ProbeDir(const string &name) {
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	return fs.JoinPath(TestDirectoryPath(), name);
 }
 
-void MakeFile(BaseFileSystem &fs, const string &path) {
+void MakeFile(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Close();
 }
@@ -19,7 +19,7 @@ void MakeFile(BaseFileSystem &fs, const string &path) {
 } // namespace
 
 TEST_CASE("Test RemoveDirectoryExtended in SINGLE mode", "[api]") {
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	const RemoveDirectoryOptions single {RemoveDirectoryMode::SINGLE};
 
 	SECTION("an empty directory is removed") {

@@ -1,6 +1,6 @@
 #include "duckdb/main/client_config.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 

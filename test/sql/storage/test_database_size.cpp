@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -8,7 +8,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	constexpr idx_t VALUE_COUNT = 10000;
 	idx_t expected_sum = 0;
 
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto config = GetTestConfig();
 	duckdb::unique_ptr<DuckDB> database;
 	duckdb::unique_ptr<QueryResult> result;

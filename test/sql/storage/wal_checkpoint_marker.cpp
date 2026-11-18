@@ -14,12 +14,12 @@
 
 using namespace duckdb;
 
-static void RemoveCheckpointRecoveryFiles(BaseFileSystem &fs, const string &database_path) {
+static void RemoveCheckpointRecoveryFiles(FileSystem &fs, const string &database_path) {
 	fs.TryRemoveFile(database_path + ".wal.checkpoint");
 	fs.TryRemoveFile(database_path + ".wal.recovery");
 }
 
-static duckdb::vector<data_t> ReadFile(BaseFileSystem &fs, const string &path) {
+static duckdb::vector<data_t> ReadFile(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto size = handle->GetFileSize();
 	duckdb::vector<data_t> result(size);
@@ -29,8 +29,7 @@ static duckdb::vector<data_t> ReadFile(BaseFileSystem &fs, const string &path) {
 	return result;
 }
 
-static void WriteFile(BaseFileSystem &raw_fs, const string &path, const duckdb::vector<data_t> &contents) {
-	BoundFileSystem fs(raw_fs, nullptr);
+static void WriteFile(FileSystem &fs, const string &path, const duckdb::vector<data_t> &contents) {
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	if (!contents.empty()) {
 		writer.WriteData(contents.data(), contents.size());
@@ -38,8 +37,7 @@ static void WriteFile(BaseFileSystem &raw_fs, const string &path, const duckdb::
 	writer.Sync();
 }
 
-static void WriteTornLegacyCheckpointMarker(BaseFileSystem &raw_fs, const string &path) {
-	BoundFileSystem fs(raw_fs, nullptr);
+static void WriteTornLegacyCheckpointMarker(FileSystem &fs, const string &path) {
 	BufferedFileWriter writer(fs, path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	BinarySerializer serializer(writer);
 	serializer.Begin();
@@ -74,7 +72,7 @@ TEST_CASE("Truncate a failed checkpoint marker before making its WAL writable", 
 
 	auto database_path = TestCreatePath("failed_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -114,7 +112,7 @@ TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[stor
 
 	auto database_path = TestCreatePath("checkpoint_marker_not_at_end");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -152,7 +150,7 @@ TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	config->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(false));
 
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	for (idx_t flush_bytes = 0; flush_bytes <= 1; flush_bytes++) {
 		auto database_path = TestCreatePath("torn_checkpoint_flush_" + to_string(flush_bytes));
 		auto wal_path = database_path + ".wal";
@@ -199,7 +197,7 @@ TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage
 
 	auto database_path = TestCreatePath("torn_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -235,7 +233,7 @@ TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint m
 
 	auto database_path = TestCreatePath("mismatched_checkpoint_marker");
 	auto wal_path = database_path + ".wal";
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 
@@ -282,7 +280,7 @@ TEST_CASE("Reject multiple checkpoint markers before changing WAL files", "[stor
 	auto wal_path = database_path + ".wal";
 	auto checkpoint_wal_path = database_path + ".wal.checkpoint";
 	auto recovery_wal_path = database_path + ".wal.recovery";
-	LocalFileSystem fs;
+	OwningFileSystem fs(BaseFileSystem::CreateLocal());
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 

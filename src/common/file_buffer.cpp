@@ -2,7 +2,7 @@
 
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/client_context.hpp"

@@ -13,7 +13,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
-class BaseFileSystem;
+class FileSystem;
 class QueryContext;
 struct PrefetchedFileData;
 

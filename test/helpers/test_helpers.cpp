@@ -1,7 +1,7 @@
 // #define CATCH_CONFIG_RUNNER
 #include "test_reporter.hpp"
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -100,7 +100,7 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 }
 
 void TestDeleteDirectory(string path) {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	try {
 		if (fs->DirectoryExists(path)) {
 			fs->RemoveDirectory(path);
@@ -110,7 +110,7 @@ void TestDeleteDirectory(string path) {
 }
 
 void TestDeleteFile(string path) {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	try {
 		fs->TryRemoveFile(path);
 	} catch (...) {
@@ -135,12 +135,12 @@ void DeleteDatabase(string path) {
 }
 
 void TestCreateDirectory(string path) {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(path);
 }
 
 string TestJoinPath(string path1, string path2) {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	return fs->JoinPath(path1, path2);
 }
 
@@ -412,7 +412,7 @@ static Path TreeTestPath(const Path &root) {
 	return TreeRunIdRoot(root).Join(ResolveTestId());
 }
 
-static bool DirectoryIsEmpty(BaseFileSystem &fs, const string &path) {
+static bool DirectoryIsEmpty(FileSystem &fs, const string &path) {
 	bool empty = true;
 	fs.ListFiles(path, [&](const string &, bool) { empty = false; });
 	return empty;
@@ -421,7 +421,7 @@ static bool DirectoryIsEmpty(BaseFileSystem &fs, const string &path) {
 // mkdir-p `path`, recording into `created` (outermost..leaf) the levels that did not already exist,
 // so the matching destroy removes only what it made. The walk stops at the first pre-existing
 // ancestor -- levels owned by an earlier lifecycle step or a prior run are never recorded.
-static void RecordAndCreateLevels(BaseFileSystem &fs, const string &path, vector<string> &created) {
+static void RecordAndCreateLevels(FileSystem &fs, const string &path, vector<string> &created) {
 	vector<string> to_create; // innermost first
 	string p = path;
 	while (!p.empty() && !fs.DirectoryExists(p)) {
@@ -439,7 +439,7 @@ static void RecordAndCreateLevels(BaseFileSystem &fs, const string &path, vector
 
 // Remove `leaf` recursively iff this step created it, then walk `created` bottom-up removing each
 // ancestor iff it is empty and this step created it. Stops at the first level that is neither.
-void ReclaimTestDirectoryLevels(BaseFileSystem &fs, const string &leaf, const vector<string> &created) {
+void ReclaimTestDirectoryLevels(FileSystem &fs, const string &leaf, const vector<string> &created) {
 	// The leaf obeys the same rule as its ancestors: reclaim only what THIS step created. RemoveDirectory
 	// is always recursive, so a run that adopted a pre-existing dir -- a reused --run-id, or $ROOT itself
 	// when --temp-dir-run-id is off -- would otherwise delete contents it does not own.
@@ -485,7 +485,7 @@ static bool DestroyFires(TempDirDestroy disposition, bool success) {
 
 // mkdir-p the local tree's $ROOT/[RUN_ID], recording what it created so destroy reclaims only that.
 static void PrepareLocalTree() {
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	RecordAndCreateLevels(*fs, TreeRunIdRoot(LocalRoot()).ToString(), run_created_levels);
 }
 
@@ -506,7 +506,7 @@ static bool PrepareTempDirInternal(string &error) {
 	// would materialize $ROOT behind PrepareLocalTree's back, RecordAndCreateLevels would read it as
 	// pre-existing, and it would never be reclaimed. Unconditional -- some code errors if
 	// home_directory is set but absent.
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	RecordAndCreateLevels(*fs, GetTempDirHome(), home_created_levels);
 	return true;
 }
@@ -527,7 +527,7 @@ void DestroyTempDir(bool success) {
 	if (!DestroyFires(temp_dir_destroy, success)) {
 		return;
 	}
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	// HOME first: it sits under $ROOT, so leaving it would fail the emptiness check in the ancestor
 	// walk below and strand a root this run owns. Reclaimed on the same created/adopted rule --
 	// co-located batches share one HOME path, and an adopted one may be another batch's live sandbox.
@@ -550,7 +550,7 @@ void DestroyTestTempDir(bool success) {
 		active_tests.erase(it);
 	}
 	if (!entry.leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
-		duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 		ReclaimTestDirectoryLevels(*fs, entry.leaf, entry.created_levels);
 	}
 }
@@ -571,7 +571,7 @@ static string MaterializeLocalTestPath() {
 	}
 	ActiveTestTempDir active;
 	active.leaf = path;
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	if (!fs->DirectoryExists(path)) {
 		RecordAndCreateLevels(*fs, path, active.created_levels);
 	}
@@ -626,7 +626,7 @@ void ClearTestDirectory() {
 	if (!DeleteTestPath()) {
 		return;
 	}
-	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto test_dir = TestDirectoryPath();
 	// try to clear any files we created in the test directory
 	fs->ListFiles(test_dir, [&](const string &file, bool is_dir) {

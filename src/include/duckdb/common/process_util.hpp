@@ -11,7 +11,7 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
-class BaseFileSystem;
+class FileSystem;
 
 //! What the operating system can tell us about processes: who we are, who is still alive, and
 //! who to name in an error message.

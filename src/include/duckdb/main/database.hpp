@@ -30,7 +30,6 @@ class Catalog;
 class TransactionManager;
 class ConnectionManager;
 class ExtensionManager;
-class BaseFileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;

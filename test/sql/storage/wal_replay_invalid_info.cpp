@@ -12,7 +12,7 @@
 using namespace duckdb;
 
 //! Append a framed [size][checksum][payload] entry to the WAL
-static void AppendWALEntry(BaseFileSystem &fs, const string &path, MemoryStream &payload) {
+static void AppendWALEntry(FileSystem &fs, const string &path, MemoryStream &payload) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND);
 	uint64_t size = payload.GetPosition();
 	uint64_t checksum = Checksum(payload.GetData(), size);
@@ -27,7 +27,7 @@ static void TestReplayInvalidAlterInfo(const string &name, unique_ptr<ParseInfo>
 	auto storage_database = TestCreatePath(name);
 	auto storage_wal = storage_database + ".wal";
 
-	LocalFileSystem lfs;
+	OwningFileSystem lfs(BaseFileSystem::CreateLocal());
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 	DeleteDatabase(storage_database);

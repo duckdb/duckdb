@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "debug_fs_extension.hpp"
 #include "sqlite/catch_test_reporter.hpp"
