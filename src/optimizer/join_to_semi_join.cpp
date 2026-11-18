@@ -34,7 +34,8 @@
 //   * none is a comparison of an expression over L with one over R: the INNER join is a cross product with a filter
 //     or a blockwise nested-loop join, and so is the SEMI join, which emits less;
 //   * one comparison and nothing else, against an R that may hold several rows: the same range or nested-loop
-//     join either way;
+//     join either way; a single range comparison may also swap its sides to build the smaller relation and keep
+//     the runtime filter on the scan of the larger one, as the INNER join does;
 //   * anything else: no rewrite. Two or more comparisons, a comparison next to another predicate, or a comparison
 //     against an R known to hold at most one row (an ungrouped aggregate, a LIMIT 1) make the INNER join a range or
 //     nested-loop join whose build side feeds runtime filters into the scan of L. The SEMI join would be a blockwise
