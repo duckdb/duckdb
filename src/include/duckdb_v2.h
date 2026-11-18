@@ -4298,8 +4298,9 @@ typedef struct _duckdb_v2_object_cache_entry {
 /*!
  * Creates the data of a cache entry that does not exist yet.
  *
- * Runs while the cache is locked, so that two threads never both create the same entry: it must not use the object
- * cache itself. A failure reported through `err` leaves the entry uncreated and fails the call.
+ * Runs outside the cache lock, but while other creations of the same entry wait for it: it must not use the object
+ * cache itself. A failure reported through `err` leaves the entry uncreated and fails the call, as does a `size_bytes`
+ * above the cache capacity.
  */
 typedef void (*duckdb_v2_object_cache_create_callback_fn)(void *user_data, duckdb_v2_opaque *data, idx_t *size_bytes,
                                                           duckdb_v2_error_info_handle *err);
@@ -4354,9 +4355,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_object_cache(duckdb_v2_contex
  * extension, e.g. `my_extension.footer`, as the cache is shared by everything on the instance.
  *
  * The opaque handle bundles the data with an optional destructor, invoked once the entry is gone from the cache and
- * nobody holds it any longer. If the call fails, the destructor is invoked right away. A `size_bytes` of 0 pins the
+ * nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run on any
+ * thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0 pins the
  * entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it evictable: the
- * cache counts it against the memory limit, and may drop it, least recently used first, when memory is needed.
+ * cache counts it against the memory limit, and may drop it, least recently used first, when memory is needed. Sizes
+ * above the cache capacity are rejected.
  *
  * history:
  * - unstable: v2.0.0
@@ -4368,7 +4371,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_object_cache(duckdb_v2_contex
  * @param key The key of the entry. Borrowed and copied.
  * @param key_length The length of `key` in bytes. `key` need not be null-terminated and may be NULL only when this is
  * 0.
- * @param data Opaque handle bundling the data pointer plus an optional destructor.
+ * @param data Opaque handle bundling the data pointer plus an optional destructor. Owned by the cache from here on,
+ * even if the call fails.
  * @param size_bytes The approximate memory the data takes up, or 0 to pin the entry.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -4413,7 +4417,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_object_cache_get(duckdb_v2_object_cache_h
  * Looks an entry up, creating it first with the create callback if there is none.
  *
  * Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others receive
- * its result. The entry is returned as `duckdb_v2_object_cache_get()` does, owned by the caller.
+ * its result. The entry is returned as `duckdb_v2_object_cache_get()` does, owned by the caller. Fails if the key holds
+ * an entry that was not created through this API.
  *
  * history:
  * - unstable: v2.0.0

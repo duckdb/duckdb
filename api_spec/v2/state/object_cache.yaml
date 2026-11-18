@@ -26,8 +26,9 @@ callbacks:
     description: |
       Creates the data of a cache entry that does not exist yet.
 
-      Runs while the cache is locked, so that two threads never both create the same entry: it must not use the
-      object cache itself. A failure reported through `err` leaves the entry uncreated and fails the call.
+      Runs outside the cache lock, but while other creations of the same entry wait for it: it must not use the
+      object cache itself. A failure reported through `err` leaves the entry uncreated and fails the call, as does a
+      `size_bytes` above the cache capacity.
     parameters:
       user_data:
         type: void
@@ -37,7 +38,9 @@ callbacks:
         type: opaque
         indirection: 1
         kind: OUT
-        description: Receives the data, a pointer bundled with an optional destructor. Owned by the cache from here on.
+        description: |
+          Receives the data, a pointer bundled with an optional destructor. Owned by the cache from here on. The
+          destructor may run on any thread, possibly while the cache is locked, so it must not use the object cache.
       size_bytes:
         type: idx
         indirection: 1
@@ -113,10 +116,11 @@ functions:
       after the extension, e.g. `my_extension.footer`, as the cache is shared by everything on the instance.
 
       The opaque handle bundles the data with an optional destructor, invoked once the entry is gone from the cache
-      and nobody holds it any longer. If the call fails, the destructor is invoked right away. A `size_bytes` of 0
+      and nobody holds it any longer. If the call fails, the destructor is invoked right away. The destructor may run
+      on any thread, possibly while the cache is locked, so it must not use the object cache itself. A `size_bytes` of 0
       pins the entry for as long as it is not deleted or replaced, and the instance lives. Any other value makes it
       evictable: the cache counts it against the memory limit, and may drop it, least recently used first, when
-      memory is needed.
+      memory is needed. Sizes above the cache capacity are rejected.
     role: method
     belongs_to: object_cache
     parameters:
@@ -144,7 +148,9 @@ functions:
       data:
         type: opaque
         indirection: 1
-        description: Opaque handle bundling the data pointer plus an optional destructor.
+        description: |
+          Opaque handle bundling the data pointer plus an optional destructor. Owned by the cache from here on, even if
+          the call fails.
       size_bytes:
         type: idx
         description: The approximate memory the data takes up, or 0 to pin the entry.
@@ -204,7 +210,8 @@ functions:
       Looks an entry up, creating it first with the create callback if there is none.
 
       Creation is atomic: of several threads racing for the same entry, one runs the create callback and the others
-      receive its result. The entry is returned as `[[object_cache_get]]` does, owned by the caller.
+      receive its result. The entry is returned as `[[object_cache_get]]` does, owned by the caller. Fails if the
+      key holds an entry that was not created through this API.
     role: method
     belongs_to: object_cache
     parameters:

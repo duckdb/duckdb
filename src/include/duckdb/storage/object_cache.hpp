@@ -128,16 +128,22 @@ public:
 		}
 
 		const lock_guard<mutex> lock(lock_mutex);
-		const auto estimated_memory = value->GetEstimatedCacheMemory();
-		const bool is_evictable = estimated_memory.IsValid();
-		if (!is_evictable) {
-			non_evictable_entries[std::move(key)] = std::move(value);
-			return;
-		}
+		PutInternal(std::move(key), std::move(value));
+	}
 
-		auto reservation =
-		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+	//! Puts `value` under `key` unless an entry is there already, and returns the entry under `key` afterwards.
+	shared_ptr<ObjectCacheEntry> GetOrPut(const string &key, shared_ptr<ObjectCacheEntry> value) {
+		const lock_guard<mutex> lock(lock_mutex);
+		auto non_evictable_it = non_evictable_entries.find(key);
+		if (non_evictable_it != non_evictable_entries.end()) {
+			return non_evictable_it->second;
+		}
+		auto existing = lru_cache.Get(key);
+		if (existing) {
+			return existing;
+		}
+		PutInternal(key, value);
+		return value;
 	}
 
 	void Delete(const string &key) {
@@ -203,6 +209,21 @@ public:
 	bool EvictToMemoryLimit(idx_t memory_limit);
 
 private:
+	//! Replaces the entry under `key`, whether pinned or evictable. Requires the lock.
+	void PutInternal(string key, shared_ptr<ObjectCacheEntry> value) {
+		const auto estimated_memory = value->GetEstimatedCacheMemory();
+		const bool is_evictable = estimated_memory.IsValid();
+		if (!is_evictable) {
+			lru_cache.Delete(key);
+			non_evictable_entries[std::move(key)] = std::move(value);
+			return;
+		}
+		non_evictable_entries.erase(key);
+		auto reservation =
+		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
+		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+	}
+
 	//! Build the internal cache key for a typed entry by namespacing the caller-provided key with the entry's
 	//! ObjectType.
 	template <class T>
