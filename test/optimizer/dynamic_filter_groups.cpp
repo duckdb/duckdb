@@ -69,6 +69,23 @@ TEST_CASE("Pruning conjuncts preserve the cost of active scan filters", "[dynami
 		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(dynamic_filter)));
 		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
 	}
+	SECTION("Runtime string prefixes cost less than exact IN lists") {
+		auto in_filter =
+		    ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0),
+		                                         vector<Value> {Value("same-A"), Value("same-M"), Value("same-Z")});
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0));
+		auto prefix = make_uniq<BoundFunctionExpression>(
+		    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(LogicalType::VARCHAR)), std::move(arguments),
+		    make_uniq<PrefixRangeFunctionData>(nullptr, true, "k", LogicalType::VARCHAR, 0.5f, 6));
+		auto active_prefix = CreateSelectivityOptionalFilterExpression(prefix->Copy(), LogicalType::VARCHAR, 0.5f, 6);
+		auto active_in = CreateSelectivityOptionalFilterExpression(in_filter->Copy(), LogicalType::VARCHAR, 0.5f, 6);
+		REQUIRE(ExpressionHeuristics::Cost(*active_in) == ExpressionHeuristics::Cost(*in_filter));
+		REQUIRE(ExpressionHeuristics::Cost(*active_prefix) == ExpressionHeuristics::Cost(*prefix));
+		REQUIRE(ExpressionHeuristics::Cost(*active_prefix) < ExpressionHeuristics::Cost(*active_in));
+		REQUIRE(ExpressionHeuristics::Cost(
+		            *CreateOptionalFilterExpression(std::move(in_filter), LogicalType::VARCHAR)) == 0);
+	}
 }
 
 TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dynamic_filter_groups]") {

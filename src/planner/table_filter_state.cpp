@@ -1,6 +1,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/context.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/optimizer/expression_heuristics.hpp"
 
 namespace duckdb {
 
@@ -1127,15 +1129,28 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expressi
 			return nullptr;
 		}
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		struct FilterCost {
+			unique_ptr<ExpressionFilterExecutor> executor;
+			idx_t cost;
+		};
+		vector<FilterCost> filters;
+		const auto is_and = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
 		for (auto &child_expr : conjunction.GetChildren()) {
 			auto child_executor = TryCreateFastExecutor(*child_expr, inside_selectivity_optional);
 			if (!child_executor) {
 				return nullptr;
 			}
-			children.push_back(std::move(child_executor));
+			filters.push_back({std::move(child_executor), is_and ? ExpressionHeuristics::Cost(*child_expr) : 0});
 		}
-		if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		if (is_and) {
+			std::stable_sort(filters.begin(), filters.end(),
+			                 [](const FilterCost &left, const FilterCost &right) { return left.cost < right.cost; });
+		}
+		vector<unique_ptr<ExpressionFilterExecutor>> children;
+		for (auto &filter : filters) {
+			children.push_back(std::move(filter.executor));
+		}
+		if (is_and) {
 			return make_uniq<ConjunctionAndFilterExecutor>(std::move(children));
 		}
 		return make_uniq<ConjunctionOrFilterExecutor>(std::move(children));

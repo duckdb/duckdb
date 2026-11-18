@@ -132,11 +132,22 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 	if (BoundCastExpression::IsCast(expr)) {
 		return CastExpressionCost(expr);
 	}
-	identifier_map_t<idx_t> function_costs = {{"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
-	                                          {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
-	                                          {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
-	                                          {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
-	                                          {"||", 200}};
+	if (expr.Function().GetName() == OptionalFilterScalarFun::NAME) {
+		return 0;
+	}
+	if (expr.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+		auto child = ExpressionFilter::GetOptionalFilterChild(expr);
+		return child ? Cost(*child) : 0;
+	}
+	identifier_map_t<idx_t> function_costs = {{"+", 5},          {"-", 5},
+	                                          {"&", 5},          {"#", 5},
+	                                          {">>", 5},         {"<<", 5},
+	                                          {"abs", 5},        {"*", 10},
+	                                          {"%", 10},         {"/", 15},
+	                                          {"date_part", 20}, {"year", 20},
+	                                          {"round", 100},    {"~~", 200},
+	                                          {"!~~", 200},      {"regexp_matches", 200},
+	                                          {"||", 200},       {PrefixRangeScalarFun::NAME, 20}};
 
 	idx_t cost_children = 0;
 	for (auto &child : expr.GetChildren()) {
