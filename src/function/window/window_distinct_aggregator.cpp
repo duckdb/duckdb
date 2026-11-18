@@ -140,8 +140,8 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	}
 
 	auto key_type = WindowCollectionChunkScanner::PrefixStructType(sort_types, aggregator.arg_types.size());
-	key_distinct_from =
-	    BoundComparisonExpression::CreateOnColumns(ExpressionType::COMPARE_DISTINCT_FROM, key_type, 0, key_type, 1);
+	key_distinct_from = BoundComparisonExpression::CreateOnColumns(client, ExpressionType::COMPARE_DISTINCT_FROM,
+	                                                               key_type, 0, key_type, 1);
 
 	sort = make_uniq<Sort>(client, orders, sort_types, sort_cols);
 	global_sink = sort->GetGlobalSinkState(client);

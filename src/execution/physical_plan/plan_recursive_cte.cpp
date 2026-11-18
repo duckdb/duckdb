@@ -117,8 +117,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		key_normalizers.clear();
 	}
 	for (idx_t i = 0; i < payload_types.size(); i++) {
-		payload_distinct_from.push_back(BoundComparisonExpression::CreateOnColumns(
-		    ExpressionType::COMPARE_DISTINCT_FROM, payload_types[i], i, payload_types[i], payload_types.size() + i));
+		payload_distinct_from.push_back(
+		    BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM, payload_types[i],
+		                                               i, payload_types[i], payload_types.size() + i));
 	}
 	if (!op.union_all) {
 		for (idx_t i = 0; i < payload_types.size(); i++) {

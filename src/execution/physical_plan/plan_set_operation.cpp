@@ -95,13 +95,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 			auto select_list = CreatePartitionedRowNumExpression(context, types);
 			auto &left_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
+			    Make<PhysicalWindow>(context, window_types, std::move(select_list), left.get().estimated_cardinality);
 			left_window.children.push_back(left);
 			left = left_window;
 
 			select_list = CreatePartitionedRowNumExpression(context, types);
 			auto &right_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
+			    Make<PhysicalWindow>(context, window_types, std::move(select_list), right.get().estimated_cardinality);
 			right_window.children.push_back(right);
 			right = right_window;
 

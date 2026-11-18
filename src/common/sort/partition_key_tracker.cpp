@@ -40,6 +40,12 @@ void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
 	hashes.resize(partition_count);
 	representatives.Reset();
 	representatives.SetChildCardinality(partition_count);
+	// the comparisons slice the representatives, so the bins without a key must hold valid (NULL) values
+	for (auto &representative : representatives.data) {
+		for (idx_t bin_idx = 0; bin_idx < partition_count; bin_idx++) {
+			FlatVector::SetNull(representative, bin_idx, true);
+		}
+	}
 }
 
 bool PartitionKeyTracker::CanBypass(idx_t hash_bin) const {

@@ -177,9 +177,9 @@ idx_t BetweenSelect(DataChunk &args, ExpressionState &state, optional_ptr<const 
 }
 #endif
 
-unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
-                                                      unique_ptr<Expression> upper, bool lower_inclusive,
-                                                      bool upper_inclusive) {
+unique_ptr<Expression> BoundBetweenExpression::Create(ClientContext &context, unique_ptr<Expression> input,
+                                                      unique_ptr<Expression> lower, unique_ptr<Expression> upper,
+                                                      bool lower_inclusive, bool upper_inclusive) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(input));
 	children.push_back(std::move(lower));
@@ -187,9 +187,11 @@ unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> inp
 
 	auto &input_type = children[0]->GetReturnType();
 	auto lower_comparison = BoundComparisonExpression::CreateOnColumns(
-	    BoundBetweenExpression::LowerComparisonType(lower_inclusive), input_type, 0, children[1]->GetReturnType(), 1);
+	    context, BoundBetweenExpression::LowerComparisonType(lower_inclusive), input_type, 0,
+	    children[1]->GetReturnType(), 1);
 	auto upper_comparison = BoundComparisonExpression::CreateOnColumns(
-	    BoundBetweenExpression::UpperComparisonType(upper_inclusive), input_type, 0, children[2]->GetReturnType(), 2);
+	    context, BoundBetweenExpression::UpperComparisonType(upper_inclusive), input_type, 0,
+	    children[2]->GetReturnType(), 2);
 	auto comparison = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 	                                                        std::move(lower_comparison), std::move(upper_comparison));
 	auto function_data = make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive, std::move(comparison));

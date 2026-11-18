@@ -663,7 +663,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 		for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
 			auto &type = partition_key_types[key_idx];
 			key_mismatches.push_back(BoundComparisonExpression::CreateOnColumns(
-			    ExpressionType::COMPARE_DISTINCT_FROM, type, key_idx, type, partition_key_count + key_idx));
+			    client, ExpressionType::COMPARE_DISTINCT_FROM, type, key_idx, type, partition_key_count + key_idx));
 		}
 		partition_key_mismatch =
 		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(key_mismatches));

@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                                       PhysicalOperator &left, PhysicalOperator &right,
-                                                       vector<JoinCondition> cond, JoinType join_type,
-                                                       idx_t estimated_cardinality,
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                                       LogicalComparisonJoin &op, PhysicalOperator &left,
+                                                       PhysicalOperator &right, vector<JoinCondition> cond,
+                                                       JoinType join_type, idx_t estimated_cardinality,
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
@@ -52,7 +52,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
 			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	}
-	tail_predicate = CreateTailPredicate(conditions, 1);
+	tail_predicate = CreateTailPredicate(context, conditions, 1);
 }
 
 //===--------------------------------------------------------------------===//

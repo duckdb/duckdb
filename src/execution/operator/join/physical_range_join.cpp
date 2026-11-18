@@ -520,7 +520,8 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	}
 }
 
-unique_ptr<Expression> PhysicalRangeJoin::CreateTailPredicate(const vector<JoinCondition> &conditions,
+unique_ptr<Expression> PhysicalRangeJoin::CreateTailPredicate(ClientContext &context,
+                                                              const vector<JoinCondition> &conditions,
                                                               idx_t tail_begin) {
 	if (tail_begin >= conditions.size()) {
 		return nullptr;
@@ -530,7 +531,7 @@ unique_ptr<Expression> PhysicalRangeJoin::CreateTailPredicate(const vector<JoinC
 	for (idx_t tail_idx = 0; tail_idx < tail_count; tail_idx++) {
 		auto &condition = conditions[tail_begin + tail_idx];
 		comparisons.push_back(BoundComparisonExpression::CreateOnColumns(
-		    condition.GetComparisonType(), condition.GetLHS().GetReturnType(), tail_idx,
+		    context, condition.GetComparisonType(), condition.GetLHS().GetReturnType(), tail_idx,
 		    condition.GetRHS().GetReturnType(), tail_count + tail_idx));
 	}
 	return BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(comparisons));

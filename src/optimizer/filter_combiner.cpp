@@ -216,7 +216,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
 					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
 					auto between =
-					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					    BoundBetweenExpression::Create(context, entries[i].get().Copy(), std::move(lower_constant),
 					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
 					callback(std::move(between));
 				}

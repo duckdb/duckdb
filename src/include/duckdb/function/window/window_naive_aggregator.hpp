@@ -17,7 +17,8 @@ class WindowAggregateExecutor;
 // Used for validation
 class WindowNaiveAggregator : public WindowAggregator {
 public:
-	WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared);
+	WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared,
+	                      ClientContext &client);
 	~WindowNaiveAggregator() override;
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;

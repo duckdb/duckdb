@@ -11,9 +11,9 @@
 
 namespace duckdb {
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                               PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> conds, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                               LogicalComparisonJoin &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> conds, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
@@ -30,17 +30,17 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
 	}
 	if (predicate && conditions.size() == 1) {
 		auto &condition = conditions[0];
-		condition_comparison = BoundComparisonExpression::CreateOnColumns(condition.GetComparisonType(),
+		condition_comparison = BoundComparisonExpression::CreateOnColumns(context, condition.GetComparisonType(),
 		                                                                  condition.GetLHS().GetReturnType(), 0,
 		                                                                  condition.GetRHS().GetReturnType(), 1);
 	}
 }
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                               PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                               LogicalComparisonJoin &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality)
-    : PhysicalNestedLoopJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality,
+    : PhysicalNestedLoopJoin(physical_plan, context, op, left, right, std::move(cond), join_type, estimated_cardinality,
                              nullptr) {
 }
 

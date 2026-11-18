@@ -164,7 +164,8 @@ public:
 	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx,
 	                               const unsafe_vector<idx_t> &result, SortedRunScanState &scan_state);
 	//! The conjunction of the conditions from tail_begin on, over [left tail keys..., right tail keys...]
-	static unique_ptr<Expression> CreateTailPredicate(const vector<JoinCondition> &conditions, idx_t tail_begin);
+	static unique_ptr<Expression> CreateTailPredicate(ClientContext &context, const vector<JoinCondition> &conditions,
+	                                                  idx_t tail_begin);
 	//! The input types of CreateTailPredicate
 	static vector<LogicalType> GetTailTypes(const vector<JoinCondition> &conditions, idx_t tail_begin);
 

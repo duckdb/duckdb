@@ -13,16 +13,16 @@
 
 namespace duckdb {
 
-PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
-                           idx_t limit, idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter_p,
-                           idx_t estimated_cardinality)
+PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+                           vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+                           shared_ptr<DynamicFilterData> dynamic_filter_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality),
       orders(std::move(orders)), limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)) {
 	const auto order_count = this->orders.size();
 	for (idx_t order_idx = 0; order_idx < order_count; order_idx++) {
 		auto &type = this->orders[order_idx].expression->GetReturnType();
 		not_distinct_from.push_back(BoundComparisonExpression::CreateOnColumns(
-		    ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, order_idx, type, order_count + order_idx));
+		    context, ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, order_idx, type, order_count + order_idx));
 	}
 }
 

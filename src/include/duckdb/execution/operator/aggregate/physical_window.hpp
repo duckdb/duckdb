@@ -20,10 +20,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::WINDOW;
 
 public:
-	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	               idx_t estimated_cardinality, vector<column_t> partitions);
-	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	               idx_t estimated_cardinality);
+	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+	               vector<column_t> partitions);
+	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;

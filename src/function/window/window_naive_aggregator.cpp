@@ -8,13 +8,15 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // WindowNaiveAggregator
 //===--------------------------------------------------------------------===//
-WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
+WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared,
+                                             ClientContext &client)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
 	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
@@ -23,8 +25,9 @@ WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &exec
 		vector<unique_ptr<Expression>> arg_equals;
 		for (idx_t arg_idx = 0; arg_idx < arg_types.size(); arg_idx++) {
 			auto &arg_type = arg_types[arg_idx];
-			arg_equals.push_back(BoundComparisonExpression::CreateOnColumns(
-			    ExpressionType::COMPARE_NOT_DISTINCT_FROM, arg_type, arg_idx, arg_type, arg_types.size() + arg_idx));
+			arg_equals.push_back(
+			    BoundComparisonExpression::CreateOnColumns(client, ExpressionType::COMPARE_NOT_DISTINCT_FROM, arg_type,
+			                                               arg_idx, arg_type, arg_types.size() + arg_idx));
 		}
 		args_equal = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(arg_equals));
 	}
