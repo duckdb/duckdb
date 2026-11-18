@@ -34,12 +34,14 @@
 // ordinary aggregate or join.
 #include "duckdb/optimizer/set_operation_aggregate.hpp"
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -83,13 +85,48 @@ optional_idx MultiplyCounts(optional_idx left, optional_idx right) {
 	return left.GetIndex() * right.GetIndex();
 }
 
-optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, const ColumnBinding &binding,
-                                 idx_t depth);
+//! Estimates how many distinct values the columns of an operator have, if there is anything to tell: a constant has
+//! one value, a column what the scan it comes from says, and another expression at most as many as the combinations
+//! of the columns it reads. A column is estimated once per operator, so that a column that is read many times in the
+//! plan below, as by a chain of projections that each read the one below twice, costs no more than reading the plan
+class DistinctCountEstimator {
+public:
+	explicit DistinctCountEstimator(ClientContext &context) : context(context) {
+	}
 
-//! An estimate of the number of distinct values of an expression over the columns of op, if there is one: a constant
-//! has one value, a column what the scan it comes from says, and another expression at most as many as the
-//! combinations of the columns it reads
-optional_idx ExpressionDistinctCount(ClientContext &context, LogicalOperator &op, const Expression &expr, idx_t depth) {
+	//! An estimate of the number of distinct values of a column that op produces, if there is one
+	optional_idx ColumnDistinctCount(LogicalOperator &op, const ColumnBinding &binding);
+
+private:
+	optional_idx EstimateColumn(LogicalOperator &op, const ColumnBinding &binding);
+	optional_idx EstimateExpression(LogicalOperator &op, const Expression &expr);
+
+private:
+	ClientContext &context;
+	//! The estimates so far, per operator and column
+	reference_map_t<LogicalOperator, column_binding_map_t<optional_idx>> estimates;
+	//! How deep below the set operation the estimate currently is
+	idx_t depth = 0;
+};
+
+optional_idx DistinctCountEstimator::ColumnDistinctCount(LogicalOperator &op, const ColumnBinding &binding) {
+	auto &op_estimates = estimates[op];
+	auto entry = op_estimates.find(binding);
+	if (entry != op_estimates.end()) {
+		return entry->second;
+	}
+	optional_idx result;
+	if (depth < MAX_DISTINCT_COUNT_DEPTH) {
+		depth++;
+		result = EstimateColumn(op, binding);
+		depth--;
+	}
+	// the map can have grown while the column was estimated
+	estimates[op][binding] = result;
+	return result;
+}
+
+optional_idx DistinctCountEstimator::EstimateExpression(LogicalOperator &op, const Expression &expr) {
 	if (expr.IsFoldable()) {
 		return 1;
 	}
@@ -100,9 +137,11 @@ optional_idx ExpressionDistinctCount(ClientContext &context, LogicalOperator &op
 	bool has_column = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		has_column = true;
-		result = colref.Depth() == 0
-		             ? MultiplyCounts(result, ColumnDistinctCount(context, op, colref.Binding(), depth + 1))
-		             : optional_idx();
+		if (colref.Depth() != 0) {
+			result = optional_idx();
+		} else if (result.IsValid()) {
+			result = MultiplyCounts(result, ColumnDistinctCount(op, colref.Binding()));
+		}
 	});
 	if (!has_column) {
 		return optional_idx();
@@ -129,12 +168,7 @@ optional_idx ExpressionDistinctCount(ClientContext &context, LogicalOperator &op
 	return result;
 }
 
-//! An estimate of the number of distinct values of a column that op produces, if there is one
-optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, const ColumnBinding &binding,
-                                 idx_t depth) {
-	if (depth > MAX_DISTINCT_COUNT_DEPTH) {
-		return optional_idx();
-	}
+optional_idx DistinctCountEstimator::EstimateColumn(LogicalOperator &op, const ColumnBinding &binding) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
@@ -163,7 +197,7 @@ optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, co
 		if (binding.table_index != projection.table_index || binding.column_index >= op.expressions.size()) {
 			return optional_idx();
 		}
-		return ExpressionDistinctCount(context, *op.children[0], *op.expressions[binding.column_index], depth);
+		return EstimateExpression(*op.children[0], *op.expressions[binding.column_index]);
 	}
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = op.Cast<LogicalSetOperation>();
@@ -176,7 +210,7 @@ optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, co
 			if (binding.column_index >= child_bindings.size()) {
 				return optional_idx();
 			}
-			auto child_count = ColumnDistinctCount(context, *child, child_bindings[binding.column_index], depth + 1);
+			auto child_count = ColumnDistinctCount(*child, child_bindings[binding.column_index]);
 			if (!child_count.IsValid()) {
 				return optional_idx();
 			}
@@ -195,7 +229,7 @@ optional_idx ColumnDistinctCount(ClientContext &context, LogicalOperator &op, co
 		for (auto &child : op.children) {
 			for (auto &child_binding : child->GetColumnBindings()) {
 				if (child_binding == binding) {
-					return ColumnDistinctCount(context, *child, binding, depth + 1);
+					return ColumnDistinctCount(*child, binding);
 				}
 			}
 		}
@@ -246,9 +280,10 @@ bool SetOperationAggregate::FewGroupsOfManyRows(LogicalSetOperation &setop) {
 		return false;
 	}
 	auto &left = *setop.children[0];
+	DistinctCountEstimator estimator(context);
 	optional_idx groups = 1;
 	for (auto &binding : left.GetColumnBindings()) {
-		groups = MultiplyCounts(groups, ColumnDistinctCount(context, left, binding, 0));
+		groups = MultiplyCounts(groups, estimator.ColumnDistinctCount(left, binding));
 	}
 	if (!groups.IsValid()) {
 		return false;
