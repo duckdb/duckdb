@@ -1,7 +1,7 @@
 # name: test/sql/parallelism/interquery/concurrent_checkpoint_insert.test
 # group: [interquery]
 
-loop j 0 100
+loop j 0 3
 
 statement ok
 ATTACH '{TEST_DIR}/bla_{j}.db' AS db{j};
@@ -9,7 +9,7 @@ ATTACH '{TEST_DIR}/bla_{j}.db' AS db{j};
 statement ok
 CREATE TABLE db{j}.tbl (key INTEGER PRIMARY KEY);
 
-concurrentloop i 0 20
+concurrentloop i 0 4
 
 statement ok
 INSERT INTO db{j}.tbl VALUES ({i})

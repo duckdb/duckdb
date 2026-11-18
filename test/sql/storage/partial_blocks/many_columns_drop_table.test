@@ -28,7 +28,19 @@ INSERT INTO integers2 VALUES (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 statement ok
 COMMIT
 
-loop i 0 100
+query I
+SELECT [*COLUMNS(*)] = range(i0, i0 + 100) FROM integers
+----
+true
+true
+
+query I
+SELECT [*COLUMNS(*)] = range(i0, i0 + 100) FROM integers2
+----
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers
@@ -59,7 +71,13 @@ endloop
 statement ok
 DROP TABLE integers2
 
-loop i 0 100
+query I
+SELECT [*COLUMNS(*)] = range(i0, i0 + 100) FROM integers
+----
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers

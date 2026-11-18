@@ -1,4 +1,4 @@
-# name: test/sql/timezone/test_icu_datetime_sweep.test
+# name: test/sql/timezone/test_icu_datetime_sweep.test_slow
 # description: A broad sweep over every time zone and every calendar system
 # group: [timezone]
 

@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/read_ahead/readahead_file_descriptor_limit.test
+# name: test/sql/copy/parquet/read_ahead/readahead_file_descriptor_limit.test_slow
 # description: A scan keeps the files it opens ahead within the file descriptor limit
 # group: [read_ahead]
 

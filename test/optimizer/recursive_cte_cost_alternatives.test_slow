@@ -1,4 +1,4 @@
-# name: test/optimizer/recursive_cte_cost_alternatives.test
+# name: test/optimizer/recursive_cte_cost_alternatives.test_slow
 # description: Allow independent builds that enable a compound join key
 # group: [optimizer]
 
