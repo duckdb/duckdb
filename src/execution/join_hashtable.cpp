@@ -1892,8 +1892,12 @@ void ScanStructure::FlushProbeMatches() {
 	if (local_probe_matches == 0) {
 		return;
 	}
-	ht.total_probe_matches.fetch_add(local_probe_matches, std::memory_order_relaxed);
+	ht.probe_matches.Add(local_probe_matches);
 	local_probe_matches = 0;
+}
+
+idx_t JoinHashTable::GetTotalProbeMatches() const {
+	return probe_matches.GetTotal();
 }
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
@@ -3009,7 +3013,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	finalized = false;
 	has_null = false;
 	chains_longer_than_one.store(false, std::memory_order_relaxed);
-	total_probe_matches = 0;
+	probe_matches.Reset();
 	load_factor = DEFAULT_LOAD_FACTOR;
 	bloom_filter.reset();
 	should_build_bloom_filter = false;

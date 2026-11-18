@@ -612,6 +612,10 @@ struct VariantColumnCheckpointState : public ColumnCheckpointState {
 	vector<unique_ptr<ColumnCheckpointState>> child_states;
 
 public:
+	bool IsShredded() const {
+		return child_states.size() == 2;
+	}
+
 	shared_ptr<ColumnData> CreateEmptyColumnData() override {
 		return make_shared_ptr<VariantColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
 		                                          original_column.column_index, original_column.type,
@@ -637,15 +641,17 @@ public:
 		D_ASSERT(global_stats);
 		global_stats->Merge(*validity_state->GetStatistics());
 		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
-		if (child_states.size() == 2) {
+		if (IsShredded()) {
 			VariantStats::SetShreddedStats(*global_stats, child_states[1]->GetStatistics());
+		} else {
+			VariantStats::MarkAsNotShredded(*global_stats);
 		}
 		return std::move(global_stats);
 	}
 
 	PersistentColumnData ToPersistentData() override {
 		PersistentColumnData data(original_column.type);
-		if (child_states.size() == 2) {
+		if (IsShredded()) {
 			//! Use the type of the column data we used to create the Checkpoint
 			//! This will either be a pointer to shredded_data[1] if we decided to shred
 			//! Or to the existing shredded column data if we didn't decide to reshred
@@ -923,6 +929,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	} else {
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
+		VariantStats::MarkAsNotShredded(target_stats);
 	}
 	this->count = validity->count.load();
 }
