@@ -1,9 +1,14 @@
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -11,6 +16,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -59,6 +65,32 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 			return FindBaseTableColumn(*projection.children[0], bound_colref.Binding());
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		// a group or the first value of a column keeps the constraints of that column (DISTINCT plans this way)
+		auto &aggregate = op.Cast<LogicalAggregate>();
+		if (aggregate.grouping_sets.size() > 1) {
+			// ROLLUP, CUBE and GROUPING SETS repeat keys and introduce NULLs
+			break;
+		}
+		optional_ptr<const Expression> source;
+		if (binding.table_index == aggregate.group_index) {
+			if (!aggregate.grouping_sets.empty() &&
+			    aggregate.grouping_sets[0].find(binding.column_index) == aggregate.grouping_sets[0].end()) {
+				break;
+			}
+			source = aggregate.GetExpression(binding);
+		} else if (binding.table_index == aggregate.aggregate_index && !aggregate.groups.empty()) {
+			// without groups first() returns NULL on empty input
+			auto &aggr = aggregate.GetExpression(binding).Cast<BoundAggregateExpression>();
+			if (aggr.Function().GetName() == FirstFun::Name && !aggr.GetFilter() && aggr.GetChildren().size() == 1) {
+				source = *aggr.GetChildren()[0];
+			}
+		}
+		if (source && source->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			return FindBaseTableColumn(*aggregate.children[0], source->Cast<BoundColumnRefExpression>().Binding());
 		}
 		break;
 	}
@@ -117,7 +149,7 @@ BoundStatement Binder::BindDescribeQuery(ShowRef &ref) {
 			// we can! emit the information from the base table directly
 			PragmaTableInfo::GetColumnInfo(*result.table, *result.column, output);
 			// Override the base column name with the alias if one is specified.
-			if (alias != result.column->Name()) {
+			if (alias.GetIdentifierName() != result.column->Name().GetIdentifierName()) {
 				output.data[0].SetValue(row_index, Value(alias));
 			}
 		} else {
@@ -163,52 +195,80 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	if (lname == "\"databases\"") {
 		sql = PragmaShowDatabases();
 	} else if (lname == "\"schemas\"") {
-		sql = "SELECT "
-		      " schema.database_name, "
-		      " schema.schema_name, "
-		      " ((select current_schema() = schema.schema_name) "
-		      "  and (select current_database() = schema.database_name)) \"current\" "
+		auto &default_entry = ClientData::Get(context).catalog_search_path->GetDefault();
+		auto catalog_name = default_entry.GetCatalog();
+		if (catalog_name.empty()) {
+			catalog_name = DatabaseManager::GetDefaultDatabase(context);
+		}
+		auto schema =
+		    Catalog::GetSchema(context, catalog_name, default_entry.GetSchemaPath(), OnEntryNotFound::RETURN_NULL);
+		auto current = schema ? StringUtil::Format("(schema.oid = %llu AND schema.database_oid = %llu)", schema->oid,
+		                                           schema->ParentCatalog().GetOid())
+		                      : "false";
+		SetAlwaysRequireRebind();
+		sql = "SELECT schema.database_name, schema.schema_name, " + current +
+		      " \"current\" "
 		      "FROM duckdb_schemas() schema "
 		      "JOIN duckdb_databases dbs USING (database_oid) "
 		      "WHERE dbs.internal = false "
 		      "ORDER BY all;";
 	} else if (lname == "\"tables\"") {
-		sql = PragmaShowTables();
-	} else if (ref.show_type == ShowType::SHOW_FROM) {
-		auto catalog_name = ref.GetCatalogName();
-		auto schema_name = ref.GetSchemaName();
-
-		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
-		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
-
-		optional_idx schema_oid;
-		// If fully qualified, check if the schema exists
-		if (!catalog_name.empty() && !schema_name.empty()) {
-			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
-			if (!schema_entry) {
-				// "a.b" can also name a nested schema
-				vector<Identifier> nested_path {catalog_name, schema_name};
-				schema_entry = Catalog::GetSchema(context, Identifier(), nested_path, OnEntryNotFound::RETURN_NULL);
-				if (schema_entry) {
-					schema_oid = schema_entry->oid;
+		SetAlwaysRequireRebind();
+		vector<string> schemas;
+		for (auto &entry : ClientData::Get(context).catalog_search_path->Get()) {
+			auto catalog = entry.GetCatalog();
+			if (catalog.empty()) {
+				catalog = DatabaseManager::TryGetDefaultDatabase(context);
+				if (catalog.empty()) {
+					continue;
 				}
 			}
-			if (!schema_entry) {
-				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
-				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
-			}
-		} else if (catalog_name.empty() && !schema_name.empty()) {
-			// We have a schema name, use default catalog
-			auto &client_data = ClientData::Get(context);
-			auto &default_entry = client_data.catalog_search_path->GetDefault();
-			catalog_name = default_entry.GetCatalog();
-			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
-			if (!schema_entry) {
-				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
-				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
+			auto schema = Catalog::GetSchema(context, catalog, entry.GetSchemaPath(), OnEntryNotFound::RETURN_NULL);
+			if (schema) {
+				schemas.push_back(StringUtil::Format("(database_name = %s AND schema_oid = %llu)",
+				                                     SQLString(schema->ParentCatalog().GetName().GetIdentifierName()),
+				                                     schema->oid));
 			}
 		}
-		sql = PragmaShowTables(catalog_name.GetIdentifierName(), schema_name.GetIdentifierName(), schema_oid);
+		sql = PragmaShowTables(schemas.empty() ? "false" : StringUtil::Join(schemas, " OR "));
+	} else if (ref.show_type == ShowType::SHOW_FROM) {
+		SetAlwaysRequireRebind();
+		auto schema_path = ref.qualified_name.Parent().Path();
+		Identifier catalog_name;
+		if (schema_path.size() == 1) {
+			BindSchemaOrCatalog(catalog_name, schema_path[0]);
+			if (schema_path[0].empty()) {
+				schema_path.clear();
+			}
+		} else if (Catalog::GetCatalogEntry(context, schema_path[0])) {
+			catalog_name = schema_path[0];
+			schema_path.erase(schema_path.begin());
+		}
+		optional_idx schema_oid;
+		if (!schema_path.empty()) {
+			if (catalog_name.empty()) {
+				catalog_name = ClientData::Get(context).catalog_search_path->ResolveCatalog(schema_path[0]);
+			}
+			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_path, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				auto name = ref.qualified_name.Parent();
+				if (name.Path().size() == 1) {
+					name = QualifiedName({catalog_name}, name.Name());
+				}
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s\" found.", name.ToString());
+			}
+			catalog_name = schema_entry->ParentCatalog().GetName();
+			schema_oid = schema_entry->oid;
+		}
+		vector<string> filters;
+		if (!catalog_name.empty()) {
+			filters.push_back(
+			    StringUtil::Format("lower(database_name) = lower(%s)", SQLString(catalog_name.GetIdentifierName())));
+		}
+		if (schema_oid.IsValid()) {
+			filters.push_back(StringUtil::Format("schema_oid = %llu", schema_oid.GetIndex()));
+		}
+		sql = PragmaShowTables(StringUtil::Join(filters, " AND "));
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {
@@ -216,7 +276,8 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	} else {
 		sql = PragmaShow(ref.GetTableName().GetIdentifierName());
 	}
-	auto select = CreateViewInfo::ParseSelect(sql);
+	auto parser = Parser::GetBuiltinParser();
+	auto select = CreateViewInfo::ParseSelect(parser, sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));
 	return Bind(*subquery);
 }
@@ -273,6 +334,9 @@ static void WarnShowDescribesQuery(ClientContext &context) {
 BoundStatement Binder::BindShow(ShowRef &ref) {
 	BoundStatement result;
 	if (ref.GetTableName().empty()) {
+		if (!ref.query) {
+			throw BinderException("SHOW requires a setting name, a table name or a query");
+		}
 		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE, and not affected
 		// by show_behavior (a parenthesized query is neither a setting nor a named table).
 		WarnShowDescribesQuery(context);

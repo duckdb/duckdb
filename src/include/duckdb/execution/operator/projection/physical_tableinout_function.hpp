@@ -20,8 +20,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INOUT_FUNCTION;
 
 public:
-	PhysicalTableInOutFunction(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
-	                           unique_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
+	PhysicalTableInOutFunction(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundTableFunction function_p,
+	                           cow_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
 	                           vector<idx_t> projection_ids_p, unique_ptr<TableFilterSet> table_filters_p,
 	                           idx_t estimated_cardinality, vector<column_t> projected_input);
 
@@ -47,6 +47,9 @@ public:
 
 	//! Information for WITH ORDINALITY
 	optional_idx ordinality_idx;
+	//! Whether the function consumes a TABLE parameter: its input rows form one invocation,
+	//! so the ordinality numbering continues across them instead of restarting per row
+	bool table_input = false;
 
 	OrderPreservationType OperatorOrder() const override {
 		return function.order_preservation_type;
@@ -54,9 +57,9 @@ public:
 
 private:
 	//! The table function
-	TableFunction function;
+	BoundTableFunction function;
 	//! Bind data of the function
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 	//! The set of column ids to fetch
 	vector<ColumnIndex> column_ids;
 	//! The projected-out column ids

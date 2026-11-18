@@ -63,11 +63,8 @@ class BindAggregateFunctionInput : public BindFunctionInput {
 public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p);
-
-	//! Construct without argument names - looking arguments up by name is not available in this case.
-	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p);
+	                           vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr,
+	                           optional_ptr<const DecimalWidthLimit> decimal_width_limit_p = nullptr);
 
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
@@ -76,6 +73,19 @@ public:
 private:
 	BoundAggregateFunction &bound_function;
 };
+
+class FunctionExpression;
+
+struct AggregateFunctionUnbindInput {
+	AggregateFunctionUnbindInput(const BoundAggregateExpression &expression_p,
+	                             vector<unique_ptr<ParsedExpression>> children_p);
+	~AggregateFunctionUnbindInput();
+
+	const BoundAggregateExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
+typedef unique_ptr<FunctionExpression> (*aggregate_function_unbind_t)(AggregateFunctionUnbindInput &input);
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
@@ -92,8 +102,8 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &
 //! Initializes the local state used by the finalize of the aggregate (optional).
 //! The local state can be used to cache expensive intermediates between finalized groups - callers can keep the
 //! local state alive to re-use it across multiple finalize calls (see AggregateFinalizeInputData).
-typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
-                                                                                optional_ptr<FunctionData> bind_data);
+typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(
+    const BoundAggregateFunction &function, optional_ptr<const FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
@@ -126,7 +136,7 @@ typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, co
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
                                     data_ptr_t g_state);
 
-typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                       const BoundAggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
@@ -194,6 +204,9 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	bool HasUnbindCallback() const { return unbind != nullptr; }
+	aggregate_function_unbind_t GetUnbindCallback() const { return unbind; }
+	void SetUnbindCallback(aggregate_function_unbind_t callback) { unbind = callback; }
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
@@ -296,6 +309,7 @@ public:
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind = nullptr;
+	aggregate_function_unbind_t unbind = nullptr;
 
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor = nullptr;
@@ -337,6 +351,12 @@ public:
 
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
+
+	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
+	bool is_holistic = false;
+
+	//! Whether combining can leave the target referencing the source's memory
+	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
 
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
@@ -384,6 +404,14 @@ public: // Properties
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
+	//! Whether the aggregate is holistic.
+	auto IsHolistic() const -> bool { return properties.is_holistic; }
+	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+	//! Whether combining can leave the target referencing the source's memory
+	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
+	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
+
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
 	bool CanWindow() const { return callbacks.window  || callbacks.window_batch; }
@@ -393,6 +421,9 @@ public: // Callbacks
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; }
 	auto GetBindCallback() const -> bind_aggregate_function_t { return callbacks.bind; }
 	auto SetBindCallback(bind_aggregate_function_t callback) -> void { callbacks.bind = callback; }
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto GetUnbindCallback() const -> aggregate_function_unbind_t { return callbacks.unbind; }
+	auto SetUnbindCallback(aggregate_function_unbind_t callback) -> void { callbacks.unbind = callback; }
 
 	auto HasStateInitCallback() const -> bool { return callbacks.initialize != nullptr; }
 	auto GetStateInitCallback() const -> aggregate_initialize_t { return callbacks.initialize; }
@@ -502,6 +533,14 @@ protected:
 
 class AggregateFunction : public BaseAggregateFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	static constexpr const FunctionKind KIND = FunctionKind::AGGREGATE;
+	FunctionKind GetKind() const override {
+		return KIND;
+	}
+	//! The properties of the function, for code that only knows it as a SimpleFunction
+	auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> override {
+		return GetProperties();
+	}
 	static constexpr aggregate_cluster_update_t NoClusterUpdate() {
 		return nullptr;
 	}
@@ -710,6 +749,10 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result);
 
+	//! The state layout of a STATE with a STATE_TYPE - defined out-of-line (after BoundAggregateFunction is complete)
+	template <class STATE>
+	static AggregateStateLayout StructStateLayout(AggregateLayoutInput &input);
+
 	template <class STATE>
 	static idx_t StateSize(AggregateStateInput &) {
 		return sizeof(STATE);
@@ -856,13 +899,32 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
 	//! Restore the definition after the bound function has been replaced wholesale, together with the
 	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {
@@ -871,7 +933,7 @@ public:
 	const LogicalType &GetLogicalReturnType() const {
 		return logical_return_type;
 	}
-	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
+	AggregateStateLayout GetStateType(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
 		return callbacks.get_state_type(input);
@@ -903,27 +965,30 @@ private:
 template <class STATE>
 inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 	if constexpr (HasStructStateType<STATE>::value) {
-		using ST = typename STATE::STATE_TYPE;
-		result.SetStructStateExport([](AggregateLayoutInput &input) {
-			auto &bound = input.function;
-			AggregateStateLayout layout;
-			if (bound.GetReturnType().IsAggregateState()) {
-				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
-				// its return type IS the state type already
-				layout.type = bound.GetReturnType();
-			} else {
-				layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
-			}
-			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-			layout.field = BuildStateField<ST>();
-			AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-			return layout;
-		});
+		result.SetStructStateExport(StructStateLayout<STATE>);
 	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
 		result.SetStructStateExport([](AggregateLayoutInput &) {
 			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
 		});
 	}
+}
+
+template <class STATE>
+inline AggregateStateLayout AggregateFunction::StructStateLayout(AggregateLayoutInput &input) {
+	using ST = typename STATE::STATE_TYPE;
+	auto &bound = input.function;
+	AggregateStateLayout layout;
+	if (bound.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = bound.GetReturnType();
+	} else {
+		layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<ST>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	return layout;
 }
 
 // Defined here (after BoundAggregateFunction is complete) so the body can access the bound function's types.

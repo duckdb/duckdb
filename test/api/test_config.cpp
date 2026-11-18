@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -83,6 +84,11 @@ TEST_CASE("Test allowed options", "[api]") {
 		option = "logging_mode";
 	}
 
+	SECTION("logging_sink") {
+		config_dict.emplace("logging_sink", Value::BOOLEAN(false));
+		option = "logging_sink";
+	}
+
 	SECTION("logging_storage") {
 		config_dict.emplace("logging_storage", Value::BOOLEAN(false));
 		option = "logging_storage";
@@ -119,7 +125,7 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db(nullptr);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
+		REQUIRE_THAT(res->Collection().GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
 	}
 	{
 		// The latest provided duckdb_api is used
@@ -129,7 +135,7 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db("", &config);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+		REQUIRE_THAT(res->Collection().GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
 	{
 		DuckDB db(nullptr);
@@ -166,10 +172,10 @@ TEST_CASE("Test secret_directory configuration", "[api]") {
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_extension_dir = con.Query("SELECT current_setting('extension_directory') AS extdir;");
-	REQUIRE(select_extension_dir->GetValue(0, 0).ToString() == "my_extension_dir");
+	REQUIRE(select_extension_dir->Collection().GetValue(0, 0).ToString() == "my_extension_dir");
 
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == "my_secret_dir");
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == "my_secret_dir");
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration", "[api]") {
@@ -190,11 +196,11 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_secret_file));
 }
 
@@ -217,18 +223,18 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Do not create a secret here because it will initialize the secret manager and forbid us to update the value.
 
 	// Update the secret directory and ensure that the setting is updated
 	con.Query("SET secret_directory='" + new_secret_dir + "';");
 	auto select_new_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_new_secret_dir->GetValue(0, 0).ToString() == new_secret_dir);
+	REQUIRE(select_new_secret_dir->Collection().GetValue(0, 0).ToString() == new_secret_dir);
 
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(new_create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_other_secret_file));
 }
 
@@ -250,14 +256,189 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_secret_file));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");
 	REQUIRE_FAIL(update_secret_directory);
+}
+
+TEST_CASE("Test warnings_as_errors in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(false)));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(true)),
+	                    Catch::Contains("startup config"));
+	// string values, as the C API passes them
+	REQUIRE_NOTHROW(config.SetOptionByName("warnings_as_errors", Value("false")));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value("true")), Catch::Contains("startup config"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value()), Catch::Contains("cannot be NULL"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SELECT current_setting('warnings_as_errors')");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+}
+
+TEST_CASE("Test deprecated extension options warn when set", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("my_deprecated_option", "A deprecated option", LogicalType::BOOLEAN, Value(false),
+	                          nullptr, SetScope::SESSION, false, true);
+	config.AddExtensionOption("my_option", "An option", LogicalType::BOOLEAN, Value(false));
+
+	REQUIRE_NO_FAIL(con.Query("SET enable_logging=true"));
+	REQUIRE_NO_FAIL(con.Query("SET warnings_as_errors=true"));
+
+	auto result = con.Query("SET my_deprecated_option=true");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(),
+	                             "The 'my_deprecated_option' setting is deprecated and will be removed"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_deprecated_option"));
+	REQUIRE_NO_FAIL(con.Query("SET my_option=true"));
+
+	// setting the option directly, as ducklake does, warns as well
+	ExtensionOption option;
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_deprecated_option"), option));
+	REQUIRE_THROWS_WITH(PhysicalSet::SetExtensionVariable(*con.context, option, SetScope::SESSION, Value(true)),
+	                    Catch::Contains("is deprecated"));
+	option = ExtensionOption();
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_option"), option));
+	REQUIRE_NOTHROW(PhysicalSet::SetExtensionVariable(*con.context, option, SetScope::SESSION, Value(true)));
+
+	result = con.Query("SELECT count(*) FROM duckdb_settings() WHERE name = 'my_deprecated_option'");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'my_deprecated_option'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Test extension option defaults are not user settings", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("my_option", "An option", LogicalType::VARCHAR, Value("default"));
+	ExtensionOption option;
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_option"), option));
+	auto setting_index = option.setting_index.GetIndex();
+	Value value;
+
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	auto result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// setting the default explicitly is not the same as leaving it unset
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'default'"));
+	REQUIRE(bool(config.TryGetCurrentUserSetting(setting_index, value)));
+	REQUIRE_NO_FAIL(con.Query("RESET GLOBAL my_option"));
+	REQUIRE(!config.TryGetCurrentUserSetting(setting_index, value));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"default"}));
+
+	// RESET clears the session value, so the connection sees the global value again
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL my_option = 'global'"));
+	REQUIRE_NO_FAIL(con.Query("SET my_option = 'session'"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option"));
+	result = con.Query("SELECT current_setting('my_option')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"global"}));
+
+	// an option without a default is unset again after RESET, not NULL
+	config.AddExtensionOption("my_option_without_default", "An option", LogicalType::BOOLEAN);
+	REQUIRE_NO_FAIL(con.Query("SET my_option_without_default = true"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_option_without_default"));
+	REQUIRE(!con.context->TryGetCurrentSetting(Identifier("my_option_without_default"), value));
+}
+
+TEST_CASE("Test every deprecated setting warns when set", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET enable_logging=true"));
+	REQUIRE_NO_FAIL(con.Query("SET warnings_as_errors=true"));
+	// profiling_mode only has a value while profiling is on
+	REQUIRE_NO_FAIL(con.Query("SET enable_profiling='no_output'"));
+
+	auto settings = con.Query("SELECT name, value FROM duckdb_settings(deprecated := true) ORDER BY name");
+	REQUIRE_NO_FAIL(*settings);
+	idx_t checked = 0;
+	while (auto chunk = settings->Fetch()) {
+		for (idx_t i = 0; i < chunk->size(); i++) {
+			auto name = chunk->GetValue(0, i).ToString();
+			auto value = chunk->GetValue(1, i).ToSQLString();
+			INFO(name);
+			// setting a deprecated setting to its current value warns, which warnings_as_errors turns into an error
+			auto result = con.Query(StringUtil::Format("SET %s = %s", name, value));
+			REQUIRE(result->HasError());
+			if (name == "vacuum_rebuild_indexes") {
+				// only settable in the startup config, so it never reaches the warning
+				REQUIRE(StringUtil::Contains(result->GetError(), "while database is running"));
+			} else {
+				REQUIRE(StringUtil::Contains(result->GetError(), "deprecated"));
+			}
+			checked++;
+		}
+	}
+	REQUIRE(checked > 0);
+}
+
+TEST_CASE("Test the per-connection progress bar options in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar", Value("true")),
+	                    Catch::Contains("enable_progress_bar") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("enable_progress_bar_print", Value("false")),
+	                    Catch::Contains("enable_progress_bar_print") && Catch::Contains("as a global option"));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("progress_bar_time", Value("100")),
+	                    Catch::Contains("progress_bar_time") && Catch::Contains("as a global option"));
+	// the options remain settable per connection
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET progress_bar_time = 100"));
+	auto result = con.Query("SELECT current_setting('progress_bar_time'), current_setting('enable_progress_bar')");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true}));
+}
+
+TEST_CASE("Test profiling_renderer_settings is rejected in the startup config", "[api]") {
+	DBConfig config;
+	auto settings =
+	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, {Value("operator_casing")}, {Value("bogus")});
+	REQUIRE_THROWS_WITH(config.SetOptionByName("profiling_renderer_settings", settings),
+	                    Catch::Contains("profiling_renderer_settings") && Catch::Contains("as a global option"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN SELECT 42"));
+	REQUIRE_NO_FAIL(con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'title'}"));
+	REQUIRE_FAIL(con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'bogus'}"));
+}
+
+TEST_CASE("Test buffer_manager_track_eviction_timestamps is fixed once the database is running", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("buffer_manager_track_eviction_timestamps", Value::BOOLEAN(true)));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SET buffer_manager_track_eviction_timestamps = false");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Cannot change buffer_manager_track_eviction_timestamps setting "
+	                                                 "while database is running"));
+	result = con.Query("SELECT current_setting('buffer_manager_track_eviction_timestamps')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}
+
+TEST_CASE("Test tracked_metrics in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("tracked_metrics", Value("['query.*']")));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("tracked_metrics", Value("['query.*', NULL]")),
+	                    Catch::Contains("cannot contain NULL entries"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto expected = Value::LIST(LogicalType::VARCHAR, {Value("query.*")});
+	auto result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
+	// a session value resets to the configured global value
+	REQUIRE_NO_FAIL(con.Query("SET tracked_metrics = ['optimizer.*']"));
+	REQUIRE_NO_FAIL(con.Query("RESET tracked_metrics"));
+	result = con.Query("SELECT current_setting('tracked_metrics')");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected}));
 }

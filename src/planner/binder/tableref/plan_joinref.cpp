@@ -4,6 +4,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
@@ -353,6 +354,40 @@ static bool HasCorrelatedColumns(const Expression &root_expr) {
 	return has_correlated_columns;
 }
 
+static bool IsDependentCondition(const Expression &expr) {
+	return expr.HasSubquery() || HasCorrelatedColumns(expr);
+}
+
+//! Push the conjuncts of a non-inner join condition that reference a single side into that child
+//! Returns the remaining conjuncts, which have to be evaluated by the join
+static unique_ptr<Expression> PushSingleSideConjuncts(JoinType type, JoinRefType ref_type,
+                                                      unique_ptr<LogicalOperator> &left_child,
+                                                      unique_ptr<LogicalOperator> &right_child,
+                                                      unique_ptr<Expression> condition) {
+	unordered_set<TableIndex> left_bindings, right_bindings;
+	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(std::move(condition));
+	LogicalFilter::SplitPredicates(expressions);
+	vector<unique_ptr<Expression>> remaining;
+	for (auto &expr : expressions) {
+		auto side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+		if (side == JoinSide::LEFT && CanPushToLeftChild(type, ref_type)) {
+			PushFilterToChild(left_child, expr);
+		} else if (side == JoinSide::RIGHT && CanPushToRightChild(type, ref_type)) {
+			PushFilterToChild(right_child, expr);
+		} else {
+			remaining.push_back(std::move(expr));
+		}
+	}
+	if (remaining.empty()) {
+		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+	}
+	return BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(remaining));
+}
+
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &context, JoinType type,
                                                               JoinRefType reftype,
                                                               unique_ptr<LogicalOperator> left_child,
@@ -363,6 +398,28 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	                                             conditions);
 	return LogicalComparisonJoin::CreateJoin(type, reftype, std::move(left_child), std::move(right_child),
 	                                         std::move(conditions));
+}
+
+static void PlanMarkJoin(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.TryGetMarkJoinGroupTypes(join.mark_types)) {
+			return;
+		}
+		bool all_equal = !join.conditions.empty();
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				all_equal = false;
+				break;
+			}
+			all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
+		}
+		if (all_equal || join.HasNullSafeMarkJoinConditions() ||
+		    (join.conditions.size() == 1 && join.conditions[0].IsComparison())) {
+			return;
+		}
+	}
+	throw NotImplementedException("Unsupported explicit MARK join conditions");
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
@@ -384,6 +441,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.lateral) {
+		if (ref.type == JoinType::MARK) {
+			throw NotImplementedException("Unsupported explicit MARK join conditions");
+		}
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
 		return new_plan;
@@ -397,16 +457,19 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		break;
 	}
 	auto has_dependent_condition = ref.ref_type == JoinRefType::REGULAR && ref.type != JoinType::INNER &&
-	                               (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
-	                               ref.duplicate_eliminated_columns.empty();
+	                               IsDependentCondition(*ref.condition) && ref.duplicate_eliminated_columns.empty();
+	if (has_dependent_condition) {
+		// only the conjuncts that remain at the join need dependent join planning
+		ref.condition = PushSingleSideConjuncts(ref.type, ref.ref_type, left, right, std::move(ref.condition));
+		has_dependent_condition = IsDependentCondition(*ref.condition);
+	}
 	if (!has_dependent_condition && ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
 	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// Binding follows the syntactic order. Normalize finalized RIGHT joins only after both sides and ON are bound.
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
-	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
-	    ref.ref_type == JoinRefType::REGULAR) {
+	if (ref.type == JoinType::INNER && IsDependentCondition(*ref.condition) && ref.ref_type == JoinRefType::REGULAR) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto root = LogicalCrossProduct::Create(std::move(left), std::move(right));
@@ -420,6 +483,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		return std::move(filter);
 	}
 	if (has_dependent_condition) {
+		if (ref.type == JoinType::MARK) {
+			throw NotImplementedException("Unsupported explicit MARK join conditions");
+		}
 		auto join = make_uniq<LogicalAnyJoin>(ref.type);
 		join->children.push_back(std::move(left));
 		join->children.push_back(std::move(right));
@@ -439,6 +505,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
+		PlanMarkJoin(*join);
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		D_ASSERT(join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);

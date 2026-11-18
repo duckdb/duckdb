@@ -187,7 +187,7 @@ scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalType &in
 	}
 }
 
-void CMIntegralSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void CMIntegralSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                          const BoundScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.GetArguments());
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
@@ -295,6 +295,16 @@ ScalarFunctionSet InternalDecompressIntegralUbigintFun::GetFunctions() {
 
 ScalarFunctionSet InternalDecompressIntegralUhugeintFun::GetFunctions() {
 	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UHUGEINT));
+}
+
+CMExpressionType CMUtils::GetIntegralType(const BoundScalarFunction &function) {
+	if (function.GetDeserializeCallback() == CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>) {
+		return CMExpressionType::COMPRESS;
+	}
+	if (function.GetDeserializeCallback() == CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>) {
+		return CMExpressionType::DECOMPRESS;
+	}
+	return CMExpressionType::NONE;
 }
 
 } // namespace duckdb

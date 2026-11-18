@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/query_location.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -62,6 +63,12 @@ struct BindLogicalTypeInput {
 	const vector<TypeArgument> &modifiers;
 	//! Location of the type expression as a whole, for errors that are not about one particular modifier
 	QueryLocation query_location;
+	//! The limit of the DECIMAL widths the binder constructs, the max_decimal_width setting without one
+	optional_ptr<const DecimalWidthLimit> decimal_width_limit;
+
+	DecimalWidthLimit GetDecimalWidthLimit() const {
+		return decimal_width_limit ? *decimal_width_limit : DecimalWidthLimit::FromSetting(context);
+	}
 
 	//! Location of the given modifier, falling back to the type itself - a modifier filled in from a parameter
 	//! default has no source text of its own.
@@ -83,6 +90,10 @@ typedef LogicalType (*bind_logical_type_function_t)(BindLogicalTypeInput &input)
 //! turns them into a LogicalType. The arguments handed to the callback are already matched against the signature.
 class TypeConstructor : public SimpleFunction {
 public:
+	static constexpr const FunctionKind KIND = FunctionKind::TYPE;
+	FunctionKind GetKind() const override {
+		return KIND;
+	}
 	DUCKDB_API TypeConstructor(Identifier name, FunctionSignature signature, bind_logical_type_function_t bind);
 	DUCKDB_API explicit TypeConstructor(FunctionSignature signature, bind_logical_type_function_t bind);
 
@@ -104,6 +115,9 @@ public:
 		return bind_function;
 	}
 
+	//! As MAP(key TYPE, value TYPE)
+	DUCKDB_API string ToString() const override;
+
 private:
 	bind_logical_type_function_t bind_function;
 };
@@ -115,10 +129,10 @@ public:
 
 	//! Select the constructor matching the given arguments and invoke it. The context may be null, in which case only
 	//! the built-in implicit cast rules are available. The location is that of the type expression as a whole, and is
-	//! only available when the type came from source text.
+	//! only available when the type came from source text. Decimals are bound within the limit, if one is given
 	DUCKDB_API LogicalType Bind(optional_ptr<ClientContext> context, const LogicalType &base_type,
-	                            const vector<TypeArgument> &arguments,
-	                            QueryLocation query_location = QueryLocation()) const;
+	                            const vector<TypeArgument> &arguments, QueryLocation query_location = QueryLocation(),
+	                            optional_ptr<const DecimalWidthLimit> decimal_width_limit = nullptr) const;
 };
 
 } // namespace duckdb

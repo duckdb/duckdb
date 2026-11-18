@@ -108,10 +108,18 @@ select try(if(random() > 2.0, '123', 'abc')::TINYINT)
 ----
 TRY can not be used in combination with a volatile function
 
-statement error
+# TRY over scalar subqueries is lowered onto the subquery plan, see
+# test/sql/subquery/scalar/test_try_subquery.test; a subquery nested deeper inside the TRY
+# argument re-raises its captured errors at the use site, and the cast around it is maskable
+query I
 select try(CAST((select 'ABC') as INTEGER))
 ----
-TRY can not be used in combination with a scalar subquery
+NULL
+
+query I
+select try((select CAST('ABC' as INTEGER)))
+----
+NULL
 
 # Aggregates or plain column references are also not allowed.
 
@@ -190,8 +198,15 @@ select list_transform([4, 0, 2], lambda x: TRY(10 // x));
 ----
 [2, NULL, 5]
 
-# the originally reported query: decimal overflow caught per-element via TRY
+# the originally reported query: the comparison used to overflow at 38 digits; the common type now grows past it,
+# so there is nothing to catch and the elements compare as unequal
 query I
 select list_transform([100.00, 101.21], lambda x: TRY(x = 1234567890123456789012345678901234567.8));
+----
+[false, false]
+
+# decimal overflow caught per-element via TRY
+query I
+select list_transform([100.00, 101.21], lambda x: TRY(x::DECIMAL(4, 2)));
 ----
 [NULL, NULL]

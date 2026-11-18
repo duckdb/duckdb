@@ -4,15 +4,23 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -141,6 +149,10 @@ bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant
 		return false;
 	}
 	if (root_type.id() != LogicalTypeId::INVALID) {
+		if (!VariantUtils::ShreddedCastMatchesVariantCast(shredded_stats.get().GetType(), root_type)) {
+			//! The cast has to be applied to the VARIANT
+			return false;
+		}
 		column_index.SetPushdownExtractType(shredded.type, root_type);
 	}
 
@@ -180,11 +192,12 @@ idx_t VariantColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
-void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t start_row,
+                                           idx_t end_row) {
 	//! FIXME: does this also need CreateScanStates ??
-	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], start_row, end_row);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
+		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], start_row, end_row);
 	}
 }
 
@@ -346,12 +359,14 @@ void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {
 
 void VariantColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;
+	validity_append.transient = state.transient;
 	validity->InitializeAppend(validity_append);
 	state.child_appends.push_back(std::move(validity_append));
 
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		ColumnAppendState child_append;
+		child_append.transient = state.transient;
 		sub_column->InitializeAppend(child_append);
 		state.child_appends.push_back(std::move(child_append));
 	}
@@ -370,6 +385,57 @@ struct VariantShreddedAppendInput {
 
 } // namespace
 
+//! Whether a VARIANT value holds a decimal wider than 38 digits, which engines before wide decimals cannot read
+static bool ContainsWideDecimal(const VariantNode &root) {
+	// an explicit work list, deeply nested values must not consume stack
+	vector<VariantNode> pending;
+	pending.push_back(root);
+	while (!pending.empty()) {
+		auto node = pending.back();
+		pending.pop_back();
+		switch (node.GetTypeId()) {
+		case VariantLogicalType::DECIMAL:
+			if (Decimal::IsWide(node.GetDecimalProperties().width)) {
+				return true;
+			}
+			break;
+		case VariantLogicalType::OBJECT:
+			for (auto &entry : node.GetObjectChildren()) {
+				pending.push_back(entry.value);
+			}
+			break;
+		case VariantLogicalType::ARRAY:
+			for (auto child : node.GetArrayChildren()) {
+				pending.push_back(child);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
+//! The unshredded payload of a wide decimal is stored as it is, so a storage version before wide decimals refuses it
+static void CheckWideDecimals(StorageManager &storage_manager, const Vector &vector, idx_t count) {
+	const auto storage_version = storage_manager.GetStorageVersion();
+	if (storage_version >= Decimal::WIDE_VERSION_ADDED) {
+		return;
+	}
+	VariantIterator iterator(vector);
+	for (idx_t row = 0; row < count; row++) {
+		if (!iterator.RowIsValid(row) || !ContainsWideDecimal(iterator.Root(row))) {
+			continue;
+		}
+		auto required = GetStorageVersionName(Decimal::WIDE_VERSION_ADDED, false);
+		auto current = GetStorageVersionName(storage_version, false);
+		throw InvalidInputException("DECIMAL values wider than %d digits cannot be stored in a VARIANT column in "
+		                            "storage versions prior to %s (database %s is using storage version %s)",
+		                            Decimal::MAX_WIDTH_INT128, required, storage_manager.GetAttached().GetName(),
+		                            current);
+	}
+}
+
 void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
@@ -377,6 +443,7 @@ void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, i
 		Append(state, append_vector, count);
 		return;
 	}
+	CheckWideDecimals(GetStorageManager(), vector, count);
 
 	// append the null values
 	validity->Append(state.child_appends[0], vector, count);
@@ -412,10 +479,6 @@ void VariantColumnData::RevertAppend(row_t new_count) {
 		sub_column->RevertAppend(new_count);
 	}
 	this->count = UnsafeNumericCast<idx_t>(new_count);
-}
-
-idx_t VariantColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw NotImplementedException("VARIANT Fetch");
 }
 
 void VariantColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
@@ -503,8 +566,9 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 		}
 
 		//! Need to perform the cast here as well
-		auto context = transaction.transaction->context.lock();
-		auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
+		auto &cast_set = CastFunctionSet::Get(GetDatabase());
+		auto cast_input = GetCastFunctionInput::Default();
+		auto fetched_row = extracted_variant.GetValue(0).CastAs(cast_set, cast_input, result.GetType());
 		result.SetValue(result_idx, fetched_row);
 	}
 }
@@ -536,9 +600,9 @@ void VariantColumnData::SetChildData(vector<shared_ptr<ColumnData>> child_data) 
 }
 
 struct VariantColumnCheckpointState : public ColumnCheckpointState {
-	VariantColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	VariantColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                             PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		global_stats = VariantStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -548,6 +612,10 @@ struct VariantColumnCheckpointState : public ColumnCheckpointState {
 	vector<unique_ptr<ColumnCheckpointState>> child_states;
 
 public:
+	bool IsShredded() const {
+		return child_states.size() == 2;
+	}
+
 	shared_ptr<ColumnData> CreateEmptyColumnData() override {
 		return make_shared_ptr<VariantColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
 		                                          original_column.column_index, original_column.type,
@@ -573,15 +641,17 @@ public:
 		D_ASSERT(global_stats);
 		global_stats->Merge(*validity_state->GetStatistics());
 		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
-		if (child_states.size() == 2) {
+		if (IsShredded()) {
 			VariantStats::SetShreddedStats(*global_stats, child_states[1]->GetStatistics());
+		} else {
+			VariantStats::MarkAsNotShredded(*global_stats);
 		}
 		return std::move(global_stats);
 	}
 
 	PersistentColumnData ToPersistentData() override {
 		PersistentColumnData data(original_column.type);
-		if (child_states.size() == 2) {
+		if (IsShredded()) {
 			//! Use the type of the column data we used to create the Checkpoint
 			//! This will either be a pointer to shredded_data[1] if we decided to shred
 			//! Or to the existing shredded column data if we didn't decide to reshred
@@ -596,9 +666,9 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                            PartialBlockManager &partial_block_manager) {
-	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<VariantColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, VariantShreddedAppendInput &append_data) {
@@ -730,7 +800,8 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
                                                                 ColumnCheckpointInfo &checkpoint_info,
                                                                 const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	auto &table_info = row_group.GetTableInfo();
@@ -747,15 +818,26 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 
 	LogicalType shredded_type;
 	if (should_shred) {
-		if (config.options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-			shredded_type = config.options.force_variant_shredding;
-		} else {
+		shredded_type = config.GetForceVariantShredding();
+		if (shredded_type.id() == LogicalTypeId::INVALID) {
 			shredded_type = GetShreddedType();
+		}
+		if (GetStorageManager().GetStorageVersion() < Decimal::WIDE_VERSION_ADDED &&
+		    TypeVisitor::Contains(shredded_type, [](const LogicalType &type) {
+			    return type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type));
+		    })) {
+			// a shredded column of a decimal wider than 38 digits cannot be stored in this storage version
+			should_shred = false;
 		}
 		D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
 		auto &type_entries = StructType::GetChildTypes(shredded_type);
 		if (type_entries.size() != 2) {
 			//! We couldn't determine a shredding type from the data
+			should_shred = false;
+		}
+		if (TypeVisitor::Contains(shredded_type, LogicalTypeId::GEOGRAPHY) &&
+		    db.GetStorageManager().GetStorageVersion() < Geometry::GEOGRAPHY_VERSION_ADDED) {
+			//! GEOGRAPHY cannot be written to the storage versions that predate it
 			should_shred = false;
 		}
 	}
@@ -847,6 +929,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	} else {
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
+		VariantStats::MarkAsNotShredded(target_stats);
 	}
 	this->count = validity->count.load();
 }

@@ -4,22 +4,24 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
-	explicit DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
-		scan_state = log_storage->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
-		log_storage->InitializeScan(*scan_state);
-	}
-	DuckDBLogData() : log_storage(nullptr) {
+	explicit DuckDBLogData(shared_ptr<LogSink> log_sink_p) : log_sink(std::move(log_sink_p)) {
+		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
+		log_sink->InitializeScan(*scan_state);
+		total_rows = log_sink->GetScanRowCount(LoggingTargetTable::LOG_ENTRIES);
 	}
 
-	//! The log storage we are scanning
-	shared_ptr<LogStorage> log_storage;
-	unique_ptr<LogStorageScanState> scan_state;
+	//! The log sink we are scanning
+	shared_ptr<LogSink> log_sink;
+	unique_ptr<LogSinkScanState> scan_state;
+	//! The number of log entries when the scan started, if known (for progress)
+	optional_idx total_rows;
+	atomic<idx_t> scanned_rows {0};
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -43,21 +45,41 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogStorage());
+	auto &log_manager = LogManager::Get(context);
+	if (!log_manager.CanScan(LoggingTargetTable::LOG_ENTRIES)) {
+		throw InvalidConfigurationException(
+		    "Log sink '%s' does not support this query. Select a queryable sink, such as 'memory' or 'file', before "
+		    "generating logs.",
+		    log_manager.GetConfig().storage);
 	}
-	return make_uniq<DuckDBLogData>();
+	return make_uniq<DuckDBLogData>(log_manager.GetLogSink());
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
-	if (data.log_storage) {
-		data.log_storage->Scan(*data.scan_state, output);
+	data.log_sink->Scan(*data.scan_state, output);
+	data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
+}
+
+static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind_data,
+                                const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBLogData>();
+	if (!data.log_sink) {
+		return 100.0;
 	}
+	if (!data.total_rows.IsValid()) {
+		return -1;
+	}
+	auto total_rows = data.total_rows.GetIndex();
+	if (total_rows == 0) {
+		return 100.0;
+	}
+	// log entries that are added while scanning are not part of the total
+	return MinValue<double>(100.0 * static_cast<double>(data.scanned_rows) / static_cast<double>(total_rows), 100.0);
 }
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto log_storage = LogManager::Get(context).GetLogStorage();
+	auto log_sink = LogManager::Get(context).GetLogSink();
 
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
@@ -70,12 +92,12 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 
 	// Without join contexts we simply scan the LOG_ENTRIES tables
 	if (!denormalized_table) {
-		auto res = log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
+		auto res = log_sink->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
 		return res;
 	}
 
-	// If the storage can bind replace for LoggingTargetTable::ALL_LOGS, we use that since that will be most efficient
-	auto all_log_scan = log_storage->BindReplace(context, input, LoggingTargetTable::ALL_LOGS);
+	// If the sink can bind replace for LoggingTargetTable::ALL_LOGS, we use that since that will be most efficient
+	auto all_log_scan = log_sink->BindReplace(context, input, LoggingTargetTable::ALL_LOGS);
 	if (all_log_scan) {
 		return all_log_scan;
 	}
@@ -86,7 +108,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	                          "timestamp, type, log_level, message"
 	                          " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs()) as l JOIN "
 	                          "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(sub_query_string);
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 
@@ -96,7 +118,11 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
-	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
+	// the log storage grows while a query executes
+	logs_fun.stability = FunctionStability::VOLATILE;
+	logs_fun.table_scan_progress = DuckDBLogProgress;
+	logs_fun.GetSignature().WithTypedKwargs(
+	    "options", [](TypedKwargs &options) { options.Add("denormalized_table", LogicalType::BOOLEAN); });
 	set.AddFunction(logs_fun);
 }
 

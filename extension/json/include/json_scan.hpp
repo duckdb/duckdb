@@ -185,9 +185,9 @@ public:
 	                               vector<JSONFeatureColumn> &feature_columns, vector<LogicalType> &return_types,
 	                               vector<Identifier> &names);
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                      const TableFunction &function);
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
+	                      const BoundTableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundTableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 	//! The named parameters shared by all read_json variants

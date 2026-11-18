@@ -395,6 +395,16 @@ struct PathJoinFun {
 	static ScalarFunction GetFunction();
 };
 
+struct HivePartitionComponentFun {
+	static constexpr const char *Name = "hive_partition_component";
+	static constexpr const char *Parameters = "name,value";
+	static constexpr const char *Description = "Returns the hive partition directory for a partition column and its value, e.g. name=value. The name and the value are escaped like url_encode does, a NULL value becomes __HIVE_DEFAULT_PARTITION__.";
+	static constexpr const char *Example = "hive_partition_component('year', 2024)";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
 struct LikeFun {
 	static constexpr const char *Name = "~~";
 	static constexpr const char *Parameters = "string,pattern";

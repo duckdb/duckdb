@@ -10,11 +10,12 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -114,11 +115,11 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_data, ClientContext &context,
+static vector<unique_ptr<Expression>> CreateCastExpressions(const WriteCSVData &bind_data, ClientContext &context,
                                                             const vector<Identifier> &names,
                                                             const vector<LogicalType> &sql_types) {
 	auto &options = bind_data.options;
-	auto &formats = options.write_date_format;
+	auto formats = options.write_date_format;
 
 	bool has_dateformat = !formats[LogicalTypeId::DATE].IsNull();
 	bool has_timestampformat = !formats[LogicalTypeId::TIMESTAMP].IsNull();
@@ -139,13 +140,8 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			vector<unique_ptr<Expression>> children;
 			children.push_back(std::move(column));
 			children.push_back(make_uniq<BoundConstantExpression>(format));
-			ErrorData error;
 			FunctionBinder function_binder(context);
-			expr = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("strftime"),
-			                                          std::move(children), error, false);
-			if (!expr) {
-				error.Throw();
-			}
+			expr = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children));
 		} else {
 			// CAST <name> AS VARCHAR
 			expr = std::move(column);
@@ -162,7 +158,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 
 	// check all the options in the copy info
 	for (auto &[option_name, option_values] : input.info.options) {
-		bind_data->options.SetWriteOption(option_name, ConvertVectorToValue(option_values));
+		bind_data->options.SetWriteOption(context.GetContext(), option_name, ConvertVectorToValue(option_values));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -198,14 +194,14 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["parallel"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["allow_quoted_nulls"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["store_rejects"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
-	copy_options["force_not_null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_ONLY);
+	copy_options["force_not_null"] = CopyOption(LogicalType::LIST(LogicalType::VARCHAR), CopyOptionMode::READ_ONLY);
 	copy_options["rejects_table"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 	copy_options["rejects_scan"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 	copy_options["rejects_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
 	copy_options["encoding"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 	copy_options["thousands"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 
-	copy_options["force_quote"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["force_quote"] = CopyOption(LogicalType::LIST(LogicalType::VARCHAR), CopyOptionMode::WRITE_ONLY);
 	copy_options["prefix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["suffix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 
@@ -233,7 +229,8 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 //===--------------------------------------------------------------------===//
 struct LocalWriteCSVData : public LocalFunctionData {
 public:
-	LocalWriteCSVData(ClientContext &context, vector<unique_ptr<Expression>> &expressions, const idx_t &flush_size)
+	LocalWriteCSVData(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
+	                  const idx_t &flush_size)
 	    : executor(context, expressions), writer_local_state(context, flush_size) {
 	}
 
@@ -250,14 +247,15 @@ static unique_ptr<AsyncFileWriter> OpenCSVFileWriter(ClientContext &context, con
                                                      FileCompressionType compression) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | std::move(compression);
-	if (!fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
+	// checking a remote path costs a request, so a remote output is opened like one that may exist
+	if (!fs.IsRemoteFile(file_path) && !fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
 		flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 	}
-	return make_uniq<AsyncFileWriter>(QueryContext(context), fs, file_path, flags);
+	return make_uniq<AsyncFileWriter>(context.GetContext(), fs, file_path, flags);
 }
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(CSVReaderOptions &options, ClientContext &context, const string &file_path,
+	GlobalWriteCSVData(const CSVReaderOptions &options, ClientContext &context, const string &file_path,
 	                   FileCompressionType compression_p)
 	    : file_writer(OpenCSVFileWriter(context, file_path, std::move(compression_p))), writer(options, *file_writer),
 	      compression(file_writer->GetFileCompressionType()) {
@@ -310,7 +308,7 @@ private:
 	vector<unique_ptr<CSVWriterState>> local_states;
 };
 
-static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, const FunctionData &bind_data) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto local_data = make_uniq<LocalWriteCSVData>(context.client, csv_data.cast_expressions, csv_data.flush_size);
 
@@ -322,7 +320,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 	return std::move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, const FunctionData &bind_data,
                                                                const string &file_path) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
@@ -343,7 +341,7 @@ static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterState &writer_loca
 	writer.WriteChunk(cast_chunk, writer_local_state);
 }
 
-static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVSink(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate, DataChunk &input) {
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
@@ -355,7 +353,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVCombine(ExecutionContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                             LocalFunctionData &lstate) {
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
@@ -365,7 +363,7 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+void WriteCSVFinalize(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 	auto &writer = global_state.GetWriter();
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
@@ -402,7 +400,7 @@ struct WriteCSVBatchData : public PreparedBatchData {
 	unique_ptr<CSVWriterState> writer_local_state;
 };
 
-unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
+unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, const FunctionData &bind_data,
                                                    GlobalFunctionData &gstate,
                                                    unique_ptr<ColumnDataCollection> collection) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
@@ -430,7 +428,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 //===--------------------------------------------------------------------===//
 // Flush Batch
 //===--------------------------------------------------------------------===//
-void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void WriteCSVFlushBatch(ClientContext &context, const FunctionData &bind_data, GlobalFunctionData &gstate,
                         PreparedBatchData &batch) {
 	auto &csv_batch = batch.Cast<WriteCSVBatchData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
@@ -461,7 +459,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.flush_batch = WriteCSVFlushBatch;
 	info.file_size_bytes = WriteCSVFileSizeBytes;
 
-	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
+	info.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

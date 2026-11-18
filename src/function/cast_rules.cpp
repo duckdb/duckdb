@@ -43,6 +43,10 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 160;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
+	case LogicalTypeId::GEOGRAPHY:
+		// Cost slightly higher than GEOMETRY (default) so that untyped NULL/literal arguments prefer the
+		// GEOMETRY overload of functions overloaded on both, instead of being ambiguous.
+		return 111;
 	case LogicalTypeId::TEMPLATE:
 		// we can cast anything to a template type, but prefer to cast to anything else!
 		return 1000000;
@@ -179,7 +183,6 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 
 static int64_t ImplicitCastFloat(const LogicalType &to) {
 	switch (to.id()) {
-	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
 	default:
@@ -258,6 +261,8 @@ static int64_t ImplicitCastTimestampSec(const LogicalType &to) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -268,6 +273,8 @@ static int64_t ImplicitCastTimestampMS(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -291,6 +298,16 @@ static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TargetTypeCost(to);
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampTz(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// like TIMESTAMP to TIMESTAMP_NS: a TIMESTAMPTZ combines with a TIMESTAMPTZ_NS at nanosecond precision
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -321,7 +338,7 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::DECIMAL:
 		// these types are only valid with auxiliary info
-		if (!type.AuxInfo()) {
+		if (!type.HasParameters()) {
 			return false;
 		}
 		break;
@@ -364,7 +381,7 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 
 int64_t ImplicitCastToUnionMember(const LogicalType &from, const LogicalType &to) {
 	// check that the union type is fully resolved.
-	if (to.AuxInfo() == nullptr) {
+	if (!to.HasParameters()) {
 		return -1;
 	}
 	// check if the union contains something castable from the source type
@@ -408,6 +425,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		if (to.id() == LogicalTypeId::VARCHAR && to.GetAlias().empty()) {
 			return 1;
+		}
+		if (to.id() == LogicalTypeId::GEOGRAPHY) {
+			// Prefer GEOMETRY over GEOGRAPHY for untyped string literals (see TargetTypeCost), so functions
+			// overloaded on both resolve unambiguously.
+			return 21;
 		}
 		return 20;
 	}
@@ -481,7 +503,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	}
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
 		// Check that the target union type is fully resolved.
-		if (to.AuxInfo() == nullptr) {
+		if (!to.HasParameters()) {
 			// If not, try anyway and let the actual cast logic handle it.
 			// This is to allow passing unions into functions that take a generic union type (without specifying member
 			// types) as an argument.
@@ -517,7 +539,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 	}
 	if (StructType::IsStruct(from) && StructType::IsStruct(to)) {
-		if (to.AuxInfo() == nullptr) {
+		if (!to.HasParameters()) {
 			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
 			return 0;
 		}
@@ -630,6 +652,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestampNS(to);
 	case LogicalTypeId::TIMESTAMP:
 		return ImplicitCastTimestamp(to);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return ImplicitCastTimestampTz(to);
 	case LogicalTypeId::BIGNUM:
 		return ImplicitCastBignum(to);
 	case LogicalTypeId::VARIANT:

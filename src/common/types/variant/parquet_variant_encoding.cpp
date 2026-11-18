@@ -1,0 +1,970 @@
+#include <algorithm>
+#include <stdint.h>
+#include <string.h>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/variant_binary_decoder.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+
+namespace duckdb {
+
+static idx_t CalculateByteLength(idx_t value) {
+	if (value == 0) {
+		return 1;
+	}
+	auto value_data = reinterpret_cast<data_ptr_t>(&value);
+	idx_t irrelevant_bytes = 0;
+	//! Check how many of the most significant bytes are 0
+	for (idx_t i = sizeof(idx_t); i > 0 && value_data[i - 1] == 0; i--) {
+		irrelevant_bytes++;
+	}
+	return sizeof(idx_t) - irrelevant_bytes;
+}
+
+static uint8_t EncodeMetadataHeader(idx_t byte_length) {
+	D_ASSERT(byte_length <= 4);
+
+	uint8_t header_byte = 0;
+	//! Set 'version' to 1
+	header_byte |= static_cast<uint8_t>(1);
+	//! NOTE: keep 'sorted_strings' at 0, we don't always sort the key strings
+	//! Set 'offset_size_minus_one' to byte_length-1
+	header_byte |= (static_cast<uint8_t>(byte_length) - 1) << 6;
+
+#ifdef DEBUG
+	auto decoded_header = VariantMetadataHeader::FromHeaderByte(header_byte);
+	D_ASSERT(decoded_header.offset_size == byte_length);
+#endif
+
+	return header_byte;
+}
+
+static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
+	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
+	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
+	auto metadata_data = FlatVector::GetDataMutable<string_t>(metadata);
+	for (idx_t row = 0; row < count; row++) {
+		uint64_t dictionary_count = 0;
+		if (variant.RowIsValid(row)) {
+			dictionary_count = variant.GetKeysCount(row);
+		}
+		idx_t dictionary_size = 0;
+		for (idx_t i = 0; i < dictionary_count; i++) {
+			auto &key = variant.GetKey(row, i);
+			dictionary_size += key.GetSize();
+		}
+		if (dictionary_size >= NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("The total length of the dictionary exceeds a 4 byte value (uint32_t), failed "
+			                            "to export VARIANT to Parquet");
+		}
+
+		auto byte_length = CalculateByteLength(dictionary_size);
+		auto total_length = 1 + (byte_length * (dictionary_count + 2)) + dictionary_size;
+
+		metadata_data[row] = StringVector::EmptyString(metadata, total_length);
+		auto &metadata_blob = metadata_data[row];
+		auto metadata_blob_data = metadata_blob.GetDataWriteable();
+
+		metadata_blob_data[0] = static_cast<char>(EncodeMetadataHeader(byte_length));
+		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
+
+		auto offset_ptr = metadata_blob_data + 1 + byte_length;
+		auto string_ptr =
+		    metadata_blob_data + 1 + byte_length + (NumericCast<idx_t>(dictionary_count + 1) * byte_length);
+		idx_t total_offset = 0;
+		for (idx_t i = 0; i < dictionary_count; i++) {
+			memcpy(offset_ptr + (i * byte_length), const_data_ptr_cast(&total_offset), byte_length);
+			auto &key = variant.GetKey(row, i);
+
+			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
+			total_offset += key.GetSize();
+		}
+		memcpy(offset_ptr + (NumericCast<idx_t>(dictionary_count) * byte_length), const_data_ptr_cast(&total_offset),
+		       byte_length);
+		D_ASSERT(offset_ptr + (NumericCast<idx_t>(dictionary_count + 1) * byte_length) == string_ptr);
+		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
+		metadata_blob.SetSizeAndFinalize(NumericCast<uint32_t>(total_length), total_length);
+
+#ifdef DEBUG
+		auto decoded_metadata = VariantMetadata(metadata_blob);
+		D_ASSERT(decoded_metadata.strings.size() == dictionary_count);
+		for (idx_t i = 0; i < dictionary_count; i++) {
+			D_ASSERT(decoded_metadata.strings[i] == variant.GetKey(row, i).GetString());
+		}
+#endif
+	}
+}
+
+namespace {
+
+static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::ANY) {
+		return {};
+	}
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		return {VariantLogicalType::OBJECT};
+	case LogicalTypeId::LIST:
+		return {VariantLogicalType::ARRAY};
+	case LogicalTypeId::BOOLEAN:
+		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
+	case LogicalTypeId::TINYINT:
+		return {VariantLogicalType::INT8};
+	case LogicalTypeId::SMALLINT:
+		return {VariantLogicalType::INT16};
+	case LogicalTypeId::INTEGER:
+		return {VariantLogicalType::INT32};
+	case LogicalTypeId::BIGINT:
+		return {VariantLogicalType::INT64};
+	case LogicalTypeId::FLOAT:
+		return {VariantLogicalType::FLOAT};
+	case LogicalTypeId::DOUBLE:
+		return {VariantLogicalType::DOUBLE};
+	case LogicalTypeId::DECIMAL:
+		return {VariantLogicalType::DECIMAL};
+	case LogicalTypeId::DATE:
+		return {VariantLogicalType::DATE};
+	case LogicalTypeId::TIME:
+		return {VariantLogicalType::TIME_MICROS};
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
+	case LogicalTypeId::TIMESTAMP:
+		return {VariantLogicalType::TIMESTAMP_MICROS};
+	case LogicalTypeId::TIMESTAMP_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS};
+	case LogicalTypeId::BLOB:
+		return {VariantLogicalType::BLOB};
+	case LogicalTypeId::VARCHAR:
+		return {VariantLogicalType::VARCHAR};
+	case LogicalTypeId::UUID:
+		return {VariantLogicalType::UUID};
+	default:
+		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
+	}
+}
+
+struct ParquetVariantShreddingState : public VariantShreddingState {
+public:
+	ParquetVariantShreddingState(const LogicalType &type, idx_t total_count)
+	    : VariantShreddingState(type, total_count), variant_types(GetVariantType(type)) {
+	}
+
+public:
+	const unordered_set<VariantLogicalType> &GetVariantTypes() override {
+		return variant_types;
+	}
+
+private:
+	unordered_set<VariantLogicalType> variant_types;
+};
+
+struct ParquetVariantShredding : public VariantShredding {
+	ParquetVariantShredding() {
+		// for parquet untyped ("value") comes before typed ("typed_value")
+		untyped_value_index = 0;
+		typed_value_index = 1;
+	}
+
+	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
+	                        optional_ptr<const SelectionVector> value_index_sel,
+	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+
+protected:
+	void WriteMissingField(Vector &vector, idx_t index) override;
+};
+
+} // namespace
+
+vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+                              optional_ptr<ParquetVariantShreddingState> shredding_state) {
+	vector<idx_t> child_indices;
+	if (!shredding_state || shredding_state->type.id() != LogicalTypeId::STRUCT) {
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			child_indices.push_back(i);
+		}
+	} else {
+		auto &shredded_fields = shredding_state->ObjectFields();
+
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
+			auto &key = variant.GetKey(row, keys_index);
+
+			if (shredded_fields.count(key)) {
+				//! This field is shredded on, omit it from the value
+				continue;
+			}
+			child_indices.push_back(i);
+		}
+	}
+	// Object field IDs and offsets must follow UTF-8 field name order, even with an unsorted dictionary.
+	std::sort(child_indices.begin(), child_indices.end(), [&](idx_t left, idx_t right) {
+		auto left_key = variant.GetKeysIndex(row, left + nested_data.children_idx);
+		auto right_key = variant.GetKeysIndex(row, right + nested_data.children_idx);
+		return variant.GetKey(row, left_key) < variant.GetKey(row, right_key);
+	});
+	return child_indices;
+}
+
+//! The size of a primitive value, the value header included
+static idx_t AnalyzePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
+                                       VariantLogicalType type_id) {
+	//! Every value has at least a value header
+	idx_t total_size = 1;
+	switch (type_id) {
+	case VariantLogicalType::BLOB:
+	case VariantLogicalType::VARCHAR: {
+		auto string_value = VariantUtils::DecodeStringData(variant, row, values_index);
+		total_size += string_value.GetSize();
+		if (type_id == VariantLogicalType::BLOB || string_value.GetSize() >= 64) {
+			//! Save as regular string value
+			total_size += sizeof(uint32_t);
+		}
+		break;
+	}
+	case VariantLogicalType::VARIANT_NULL:
+	case VariantLogicalType::BOOL_TRUE:
+	case VariantLogicalType::BOOL_FALSE:
+		break;
+	case VariantLogicalType::INT8:
+		total_size += sizeof(uint8_t);
+		break;
+	case VariantLogicalType::INT16:
+		total_size += sizeof(uint16_t);
+		break;
+	case VariantLogicalType::INT32:
+		total_size += sizeof(uint32_t);
+		break;
+	case VariantLogicalType::INT64:
+		total_size += sizeof(uint64_t);
+		break;
+	case VariantLogicalType::FLOAT:
+		total_size += sizeof(float);
+		break;
+	case VariantLogicalType::DOUBLE:
+		total_size += sizeof(double);
+		break;
+	case VariantLogicalType::DECIMAL: {
+		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
+		total_size += 1;
+		if (decimal_data.width <= 9) {
+			total_size += sizeof(int32_t);
+		} else if (decimal_data.width <= 18) {
+			total_size += sizeof(int64_t);
+		} else if (decimal_data.width <= 38) {
+			total_size += sizeof(uhugeint_t);
+		} else {
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT: the Parquet VARIANT "
+			                            "specification holds decimals of at most 38 digits",
+			                            decimal_data.width, decimal_data.scale);
+		}
+		break;
+	}
+	case VariantLogicalType::UUID:
+		total_size += sizeof(uhugeint_t);
+		break;
+	case VariantLogicalType::DATE:
+		total_size += sizeof(uint32_t);
+		break;
+	case VariantLogicalType::TIME_MICROS:
+	case VariantLogicalType::TIMESTAMP_MICROS:
+	case VariantLogicalType::TIMESTAMP_NANOS:
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		total_size += sizeof(uint64_t);
+		break;
+	case VariantLogicalType::UINT8:
+		// store as int16_t
+		total_size += sizeof(int16_t);
+		break;
+	case VariantLogicalType::UINT16:
+		// store as int32_t
+		total_size += sizeof(int32_t);
+		break;
+	case VariantLogicalType::UINT32:
+	case VariantLogicalType::UINT64:
+	case VariantLogicalType::UINT128:
+	case VariantLogicalType::INT128:
+		// try to store as int64_t - fail if it doesn't fit
+		total_size += sizeof(int64_t);
+		break;
+	case VariantLogicalType::INTERVAL:
+	case VariantLogicalType::BIGNUM:
+	case VariantLogicalType::BITSTRING:
+	case VariantLogicalType::TIMESTAMP_MILIS:
+	case VariantLogicalType::TIMESTAMP_SEC:
+	case VariantLogicalType::TIME_MICROS_TZ:
+	case VariantLogicalType::TIME_NANOS:
+	default:
+		throw InvalidInputException("Can't convert VARIANT of type '%s' to Parquet VARIANT",
+		                            EnumUtil::ToString(type_id));
+	}
+
+	return total_size;
+}
+
+//! The size of the header of a nested value, the value header, the element count, the field ids and the field offsets
+static idx_t NestedHeaderSize(idx_t num_elements, idx_t field_id_size, idx_t field_offset_size) {
+	idx_t total_size = 1;
+	if (num_elements > NumericLimits<uint8_t>::Maximum()) {
+		total_size += sizeof(uint32_t);
+	} else {
+		total_size += sizeof(uint8_t);
+	}
+	total_size += num_elements * field_id_size;
+	total_size += (num_elements + 1) * field_offset_size;
+	return total_size;
+}
+
+//! A nested value whose children are being measured. The explicit stack replaces recursion, so the nesting depth of
+//! a value is not bounded by the thread stack
+struct AnalyzeFrame {
+	VariantLogicalType type_id;
+	VariantNestedData nested_data;
+	//! The children of an object in the order of the Parquet value, unused for an array
+	vector<idx_t> child_indices;
+	idx_t num_elements = 0;
+	//! Where the field offsets of this value start in 'offsets'
+	idx_t offset_start = 0;
+	idx_t next_child = 0;
+	//! The size of the children measured so far
+	idx_t total_offset = 0;
+	uint32_t highest_keys_index = 0;
+};
+
+//! The caller keeps 'stack' across rows, so its capacity is reused
+static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
+                              vector<uint32_t> &offsets, optional_ptr<ParquetVariantShreddingState> shredding_state,
+                              vector<AnalyzeFrame> &stack) {
+	stack.clear();
+	auto current = values_index;
+	for (;;) {
+		//! Measure 'current', entering it when it is nested
+		VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+		if (variant.RowIsValid(row)) {
+			type_id = variant.GetTypeId(row, current);
+		}
+		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
+			AnalyzeFrame frame;
+			frame.type_id = type_id;
+			frame.nested_data = VariantUtils::DecodeNestedData(variant, row, current);
+			if (type_id == VariantLogicalType::OBJECT) {
+				//! The shredding state only applies to the root
+				frame.child_indices =
+				    GetChildIndices(variant, row, frame.nested_data, stack.empty() ? shredding_state : nullptr);
+				if (frame.nested_data.child_count && frame.child_indices.empty()) {
+					//! All fields of the object are shredded, omit the object entirely
+					D_ASSERT(stack.empty());
+					return 0;
+				}
+				frame.num_elements = frame.child_indices.size();
+			} else {
+				frame.num_elements = frame.nested_data.child_count;
+			}
+			frame.offset_start = offsets.size();
+			offsets.resize(frame.offset_start + frame.num_elements + 1);
+			stack.push_back(std::move(frame));
+		} else {
+			auto size = AnalyzePrimitiveValueData(variant, row, current, type_id);
+			if (stack.empty()) {
+				return size;
+			}
+			stack.back().total_offset += size;
+		}
+		//! Finish the nested values whose children are all measured, then move to the next child
+		for (;;) {
+			auto &frame = stack.back();
+			if (frame.next_child < frame.num_elements) {
+				auto child = frame.type_id == VariantLogicalType::OBJECT ? frame.child_indices[frame.next_child]
+				                                                         : frame.next_child;
+				auto child_position = child + frame.nested_data.children_idx;
+				offsets[frame.offset_start + frame.next_child] = NumericCast<uint32_t>(frame.total_offset);
+				if (frame.type_id == VariantLogicalType::OBJECT) {
+					frame.highest_keys_index =
+					    MaxValue(frame.highest_keys_index, variant.GetKeysIndex(row, child_position));
+				}
+				current = variant.GetValuesIndex(row, child_position);
+				frame.next_child++;
+				break;
+			}
+			//! All children are measured, the header sizes follow from them
+			offsets[frame.offset_start + frame.num_elements] = NumericCast<uint32_t>(frame.total_offset);
+			idx_t field_id_size = 0;
+			if (frame.type_id == VariantLogicalType::OBJECT) {
+				field_id_size = CalculateByteLength(frame.highest_keys_index);
+			}
+			auto field_offset_size = CalculateByteLength(frame.total_offset);
+			auto size = NestedHeaderSize(frame.num_elements, field_id_size, field_offset_size) + frame.total_offset;
+			stack.pop_back();
+			if (stack.empty()) {
+				return size;
+			}
+			stack.back().total_offset += size;
+		}
+	}
+}
+
+template <VariantPrimitiveType TYPE_ID>
+void WritePrimitiveTypeHeader(data_ptr_t &value_data) {
+	uint8_t value_header = 0;
+	value_header |= static_cast<uint8_t>(VariantBasicType::PRIMITIVE);
+	value_header |= static_cast<uint8_t>(TYPE_ID) << 2;
+
+	*value_data = value_header;
+	value_data++;
+}
+
+struct VariantSimpleCopy {
+	template <class T>
+	static void CopyValue(const_data_ptr_t source, data_ptr_t target) {
+		memcpy(target, source, sizeof(T));
+	}
+};
+
+template <class SRC>
+struct VariantSimpleConversion {
+	template <class T>
+	static void CopyValue(const_data_ptr_t source, data_ptr_t target) {
+		auto src = Load<SRC>(source);
+		Store(static_cast<T>(src), target);
+	}
+};
+
+template <class SRC>
+struct VariantTryConvert {
+	template <class T>
+	static void CopyValue(const_data_ptr_t source, data_ptr_t target) {
+		auto src = Load<SRC>(source);
+		Store(Cast::Operation<SRC, T>(src), target);
+	}
+};
+
+template <class T, class OP = VariantSimpleCopy>
+void CopySimplePrimitiveData(const UnifiedVariantVectorData &variant, data_ptr_t &value_data, idx_t row,
+                             uint32_t values_index) {
+	auto byte_offset = variant.GetByteOffset(row, values_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+	OP::template CopyValue<T>(ptr, value_data);
+	value_data += sizeof(T);
+}
+
+void CopyUUIDData(const UnifiedVariantVectorData &variant, data_ptr_t &value_data, idx_t row, uint32_t values_index) {
+	auto byte_offset = variant.GetByteOffset(row, values_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto uuid = Load<uhugeint_t>(ptr);
+	BaseUUID::ToBlob(uuid, value_data);
+	value_data += sizeof(uhugeint_t);
+}
+
+static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
+                                    data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
+
+	D_ASSERT(type_id != VariantLogicalType::OBJECT && type_id != VariantLogicalType::ARRAY);
+	switch (type_id) {
+	case VariantLogicalType::BLOB:
+	case VariantLogicalType::VARCHAR: {
+		auto string_value = VariantUtils::DecodeStringData(variant, row, values_index);
+		auto string_size = string_value.GetSize();
+		if (type_id == VariantLogicalType::BLOB || string_size >= 64) {
+			if (type_id == VariantLogicalType::BLOB) {
+				WritePrimitiveTypeHeader<VariantPrimitiveType::BINARY>(value_data);
+			} else {
+				WritePrimitiveTypeHeader<VariantPrimitiveType::STRING>(value_data);
+			}
+			Store<uint32_t>(NumericCast<uint32_t>(string_size), value_data);
+			value_data += sizeof(uint32_t);
+		} else {
+			uint8_t value_header = 0;
+			value_header |= static_cast<uint8_t>(VariantBasicType::SHORT_STRING);
+			value_header |= static_cast<uint8_t>(string_size) << 2;
+
+			*value_data = value_header;
+			value_data++;
+		}
+		memcpy(value_data, reinterpret_cast<const char *>(string_value.GetData()), string_size);
+		value_data += string_size;
+		break;
+	}
+	case VariantLogicalType::VARIANT_NULL:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::NULL_TYPE>(value_data);
+		break;
+	case VariantLogicalType::BOOL_TRUE:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::BOOLEAN_TRUE>(value_data);
+		break;
+	case VariantLogicalType::BOOL_FALSE:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::BOOLEAN_FALSE>(value_data);
+		break;
+	case VariantLogicalType::INT8:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT8>(value_data);
+		CopySimplePrimitiveData<int8_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::INT16:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT16>(value_data);
+		CopySimplePrimitiveData<int16_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::INT32:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT32>(value_data);
+		CopySimplePrimitiveData<int32_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::INT64:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT64>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::FLOAT:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::FLOAT>(value_data);
+		CopySimplePrimitiveData<float>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::DOUBLE:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::DOUBLE>(value_data);
+		CopySimplePrimitiveData<double>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::UUID:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::UUID>(value_data);
+		CopyUUIDData(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::DATE:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::DATE>(value_data);
+		CopySimplePrimitiveData<int32_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIME_MICROS:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIME_NTZ_MICROS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_NTZ_MICROS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_NTZ_NANOS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_MICROS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_NANOS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::DECIMAL: {
+		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
+
+		if (decimal_data.width > 38) {
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT: the Parquet VARIANT "
+			                            "specification holds decimals of at most 38 digits",
+			                            decimal_data.width, decimal_data.scale);
+		} else if (decimal_data.width <= 4) {
+			// DuckDB uses INT16 to store small decimals, but parquet only supports DECIMAL4 at minimum, so here we
+			// promote to INT32.
+			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
+			value_data++;
+			const int32_t promoted = Load<int16_t>(decimal_data.value_ptr);
+			Store<int32_t>(promoted, value_data);
+			value_data += sizeof(int32_t);
+		} else if (decimal_data.width <= 9) {
+			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
+			value_data++;
+			memcpy(value_data, decimal_data.value_ptr, sizeof(int32_t));
+			value_data += sizeof(int32_t);
+		} else if (decimal_data.width <= 18) {
+			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL8>(value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
+			value_data++;
+			memcpy(value_data, decimal_data.value_ptr, sizeof(int64_t));
+			value_data += sizeof(int64_t);
+		} else if (decimal_data.width <= 38) {
+			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL16>(value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
+			value_data++;
+			memcpy(value_data, decimal_data.value_ptr, sizeof(hugeint_t));
+			value_data += sizeof(hugeint_t);
+		} else {
+			throw InternalException(
+			    "Uncovered VARIANT(DECIMAL) -> Parquet VARIANT conversion for type 'DECIMAL(%d, %d)'",
+			    decimal_data.width, decimal_data.scale);
+		}
+		break;
+	}
+	case VariantLogicalType::UINT8:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT16>(value_data);
+		CopySimplePrimitiveData<int16_t, VariantSimpleConversion<uint8_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::UINT16:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT32>(value_data);
+		CopySimplePrimitiveData<int32_t, VariantSimpleConversion<uint16_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::UINT32:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT64>(value_data);
+		CopySimplePrimitiveData<int64_t, VariantSimpleConversion<uint32_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::UINT64:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT64>(value_data);
+		CopySimplePrimitiveData<int64_t, VariantTryConvert<uint64_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::UINT128:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT64>(value_data);
+		CopySimplePrimitiveData<int64_t, VariantTryConvert<uhugeint_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::INT128:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::INT64>(value_data);
+		CopySimplePrimitiveData<int64_t, VariantTryConvert<hugeint_t>>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::INTERVAL:
+	case VariantLogicalType::BIGNUM:
+	case VariantLogicalType::BITSTRING:
+	case VariantLogicalType::TIMESTAMP_MILIS:
+	case VariantLogicalType::TIMESTAMP_SEC:
+	case VariantLogicalType::TIME_MICROS_TZ:
+	case VariantLogicalType::TIME_NANOS:
+	default:
+		throw InvalidInputException("Can't convert VARIANT of type '%s' to Parquet VARIANT",
+		                            EnumUtil::ToString(type_id));
+	}
+}
+
+//! A nested value whose children are being written
+struct WriteFrame {
+	VariantLogicalType type_id;
+	VariantNestedData nested_data;
+	//! The children of an object in the order of the Parquet value, unused for an array
+	vector<idx_t> child_indices;
+	idx_t num_elements = 0;
+	idx_t field_offset_size = 0;
+	idx_t next_child = 0;
+	//! The size of the children written so far
+	idx_t total_offset = 0;
+	//! Where the next field offset is written
+	data_ptr_t offsets_ptr = nullptr;
+	//! Where the next child is written
+	data_ptr_t children_ptr = nullptr;
+	//! Where the child being written started
+	data_ptr_t child_start = nullptr;
+};
+
+//! Writes the header of a nested value, the value header, the element count and for an object the field ids, and
+//! leaves the frame ready to write the field offsets and the children
+static WriteFrame WriteNestedHeader(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
+                                    VariantLogicalType type_id, data_ptr_t &value_data, const vector<uint32_t> &offsets,
+                                    idx_t &offset_index, optional_ptr<ParquetVariantShreddingState> shredding_state) {
+	WriteFrame frame;
+	frame.type_id = type_id;
+	frame.nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
+	idx_t field_id_size = 0;
+	if (type_id == VariantLogicalType::OBJECT) {
+		frame.child_indices = GetChildIndices(variant, row, frame.nested_data, shredding_state);
+		if (frame.nested_data.child_count && frame.child_indices.empty()) {
+			throw InternalException(
+			    "The entire should be omitted, should have been handled by the Analyze step already");
+		}
+		frame.num_elements = frame.child_indices.size();
+
+		//! Determine the 'field_id_size'
+		uint32_t highest_keys_index = 0;
+		for (auto &i : frame.child_indices) {
+			auto keys_index = variant.GetKeysIndex(row, i + frame.nested_data.children_idx);
+			highest_keys_index = MaxValue(highest_keys_index, keys_index);
+		}
+		field_id_size = CalculateByteLength(highest_keys_index);
+	} else {
+		frame.num_elements = frame.nested_data.child_count;
+	}
+
+	uint32_t last_offset = 0;
+	if (frame.num_elements) {
+		last_offset = offsets[offset_index + frame.num_elements];
+	}
+	offset_index += frame.num_elements + 1;
+	frame.field_offset_size = CalculateByteLength(last_offset);
+
+	const bool is_large = frame.num_elements > NumericLimits<uint8_t>::Maximum();
+
+	uint8_t value_header = 0;
+	if (type_id == VariantLogicalType::OBJECT) {
+		value_header |= static_cast<uint8_t>(VariantBasicType::OBJECT);
+		value_header |= static_cast<uint8_t>(is_large) << 6;
+		value_header |= (static_cast<uint8_t>(field_id_size) - 1) << 4;
+		value_header |= (static_cast<uint8_t>(frame.field_offset_size) - 1) << 2;
+	} else {
+		value_header |= static_cast<uint8_t>(VariantBasicType::ARRAY);
+		value_header |= static_cast<uint8_t>(is_large) << 4;
+		value_header |= (static_cast<uint8_t>(frame.field_offset_size) - 1) << 2;
+	}
+
+#ifdef DEBUG
+	auto nested_value_header = VariantValueMetadata::FromHeaderByte(value_header);
+	D_ASSERT(nested_value_header.basic_type ==
+	         (type_id == VariantLogicalType::OBJECT ? VariantBasicType::OBJECT : VariantBasicType::ARRAY));
+	D_ASSERT(nested_value_header.is_large == is_large);
+	D_ASSERT(nested_value_header.field_offset_size == frame.field_offset_size);
+	if (type_id == VariantLogicalType::OBJECT) {
+		D_ASSERT(nested_value_header.field_id_size == field_id_size);
+	}
+#endif
+
+	*value_data = value_header;
+	value_data++;
+
+	//! Write the 'num_elements'
+	if (is_large) {
+		Store<uint32_t>(static_cast<uint32_t>(frame.num_elements), value_data);
+		value_data += sizeof(uint32_t);
+	} else {
+		Store<uint8_t>(static_cast<uint8_t>(frame.num_elements), value_data);
+		value_data += sizeof(uint8_t);
+	}
+
+	//! Write the 'field_id' entries
+	for (auto &i : frame.child_indices) {
+		auto keys_index = variant.GetKeysIndex(row, i + frame.nested_data.children_idx);
+		memcpy(value_data, reinterpret_cast<data_ptr_t>(&keys_index), field_id_size);
+		value_data += field_id_size;
+	}
+
+	//! The 'field_offset' entries come next, the children follow them
+	frame.offsets_ptr = value_data;
+	frame.children_ptr = value_data + ((frame.num_elements + 1) * frame.field_offset_size);
+	return frame;
+}
+
+//! The explicit stack replaces recursion, so the nesting depth of a value is not bounded by the thread stack. The
+//! caller keeps it across rows, so its capacity is reused
+static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
+                           data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index,
+                           optional_ptr<ParquetVariantShreddingState> shredding_state, vector<WriteFrame> &stack) {
+	stack.clear();
+	auto current = values_index;
+	auto cursor = value_data;
+	for (;;) {
+		//! Write 'current' at 'cursor', entering it when it is nested
+		VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+		if (variant.RowIsValid(row)) {
+			type_id = variant.GetTypeId(row, current);
+		}
+		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
+			//! The shredding state only applies to the root
+			stack.push_back(WriteNestedHeader(variant, row, current, type_id, cursor, offsets, offset_index,
+			                                  stack.empty() ? shredding_state : nullptr));
+		} else {
+			WritePrimitiveValueData(variant, row, current, cursor, offsets, offset_index);
+			if (stack.empty()) {
+				value_data = cursor;
+				return;
+			}
+			auto &parent = stack.back();
+			parent.total_offset += NumericCast<idx_t>(cursor - parent.child_start);
+			parent.children_ptr = cursor;
+		}
+		//! Finish the nested values whose children are all written, then move to the next child
+		for (;;) {
+			auto &frame = stack.back();
+			if (frame.next_child < frame.num_elements) {
+				auto child = frame.type_id == VariantLogicalType::OBJECT ? frame.child_indices[frame.next_child]
+				                                                         : frame.next_child;
+				memcpy(frame.offsets_ptr, reinterpret_cast<data_ptr_t>(&frame.total_offset), frame.field_offset_size);
+				frame.offsets_ptr += frame.field_offset_size;
+				frame.child_start = frame.children_ptr;
+				cursor = frame.children_ptr;
+				current = variant.GetValuesIndex(row, child + frame.nested_data.children_idx);
+				frame.next_child++;
+				break;
+			}
+			//! All children are written, the last field offset is their total size
+			memcpy(frame.offsets_ptr, reinterpret_cast<data_ptr_t>(&frame.total_offset), frame.field_offset_size);
+			frame.offsets_ptr += frame.field_offset_size;
+			D_ASSERT(frame.children_ptr - frame.total_offset == frame.offsets_ptr);
+			cursor = frame.children_ptr;
+			stack.pop_back();
+			if (stack.empty()) {
+				value_data = cursor;
+				return;
+			}
+			auto &parent = stack.back();
+			parent.total_offset += NumericCast<idx_t>(cursor - parent.child_start);
+			parent.children_ptr = cursor;
+		}
+	}
+}
+
+static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optional_ptr<const SelectionVector> sel,
+                         optional_ptr<const SelectionVector> value_index_sel,
+                         optional_ptr<const SelectionVector> result_sel,
+                         optional_ptr<ParquetVariantShreddingState> shredding_state, idx_t count) {
+	auto &validity = FlatVector::ValidityMutable(value);
+	auto value_data = FlatVector::GetDataMutable<string_t>(value);
+
+	vector<AnalyzeFrame> analyze_stack;
+	vector<WriteFrame> write_stack;
+	for (idx_t i = 0; i < count; i++) {
+		uint32_t value_index = 0;
+		if (value_index_sel) {
+			value_index = NumericCast<uint32_t>(value_index_sel->get_index(i));
+		}
+
+		auto row = NumericCast<uint32_t>(i);
+		if (sel) {
+			row = NumericCast<uint32_t>(sel->get_index(i));
+		}
+
+		auto result_index = NumericCast<uint32_t>(i);
+		if (result_sel) {
+			result_index = NumericCast<uint32_t>(result_sel->get_index(i));
+		}
+
+		bool is_shredded = false;
+		if (variant.RowIsValid(row) && shredding_state && shredding_state->ValueIsShredded(variant, row, value_index)) {
+			shredding_state->SetShredded(row, value_index, result_index);
+			is_shredded = true;
+			if (shredding_state->type.id() != LogicalTypeId::STRUCT) {
+				//! Value is shredded, directly write a NULL to the 'value' if the type is not an OBJECT
+				//! When the type is OBJECT, all excess fields would still need to be written to the 'value'
+				validity.SetInvalid(result_index);
+				continue;
+			}
+		}
+
+		//! The (relative) offsets for each value, in the case of nesting
+		vector<uint32_t> offsets;
+		//! Determine the size of this 'value' blob
+		idx_t blob_length = AnalyzeValueData(variant, row, value_index, offsets, shredding_state, analyze_stack);
+		if (!blob_length) {
+			//! This is only allowed to happen for a shredded OBJECT, where there are no excess fields to write for the
+			//! OBJECT
+			(void)is_shredded;
+			D_ASSERT(is_shredded);
+			validity.SetInvalid(result_index);
+			continue;
+		}
+		value_data[result_index] = StringVector::EmptyString(value, blob_length);
+		auto &value_blob = value_data[result_index];
+		auto value_blob_data = reinterpret_cast<data_ptr_t>(value_blob.GetDataWriteable());
+
+		idx_t offset_index = 0;
+		WriteValueData(variant, row, value_index, value_blob_data, offsets, offset_index, shredding_state, write_stack);
+		D_ASSERT(data_ptr_cast(value_blob.GetDataWriteable() + blob_length) == value_blob_data);
+		value_blob.SetSizeAndFinalize(NumericCast<uint32_t>(blob_length), blob_length);
+	}
+}
+
+void ParquetVariantShredding::WriteMissingField(Vector &vector, idx_t index) {
+	//! The field is missing, set it to null
+	FlatVector::SetNull(vector, index, true);
+}
+
+void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
+                                                 optional_ptr<const SelectionVector> sel,
+                                                 optional_ptr<const SelectionVector> value_index_sel,
+                                                 optional_ptr<const SelectionVector> result_sel, idx_t count) {
+	optional_ptr<Vector> value;
+	optional_ptr<Vector> typed_value;
+
+	auto &result_type = result.GetType();
+	D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
+	auto &child_types = StructType::GetChildTypes(result_type);
+	auto &child_vectors = StructVector::GetEntries(result);
+	D_ASSERT(child_types.size() == child_vectors.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &name = child_types[i].first;
+		if (name == "value") {
+			value = &child_vectors[i];
+		} else if (name == "typed_value") {
+			typed_value = &child_vectors[i];
+		}
+	}
+
+	if (typed_value) {
+		ParquetVariantShreddingState shredding_state(typed_value->GetType(), count);
+		CreateValues(variant, *value, sel, value_index_sel, result_sel, &shredding_state, count);
+
+		SelectionVector null_values;
+		if (shredding_state.count) {
+			WriteTypedValues(variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
+			                 shredding_state.result_sel, shredding_state.count);
+			//! 'shredding_state.result_sel' will always be a subset of 'result_sel', set the rows not in the subset to
+			//! NULL
+			idx_t sel_idx = 0;
+			for (idx_t i = 0; i < count; i++) {
+				auto original_index = result_sel ? result_sel->get_index(i) : i;
+				if (sel_idx < shredding_state.count && shredding_state.result_sel[sel_idx] == original_index) {
+					sel_idx++;
+					continue;
+				}
+				FlatVector::SetNull(*typed_value, original_index, true);
+			}
+		} else {
+			//! Set all rows of the typed_value to NULL, nothing is shredded on
+			for (idx_t i = 0; i < count; i++) {
+				FlatVector::SetNull(*typed_value, result_sel ? result_sel->get_index(i) : i, true);
+			}
+		}
+	} else {
+		CreateValues(variant, *value, sel, value_index_sel, result_sel, nullptr, count);
+	}
+}
+
+void ParquetVariantConversion::ToParquetVariant(const Vector &variant_vec, idx_t count, Vector &result) {
+	// DuckDB Variant:
+	// - keys = VARCHAR[]
+	// - children = STRUCT(keys_index UINTEGER, values_index UINTEGER)[]
+	// - values = STRUCT(type_id UTINYINT, byte_offset UINTEGER)[]
+	// - data = BLOB
+
+	// Parquet VARIANT:
+	// - metadata = BLOB
+	// - value = BLOB (+ typed_value when 'result' declares a shredded layout)
+
+	RecursiveUnifiedVectorFormat recursive_format;
+	Vector::RecursiveToUnifiedFormat(variant_vec, recursive_format);
+	UnifiedVariantVectorData variant(recursive_format);
+
+	auto &result_vectors = StructVector::GetEntries(result);
+	auto &metadata = result_vectors[0];
+	CreateMetadata(variant, metadata, count);
+
+	ParquetVariantShredding shredding;
+	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+}
+
+} // namespace duckdb

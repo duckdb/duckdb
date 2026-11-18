@@ -81,6 +81,7 @@ bool IsPrimitiveEqual(const VariantNode &haystack, VariantLogicalType haystack_t
 	case VariantComparisonType::BLOB:
 	case VariantComparisonType::BITSTRING:
 	case VariantComparisonType::GEOMETRY:
+	case VariantComparisonType::GEOGRAPHY:
 	case VariantComparisonType::VARCHAR:
 		return haystack.GetString() == needle.node.GetString();
 	default:

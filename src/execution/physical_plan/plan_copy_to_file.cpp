@@ -7,6 +7,16 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto &plan = CreatePlan(*op.children[0]);
+	auto &fs = FileSystem::GetFileSystem(context);
+	op.file_path = fs.ExpandPath(op.file_path);
+	return CreatePlan(op, plan);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, PhysicalOperator &plan) {
+	if (op.use_tmp_file) {
+		auto base = StringUtil::GetFileName(op.file_path);
+		op.file_path = StringUtil::ReplaceFileName(op.file_path, "tmp_" + base);
+	}
 	bool preserve_insertion_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, plan);
 	bool supports_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
 
@@ -15,23 +25,22 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	} else if (op.preserve_order == PreserveOrderType::DONT_PRESERVE_ORDER) {
 		preserve_insertion_order = false;
 	}
-
-	auto &fs = FileSystem::GetFileSystem(context);
-	op.file_path = fs.ExpandPath(op.file_path);
-
-	if (op.use_tmp_file) {
-		auto path = StringUtil::GetFilePath(op.file_path);
-		auto base = StringUtil::GetFileName(op.file_path);
-		op.file_path = fs.JoinPath(path, "tmp_" + base);
-	}
-	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty() || !op.order_columns.empty()) {
+	if (op.per_thread_output || op.partition_output || !op.partition_columns.empty() || !op.order_columns.empty()) {
 		if (op.preserve_order == PreserveOrderType::PRESERVE_ORDER) {
 			throw InvalidInputException("PRESERVE_ORDER is not supported with these parameters");
 		}
 		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
 		preserve_insertion_order = false;
 		supports_batch_index = false;
+	} else if (op.file_size_bytes.IsValid() || op.rotate) {
+		// rotated files are written one after another, so a required order is kept across them: by the batch
+		// writer, or by sinking sequentially. An unordered source's insertion order still writes in parallel
+		if (op.preserve_order == PreserveOrderType::AUTOMATIC) {
+			preserve_insertion_order = OrderPreservationRecursive(plan) == OrderPreservationType::FIXED_ORDER;
+		}
+		if (op.use_tmp_file || !op.function.file_size_bytes) {
+			supports_batch_index = false;
+		}
 	}
 	auto mode = CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
 	if (op.function.execution_mode) {
@@ -50,10 +59,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		cast_copy.use_tmp_file = op.use_tmp_file;
 		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
+		cast_copy.query_names = op.query_names;
+		cast_copy.query_types = op.query_types;
 		cast_copy.write_empty_file = op.write_empty_file;
 
 		cast_copy.batch_size = op.batch_size;
 		cast_copy.batch_size_bytes = op.batch_size_bytes;
+		cast_copy.batches_per_file = op.batches_per_file;
+		cast_copy.file_size_bytes = op.file_size_bytes;
+		cast_copy.overwrite_mode = op.overwrite_mode;
+		cast_copy.filename_pattern = op.filename_pattern;
+		cast_copy.file_extension = op.file_extension;
 
 		return copy;
 	}
@@ -75,6 +91,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.file_size_bytes = op.file_size_bytes;
 
 	cast_copy.return_type = op.return_type;
+	cast_copy.query_names = op.query_names;
+	cast_copy.query_types = op.query_types;
 	cast_copy.partition_output = op.partition_output;
 	cast_copy.partition_columns = op.partition_columns;
 	cast_copy.write_partition_columns = op.write_partition_columns;
@@ -84,6 +102,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
 	cast_copy.order_columns = std::move(op.order_columns);
+	cast_copy.partition_path_expression = std::move(op.partition_path_expression);
+	cast_copy.partition_stats = std::move(op.partition_stats);
 
 	cast_copy.children.push_back(plan);
 	return copy;

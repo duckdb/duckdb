@@ -20,6 +20,9 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
 
 public:
@@ -41,6 +44,8 @@ public:
 	vector<unique_ptr<BaseStatistics>> group_stats;
 	//! Whether the inputs to all expression are non-NULL
 	TupleDataValidityType distinct_validity;
+	//! Whether each group takes its first row in input order (DISTINCT ON without ORDER BY)
+	bool preserve_input_order = false;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -54,6 +59,11 @@ public:
 	string GetName() const override;
 
 	const Expression &GetExpression(ColumnBinding binding) const;
+
+	//! Whether the rows of `op` are unique in the columns `keys`: the keys are traced through projections and filters
+	//! to an aggregate with one full grouping set whose groups are all among the keys (or to an aggregate without
+	//! groups, which emits one row).
+	static bool KeysAreUnique(LogicalOperator &op, vector<ColumnBinding> keys);
 	const Expression &GetGroupExpression(ProjectionIndex group_index) const;
 
 protected:

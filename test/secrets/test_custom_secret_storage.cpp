@@ -95,8 +95,8 @@ TEST_CASE("Test secret lookups by secret type", "[secret][.]") {
 	auto res2 = con.Query("SELECT name FROM which_secret('blablabla', 'secret_type_2')");
 
 	// Correct secret is selected
-	REQUIRE(res1->GetValue(0, 0).ToString() == "s1");
-	REQUIRE(res2->GetValue(0, 0).ToString() == "s2");
+	REQUIRE(res1->Collection().GetValue(0, 0).ToString() == "s1");
+	REQUIRE(res2->Collection().GetValue(0, 0).ToString() == "s2");
 }
 
 TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
@@ -133,14 +133,14 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	// Inspect current duckdb_secrets output
 	auto result = con.Query("SELECT name, storage from duckdb_secrets() ORDER BY type, name, storage");
 	REQUIRE(result->RowCount() == 4);
-	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
-	REQUIRE(result->GetValue(1, 0).ToString() == "test_storage");
-	REQUIRE(result->GetValue(0, 1).ToString() == "s2");
-	REQUIRE(result->GetValue(1, 1).ToString() == "memory");
-	REQUIRE(result->GetValue(0, 2).ToString() == "s2");
-	REQUIRE(result->GetValue(1, 2).ToString() == "test_storage");
-	REQUIRE(result->GetValue(0, 3).ToString() == "s1_test_type");
-	REQUIRE(result->GetValue(1, 3).ToString() == "test_storage");
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "s1");
+	REQUIRE(result->Collection().GetValue(1, 0).ToString() == "test_storage");
+	REQUIRE(result->Collection().GetValue(0, 1).ToString() == "s2");
+	REQUIRE(result->Collection().GetValue(1, 1).ToString() == "memory");
+	REQUIRE(result->Collection().GetValue(0, 2).ToString() == "s2");
+	REQUIRE(result->Collection().GetValue(1, 2).ToString() == "test_storage");
+	REQUIRE(result->Collection().GetValue(0, 3).ToString() == "s1_test_type");
+	REQUIRE(result->Collection().GetValue(1, 3).ToString() == "test_storage");
 
 	auto transaction = CatalogTransaction::GetSystemTransaction(*db.instance);
 
@@ -155,14 +155,14 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 
 	// Now try resolve secret by path -> this will return s1 because its scope matches best
 	auto which_secret_result = con.Query("SELECT name FROM which_secret('s3://foo/bar.csv', 'S3');");
-	REQUIRE(which_secret_result->GetValue(0, 0).ToString() == "s1");
+	REQUIRE(which_secret_result->Collection().GetValue(0, 0).ToString() == "s1");
 
 	// Exclude the storage from lookups
 	storage_ref.include_in_lookups = false;
 
 	// Now the lookup will choose the other storage
 	which_secret_result = con.Query("SELECT name FROM which_secret('s3://foo/bar.csv', 's3');");
-	REQUIRE(which_secret_result->GetValue(0, 0).ToString() == "s2");
+	REQUIRE(which_secret_result->Collection().GetValue(0, 0).ToString() == "s2");
 
 	// Lets drop stuff now
 	REQUIRE_NO_FAIL(con.Query("DROP TEMPORARY SECRET s2"));
@@ -215,25 +215,25 @@ TEST_CASE("Test tie-break behaviour for custom secret storage", "[secret][.]") {
 	// Inspect current duckdb_secrets output
 	auto result = con.Query("SELECT name, storage from duckdb_secrets() ORDER BY name, storage");
 	REQUIRE(result->RowCount() == 3);
-	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
-	REQUIRE(result->GetValue(1, 0).ToString() == "memory");
-	REQUIRE(result->GetValue(0, 1).ToString() == "s2");
-	REQUIRE(result->GetValue(1, 1).ToString() == "test_storage_after");
-	REQUIRE(result->GetValue(0, 2).ToString() == "s3");
-	REQUIRE(result->GetValue(1, 2).ToString() == "test_storage_before");
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "s1");
+	REQUIRE(result->Collection().GetValue(1, 0).ToString() == "memory");
+	REQUIRE(result->Collection().GetValue(0, 1).ToString() == "s2");
+	REQUIRE(result->Collection().GetValue(1, 1).ToString() == "test_storage_after");
+	REQUIRE(result->Collection().GetValue(0, 2).ToString() == "s3");
+	REQUIRE(result->Collection().GetValue(1, 2).ToString() == "test_storage_before");
 
 	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
-	REQUIRE(result->GetValue(0, 0).ToString() == "s3");
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "s3");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s3"));
 
 	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
-	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "s1");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s1"));
 
 	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
-	REQUIRE(result->GetValue(0, 0).ToString() == "s2");
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "s2");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s2"));
 
@@ -395,9 +395,10 @@ TEST_CASE("Transaction secrets are isolated and cleaned up", "[secret]") {
 
 	owner.Commit();
 	owner.BeginTransaction();
-	owner_transaction = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
-	REQUIRE(!secret_manager.GetSecretByName(owner_transaction, "transaction_secret"));
-	owner_match = secret_manager.LookupSecret(owner_transaction, "s3://bucket/data.parquet", "transaction_secret_type");
+	auto owner_transaction_after_commit = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
+	REQUIRE(!secret_manager.GetSecretByName(owner_transaction_after_commit, "transaction_secret"));
+	owner_match = secret_manager.LookupSecret(owner_transaction_after_commit, "s3://bucket/data.parquet",
+	                                          "transaction_secret_type");
 	REQUIRE(owner_match.HasMatch());
 	REQUIRE(owner_match.GetSecret().GetName() == "global_secret");
 
@@ -405,8 +406,8 @@ TEST_CASE("Transaction secrets are isolated and cleaned up", "[secret]") {
 	REQUIRE(secret_manager.CreateSecret(*owner.context, rollback_input));
 	owner.Rollback();
 	owner.BeginTransaction();
-	owner_transaction = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
-	REQUIRE(!secret_manager.GetSecretByName(owner_transaction, "rollback_secret"));
+	auto owner_transaction_after_rollback = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
+	REQUIRE(!secret_manager.GetSecretByName(owner_transaction_after_rollback, "rollback_secret"));
 	owner.Rollback();
 }
 
@@ -419,7 +420,7 @@ TEST_CASE("Transaction secret validation and conflicts", "[secret]") {
 	con.BeginTransaction();
 	auto input = TransactionSecretInput("conflicting_secret", "s3://original");
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*con.context);
-	REQUIRE_THROWS(secret_manager.BindCreateSecret(transaction, input));
+	REQUIRE_THROWS(secret_manager.BindCreateSecret(con.context->GetContext(), transaction, input));
 	REQUIRE(secret_manager.CreateSecret(*con.context, input));
 	REQUIRE_THROWS(secret_manager.CreateSecret(*con.context, input));
 

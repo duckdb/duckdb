@@ -65,21 +65,6 @@ void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
-// Checkpoint Threshold
-//===----------------------------------------------------------------------===//
-void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_wal_size = DBConfigOptions().checkpoint_wal_size;
-}
-
-//===----------------------------------------------------------------------===//
-// Custom User Agent
-//===----------------------------------------------------------------------===//
-Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.custom_user_agent);
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -100,20 +85,23 @@ void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &paramet
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Initialize
+//===----------------------------------------------------------------------===//
+void DebugInitializeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_initialize setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugInitialize>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Order Verification
 //===----------------------------------------------------------------------===//
-void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.debug_order_verification = EnumUtil::FromString<DebugOrderVerification>(str_input);
-}
-
-void DebugOrderVerificationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.debug_order_verification = DBConfigOptions().debug_order_verification;
-}
-
-Value DebugOrderVerificationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_order_verification)));
+void DebugOrderVerificationSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_order_verification setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugOrderVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -124,6 +112,16 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 		throw InvalidInputException("debug_physical_table_scan_execution_strategy setting cannot be NULL");
 	}
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Verify Progress
+//===----------------------------------------------------------------------===//
+void DebugVerifyProgressSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_progress setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugProgressVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -177,29 +175,6 @@ void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &pa
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Progress Bar
-//===----------------------------------------------------------------------===//
-void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!OnLocalSet(context, input)) {
-		return;
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_progress_bar = input.GetValue<bool>();
-}
-
-void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
-	if (!OnLocalReset(context)) {
-		return;
-	}
-	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
-}
-
-Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_progress_bar);
-}
-
-//===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -210,11 +185,23 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// H T T P Proxy
+// External File Cache Request Sizing
 //===----------------------------------------------------------------------===//
-Value HTTPProxySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy);
+void ExternalFileCacheRequestSizingSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("external_file_cache_request_sizing setting cannot be NULL");
+	}
+	EnumUtil::FromString<ExternalFileCacheRequestSizing>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Fsync Mode
+//===----------------------------------------------------------------------===//
+void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("fsync_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<FileSyncMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

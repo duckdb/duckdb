@@ -170,6 +170,10 @@ FileMetadata DebugFileSystem::Stats(FileHandle &handle) {
 	return inner.file_system.Stats(inner);
 }
 
+optional<FileMetadata> DebugFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	return inner_fs->GetStatsIfExists(file, opener);
+}
+
 void DebugFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Truncate(inner, new_size);
@@ -303,6 +307,10 @@ unique_ptr<FileSystem> DebugFileSystem::ExtractSubSystem(const string &name) {
 
 void DebugFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	inner_fs->SetDisabledFileSystems(names);
+}
+
+vector<string> DebugFileSystem::GetDisabledFileSystems() {
+	return inner_fs->GetDisabledFileSystems();
 }
 
 bool DebugFileSystem::SubSystemIsDisabled(const string &name) {

@@ -402,6 +402,15 @@
         "struct": "PathJoinFun"
     },
     {
+        "name": "hive_partition_component",
+        "parameters": "name,value",
+        "description": "Returns the hive partition directory for a partition column and its value, e.g. name=value. The name and the value are escaped like url_encode does, a NULL value becomes __HIVE_DEFAULT_PARTITION__.",
+        "example": "hive_partition_component('year', 2024)",
+        "categories": ["string"],
+        "type": "scalar_function",
+        "struct": "HivePartitionComponentFun"
+    },
+    {
         "name": "~~",
         "parameters": "string,pattern",
         "description": "",

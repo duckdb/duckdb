@@ -17,6 +17,9 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
 
+#include <limits>
+#include <type_traits>
+
 namespace duckdb {
 
 struct BaseStatsWriter {
@@ -62,7 +65,11 @@ struct StatsWriter : public BaseStatsWriter {
 
 	inline void Clear() {
 		ClearBase();
-		min = NumericLimits<T>::Maximum();
+		if constexpr (std::is_floating_point_v<T>) {
+			min = std::numeric_limits<T>::quiet_NaN();
+		} else {
+			min = NumericLimits<T>::Maximum();
+		}
 		max = NumericLimits<T>::Minimum();
 	}
 
@@ -72,8 +79,7 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void UpdateMinMax(T new_value) {
-		min = LessThan::Operation(new_value, min) ? new_value : min;
-		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		NumericStats::UpdateValue(new_value, min, max);
 	}
 
 	void Merge(BaseStatistics &target) const {
@@ -125,7 +131,10 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
-	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR),
+	      is_geometry(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY),
+	      geometry_model(Geometry::GetModel(type)),
+	      is_bignum(BaseStatistics::GetStatsType(type) == StatisticsType::BIGNUM_STATS) {
 		Clear();
 	}
 
@@ -133,6 +142,9 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		ClearBase();
 		if (is_geometry) {
 			geometry_stats.SetEmpty();
+		} else if (is_bignum) {
+			bignum_min.clear();
+			bignum_max.clear();
 		} else {
 			is_set = false;
 			min_size = 0;
@@ -147,7 +159,11 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	inline void Update(const string_t &value) {
 		SetHasValid();
 		if (is_geometry) {
-			geometry_stats.Update(value);
+			geometry_stats.Update(value, geometry_model);
+			return;
+		}
+		if (is_bignum) {
+			UpdateBignum(value);
 			return;
 		}
 		auto data = const_data_ptr_cast(value.GetData());
@@ -227,15 +243,31 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 			return;
 		}
 		SetHasValid();
-		total_string_length += value.GetSize();
+		if (!is_bignum) {
+			total_string_length += value.GetSize();
+		}
 	}
 
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {
-			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
+			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats, geometry_model);
+		} else if (is_bignum) {
+			BignumStats::Merge(other, string_t(bignum_min), string_t(bignum_max));
 		} else {
 			StringStats::Merge(other, *this);
+		}
+	}
+
+private:
+	//! The byte order of the BIGNUM encoding is the numeric order; the exact min/max blobs are kept while a vector is
+	//! written, the statistics they are merged into cut them to the bound size
+	inline void UpdateBignum(const string_t &value) {
+		if (bignum_min.empty() || LessThan::Operation(value, string_t(bignum_min))) {
+			bignum_min.assign(value.GetData(), value.GetSize());
+		}
+		if (bignum_max.empty() || GreaterThan::Operation(value, string_t(bignum_max))) {
+			bignum_max.assign(value.GetData(), value.GetSize());
 		}
 	}
 
@@ -251,7 +283,11 @@ private:
 	idx_t total_string_length;
 	bool is_varchar;
 	bool is_geometry;
+	GeometryModel geometry_model;
+	bool is_bignum;
 	GeometryStatsData geometry_stats;
+	string bignum_min;
+	string bignum_max;
 };
 
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/capi/capi_function_signature.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function.hpp"
@@ -88,13 +89,13 @@ struct CScalarFunctionLocalState : public FunctionLocalState {
 };
 
 struct CScalarFunctionInternalInitInfo {
-	CScalarFunctionInternalInitInfo(ClientContext &context, CScalarFunctionBindData &bind_data,
+	CScalarFunctionInternalInitInfo(ClientContext &context, const CScalarFunctionBindData &bind_data,
 	                                CScalarFunctionLocalState &local_state)
 	    : context(context), bind_data(bind_data), local_state(local_state) {
 	}
 
 	ClientContext &context;
-	CScalarFunctionBindData &bind_data;
+	const CScalarFunctionBindData &bind_data;
 	CScalarFunctionLocalState &local_state;
 
 	bool success = true;
@@ -176,14 +177,14 @@ unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
 }
 
 unique_ptr<FunctionLocalState> CScalarFunctionInit(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data) {
+                                                   optional_ptr<const FunctionData> bind_data) {
 	auto &function = expr.Function();
 	auto &info = function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
 	auto result = make_uniq<CScalarFunctionLocalState>();
 	if (info.init) {
-		auto &context = state.GetContext();
+		auto &context = state.GetClientContext();
 		auto &c_bind_data = bind_data->Cast<CScalarFunctionBindData>();
 		CScalarFunctionInternalInitInfo init_info(context, c_bind_data, *result);
 		info.init(ToCScalarFunctionInitInfo(init_info));
@@ -195,12 +196,16 @@ unique_ptr<FunctionLocalState> CScalarFunctionInit(ExpressionState &state, const
 }
 
 void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	PrepareCAPIVector(result);
 	auto &function = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_info = function.BindInfo();
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
 	auto &c_local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CScalarFunctionLocalState>();
 
 	input.Flatten();
+	for (auto &vector : input.data) {
+		PrepareCAPIVector(vector);
+	}
 	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
 
@@ -251,7 +256,7 @@ void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.SetVarArgs(*logical_type);
+	duckdb::CAPIFunctionSignature::SetVarArgs(scalar_function.GetSignature(), *logical_type);
 }
 
 void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function) {
@@ -276,7 +281,9 @@ void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.GetSignature().AddParameter(*logical_type);
+	// v1 declares no parameter name, so the caller cannot mean one: the parameter is positional-only, and the
+	// synthetic "colN" it is given stays invisible. It goes ahead of any varargs set beforehand.
+	duckdb::CAPIFunctionSignature::AddPositionalOnly(scalar_function.GetSignature(), *logical_type);
 }
 
 void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duckdb_logical_type type) {

@@ -5,10 +5,13 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
 #include <thread>
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -726,12 +729,164 @@ TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified
 // CachingFileSystem Tests
 //===----------------------------------------------------------------------===//
 
+TEST_CASE("Uncached read buffer reuse preserves pins and exact read ranges",
+          "[file_system][caching][read_buffer_reuse]") {
+	DuckDB db;
+	auto con = make_uniq<Connection>(db);
+	auto &manager = BufferManager::GetBufferManager(*con->context);
+	TrackingFileSystem file_system;
+	CachingFileSystem cfs(file_system, *db.instance);
+	const idx_t size = 270 * 1024;
+	string content(size, 'a');
+	content += string(size, 'b');
+	TestFileGuard test_file("uncached_read_reuse.bin", content);
+	auto handle = cfs.OpenFile(*con->context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	auto first = handle->Read(size, 0);
+	auto block = first.GetHandles()[0].handle.GetBlockHandle();
+	auto pin = manager.Pin(block);
+	first = FileBufferHandleGroup();
+	auto second = handle->Read(size, size);
+	REQUIRE(second.Ptr() != pin.Ptr());
+	REQUIRE(memcmp(pin.Ptr(), content.data(), size) == 0);
+	REQUIRE(memcmp(second.Ptr(), content.data() + size, size) == 0);
+	pin.Destroy();
+	auto third = handle->Read(size - 1, size);
+	REQUIRE(third.GetHandles()[0].length == size - 1);
+	REQUIRE(third.GetHandles()[0].handle.GetBlockHandle() != block);
+	REQUIRE(memcmp(third.Ptr(), content.data() + size, size - 1) == 0);
+	REQUIRE(file_system.GetReadCount(test_file.GetPath(), 0, size) == 1);
+	REQUIRE(file_system.GetReadCount(test_file.GetPath(), size, size) == 1);
+	REQUIRE(file_system.GetReadCount(test_file.GetPath(), size, size - 1) == 1);
+
+	third = FileBufferHandleGroup();
+	second = FileBufferHandleGroup();
+	manager.SetMemoryLimit(256 * 1024);
+	REQUIRE(block->GetMemory().IsUnloaded());
+	manager.SetMemoryLimit(64 * 1024 * 1024);
+	auto fourth = handle->Read(size, 0);
+	REQUIRE(memcmp(fourth.Ptr(), content.data(), size) == 0);
+	weak_ptr<BlockHandle> retained = fourth.GetHandles()[0].handle.GetBlockHandle();
+	fourth = FileBufferHandleGroup();
+	REQUIRE(retained.expired());
+	REQUIRE_NO_FAIL(con->Query("SELECT 1"));
+	REQUIRE(retained.expired());
+	handle.reset();
+	con.reset();
+	REQUIRE(retained.expired());
+}
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("Concurrent uncached reads keep their buffers until the last consumer", "[caching][read_buffer_reuse]") {
+	DuckDB db;
+	Connection con(db);
+	LocalFileSystem file_system;
+	CachingFileSystem cfs(file_system, *db.instance);
+	const idx_t size = 270 * 1024;
+	string content;
+	for (idx_t i = 0; i < 8; i++) {
+		content += string(size, static_cast<char>('a' + i));
+	}
+	TestFileGuard test_file("concurrent_uncached_read_reuse.bin", content);
+	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()),
+	                           FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
+	atomic<bool> correct {true};
+	vector<std::thread> threads;
+	for (idx_t i = 0; i < 8; i++) {
+		threads.emplace_back([&, i] {
+			try {
+				for (idx_t iteration = 0; iteration < 32; iteration++) {
+					const auto offset = (i + iteration) % 8 * size;
+					auto group = handle->Read(size, offset);
+					std::this_thread::yield();
+					if (memcmp(group.Ptr(), content.data() + offset, size) != 0) {
+						correct = false;
+					}
+				}
+			} catch (...) {
+				correct = false;
+			}
+		});
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	REQUIRE(correct.load());
+}
+#endif
+
+TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_buffer_reuse]") {
+	DBConfig config;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto &manager = BufferManager::GetBufferManager(*con.context);
+	BufferHandle pinned;
+	idx_t read_count = 1;
+	SECTION("Only the requested read size fits") {
+		manager.SetMemoryLimit(64 * 1024 * 1024);
+		pinned = manager.Allocate(MemoryTag::BASE_TABLE, 61 * 1024 * 1024 + 768 * 1024);
+	}
+	SECTION("Two reads must fit at the same time") {
+		manager.SetMemoryLimit(8 * 1024 * 1024);
+		pinned = manager.Allocate(MemoryTag::BASE_TABLE, 3 * 1024 * 1024);
+		read_count = 2;
+	}
+	LocalFileSystem file_system;
+	CachingFileSystem cfs(file_system, *db.instance);
+	const idx_t size = 2 * 1024 * 1024 + 1;
+	string content(size, 'x');
+	TestFileGuard test_file("uncached_read_pressure.bin", content);
+	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	vector<FileBufferHandleGroup> groups;
+	for (idx_t i = 0; i < read_count; i++) {
+		groups.push_back(handle->Read(size, 0));
+	}
+	for (auto &group : groups) {
+		REQUIRE(group.GetHandles().size() == 1);
+		REQUIRE(group.GetHandles()[0].length == size);
+		REQUIRE(memcmp(group.Ptr(), content.data(), size) == 0);
+	}
+}
+
+TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[caching][read_buffer_reuse]") {
+	DBConfig config;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
+	const idx_t size = 2 * 1024 * 1024 + 1;
+	idx_t memory_limit = 16 * 1024 * 1024;
+	idx_t expected_capacity = 4 * 1024 * 1024;
+	SECTION("Round when memory is plentiful") {
+	}
+#ifndef DUCKDB_NO_THREADS
+	SECTION("Keep exact sizes when each worker has little memory") {
+		Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(4));
+		expected_capacity = BufferManager::GetAllocSize(size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	}
+#endif
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto &manager = BufferManager::GetBufferManager(*con.context);
+	manager.SetMemoryLimit(memory_limit);
+	LocalFileSystem file_system;
+	CachingFileSystem cfs(file_system, *db.instance);
+	string content(size, 'x');
+	TestFileGuard test_file("uncached_read_rounding.bin", content);
+	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto group = handle->Read(size, 0);
+	REQUIRE(group.GetHandles().size() == 1);
+	REQUIRE(group.GetHandles()[0].handle.GetBlockHandle()->GetMemory().GetMemoryUsage() == expected_capacity);
+	REQUIRE(group.GetHandles()[0].length == size);
+	REQUIRE(memcmp(group.Ptr(), content.data(), size) == 0);
+}
+
 TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file_system][caching]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
-	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheMaxBlockSize(TestDirectoryPath());
 	const idx_t EXTRA = 100;
 	const idx_t FILE_SIZE = BLOCK_SIZE + EXTRA;
 
@@ -865,7 +1020,7 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	auto counting_fs = make_uniq<CountingFileSystem>();
 	auto *counting_fs_ptr = counting_fs.get();
 
-	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheMaxBlockSize(TestDirectoryPath());
 	const idx_t FILE_SIZE = BLOCK_SIZE;
 
 	string content(FILE_SIZE, 'X');
@@ -899,6 +1054,74 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 		REQUIRE(result == content);
 		REQUIRE(counting_fs_ptr->GetOpenCount() == 1);
 	}
+}
+
+TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NOT_EXISTS", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
+
+	auto missing_path = TestCreatePath("test_caching_missing_file.bin");
+	FileSystem::CreateLocal()->TryRemoveFile(missing_path);
+
+	auto validate = GENERATE(true, false);
+	OpenFileInfo file_info(missing_path);
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(validate);
+
+	for (auto mode : {CachingMode::NO_CACHING, CachingMode::CACHE_REMOTE_ONLY, CachingMode::ALWAYS_CACHE}) {
+		FileOpenFlags flags {FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS};
+		flags.SetCachingMode(mode);
+		REQUIRE(opener_filesystem.OpenFile(file_info, flags) == nullptr);
+
+		FileOpenFlags throwing_flags {FileFlags::FILE_FLAGS_READ};
+		throwing_flags.SetCachingMode(mode);
+		REQUIRE_THROWS_AS(opener_filesystem.OpenFile(file_info, throwing_flags), IOException);
+	}
+
+	LocalFileSystem local_fs;
+	auto caching_wrapper = make_shared_ptr<CachingFileSystemWrapper>(local_fs, db_instance, CachingMode::ALWAYS_CACHE);
+	REQUIRE(caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ |
+	                                                 FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS) == nullptr);
+
+	CachingFileSystem cfs(local_fs, db_instance);
+	REQUIRE(cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS) == nullptr);
+}
+
+TEST_CASE("Cached file removed after caching with FILE_FLAGS_NULL_IF_NOT_EXISTS", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	LocalFileSystem local_fs;
+	CachingFileSystem cfs(local_fs, db_instance);
+
+	const string content = "Content that gets cached and then removed from disk.";
+	TestFileGuard test_file("test_caching_removed_file.bin", content);
+
+	auto make_file_info = [&](bool validate) {
+		OpenFileInfo info(test_file.GetPath());
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(validate);
+		return info;
+	};
+	const FileOpenFlags flags {FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS};
+
+	{
+		auto handle = cfs.OpenFile(make_file_info(false), flags);
+		REQUIRE(handle);
+		auto group = handle->Read(content.size(), 0);
+		string result(content.size(), '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), content.size());
+		REQUIRE(result == content);
+	}
+	local_fs.RemoveFile(test_file.GetPath());
+
+	// Validation must open the file, so the missing file is reported as a null handle
+	REQUIRE(cfs.OpenFile(make_file_info(true), flags) == nullptr);
+
+	// Without validation the cached blocks defer opening the file; opening it later throws a regular IO error
+	auto handle = cfs.OpenFile(make_file_info(false), flags);
+	REQUIRE(handle);
+	REQUIRE_THROWS_AS(handle->GetFileHandle(), IOException);
 }
 
 } // namespace duckdb

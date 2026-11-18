@@ -1,10 +1,13 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
@@ -240,7 +243,16 @@ static void CloseFileAndAppendError(int fd, string &extended_error) {
 static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
-	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+#ifdef __APPLE__
+	const auto &modification_time = s.st_mtimespec;
+#else
+	const auto &modification_time = s.st_mtim;
+#endif
+	// with the fraction of a second, so that a file rewritten within the same second gets another version tag
+	const auto modification_seconds = Timestamp::FromEpochSeconds(static_cast<int64_t>(modification_time.tv_sec));
+	file_metadata.last_modification_time =
+	    Timestamp::FromEpochMicroSeconds(AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(
+	        modification_seconds.value, static_cast<int64_t>(modification_time.tv_nsec) / Interval::NANOS_PER_MICRO));
 	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
 	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 
@@ -488,8 +500,10 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 	int fd = unix_handle.fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
+		// macOS rejects a single read above INT_MAX bytes with EINVAL and Linux silently caps it, so read in chunks
+		auto chunk = MinValue<int64_t>(nr_bytes, int64_t(1) << 30);
 		int64_t bytes_read =
-		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
+		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(chunk), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 			                  strerror(errno));
@@ -615,6 +629,26 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto file_metadata = StatsInternal(fd, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto path = ExpandPath(path_p, opener);
+	struct stat status;
+	if (stat(path.c_str(), &status) != 0) {
+		auto retained_errno = errno;
+		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+			return nullopt;
+		}
+		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
+		                  path_p, strerror(retained_errno));
+	}
+	auto file_metadata = StatsFromStruct(status);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
@@ -794,21 +828,26 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-
-#if HAVE_FULLFSYNC
-	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
-	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
-	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	auto fsync_mode = unix_handle.db ? Settings::Get<FsyncModeSetting>(*unix_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
 		return;
 	}
-#endif // HAVE_FULLFSYNC
+	int fd = unix_handle.fd;
 
-#if HAVE_FDATASYNC
+#ifdef F_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (fsync_mode == FileSyncMode::FULL && ::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // F_FULLFSYNC
+
+#ifdef DUCKDB_HAVE_FDATASYNC
 	bool sync_success = ::fdatasync(fd) == 0;
 #else
 	bool sync_success = ::fsync(fd) == 0;
-#endif // HAVE_FDATASYNC
+#endif // DUCKDB_HAVE_FDATASYNC
 
 	if (sync_success) {
 		return;
@@ -840,11 +879,53 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 
 bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	char resolved[PATH_MAX];
-	if (!realpath(input.c_str(), resolved)) {
-		return false;
+	if (realpath(input.c_str(), resolved)) {
+		input = resolved;
+		return true;
 	}
-	input = resolved;
-	return true;
+	// the path might be a dangling symlink - follow the chain and canonicalize the parent of the final target
+	static constexpr idx_t MAX_SYMLINK_DEPTH = 40;
+	string current = input;
+	for (idx_t depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+		char link_target[PATH_MAX];
+		auto link_length = readlink(current.c_str(), link_target, sizeof(link_target) - 1);
+		if (link_length < 0) {
+			return false;
+		}
+		string target(link_target, NumericCast<idx_t>(link_length));
+		auto sep = current.rfind('/');
+		if (target.empty() || sep == string::npos) {
+			return false;
+		}
+		if (target[0] != '/') {
+			target = current.substr(0, sep + 1) + target;
+		}
+		if (realpath(target.c_str(), resolved)) {
+			input = resolved;
+			return true;
+		}
+		auto target_sep = target.rfind('/');
+		if (target_sep == string::npos) {
+			return false;
+		}
+		struct stat target_stat;
+		if (lstat(target.c_str(), &target_stat) == 0 && S_ISLNK(target_stat.st_mode)) {
+			current = target;
+			continue;
+		}
+		// final target does not exist - canonicalize its parent directory
+		auto parent = target.substr(0, target_sep + 1);
+		if (!realpath(parent.c_str(), resolved)) {
+			return false;
+		}
+		string result = resolved;
+		if (result.empty() || result.back() != '/') {
+			result += '/';
+		}
+		input = result + target.substr(target_sep + 1);
+		return true;
+	}
+	return false;
 }
 
 bool LocalFileSystem::PathStartsWithDrive(const string &path) {
@@ -1110,8 +1191,9 @@ static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
-	    : FileHandle(file_system, path, flags), position(0), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
+	                  optional_ptr<DatabaseInstance> db)
+	    : FileHandle(file_system, path, flags), position(0), fd(fd), db(db) {
 	}
 	~WindowsFileHandle() override {
 		Close();
@@ -1119,6 +1201,7 @@ public:
 
 	idx_t position;
 	HANDLE fd;
+	optional_ptr<DatabaseInstance> db;
 
 public:
 	void Close() override {
@@ -1257,7 +1340,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		if (flags.ReturnNullIfNotExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
+		auto last_error = GetLastError();
+		if (flags.ReturnNullIfNotExists() && last_error == ERROR_FILE_NOT_FOUND) {
+			return nullptr;
+		}
+		// Match POSIX EEXIST handling for exclusive creation.
+		if (flags.ReturnNullIfExists() && (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)) {
 			return nullptr;
 		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1269,7 +1357,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
 		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, FileOpener::TryGetDatabase(opener));
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
@@ -1585,7 +1673,12 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &windows_handle = handle.Cast<WindowsFileHandle>();
+	auto fsync_mode = windows_handle.db ? Settings::Get<FsyncModeSetting>(*windows_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
+		return;
+	}
+	HANDLE hFile = windows_handle.fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
@@ -1649,6 +1742,31 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
+	auto raw_handle = CreateFileW(unicode_path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (raw_handle == INVALID_HANDLE_VALUE) {
+		auto error_code = GetLastError();
+		// a name that cannot be a local file does not exist, as for ENOENT and ENOTDIR
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND ||
+		    error_code == ERROR_INVALID_NAME || error_code == ERROR_BAD_PATHNAME || error_code == ERROR_DIRECTORY) {
+			return nullopt;
+		}
+		SetLastError(error_code);
+		throw IOException("Failed to get stats for path \"%s\": %s", path_p, GetLastErrorAsString());
+	}
+	unique_ptr<void, decltype(&CloseHandle)> handle(raw_handle, CloseHandle);
+
+	auto file_metadata = StatsInternal(handle.get(), path_p);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
@@ -2056,7 +2174,21 @@ static bool IsSymbolicLink(const string &path) {
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
                                                            bool absolute_path) {
 	vector<OpenFileInfo> result;
-	if (FileExists(path, opener) || IsPipe(path, opener)) {
+	// a regular file comes with its type, size, modification time and version tag, as from a glob
+	auto add_file = [&](const string &file_path) {
+		OpenFileInfo info(file_path);
+		auto file_metadata = GetStatsIfExists(info, opener);
+		if (file_metadata) {
+			info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+			auto &options = info.extended_info->options;
+			options.emplace("type", Value("file"));
+			FillFileOptions(*file_metadata, options);
+		}
+		result.push_back(std::move(info));
+	};
+	if (FileExists(path, opener)) {
+		add_file(path);
+	} else if (IsPipe(path, opener)) {
 		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
@@ -2065,7 +2197,9 @@ vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, o
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
+				if (FileExists(joined_path, opener)) {
+					add_file(joined_path);
+				} else if (IsPipe(joined_path, opener)) {
 					result.emplace_back(joined_path);
 				}
 			}
@@ -2155,7 +2289,7 @@ private:
 
 LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), fs(fs), path(fs.ExpandPath(path_p, opener)),
+    : LazyMultiFileList(FileOpener::TryGetContext(opener)), fs(fs), path(fs.ExpandPath(path_p, opener)),
       opener(opener) {
 	if (path.empty()) {
 		finished = true;

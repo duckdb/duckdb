@@ -296,6 +296,9 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 		case StorageVersion::V2_0_0:
 			header.storage_compatibility = StorageVersion::V2_0_0;
 			break;
+		case StorageVersion::V2_1_0:
+			header.storage_compatibility = StorageVersion::V2_1_0;
+			break;
 			// new versions should be added here
 		default:
 			if (static_cast<idx_t>(read_version) > VERSION_NUMBER_UPPER) {
@@ -529,7 +532,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// MAP mode opens only the mmap; other modes open the FileHandle.
-	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW_FILE);
+	handle = DatabaseHandle::Open(context, db, path, options, DatabaseOpenMode::CREATE_NEW_FILE);
 	header_buffer.Clear();
 
 	if (options.storage_version == StorageVersion::INVALID) {
@@ -538,6 +541,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version);
+	GetMetadataManager().SetStorageVersion(options.storage_version);
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number);
@@ -606,6 +610,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.storage_compatibility = options.storage_version;
+	header_buffer.Clear();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -619,6 +624,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.storage_compatibility = options.storage_version;
+	header_buffer.Clear();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -631,7 +637,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
-	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING_FILE);
+	handle = DatabaseHandle::Open(context, db, path, options, DatabaseOpenMode::OPEN_EXISTING_FILE);
 	handle->CheckMagicBytes(context);
 
 	// otherwise, we check the metadata of the file
@@ -832,7 +838,10 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
-	max_block = NumericCast<block_id_t>(header.block_count);
+	if (header.block_count > static_cast<uint64_t>(NumericLimits<block_id_t>::Maximum())) {
+		throw DataCorruptionException("Corrupt database file: invalid block count %llu", header.block_count);
+	}
+	max_block = UnsafeNumericCast<block_id_t>(header.block_count);
 	if (options.storage_version != StorageVersion::INVALID) {
 		// storage version specified explicitly - use requested storage version
 		auto requested_compat_version = options.storage_version;
@@ -854,6 +863,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	}
 
 	db.GetStorageManager().SetStorageVersion(options.storage_version);
+	GetMetadataManager().SetStorageVersion(options.storage_version);
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
 		throw InvalidInputException(
@@ -916,7 +926,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	}
 	// add the entry to the list of newly used blocks
 	if (type == FreeBlockType::NEWLY_USED_BLOCK) {
-		newly_used_blocks.insert(block_id);
+		newly_used_blocks[block_id] = MAX_TRANSACTION_ID;
 	}
 	if (BlockIsRegistered(block_id)) {
 		throw InternalException("Free block %d is already registered", block_id);
@@ -945,6 +955,17 @@ void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
+}
+
+void SingleFileBlockManager::MarkBlockAsCommitted(block_id_t block_id, transaction_t commit_id) {
+	lock_guard<mutex> lock(single_file_block_lock);
+	auto entry = newly_used_blocks.find(block_id);
+	// optimistic writes keep their blocks newly used until their commit
+	if (entry == newly_used_blocks.end()) {
+		throw InternalException("MarkBlockAsCommitted called with block id %d that is not newly used", block_id);
+	}
+	D_ASSERT(entry->second == MAX_TRANSACTION_ID || entry->second == commit_id);
+	entry->second = commit_id;
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -994,7 +1015,7 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
 	}
 	auto newly_used_entry = newly_used_blocks.find(block_id);
-	if (newly_used_entry != newly_used_blocks.end()) {
+	if (newly_used_entry != newly_used_blocks.end() && newly_used_entry->second == MAX_TRANSACTION_ID) {
 		// this block was newly used - and now we are labeling it as no longer being required
 		// we can directly add it back to the free list
 		newly_used_blocks.erase(block_id);
@@ -1002,6 +1023,8 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	} else {
 		// this block was used in storage, we cannot directly re-use it
 		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		// so is a committed newly used block, which the WAL of its commit refers to until a header includes it
+		newly_used_blocks.erase(block_id);
 		modified_blocks.insert(block_id);
 	}
 }
@@ -1053,7 +1076,7 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 		}
 	}
 	for (auto &newly_used_block : newly_used_blocks) {
-		referenced_blocks.insert(newly_used_block);
+		referenced_blocks.insert(newly_used_block.first);
 	}
 	for (auto &free_block : free_list) {
 		referenced_blocks.insert(free_block);
@@ -1098,7 +1121,7 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			if (!newly_used_blocks_str.empty()) {
 				newly_used_blocks_str += ", ";
 			}
-			newly_used_blocks_str += to_string(block);
+			newly_used_blocks_str += to_string(block.first);
 		}
 
 		throw InternalException(
@@ -1164,7 +1187,13 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 }
 
 idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) const {
-	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+	const auto block_index = NumericCast<idx_t>(block_id);
+	const auto block_alloc_size = GetBlockAllocSize();
+	// block ids are read from the file: the location of a block (and its end) must not wrap around
+	if (block_index >= (NumericLimits<idx_t>::Maximum() - BLOCK_START) / block_alloc_size) {
+		throw DataCorruptionException("Corrupt database file: block id %lld is out of range", block_id);
+	}
+	return BLOCK_START + block_index * block_alloc_size;
 }
 
 void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header) const {
@@ -1197,8 +1226,13 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 
 void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
-	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
+	D_ASSERT(!BlockIsFreeListed(block.id));
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
+}
+
+bool SingleFileBlockManager::BlockIsFreeListed(block_id_t block_id) {
+	lock_guard<mutex> lock(single_file_block_lock);
+	return free_list.find(block_id) != free_list.end();
 }
 
 void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
@@ -1241,14 +1275,14 @@ void SingleFileBlockManager::Truncate() {
 		blocks_to_truncate++;
 		max_block--;
 	}
-	if (blocks_to_truncate == 0) {
-		// nothing to truncate
-		return;
+	if (blocks_to_truncate > 0) {
+		// truncate the file
+		free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	}
-	// truncate the file
-	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
-	handle->Truncate(new_size);
+	if (blocks_to_truncate > 0 || handle->GetFileSize() > new_size) {
+		handle->Truncate(new_size);
+	}
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -1325,7 +1359,7 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	lock.lock();
 	return false;
 }
-void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
@@ -1338,15 +1372,22 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
+	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
 	}
 	auto written_multi_use_blocks = multi_use_blocks;
-	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
-	for (auto &newly_used_block : newly_used_blocks) {
-		all_free_blocks.insert(newly_used_block);
-		written_multi_use_blocks.erase(newly_used_block);
+	for (auto entry = newly_used_blocks.begin(); entry != newly_used_blocks.end();) {
+		if (entry->second < bound) {
+			// committed before the bound: this checkpoint includes the block
+			entry = newly_used_blocks.erase(entry);
+			continue;
+		}
+		// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
+		all_free_blocks.insert(entry->first);
+		written_multi_use_blocks.erase(entry->first);
+		entry++;
 	}
 
 	if (!free_list_blocks.empty()) {
@@ -1374,12 +1415,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
-	lock.unlock();
-	metadata_manager.Flush(context);
-
-	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
+	metadata_manager.Flush(context);
 
 	header.storage_compatibility = options.storage_version;
 
@@ -1434,17 +1472,38 @@ void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
-	// perform the actual unregistration
-	BlockManager::UnregisterBlock(id);
-	// check if it is part of the newly free list
-	lock_guard<mutex> lock(single_file_block_lock);
+void SingleFileBlockManager::ReleaseFreeBlockInUse(unique_lock<mutex> &lock, block_id_t id) {
+	if (!lock.owns_lock()) {
+		throw InternalException("ReleaseFreeBlockInUse must be called while holding the lock");
+	}
+	// check if the block is part of the newly free list
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
 		free_list.insert(id);
 		free_blocks_in_use.erase(entry);
 	}
+}
+
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	unique_lock<mutex> lock(single_file_block_lock);
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	ReleaseFreeBlockInUse(lock, id);
+}
+
+bool SingleFileBlockManager::UnregisterExpiredBlock(block_id_t id) {
+	// hold the lock across the live-handle check and the free-list transition: otherwise a
+	// re-registration and retirement of the block id can interleave between them, and the
+	// free-list transition would run although a live handle exists
+	// lock order: single_file_block_lock before blocks_lock, as in AddFreeBlock
+	unique_lock<mutex> lock(single_file_block_lock);
+	if (!BlockManager::UnregisterExpiredBlock(id)) {
+		// a newer handle is registered for this block id - the block id is still in use
+		return false;
+	}
+	ReleaseFreeBlockInUse(lock, id);
+	return true;
 }
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
@@ -1455,7 +1514,7 @@ void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end
 }
 
 void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
-	if (!DBConfig::Get(db).options.trim_free_blocks) {
+	if (!Settings::Get<TrimFreeBlocksSetting>(DBConfig::Get(db))) {
 		return;
 	}
 	lock_guard<mutex> lock(single_file_block_lock);

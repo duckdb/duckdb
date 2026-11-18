@@ -8,18 +8,66 @@
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/context.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 BindCastInput::BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info,
-                             optional_ptr<ClientContext> context)
-    : function_set(function_set), info(info), context(context) {
+                             GetCastFunctionInput &get_input)
+    : function_set(function_set), info(info), context(get_input.client_context), services(get_input.TryGetContext()) {
+}
+
+Context &BindCastInput::GetContext() {
+	if (!services) {
+		throw InternalException("BindCastInput::GetContext called on the input of a default cast");
+	}
+	return *services;
+}
+
+//! Orders the stabilities from the most to the least stable
+static idx_t StabilityRank(FunctionStability stability) {
+	switch (stability) {
+	case FunctionStability::CONSISTENT:
+		return 0;
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return 1;
+	case FunctionStability::VOLATILE:
+		return 2;
+	}
+	throw InternalException("Unsupported FunctionStability");
+}
+
+//! A cast that applies other casts is as stable as the least stable of them
+static FunctionStability LeastStable(FunctionStability left, FunctionStability right) {
+	return StabilityRank(left) >= StabilityRank(right) ? left : right;
+}
+
+GetCastFunctionInput::GetCastFunctionInput(Context &context_p)
+    : client_context(context_p.TryGetClientContext()), context(context_p) {
+}
+
+GetCastFunctionInput::GetCastFunctionInput(ClientContext &context_p)
+    : client_context(context_p), context(context_p.GetContext()) {
+}
+
+GetCastFunctionInput GetCastFunctionInput::Default() {
+	return GetCastFunctionInput();
+}
+
+Context &GetCastFunctionInput::GetContext() {
+	if (!context) {
+		throw InternalException("GetCastFunctionInput::GetContext called on the input of a default cast");
+	}
+	return *context;
 }
 
 BoundCastInfo BindCastInput::GetCastFunction(const LogicalType &source, const LogicalType &target) {
-	GetCastFunctionInput input(context);
+	auto input = services ? GetCastFunctionInput(*services) : GetCastFunctionInput::Default();
 	input.query_location = query_location;
-	return function_set.GetCastFunction(source, target, input);
+	auto result = function_set.GetCastFunction(source, target, input);
+	stability = LeastStable(stability, result.GetStability());
+	return result;
 }
 
 BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<BindCastInfo> info_p)
@@ -39,8 +87,16 @@ CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {
 	return DBConfig::GetConfig(context).GetCastFunctions();
 }
 
+const CastFunctionSet &CastFunctionSet::Get(const ClientContext &context) {
+	return DBConfig::GetConfig(context).GetCastFunctions();
+}
+
 CollationBinding &CollationBinding::Get(ClientContext &context) {
 	return DBConfig::GetConfig(context).GetCollationBinding();
+}
+
+CastFunctionSet &CastFunctionSet::Get(Context &context) {
+	return DBConfig::GetConfig(context.GetDatabase()).GetCastFunctions();
 }
 
 CastFunctionSet &CastFunctionSet::Get(DatabaseInstance &db) {
@@ -58,10 +114,17 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 		result.SetStatisticsCallback(CastStatistics::Propagate);
 		return result;
 	}
+	if (registration_probe) {
+		// VARIANT selects additional casts from runtime values.
+		registered_cast_found |=
+		    source.id() == LogicalTypeId::VARIANT || registration_probe->HasRegisteredCast(source, target);
+	}
 	auto bind_cast = [&](BindCastFunction &bind_function) {
-		BindCastInput input(*this, bind_function.info.get(), get_input.context);
+		BindCastInput input(*this, bind_function.info.get(), get_input);
 		input.query_location = get_input.query_location;
-		return bind_function.function(input, source, target);
+		auto result = bind_function.function(input, source, target);
+		result.SetStability(LeastStable(result.GetStability(), input.stability));
+		return result;
 	};
 
 	// Registered casts can have different semantics, so only their own statistics callbacks are valid.
@@ -98,8 +161,8 @@ struct MapCastNode {
 	int64_t implicit_cast_cost;
 };
 
-template <class MAP_VALUE_TYPE>
-static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType &type) -> decltype(map.find(type)) {
+template <class MAP>
+static auto RelaxedTypeMatch(MAP &map, const LogicalType &type) -> decltype(map.find(type)) {
 	D_ASSERT(map.find(type) == map.end()); // we shouldn't be here
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
@@ -130,6 +193,22 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalTypeId::DECIMAL);
 	case LogicalTypeId::ENUM:
 		return map.find(LogicalTypeId::ENUM);
+	case LogicalTypeId::GEOMETRY: {
+		// a GEOMETRY with a CRS matches the casts of the GEOMETRY without a CRS
+		auto entry = map.find(LogicalType::GEOMETRY());
+		if (entry != map.end()) {
+			return entry;
+		}
+		return map.find(LogicalType::ANY);
+	}
+	case LogicalTypeId::GEOGRAPHY: {
+		// a GEOGRAPHY with a CRS matches the casts of the GEOGRAPHY without a CRS
+		auto entry = map.find(LogicalType::GEOGRAPHY());
+		if (entry != map.end()) {
+			return entry;
+		}
+		return map.find(LogicalType::ANY);
+	}
 	default:
 		return map.find(LogicalType::ANY);
 	}
@@ -137,7 +216,7 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 
 struct MapCastInfo : public BindCastInfo {
 public:
-	const optional_ptr<MapCastNode> GetEntry(const LogicalType &source, const LogicalType &target) {
+	optional_ptr<const MapCastNode> GetEntry(const LogicalType &source, const LogicalType &target) const {
 		auto source_type_id_entry = casts.find(source.id());
 		if (source_type_id_entry == casts.end()) {
 			source_type_id_entry = casts.find(LogicalTypeId::ANY);
@@ -176,6 +255,18 @@ public:
 		return &target_type_entry->second;
 	}
 
+	vector<LogicalType> GetSourceTypes(const LogicalType &target) const {
+		vector<LogicalType> result;
+		for (auto &source_id : casts) {
+			for (auto &source_type : source_id.second) {
+				if (GetEntry(source_type.first, target)) {
+					result.push_back(source_type.first);
+				}
+			}
+		}
+		return result;
+	}
+
 	void AddEntry(const LogicalType &source, const LogicalType &target, MapCastNode node) {
 		casts[source.id()][source][target.id()].insert(make_pair(target, std::move(node)));
 	}
@@ -184,8 +275,33 @@ private:
 	type_id_map_t<type_map_t<type_id_map_t<type_map_t<MapCastNode>>>> casts;
 };
 
+bool CastFunctionSet::HasRegisteredCast(const LogicalType &source, const LogicalType &target) const {
+	return map_info && map_info->GetEntry(source, target);
+}
+
+vector<LogicalType> CastFunctionSet::GetRegisteredCastSourceTypes(const LogicalType &target) const {
+	return map_info ? map_info->GetSourceTypes(target) : vector<LogicalType>();
+}
+
+bool CastFunctionSet::CanOverrideDefaultCast(const LogicalType &source, const LogicalType &target) const {
+	if (!map_info || source == target) {
+		return false;
+	}
+	if (HasRegisteredCast(source, target)) {
+		return true;
+	}
+	CastFunctionSet probe;
+	probe.registration_probe = this;
+	auto input = GetCastFunctionInput::Default();
+	probe.GetCastFunction(source, target, input);
+	return probe.registered_cast_found;
+}
+
 int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
                                           const LogicalType &target) {
+	if (registration_probe && registration_probe->HasRegisteredCast(source, target)) {
+		registered_cast_found = true;
+	}
 	// check if a cast has been registered
 	if (map_info) {
 		auto entry = map_info->GetEntry(source, target);

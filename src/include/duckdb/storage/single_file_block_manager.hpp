@@ -92,6 +92,8 @@ public:
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as included in a checkpoint
 	void MarkBlockAsCheckpointed(block_id_t block_id) override;
+	//! Mark a newly used block as part of a commit
+	void MarkBlockAsCommitted(block_id_t block_id, transaction_t commit_id) override;
 	//! Mark a block as used (no longer re-writeable)
 	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)
@@ -100,6 +102,8 @@ public:
 	void IncreaseBlockReferenceCount(block_id_t block_id) override;
 	//! UnregisterBlock, only accepts non-temporary block ids
 	void UnregisterBlock(block_id_t id) override;
+	//! Unregister the block id if no live handle is registered for it
+	bool UnregisterExpiredBlock(block_id_t id) override;
 	//! Return the meta block id
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
@@ -115,7 +119,7 @@ public:
 	//! Write the block to disk.
 	void Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(QueryContext context, DatabaseHeader header) override;
+	void WriteHeader(QueryContext context, DatabaseHeader header, VisibilityBound bound) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
@@ -193,6 +197,10 @@ private:
 	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
 	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
 	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
+	//! Move the block from free_blocks_in_use to the free list, if present
+	void ReleaseFreeBlockInUse(unique_lock<mutex> &lock, block_id_t id);
+	//! Returns true, if the block is in the free list. Takes the lock (verification only).
+	bool BlockIsFreeListed(block_id_t block_id);
 
 private:
 	AttachedDatabase &db;
@@ -208,8 +216,8 @@ private:
 	set<block_id_t> free_list;
 	//! The list of blocks that have been freed, but cannot yet be re-used because they are still in-use
 	set<block_id_t> free_blocks_in_use;
-	//! The list of blocks that are in-use, but haven't been written as part of a checkpoint yet
-	set<block_id_t> newly_used_blocks;
+	//! Blocks in use that no written header includes yet, by commit id (MAX_TRANSACTION_ID while uncommitted)
+	unordered_map<block_id_t, transaction_t> newly_used_blocks;
 	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list

@@ -210,6 +210,15 @@ RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options_p, Tran
     : options(options_p), transaction(transaction_p), offset(0), initialized(false) {
 }
 
+idx_t RowGroupReorderer::ScanRowCount() const {
+	D_ASSERT(initialized);
+	idx_t count = 0;
+	for (auto &row_group : ordered_row_groups) {
+		count += row_group.get().GetNode().count;
+	}
+	return count;
+}
+
 optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetNextRowGroup(SegmentNode<RowGroup> &row_group) {
 	D_ASSERT(RefersToSameObject(ordered_row_groups[offset].get(), row_group));
 	if (offset >= ordered_row_groups.size() - 1) {
@@ -221,6 +230,13 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetNextRowGroup(SegmentNo
 Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
                                       OrderByColumnType column_type) {
 	if (column_type == OrderByColumnType::NUMERIC) {
+		if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+			// the bignum_t tier of decimals
+			if (!BignumStats::HasMinMax(stats)) {
+				return Value();
+			}
+			return order_by == OrderByStatistics::MIN ? BignumStats::Min(stats) : BignumStats::Max(stats);
+		}
 		if (!NumericStats::HasMinMax(stats)) {
 			return Value();
 		}
