@@ -73,7 +73,7 @@ struct TopNBoundaryValue {
 			boundary_value = boundary_val.GetString();
 			is_set = true;
 			if (op.dynamic_filter) {
-				CreateSortKeyHelpers::DecodeSortKey(boundary_val, boundary_vector, 0, boundary_modifiers);
+				CreateSortKeyHelpers::DecodeSortKeyPrefix(boundary_val, boundary_vector, 0, boundary_modifiers);
 				auto new_dynamic_value = boundary_vector.GetValue(0);
 				l.unlock();
 				op.dynamic_filter->SetValue(std::move(new_dynamic_value));

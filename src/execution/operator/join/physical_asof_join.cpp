@@ -867,10 +867,10 @@ struct SortKeyPrefixComparison {
 			case SortKeyPrefixComparisonType::NESTED:
 				decoded.Reset();
 				//	Decode from the current column, not from the start of the whole key.
-				lhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				lhs_width = CreateSortKeyHelpers::DecodeSortKeyPrefix(
 				    string_t(lhs_ptr, UnsafeNumericCast<uint32_t>(lhs_key.GetData() + lhs_key.GetSize() - lhs_ptr)),
 				    vec, 0, modifiers);
-				rhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				rhs_width = CreateSortKeyHelpers::DecodeSortKeyPrefix(
 				    string_t(rhs_ptr, UnsafeNumericCast<uint32_t>(rhs_key.GetData() + rhs_key.GetSize() - rhs_ptr)),
 				    vec, 1, modifiers);
 				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
