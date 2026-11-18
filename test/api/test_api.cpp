@@ -18,6 +18,7 @@
 #include <chrono>
 #include <fstream>
 #include <thread>
+#include "duckdb/main/settings.hpp"
 
 using namespace duckdb;
 
@@ -828,7 +829,7 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 	DBConfig config;
-	config.options.maximum_threads = 8;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(8));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 

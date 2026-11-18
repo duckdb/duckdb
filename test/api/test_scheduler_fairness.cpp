@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/main/settings.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -130,8 +131,8 @@ TEST_CASE("Scheduler CPU estimates follow pinning and unpinned worker migration"
 	const auto first_cpu = cpus.back();
 	const auto second_cpu = cpus[cpus.size() - 2];
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 

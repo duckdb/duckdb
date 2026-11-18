@@ -113,7 +113,8 @@ void RowNumberColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 }
 
 unique_ptr<ColumnCheckpointState>
-RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
+                                           PartialBlockManager &partial_block_manager) {
 	throw InternalException("RowNumberColumnData cannot be checkpointed");
 }
 

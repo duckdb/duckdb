@@ -22,18 +22,21 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 #include <functional>
 
 namespace duckdb {
 class ClientContext;
 struct TableFunctionInput;
+class ScanReadAhead;
+class ScanAffinityQueue;
+struct ScanReadAheadJob;
 
 class ReadAheadJobCompletion {
 public:
-	explicit ReadAheadJobCompletion(shared_ptr<TaskExecutor> executor_p)
-	    : executor(std::move(executor_p)), pending_io_tasks(0) {
-	}
+	explicit ReadAheadJobCompletion(shared_ptr<TaskExecutor> executor_p);
+	~ReadAheadJobCompletion();
 
 public:
 	//! Arm the completion for one I/O task, only called before the job becomes visible to other threads
@@ -48,16 +51,31 @@ public:
 	void WaitForIO();
 
 private:
+	friend class ScanReadAhead;
+	//! Affinity completion owns the job until publication; the job must not own this completion and form a cycle.
+	void OwnJob(ScanReadAhead &read_ahead, unique_ptr<ScanReadAheadJob> job);
+
+private:
+	friend class ReadAheadIOTask;
 	//! Executor holding the scheduled I/O, waiters drain it inline
 	shared_ptr<TaskExecutor> executor;
 	atomic<idx_t> pending_io_tasks;
 	//! Holds the scan task parked on this job's I/O
 	StateWithBlockableTasks parked_scan;
+	optional_ptr<ScanReadAhead> read_ahead;
+	unique_ptr<ScanReadAheadJob> ready_job;
 };
 
 //! Base of the job types driven by ScanReadAhead
 struct ScanReadAheadJob {
 	virtual ~ScanReadAheadJob();
+	//! Called once after reads finish to resolve placement; may release discovery-only references.
+	virtual optional_idx ResolveAffinity() {
+		return optional_idx();
+	}
+	virtual idx_t GetMemoryUsage() const {
+		return 0;
+	}
 
 	//! Settle in-flight I/O
 	void SettleIO() {
@@ -68,19 +86,22 @@ struct ScanReadAheadJob {
 	}
 
 	//! Batch index of this job, drives ordered queue admission.
-	//! Producers must assign batch indexes densely from 0 in claim order
+	//! Ordered producers must assign batch indexes densely from 0 in claim order
 	idx_t batch_index = 0;
 	//! Completion of the job's scheduled I/O
 	shared_ptr<ReadAheadJobCompletion> io_completion;
-	//! Total bytes of scheduled I/O for this job
-	idx_t io_bytes = 0;
+	//! Budget charge for this job's I/O and scan metadata
+	idx_t budget_charge = 0;
+
+protected:
+	//! Derived destructors must settle I/O before destroying any state referenced by pending reads.
+	ScanReadAheadJob() = default;
 
 private:
-	ScanReadAheadJob() = default;
 	ScanReadAheadJob(const ScanReadAheadJob &) = delete;
 	ScanReadAheadJob &operator=(const ScanReadAheadJob &) = delete;
-	template <class JOB_STATE>
-	friend struct ScanReadAheadJobWrapper;
+	friend class ScanReadAhead;
+	idx_t producer_shard = 0;
 };
 
 //! Wraps job-specific state so in-flight I/O is settled before that state is destroyed
@@ -132,37 +153,50 @@ public:
 	static idx_t Count();
 };
 
-//! Outcome of ScanReadAhead::AcquireJob
+//! Outcome of scan job acquisition
 enum class ScanReadAheadAcquire : uint8_t {
 	ACQUIRED,  //! a job with settled I/O is now held
 	EXHAUSTED, //! every job has been produced and claimed, the scan is done
-	PARKED     //! the scan task parked until the claimed job's I/O completes, the caller must yield
+	PARKED     //! the scan task parked until work becomes ready, the caller must yield
 };
 
-//! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
-//! Job state is held in a ScanReadAheadJobWrapper, callers claim jobs back with unique_ptr_cast.
+enum class ScanReadAheadPolicy : uint8_t { ORDERED, AFFINITY };
+
+//! Shares the I/O executor, budget and cancellation lifecycle between ordered and affinity scans.
+//! Ordered consumers claim jobs before I/O completes and may park on the job's completion.
+//! Affinity completions own unfinished jobs; consumers claim only ready jobs and park on scan progress.
 class ScanReadAhead {
 public:
-	ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
-	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p);
+	ScanReadAhead(ClientContext &context, ScanReadAheadPolicy policy, idx_t read_ahead_depth,
+	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor, bool prefetch_enabled = true,
+	              idx_t shard_count = 1, idx_t scan_concurrency = 0);
 	~ScanReadAhead();
 
-	//! Create the read-ahead driver from the read_ahead_depth setting, returns null when read-ahead is disabled.
+	//! Create a driver with a fixed scheduling policy; prefetch also requires async threads and read_ahead_depth.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
-	static unique_ptr<ScanReadAhead> Create(ClientContext &context);
+	//! Without prefetch, ordered scans need no driver; affinity scans retain their fixed assignment window.
+	static unique_ptr<ScanReadAhead> Create(ClientContext &context, ScanReadAheadPolicy policy, bool prefetch = true,
+	                                        idx_t shard_count = 1, idx_t scan_concurrency = 0);
+	bool PrefetchEnabled() const {
+		return prefetch_enabled;
+	}
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Returns null when there are no more jobs to produce.
-	//! The callback must assign the job's batch index, densely from 0 in claim order.
+	//! Ordered callbacks must assign the job's batch index, densely from 0 in claim order.
 	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
 	//! Settle the claimed job's scheduled I/O, blocking until it completed, and release its budget charge
 	void WaitForJob(ScanReadAheadJob &job);
 	//! Acquire the next job, producing and claiming as needed; on ACQUIRED the job's I/O has been settled.
-	//! On PARKED the caller must yield holding the claimed job and settle it with WaitForJob when it resumes.
+	//! On PARKED the caller retains a job to settle with WaitForJob after resumption.
 	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
 	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<ScanReadAheadJob> &job);
+	//! Acquire ready work by locality. On PARKED the caller holds no job and retries after resumption.
+	ScanReadAheadAcquire AcquireReadyJob(ClientContext &context, TableFunctionInput &input,
+	                                     const ProduceJobCallback &produce, unique_ptr<ScanReadAheadJob> &job,
+	                                     idx_t local_shard);
 
 	//! Push an error onto the async executor
 	void PushError(ErrorData error);
@@ -182,28 +216,48 @@ public:
 	void CancelAndDrain();
 
 private:
+	static idx_t JobWindow(ScanReadAheadPolicy policy, idx_t read_ahead_depth, idx_t scan_concurrency);
 	//! Settles the reservation taken by TryReserveSlot
 	struct ProducerReservation {
-		explicit ProducerReservation(ScanReadAhead &read_ahead) : read_ahead(read_ahead) {
+		explicit ProducerReservation(ScanReadAhead &read_ahead, idx_t count)
+		    : read_ahead(read_ahead), remaining(count) {
 		}
 		~ProducerReservation() {
-			if (!committed) {
-				read_ahead.ReleaseSlot();
-				read_ahead.pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
+			if (remaining) {
+				read_ahead.active_jobs.fetch_sub(remaining);
+				if (read_ahead.MinimumJobCharge()) {
+					read_ahead.pending_budget_charge -= remaining * read_ahead.MinimumJobCharge();
+				}
 			}
 			--read_ahead.active_producers;
-			// a pushed job was signalled already, a released slot frees one thread and a done scan all of them
-			if (!committed || read_ahead.IsDone()) {
+			// Ready jobs can be consumed before their producer exits; its exit can then finish an affinity scan.
+			if (remaining || read_ahead.IsDone() || read_ahead.affinity) {
 				read_ahead.SignalProgress(read_ahead.IsDone());
 			}
 		}
+		void Commit() {
+			D_ASSERT(remaining > 0);
+			--remaining;
+		}
 
 		ScanReadAhead &read_ahead;
-		bool committed = false;
+		idx_t remaining;
 	};
 
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
+	bool TryProduceBatch(const ProduceJobCallback &claim_and_schedule, idx_t local_shard);
+	idx_t ReserveBatch();
+	idx_t MinimumJobCharge() const;
+	bool TryParkForProgress(TableFunctionInput &input, idx_t epoch);
+	void ResumeScan(const InterruptState &interrupt_state);
+	void ScheduleReadyJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks,
+	                      ProducerReservation &reservation);
+	//! Takes ownership of a completed job's reservation, publishing or retiring it exactly once.
+	void CompleteJob(unique_ptr<ScanReadAheadJob> job);
+	void RetireJob(idx_t budget_charge);
+	friend class ReadAheadJobCompletion;
+	friend class ReadAheadIOTask;
 	//! Check if scan is done, i.e., no more jobs to do
 	bool IsDone() const;
 	//! Whether any thread holds a reserved slot it has not pushed a job for yet
@@ -220,7 +274,9 @@ private:
 		return !pending_jobs.empty();
 	}
 	//! The number of jobs that may be in flight under the current budget
-	idx_t ReservationDepth() const;
+	idx_t ReservationDepth(idx_t pending_bytes) const;
+	//! Refresh the grant if the next job needs more room, and log the current budget.
+	void UpdateBudget();
 	//! Reserve an in-flight job slot for producing a job
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
@@ -238,15 +294,20 @@ private:
 	idx_t ProgressEpoch() const;
 
 private:
-	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
-	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
+	//! Ordered jobs retain reader/decode state; charge at least this much, or their I/O size if larger.
+	static constexpr idx_t MINIMUM_ORDERED_JOB_CHARGE = 16ULL * 1024 * 1024;
 	//! How long a thread yields for another thread to push a job before it waits for it
 	static constexpr idx_t PRODUCER_YIELD_MICROS = 1000;
+	static constexpr idx_t AFFINITY_WINDOW = 256;
+	static constexpr idx_t PRODUCE_BATCH = 8;
+	//! Managed affinity jobs charge metadata plus I/O; cached work without a governor uses only the fixed window.
+	static constexpr idx_t MINIMUM_AFFINITY_JOB_CHARGE = 4096;
 
 private:
 	ClientContext &context;
-	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
-	const idx_t read_ahead_depth;
+	const bool prefetch_enabled;
+	//! Admission window, fixed together with the scheduling policy at construction.
+	const idx_t job_window;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
 	//! Maximum files opening or open ahead of decoding
@@ -258,21 +319,25 @@ private:
 
 	mutable mutex lock;
 	deque<unique_ptr<ScanReadAheadJob>> ready_queue;
+	const unique_ptr<ScanAffinityQueue> affinity;
 	//! Jobs pushed out of order, held back until all earlier batch indexes are admitted to the queue
 	map<idx_t, unique_ptr<ScanReadAheadJob>> pending_jobs;
 	//! The batch index the queue admits next
 	idx_t next_batch_index = 0;
 	//! Jobs scheduled ahead of decoding
-	atomic<idx_t> active_jobs {0};
-	//! Budget charge of the reserved producer slots and scheduled jobs, released per job in WaitForJob
-	atomic<idx_t> pending_io_bytes {0};
+	PaddedAtomic<idx_t> active_jobs {0};
+	//! Budget charge of the reserved producer slots and scheduled jobs
+	atomic<idx_t> pending_budget_charge {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
 	//! Incremented whenever a waiting thread could make progress
 	atomic<idx_t> progress_epoch {0};
-	//! Threads waiting for progress, only these need a notification
+	//! Registered task and thread waiters, only these need a notification
 	atomic<idx_t> waiting_threads {0};
+	vector<InterruptState> parked_scans;
+	//! An executing read guarantees another progress signal even if the worker pools stop.
+	atomic<idx_t> running_reads {0};
 	condition_variable progress;
 	//! Async I/O executor (async pool)
 	shared_ptr<TaskExecutor> executor;
