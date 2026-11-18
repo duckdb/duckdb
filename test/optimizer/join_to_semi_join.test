@@ -16,26 +16,62 @@ create table p as select * from (values (15, 35), (25, 45), (200, 300), (NULL, 5
 
 # p only says which rows of a qualify; the DISTINCT ignores how often
 query II
-explain select distinct a.x from a cross join p join b on a.x = b.x where a.y between p.lo and p.hi;
+explain select distinct a.x from a cross join p join b on a.x = b.x where a.y > p.hi;
 ----
 physical_plan	<REGEX>:.*Join Type: SEMI.*
 
 query II
-explain select distinct a.x from a cross join p join b on a.x = b.x where a.y between p.lo and p.hi;
+explain select distinct a.x from a cross join p join b on a.x = b.x where a.y > p.hi;
 ----
-physical_plan	<!REGEX>:.*(CROSS_PRODUCT|NESTED_LOOP_JOIN).*
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
 
 query I
-select distinct a.x from a cross join p join b on a.x = b.x where a.y between p.lo and p.hi order by all;
+select distinct a.x from a cross join p join b on a.x = b.x where a.y > p.hi order by all;
 ----
-2
-3
 4
+5
+6
+7
+8
+9
 
+query II
+explain select distinct a.x from a, p where a.y > p.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+query I
+select distinct a.x from a, p where a.y > p.hi order by all;
+----
+4
+5
+6
+7
+8
+9
+
+# the predicate as a join condition
+query II
+explain select distinct a.x from a join p on a.y > p.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+query I
+select distinct a.x from a join p on a.y > p.hi order by all;
+----
+4
+5
+6
+7
+8
+9
+
+# must not fire: two comparisons are a range join with runtime filters, the SEMI join would be a blockwise
+# nested-loop join without them
 query II
 explain select distinct a.x from a, p where a.y between p.lo and p.hi;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query I
 select distinct a.x from a, p where a.y between p.lo and p.hi order by all;
@@ -44,18 +80,30 @@ select distinct a.x from a, p where a.y between p.lo and p.hi order by all;
 3
 4
 
-# the predicates as join conditions
 query II
 explain select distinct a.x from a join p on a.y >= p.lo and a.y <= p.hi;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the INNER join stays a piecewise merge join whose build side filters the scan of ids; as a SEMI join it would
+# compare every row of ids with every row of r
+statement ok
+create table ids as select i::integer as x from range(9999) t(i) union all select 20000;
+
+statement ok
+create table ranges as select 20000 as lo, 20001 as hi, true as keep from range(2000) union all select 0, 1, false;
+
+query II
+explain with r as materialized (select lo, hi from ranges where keep)
+select count(*) from (select distinct ids.x from ids, r where ids.x >= r.lo and ids.x <= r.hi);
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Join Type: INNER.*
 
 query I
-select distinct a.x from a join p on a.y >= p.lo and a.y <= p.hi order by all;
+with r as materialized (select lo, hi from ranges where keep)
+select count(*) from (select distinct ids.x from ids, r where ids.x >= r.lo and ids.x <= r.hi);
 ----
-2
-3
-4
+1
 
 # min / max ignore duplicates
 query II
@@ -307,7 +355,7 @@ explain select distinct a.x from a, (select min(lo) as lo, max(hi) as hi from p)
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
-# two comparisons may be a blockwise nested-loop SEMI join (always in a plan with a CTE): only on a small relation
+# two comparisons: no rewrite on a relation of any size
 statement ok
 create table big as select i::integer as x, (i * 10)::integer as y from range(200000) t(i);
 
@@ -338,20 +386,23 @@ select count(*) from (select distinct big.x from big, p where big.y >= p.lo and 
 ----
 198
 
-# fires: a is small, the SEMI join reduces it before it joins big
+# fires: one comparison, the SEMI join reduces a before it joins big
 query II
 explain with q as materialized (select * from p)
-select distinct big.x from big, q, a where big.x = a.x and a.y >= q.lo and a.y <= q.hi;
+select distinct big.x from big, q, a where big.x = a.x and a.y > q.hi;
 ----
 physical_plan	<REGEX>:.*Join Type: SEMI.*
 
 query I
 with q as materialized (select * from p)
-select distinct big.x from big, q, a where big.x = a.x and a.y >= q.lo and a.y <= q.hi order by all;
+select distinct big.x from big, q, a where big.x = a.x and a.y > q.hi order by all;
 ----
-2
-3
 4
+5
+6
+7
+8
+9
 
 # one comparison is a range join either way, on a relation of any size
 query II
@@ -462,13 +513,16 @@ statement ok
 SET disabled_optimizers = 'join_to_semi_join';
 
 query II
-explain select distinct a.x from a cross join p join b on a.x = b.x where a.y between p.lo and p.hi;
+explain select distinct a.x from a cross join p join b on a.x = b.x where a.y > p.hi;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
 query I
-select distinct a.x from a cross join p join b on a.x = b.x where a.y between p.lo and p.hi order by all;
+select distinct a.x from a cross join p join b on a.x = b.x where a.y > p.hi order by all;
 ----
-2
-3
 4
+5
+6
+7
+8
+9

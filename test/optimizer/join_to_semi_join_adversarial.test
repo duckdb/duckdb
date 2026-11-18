@@ -293,11 +293,11 @@ explain select b.x, (select count(*) from a, p where a.y > p.lo and a.x = b.x) f
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
-# read by a correlated subquery
+# read by a correlated subquery: the join of a and p stays an INNER join (the EXISTS is a SEMI join of its own)
 query II
 explain select distinct a.x from a, p where a.y > p.lo and exists (select 1 from b where b.x = p.hi - 34);
 ----
-physical_plan	<!REGEX>:.*Join Type: SEMI.*
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Join Type: INNER.*
 
 # read by a lateral join
 query II
@@ -325,7 +325,7 @@ physical_plan	<REGEX>:.*Join Type: SEMI.*
 
 # the filtered relation has duplicates and NULLs: count(*) above a DISTINCT subquery
 query II
-explain select count(*) from (select distinct a.x, a.y from a, p where a.y between p.lo and p.hi) t;
+explain select count(*) from (select distinct a.x, a.y from a, p where a.y > p.lo) t;
 ----
 physical_plan	<REGEX>:.*Join Type: SEMI.*
 
@@ -879,9 +879,9 @@ select distinct a.x from a, p, e where a.y > p.lo and a.y < e.hi;
 
 # the filtered relation has duplicates and NULLs: count(*) above a DISTINCT subquery
 query I rowsort
-select count(*) from (select distinct a.x, a.y from a, p where a.y between p.lo and p.hi) t;
+select count(*) from (select distinct a.x, a.y from a, p where a.y > p.lo) t;
 ----
-3
+7
 
 # a materialized CTE read twice
 query I rowsort

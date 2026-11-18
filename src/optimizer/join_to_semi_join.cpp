@@ -1,11 +1,11 @@
 // An INNER join against a relation that is only read by predicates becomes a SEMI join on the one relation those
 // predicates compare it with.
 //
-//     SELECT DISTINCT f.k FROM f, d, p WHERE f.dk = d.dk AND d.x BETWEEN p.lo AND p.hi
+//     SELECT DISTINCT f.k FROM f, d, p WHERE f.dk = d.dk AND d.x > p.lo
 //
 // `p` contributes no column: it only says which rows of `d` qualify, and it repeats every qualifying row once per
 // matching row of `p`. The join order keeps a relation without an equality predicate for last, so the predicate runs
-// over (f JOIN d) x p. As `d SEMI JOIN p ON d.x BETWEEN p.lo AND p.hi` it filters `d` before the join with `f` and
+// over (f JOIN d) x p. As `d SEMI JOIN p ON d.x > p.lo` it filters `d` before the join with `f` and
 // repeats nothing.
 //
 // JoinSimplification calls this for every region it reaches in its first phase, with what it knows about the operators
@@ -33,14 +33,15 @@
 //   R, split into their conjuncts (a BETWEEN is two range comparisons):
 //   * none is a comparison of an expression over L with one over R: the INNER join is a cross product with a filter
 //     or a blockwise nested-loop join, and so is the SEMI join, which emits less;
-//   * one comparison: the same range or nested-loop join either way;
-//   * two comparisons, or comparisons next to other predicates: the INNER join is a range join whose build side
-//     feeds runtime filters into the scan of L. The SEMI join is an IE join only for two range comparisons in a
-//     plan without materialized or recursive CTEs (which later optimizers may still add); otherwise it is a
-//     blockwise or nested-loop join that compares every row of L with every row of R, without runtime filters.
-//     That is cheap only on a small L: L must be a scan of at most MAX_UNFILTERED_SEMI_ROWS rows;
-//   * three or more comparisons, or comparisons against an R known to hold at most one row (an ungrouped
-//     aggregate, a LIMIT 1): no rewrite, the INNER join is a nested-loop join with runtime filters.
+//   * one comparison and nothing else, against an R that may hold several rows: the same range or nested-loop
+//     join either way;
+//   * anything else: no rewrite. Two or more comparisons, a comparison next to another predicate, or a comparison
+//     against an R known to hold at most one row (an ungrouped aggregate, a LIMIT 1) make the INNER join a range or
+//     nested-loop join whose build side feeds runtime filters into the scan of L. The SEMI join would be a blockwise
+//     or nested-loop join that compares every row of L with every row of R without those filters (an IE join only
+//     for two range comparisons in a plan without materialized or recursive CTEs, which later optimizers may still
+//     add): orders of magnitude slower on a large L. Taking such a SEMI join where it pays off needs the join
+//     algorithm and the lost runtime filters costed.
 //
 // Then L becomes `L SEMI JOIN R ON <the predicates that read R>` and R leaves the region. The rows of the region
 // are, as a set, the rows of the region without R whose L row has a match in R, which is what the SEMI join keeps;
@@ -61,7 +62,6 @@
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
@@ -106,9 +106,6 @@ public:
 		}
 	}
 
-	//! The largest scan that gets a SEMI join which may be planned as a blockwise nested-loop join
-	static constexpr idx_t MAX_UNFILTERED_SEMI_ROWS = 100000;
-
 	//! A relation of the region
 	struct Leaf {
 		//! The child indexes that lead from the root of the region to the relation
@@ -116,8 +113,6 @@ public:
 		table_set_t tables;
 		bool one_row;
 		bool at_most_one_row;
-		//! The rows of the scan the relation reads, when it is a scan below projections and filters
-		optional_idx scan_cardinality;
 		//! Whether an expression below the relation is volatile or can throw
 		bool unstable;
 	};
@@ -364,28 +359,6 @@ public:
 		return result;
 	}
 
-	//! The rows of the scan below projections and filters, when the scan says how many it reads
-	optional_idx ScanCardinality(const LogicalOperator &op) const {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_GET: {
-			auto &get = op.Cast<LogicalGet>();
-			if (!get.children.empty() || !get.function.cardinality || !get.bind_data) {
-				return optional_idx();
-			}
-			auto node_statistics = get.function.cardinality(context, get.bind_data.get());
-			if (!node_statistics || !node_statistics->has_estimated_cardinality) {
-				return optional_idx();
-			}
-			return node_statistics->estimated_cardinality;
-		}
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-		case LogicalOperatorType::LOGICAL_FILTER:
-			return op.children.size() == 1 ? ScanCardinality(*op.children[0]) : optional_idx();
-		default:
-			return optional_idx();
-		}
-	}
-
 	static unique_ptr<LogicalOperator> &SlotAt(unique_ptr<LogicalOperator> &op, const vector<idx_t> &path) {
 		reference<unique_ptr<LogicalOperator>> slot = op;
 		for (auto child : path) {
@@ -404,7 +377,6 @@ public:
 			}
 			leaf.one_row = HoldsOneRow(op);
 			leaf.at_most_one_row = HoldsAtMostOneRow(op);
-			leaf.scan_cardinality = ScanCardinality(op);
 			leaf.unstable = IsUnstable(op);
 			leaves.push_back(std::move(leaf));
 			return;
@@ -558,7 +530,7 @@ public:
 					AddComparison(predicate.comparison_type, *predicate.lhs, *predicate.rhs, removed.tables, shape);
 				}
 			}
-			if (!SemiJoinIsNoSlower(shape, leaves, r, semi.GetIndex())) {
+			if (!SemiJoinIsNoSlower(shape, leaves[r])) {
 				continue;
 			}
 			rewrite.removed_leaf = r;
@@ -569,26 +541,21 @@ public:
 		return false;
 	}
 
-	//! Whether `semi` SEMI JOIN `removed` on predicates of `shape` is planned as a join that is no slower than the
-	//! INNER join of the two (see the top of this file)
-	bool SemiJoinIsNoSlower(const PredicateShape &shape, const vector<Leaf> &leaves, idx_t removed, idx_t semi) const {
+	//! Whether a SEMI join against `removed` on predicates of `shape` is planned as a join that is no slower than the
+	//! INNER join it replaces (see the top of this file)
+	static bool SemiJoinIsNoSlower(const PredicateShape &shape, const Leaf &removed) {
 		const auto comparisons = shape.range_comparisons + shape.other_comparisons;
 		if (comparisons == 0) {
 			// a cross product with a filter or a blockwise nested-loop join either way
 			return true;
 		}
-		if (comparisons > 2 || leaves[removed].at_most_one_row) {
-			// the INNER join is a nested-loop join with runtime filters, the SEMI join would be a blockwise one
-			return false;
-		}
-		if (comparisons == 1 && shape.other_predicates == 0) {
+		if (comparisons == 1 && shape.other_predicates == 0 && !removed.at_most_one_row) {
 			// the same range or nested-loop join either way
 			return true;
 		}
-		// the INNER join is a range join with runtime filters into the scan of L; the SEMI join may compare every
-		// row of L with every row of R
-		auto &semi_cardinality = leaves[semi].scan_cardinality;
-		return semi_cardinality.IsValid() && semi_cardinality.GetIndex() <= MAX_UNFILTERED_SEMI_ROWS;
+		// the INNER join is a range or nested-loop join with runtime filters into the scan of L, the SEMI join would
+		// be a blockwise one that compares every row of L with every row of R
+		return false;
 	}
 
 	//! A filter of the region that lost every predicate goes
