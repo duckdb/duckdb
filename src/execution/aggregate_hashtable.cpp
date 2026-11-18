@@ -302,6 +302,23 @@ void GroupedAggregateHashTable::Verify() {
 #endif
 }
 
+void GroupedAggregateHashTable::VerifyEntries(const Vector &group_hashes_v, const Vector &addresses_v, idx_t count) {
+#ifdef DEBUG
+	// every row's entry points to its row, which carries the hash the entry's salt was taken from
+	const auto hashes = group_hashes_v.Values<hash_t>();
+	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &entry = entries[ht_offsets[i]];
+		const auto hash = hashes[i].GetValue();
+		D_ASSERT(entry.IsOccupied());
+		D_ASSERT(entry.GetPointer() == addresses[i]);
+		D_ASSERT(entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
+		D_ASSERT(Load<hash_t>(addresses[i] + hash_offset) == hash);
+	}
+#endif
+}
+
 void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, ht_entry_t());
 }
@@ -731,7 +748,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 	// evaluate every aggregate filter once for this chunk
 	filter_set.ApplyFilters(payload, filter);
 	if (UpdateAggregatesClustered(payload, filter, count, ht_offsets_valid)) {
-		Verify();
 		return;
 	}
 
@@ -760,8 +776,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}
-
-	Verify();
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
@@ -1029,6 +1043,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	FlatVector::SetSize(addresses_v, chunk_size);
 	count += new_group_count;
+	VerifyEntries(group_hashes_v, addresses_v, chunk_size);
 	return new_group_count;
 }
 
