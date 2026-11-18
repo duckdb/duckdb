@@ -44,7 +44,7 @@ statement ok
 INSERT INTO db.t2 SELECT (i % 10)::DECIMAL(4,2)::VARIANT FROM range(2048, 4096) r(i)
 
 statement ok
-CHECKPOINT
+CHECKPOINT db
 
 query II
 SELECT count(*), count(DISTINCT v::VARCHAR) FROM db.t
