@@ -1,0 +1,28 @@
+diff --git a/test/sql/table_changes/table_changes_start_after_last_snapshot.test b/test/sql/table_changes/table_changes_start_after_last_snapshot.test
+index 7b17b7e1..4cc21880 100644
+--- a/test/sql/table_changes/table_changes_start_after_last_snapshot.test
++++ b/test/sql/table_changes/table_changes_start_after_last_snapshot.test
+@@ -8,6 +8,9 @@ require parquet
+ 
+ require icu
+ 
++statement ok
++LOAD icu
++
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+diff --git a/test/sql/table_changes/timestamp_bounds_same_transaction.test b/test/sql/table_changes/timestamp_bounds_same_transaction.test
+index 23aca945..7333fb99 100644
+--- a/test/sql/table_changes/timestamp_bounds_same_transaction.test
++++ b/test/sql/table_changes/timestamp_bounds_same_transaction.test
+@@ -8,6 +8,9 @@ require parquet
+ 
+ require icu
+ 
++statement ok
++LOAD icu
++
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}

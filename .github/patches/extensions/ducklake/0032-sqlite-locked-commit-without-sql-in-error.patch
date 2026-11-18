@@ -1,0 +1,15 @@
+diff --git a/src/metadata_manager/sqlite_metadata_manager.cpp b/src/metadata_manager/sqlite_metadata_manager.cpp
+index 468970f1..173ad7d3 100644
+--- a/src/metadata_manager/sqlite_metadata_manager.cpp
++++ b/src/metadata_manager/sqlite_metadata_manager.cpp
+@@ -31,7 +31,9 @@ bool SQLiteMetadataManager::TypeIsNativelySupported(const LogicalType &type) {
+ }
+ 
+ static bool IsLockedCommit(const string &lower_message) {
+-	return StringUtil::Contains(lower_message, "failed to execute query \"commit\": database is locked");
++	// without the SQL in sqlite_scanner's errors, only the "failed to commit: " prefix marks a locked COMMIT
++	return StringUtil::Contains(lower_message, "failed to execute query \"commit\": database is locked") ||
++	       StringUtil::Contains(lower_message, "failed to commit: failed to execute query: database is locked");
+ }
+ 
+ bool SQLiteMetadataManager::IsRetryableCommitError(const string &message) const {

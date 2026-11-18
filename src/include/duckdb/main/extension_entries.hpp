@@ -351,6 +351,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_table_deletions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_info", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_insertions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_unreadable_macro_default", "ducklake", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"editdist3", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"element_at", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"encode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
