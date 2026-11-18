@@ -1306,3 +1306,158 @@ query II
 explain select distinct i from (select n1.i, unnest([random(), 2]) as e from n1 left join n2 on n1.i = n2.i) where e > 1;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# ---- A removed side that reads a materialized CTE: the definition counts as part of it ------------------------------
+# once the reference is gone, column pruning drops the columns of the CTE that only it read, so a volatile expression
+# in the definition would not be evaluated any more: the join stays, and the sequence is advanced twice (n2 holds two
+# rows) with the optimizer enabled (i = 1) as with it disabled (i = 0)
+loop i 0 2
+
+statement ok
+SET disabled_optimizers = CASE WHEN {i} = 0 THEN 'join_elimination' ELSE '' END;
+
+statement ok
+create or replace sequence vseq;
+
+query I
+with d as materialized (select i, nextval('vseq') as n from n2) select max(n1.i) from n1 left join d on n1.i = d.n;
+----
+1
+
+query I
+select nextval('vseq');
+----
+3
+
+# below a DISTINCT
+statement ok
+create or replace sequence vseq;
+
+query I
+with d as materialized (select i, nextval('vseq') as n from n2) select distinct n1.i from n1 left join d on n1.i = d.n;
+----
+1
+
+query I
+select nextval('vseq');
+----
+3
+
+# through a second CTE, and with a second reference that does not read the volatile column
+statement ok
+create or replace sequence vseq;
+
+query I
+with d as materialized (select i, nextval('vseq') as n from n2), e as materialized (select i, n from d) select max(n1.i) from n1 left join e on n1.i = e.n;
+----
+1
+
+query I
+select nextval('vseq');
+----
+3
+
+statement ok
+create or replace sequence vseq;
+
+query II
+with d as materialized (select i, nextval('vseq') as n from n2) select max(n1.i), (select count(*) from d) from n1 left join d on n1.i = d.n;
+----
+1	2
+
+query I
+select nextval('vseq');
+----
+3
+
+# a data-modifying CTE on the removed side: the rows are inserted either way
+statement ok
+with x as (insert into n3 values (7), (7) returning i) select max(n1.i) from n1 left join x on n1.i = x.i;
+
+query I
+select count(*) from n3 where i = 7;
+----
+2
+
+statement ok
+delete from n3 where i = 7;
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';
+
+# the plans: these joins stay
+query II
+explain with d as materialized (select i, nextval('vseq') as n from n2) select max(n1.i) from n1 left join d on n1.i = d.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with d as materialized (select i, nextval('vseq') as n from n2) select distinct n1.i from n1 left join d on n1.i = d.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with d as materialized (select i, nextval('vseq') as n from n2), e as materialized (select i, n from d) select max(n1.i) from n1 left join e on n1.i = e.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with d as materialized (select i, nextval('vseq') as n from n2) select max(n1.i), (select count(*) from d) from n1 left join d on n1.i = d.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with d as (select i, nextval('vseq') as n from n2) select max(n1.i) from n1 left join d on n1.i = d.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with recursive r(i, n) as (select 1, nextval('vseq') union all select i + 1, nextval('vseq') from r where i < 3) select max(n1.i) from n1 left join r on n1.i = r.n;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain with x as (insert into n3 values (7), (7) returning i) select max(n1.i) from n1 left join x on n1.i = x.i;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# a table function that declares itself volatile stays as well
+query II
+explain select max(n1.i) from n1 left join duckdb_memory() m on n1.i = m.memory_usage_bytes;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# CTEs without a volatile expression on the removed side do not keep the join: materialized, nested, read twice,
+# recursive
+query II
+explain with d as materialized (select i from n2) select max(n1.i) from n1 left join d on n1.i = d.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain with d as materialized (select i from n2), e as materialized (select i from d where i > 0) select distinct n1.i from n1 left join e on n1.i = e.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain with d as materialized (select i from n2) select max(n1.i), (select count(*) from d) from n1 left join d on n1.i = d.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain with recursive r(i) as (select 1 union all select i + 1 from r where i < 3) select max(n1.i) from n1 left join r on n1.i = r.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+with d as materialized (select i from n2) select max(n1.i), (select count(*) from d) from n1 left join d on n1.i = d.i;
+----
+1	2
+
+# a volatile CTE on the outer side does not matter
+query II
+explain with d as materialized (select i, nextval('vseq') as n from n1) select max(d.i + d.n * 0) from d left join n2 on d.i = n2.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*

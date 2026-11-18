@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -42,6 +45,31 @@ public:
 	}
 };
 
+//! What a removed subtree would no longer do, beyond returning rows: evaluate a volatile expression (nextval, random),
+//! modify data, or run a table function that declares itself VOLATILE. A reference to a materialized CTE counts with
+//! everything in the definition of that CTE: once the reference is gone, the columns only it read are pruned from the
+//! definition, expressions included.
+class RemovedSubtreeEffects {
+public:
+	//! Registers the CTEs that are defined in the plan
+	explicit RemovedSubtreeEffects(LogicalOperator &plan);
+
+	//! Whether removing the subtree would skip an effect
+	bool HasEffect(LogicalOperator &subtree);
+
+private:
+	void CollectDefinitions(LogicalOperator &op);
+	//! Whether the definition of a materialized CTE has an effect; computed once per CTE
+	bool DefinitionHasEffect(TableIndex cte_index);
+
+	//! The materialized CTEs of the plan (the CTE operators; the definition is their first child)
+	unordered_map<TableIndex, reference<LogicalOperator>> materialized_ctes;
+	//! The recursive CTEs of the plan: a reference to one reads the working table of a recursion that is part of the
+	//! plan around the reference
+	unordered_set<TableIndex> recursive_ctes;
+	unordered_map<TableIndex, bool> definition_has_effect;
+};
+
 class JoinElimination : public LogicalOperatorVisitor {
 public:
 	explicit JoinElimination() {
@@ -51,7 +79,7 @@ public:
 	// 1. nothing above the join reads a column of its inner side (the output, filters, the conditions of the joins
 	//    above only read the outer side),
 	// 2. neither the join condition nor the inner side has a volatile expression (nextval, random): they would not
-	//    be evaluated any more, and
+	//    be evaluated any more. The inner side must not have any other effect either (RemovedSubtreeEffects), and
 	// 3. the join cannot change how often an outer row occurs in a way that is visible. There are two separate proofs:
 	//    a) the operators above ignore duplicates (PipelineInfo::ignores_duplicates): the join only repeats outer rows
 	//    b) every outer row matches at most one inner row: the inner side is distinct on the columns its equality
@@ -65,6 +93,7 @@ public:
 	unique_ptr<JoinElimination> CreateChildren() {
 		auto result = make_uniq<JoinElimination>();
 		result->pipe_info = pipe_info.CreateChild();
+		result->effects = effects;
 		return result;
 	}
 
@@ -83,6 +112,8 @@ private:
 	bool TryEliminateJoin(unique_ptr<LogicalOperator> &op, JoinElimination &left_child, JoinElimination &right_child);
 
 	PipelineInfo pipe_info;
+	//! Shared by the optimizers of all pipelines of one plan
+	shared_ptr<RemovedSubtreeEffects> effects;
 	//! The number of joins removed in this pipeline and the pipelines below it
 	idx_t removed_joins = 0;
 };
