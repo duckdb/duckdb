@@ -66,4 +66,22 @@ public:
 	void ApplyGrammarChanges(GrammarChangesInput &input) override;
 };
 
+//! The grammar used while a client is CONNECT-ed to a database that takes its input whole
+//! (RemoteCapability::UNSPLIT_INPUT):
+//!
+//!   Statement <- DisconnectStatement
+//!
+//! DISCONNECT is the only statement it knows. Anything else fails to parse, and the parser then hands the text over
+//! as one PassthroughStatement, as it was typed: quotes are characters and a semicolon is not a boundary.
+class UnsplitDialect : public DialectExtension {
+public:
+	static constexpr const char *NAME = "unsplit";
+
+public:
+	UnsplitDialect() : DialectExtension(NAME) {
+	}
+
+	void ApplyGrammarChanges(GrammarChangesInput &input) override;
+};
+
 } // namespace duckdb

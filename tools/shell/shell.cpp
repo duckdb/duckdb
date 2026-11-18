@@ -61,8 +61,6 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -2959,8 +2957,7 @@ bool ShellState::UnsplitInput() {
 	if (!state.conn || !state.conn->context || !state.conn->context->IsConnected()) {
 		return false;
 	}
-	auto connected = state.conn->context->TryGetConnectedCatalog();
-	return connected && connected->GetCatalog().Supports(duckdb::RemoteCapability::UNSPLIT_INPUT);
+	return duckdb::ClientConfig::GetConfig(*state.conn->context).ConnectedUnsplitInput();
 }
 
 void ShellState::ShellAddHistory(const char *history) {

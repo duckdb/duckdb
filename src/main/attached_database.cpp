@@ -240,6 +240,9 @@ shared_ptr<CompiledGrammar> AttachedDatabase::GetConnectedGrammar(const ClientCo
 	if (connected_grammar) {
 		return connected_grammar;
 	}
+	if (GetCatalog().Supports(RemoteCapability::UNSPLIT_INPUT)) {
+		return db.GetParserCache().GetUnsplitMatcher(context);
+	}
 	return db.GetParserCache().GetPassthroughMatcher(context);
 }
 

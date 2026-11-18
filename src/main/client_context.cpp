@@ -184,13 +184,17 @@ void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target)
 	}
 	connected_to_database = target;
 	is_connected = true;
-	ClientConfig::GetConfig(*this).connected_grammar = target->GetConnectedGrammar(*this);
+	auto &config = ClientConfig::GetConfig(*this);
+	config.connected_grammar = target->GetConnectedGrammar(*this);
+	config.SetConnectedUnsplitInput(target->GetCatalog().Supports(RemoteCapability::UNSPLIT_INPUT));
 }
 
 void ClientContext::DisconnectFromCatalog() {
 	connected_to_database.reset();
 	is_connected = false;
-	ClientConfig::GetConfig(*this).connected_grammar.reset();
+	auto &config = ClientConfig::GetConfig(*this);
+	config.connected_grammar.reset();
+	config.SetConnectedUnsplitInput(false);
 }
 
 shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
@@ -1566,6 +1570,7 @@ ParserOptions ClientContext::GetParserOptions() {
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.compiled_grammar = CompiledGrammar::Get(*this);
+	options.unsplit_input = ClientConfig::GetConfig(*this).ConnectedUnsplitInput();
 	options.context = GetContext();
 	return options;
 }

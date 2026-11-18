@@ -158,4 +158,12 @@ shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientConte
 	return passthrough_dialect->GetCompiledGrammar(context);
 }
 
+shared_ptr<CompiledGrammar> ParserCache::GetUnsplitMatcher(const ClientContext &context) {
+	lock_guard<std::mutex> lock(passthrough_mutex);
+	if (!unsplit_dialect) {
+		unsplit_dialect = make_uniq<UnsplitDialect>();
+	}
+	return unsplit_dialect->GetCompiledGrammar(context);
+}
+
 } // namespace duckdb

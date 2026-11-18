@@ -39,6 +39,8 @@ public:
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
 	shared_ptr<CompiledGrammar> compiled_grammar;
+	//! The input is one statement taken whole, not tokenized (CONNECT-ed to a database with UNSPLIT_INPUT)
+	bool unsplit_input = false;
 	//! The services the statement is parsed for (not set when parsing without a context)
 	optional_ptr<Context> context;
 };

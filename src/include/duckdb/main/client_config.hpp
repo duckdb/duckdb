@@ -91,10 +91,22 @@ public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
+	//! Whether the CONNECT-ed database takes its input whole (RemoteCapability::UNSPLIT_INPUT): the text is one
+	//! statement, not tokenized - an apostrophe is a character, a semicolon is not a boundary
+	bool ConnectedUnsplitInput() const {
+		return connected_unsplit_input;
+	}
+	void SetConnectedUnsplitInput(bool unsplit_input) {
+		connected_unsplit_input = unsplit_input;
+	}
+
 	void SetUserVariable(const String &name, Value value);
 	bool GetUserVariable(const Identifier &name, Value &result);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
+
+private:
+	bool connected_unsplit_input = false;
 };
 
 struct ScopedConfigSetting {
