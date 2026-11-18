@@ -1,0 +1,87 @@
+# name: test/sql/multi_file/multi_file_delete_options.test
+# description: Test describing deleted rows with the open options of a file
+# group: [multi_file]
+
+require parquet
+
+statement ok
+COPY (SELECT i a FROM range(10) t(i)) TO '{TEST_DIR}/delete_options_data.parquet'
+
+statement ok
+COPY (SELECT 'x' file_path, pos FROM (VALUES (2::BIGINT), (5), (9)) t(pos)) TO '{TEST_DIR}/delete_options_del.parquet'
+
+statement ok
+COPY (SELECT 'x' file_path, pos, snapshot_id AS _ducklake_internal_snapshot_id FROM (VALUES (1::BIGINT, 1::BIGINT), (4, 3), (7, 5)) t(pos, snapshot_id)) TO '{TEST_DIR}/delete_options_del_snap.parquet'
+
+# deleted positions given inline
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [0, 3, 4]}])
+----
+1
+2
+5
+6
+7
+8
+9
+
+# unsorted and duplicate positions
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [8, 1, 8]}])
+----
+0
+2
+3
+4
+5
+6
+7
+9
+
+# max_row_count truncates the file
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'max_row_count': 6::UBIGINT}])
+----
+6
+
+# a delete file
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del.parquet'}])
+----
+0
+1
+3
+4
+6
+7
+8
+
+# a delete file with snapshot ids only applies up to the snapshot filter
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del_snap.parquet', 'delete_snapshot_filter': 3}])
+----
+0
+2
+3
+5
+6
+7
+8
+9
+
+# counts are not answered from the metadata of the file
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'deleted_rows': [1, 2]}])
+----
+8
+
+# no deletes at all
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet'}])
+----
+10
+
+statement error
+SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/does_not_exist.parquet'}])
+----
+Failed to read delete file

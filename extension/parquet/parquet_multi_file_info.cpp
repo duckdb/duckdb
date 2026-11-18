@@ -1,4 +1,5 @@
 #include "parquet_multi_file_info.hpp"
+#include "duckdb/common/multi_file/options_delete_filter.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -222,6 +223,12 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientContext &context,
                                                                      GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	for (auto &file : bind_data.file_list->GetAllFiles()) {
+		if (OptionsDeleteFilter::HasDeleteOptions(file)) {
+			// rows are deleted from the file - its metadata does not tell how many rows the scan produces
+			return vector<PartitionStatistics>();
+		}
+	}
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 		auto result = TableFunctionMultiFileWrapper::GetPartitionStats(context, input);
 		// Column accessors address physical ordinals and types, not the mapped output or generated roles.

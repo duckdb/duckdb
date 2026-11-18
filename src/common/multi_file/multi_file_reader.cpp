@@ -10,6 +10,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/multi_file/options_delete_filter.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file_list.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
@@ -1240,6 +1241,10 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
 	}
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, column_ids, context,
 	             gstate.multi_file_reader_state.get());
+	if (!reader_data.reader->deletion_filter) {
+		// the file list can describe deleted rows with the options of a file
+		reader_data.reader->deletion_filter = OptionsDeleteFilter::TryCreate(context, reader_data.reader->file);
+	}
 	return CreateMapping(context, reader_data, global_columns, column_ids, table_filters, gstate.file_list,
 	                     bind_data.reader_bind, bind_data.virtual_columns);
 }
