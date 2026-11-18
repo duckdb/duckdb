@@ -384,9 +384,9 @@ TEST_CASE("State export retires aggregate telemetry even after another worker co
 TEST_CASE("Aggregate lookup retries recover a small recurring domain after unique input", "[radix_ht_sink]") {
 	// Keep chunk metadata at tiny vector sizes from triggering spill before the lookup decision.
 	RadixSinkFixture fixture("8GB");
-	const auto sample_size = RadixHTAdaptivity::LOOKUP_SAMPLE_SIZE;
+	const auto minimum_input = RadixHTAdaptivity::MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP;
 	idx_t offset = 0;
-	for (; offset < sample_size + 2 * fixture.Global().config.sink_capacity; offset += STANDARD_VECTOR_SIZE) {
+	for (; offset < minimum_input + 2 * fixture.Global().config.sink_capacity; offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
 		fixture.Sink();
 		if (fixture.Local().ht->GetAdaptivityState().LookupsSkipped()) {
@@ -405,7 +405,8 @@ TEST_CASE("Aggregate lookup retries recover a small recurring domain after uniqu
 	REQUIRE(ht.GetAdaptivityState().GetSkippedInputCount() == 0);
 
 	// Ordinary abandonment must not reset the skipped-input interval.
-	for (; ht.GetAdaptivityState().GetSkippedInputCount() + STANDARD_VECTOR_SIZE < sample_size;
+	for (; ht.GetAdaptivityState().GetSkippedInputCount() + STANDARD_VECTOR_SIZE <
+	       RadixHTAdaptivity::MIN_LOOKUP_RETRY_ROWS;
 	     offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
 		fixture.Sink();
@@ -569,7 +570,7 @@ TEST_CASE("Failed adaptive growth preserves rows and falls back to the existing 
 	{
 		auto competing_allocation =
 		    manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - manager.GetUsedMemory() - 65536);
-		REQUIRE_FALSE(RadixHTAdaptivity::TryGrow(global, local));
+		REQUIRE(local.adaptivity.HandleSinkBoundary(global, local, false) == RadixHTAdaptivity::SinkResult::ABANDONED);
 		REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE(local.ht->Capacity() == old_capacity);
 		REQUIRE(local.local_sink_capacity == old_capacity);
