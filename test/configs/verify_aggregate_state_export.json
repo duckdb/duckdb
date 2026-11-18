@@ -14,6 +14,11 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/avg_rewrite_profitability.test",
+        "test/optimizer/case_to_filter_aggregate.test",
+        "test/optimizer/case_to_filter_aggregate_distinct_filter.test",
+        "test/optimizer/case_to_filter_aggregate_exactness.test",
+        "test/optimizer/case_to_filter_aggregate_guards.test",
+        "test/optimizer/case_to_filter_aggregate_statistics.test",
         "test/optimizer/generated_domain_plan.test",
         "test/optimizer/join_to_semi_join.test",
         "test/optimizer/join_to_semi_join_adversarial.test",
