@@ -50,6 +50,8 @@ string TestNameToId(const string &name);
 
 //! Delete a database file (+ its .wal). A no-op under --database-destroy off (retain).
 void DeleteDatabase(string path);
+//! A shared local file system obtained from a DuckDB instance (for tests that have no database of their own)
+FileSystem &TestLocalFileSystem();
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);

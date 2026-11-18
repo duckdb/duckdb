@@ -2,6 +2,7 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -697,7 +698,8 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 	if (default_memory != 0) {
 		return default_memory;
 	}
-	auto memory = GetSystemAvailableMemory(file_system ? *file_system : *FileSystem::CreateLocal());
+	LocalFileSystem local_fs;
+	auto memory = GetSystemAvailableMemory(file_system ? *file_system : local_fs);
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
 		default_memory = memory;
@@ -787,7 +789,8 @@ idx_t DBConfig::GetDefaultThreads() const {
 	}
 	if (!file_system) {
 		// not started yet: do not cache, the database may still install another file system
-		return GetSystemMaxThreads(*FileSystem::CreateLocal());
+		LocalFileSystem local_fs;
+		return GetSystemMaxThreads(local_fs);
 	}
 	threads = GetSystemMaxThreads(*file_system);
 	default_threads = threads;
