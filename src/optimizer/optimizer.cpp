@@ -347,17 +347,17 @@ void Optimizer::RunBuiltInOptimizers() {
 		outer_join_simplification.VisitOperator(*plan);
 	});
 
+	// removes duplicate eliminations (DISTINCT, GROUP BY without aggregates) over an input that is already distinct
+	RunOptimizer(OptimizerType::REDUNDANT_DISTINCT, [&]() {
+		RemoveRedundantDistinct remove_redundant_distinct;
+		remove_redundant_distinct.VisitOperator(plan);
+	});
+
 	// removes the outer joins that can be removed before the join order is chosen, so that the join order sees the
 	// plan without them; a second run after UNUSED_COLUMNS removes the ones only column pruning exposes
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
 		JoinElimination join_elimination;
 		plan = join_elimination.Optimize(std::move(plan));
-	});
-
-	// removes duplicate eliminations (DISTINCT, GROUP BY without aggregates) over an input that is already distinct
-	RunOptimizer(OptimizerType::REDUNDANT_DISTINCT, [&]() {
-		RemoveRedundantDistinct remove_redundant_distinct;
-		remove_redundant_distinct.VisitOperator(plan);
 	});
 
 	// then we perform the join ordering optimization
