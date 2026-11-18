@@ -575,6 +575,7 @@ void PhysicalNestedLoopJoin::ResolveRightSemiJoin(ExecutionContext &context, Dat
 	// mark the build rows a probe row matches: each build chunk is the left side of the flipped comparison
 	const auto comparison = FlipComparisonExpression(conditions[0].GetComparisonType());
 	bool found_match[STANDARD_VECTOR_SIZE];
+	SelectionVector match_sel(STANDARD_VECTOR_SIZE);
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
 		const auto count = state.right_condition.size();
@@ -582,11 +583,18 @@ void PhysicalNestedLoopJoin::ResolveRightSemiJoin(ExecutionContext &context, Dat
 		memset(found_match, 0, sizeof(bool) * count);
 		NestedLoopJoinMark::Perform(state.right_condition.data[0], state.left_condition.data[0], count, input.size(),
 		                            found_match, comparison);
+		idx_t match_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			if (found_match[i]) {
-				gstate.right_outer.SetMatch(base + i);
+				match_sel.set_index(match_count++, i);
 			}
 		}
+		if (match_count == 0) {
+			continue;
+		}
+		// the marker is shared by all probe threads
+		lock_guard<mutex> guard(gstate.nj_lock);
+		gstate.right_outer.SetMatches(match_sel, match_count, base);
 	}
 }
 
