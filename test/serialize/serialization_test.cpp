@@ -357,7 +357,8 @@ TEST_CASE("Test KeyValueSecret deserialization validates redact_keys", "[seriali
 		if (valid) {
 			REQUIRE_NOTHROW(KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, base));
 		} else {
-			REQUIRE_THROWS_AS(KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, base), SerializationException);
+			REQUIRE_THROWS_WITH(KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, base),
+			                    Catch::Contains("Secret redact_keys must be a non-NULL list"));
 		}
 	}
 }
