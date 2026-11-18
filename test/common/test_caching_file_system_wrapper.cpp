@@ -1076,7 +1076,7 @@ TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NO
 
 		FileOpenFlags throwing_flags {FileFlags::FILE_FLAGS_READ};
 		throwing_flags.SetCachingMode(mode);
-		REQUIRE_THROWS_AS(opener_filesystem.OpenFile(file_info, throwing_flags), IOException);
+		REQUIRE_THROWS_WITH(opener_filesystem.OpenFile(file_info, throwing_flags), Catch::Contains("Cannot open file"));
 	}
 
 	LocalFileSystem local_fs;
@@ -1121,7 +1121,7 @@ TEST_CASE("Cached file removed after caching with FILE_FLAGS_NULL_IF_NOT_EXISTS"
 	// Without validation the cached blocks defer opening the file; opening it later throws a regular IO error
 	auto handle = cfs.OpenFile(make_file_info(false), flags);
 	REQUIRE(handle);
-	REQUIRE_THROWS_AS(handle->GetFileHandle(), IOException);
+	REQUIRE_THROWS_WITH(handle->GetFileHandle(), Catch::Contains("file does not exist"));
 }
 
 } // namespace duckdb
