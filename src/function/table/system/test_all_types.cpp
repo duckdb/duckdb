@@ -83,7 +83,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz", Value::TIMESTAMPTZ(timestamp_tz_t(min_ts)),
 	                    Value::TIMESTAMPTZ(timestamp_tz_t(max_ts)));
 	result.emplace_back(LogicalType::TIMESTAMP_TZ_NS, "timestamp_tz_ns",
-	                    Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns)), Value::TIMESTAMPTZNS(timestamp_tz_ns_t(max_ns)));
+	                    Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns)),
+	                    Value::TIMESTAMPTZNS(timestamp_tz_ns_t(max_ns)));
 
 	// More complex numeric types.
 	result.emplace_back(LogicalType::FLOAT, "float", Value::FLOAT(std::numeric_limits<float>::lowest()),
