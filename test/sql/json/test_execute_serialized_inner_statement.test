@@ -10,7 +10,7 @@ CREATE TABLE t(i INTEGER, s VARCHAR);
 statement ok
 INSERT INTO t VALUES (1, 'abc'), (2, 'def');
 
-# a parameter the statement declares or binds is refused when the outer query is bound
+# a parameter the statement binds is refused when the outer query is bound
 statement error
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT $1 + 1'));
 ----
@@ -47,11 +47,11 @@ EXPLAIN SELECT * FROM json_execute_serialized_sql(replace(json_serialize_sql('SE
 ----
 Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
 
-# also when no part of the statement binds it
-statement error
+# a parameter in a part of the statement that is never bound is ignored
+query I
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('WITH unused AS (SELECT $1) SELECT 42'));
 ----
-Binder Error: json_execute_serialized_sql cannot execute a statement with parameters
+42
 
 # planning this statement fails
 statement error
