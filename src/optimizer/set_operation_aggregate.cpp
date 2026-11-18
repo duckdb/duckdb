@@ -30,6 +30,9 @@
 // The join is also kept where the left child is estimated to have few distinct rows with many copies each: the few
 // groups of the aggregate cannot feed all threads, so the expansion and what follows it would run on one thread.
 // Without an estimate of the distinct rows, a left child with enough rows for many copies of each is taken for one.
+// And it is kept where the side it can build its hash table on is estimated to be much smaller than the other: its
+// filter then prunes the scan of the larger side to the rows that have a match, where the aggregate hashes every row
+// of both sides. That is either side of an INTERSECT ALL and the left side of an EXCEPT ALL.
 //
 // The pass runs before the join order, statistics propagation and compressed materialization, which then see an
 // ordinary aggregate or join.
@@ -71,19 +74,20 @@ constexpr int64_t COPY_BLOCK_SIZE = STANDARD_VECTOR_SIZE;
 constexpr idx_t MIN_GROUPS_PER_THREAD = 2048;
 //! .. if every group has at least this many rows on average, so that there is work above to be spread
 constexpr idx_t MIN_COPIES_PER_GROUP = 128;
+//! The join is kept where the side it builds on is estimated to have this many times fewer rows than the side it
+//! probes: at a ratio of 4 the two plans take the same time, from 8 on the join is ahead and increasingly so
+constexpr idx_t MIN_PROBE_TO_BUILD_RATIO = 8;
 //! How deep the estimate of the distinct values of a column follows the plan
 constexpr idx_t MAX_DISTINCT_COUNT_DEPTH = 64;
+//! Estimates of distinct values are capped here, so that their products and sums cannot overflow: everything above
+//! it is many groups
+constexpr idx_t MAX_DISTINCT_COUNT = NumericLimits<uint32_t>::Maximum();
 
 optional_idx MultiplyCounts(optional_idx left, optional_idx right) {
 	if (!left.IsValid() || !right.IsValid()) {
 		return optional_idx();
 	}
-	const idx_t limit = NumericLimits<uint32_t>::Maximum();
-	if (left.GetIndex() > limit || right.GetIndex() > limit) {
-		// as good as unknown
-		return optional_idx();
-	}
-	return left.GetIndex() * right.GetIndex();
+	return MinValue(left.GetIndex() * right.GetIndex(), MAX_DISTINCT_COUNT);
 }
 
 //! Estimates how many distinct values the columns of an operator have, if there is anything to tell: a constant has
@@ -191,7 +195,7 @@ optional_idx DistinctCountEstimator::EstimateColumn(LogicalOperator &op, const C
 			return optional_idx();
 		}
 		// one more for NULL
-		return stats->GetDistinctCount() + 1;
+		return MinValue<idx_t>(stats->GetDistinctCount(), MAX_DISTINCT_COUNT - 1) + 1;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op.Cast<LogicalProjection>();
@@ -215,7 +219,7 @@ optional_idx DistinctCountEstimator::EstimateColumn(LogicalOperator &op, const C
 			if (!child_count.IsValid()) {
 				return optional_idx();
 			}
-			result += child_count.GetIndex();
+			result = MinValue(result + child_count.GetIndex(), MAX_DISTINCT_COUNT);
 		}
 		return result;
 	}
@@ -267,7 +271,7 @@ bool SetOperationAggregate::CanUseAggregate(LogicalSetOperation &setop) {
 			return false;
 		}
 	}
-	return !FewGroupsOfManyRows(setop);
+	return !FewGroupsOfManyRows(setop) && !OneSideMuchSmaller(setop);
 }
 
 //! Whether the left child, whose rows the set operation returns, is estimated to have few distinct rows with many
@@ -290,6 +294,21 @@ bool SetOperationAggregate::FewGroupsOfManyRows(LogicalSetOperation &setop) {
 	idx_t group_count = groups.IsValid() ? groups.GetIndex() : 1;
 	auto rows = left.EstimateCardinality(context);
 	return group_count < threads * MIN_GROUPS_PER_THREAD && group_count * MIN_COPIES_PER_GROUP <= rows;
+}
+
+//! Whether the child the join builds its hash table on is estimated to be much smaller than the one it probes. The
+//! join then prunes the scan of the larger child to the rows that have a match in the smaller one, where the
+//! aggregate hashes every row of both children. An INTERSECT ALL is a SEMI join that builds on either side, an
+//! EXCEPT ALL an ANTI join that builds on the left side only: over a small right side it has to see every left row,
+//! and those without a match are its result
+bool SetOperationAggregate::OneSideMuchSmaller(LogicalSetOperation &setop) {
+	auto &context = optimizer.context;
+	auto build_rows = setop.children[0]->EstimateCardinality(context);
+	auto probe_rows = setop.children[1]->EstimateCardinality(context);
+	if (setop.type == LogicalOperatorType::LOGICAL_INTERSECT && probe_rows < build_rows) {
+		std::swap(build_rows, probe_rows);
+	}
+	return build_rows <= probe_rows / MIN_PROBE_TO_BUILD_RATIO;
 }
 
 //! The columns of a child followed by its side markers: in_left is TRUE for the rows of the left child and NULL for

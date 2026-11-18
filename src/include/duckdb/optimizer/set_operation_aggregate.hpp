@@ -28,6 +28,7 @@ public:
 private:
 	bool CanUseAggregate(LogicalSetOperation &setop);
 	bool FewGroupsOfManyRows(LogicalSetOperation &setop);
+	bool OneSideMuchSmaller(LogicalSetOperation &setop);
 	unique_ptr<LogicalOperator> CreateAggregate(LogicalSetOperation &setop);
 	unique_ptr<LogicalOperator> AddSideMarkers(unique_ptr<LogicalOperator> child, bool is_left);
 

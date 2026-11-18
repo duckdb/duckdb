@@ -237,6 +237,103 @@ physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
 statement ok
 RESET threads;
 
+# ---- Many distinct rows: the estimate of the groups saturates and counts as many ---------------------------------------
+
+# four columns whose distinct counts multiply to more than the estimate holds
+statement ok
+CREATE TABLE four_l AS SELECT i::BIGINT AS k, (i % 7)::INTEGER AS a, CASE WHEN i % 11 = 0 THEN NULL ELSE 'v' || (i % 10000) END AS s, DATE '2020-01-01' + (i % 365)::INTEGER AS d FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE four_r AS SELECT * FROM four_l WHERE k % 3 <> 0;
+
+statement ok
+SET threads = 4;
+
+query II
+EXPLAIN SELECT * FROM four_l EXCEPT ALL SELECT * FROM four_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT * FROM four_l INTERSECT ALL SELECT * FROM four_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT count(*), sum(k) FROM (SELECT * FROM four_l EXCEPT ALL SELECT * FROM four_r)
+----
+33334	1666683333
+
+query II
+SELECT count(*), sum(k) FROM (SELECT * FROM four_l INTERSECT ALL SELECT * FROM four_r)
+----
+66666	3333266667
+
+statement ok
+RESET threads;
+
+# ---- A much smaller side the join can build on keeps the join ----------------------------------------------------------
+
+# the join prunes the scan of the larger side to the rows with a match in the smaller one, the aggregate hashes all of them
+statement ok
+CREATE TABLE side_small AS SELECT range::BIGINT AS k FROM range(1000);
+
+statement ok
+CREATE TABLE side_large AS SELECT range::BIGINT AS k FROM range(100000);
+
+query II
+EXPLAIN SELECT k FROM side_small EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT k FROM side_small INTERSECT ALL SELECT k FROM side_large
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT k FROM side_large INTERSECT ALL SELECT k FROM side_small
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# an EXCEPT ALL over a small right side has to see every left row: the aggregate
+query II
+EXPLAIN SELECT k FROM side_large EXCEPT ALL SELECT k FROM side_small
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+# the ratio: eight times as many rows keep the join, fewer do not
+statement ok
+CREATE TABLE side_eighth AS SELECT range::BIGINT AS k FROM range(12500);
+
+statement ok
+CREATE TABLE side_seventh AS SELECT range::BIGINT AS k FROM range(12501);
+
+query II
+EXPLAIN SELECT k FROM side_eighth EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT k FROM side_seventh EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT count(*), sum(k) FROM (SELECT k FROM side_small INTERSECT ALL SELECT k FROM side_large)
+----
+1000	499500
+
+query II
+SELECT count(*), sum(k) FROM (SELECT k FROM side_large EXCEPT ALL SELECT k FROM side_small)
+----
+99000	4999450500
+
+query I
+SELECT count(*) FROM (SELECT k FROM side_small EXCEPT ALL SELECT k FROM side_large)
+----
+0
+
 # ---- Set operations that become the join -------------------------------------------------------------------------
 
 # without ALL
