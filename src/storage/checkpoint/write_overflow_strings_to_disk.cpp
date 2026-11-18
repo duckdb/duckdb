@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(PartialBlockManager &partial_block_manager)
-    : partial_block_manager(partial_block_manager), block_id(INVALID_BLOCK), offset(0) {
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(Context &context, PartialBlockManager &partial_block_manager)
+    : context(context), partial_block_manager(partial_block_manager), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
@@ -129,7 +129,7 @@ void WriteOverflowStringsToDisk::Flush() {
 		}
 		// write to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		block_manager.Write(partial_block_manager.GetQueryContext(), handle.GetFileBuffer(), block_id);
+		block_manager.Write(QueryContext(context), handle.GetFileBuffer(), block_id);
 	}
 	block_id = INVALID_BLOCK;
 	offset = 0;

@@ -226,17 +226,17 @@ OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
 		return OperatorCachingMode::NONE;
-	} else {
-		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
-		if (partition_info.AnyRequired()) {
-			return OperatorCachingMode::PARTITIONED;
-		}
 	}
-	if (context.pipeline->IsOrderDependent()) {
+	switch (context.pipeline->GetExecutionOrder()) {
+	case PipelineExecutionOrder::PARTITIONED:
+		return OperatorCachingMode::PARTITIONED;
+	case PipelineExecutionOrder::ORDERED:
 		return OperatorCachingMode::ORDERED;
+	case PipelineExecutionOrder::UNORDERED:
+		return OperatorCachingMode::UNORDERED;
+	default:
+		throw InternalException("Unknown pipeline execution order");
 	}
-
-	return OperatorCachingMode::UNORDERED;
 }
 
 //===--------------------------------------------------------------------===//

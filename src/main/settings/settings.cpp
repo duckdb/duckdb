@@ -65,6 +65,22 @@ bool Settings::TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_i
 	return TryGetSettingInternal(DBConfig::GetConfig(db), setting_index, result);
 }
 
+const DBConfig &Settings::GetConfigInternal(const DatabaseInstance &db) {
+	return DBConfig::GetConfig(db);
+}
+
+const DBConfig &Settings::GetConfigInternal(const DBConfig &config) {
+	return config; // NOLINT(bugprone-return-const-ref-from-parameter)
+}
+
+const DBConfig &Settings::GetConfigInternal(const ClientContext &context) {
+	return DBConfig::GetConfig(context);
+}
+
+const DBConfig &Settings::GetConfigInternal(const Context &context) {
+	return DBConfig::GetConfig(context.GetDatabase());
+}
+
 void Settings::SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value) {
 	SetSettingInternal(DBConfig::GetConfig(db), setting_index, scope, std::move(target_value));
 }

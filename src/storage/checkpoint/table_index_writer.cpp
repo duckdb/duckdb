@@ -21,6 +21,10 @@ SingleFileTableIndexWriter::SingleFileTableIndexWriter(SingleFileCheckpointWrite
     : TableIndexWriter(checkpoint_manager.partial_block_manager, version), checkpoint_manager(checkpoint_manager) {
 }
 
+Context &SingleFileTableIndexWriter::GetContext() const {
+	return checkpoint_manager.GetContext();
+}
+
 PartialBlockManager SingleFileTableIndexWriter::CreatePerIndexPartialBlockManager() {
 	return checkpoint_manager.CreatePerIndexPartialBlockManager();
 }

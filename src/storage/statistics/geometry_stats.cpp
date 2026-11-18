@@ -74,14 +74,16 @@ bool GeometryTypeSet::TryAdd(const string &type_name) {
 BaseStatistics GeometryStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	GetDataUnsafe(result).SetUnknown();
+	auto &data = GetDataUnsafe(result);
+	data.SetUnknown();
 	return result;
 }
 
 BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	GetDataUnsafe(result).SetEmpty();
+	auto &data = GetDataUnsafe(result);
+	data.SetEmpty();
 	return result;
 }
 
@@ -276,7 +278,7 @@ void GeometryStats::SetFromStruct(BaseStatistics &stats, StatsStructFields &fiel
 
 void GeometryStats::Update(BaseStatistics &stats, const string_t &value) {
 	auto &data = GetDataUnsafe(stats);
-	data.Update(value);
+	data.Update(value, Geometry::GetModel(stats.GetType()));
 }
 
 void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -289,7 +291,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 
 	auto &target = GetDataUnsafe(stats);
 	auto &source = GetDataUnsafe(other);
-	target.Merge(source);
+	target.Merge(source, Geometry::GetModel(stats.GetType()));
 }
 
 void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {

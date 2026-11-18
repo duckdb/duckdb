@@ -7,6 +7,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -110,7 +111,7 @@ TEST_CASE("RLE validation covers batch boundaries before decoding", "[storage][c
 	}
 }
 
-TEST_CASE("Pure RLE filtering advances past a partially selected batch", "[storage][compression][rle]") {
+TEST_CASE("RLE filtering advances past a partially selected batch", "[storage][compression][rle]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto function = RLEFun::GetFunction(PhysicalType::INT32);
@@ -120,9 +121,14 @@ TEST_CASE("Pure RLE filtering advances past a partially selected batch", "[stora
 	segment->InitializeScan(state);
 	auto filter =
 	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::INTEGER(3));
+	const auto adaptive = GENERATE(false, true);
+	if (adaptive) {
+		filter = make_uniq<ExpressionFilter>(
+		    CreateSelectivityOptionalFilterExpression(filter->expr->Copy(), LogicalType::INTEGER, 1.0f, 1));
+	}
 	auto filter_state = TableFilterState::Initialize(*con.context, *filter);
 	REQUIRE(filter_state->can_cache);
-	REQUIRE(filter_state->Cast<ExpressionFilterState>().can_cache_result);
+	REQUIRE(filter_state->Cast<ExpressionFilterState>().can_cache_result == !adaptive);
 	const idx_t prefix = GENERATE(0, 1, 5, 10);
 	const auto incoming_selection = GENERATE(false, true);
 	Vector result(LogicalType::INTEGER, 10);

@@ -34,7 +34,7 @@ struct Settings {
 		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return FromValue<typename OP::RETURN_TYPE>(result);
 		}
-		return FromDefault<typename OP::RETURN_TYPE>(OP::DefaultValue);
+		return GetDefault<OP>(source, 0);
 	}
 
 	template <class SOURCE>
@@ -54,6 +54,18 @@ struct Settings {
 	}
 
 private:
+	//! The default of a setting with a default function
+	template <class OP, class SOURCE>
+	static auto GetDefault(const SOURCE &source, int)
+	    -> decltype(OP::GetDefaultValue(std::declval<const DBConfig &>()), typename OP::RETURN_TYPE()) {
+		return FromValue<typename OP::RETURN_TYPE>(OP::GetDefaultValue(GetConfigInternal(source)));
+	}
+	//! The default of a setting with a constant default
+	template <class OP, class SOURCE>
+	static typename OP::RETURN_TYPE GetDefault(const SOURCE &, long) {
+		return FromDefault<typename OP::RETURN_TYPE>(OP::DefaultValue);
+	}
+
 	//! Converts the value of a setting to its return type
 	template <class T>
 	static typename std::enable_if<std::is_enum<T>::value, T>::type FromValue(const Value &value) {
@@ -212,6 +224,10 @@ private:
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const Context &context, idx_t setting_index, Value &result);
+	static const DBConfig &GetConfigInternal(const DatabaseInstance &db);
+	static const DBConfig &GetConfigInternal(const DBConfig &config);
+	static const DBConfig &GetConfigInternal(const ClientContext &context);
+	static const DBConfig &GetConfigInternal(const Context &context);
 
 	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
 	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
@@ -520,9 +536,10 @@ struct AsyncThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AutoCheckpointSkipWalThresholdSetting {
@@ -1941,9 +1958,10 @@ struct HTTPProxySetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct HTTPProxyPasswordSetting {
@@ -2289,9 +2307,10 @@ struct MaxMemorySetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct MaxStreamingBufferSizeSetting {
@@ -2304,9 +2323,10 @@ struct MaxStreamingBufferSizeSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "10.0 MiB";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct MaxTempDirectorySizeSetting {
@@ -2797,9 +2817,10 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "latest";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TableFunctionIdentifierConversionSetting {
@@ -2848,9 +2869,10 @@ struct ThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TrackedMetricsSetting {

@@ -666,18 +666,23 @@ protected:
 
 	void FilterRunsInternal(const SelectionVector &values, array_ptr<const idx_t> row_counts, SelectionVector &sel,
 	                        idx_t &count) override {
-		const auto before_rows = CountRunRows(row_counts, sel, count);
-		if (before_rows == 0) {
+		if (!stats.get().IsActive()) {
+			for (idx_t i = 0; i < count; i++) {
+				if (row_counts[sel.get_index(i)] != 0) {
+					stats.get().Update(0, 0);
+					break;
+				}
+			}
 			return;
 		}
-		if (!stats.get().IsActive()) {
-			stats.get().Update(0, 0);
+		const auto before_rows = CountRunRows(row_counts, sel, count);
+		if (before_rows == 0) {
 			return;
 		}
 		const auto before_count = count;
 		const auto had_selection = sel.IsSet();
 		child->FilterRuns(values, row_counts, sel, count);
-		const auto accepted_rows = CountRunRows(row_counts, sel, count);
+		const auto accepted_rows = count == before_count ? before_rows : CountRunRows(row_counts, sel, count);
 		stats.get().Update(accepted_rows, before_rows);
 		if (!had_selection && !KeepOptionalSelection(stats.get(), accepted_rows, before_rows)) {
 			sel = SelectionVector();

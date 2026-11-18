@@ -87,6 +87,9 @@ struct GeoParquetColumnMetadata {
 	// The crs of the geometry column (if any) in PROJJSON format
 	string projjson;
 
+	// The edge interpretation of the column: GEODETIC ("edges": "spherical") columns are GEOGRAPHY
+	GeometryModel geometry_model = GeometryModel::PLANAR;
+
 	// Used to track the "primary" geometry column (if any)
 	idx_t insertion_index = 0;
 

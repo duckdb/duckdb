@@ -82,9 +82,14 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		extra_state.Reserve(input.size());
 		CreateSortKeyHelpers::CreateSortKey(input, modifiers, extra_state);
-		input.Flatten();
 		extra_state.Flatten();
-		FlatVector::ValidityMutable(extra_state).Initialize(FlatVector::Validity(input));
+		auto input_validity = input.Validity();
+		auto &validity = FlatVector::ValidityMutable(extra_state);
+		for (idx_t i = 0; i < input_validity.size(); i++) {
+			if (!input_validity.IsValid(i)) {
+				validity.SetInvalid(i);
+			}
+		}
 		extra_state.ToUnifiedFormat(result);
 	}
 };
