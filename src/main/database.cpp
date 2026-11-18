@@ -56,6 +56,7 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
+	bootstrap_file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
@@ -477,18 +478,12 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	auto &default_fs = vfs.GetDefaultFileSystem();
-	if (default_fs.IsLocalFileSystem()) {
-		return default_fs;
-	}
-	owned = make_uniq<LocalFileSystem>();
-	return *owned;
+static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db) {
+	return static_cast<VirtualFileSystem &>(*db.config.file_system).GetLocalFileSystem();
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p)), database_opener(db_p) {
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
