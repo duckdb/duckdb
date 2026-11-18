@@ -37,6 +37,7 @@
 #include "duckdb/optimizer/scalar_aggregate_merger.hpp"
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/self_join_aggregate.hpp"
+#include "duckdb/optimizer/set_operation_aggregate.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/aggregate_reuse.hpp"
@@ -251,7 +252,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
-		FilterPullup filter_pullup;
+		FilterPullup filter_pullup(context);
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
@@ -323,6 +324,21 @@ void Optimizer::RunBuiltInOptimizers() {
 		EmptyResultPullup empty_result_pullup;
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
+
+	// Chooses how EXCEPT ALL / INTERSECT ALL run, which are set operations until here so that the filters could be
+	// moved around them: one aggregate over the UNION ALL of both children, or a join of the numbered rows. The join
+	// order, statistics propagation and compressed materialization then see that aggregate or join. Disabling the
+	// optimizer type only takes the aggregate away
+	const bool use_set_operation_aggregate = !OptimizerDisabled(OptimizerType::SET_OPERATION_AGGREGATE);
+	const auto lower_set_operations = [&]() {
+		SetOperationAggregate set_operation_aggregate(*this, use_set_operation_aggregate);
+		plan = set_operation_aggregate.Optimize(std::move(plan));
+	};
+	if (use_set_operation_aggregate) {
+		RunOptimizer(OptimizerType::SET_OPERATION_AGGREGATE, lower_set_operations);
+	} else {
+		lower_set_operations();
+	}
 
 	// Replaces some window computations with self-joins
 	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {
