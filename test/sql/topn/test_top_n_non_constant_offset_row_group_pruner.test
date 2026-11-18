@@ -38,6 +38,21 @@ SELECT count(*) FROM (SELECT a FROM db.t ORDER BY a OFFSET (random() * 0 + 3000)
 ----
 5192
 
+# the limit is larger than one row group
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a DESC LIMIT 3000 OFFSET (random() * 0 + 3000)::BIGINT)
+----
+3000	2192	5191
+
+# the limit is a parameter
+statement ok
+PREPARE q AS SELECT a FROM db.t ORDER BY a DESC LIMIT ? OFFSET (random() * 0 + 3000)::BIGINT
+
+query I
+EXECUTE q(1)
+----
+5191
+
 # non-constant limit
 query I
 SELECT a FROM db.t ORDER BY a LIMIT (random() * 0 + 1)::BIGINT
