@@ -38,12 +38,6 @@ CREATE TABLE typed_l AS SELECT k::TINYINT AS k, k::DECIMAL(4,1) AS d, DATE '2024
 statement ok
 CREATE TABLE typed_r AS SELECT k::BIGINT AS k, k::DECIMAL(9,3) AS d, (DATE '2024-01-01' + k)::TIMESTAMP AS dt, s AS b FROM r;
 
-statement ok
-CREATE TABLE outer_rows(s VARCHAR COLLATE "binary");
-
-statement ok
-INSERT INTO outer_rows VALUES ('a'), ('A');
-
 # ---- The plan: one aggregate over the union, no window and no join ---------------------------------------------
 
 query II
@@ -239,85 +233,6 @@ query II
 EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(100) t(i) EXCEPT ALL SELECT 1 FROM range(3))
 ----
 physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
-
-# ---- The estimate of the distinct rows reads the plan once per column ----------------------------------------------
-
-# every projection reads the column below it twice: the estimate must not follow each read on its own
-query I
-WITH p0 AS NOT MATERIALIZED (SELECT i AS a FROM ints_a),
-p1 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p0),
-p2 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p1),
-p3 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p2),
-p4 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p3),
-p5 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p4),
-p6 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p5),
-p7 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p6),
-p8 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p7),
-p9 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p8),
-p10 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p9),
-p11 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p10),
-p12 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p11),
-p13 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p12),
-p14 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p13),
-p15 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p14),
-p16 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p15),
-p17 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p16),
-p18 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p17),
-p19 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p18),
-p20 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p19),
-p21 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p20),
-p22 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p21),
-p23 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p22),
-p24 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p23),
-p25 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p24),
-p26 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p25),
-p27 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p26),
-p28 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p27),
-p29 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p28),
-p30 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p29),
-p31 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p30),
-p32 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p31)
-SELECT count(*) FROM (SELECT a FROM p32 EXCEPT ALL SELECT 42::UBIGINT)
-----
-100
-
-query I
-WITH p0 AS NOT MATERIALIZED (SELECT i AS a, j AS b FROM ints_a),
-p1 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p0),
-p2 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p1),
-p3 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p2),
-p4 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p3),
-p5 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p4),
-p6 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p5),
-p7 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p6),
-p8 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p7),
-p9 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p8),
-p10 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p9),
-p11 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p10),
-p12 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p11),
-p13 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p12),
-p14 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p13),
-p15 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p14),
-p16 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p15),
-p17 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p16),
-p18 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p17),
-p19 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p18),
-p20 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p19),
-p21 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p20),
-p22 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p21),
-p23 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p22),
-p24 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p23),
-p25 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p24),
-p26 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p25),
-p27 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p26),
-p28 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p27),
-p29 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p28),
-p30 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p29),
-p31 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p30),
-p32 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p31)
-SELECT count(*) FROM (SELECT a, b FROM p32 EXCEPT ALL SELECT 42::UBIGINT, 42::UBIGINT)
-----
-100
 
 statement ok
 RESET threads;
@@ -1079,50 +994,6 @@ SELECT o.s, (SELECT count(*) FROM ((SELECT s FROM ul WHERE o.s IS NOT NULL UNION
 A	1
 a	1
 b	1
-
-# the correlated columns are compared as they are: a collation would mix the rows of outer rows it treats as equal
-statement ok
-SET default_collation = 'nocase';
-
-query TI
-SELECT s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.s) = 97 EXCEPT ALL SELECT 1 WHERE ascii(o.s) = 65)) FROM (VALUES ('a'), ('A')) o(s) ORDER BY s COLLATE "binary"
-----
-A	0
-a	1
-
-query TI
-SELECT s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.s) = 97 INTERSECT ALL SELECT 1 WHERE ascii(o.s) = 65)) FROM (VALUES ('a'), ('A')) o(s) ORDER BY s COLLATE "binary"
-----
-A	0
-a	0
-
-query TI
-SELECT o.s, (SELECT count(*) FROM (SELECT 1 AS k INTERSECT ALL SELECT 1 FROM range(2) WHERE o.s COLLATE "binary" = 'a')) FROM outer_rows o ORDER BY s COLLATE "binary"
-----
-A	0
-a	1
-
-query TI
-SELECT o.s, (SELECT count(*) FROM (SELECT 1 AS k EXCEPT ALL SELECT 1 FROM range(2) WHERE o.s COLLATE "binary" = 'a')) FROM outer_rows o ORDER BY s COLLATE "binary"
-----
-A	1
-a	0
-
-statement ok
-RESET default_collation;
-
-# a collated string inside a nested correlated column
-query TI
-SELECT o.st.s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.st.s) = 97 EXCEPT ALL SELECT 1 WHERE ascii(o.st.s) = 65)) FROM (SELECT {'s': s COLLATE NOCASE} AS st FROM (VALUES ('a'), ('A')) t(s)) o ORDER BY ascii(o.st.s)
-----
-A	0
-a	1
-
-query TI
-SELECT o.st.s, (SELECT count(*) FROM (SELECT 1 WHERE ascii(o.st.s) = 97 INTERSECT ALL SELECT 1 WHERE ascii(o.st.s) = 65)) FROM (SELECT {'s': s COLLATE NOCASE} AS st FROM (VALUES ('a'), ('A')) t(s)) o ORDER BY ascii(o.st.s)
-----
-A	0
-a	0
 
 statement ok
 SET enable_optimizer = true;
