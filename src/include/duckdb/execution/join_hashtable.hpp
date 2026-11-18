@@ -23,6 +23,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/perfect_hash_join_table.hpp"
+#include "duckdb/parallel/sharded_counter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/joinside.hpp"
 
@@ -411,6 +412,8 @@ public:
 	//! Choose direct lookup from the completed in-memory build.
 	bool TryInitializePerfectHashTable();
 
+	idx_t GetTotalProbeMatches() const;
+
 	ClientContext &context;
 	const PhysicalOperator &op;
 	//! BufferManager
@@ -470,8 +473,6 @@ public:
 	bool single_join_error_on_multiple_rows = true;
 	//! Whether or not to perform deduplication based on join_keys when building ht
 	bool insert_duplicate_keys = true;
-	//! Number of probe matches, isolated from immutable probe metadata.
-	PaddedAtomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
 	optional_ptr<Expression> residual_predicate;
 	//! Residual predicate mapping info
@@ -591,6 +592,9 @@ private:
 	};
 	unique_ptr<MaterializedDictionary> materialized_dictionary;
 
+	//! Number of matches from completed probe chunks.
+	ShardedCounter probe_matches;
+
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
 	//! Partitioned data collection that the data is sunk into when building
@@ -620,7 +624,7 @@ private:
 	//! Whether finalize should build the bloom filter from the materialized build side
 	bool should_build_bloom_filter = false;
 
-	//! Per-key-column bloom filters of a join with several equality keys
+	//! Per-key-column bloom filters of a join with several equality keys, filled and shared like bloom_filter
 	vector<shared_ptr<BloomFilter>> key_bloom_filters;
 	vector<bool> should_build_key_bloom_filters;
 	//! Per-column bitmap budget after sharing memory with the other runtime filters.
@@ -713,6 +717,15 @@ public:
 	//! Whether the join has one equality key, so the hash table hashes are that key's hashes
 	bool HasSingleEqualityKey() const {
 		return equality_predicate_columns.size() == 1;
+	}
+	//! Creates the per-key-column bloom filters that an external join with several equality keys fills during
+	//! Sink. They split the memory budget between them
+	void InitializeKeyBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget);
+	void SetKeyBloomFilters(vector<shared_ptr<BloomFilter>> filters) {
+		key_bloom_filters = std::move(filters);
+	}
+	const vector<shared_ptr<BloomFilter>> &GetKeyBloomFilters() const {
+		return key_bloom_filters;
 	}
 	//! Requests a finalize-built bloom filter for a key column (in-memory joins only)
 	void SetBuildBloomFilter(idx_t key_idx);

@@ -391,7 +391,7 @@ private:
 			children.push_back(stats ? stats->Copy() : BaseStatistics::CreateUnknown(child->GetReturnType()));
 		}
 		NodeStatistics rows(maximum.GetIndex(), maximum.GetIndex());
-		AggregateStatisticsInput statistics(copy.BindInfo(), children, &rows);
+		AggregateStatisticsInput statistics(copy.BindInfoMutable(), children, &rows);
 		return copy.Function().GetCallbacks().GetStatisticsCallback()(context, copy, statistics);
 	}
 
@@ -582,8 +582,14 @@ public:
 
 public:
 	bool IsProfitable(LogicalComparisonJoin &restriction, LogicalOperator &domain);
+	//! The cheapest of the permitted actions. Keeping is always permitted, removal when it is safe; replacement by
+	//! `domain` only with `allow_replace`.
 	RestrictionAction ChooseRestrictionAction(const DomainRestriction &existing, LogicalAggregate &domain,
-	                                          bool keys_may_expand = false);
+	                                          bool keys_may_expand = false, bool allow_replace = true);
+	//! Work only a kept restriction pays for: the production of the key domain at `production` and the materialization
+	//! of the source it is read from (`source_values` values), each only when the caller has proven that it stops
+	//! with the removal (no production, 0 values otherwise).
+	void SetReleasedWork(optional_ptr<LogicalOperator> production, double source_values);
 
 private:
 	static bool IsCheaper(double candidate, double original);
@@ -598,7 +604,17 @@ private:
 	LogicalAggregate &aggregate;
 	double key_input_rows;
 	double source_read_write_work;
+	double released_work = 0;
 };
+
+void DomainCostModel::SetReleasedWork(optional_ptr<LogicalOperator> production, double source_values) {
+	// The unit of this model is one row through a hash table. Producing the key domain and materializing its source
+	// are counted per value by the formulas, but measured they cost about one such unit per source row each (0.25 to
+	// 0.46 of the formula for sources of 3 columns and 1 column), so the released work is scaled down.
+	static constexpr double RELEASED_WORK_SCALE = 0.3;
+	auto production_work = production ? EstimateKeyProductionWork(*production) : 0;
+	released_work = RELEASED_WORK_SCALE * (production_work + source_values);
+}
 
 bool DomainCostModel::IsCheaper(double candidate, double original) {
 	auto tolerance = 32 * std::numeric_limits<double>::epsilon() * MaxValue(original, candidate);
@@ -694,7 +710,7 @@ bool DomainCostModel::IsProfitable(LogicalComparisonJoin &restriction, LogicalOp
 }
 
 RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestriction &existing, LogicalAggregate &domain,
-                                                           bool keys_may_expand) {
+                                                           bool keys_may_expand, bool allow_replace) {
 	if (keys_may_expand && !existing.CanRemove()) {
 		return RestrictionAction::KEEP;
 	}
@@ -718,7 +734,7 @@ RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestricti
 	if (!old_input) {
 		// Key containment bounds aggregation/probe work; cheaper key production/build can justify replacement.
 		// Missing old selectivity cannot justify removal.
-		return !keys_may_expand && IsCheaper(new_key_work, old_key_rows + old_producer_work)
+		return allow_replace && !keys_may_expand && IsCheaper(new_key_work, old_key_rows + old_producer_work)
 		           ? RestrictionAction::REPLACE
 		           : RestrictionAction::KEEP;
 	}
@@ -727,7 +743,7 @@ RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestricti
 	auto input_rows = static_cast<double>(input->cardinality);
 	auto old_input_rows = static_cast<double>(old_input->cardinality);
 	auto best_work = EstimateAggregateWork(*old_input, group_binding) +
-	                 EstimateSemiJoinWork(input_rows, old_input_rows, old_key_rows) + old_producer_work;
+	                 EstimateSemiJoinWork(input_rows, old_input_rows, old_key_rows) + old_producer_work + released_work;
 	auto action = RestrictionAction::KEEP;
 	auto consider = [&](double work, RestrictionAction alternative) {
 		if (IsCheaper(work, best_work)) {
@@ -735,7 +751,9 @@ RestrictionAction DomainCostModel::ChooseRestrictionAction(const DomainRestricti
 			action = alternative;
 		}
 	};
-	if (restricted) {
+	if (!allow_replace) {
+		// only keeping and removing are compared
+	} else if (restricted) {
 		consider(EstimateAggregateWork(*restricted, group_binding) +
 		             EstimateSemiJoinWork(input_rows, static_cast<double>(restricted->cardinality), distinct_key_rows) +
 		             new_producer_work,
@@ -879,18 +897,31 @@ static bool CanChangeRuntimeKeyReaders(LogicalOperator &op, const vector<referen
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte = op.Cast<LogicalCTERef>();
-		auto owner = FindVisibleOwner(cte.cte_index, cte_scopes);
-		if (!owner || cte.is_recurring || cte.correlated_columns) {
+		if (cte.is_recurring || cte.correlated_columns) {
 			return false;
 		}
-		auto entry = checked_owners.emplace(cte.cte_index, false);
-		if (!entry.second) {
-			return entry.first->second;
+		auto checked = checked_owners.find(cte.cte_index);
+		if (checked != checked_owners.end()) {
+			return checked->second;
 		}
+		auto owner = FindVisibleOwner(cte.cte_index, cte_scopes);
+		if (!owner) {
+			return false;
+		}
+		checked_owners.emplace(cte.cte_index, false);
 		// Reader changes can expose or prevent producer filters and alter volatile payload evaluation.
 		auto repeatable = CanChangeRuntimeKeyReaders(*owner->children[0], cte_scopes, checked_owners);
 		checked_owners[cte.cte_index] = repeatable;
 		return repeatable;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		// A materialized CTE inside the subtree is read by the subtree only: its definition is checked here, once,
+		// for all of its references.
+		if (!CanChangeRuntimeKeyReaders(*op.children[0], cte_scopes, checked_owners)) {
+			return false;
+		}
+		checked_owners[op.Cast<LogicalMaterializedCTE>().table_index] = true;
+		return CanChangeRuntimeKeyReaders(*op.children[1], cte_scopes, checked_owners);
 	}
 	for (auto &child : op.children) {
 		if (!CanChangeRuntimeKeyReaders(*child, cte_scopes, checked_owners)) {
@@ -981,7 +1012,7 @@ static RestrictionAction TryOptimizeRuntimeRestriction(ClientContext &context, D
                                                        idx_t demand_index, unique_ptr<LogicalAggregate> &domain,
                                                        ExpressionType consumer_comparison,
                                                        const vector<reference<LogicalMaterializedCTE>> &cte_scopes,
-                                                       bool keys_may_expand = false) {
+                                                       bool keys_may_expand = false, bool allow_replace = true) {
 	DomainRestriction existing(context, cte_scopes, aggregate, consumer_comparison);
 	auto restriction = existing.GetJoin();
 	if (!restriction || !existing.HasSimpleProjections()) {
@@ -1004,7 +1035,7 @@ static RestrictionAction TryOptimizeRuntimeRestriction(ClientContext &context, D
 	if (!contains_demand) {
 		return RestrictionAction::KEEP;
 	}
-	auto action = costs.ChooseRestrictionAction(existing, *domain, keys_may_expand);
+	auto action = costs.ChooseRestrictionAction(existing, *domain, keys_may_expand, allow_replace);
 	if (action != RestrictionAction::KEEP) {
 		existing.Apply(domain, action);
 	}
@@ -1086,6 +1117,312 @@ static void FindScanKeySource(const unique_ptr<LogicalOperator> &input, idx_t ke
 	}
 }
 
+//! A join whose RHS recovers the keys without a group of a correlated aggregate: a LEFT join of the
+//! duplicate-eliminated keys of the join's own LHS against the grouped aggregate (FindOuterDomainJoin).
+struct OuterDomainJoin {
+	//! The number of operators between the join and the LEFT join against the key domain
+	idx_t chain_length = 0;
+	//! The LEFT join against the key domain
+	optional_ptr<LogicalComparisonJoin> domain_join;
+	//! Per key: the binding of the domain column and the binding of the LHS column it duplicates
+	vector<pair<ColumnBinding, ColumnBinding>> keys;
+	//! The index of the (first) key in the LHS output
+	idx_t demand_index = 0;
+	//! The comparison of the (first) key with the aggregate's group
+	ExpressionType comparison = ExpressionType::INVALID;
+	//! The materialized CTE both the LHS and the key domain read
+	TableIndex source;
+	//! Whether the aggregate side still reads the LHS source (a key restriction of its input)
+	bool restricted = false;
+	//! The single-key aggregate, when the restriction decision can handle the operators above it
+	optional_ptr<LogicalAggregate> aggregate;
+};
+
+//! The (CTE, column) an output column reads from a materialized CTE through plain projections. With `distinct` the
+//! column must pass exactly one duplicate elimination of `group_count` groups (inline or as a visible CTE); `group`
+//! is the group of that duplicate elimination the column reads.
+static bool TraceSourceColumn(LogicalOperator &op, idx_t column,
+                              const vector<reference<LogicalMaterializedCTE>> &cte_scopes, bool distinct,
+                              idx_t group_count, TableIndex &source, idx_t &source_column, idx_t &group) {
+	reference<LogicalOperator> current = op;
+	bool seen_distinct = false;
+	while (true) {
+		auto &node = current.get();
+		switch (node.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			if (column >= node.expressions.size()) {
+				return false;
+			}
+			auto index = ReferenceIndex(*node.expressions[column], *node.children[0]);
+			if (!index.IsValid()) {
+				return false;
+			}
+			column = index.GetIndex();
+			current = *node.children[0];
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggregate = node.Cast<LogicalAggregate>();
+			if (!distinct || seen_distinct || !aggregate.expressions.empty() ||
+			    aggregate.groups.size() != group_count) {
+				return false;
+			}
+			auto index = GroupKeyIndex(aggregate, column);
+			if (!index.IsValid()) {
+				return false;
+			}
+			group = column;
+			column = index.GetIndex();
+			seen_distinct = true;
+			current = *node.children[0];
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_CTE_REF: {
+			auto &reference = node.Cast<LogicalCTERef>();
+			if (reference.is_recurring || reference.correlated_columns) {
+				return false;
+			}
+			if (distinct == seen_distinct) {
+				source = reference.cte_index;
+				source_column = column;
+				return true;
+			}
+			auto owner = FindVisibleOwner(reference.cte_index, cte_scopes);
+			if (!owner) {
+				return false;
+			}
+			current = *owner->children[0];
+			break;
+		}
+		default:
+			return false;
+		}
+	}
+}
+
+//! `depends` caches, for one walk, whether the definition of a visible CTE reads the source: every reference of such a
+//! CTE counts, but its definition is walked once.
+static idx_t CountSourceReaders(LogicalOperator &op, TableIndex source,
+                                const vector<reference<LogicalMaterializedCTE>> &cte_scopes,
+                                unordered_map<TableIndex, bool> &depends) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &reference = op.Cast<LogicalCTERef>();
+		if (reference.cte_index == source) {
+			return 1;
+		}
+		auto known = depends.find(reference.cte_index);
+		if (known != depends.end()) {
+			return known->second ? 1 : 0;
+		}
+		// The owner is an ancestor of `op`: its definition cannot contain `op`.
+		auto owner = FindVisibleOwner(reference.cte_index, cte_scopes);
+		bool reads_source = owner && CountSourceReaders(*owner->children[0], source, cte_scopes, depends) > 0;
+		depends[reference.cte_index] = reads_source;
+		return reads_source ? 1 : 0;
+	}
+	idx_t count = 0;
+	for (auto &child : op.children) {
+		count += CountSourceReaders(*child, source, cte_scopes, depends);
+	}
+	return count;
+}
+
+//! The number of references below `op` that read the materialized CTE `source`, directly or through a visible CTE
+//! whose definition does.
+static idx_t CountSourceReaders(LogicalOperator &op, TableIndex source,
+                                const vector<reference<LogicalMaterializedCTE>> &cte_scopes) {
+	unordered_map<TableIndex, bool> depends;
+	return CountSourceReaders(op, source, cte_scopes, depends);
+}
+
+//! An aggregate without groups below plain projections.
+static bool IsSingleRow(LogicalOperator &op) {
+	reference<LogicalOperator> current = op;
+	while (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		current = *current.get().children[0];
+	}
+	if (current.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return false;
+	}
+	auto &aggregate = current.get().Cast<LogicalAggregate>();
+	return aggregate.groups.empty() && aggregate.grouping_sets.size() <= 1;
+}
+
+//! The RHS of the equality join is grouped by (a subset of) the join keys.
+static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
+	vector<ColumnBinding> bindings;
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison() || condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetRHS().Cast<BoundColumnRefExpression>().Depth() != 0) {
+			return false;
+		}
+		bindings.push_back(condition.GetRHS().Cast<BoundColumnRefExpression>().Binding());
+	}
+	return LogicalAggregate::KeysAreUnique(*join.children[1], std::move(bindings));
+}
+
+//! Matches, at an INNER / LEFT / SINGLE join,
+//!
+//!   JOIN (l.k IS NOT DISTINCT FROM p.k)
+//!     L: a reference of a materialized CTE
+//!     PROJECTION p (.., d.k)                    the empty-input substitution
+//!       LEFT JOIN (no condition)                one row of empty-input aggregate values
+//!         LEFT JOIN (d.k = a.k)
+//!           d: the distinct keys of the CTE L reads
+//!           a: an aggregate grouped by the keys
+//!
+//! Only operators that compute one row from one row of the inner LEFT join may sit above it.
+static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<LogicalMaterializedCTE>> &cte_scopes,
+                                OuterDomainJoin &result) {
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	if ((join.join_type != JoinType::SINGLE && join.join_type != JoinType::LEFT && join.join_type != JoinType::INNER) ||
+	    !join.left_projection_map.empty() || !join.expressions.empty() || !join.duplicate_eliminated_columns.empty() ||
+	    join.filter_pushdown || join.children[1]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return false;
+	}
+	vector<reference<LogicalOperator>> chain;
+	reference<LogicalOperator> current = *join.children[1];
+	while (true) {
+		auto &node = current.get();
+		if (node.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			for (auto &expression : node.expressions) {
+				if (expression->CanThrow() || expression->IsVolatile()) {
+					return false;
+				}
+			}
+		} else if (node.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &inner = node.Cast<LogicalComparisonJoin>();
+			if (inner.join_type != JoinType::LEFT || inner.HasProjectionMap() || !inner.expressions.empty() ||
+			    !inner.duplicate_eliminated_columns.empty() || inner.filter_pushdown) {
+				return false;
+			}
+			if (!inner.conditions.empty()) {
+				break;
+			}
+			if (!IsSingleRow(*inner.children[1])) {
+				return false;
+			}
+		} else {
+			return false;
+		}
+		chain.push_back(node);
+		current = *node.children[0];
+	}
+	auto &domain_join = current.get().Cast<LogicalComparisonJoin>();
+	auto &domain = *domain_join.children[0];
+	auto domain_bindings = domain.GetColumnBindings();
+	auto key_count = domain_bindings.size();
+	if (domain_join.conditions.size() != key_count || join.conditions.size() != key_count ||
+	    !JoinRHSIsDeduplicated(domain_join)) {
+		return false;
+	}
+
+	// The inner LEFT join compares every domain column with a group of the aggregate. The domain columns are the
+	// groups of the duplicate elimination, each of them exactly once: a group that is not output, or one that is output
+	// twice in place of another, leaves several domain rows per key and would multiply the rows of the LHS.
+	vector<idx_t> sources;
+	vector<bool> domain_groups(key_count, false);
+	for (idx_t index = 0; index < key_count; index++) {
+		idx_t compared = 0;
+		for (auto &condition : domain_join.conditions) {
+			if (!condition.IsComparison() ||
+			    (condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
+			     condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+				continue;
+			}
+			auto &left = condition.GetLHS();
+			if (left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    left.Cast<BoundColumnRefExpression>().Depth() == 0 &&
+			    left.Cast<BoundColumnRefExpression>().Binding() == domain_bindings[index]) {
+				compared++;
+			}
+		}
+		TableIndex cte;
+		idx_t column;
+		idx_t group = 0;
+		if (compared != 1 || !TraceSourceColumn(domain, index, cte_scopes, true, key_count, cte, column, group) ||
+		    group >= key_count || domain_groups[group]) {
+			return false;
+		}
+		domain_groups[group] = true;
+		if (index == 0) {
+			result.source = cte;
+		} else if (result.source != cte) {
+			return false;
+		}
+		sources.push_back(column);
+	}
+
+	// The outer join compares the LHS column each domain column duplicates with that column, passed through.
+	vector<bool> matched(key_count, false);
+	result.keys.resize(key_count);
+	optional_idx demand_index;
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetRHS().Cast<BoundColumnRefExpression>().Depth() != 0) {
+			return false;
+		}
+		auto left_index = ReferenceIndex(condition.GetLHS(), *join.children[0]);
+		TableIndex cte;
+		idx_t column;
+		idx_t group = 0;
+		if (!left_index.IsValid() ||
+		    !TraceSourceColumn(*join.children[0], left_index.GetIndex(), cte_scopes, false, 0, cte, column, group)) {
+			return false;
+		}
+		auto binding = condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
+		for (auto &above : chain) {
+			if (above.get().type != LogicalOperatorType::LOGICAL_PROJECTION) {
+				continue;
+			}
+			auto outputs = above.get().GetColumnBindings();
+			auto entry = std::find(outputs.begin(), outputs.end(), binding);
+			if (entry == outputs.end()) {
+				return false;
+			}
+			auto &expression = *above.get().expressions[NumericCast<idx_t>(entry - outputs.begin())];
+			if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+			    expression.Cast<BoundColumnRefExpression>().Depth() != 0) {
+				return false;
+			}
+			binding = expression.Cast<BoundColumnRefExpression>().Binding();
+		}
+		auto entry = std::find(domain_bindings.begin(), domain_bindings.end(), binding);
+		if (entry == domain_bindings.end()) {
+			return false;
+		}
+		auto index = NumericCast<idx_t>(entry - domain_bindings.begin());
+		if (cte != result.source || column != sources[index] || matched[index]) {
+			return false;
+		}
+		matched[index] = true;
+		result.keys[index] = make_pair(binding, condition.GetLHS().Cast<BoundColumnRefExpression>().Binding());
+		if (!demand_index.IsValid()) {
+			demand_index = left_index;
+		}
+	}
+	// One condition per key and every condition matched a distinct key.
+	if (!demand_index.IsValid()) {
+		return false;
+	}
+
+	auto &aggregate_side = *domain_join.children[1];
+	result.chain_length = chain.size();
+	result.domain_join = &domain_join;
+	result.demand_index = demand_index.GetIndex();
+	result.comparison = domain_join.conditions[0].GetComparisonType();
+	result.restricted = CountSourceReaders(aggregate_side, result.source, cte_scopes) > 0;
+	if (key_count == 1) {
+		auto aggregate_index = ReferenceIndex(domain_join.conditions[0].GetRHS(), aggregate_side);
+		if (aggregate_index.IsValid()) {
+			result.aggregate = FindAggregate(aggregate_side, aggregate_index.GetIndex());
+		}
+	}
+	return true;
+}
+
 static BindingReplacementGraph MaterializeRuntimeDomain(Optimizer &optimizer, unique_ptr<LogicalOperator> &op,
                                                         idx_t demand_side, const LogicalCTERef &domain) {
 	BindingReplacementGraph replacements;
@@ -1113,7 +1450,10 @@ static BindingReplacementGraph MaterializeRuntimeDomain(Optimizer &optimizer, un
 
 bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<LogicalOperator> &op,
                                                                   LogicalAggregate &aggregate, idx_t aggregate_side,
-                                                                  idx_t demand_index, ExpressionType comparison) {
+                                                                  idx_t demand_index, ExpressionType comparison,
+                                                                  optional_ptr<const ReleasedDomainWork> released) {
+	// With a released domain the caller only asks whether the aggregate stops reading the demand's keys.
+	bool remove_only = released;
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	auto &demand = *join.children[1 - aggregate_side];
 	if (!ReferencesVisibleOwners(demand, cte_scopes) || !ReferencesVisibleOwners(aggregate, cte_scopes)) {
@@ -1137,6 +1477,12 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	if (!source_stats) {
 		return false;
 	}
+	// The materialization of the source counts as released only when it is proven to stop with the restriction.
+	double released_source_values = 0;
+	if (released && released->source) {
+		released_source_values = static_cast<double>(source_stats->cardinality) *
+		                         static_cast<double>(source.input->GetColumnBindings().size());
+	}
 	if (source.owner) {
 		ScanKeySource scan_source;
 		auto &type = aggregate.groups[0]->GetReturnType();
@@ -1148,6 +1494,10 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 			auto key = make_uniq<BoundColumnRefExpression>(type, scan->GetColumnBindings()[scan_source.key]);
 			scan_domain = CreateKeyDomain(optimizer, std::move(scan), std::move(key));
 			DomainCostModel costs(extractor, aggregate, scan_source.rows, scan_source.scan_rows);
+			if (released) {
+				costs.SetReleasedWork(released->production, released_source_values);
+			}
+			// A scan supplies the keys: the demand's source is released either way.
 			if (TryOptimizeRuntimeRestriction(optimizer.context, costs, aggregate, demand, demand_index, scan_domain,
 			                                  comparison, cte_scopes, true) != RestrictionAction::KEEP) {
 				return true;
@@ -1169,8 +1519,14 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	// CTE readers scan the full row. A new owner also writes it and replaces the consumer with another reader.
 	auto source_read_write_work = (source.owner ? 1 : 3) * source_rows * static_cast<double>(source_types.size());
 	DomainCostModel costs(extractor, aggregate, source_rows, source_read_write_work);
+	if (released) {
+		costs.SetReleasedWork(released->production, released_source_values);
+	}
 	auto action = TryOptimizeRuntimeRestriction(optimizer.context, costs, aggregate, demand, demand_index, domain,
-	                                            comparison, cte_scopes);
+	                                            comparison, cte_scopes, false, !remove_only);
+	if (remove_only) {
+		return action == RestrictionAction::REMOVE;
+	}
 	if (action != RestrictionAction::KEEP) {
 		if (action == RestrictionAction::REPLACE && !source.owner) {
 			replacements.Merge(MaterializeRuntimeDomain(optimizer, op, 1 - aggregate_side, domain_reference));
@@ -1188,6 +1544,168 @@ bool DuplicateEliminatedDomainOptimizer::TryOptimizeRuntimeDomain(unique_ptr<Log
 	aggregate.children[0] = std::move(restriction);
 	if (!source.owner) {
 		replacements.Merge(MaterializeRuntimeDomain(optimizer, op, 1 - aggregate_side, domain_reference));
+	}
+	return true;
+}
+
+//! The number of references of the materialized CTE `cte` below `op`, nested CTE definitions included.
+static idx_t CountReferences(LogicalOperator &op, TableIndex cte) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		return op.Cast<LogicalCTERef>().cte_index == cte ? 1 : 0;
+	}
+	idx_t count = 0;
+	for (auto &child : op.children) {
+		count += CountReferences(*child, cte);
+	}
+	return count;
+}
+
+//! Which producers stop when the restriction of the aggregate input to the keys of `domain` is removed and the outer
+//! side `demand` takes the place of the domain. The restriction keys and the domain go away with the rewrite; their
+//! producers only stop when nothing else reads them:
+//! - the duplicate elimination behind the domain, when it is inline or a CTE that only the domain and the restriction
+//!   keys reference;
+//! - the materialization of the source, when the demand is its only remaining reference and the CTE is not
+//!   materialized on request (it is then inlined).
+static ReleasedDomainWork FindReleasedDomainWork(LogicalOperator &demand, LogicalOperator &domain,
+                                                 LogicalOperator &restriction_keys, TableIndex source,
+                                                 const vector<reference<LogicalMaterializedCTE>> &cte_scopes) {
+	ReleasedDomainWork released;
+	reference<LogicalOperator> production = domain;
+	while (production.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		production = *production.get().children[0];
+	}
+	auto released_source_references = CountReferences(domain, source) + CountReferences(restriction_keys, source);
+	bool production_stops = true;
+	if (production.get().type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto index = production.get().Cast<LogicalCTERef>().cte_index;
+		auto owner = FindVisibleOwner(index, cte_scopes);
+		production_stops = owner && index != source &&
+		                   CountReferences(*owner->children[1], index) ==
+		                       CountReferences(domain, index) + CountReferences(restriction_keys, index);
+		if (production_stops) {
+			production = *owner->children[0];
+			released_source_references += CountReferences(production, source);
+		}
+	}
+	if (production_stops) {
+		released.production = production.get();
+	}
+	auto owner = FindVisibleOwner(source, cte_scopes);
+	released.source = owner && owner->materialize != CTEMaterialize::CTE_MATERIALIZE_ALWAYS &&
+	                  CountReferences(demand, source) == 1 &&
+	                  CountReferences(*owner->children[1], source) == 1 + released_source_references;
+	return released;
+}
+
+//! The join matches FindOuterDomainJoin and the aggregate does not need the keys of the LHS, or the cost model removes
+//! its restriction to them: the LHS takes the place of the key domain (`L LEFT JOIN aggregate`) and the operators that
+//! sat on the inner LEFT join move above the join, passing the LHS columns through. Nothing reads the
+//! duplicate-eliminated keys afterwards, so the LHS is no longer materialized for them. When the restriction stays the
+//! plan is left alone: the keys are needed anyway.
+bool DuplicateEliminatedDomainOptimizer::TryPullUpOuterDomainJoin(unique_ptr<LogicalOperator> &op) {
+	OuterDomainJoin matched;
+	if (!FindOuterDomainJoin(*op, cte_scopes, matched)) {
+		return false;
+	}
+	if (matched.restricted) {
+		if (!matched.aggregate) {
+			return false;
+		}
+		auto &aggregate_side = *matched.domain_join->children[1];
+		ReleasedDomainWork released;
+		{
+			// The restriction must be the aggregate side's only reader of the keys.
+			DomainRestriction restriction(optimizer.context, cte_scopes, *matched.aggregate, matched.comparison);
+			auto restriction_join = restriction.GetJoin();
+			if (!restriction_join ||
+			    CountSourceReaders(aggregate_side, matched.source, cte_scopes) !=
+			        CountSourceReaders(*restriction_join->children[1], matched.source, cte_scopes)) {
+				return false;
+			}
+			released = FindReleasedDomainWork(*op->children[0], *matched.domain_join->children[0],
+			                                  *restriction_join->children[1], matched.source, cte_scopes);
+		}
+		if (!TryOptimizeRuntimeDomain(op, *matched.aggregate, 1, matched.demand_index, matched.comparison, &released)) {
+			return false;
+		}
+		if (CountSourceReaders(aggregate_side, matched.source, cte_scopes) != 0) {
+			return false;
+		}
+	}
+
+	auto old_bindings = op->GetColumnBindings();
+	auto &join = op->Cast<LogicalComparisonJoin>();
+	join.children[0]->ResolveOperatorTypes();
+	auto left_types = join.children[0]->types;
+	auto left_bindings = join.children[0]->GetColumnBindings();
+	auto right_projection_map = std::move(join.right_projection_map);
+	join.right_projection_map.clear();
+
+	// The join takes the place of the LEFT join against the key domain.
+	ColumnBindingReplacer replacer;
+	for (auto &key : matched.keys) {
+		replacer.replacement_bindings.emplace_back(key.first, key.second);
+	}
+	auto chain_top = std::move(join.children[1]);
+	vector<reference<LogicalOperator>> chain;
+	reference<unique_ptr<LogicalOperator>> slot = chain_top;
+	for (idx_t depth = 0; depth < matched.chain_length; depth++) {
+		chain.push_back(*slot.get());
+		slot = slot.get()->children[0];
+	}
+	auto &domain_join = slot.get()->Cast<LogicalComparisonJoin>();
+	join.children[1] = std::move(domain_join.children[1]);
+	join.conditions = std::move(domain_join.conditions);
+	for (auto &condition : join.conditions) {
+		replacer.VisitExpression(&condition.LeftReference());
+	}
+	join.join_type = JoinType::LEFT;
+	slot.get() = std::move(op);
+
+	// The operators above read the LHS keys instead of the domain and pass the LHS through.
+	auto current_left = left_bindings;
+	idx_t top_column_count = 0;
+	for (idx_t depth = chain.size(); depth-- > 0;) {
+		auto &node = chain[depth].get();
+		if (node.type != LogicalOperatorType::LOGICAL_PROJECTION) {
+			continue;
+		}
+		auto table_index = node.Cast<LogicalProjection>().table_index;
+		for (auto &expression : node.expressions) {
+			replacer.VisitExpression(&expression);
+		}
+		top_column_count = node.expressions.size();
+		for (idx_t column = 0; column < current_left.size(); column++) {
+			auto passed = ColumnBinding::PushExpression(
+			    node.expressions, make_uniq<BoundColumnRefExpression>(left_types[column], current_left[column]));
+			current_left[column] = ColumnBinding(table_index, passed);
+		}
+	}
+
+	// Restore the column order of the join: its LHS, then its RHS.
+	auto projection = LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(chain_top));
+	auto right_expressions = std::move(projection->expressions);
+	projection->expressions.clear();
+	for (idx_t column = top_column_count; column < right_expressions.size(); column++) {
+		projection->expressions.push_back(std::move(right_expressions[column]));
+	}
+	if (right_projection_map.empty()) {
+		for (idx_t column = 0; column < top_column_count; column++) {
+			projection->expressions.push_back(std::move(right_expressions[column]));
+		}
+	} else {
+		for (auto &index : right_projection_map) {
+			projection->expressions.push_back(right_expressions[index.GetIndex()]->Copy());
+		}
+	}
+	projection->ResolveOperatorTypes();
+	auto new_bindings = projection->GetColumnBindings();
+	op = std::move(projection);
+	for (idx_t column = 0; column < old_bindings.size(); column++) {
+		if (old_bindings[column] != new_bindings[column] && !replacements.Find(old_bindings[column])) {
+			replacements.Add(old_bindings[column], new_bindings[column]);
+		}
 	}
 	return true;
 }
@@ -1266,7 +1784,7 @@ void DuplicateEliminatedDomainOptimizer::VisitOperator(unique_ptr<LogicalOperato
 		}
 	}
 	replacements = std::move(child_replacements);
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && !TryPullUpOuterDomainJoin(op)) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		bool safe_conditions = true;
 		LogicalOperatorVisitor::EnumerateExpressions(join, [&](const unique_ptr<Expression> *expression) {

@@ -498,22 +498,80 @@ void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes
 }
 // LCOV_EXCL_STOP
 
+template <idx_t FIXED_WIDTH>
+static void CopyRowBytes(const data_ptr_t source_locations[], const data_ptr_t target_locations[],
+                         const SelectionVector &append_sel, idx_t append_count, idx_t variable_width) {
+	const auto width = FIXED_WIDTH ? FIXED_WIDTH : variable_width;
+	if (append_sel.IsSet()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			memcpy(target_locations[i], source_locations[append_sel[i]], width);
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			memcpy(target_locations[i], source_locations[i], width);
+		}
+	}
+}
+
 void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
                                    const SelectionVector &append_sel, const idx_t append_count) const {
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
-	// Copy rows
+	// Constant sizes let the compiler inline short row copies.
 	const auto row_width = layout.GetRowWidth();
-	if (append_sel.IsSet()) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto idx = append_sel[i];
-			memcpy(target_locations[i], source_locations[idx], row_width);
-		}
-	} else {
-		for (idx_t i = 0; i < append_count; i++) {
-			memcpy(target_locations[i], source_locations[i], row_width);
-		}
+	switch (row_width) {
+	case 8:
+		CopyRowBytes<8>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 16:
+		CopyRowBytes<16>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 24:
+		CopyRowBytes<24>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 32:
+		CopyRowBytes<32>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 40:
+		CopyRowBytes<40>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 48:
+		CopyRowBytes<48>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 56:
+		CopyRowBytes<56>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 64:
+		CopyRowBytes<64>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 72:
+		CopyRowBytes<72>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 80:
+		CopyRowBytes<80>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 88:
+		CopyRowBytes<88>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 96:
+		CopyRowBytes<96>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 104:
+		CopyRowBytes<104>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 112:
+		CopyRowBytes<112>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 120:
+		CopyRowBytes<120>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	case 128:
+		CopyRowBytes<128>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
+	default:
+		CopyRowBytes<0>(source_locations, target_locations, append_sel, append_count, row_width);
+		break;
 	}
 
 	// Copy heap if we need to

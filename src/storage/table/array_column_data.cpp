@@ -305,9 +305,9 @@ void ArrayColumnData::SetChildData(shared_ptr<ColumnData> child_column_p) {
 }
 
 struct ArrayColumnCheckpointState : public ColumnCheckpointState {
-	ArrayColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	ArrayColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                           PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		global_stats = ArrayStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -347,16 +347,17 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                          PartialBlockManager &partial_block_manager) {
-	return make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<ArrayColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(const RowGroup &row_group,
                                                               ColumnCheckpointInfo &checkpoint_info,
                                                               const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 	checkpoint_state->child_state =
 	    child_column->Checkpoint(row_group, checkpoint_info, ArrayStats::GetChildStats(old_stats));

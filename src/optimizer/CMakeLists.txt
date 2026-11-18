@@ -29,6 +29,7 @@ add_library_unity(
   cte_join_filter_collector.cpp
   cte_join_filter_pusher.cpp
   cte_runtime_filter_pushdown.cpp
+  cte_semi_join_filter_transfer.cpp
   cte_inlining.cpp
   deliminator.cpp
   distinctness.cpp
@@ -65,6 +66,7 @@ add_library_unity(
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp
+  window_fusion.cpp
   window_join_pushdown.cpp
   window_self_join.cpp
   row_number_rewriter.cpp

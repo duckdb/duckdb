@@ -1008,7 +1008,7 @@ TEST_CASE("Projection and window preserve the statistics source", "[optimizer][r
 	REQUIRE(projected);
 	REQUIRE(projected->row_retention == child_stats.row_retention);
 	REQUIRE(projected->columns[0].GetSupportedSemiAntiDomainSize().GetIndex() == 10);
-	LogicalWindow window(TableIndex(30));
+	LogicalWindow window(TableIndex(30), optional_idx());
 	window.children.push_back(std::move(projection));
 	auto windowed = RelationStatisticsHelper::ExtractWindowStats(window, *projected);
 	REQUIRE(windowed);
@@ -1522,7 +1522,7 @@ static void CreateStatisticsJoinTables(Connection &connection) {
 static unique_ptr<LogicalGet> CreateDomainProvider(TableIndex index, idx_t rows, DistinctCount domain) {
 	auto get = CreateCardinalityProvider(rows, rows);
 	get->table_index = index;
-	get->bind_data->Cast<CardinalityProviderData>().domain = domain;
+	get->bind_data.write().Cast<CardinalityProviderData>().domain = domain;
 	get->function.statistics = [](ClientContext &, auto bind_data, column_t) -> unique_ptr<BaseStatistics> {
 		auto &domain = bind_data->template Cast<CardinalityProviderData>().domain;
 		auto result = BaseStatistics::CreateUnknown(LogicalType::INTEGER);
@@ -1777,8 +1777,8 @@ TEST_CASE("Join source collection visits both subtrees before either is optimize
 	auto left = CreateCardinalityProvider(100, 100);
 	auto right = CreateCardinalityProvider(200, 200);
 	right->table_index = TableIndex(11);
-	auto &left_data = left->bind_data->Cast<CardinalityProviderData>();
-	auto &right_data = right->bind_data->Cast<CardinalityProviderData>();
+	auto &left_data = left->bind_data.write().Cast<CardinalityProviderData>();
+	auto &right_data = right->bind_data.write().Cast<CardinalityProviderData>();
 	left_data.observed_scans = {*left, *right};
 	right_data.observed_scans = {*left, *right};
 	auto left_captured = left_data.captured_before_mutation;

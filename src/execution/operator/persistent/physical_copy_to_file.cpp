@@ -1779,8 +1779,8 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 //===--------------------------------------------------------------------===//
 // Copy File Lifecycle
 //===--------------------------------------------------------------------===//
-static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       unique_ptr<GlobalFileState> state) {
+static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize,
+                                       const FunctionData &bind_data, unique_ptr<GlobalFileState> state) {
 	if (!finalize) {
 		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
 	}
@@ -4511,29 +4511,35 @@ void CopyToFileGlobalState::Initialize() {
 	initialized = true;
 }
 
-void CopyToFileGlobalState::PrepareOutputDirectory() {
+void PhysicalCopyToFile::PrepareOutputDirectory(ClientContext &context, const string &directory,
+                                                CopyOverwriteMode overwrite_mode,
+                                                CopyOutputLifecycle &output_lifecycle) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	if (!fs.IsRemoteFile(op.file_path)) {
-		if (fs.FileExists(op.file_path)) {
-			if (op.overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-				fs.RemoveFile(op.file_path);
+	if (!fs.IsRemoteFile(directory)) {
+		if (fs.FileExists(directory)) {
+			if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
+				fs.RemoveFile(directory);
 			} else {
 				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
 				                  "OVERWRITE option to overwrite the file",
-				                  op.file_path);
+				                  directory);
 			}
 		}
 	}
 
-	if (!fs.DirectoryExists(op.file_path)) {
-		if (fs.CreateDirectoryExtended(op.file_path, {CreateDirectoryMode::SINGLE})) {
-			output_lifecycle.RegisterCreatedDirectory(op.file_path);
+	if (!fs.DirectoryExists(directory)) {
+		if (fs.CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE})) {
+			output_lifecycle.RegisterCreatedDirectory(directory);
 		} else {
-			CheckDirectory(fs, op.file_path, op.overwrite_mode);
+			CheckDirectory(fs, directory, overwrite_mode);
 		}
 	} else {
-		CheckDirectory(fs, op.file_path, op.overwrite_mode);
+		CheckDirectory(fs, directory, overwrite_mode);
 	}
+}
+
+void CopyToFileGlobalState::PrepareOutputDirectory() {
+	PhysicalCopyToFile::PrepareOutputDirectory(context, op.file_path, op.overwrite_mode, output_lifecycle);
 }
 
 void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
@@ -4829,7 +4835,7 @@ CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, Execu
 // PhysicalCopyToFile
 //===--------------------------------------------------------------------===//
 PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function_p,
-                                       unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
+                                       cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
@@ -5171,7 +5177,7 @@ static unique_ptr<PreparedBatchData> PrepareLegacyCopyBatch(unique_ptr<ColumnDat
 	return make_uniq<LegacyCopyPreparedBatch>(std::move(batch));
 }
 
-static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, FunctionData &bind_data,
+static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, const FunctionData &bind_data,
                                  GlobalFunctionData &gstate, PreparedBatchData &prepared_batch) {
 	if (!function.copy_to_initialize_local || !function.copy_to_sink || !function.copy_to_combine) {
 		throw InternalException("Legacy copy function is missing required sink/combine callbacks");

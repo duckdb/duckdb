@@ -63,12 +63,14 @@ set(TEST_API_OBJECTS
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
+    test_persisted_view_over_rows.cpp
     test_stream_result_buffer.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_extension_metrics.cpp
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
+    test_native_scan.cpp
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp

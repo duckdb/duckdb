@@ -1541,7 +1541,7 @@ FunctionBinder::ResolveScalarFunction(const FunctionBinding &binding, vector<uni
 
 	if (bound_function.HasModifiedDatabasesCallback() && binder) {
 		auto &properties = binder->GetStatementProperties();
-		FunctionModifiedDatabasesInput input(bind_info, properties);
+		FunctionModifiedDatabasesInput input(bind_info.get(), properties);
 		bound_function.GetModifiedDatabasesCallback()(context, input);
 	}
 
