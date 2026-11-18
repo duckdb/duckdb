@@ -56,17 +56,12 @@ FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_variant_metadata_
 ----
 Column "metadata" cannot hold NULL values but its statistics count 10 NULL values
 
-# A REQUIRED column below an OPTIONAL group has definition levels: its null count (1 of 4 here) is left alone.
-query III
-SELECT count(*), count(geometry), count(geometry.x)
-FROM read_parquet('{DATA_DIR}/geoparquet/data-point-encoding_native.parquet');
+# A REQUIRED column below an OPTIONAL group has definition levels: the null count of the 'metadata' column of this
+# OPTIONAL VARIANT (1 of 7) is left alone.
+query II
+SELECT count(*), count(PAYLOAD) FROM read_parquet('{DATA_DIR}/parquet-testing/snowflake_variant.parquet');
 ----
-4	3	3
-
-query I
-SELECT count(*) FROM read_parquet('{DATA_DIR}/geoparquet/data-point-encoding_native.parquet') WHERE geometry.x IS NULL;
-----
-1
+7	6
 
 # So has a REQUIRED column below a REPEATED group: the keys of this MAP have a null count of 18.
 query III
