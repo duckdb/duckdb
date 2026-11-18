@@ -10,6 +10,7 @@
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
@@ -23,8 +24,11 @@ TEST_CASE("Constant membership filters stay outside the join search", "[optimize
 	                 "CREATE TABLE c AS SELECT i%10 k FROM range(50)t(i)"}) {
 		REQUIRE_NO_FAIL(connection.Query(sql));
 	}
-	const auto query =
-	    "SELECT count(*) FROM a JOIN c ON a.k=c.k WHERE a.v " + predicate + " ('0','1','2','3','4','5','6','7','0')";
+	// A CTE reference keeps NOT IN above the scan so it can become an ANTI join.
+	const string prefix = predicate == "IN" ? "" : "WITH input AS MATERIALIZED (SELECT * FROM a) ";
+	const string input = predicate == "IN" ? "a" : "input a";
+	const auto query = prefix + "SELECT count(*) FROM " + input + " JOIN c ON a.k=c.k WHERE a.v " + predicate +
+	                   " ('0','1','2','3','4','5','6','7','0')";
 	connection.BeginTransaction();
 	Parser parser(*connection.context);
 	parser.ParseQuery(query);
@@ -39,7 +43,16 @@ TEST_CASE("Constant membership filters stay outside the join search", "[optimize
 	simplifier.Optimize(plan);
 	ProjectionPullup projection_pullup(optimizer, plan);
 	projection_pullup.Optimize(plan);
+	JoinOrderOptimizer join_optimizer(*connection.context);
 	optional_ptr<LogicalOperator> root = plan.get();
+	if (root->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		auto &cte = root->Cast<LogicalCTE>();
+		RelationStats producer_stats;
+		auto producer_optimizer = join_optimizer.CreateChildOptimizer();
+		cte.children[0] = producer_optimizer.Optimize(std::move(cte.children[0]), &producer_stats);
+		join_optimizer.AddMaterializedCTEStats(cte.table_index, std::move(producer_stats));
+		root = cte.children[1].get();
+	}
 	while (root->children.size() == 1) {
 		root = root->children[0].get();
 	}
@@ -50,7 +63,6 @@ TEST_CASE("Constant membership filters stay outside the join search", "[optimize
 	REQUIRE(membership->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 	REQUIRE(membership->Cast<LogicalComparisonJoin>().join_type ==
 	        (predicate == "IN" ? JoinType::SEMI : JoinType::ANTI));
-	JoinOrderOptimizer join_optimizer(*connection.context);
 	QueryGraphManager graph(*connection.context);
 	REQUIRE(graph.Build(join_optimizer, *root));
 	REQUIRE(graph.relation_manager.NumRelations() == 2);
