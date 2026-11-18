@@ -68,6 +68,19 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+public:
+	//! A thread stages out-of-order in-place updates until they use 1/STAGED_UPDATE_MEMORY_FRACTION of the memory
+	//! limit divided over the threads, bounded by STAGED_UPDATE_MIN_MEMORY and STAGED_UPDATE_MAX_MEMORY
+	static constexpr idx_t STAGED_UPDATE_MEMORY_FRACTION = 10;
+	static constexpr idx_t STAGED_UPDATE_MIN_MEMORY = 1ULL << 20ULL;
+	static constexpr idx_t STAGED_UPDATE_MAX_MEMORY = 64ULL << 20ULL;
+
+private:
+	void StageUpdates(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &updates,
+	                  Vector &row_ids, InterruptState &interrupt_state) const;
+	void FlushStagedUpdates(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	                        InterruptState &interrupt_state) const;
 };
 
 } // namespace duckdb
