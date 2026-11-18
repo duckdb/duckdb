@@ -323,6 +323,9 @@ public:
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
+	//! A file system for probing the host (cgroups, memory, paths): no opener, so no access checks apply.
+	//! Falls back to a local file system before the database has started
+	unique_ptr<FileSystem> GetSystemFileSystem() const;
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);

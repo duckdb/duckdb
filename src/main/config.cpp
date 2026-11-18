@@ -697,12 +697,7 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 	if (default_memory != 0) {
 		return default_memory;
 	}
-	unique_ptr<FileSystem> system_fs;
-	if (file_system) {
-		system_fs = make_uniq<BoundFileSystem>(*file_system, nullptr);
-	} else {
-		system_fs = FileSystem::CreateLocal();
-	}
+	auto system_fs = GetSystemFileSystem();
 	auto memory = GetSystemAvailableMemory(*system_fs);
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
@@ -791,15 +786,20 @@ idx_t DBConfig::GetDefaultThreads() const {
 	if (threads != 0) {
 		return threads;
 	}
-	if (!file_system) {
-		// not started yet: do not cache, the database may still install another file system
-		auto local_fs = FileSystem::CreateLocal();
-		return GetSystemMaxThreads(*local_fs);
+	auto system_fs = GetSystemFileSystem();
+	threads = GetSystemMaxThreads(*system_fs);
+	// not started yet: do not cache, the database may still install another file system
+	if (file_system) {
+		default_threads = threads;
 	}
-	BoundFileSystem fs(*file_system, nullptr);
-	threads = GetSystemMaxThreads(fs);
-	default_threads = threads;
 	return threads;
+}
+
+unique_ptr<FileSystem> DBConfig::GetSystemFileSystem() const {
+	if (!file_system) {
+		return FileSystem::CreateLocal();
+	}
+	return make_uniq<BoundFileSystem>(*file_system, nullptr);
 }
 
 idx_t DBConfig::GetDefaultAsyncThreads() const {

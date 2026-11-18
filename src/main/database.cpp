@@ -403,8 +403,7 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			BoundFileSystem raw_fs(*config.file_system, nullptr);
-			ExtensionHelper::LoadExternalExtension(*this, raw_fs, {config.options.database_type});
+			ExtensionHelper::LoadExternalExtension(*this, fs, {config.options.database_type});
 		}
 	}
 
@@ -575,7 +574,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
-	BoundFileSystem system_fs(*config.file_system, nullptr);
+	auto system_fs = config.GetSystemFileSystem();
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
@@ -584,7 +583,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
 		config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
-		                                                   DBConfig::GetSystemAvailableMemory(system_fs));
+		                                                   DBConfig::GetSystemAvailableMemory(*system_fs));
 	}
 	config.block_allocator->SetEnabled(config.options.enable_block_allocator);
 	config.replacement_scans = std::move(new_config.replacement_scans);

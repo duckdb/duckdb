@@ -93,15 +93,10 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	return LossyNumericCast<idx_t>(result);
 }
 
-//! The available system memory. The config's filesystem is not set until the database starts, but
-//! options can be configured before that, so fall back to a temporary local filesystem.
+//! The available system memory
 static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	if (config.file_system) {
-		BoundFileSystem fs(*config.file_system, nullptr);
-		return DBConfig::GetSystemAvailableMemory(fs);
-	}
-	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
+	auto system_fs = config.GetSystemFileSystem();
+	return DBConfig::GetSystemAvailableMemory(*system_fs);
 }
 
 } // namespace
