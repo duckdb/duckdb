@@ -78,8 +78,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 	// We can use the RowGroupReorderer!
 	const auto &primary_order = logical_order->orders[0];
+	const bool has_secondary_order = logical_order->orders.size() > 1;
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
-	                                              logical_limit);
+	                                              logical_limit, has_secondary_order);
 	if (!options) {
 		return false;
 	}
@@ -163,7 +164,8 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 unique_ptr<RowGroupOrderOptions>
 RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, const optional_idx row_offset,
                                                const BoundOrderByNode &primary_order, const LogicalGet &logical_get,
-                                               const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
+                                               const StorageIndex &storage_index, LogicalLimit &logical_limit,
+                                               const bool has_secondary_order) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
 	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
@@ -180,8 +182,9 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		auto partition_stats = logical_get.function.get_partition_stats(context, input);
 
 		if (!partition_stats.empty()) {
-			auto offset_puning_result = RowGroupReorderer::GetOffsetAfterPruning(
-			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
+			auto offset_puning_result =
+			    RowGroupReorderer::GetOffsetAfterPruning(order_by, column_type, order_type, null_order, storage_index,
+			                                             row_offset.GetIndex(), partition_stats, has_secondary_order);
 			if (offset_puning_result.pruned_row_group_count > 0 || offset_puning_result.leading_null_group_offset > 0) {
 				// We can prune row groups and/or reduce the offset by consuming definite NULL-only groups
 				if (!logical_limit.unpruned_offset.IsValid()) {
