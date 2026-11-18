@@ -2,38 +2,41 @@ diff --git a/test/sql/fts/test_near_search.test b/test/sql/fts/test_near_search.
 index 1c14542..0a63d30 100644
 --- a/test/sql/fts/test_near_search.test
 +++ b/test/sql/fts/test_near_search.test
-@@ -10,6 +10,9 @@ require json
- 
+@@ -10,6 +10,10 @@ require json
+
  require no_alternative_verify
- 
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
 +statement ok
 +SELECT json_valid('{}')
 +
  statement ok
  CREATE TABLE near_docs(id VARCHAR NOT NULL, body VARCHAR)
- 
+
 diff --git a/test/sql/fts/test_pattern_persistence.test b/test/sql/fts/test_pattern_persistence.test
 index 1ab47b4..a1b9f7d 100644
 --- a/test/sql/fts/test_pattern_persistence.test
 +++ b/test/sql/fts/test_pattern_persistence.test
-@@ -10,6 +10,9 @@ require no_alternative_verify
- 
+@@ -10,6 +10,10 @@ require no_alternative_verify
+
  load {TEST_DIR}/pattern_persistence.db
- 
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
 +statement ok
 +SELECT json_valid('{}')
 +
  statement ok
  SET extension_directory='{TEST_DIR}/pp_ext'
- 
+
 diff --git a/test/sql/fts/test_pattern_search.test b/test/sql/fts/test_pattern_search.test
 index 766e32b..ae4e665 100644
 --- a/test/sql/fts/test_pattern_search.test
 +++ b/test/sql/fts/test_pattern_search.test
-@@ -10,6 +10,9 @@ require json
- 
+@@ -10,6 +10,10 @@ require json
+
  require no_alternative_verify
- 
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
 +statement ok
 +SELECT json_valid('{}')
 +
@@ -44,13 +47,14 @@ diff --git a/test/sql/fts/test_phrase_search.test b/test/sql/fts/test_phrase_sea
 index b7778ee..2ac11a7 100644
 --- a/test/sql/fts/test_phrase_search.test
 +++ b/test/sql/fts/test_phrase_search.test
-@@ -10,6 +10,9 @@ require json
- 
+@@ -10,6 +10,10 @@ require json
+
  require no_alternative_verify
- 
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
 +statement ok
 +SELECT json_valid('{}')
 +
  statement ok
  CREATE TABLE phrase_docs(
-     id VARCHAR NOT NULL,
+
