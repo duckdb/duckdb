@@ -58,9 +58,9 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
-	//! Whether the result is the same over the input with or without repeated rows: no group or aggregate is
-	//! volatile, and every aggregate is DISTINCT or depends neither on duplicates nor on the order of its input
-	//! (min, max, bool_and, bool_or)
+	//! Whether the result is the same over the input with or without repeated rows: every aggregate is DISTINCT, or
+	//! a function that neither depends on how often a value occurs nor on the order of its input (min, max, bool_and,
+	//! bool_or, ...), nothing is volatile and no aggregate state is exported
 	bool IgnoresDuplicates() const;
 
 	const Expression &GetExpression(ColumnBinding binding) const;
