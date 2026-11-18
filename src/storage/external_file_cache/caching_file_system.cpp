@@ -214,8 +214,8 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &pa
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
                                                           const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	auto handle = make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
-	if (handle->file_not_found) {
+	auto handle = unique_ptr<CachingFileHandle>(new CachingFileHandle(context, *this, path, flags, opener));
+	if (!handle->Initialize()) {
 		return nullptr;
 	}
 	return handle;
@@ -315,12 +315,13 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p),
       validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetContext(), caching_file_system_p.db)),
-      cached_file(nullptr), position(0) {
-	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
+      cached_file(external_file_cache.GetOrCreateCachedFile(path_p.path)), position(0) {
+}
+
+bool CachingFileHandle::Initialize() {
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
-		file_not_found = !TryGetFileHandle();
-		return;
+		return TryGetFileHandle() != nullptr;
 	}
 	// If we don't have any cached blocks, we must also open the file.
 	bool needs_open = false;
@@ -329,13 +330,13 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		needs_open = cached_file->blocks.empty();
 	}
 	if (needs_open && !TryGetFileHandle()) {
-		file_not_found = true;
-		return;
+		return false;
 	}
 	auto needs_full_download = StripForceFullDownloadIfPresent();
 	if (needs_full_download) {
 		Read(GetFileSize(), 0);
 	}
+	return true;
 }
 
 CachingFileHandle::~CachingFileHandle() {

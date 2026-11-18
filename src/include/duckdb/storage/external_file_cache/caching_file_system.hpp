@@ -55,9 +55,11 @@ struct CachingFileHandle {
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
 
+private:
+	CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
+	                  FileOpenFlags flags, optional_ptr<FileOpener> opener);
+
 public:
-	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -101,6 +103,8 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Open the file unless cached blocks allow deferring it; returns false if the file system returned no handle
+	bool Initialize();
 	//! Open the underlying FileHandle if not yet open; returns nullptr if the file system returned no handle
 	shared_ptr<FileHandle> TryGetFileHandle();
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
@@ -145,8 +149,6 @@ private:
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
-	//! Whether opening the file at construction found it missing (only with FILE_FLAGS_NULL_IF_NOT_EXISTS)
-	bool file_not_found = false;
 
 	//! Throughput fitted from this handle's own reads, used for local files (remote files measure their own).
 	ReadThroughputEstimator throughput_estimator;
