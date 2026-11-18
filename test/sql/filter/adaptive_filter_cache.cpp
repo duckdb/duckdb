@@ -35,7 +35,7 @@ TEST_CASE("Published pure runtime-filter children support adaptive caches", "[fi
 	prefix->Initialize(*con.context, 1, Value::BIGINT(3000), Value::BIGINT(3000), 1);
 	auto build_state = prefix->InitializeBuildState(*con.context);
 	prefix->InsertKeys(keys, *build_state);
-	prefix->MergeBuildState(*build_state);
+	prefix->MergeBuildState(std::move(build_state));
 	float threshold;
 	idx_t vectors;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, threshold, vectors);

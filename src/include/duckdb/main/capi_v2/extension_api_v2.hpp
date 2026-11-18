@@ -1602,6 +1602,10 @@ typedef struct {
 	(duckdb_v2_extension_handle extension, duckdb_v2_crypto_provider_handle provider, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_register_crypto_provider)
 	(duckdb_v2_instance_handle instance, duckdb_v2_crypto_provider_handle provider, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_open_shared)
+	(duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char **option_names,
+	 const idx_t *option_names_lengths, const char **option_values, const idx_t *option_values_lengths,
+	 idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2327,6 +2331,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_crypto_supports_hmac = duckdb_v2_crypto_supports_hmac;
 	result.duckdb_v2_extension_register_crypto_provider = duckdb_v2_extension_register_crypto_provider;
 	result.duckdb_v2_instance_register_crypto_provider = duckdb_v2_instance_register_crypto_provider;
+	result.duckdb_v2_instance_open_shared = duckdb_v2_instance_open_shared;
 	return result;
 }
 

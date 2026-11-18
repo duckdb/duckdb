@@ -60,7 +60,49 @@ SELECT i AS id,
        to_json([{'id': i, 'items': [{'id': j, 'type': CASE WHEN j = 0 THEN 'a' ELSE 'b' END} FOR j IN range(5)]}]) AS doc
 FROM range(4) t(i);
 
-# a filter that can throw on the unnested side of an inner lateral join is applied to the unnest output
+# a filter that can throw on the unnested side of an inner lateral join is applied to the unnest output. These joins
+# are planned as an UNNEST over the rows of docs, so the filter sits on the UNNEST and nothing is joined back
+query II
+EXPLAIN (FORMAT compact) SELECT count(*)
+FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) AS i(item)
+WHERE json_extract_string(item, '$.type') = 'a';
+----
+physical_plan	<REGEX>:.*FILTER[^\n]*json_extract_string\(item, '\$\.type'\) = 'a'[^\n]*\n( *PROJECTION[^\n]*\n)* *UNNEST.*
+
+query II
+EXPLAIN (FORMAT compact) SELECT count(*)
+FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) AS i(item)
+WHERE json_extract_string(item, '$.type') = 'a';
+----
+physical_plan	<!REGEX>:.*(JOIN|CTE|INOUT_FUNCTION).*
+
+query I
+SELECT count(*)
+FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) AS i(item)
+WHERE json_extract_string(item, '$.type') = 'a';
+----
+4
+
+# with an ordinality column the second unnest stays a delim join that is rewritten into CTEs, and the filter is applied
+# to the output of the table function
+query II
+EXPLAIN (FORMAT compact) SELECT count(*)
+FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) WITH ORDINALITY AS i(item, ord)
+WHERE json_extract_string(item, '$.type') = 'a';
+----
+physical_plan	<REGEX>:.*CTE Name.*FILTER[^\n]*json_extract_string\(item, '\$\.type'\) = 'a'[^\n]*\n( *PROJECTION[^\n]*\n)* *INOUT_FUNCTION[^\n]*Name: unnest.*
+
+query I
+SELECT count(*)
+FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) WITH ORDINALITY AS i(item, ord)
+WHERE json_extract_string(item, '$.type') = 'a';
+----
+4
+
+# so it is for the two plain unnests when they are not planned over the rows of docs
+statement ok
+SET disabled_optimizers = 'unnest_rewriter';
+
 query II
 EXPLAIN (FORMAT compact) SELECT count(*)
 FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extract(thread, '$.items') AS JSON[])) AS i(item)
@@ -74,6 +116,9 @@ FROM docs, unnest(CAST(docs.doc AS JSON[])) AS t(thread), unnest(CAST(json_extra
 WHERE json_extract_string(item, '$.type') = 'a';
 ----
 4
+
+statement ok
+SET disabled_optimizers = '';
 
 # above a LEFT lateral join, the filter has to see the rows without a match
 query I
