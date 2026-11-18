@@ -4,6 +4,144 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// TopOneFunc
+//===--------------------------------------------------------------------===//
+//	Simple scalar min/max aggregation
+template <typename T>
+struct TopOneState {
+	using value_type = T;
+	bool is_set = false;
+	bool is_null;
+	value_type value;
+};
+
+template <typename OP, typename T>
+struct TopOneOp {
+	using STATE = TopOneState<T>;
+
+	static idx_t Size() {
+		return sizeof(STATE);
+	}
+
+	static optional_idx Update(data_ptr_t state_p, Vector &sort_key, const idx_t count) {
+		auto &state = *reinterpret_cast<STATE *>(state_p);
+		optional_idx result;
+		UnifiedVectorFormat format;
+		sort_key.ToUnifiedFormat(format);
+		const auto data = format.GetData<typename STATE::value_type>();
+		for (idx_t r = 0; r < count; ++r) {
+			const auto idx = format.sel->get_index(r);
+			STATE left;
+			left.is_null = !format.validity.RowIsValid(idx);
+			left.value = data[idx];
+			auto &right = state;
+			if (!state.is_set || OP::Operation(left.value, right.value, left.is_null, right.is_null)) {
+				state = left;
+				state.is_set = true;
+				result = r;
+			}
+		}
+
+		return result;
+	}
+
+	static bool Combine(const_data_ptr_t source_p, data_ptr_t target_p) {
+		const auto &source = *reinterpret_cast<const STATE *>(source_p);
+		auto &target = *reinterpret_cast<STATE *>(target_p);
+		if (!source.is_set) {
+			return false;
+		} else if (!target.is_set || OP::Operation(source.value, target.value, source.is_null, target.is_null)) {
+			target = source;
+			return true;
+		}
+		return false;
+	}
+};
+
+template <typename T, typename REDUCE_OP>
+static unique_ptr<TopOneFunc> MakeTopOneFunc() {
+	using OP = TopOneOp<REDUCE_OP, T>;
+	auto result = make_uniq<TopOneFunc>();
+	result->state_size = OP::Size;
+	result->update = OP::Update;
+	result->combine = OP::Combine;
+
+	return result;
+}
+
+template <typename OP>
+static unique_ptr<TopOneFunc> GetTopOneFunc(const BoundOrderByNode &order) {
+	auto &expr = *order.expression;
+	switch (expr.GetReturnType().InternalType()) {
+	case PhysicalType::BOOL:
+		return MakeTopOneFunc<int8_t, OP>();
+	case PhysicalType::INT8:
+		return MakeTopOneFunc<int8_t, OP>();
+	case PhysicalType::INT16:
+		return MakeTopOneFunc<int16_t, OP>();
+	case PhysicalType::INT32:
+		return MakeTopOneFunc<int32_t, OP>();
+	case PhysicalType::INT64:
+		return MakeTopOneFunc<int64_t, OP>();
+	case PhysicalType::UINT8:
+		return MakeTopOneFunc<uint8_t, OP>();
+	case PhysicalType::UINT16:
+		return MakeTopOneFunc<uint16_t, OP>();
+	case PhysicalType::UINT32:
+		return MakeTopOneFunc<uint32_t, OP>();
+	case PhysicalType::UINT64:
+		return MakeTopOneFunc<uint64_t, OP>();
+	case PhysicalType::INT128:
+		return MakeTopOneFunc<hugeint_t, OP>();
+	case PhysicalType::UINT128:
+		return MakeTopOneFunc<uhugeint_t, OP>();
+	case PhysicalType::INTERVAL:
+		return MakeTopOneFunc<interval_t, OP>();
+	default:
+		return nullptr;
+	}
+}
+
+static unique_ptr<TopOneFunc> TopOneFactory(const TopNHeap &heap) {
+	if (heap.offset > 0 || heap.limit != 1) {
+		return nullptr;
+	}
+
+	const auto &orders = heap.orders;
+	if (orders.size() != 1) {
+		return nullptr;
+	}
+
+	const auto &order = orders.front();
+	switch (order.type) {
+	case OrderType::ASCENDING:
+		switch (order.null_order) {
+		case OrderByNullType::NULLS_LAST:
+			return GetTopOneFunc<DistinctLessThan>(order);
+		case OrderByNullType::NULLS_FIRST:
+			return GetTopOneFunc<DistinctLessThanNullsFirst>(order);
+		default:
+			break;
+		}
+		break;
+	case OrderType::DESCENDING:
+		switch (order.null_order) {
+		case OrderByNullType::NULLS_LAST:
+			return GetTopOneFunc<DistinctGreaterThanNullsFirst>(order);
+		case OrderByNullType::NULLS_FIRST:
+			return GetTopOneFunc<DistinctGreaterThan>(order);
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return nullptr;
+}
+
+//===--------------------------------------------------------------------===//
 // TopNHeap
 //===--------------------------------------------------------------------===//
 TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<LogicalType> &payload_types_p,
@@ -35,6 +173,12 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	auto boundary_compare_types = sort_types;
 	boundary_compare_types.insert(boundary_compare_types.end(), sort_types.begin(), sort_types.end());
 	boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
+
+	//	Can we use a fast aggregate?
+	topone = TopOneFactory(*this);
+	if (topone) {
+		topone_state.resize(topone->state_size());
+	}
 }
 
 TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types,
@@ -62,6 +206,20 @@ bool TopNHeap::CanOptimize(idx_t limit, idx_t cardinality) {
 	}
 
 	return true;
+}
+
+void TopNHeap::AddSingleHeap(DataChunk &input, Vector &sort_key) {
+	const auto count = input.size();
+	const auto best = topone->update(topone_state.data(), sort_key, count);
+	if (!best.IsValid()) {
+		return;
+	}
+
+	// copy over the input row to the payload chunk
+	idx_t match_count = 0;
+	matching_sel.set_index(match_count++, best.GetIndex());
+	heap_data.Reset();
+	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void TopNHeap::AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec) {
@@ -225,6 +383,12 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 	sort_chunk.Reset();
 	executor.Execute(input, sort_chunk);
 
+	//	LIMIT 1 without OFFSET and a single scalar column with NULLS LAST
+	if (topone) {
+		AddSingleHeap(input, sort_chunk.data[0]);
+		return;
+	}
+
 	if (global_boundary) {
 		// if we have a global boundary value check which rows pass before doing anything
 		if (!CheckBoundaryValues(sort_chunk, input, *global_boundary)) {
@@ -254,6 +418,15 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 void TopNHeap::Combine(TopNHeap &other) {
 	// "other" is sorted at this point
 	idx_t match_count = 0;
+	if (topone) {
+		if (topone->combine(other.topone_state.data(), topone_state.data())) {
+			matching_sel.set_index(match_count++, 0);
+			heap_data.Reset();
+			heap_data.Append(other.heap_data, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
+		}
+		return;
+	}
+
 	// merge the heap of other into this
 	for (idx_t i = 0; i < other.heap.size(); i++) {
 		// heap is full - check the latest entry
@@ -284,6 +457,13 @@ void TopNHeap::Combine(TopNHeap &other) {
 }
 
 void TopNHeap::Finalize() {
+	//	For TopOne there is at most one entry.
+	if (topone && heap_data.size()) {
+		TopNEntry entry;
+		entry.index = 0;
+		AddEntryToHeap(entry);
+	}
+
 	std::sort(heap.begin(), heap.end());
 }
 

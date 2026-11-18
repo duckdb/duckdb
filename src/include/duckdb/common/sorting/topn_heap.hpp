@@ -77,6 +77,16 @@ struct TopNBoundaryValue {
 	}
 };
 
+struct TopOneFunc {
+	typedef idx_t (*topone_size_t)();
+	typedef optional_idx (*topone_update_t)(data_ptr_t state_p, Vector &sort_key, const idx_t count);
+	typedef bool (*topone_combine_t)(const_data_ptr_t source_p, data_ptr_t target_p);
+
+	topone_size_t state_size;
+	topone_update_t update;
+	topone_combine_t combine;
+};
+
 class TopNHeap {
 public:
 	static bool CanOptimize(idx_t limit, idx_t cardinality);
@@ -123,6 +133,9 @@ public:
 	SelectionVector false_sel;
 	SelectionVector new_remaining_sel;
 
+	unique_ptr<TopOneFunc> topone;
+	vector<data_t> topone_state;
+
 public:
 	void Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> boundary_value = nullptr);
 	void Combine(TopNHeap &other);
@@ -133,6 +146,7 @@ public:
 	void Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos);
 
 	bool CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &boundary_val);
+	void AddSingleHeap(DataChunk &input, Vector &sort_key);
 	void AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec);
 	void AddLargeHeap(DataChunk &input, const Vector &sort_keys_vec);
 
