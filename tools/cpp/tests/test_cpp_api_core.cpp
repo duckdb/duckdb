@@ -426,3 +426,43 @@ TEST_CASE("Stable C++API: StartupOptions::Set passes options by name", "[cpp_api
 	// Options that need a running instance go through the instance's config instead.
 	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("allowed_directories", "['/tmp']")), Exception);
 }
+
+TEST_CASE("Stable C++API: Instance::OpenShared shares one instance per file", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_open_shared.db");
+	duckdb::DeleteDatabase(path);
+	{
+		Environment env;
+		{
+			auto a = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"));
+			auto b = Instance::OpenShared(env, path, StartupOptions().Set("threads", "2"));
+			REQUIRE(env.GetInstanceCount() == 2);
+			auto conn_a = a.Connect();
+			conn_a.Execute("CREATE TABLE t AS SELECT 42 AS i").Drain();
+			auto conn_b = b.Connect();
+			REQUIRE(conn_b.Execute("SELECT i FROM t").FetchChunk().GetVector(0).GetValue(0).Get<int32_t>() == 42);
+
+			// open with other startup options
+			REQUIRE_THROWS_AS(Instance::OpenShared(env, path, StartupOptions().Set("threads", "3")), Exception);
+			// attached to an instance that is not shared
+			auto unshared = Instance(env);
+			REQUIRE_THROWS_AS(unshared.Attach(path), Exception);
+
+			// an unnamed in-memory database is never shared
+			auto memory_a = Instance::OpenShared(env, ":memory:");
+			auto memory_b = Instance::OpenShared(env, ":memory:");
+			memory_a.Connect().Execute("CREATE TABLE t AS SELECT 1 AS i").Drain();
+			REQUIRE_THROWS_AS(memory_b.Connect().Execute("SELECT * FROM t").Drain(), Exception);
+		}
+		REQUIRE(env.GetInstanceCount() == 0);
+	}
+
+	// in the default environment, once the file was closed: with other startup options too
+	{
+		auto instance = Instance::OpenShared(path, StartupOptions().Set("threads", "1"));
+		auto conn = instance.Connect();
+		REQUIRE(conn.Execute("SELECT count(*) FROM t").FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 1);
+	}
+	duckdb::DeleteDatabase(path);
+}
