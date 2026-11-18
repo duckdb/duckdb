@@ -324,10 +324,6 @@ struct ExecuteSqlTableFunction {
 		if (stmts.size() != 1) {
 			throw BinderException("json_execute_serialized_sql expects exactly one statement");
 		}
-		// a remote catalog can take the statement whole before the prepare binds any of its parameters
-		if (!stmts[0]->named_param_map.empty()) {
-			throw BinderException("json_execute_serialized_sql cannot execute a statement with parameters");
-		}
 		result->query = stmts[0]->ToString();
 		result->node = std::move(stmts[0]->node);
 
@@ -370,6 +366,11 @@ struct ExecuteSqlTableFunction {
 					error += result->ColumnName(i) + " " + result->GetTypes()[i].ToString();
 				}
 				error += "]";
+				if (result->GetNames() != data.names) {
+					error +=
+					    "\nAn unaliased expression can be named differently when the statement is bound and when it "
+					    "runs; an alias keeps its name stable.";
+				}
 				ErrorData(error).Throw();
 			}
 			state.result = std::move(result);

@@ -43,6 +43,7 @@ TEST_CASE("json_execute_serialized_sql refuses a result that changed since the o
 		REQUIRE_FAIL(result);
 		REQUIRE(StringUtil::Contains(result->GetError(), "Expected the following columns: [i INTEGER]"));
 		REQUIRE(StringUtil::Contains(result->GetError(), "But result contained the following: [i VARCHAR]"));
+		REQUIRE(!StringUtil::Contains(result->GetError(), "an alias keeps its name stable"));
 	}
 	SECTION("a column is renamed") {
 		auto result = con.Submit(query);
@@ -325,20 +326,12 @@ TEST_CASE("json_execute_serialized_sql runs its statement as any SELECT when a r
 		REQUIRE(result->GetNames() == direct->GetNames());
 		REQUIRE(json_pushed_nodes.empty());
 	}
-	SECTION("a statement with a parameter is refused at bind before anything is sent to the remote catalog") {
-		for (auto inner :
-		     {"SELECT $1 FROM s.tbl", "SELECT i FROM s.tbl WHERE i = $1", "SELECT $1::INTEGER AS p FROM s.tbl"}) {
-			const string query =
-			    StringUtil::Format("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('%s'))", inner);
-			json_pushed_nodes.clear();
-			auto prepared = con.Prepare(query);
-			REQUIRE(prepared->HasError());
-			REQUIRE(StringUtil::Contains(prepared->GetError(), "cannot execute a statement with parameters"));
-			auto result = con.Query(query);
-			REQUIRE_FAIL(result);
-			REQUIRE(StringUtil::Contains(result->GetError(), "cannot execute a statement with parameters"));
-			REQUIRE(json_pushed_nodes.empty());
-		}
+	SECTION("a statement with a parameter that reads only the remote catalog is handed to it whole, unrefused") {
+		json_pushed_nodes.clear();
+		auto result =
+		    con.Query("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT $1 FROM s.tbl'))");
+		REQUIRE(CHECK_COLUMN(result, 0, {"pushed"}));
+		REQUIRE(json_pushed_nodes == vector<string> {"SELECT $1 FROM tbl", "SELECT $1 FROM tbl"});
 	}
 	SECTION("an unaliased column over now() fails the column check, an aliased one does not") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE ev(id INTEGER, created TIMESTAMPTZ)"));
@@ -348,6 +341,7 @@ TEST_CASE("json_execute_serialized_sql runs its statement as any SELECT when a r
 		    "SELECT id FROM json_execute_serialized_sql(json_serialize_sql('SELECT id, now() - created FROM ev'))");
 		REQUIRE_FAIL(result);
 		REQUIRE(StringUtil::Contains(result->GetError(), "Result mismatch in query!"));
+		REQUIRE(StringUtil::Contains(result->GetError(), "an alias keeps its name stable"));
 		result = con.Query("SELECT id FROM json_execute_serialized_sql(json_serialize_sql('SELECT id, now() - created "
 		                   "AS age FROM ev'))");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
