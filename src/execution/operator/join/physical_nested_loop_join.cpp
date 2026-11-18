@@ -2,18 +2,18 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
-#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                               PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> conds, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                               LogicalComparisonJoin &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> conds, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
@@ -28,13 +28,19 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
 	if (join_type == JoinType::MARK) {
 		mark_projection_map = FillProjectionMap(left, op.left_projection_map);
 	}
+	if (predicate && conditions.size() == 1) {
+		auto &condition = conditions[0];
+		condition_comparison = BoundComparisonExpression::CreateOnColumns(context, condition.GetComparisonType(),
+		                                                                  condition.GetLHS().GetReturnType(), 0,
+		                                                                  condition.GetRHS().GetReturnType(), 1);
+	}
 }
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                               PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                               LogicalComparisonJoin &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality)
-    : PhysicalNestedLoopJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality,
+    : PhysicalNestedLoopJoin(physical_plan, context, op, left, right, std::move(cond), join_type, estimated_cardinality,
                              nullptr) {
 }
 
@@ -337,7 +343,8 @@ class PhysicalNestedLoopJoinState : public CachingOperatorState {
 public:
 	PhysicalNestedLoopJoinState(ClientContext &context, const PhysicalNestedLoopJoin &op,
 	                            const vector<JoinCondition> &conditions)
-	    : lhs_executor(context), left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
+	    : lhs_executor(context), left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context),
+	      comparison_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(cond.GetLHS());
@@ -363,6 +370,11 @@ public:
 			}
 			pred_input.Initialize(allocator, predicate_types);
 		}
+		if (op.condition_comparison) {
+			comparison_executor.AddExpression(*op.condition_comparison);
+			comparison_input.InitializeEmpty(
+			    {conditions[0].GetLHS().GetReturnType(), conditions[0].GetRHS().GetReturnType()});
+		}
 		ResetState();
 	}
 
@@ -387,6 +399,9 @@ public:
 	SelectionVector pred_matches;
 	DataChunk pred_input;
 	DataChunk mark_payload;
+	//! The condition of SEMI/ANTI joins with a predicate, over [left constant, right condition]
+	ExpressionExecutor comparison_executor;
+	DataChunk comparison_input;
 
 private:
 	void ResetState() {
@@ -466,8 +481,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 	D_ASSERT(conditions.size() == 1);
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	gstate.right_payload_data.InitializeScan(state.payload_scan_state);
-	Vector comparison(LogicalType::BOOLEAN);
-	Vector left_reference(state.left_condition.data[0].GetType());
+	auto &comparison_input = state.comparison_input;
 	VectorCache predicate_cache(state.pred_executor.GetAllocator(), LogicalType::BOOLEAN);
 	Vector predicate_result(predicate_cache);
 	while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
@@ -479,18 +493,12 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 			if (found_match[left_row]) {
 				continue;
 			}
-			ConstantVector::Reference(left_reference, count_t(state.right_condition.size()),
+			ConstantVector::Reference(comparison_input.data[0], count_t(state.right_condition.size()),
 			                          state.left_condition.data[0], left_row, state.left_condition.size());
-			MarkJoinRowComparison::Compare(left_reference, state.right_condition.data[0],
-			                               conditions[0].GetComparisonType(), comparison);
-			auto comparisons = comparison.Values<bool>();
-			idx_t candidate_count = 0;
-			for (idx_t right_row = 0; right_row < state.right_condition.size(); right_row++) {
-				auto entry = comparisons[right_row];
-				if (entry.IsValid() && entry.GetValue()) {
-					state.pred_matches.set_index(candidate_count++, right_row);
-				}
-			}
+			comparison_input.data[1].Reference(state.right_condition.data[0]);
+			comparison_input.CheckCardinality(state.right_condition.size());
+			const auto candidate_count =
+			    state.comparison_executor.SelectExpression(comparison_input, state.pred_matches);
 			if (candidate_count == 0) {
 				continue;
 			}

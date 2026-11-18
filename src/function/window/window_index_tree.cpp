@@ -23,7 +23,7 @@ WindowIndexTreeLocalState::WindowIndexTreeLocalState(ExecutionContext &context, 
     : WindowMergeSortTreeLocalState(context, index_tree), index_tree(index_tree) {
 }
 
-void WindowIndexTreeLocalState::BuildLeaves() {
+void WindowIndexTreeLocalState::BuildLeaves(Context &) {
 	auto &collection = *window_tree.sorted;
 	if (!collection.Count()) {
 		return;
