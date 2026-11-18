@@ -7,6 +7,7 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_json_execute_serialized_sql.cpp
     test_multi_file_column_mapper.cpp
     test_multi_file_lazy_initialization.cpp
     test_process_util.cpp

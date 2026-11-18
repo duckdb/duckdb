@@ -31,7 +31,7 @@ TEST_CASE("Prefix range membership collisions follow the configured representati
 		}
 		auto state = filter->InitializeBuildState(context);
 		filter->InsertKeys(keys, *state);
-		filter->MergeBuildState(*state);
+		filter->MergeBuildState(std::move(state));
 		Vector probe(Value::BIGINT(1), count_t(1));
 		SelectionVector selection(1);
 		REQUIRE(filter->LookupKeys(probe, selection, 1) == 0);
@@ -50,7 +50,7 @@ TEST_CASE("Prefix range membership collisions follow the configured representati
 		}
 		auto state = filter->InitializeBuildState(context);
 		filter->InsertKeys(keys, *state);
-		filter->MergeBuildState(*state);
+		filter->MergeBuildState(std::move(state));
 		Vector probe(Value::BIGINT(1), count_t(1));
 		SelectionVector selection(1);
 		REQUIRE(filter->LookupKeys(probe, selection, 1) == 1);
@@ -72,7 +72,7 @@ TEST_CASE("Prefix range membership collisions follow the configured representati
 		}
 		auto state = filter->InitializeBuildState(context);
 		filter->InsertKeys(keys, *state);
-		filter->MergeBuildState(*state);
+		filter->MergeBuildState(std::move(state));
 		Vector probe(Value("same-b"), count_t(1));
 		SelectionVector selection(1);
 		REQUIRE(filter->LookupKeys(probe, selection, 1) == 1);
@@ -105,7 +105,7 @@ TEST_CASE("Prefix range filter lookup is bounded by the filter count", "[filter]
 	                   MAX_BITS);
 	auto build_state = filter->InitializeBuildState(context);
 	filter->InsertKeys(keys, *build_state);
-	filter->MergeBuildState(*build_state);
+	filter->MergeBuildState(std::move(build_state));
 
 	// only the odd keys are in the bitmap, key 0 sits below its lower bound, and NULLs never match
 	for (idx_t i = 0; i < VECTOR_ROWS; i++) {
@@ -164,7 +164,7 @@ TEST_CASE("Prefix range filter prune handles all-NULL and missing statistics", "
 	filter->Initialize(context, 2, Value::BIGINT(1), Value::BIGINT(100), 1ULL << 26);
 	auto build_state = filter->InitializeBuildState(context);
 	filter->InsertKeys(keys, *build_state);
-	filter->MergeBuildState(*build_state);
+	filter->MergeBuildState(std::move(build_state));
 	REQUIRE(filter->IsInitialized());
 
 	auto make_expr = [](optional_ptr<PrefixRangeFilter> prf, bool filters_null_values) {
@@ -212,7 +212,7 @@ static void TestStagedPrefixRangeLookup(ClientContext &context, const vector<Val
 	REQUIRE(filter->GetBuildStateSize() >= 2 * 1024 * 1024);
 	auto build_state = filter->InitializeBuildState(context);
 	filter->InsertKeys(build_keys, *build_state);
-	filter->MergeBuildState(*build_state);
+	filter->MergeBuildState(std::move(build_state));
 
 	for (idx_t count : {idx_t(0), idx_t(1), idx_t(127), idx_t(128), idx_t(129), idx_t(STANDARD_VECTOR_SIZE),
 	                    idx_t(STANDARD_VECTOR_SIZE + 17)}) {
@@ -409,7 +409,7 @@ TEST_CASE("Dense numeric prefix filters prune only contained non-NULL ranges", "
 	filter->Initialize(context, keys.size(), min_value, max_value, 128);
 	auto state = filter->InitializeBuildState(context);
 	filter->InsertKeys(keys, *state);
-	filter->MergeBuildState(*state);
+	filter->MergeBuildState(std::move(state));
 	const auto contained =
 	    missing_bucket ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	REQUIRE(filter->LookupRange(min_value, max_value) == contained);

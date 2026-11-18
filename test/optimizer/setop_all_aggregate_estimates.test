@@ -1,0 +1,89 @@
+# name: test/optimizer/setop_all_aggregate_estimates.test
+# description: The estimate of the distinct rows that chooses between the aggregate and the join of an EXCEPT ALL / INTERSECT ALL reads the plan once per column
+# group: [optimizer]
+
+statement ok
+CREATE TABLE ints_a AS SELECT range AS i, range % 7 AS j FROM range(100);
+
+statement ok
+SET threads = 4;
+
+# every projection reads the column below it twice: the estimate must not follow each read on its own
+query I
+WITH p0 AS NOT MATERIALIZED (SELECT i AS a FROM ints_a),
+p1 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p0),
+p2 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p1),
+p3 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p2),
+p4 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p3),
+p5 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p4),
+p6 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p5),
+p7 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p6),
+p8 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p7),
+p9 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p8),
+p10 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p9),
+p11 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p10),
+p12 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p11),
+p13 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p12),
+p14 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p13),
+p15 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p14),
+p16 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p15),
+p17 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p16),
+p18 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p17),
+p19 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p18),
+p20 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p19),
+p21 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p20),
+p22 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p21),
+p23 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p22),
+p24 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p23),
+p25 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p24),
+p26 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p25),
+p27 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p26),
+p28 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p27),
+p29 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p28),
+p30 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p29),
+p31 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p30),
+p32 AS NOT MATERIALIZED (SELECT hash(a, a) AS a FROM p31)
+SELECT count(*) FROM (SELECT a FROM p32 EXCEPT ALL SELECT 42::UBIGINT)
+----
+100
+
+query I
+WITH p0 AS NOT MATERIALIZED (SELECT i AS a, j AS b FROM ints_a),
+p1 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p0),
+p2 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p1),
+p3 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p2),
+p4 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p3),
+p5 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p4),
+p6 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p5),
+p7 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p6),
+p8 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p7),
+p9 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p8),
+p10 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p9),
+p11 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p10),
+p12 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p11),
+p13 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p12),
+p14 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p13),
+p15 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p14),
+p16 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p15),
+p17 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p16),
+p18 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p17),
+p19 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p18),
+p20 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p19),
+p21 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p20),
+p22 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p21),
+p23 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p22),
+p24 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p23),
+p25 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p24),
+p26 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p25),
+p27 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p26),
+p28 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p27),
+p29 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p28),
+p30 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p29),
+p31 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p30),
+p32 AS NOT MATERIALIZED (SELECT hash(a, b) AS a, hash(b, a) AS b FROM p31)
+SELECT count(*) FROM (SELECT a, b FROM p32 EXCEPT ALL SELECT 42::UBIGINT, 42::UBIGINT)
+----
+100
+
+statement ok
+RESET threads;

@@ -93,10 +93,16 @@ struct TableFilterFunctions {
 //! describes a complete key set, so only a sealed filter may be looked up or handed to a scan.
 class BloomFilter {
 public:
+	//! Deferred buffers must be cleared through InitializeRange before inserting any keys.
+	enum class Initialization { IMMEDIATE, DEFERRED };
+
 	BloomFilter() = default;
 	//! Cap the bitmap size without reducing its desired bits per key.
 	void Initialize(ClientContext &context_p, idx_t number_of_rows,
-	                idx_t max_bitmap_bytes = NumericLimits<idx_t>::Maximum());
+	                idx_t max_bitmap_bytes = NumericLimits<idx_t>::Maximum(),
+	                Initialization initialization = Initialization::IMMEDIATE);
+	//! Deferred initialization must cover disjoint ranges of [0,total) before insertion begins.
+	void InitializeRange(idx_t begin, idx_t end, idx_t total);
 
 	//! VectorOperations::Hash writes at the source row positions, so the hashes to insert are the ones sel
 	//! points at rather than the first count entries
@@ -110,10 +116,11 @@ public:
 
 	void InsertOne(hash_t hash);
 	bool LookupOne(hash_t hash) const;
-	//! Folds the filter down to the smallest size that still meets the target false positive rate, releases the
-	//! memory that folding freed up, and marks the filter complete.
+	//! Folds the filter down to the smallest size that still meets the target false positive rate, releases excess
+	//! spare capacity, and marks the filter complete.
 	void Seal(ClientContext &context);
 
+	//! Allocation and geometry are configured; only a sealed filter is ready for lookup.
 	bool IsInitialized() const {
 		return initialized;
 	}
@@ -130,6 +137,7 @@ public:
 	}
 	//! Marks the filter as handed to a probe-side consumer: it must stay immutable afterwards
 	void MarkPublished() {
+		D_ASSERT(initialized && sealed);
 		published = true;
 	}
 
@@ -153,7 +161,8 @@ private:
 	bool sealed = false;
 	bool useful = false;
 	bool published = false;
-	AllocatedData buf_;
+	Initialization initialization = Initialization::IMMEDIATE;
+	HugeAllocation buf_;
 	uint64_t *bf;
 };
 
@@ -198,7 +207,8 @@ public:
 	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
 	virtual void InsertKeys(Vector &keys, BuildState &state) const = 0;
 	virtual void InsertKeysParallel(Vector &keys, BuildState &state) const = 0;
-	virtual void MergeBuildState(BuildState &state) = 0;
+	//! Consumes a completed state after all writers have finished.
+	virtual void MergeBuildState(unique_ptr<BuildState> state) = 0;
 	virtual idx_t GetBuildStateSize() const = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	//! result_sel contains local positions into sel rather than source row ids.

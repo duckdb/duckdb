@@ -61,7 +61,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
 			throw InvalidInputException("Cannot use non-aggregate window function with naive window executor!");
 		}
-		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared);
+		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared, client);
 	} else if (WindowDistinctAggregator::CanAggregate(wexpr)) {
 		// build a merge sort tree
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
@@ -76,7 +76,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 		aggregator = make_uniq<WindowSegmentTree>(wexpr, shared);
 	} else if (WindowNaiveAggregator::CanAggregate(wexpr)) {
 		// No accelerator can handle this combination, so fall back to naïve.
-		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared);
+		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared, client);
 	} else {
 		// This shouldn't happen, if we get here, the binder messed up
 		// Non-aggregate window functions that can't be handled by the WindowCustomAggregator due to e.g. a ORDER BY

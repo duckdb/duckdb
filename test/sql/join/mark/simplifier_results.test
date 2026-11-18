@@ -201,3 +201,34 @@ JOIN BY (TYPE MARK) fallible_build ON CAST(p.s AS INTEGER) IS NOT DISTINCT FROM 
 WHERE NOT __mark_join_marker;
 ----
 0
+
+# An inferred EXCEPT filter must retain the right MARK's NULL results.
+statement ok
+CREATE TABLE setop_nullable_members(k INTEGER);
+
+statement ok
+INSERT INTO setop_nullable_members VALUES (1), (NULL);
+
+query I
+SELECT count(*) FROM (
+	SELECT m FROM (VALUES (false), (false), (NULL::BOOLEAN)) l(m)
+	EXCEPT ALL
+	SELECT x IN (SELECT k FROM setop_nullable_members) FROM (VALUES (1), (2)) p(x)
+) e WHERE m = false;
+----
+2
+
+statement ok
+CREATE TABLE setop_nonnull_members(k INTEGER NOT NULL);
+
+statement ok
+INSERT INTO setop_nonnull_members VALUES (1);
+
+query I
+SELECT count(*) FROM (
+	SELECT m FROM (VALUES (false), (false), (NULL::BOOLEAN)) l(m)
+	EXCEPT ALL
+	SELECT x IN (SELECT k FROM setop_nonnull_members) FROM (VALUES (1), (2)) p(x)
+) e WHERE m = false;
+----
+1
