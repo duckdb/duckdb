@@ -1106,12 +1106,12 @@ select i from n3 where i in (select n1.i from (n1 left join n2 on n1.i = n2.i) j
 ----
 1
 
-# a volatile filter between the DISTINCT and the join
+# a volatile filter between the DISTINCT and the join (the plan is pinned below)
 statement ok
 create or replace sequence vseq;
 
 query I
-select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where (i + nextval('vseq')) % 2 = 1;
+select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where nextval('vseq') > 0;
 ----
 1
 
@@ -1178,7 +1178,7 @@ explain select i from n3 where i in (select n1.i from (n1 left join n2 on n1.i =
 physical_plan	<REGEX>:.*JOIN.*JOIN.*JOIN.*
 
 query II
-explain select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where (i + nextval('vseq')) % 2 = 1;
+explain select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where nextval('vseq') > 0;
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
