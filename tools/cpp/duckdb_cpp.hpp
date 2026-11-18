@@ -48,6 +48,19 @@ struct ArrowSchema;
 struct ArrowArray;
 struct ArrowArrayStream;
 
+// <windows.h> defines DELETE and IGNORE, which StatementType and FunctionCollationHandling name: keep the macros out of
+// this header, whatever the include order.
+#ifdef DELETE
+#pragma push_macro("DELETE")
+#undef DELETE
+#define DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef IGNORE
+#pragma push_macro("IGNORE")
+#undef IGNORE
+#define DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif
+
 namespace duckdb {
 namespace cxx {
 
@@ -1190,12 +1203,24 @@ public:
 		return *this;
 	}
 
+	/// Sets any option by name, for options without a dedicated setter above, e.g. `duckdb_api` or `access_mode`.
+	/// Options are applied in the order they are set, after the dedicated setters, so a later value wins. An option
+	/// that needs a running instance (such as `allowed_directories`) makes `Instance` construction throw: write it
+	/// through `Instance::GetConfig` instead.
+	/// @param name The option's canonical name or one of its aliases.
+	/// @param value The value, in the textual form SQL `SET` accepts.
+	auto Set(std::string_view name, std::string_view value) -> StartupOptions & {
+		options.emplace_back(std::string(name), std::string(value));
+		return *this;
+	}
+
 private:
 	std::optional<bool> allow_community_extensions;
 	std::optional<bool> allow_unsigned_extensions;
 	std::optional<bool> allow_unredacted_secrets;
 	std::optional<bool> disable_database_invalidation;
 	std::optional<std::string> custom_user_agent;
+	std::vector<std::pair<std::string, std::string>> options;
 };
 
 class Instance final : public detail::Handle<Instance> {
@@ -1529,11 +1554,11 @@ public:
 	// kind they misread that type's parameters or throw, so check the kind first. Names and dictionary entries come
 	// back as owned strings.
 
-	/// The total number of digits a DECIMAL holds.
-	auto GetDecimalWidth() const -> uint8_t;
+	/// The total number of digits a DECIMAL holds; any `uint32_t`, widths above 38 are BIGNUM-backed.
+	auto GetDecimalWidth() const -> uint32_t;
 
 	/// The number of digits a DECIMAL keeps after the point.
-	auto GetDecimalScale() const -> uint8_t;
+	auto GetDecimalScale() const -> uint32_t;
 
 	/// How many entries an ENUM's dictionary holds.
 	auto GetEnumSize() const -> idx_t;
@@ -1579,8 +1604,8 @@ public:
 	/// @param index Member index in [0, GetUnionMemberCount()).
 	auto GetUnionMemberType(idx_t index) const -> LogicalType;
 
-	/// The integer type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the
-	/// width.
+	/// The type a DECIMAL's digits are stored in, which is what its vector elements are; determined by the width:
+	/// SMALLINT, INTEGER, BIGINT or HUGEINT up to 38 digits, BIGNUM (`bignum_t` elements) beyond.
 	auto GetDecimalInternalTypeId() const -> LogicalTypeId;
 
 	/// The unsigned integer type an ENUM's dictionary indices are stored in, which is what its vector elements are;
@@ -1764,10 +1789,11 @@ struct list_entry_t {
 
 /// DECIMAL(WIDTH, SCALE): an exact number, kept as an integer of WIDTH digits with the point SCALE digits from the
 /// right. The width picks the storage integer, so DECIMAL(9, 2) and DECIMAL(18, 2) are different C++ types and their
-/// payloads are not interchangeable.
+/// payloads are not interchangeable. This covers the fixed-size decimals of up to 38 digits; a wider DECIMAL stores
+/// its digits as a `bignum_t`, see `LogicalType::GetDecimalInternalTypeId`.
 template <int8_t WIDTH, uint8_t SCALE>
 struct decimal_t {
-	static_assert(WIDTH >= 1 && WIDTH <= 38, "DECIMAL type width must be between 1 and 38");
+	static_assert(WIDTH >= 1 && WIDTH <= 38, "decimal_t covers fixed-size decimals, with a width between 1 and 38");
 	static_assert(SCALE <= WIDTH, "DECIMAL scale must be less than or equal to width");
 	using storage_type = std::conditional_t<
 	    (WIDTH <= 4), int16_t,
@@ -2023,6 +2049,19 @@ public:
 		}
 	}
 
+	/// A DECIMAL of a width and scale that are only known at runtime, by its backing integer.
+	struct RuntimeDecimal {
+		/// The unscaled value: the DECIMAL is `value / 10^scale`, e.g. 12345 for 123.45 at scale 2.
+		int128_t value;
+		uint8_t width;
+		uint8_t scale;
+	};
+
+	/// Reads a DECIMAL of any width and scale, for when they are not known at compile time; `Get<WIDTH, SCALE>` is the
+	/// typed alternative.
+	/// @throws Exception When the value is NULL or not a DECIMAL.
+	auto GetDecimal() const -> RuntimeDecimal;
+
 	/// A NULL of the given type.
 	/// @param factory The factory to create the value with.
 	/// @param type The type the NULL carries.
@@ -2067,6 +2106,15 @@ public:
 	static auto Create(Factory &factory, decimal_t<WIDTH, SCALE> value) -> Value {
 		return CreateDecimal(factory, WidenDecimal(value.value), WIDTH, SCALE);
 	}
+
+	/// Creates a DECIMAL of a width and scale chosen at runtime; `Create(factory, decimal_t<WIDTH, SCALE>)` is the
+	/// typed alternative.
+	/// @param factory The factory to create the value with.
+	/// @param value The unscaled value, e.g. 12345 for 123.45 at scale 2.
+	/// @param width The number of digits, in [1, 255]; widths above 38 are stored as BIGNUM.
+	/// @param scale The number of digits after the decimal point, at most `width`.
+	/// @throws Exception When the width or scale is out of range, or the value does not fit in `width` digits.
+	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	static auto Create(Factory &factory, bit_t value) -> Value;
 	static auto Create(Factory &factory, bignum_t value) -> Value;
@@ -2143,10 +2191,6 @@ public:
 private:
 	/// @internal Reads the backing integer, throwing unless the value's own width and scale are the ones asked for.
 	void GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const;
-
-	/// @internal The runtime forwarder behind the templated DECIMAL constructors, so those can be defined in the header
-	/// without naming a C type.
-	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
 	/// every tier.
@@ -2407,7 +2451,7 @@ public:
 	/// Place it in the vector owning this heap with `Vector::SetString`.
 	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		ValidateUTF8(data);
@@ -2422,7 +2466,7 @@ public:
 
 	/// `AddString` for arbitrary bytes rather than text.
 	auto AddBlob(std::string_view data) -> blob_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		const auto size = static_cast<uint32_t>(data.size());
@@ -7571,3 +7615,12 @@ inline auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters
 
 } // namespace cxx
 } // namespace duckdb
+
+#ifdef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#pragma pop_macro("DELETE")
+#undef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#pragma pop_macro("IGNORE")
+#undef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif

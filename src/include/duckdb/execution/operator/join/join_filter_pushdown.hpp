@@ -65,6 +65,8 @@ struct JoinFilterPushdownColumn {
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
 
+enum class InFilterMode { PRUNING_ONLY, ADAPTIVE_ROW_FILTERING };
+
 struct DeferredRuntimeFilterPushdown {
 	DeferredRuntimeFilterType type = DeferredRuntimeFilterType::BLOOM_FILTER;
 	const PhysicalOperator *op = nullptr;
@@ -143,7 +145,7 @@ private:
 
 	bool PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
 	                  const JoinFilterPushdownColumn &column, JoinHashTable &ht, const PhysicalOperator &op,
-	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	                  idx_t filter_idx, ProjectionIndex filter_col_idx, InFilterMode mode) const;
 
 	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
 	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,

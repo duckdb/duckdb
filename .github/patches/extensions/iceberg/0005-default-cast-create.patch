@@ -1,0 +1,11 @@
+--- a/src/execution/operator/iceberg_insert.cpp
++++ b/src/execution/operator/iceberg_insert.cpp
+@@ -495,7 +495,7 @@
+ 		CastFunctionSet default_casts;
+ 		auto get_input = GetCastFunctionInput::Default();
+ 		auto bound_cast = default_casts.GetCastFunction(source->GetReturnType(), target_type, get_input);
+-		source = BoundCastExpression::CreateDefault(std::move(source), target_type, std::move(bound_cast));
++		source = BoundCastExpression::Create(std::move(source), target_type, std::move(bound_cast));
+ 	}
+ 	children.push_back(std::move(source));
+ 	return BindTransformFunction(context, "date_diff", std::move(children));

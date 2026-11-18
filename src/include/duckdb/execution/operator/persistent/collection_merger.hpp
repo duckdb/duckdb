@@ -85,15 +85,16 @@ public:
 					}
 					auto flushed_row_group_idx = result_collection.Append(scan_chunk, append_state);
 					if (flushed_row_group_idx.IsValid()) {
-						writer.WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
+						writer.WriteNewRowGroup(context.GetContext(), optimistic_collection,
+						                        flushed_row_group_idx.GetIndex());
 					}
 				}
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
 			result_collection.FinalizeAppend(DuckTransaction::Get(context, data_table.db), append_state);
-			writer.WriteUnflushedRowGroups(optimistic_collection);
+			writer.WriteUnflushedRowGroups(context.GetContext(), optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteUnflushedRowGroups(optimistic_collection);
+			writer.WriteUnflushedRowGroups(context.GetContext(), optimistic_collection);
 		}
 
 		collection_indexes.clear();

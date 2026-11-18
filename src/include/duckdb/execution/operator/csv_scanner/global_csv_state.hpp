@@ -48,7 +48,7 @@ struct CSVLocalState : public LocalTableFunctionState {
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
 	CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data, const vector<Identifier> &column_names,
-	               idx_t total_file_count, optional_ptr<const PhysicalOperator> scan_op = nullptr);
+	               idx_t file_count, optional_ptr<const PhysicalOperator> scan_op = nullptr);
 
 	~CSVGlobalState() override {
 	}
@@ -72,10 +72,8 @@ private:
 	//! Reference to the client context that created this scan
 	ClientContext &context;
 	ReadCSVData &csv_data;
-	//! The operator the files are scanned for, and how many files it scans - together they tell the rejects tables
-	//! which file of which scan an error belongs to
+	//! Identifies the scan that each file belongs to in the rejects tables
 	optional_ptr<const PhysicalOperator> scan_op;
-	idx_t total_file_count;
 	//! The names of the columns that are read - used when filling the rejects table
 	const vector<Identifier> &column_names;
 

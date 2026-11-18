@@ -91,7 +91,7 @@ TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
 	std::atomic<bool> opened {false};
 	std::atomic<bool> settled {false};
 	{
-		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		ScanReadAhead read_ahead(*con.context, ScanReadAheadPolicy::ORDERED, 1, nullptr);
 		read_ahead.PushError(ErrorData("injected read-ahead error"));
 		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
 		// leaving the scope cancels and drains, retiring the open without running it
@@ -120,7 +120,7 @@ TEST_CASE("Automatic read-ahead grows its backlog within the memory budget", "[a
 		expect_overlap = false;
 	}
 
-	auto read_ahead = ScanReadAhead::Create(*con.context);
+	auto read_ahead = ScanReadAhead::Create(*con.context, ScanReadAheadPolicy::ORDERED);
 	REQUIRE(read_ahead);
 	struct JobState {};
 	const idx_t job_count = 32;
@@ -157,6 +157,7 @@ TEST_CASE("Automatic read-ahead grows its backlog within the memory budget", "[a
 TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	const auto use_affinity = GENERATE(false, true);
 	REQUIRE_NO_FAIL(con.Query("SET threads=8"));
 	REQUIRE_NO_FAIL(con.Query("SET async_threads=1"));
 	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=-1"));
@@ -170,7 +171,8 @@ TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]"
 	observer->SetRemainingSizeAndUpdateReservation(context, 770ULL * 1000 * 1000);
 	const auto full_reservation = observer->GetReservation();
 
-	auto read_ahead = ScanReadAhead::Create(*con.context);
+	auto policy = use_affinity ? ScanReadAheadPolicy::AFFINITY : ScanReadAheadPolicy::ORDERED;
+	auto read_ahead = ScanReadAhead::Create(*con.context, policy, true, 2, 8);
 	REQUIRE(read_ahead);
 	struct JobState {};
 	const idx_t job_count = 8;
@@ -185,8 +187,12 @@ TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]"
 	};
 	TableFunctionInput input(nullptr, nullptr, nullptr);
 	duckdb::unique_ptr<ScanReadAheadJob> job;
+	auto acquire = [&]() {
+		return use_affinity ? read_ahead->AcquireReadyJob(*con.context, input, produce, job, 0)
+		                    : read_ahead->AcquireJob(*con.context, input, produce, job);
+	};
 	for (idx_t consumed = 0; consumed < job_count; consumed++) {
-		REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::ACQUIRED);
+		REQUIRE(acquire() == ScanReadAheadAcquire::ACQUIRED);
 		job.reset();
 		if (consumed == 0) {
 			// the scan reserved memory for its backlog
@@ -194,7 +200,7 @@ TEST_CASE("An exhausted read-ahead scan returns its memory reservation", "[api]"
 			REQUIRE(observer->GetReservation() < full_reservation);
 		}
 	}
-	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::EXHAUSTED);
+	REQUIRE(acquire() == ScanReadAheadAcquire::EXHAUSTED);
 
 	// the scan still exists but no longer holds memory
 	observer->UpdateReservation(context);

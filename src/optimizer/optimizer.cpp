@@ -29,6 +29,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_redundant_distinct.hpp"
 #include "duckdb/optimizer/remove_redundant_order.hpp"
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -352,6 +353,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
 		JoinSimplification join_simplification(context, JoinSimplificationPhase::AFTER_FILTER_PUSHDOWN);
 		join_simplification.Optimize(plan);
+	});
+
+	// removes duplicate eliminations (DISTINCT, GROUP BY without aggregates) over an input that is already distinct
+	RunOptimizer(OptimizerType::REDUNDANT_DISTINCT, [&]() {
+		RemoveRedundantDistinct remove_redundant_distinct;
+		remove_redundant_distinct.VisitOperator(plan);
 	});
 
 	// then we perform the join ordering optimization

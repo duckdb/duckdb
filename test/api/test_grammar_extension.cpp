@@ -3583,3 +3583,31 @@ TEST_CASE("Grammar extension transforms can read the query text", "[api][grammar
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Collection().GetValue(0, 0) == Value(body));
 }
+
+TEST_CASE("The parser's tokens keep the literal info the tokenizer cached", "[api][grammar_extension]") {
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto &table = grammar->GetKeywordHelper().GetLiteralTable();
+	const string sql = "SELECT a.b, 42, 'text', \"quoted\" FROM tbl WHERE x <= 1.5e3 AND y::INT IN (1, 2);";
+	// the owning iterator is what Parser::ParseQuery matches on: a word the tokenizer looked up is not looked up again
+	ParserTokenizerBehavior behavior(sql);
+	grammar->GetTokenizer().TokenizeInput(behavior);
+	TokenIterator iterator(behavior);
+	REQUIRE(iterator.Size() > 20);
+	idx_t words = 0;
+	for (idx_t i = 0; i < iterator.Size(); i++) {
+		auto &token = iterator.GetToken(i);
+		const bool quoted = !token.text.empty() && token.text[0] == '"';
+		if (token.type != TokenType::KEYWORD && (token.type != TokenType::IDENTIFIER || quoted)) {
+			continue;
+		}
+		INFO("token " << i << ": " << token.text);
+		REQUIRE(token.HasLiteralInfo(table));
+		words++;
+	}
+	REQUIRE(words == 11);
+	// a borrowed token vector may have been edited by its owner, so its cache is dropped
+	auto borrowed = TokenizeFirstSetTestInput(*grammar, sql);
+	TokenIterator borrowing_iterator(borrowed);
+	REQUIRE_FALSE(borrowing_iterator.GetToken(0).HasLiteralInfo(table));
+	REQUIRE(borrowed[0].GetLiteralInfo(table).LiteralId() == table.Lookup("SELECT").LiteralId());
+}

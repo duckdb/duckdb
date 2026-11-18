@@ -1,0 +1,86 @@
+# name: test/sql/copy/parquet/parquet_schema_default_only_struct.test
+# description: Nested structs retain validity when none of their original children remain in the schema
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(1, {'a': 'one', 'n': {'b': 1}}),
+		(2, {'a': 'two', 'n': NULL}),
+		(3, NULL),
+		(4, {'a': 'four', 'n': {'b': NULL}})
+	) t(id, s)
+) TO '{TEST_DIR}/default_only_struct.parquet'
+(FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, a: 3, n: {__duckdb_field_id: 4, b: 5}}});
+
+statement ok
+CREATE VIEW default_only_struct AS
+FROM read_parquet('{TEST_DIR}/default_only_struct.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL, children: NULL},
+	2: {name: 's', type: 'STRUCT(a VARCHAR, n STRUCT(y INTEGER))', default_value: NULL, children: MAP {
+		3: {name: 'a', type: 'VARCHAR', default_value: NULL, children: NULL},
+		4: {name: 'n', type: 'STRUCT(y INTEGER)', default_value: NULL, children: MAP {
+			6: {name: 'y', type: 'INTEGER', default_value: 5, children: NULL}
+		}}
+	}}
+});
+
+query III
+SELECT id, s.n, s.n.y FROM default_only_struct ORDER BY id;
+----
+1	{'y': 5}	5
+2	NULL	NULL
+3	NULL	NULL
+4	{'y': 5}	5
+
+query II
+SELECT id, s.n.y FROM default_only_struct ORDER BY id;
+----
+1	5
+2	NULL
+3	NULL
+4	5
+
+query I
+SELECT id FROM default_only_struct WHERE s.n.y = 5 ORDER BY id;
+----
+1
+4
+
+query I
+SELECT id FROM default_only_struct WHERE s.n.y IS NULL ORDER BY id;
+----
+2
+3
+
+query II
+SELECT id, s.n::VARCHAR FROM default_only_struct WHERE s.n::VARCHAR = '{''y'': 5}' ORDER BY id;
+----
+1	{'y': 5}
+4	{'y': 5}
+
+# Reconstructing the whole root must preserve the same inner validity.
+query II
+SELECT id, s FROM default_only_struct ORDER BY id;
+----
+1	{'a': one, 'n': {'y': 5}}
+2	{'a': two, 'n': NULL}
+3	NULL
+4	{'a': four, 'n': {'y': 5}}
+
+statement ok
+SET disabled_optimizers = 'unused_columns';
+
+query II
+SELECT id, s.n.y FROM default_only_struct ORDER BY id;
+----
+1	5
+2	NULL
+3	NULL
+4	5
+
+# Older releases cannot bind the default-only struct mapping in a persisted view.
+statement ok
+DROP VIEW default_only_struct;

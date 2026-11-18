@@ -53,9 +53,7 @@ env:
 jobs:
  prepare:
     # We run all other jobs on PRs only if they are not draft PR
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
@@ -208,14 +206,14 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          # Wasm extensions: wasm_eh and wasm_threads everywhere, never wasm_mvp
+          # Wasm and Windows extensions: only built on pull requests that change extensions, never wasm_mvp
           wasm_exclude_archs="wasm_mvp"
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs="$wasm_exclude_archs"
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs="$wasm_exclude_archs;osx_amd64"
           else
-            extra_exclude_archs="$wasm_exclude_archs;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
+            extra_exclude_archs="$wasm_exclude_archs;windows_amd64;windows_amd64_mingw;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
           fi
           if [[ -n "$INPUT_EXCLUDE_ARCHS" ]]; then
             extra_exclude_archs="${extra_exclude_archs:+$extra_exclude_archs;}$INPUT_EXCLUDE_ARCHS"
@@ -1369,9 +1367,8 @@ jobs:
 
  summary:
     name: Summary
-    if: ${{ always() }}
-    # No fromJSON here: when prepare is skipped (draft PRs, non-member synchronize) its outputs are
-    # empty and fromJSON('') makes the whole run fail with every job skipped.
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    # Use a fallback runner when prepare has no outputs.
     runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
@@ -1512,6 +1509,11 @@ jobs:
         shell: bash
         run: |
           NEEDS_JSON='${{ toJSON(needs) }}'
+
+          if ! jq -e '.prepare.result == "success"' <<<"$NEEDS_JSON" > /dev/null; then
+            echo "The prepare job did not succeed."
+            exit 1
+          fi
 
           failed_or_cancelled=$(
             jq -r '
