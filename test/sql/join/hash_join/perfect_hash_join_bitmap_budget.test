@@ -78,6 +78,9 @@ statement ok
 DROP TABLE b
 
 statement ok
+SET disabled_optimizers='join_order,join_filter_pushdown,compressed_materialization'
+
+statement ok
 CREATE TABLE p AS SELECT i * 25 k FROM range(4000000) t(i)
 
 statement ok
