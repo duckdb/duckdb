@@ -1599,10 +1599,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 
 // Resource types registered by extensions: CREATE/REGISTER EXTERNAL RESOURCE '<type>' autoloads the extension
 static constexpr ExtensionEntry EXTENSION_EXTERNAL_RESOURCE_TYPES[] = {
-    {"aws:cloudformation:quack-on-ec2", "aws"},
-    {"aws:s3:bucket", "aws"},
-    {"aws:s3tables:bucket", "aws"},
-    {"aws:system-table", "aws"},
+    {"aws.cloudformation.stack", "aws"},
+    {"aws.s3.bucket", "aws"},
+    {"aws.s3tables.bucket", "aws"},
+    {"aws.system-table", "aws"},
 }; // END_OF_EXTENSION_EXTERNAL_RESOURCE_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
