@@ -33,6 +33,9 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 namespace duckdb {
 
@@ -826,6 +829,208 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 	}
 }
 
+//! Whether an expression on the right side of a lateral join can be evaluated over the left rows: it has no subquery,
+//! and every correlated column it reads is a column of the left side
+static bool ReadsOnlyLateralInput(const Expression &expr, const column_binding_map_t<idx_t> &left_columns) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_SUBQUERY:
+		return false;
+	case ExpressionClass::BOUND_COLUMN_REF: {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		return colref.Depth() == 0 ||
+		       (colref.Depth() == 1 && left_columns.find(colref.Binding()) != left_columns.end());
+	}
+	default:
+		break;
+	}
+	bool result = true;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { result = result && ReadsOnlyLateralInput(child, left_columns); });
+	return result;
+}
+
+//! Replaces the references of the given depth to the columns of the left side by references to the bindings under
+//! which the operator below provides these columns
+static void BindToLateralInput(unique_ptr<Expression> &expr, const column_binding_map_t<idx_t> &left_columns,
+                               const vector<ColumnBinding> &left_bindings, idx_t depth) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
+		auto entry = left_columns.find(colref.Binding());
+		if (colref.Depth() == depth && entry != left_columns.end()) {
+			expr = colref.WithBinding(left_bindings[entry->second], 0);
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { BindToLateralInput(child, left_columns, left_bindings, depth); });
+}
+
+//! The unnest table function over one list that is computed in a projection over a DUMMY_SCAN
+static bool IsLateralUnnestFunction(LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_GET || op.children.size() != 1) {
+		return false;
+	}
+	auto &get = op.Cast<LogicalGet>();
+	if (!ExpressionBinder::IsUnnestFunction(get.function.GetName()) || get.ordinality_idx.IsValid() ||
+	    !get.named_parameters.empty() || !get.projected_input.empty() || get.returned_types.size() != 1) {
+		return false;
+	}
+	auto &projection = *get.children[0];
+	if (projection.type != LogicalOperatorType::LOGICAL_PROJECTION || projection.expressions.size() != 1 ||
+	    projection.children[0]->type != LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+		return false;
+	}
+	auto &list_type = projection.expressions[0]->GetReturnType();
+	return list_type.id() == LogicalTypeId::LIST || list_type.id() == LogicalTypeId::ARRAY;
+}
+
+//! An inner lateral join whose right side unnests a list that is computed from the left row alone
+//!     DEPENDENT_JOIN(left, GET unnest -> PROJECTION(list) -> DUMMY_SCAN)
+//! is the UNNEST of that list over the left rows: the UNNEST passes the columns of the left side through and takes
+//! over the table index of the function, so the join keeps its column bindings.
+//! The same holds for a lateral subquery around the unnest, as long as its operators map every row on its own
+//! (PROJECTION, FILTER, UNNEST): the operators then run over the left rows instead of the single row of the
+//! DUMMY_SCAN, and the projections pass the columns of the left side through. These columns get new bindings, which
+//! are returned as replacements.
+//! Any other join is left to the general decorrelation.
+static BindingReplacementGraph PlanLateralUnnest(Binder &binder, unique_ptr<LogicalOperator> &op) {
+	BindingReplacementGraph replacements;
+	if (op->type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		return replacements;
+	}
+	auto &join = op->Cast<LogicalDependentJoin>();
+	if (join.join_type != JoinType::INNER || join.any_join ||
+	    Optimizer::OptimizerDisabled(binder.context, OptimizerType::UNNEST_REWRITER)) {
+		return replacements;
+	}
+	if (Optimizer::OptimizerDisabled(binder.context, OptimizerType::FILTER_PUSHDOWN) ||
+	    Settings::Get<DebugDisableOptimizerSetting>(binder.context)) {
+		// a filter on the left columns above the join guards the list: the join does not unnest the rows that the
+		// filter removes. Above an UNNEST that takes the filter pushdown
+		return replacements;
+	}
+	const auto original_bindings = join.children[0]->GetColumnBindings();
+	column_binding_map_t<idx_t> left_columns;
+	for (idx_t i = 0; i < original_bindings.size(); i++) {
+		left_columns[original_bindings[i]] = i;
+	}
+
+	// the right side, from the top down to the DUMMY_SCAN
+	bool has_unnest = false;
+	bool has_projection = false;
+	bool can_throw = false;
+	idx_t operator_count = 0;
+	reference<LogicalOperator> current = *join.children[1];
+	while (current.get().type != LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+		reference<LogicalOperator> expression_operator = current;
+		switch (current.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			has_projection = true;
+			break;
+		case LogicalOperatorType::LOGICAL_FILTER:
+			if (current.get().HasProjectionMap()) {
+				return replacements;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_UNNEST:
+			has_unnest = true;
+			break;
+		case LogicalOperatorType::LOGICAL_GET:
+			if (!IsLateralUnnestFunction(current)) {
+				return replacements;
+			}
+			has_unnest = true;
+			// the list is computed in the projection below the function, which becomes part of the UNNEST
+			expression_operator = *current.get().children[0];
+			break;
+		default:
+			return replacements;
+		}
+		for (auto &expr : expression_operator.get().expressions) {
+			// a volatile expression is evaluated for every left row by the join, also for rows that a LIMIT above
+			// does not need; a subquery or a column of an enclosing query needs the general decorrelation
+			if (expr->IsVolatile() || !ReadsOnlyLateralInput(*expr, left_columns)) {
+				return replacements;
+			}
+			can_throw = can_throw || expr->CanThrow();
+		}
+		operator_count++;
+		current = *expression_operator.get().children[0];
+	}
+	if (!has_unnest) {
+		return replacements;
+	}
+	if (has_projection && can_throw) {
+		// a filter on the left columns above the join guards the expressions of the right side: the join evaluates
+		// them for the left rows that pass it. Such a filter does not always move below a projection
+		return replacements;
+	}
+	if (join.condition &&
+	    (join.condition->IsVolatile() || join.condition->CanThrow() || join.condition->HasSubquery())) {
+		// the ON condition becomes a filter over the joined rows. The join does not evaluate its condition once for
+		// every one of them, so only a condition that gives the same result however often and on whichever of these
+		// rows it is evaluated can move there
+		return replacements;
+	}
+
+	vector<unique_ptr<LogicalOperator>> operators;
+	auto right = std::move(join.children[1]);
+	for (idx_t i = 0; i < operator_count; i++) {
+		auto child = std::move(right->children[0]);
+		operators.push_back(std::move(right));
+		right = std::move(child);
+	}
+
+	// rebuild the right side over the left side, bottom-up
+	auto result = std::move(join.children[0]);
+	result->ResolveOperatorTypes();
+	const auto left_types = result->types;
+	auto left_bindings = original_bindings;
+	while (!operators.empty()) {
+		auto right_operator = std::move(operators.back());
+		operators.pop_back();
+		if (right_operator->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = right_operator->Cast<LogicalGet>();
+			auto list = std::move(right->expressions[0]);
+			BindToLateralInput(list, left_columns, left_bindings, 1);
+			auto unnest_expr = make_uniq<BoundUnnestExpression>(get.returned_types[0]);
+			unnest_expr->ChildMutable() = BoundCastExpression::AddArrayCastToList(binder.context, std::move(list));
+			auto unnest = make_uniq<LogicalUnnest>(get.table_index);
+			unnest->expressions.push_back(std::move(unnest_expr));
+			unnest->AddChild(std::move(result));
+			result = std::move(unnest);
+			continue;
+		}
+		for (auto &expr : right_operator->expressions) {
+			BindToLateralInput(expr, left_columns, left_bindings, 1);
+		}
+		right_operator->children[0] = std::move(result);
+		if (right_operator->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &projection = right_operator->Cast<LogicalProjection>();
+			for (idx_t i = 0; i < left_bindings.size(); i++) {
+				auto left_column = make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]);
+				auto column_index = ColumnBinding::PushExpression(projection.expressions, std::move(left_column));
+				left_bindings[i] = ColumnBinding(projection.table_index, column_index);
+			}
+		}
+		result = std::move(right_operator);
+	}
+	if (join.condition) {
+		// the ON condition of an inner join filters the joined rows
+		BindToLateralInput(join.condition, left_columns, left_bindings, 0);
+		auto filter = make_uniq<LogicalFilter>(std::move(join.condition));
+		filter->AddChild(std::move(result));
+		result = std::move(filter);
+	}
+	for (idx_t i = 0; i < left_bindings.size(); i++) {
+		if (left_bindings[i] != original_bindings[i]) {
+			replacements.Add(original_bindings[i], left_bindings[i]);
+		}
+	}
+	op = std::move(result);
+	return replacements;
+}
+
 BindingReplacementGraph RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	PlanJoinChildFilters(*op_ptr);
 	if (op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN &&
@@ -864,6 +1069,7 @@ BindingReplacementGraph RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<L
 		// start from the bindings the children export now
 		operator_replacements.Merge(NormalizeJoinConditionOperands(op_ptr));
 	}
+	operator_replacements.Merge(PlanLateralUnnest(binder, op_ptr));
 	ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 	return operator_replacements;
 }

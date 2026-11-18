@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/atomic.hpp"
 
 #include "duckdb/common/mutex.hpp"
@@ -10,11 +11,17 @@
 
 namespace duckdb {
 
-PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
-                           idx_t limit, idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter_p,
-                           idx_t estimated_cardinality)
+PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+                           vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+                           shared_ptr<DynamicFilterData> dynamic_filter_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality),
       orders(std::move(orders)), limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)) {
+	const auto order_count = this->orders.size();
+	for (idx_t order_idx = 0; order_idx < order_count; order_idx++) {
+		auto &type = this->orders[order_idx].expression->GetReturnType();
+		not_distinct_from.push_back(BoundComparisonExpression::CreateOnColumns(
+		    context, ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, order_idx, type, order_count + order_idx));
+	}
 }
 
 PhysicalTopN::~PhysicalTopN() {
@@ -23,7 +30,8 @@ PhysicalTopN::~PhysicalTopN() {
 class TopNGlobalSinkState : public GlobalSinkState {
 public:
 	TopNGlobalSinkState(ClientContext &context, const PhysicalTopN &op)
-	    : heap(context, op.types, op.orders, op.limit, op.offset), boundary_value(op.orders[0], op.dynamic_filter) {
+	    : heap(context, op.types, op.orders, op.not_distinct_from, op.limit, op.offset),
+	      boundary_value(op.orders[0], op.dynamic_filter) {
 	}
 
 	mutex lock;
@@ -34,15 +42,16 @@ public:
 class TopNLocalSinkState : public LocalSinkState {
 public:
 	TopNLocalSinkState(ExecutionContext &context, const vector<LogicalType> &payload_types,
-	                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-	    : heap(context, payload_types, orders, limit, offset) {
+	                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	                   idx_t limit, idx_t offset)
+	    : heap(context, payload_types, orders, not_distinct_from, limit, offset) {
 	}
 
 	TopNHeap heap;
 };
 
 unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<TopNLocalSinkState>(context, types, orders, limit, offset);
+	return make_uniq<TopNLocalSinkState>(context, types, orders, not_distinct_from, limit, offset);
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {

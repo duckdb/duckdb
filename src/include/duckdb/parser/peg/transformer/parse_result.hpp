@@ -133,11 +133,11 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast parse result of type %s to type %s for rule %s",
-			                        ParseResultToString(TARGET::TYPE), ParseResultToString(type), Name());
+			ThrowCastError(TARGET::TYPE);
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
+	DUCKDB_API void ThrowCastError(ParseResultType target) const;
 
 	optional_ptr<const CompiledGrammarRule> rule;
 	ParseResultType type;

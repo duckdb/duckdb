@@ -125,6 +125,97 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
+  instance_open_shared:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-18" ]
+    description: |
+      Opens the database file at `path` in an instance shared through the
+      environment: a new handle to the instance that already has the file
+      open, or else to a new instance, created with the startup options, with
+      the file attached as its default database.
+
+      Every call for the same file returns a new handle to the same instance,
+      so connections created from any of them see the same database. The file
+      is identified by its absolute path, as DuckDB resolves it. Destroy each
+      handle via `[[instance_destroy]]`; the instance is destroyed once the
+      last handle and the last connection on it are, and a call for the same
+      file meanwhile waits for it to be, rather than opening the file again
+      while it is being closed.
+
+      An existing instance is shared only when it was created with the same
+      startup options, compared as written: an option given under an alias,
+      or a value written differently, counts as a different configuration,
+      as for `duckdb_get_or_create_from_cache` in the V1 API. Otherwise
+      ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
+      view opens a new in-memory instance on every call, which is never
+      shared; a named in-memory database such as `:memory:name` is shared like
+      a file. The startup options are those of
+      `[[instance_create_with_options]]`, with the same restrictions.
+
+      A file that an instance of the environment attached with
+      `[[instance_attach]]` is not shared, and opening it returns an error
+      like a second `[[instance_attach]]` would; nor can a file opened here
+      be attached to another instance. `[[instance_attach]]`,
+      `[[instance_detach]]` and `[[instance_set_default]]` on a shared handle
+      change the instance for every handle to it.
+
+      A client cannot compose this from the other functions: telling that two
+      paths name the same file as DuckDB resolves it, and waiting for an
+      instance whose last handle and connection were just destroyed to finish
+      closing its files, both need the engine.
+    role: constructor
+    belongs_to: instance
+    parameters:
+      env:
+        type: environment
+        description: "The environment the instance is shared through."
+      path:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: "Path to the database file, or `:memory:` / an empty view for a new in-memory database."
+      path_length:
+        type: idx
+        description: The length of `path` in bytes. `path` need not be null-terminated and may be NULL only when this is 0.
+      option_names:
+        type: char
+        indirection: 2
+        const: true
+        kind: IN
+        description: "Optional. An array of option_count option names (canonical or alias). Pass NULL when option_count is 0."
+      option_names_lengths:
+        type: idx
+        indirection: 1
+        const: true
+        kind: IN
+        description: Byte lengths of the entries in `option_names`; element i is the length of `option_names[i]`. May be NULL only when `option_names` is NULL.
+      option_values:
+        type: char
+        indirection: 2
+        const: true
+        kind: IN
+        description: "Optional. An array of option_count values, parallel to option_names, in the textual form SQL `SET` accepts. Pass NULL when option_count is 0."
+      option_values_lengths:
+        type: idx
+        indirection: 1
+        const: true
+        kind: IN
+        description: Byte lengths of the entries in `option_values`; element i is the length of `option_values[i]`. May be NULL only when `option_values` is NULL.
+      option_count:
+        type: idx
+        description: "The number of startup options."
+      out_instance:
+        type: instance
+        indirection: 1
+        kind: OUT
+        description: "Receives a new handle to the shared instance."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
   instance_destroy:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-08-04" ]

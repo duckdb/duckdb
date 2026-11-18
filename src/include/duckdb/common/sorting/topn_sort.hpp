@@ -58,6 +58,8 @@ public:
 	Orders orders;
 	// Key columns that must be computed
 	vector<unique_ptr<Expression>> sort_exprs;
+	//! NOT DISTINCT FROM comparison of the boundary value for every order column
+	vector<unique_ptr<Expression>> not_distinct_from;
 };
 
 } // namespace duckdb

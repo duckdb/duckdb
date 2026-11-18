@@ -3,6 +3,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
@@ -33,7 +34,8 @@ public:
 };
 
 TopNSortGlobalSinkState::TopNSortGlobalSinkState(ClientContext &client, const TopNSort &topn)
-    : client(client), heap(client, topn.payload_types, topn.orders, topn.partition_limit.GetIndex(), 0),
+    : client(client),
+      heap(client, topn.payload_types, topn.orders, topn.not_distinct_from, topn.partition_limit.GetIndex(), 0),
       boundary_value(topn.orders[0], dynamic_filter), count(0) {
 }
 
@@ -59,7 +61,8 @@ public:
 };
 
 TopNSortLocalSinkState::TopNSortLocalSinkState(ExecutionContext &context, const TopNSort &topn)
-    : topn(topn), heap(context, topn.payload_types, topn.orders, topn.partition_limit.GetIndex(), 0),
+    : topn(topn),
+      heap(context, topn.payload_types, topn.orders, topn.not_distinct_from, topn.partition_limit.GetIndex(), 0),
       sort_exec(context.client) {
 	vector<LogicalType> sort_types;
 	for (const auto &expr : topn.sort_exprs) {
@@ -223,6 +226,13 @@ TopNSort::TopNSort(ClientContext &client, const vector<BoundOrderByNode> &order_
 		sort_ids.emplace_back(idx);
 		payload_types.emplace_back(type);
 		sort_exprs.emplace_back(std::move(saved));
+	}
+
+	const auto order_count = orders.size();
+	for (idx_t order_idx = 0; order_idx < order_count; order_idx++) {
+		auto &type = orders[order_idx].expression->GetReturnType();
+		not_distinct_from.push_back(BoundComparisonExpression::CreateOnColumns(
+		    client, ExpressionType::COMPARE_NOT_DISTINCT_FROM, type, order_idx, type, order_count + order_idx));
 	}
 }
 

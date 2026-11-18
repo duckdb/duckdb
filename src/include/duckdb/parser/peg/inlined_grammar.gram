@@ -1492,14 +1492,17 @@ TargetOptAlias <- BaseTableName TargetAlias?
 TargetAlias <- 'AS'? ColId
 DeleteUsingClause <- 'USING' List(TableRef)
 
-DescribeStatement <- ShowExternalResources / ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName
+DescribeStatement <- ShowExternalResourceTypes / ShowExternalResources / ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName
 
-# "SHOW [ALL] EXTERNAL RESOURCES" is a query over duckdb_external_resources, so it works as a subquery too. It comes
-# first: "SHOW ALL" alone is ShowAllTables, and "SHOW <name>" is ShowByName, and neither can be retried once matched.
+# "SHOW [ALL] EXTERNAL RESOURCES" is a query over duckdb_external_resources, so it works as a subquery too. It and
+# ShowExternalResourceTypes come first: "SHOW ALL" alone is ShowAllTables, and "SHOW <name>" is ShowByName, and
+# neither can be retried once matched.
 ShowExternalResources <- ShowRule 'ALL'? 'EXTERNAL' 'RESOURCES' ShowExternalResourcesType?
 # "WITH TYPE 'aws:s3tables:table-bucket'" restricts the listing (and the discovery) to one type; a bare identifier
 # is passed through as the type name as well.
 ShowExternalResourcesType <- 'WITH' 'TYPE' ColIdOrString
+# "SHOW EXTERNAL RESOURCE TYPES" is a query over duckdb_external_resource_types, so it works as a subquery too.
+ShowExternalResourceTypes <- ShowRule 'EXTERNAL' 'RESOURCE' 'TYPES'
 
 # "DESCRIBE (query)" and "SUMMARIZE (query)" describe the query's columns. "SHOW (query)" does too but is deprecated,
 # so ShowDeprecatedSelect is parsed yet suppressed from autocomplete (matcher_factory.cpp) - SHOW won't offer to complete a query.
@@ -2080,8 +2083,8 @@ UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
 FromSourceIdentifier <- 'FROM' FromSourceName
 FromSourceString <- 'FROM' StringLiteral
-# a repository named after its host is spelled as dotted words: INSTALL x FROM carlopi.github.io
-FromSourceName <- ExtensionRepositoryHostName / Identifier
+# a repository may be named by a dotted name: INSTALL x FROM carlopi.github.io
+FromSourceName <- DottedName / Identifier
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 
 ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / CreateExtensionRepositoryFromHostStmt / DropExtensionRepositoryStmt
@@ -2093,10 +2096,14 @@ RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)
 # the signing keys). The rest is CREATE EXTENSION REPOSITORY <name> WITH PREFIX <that prefix>.
 CreateExtensionRepositoryFromHostStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ExtensionRepositoryName
 DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ExtensionRepositoryName
-# A repository name: an identifier or a string, or a host spelled as dotted words. A host with a '-' in it cannot be
-# spelled unquoted ('-' is an operator); it is given as a string: 'duckdb-extensions.example.com'
-ExtensionRepositoryName <- ExtensionRepositoryHostName / ColIdOrString
-ExtensionRepositoryHostName <- ColId DotColLabel+
+# A repository name: an identifier or a string, or a dotted name spelled without quotes
+ExtensionRepositoryName <- DottedName / ColIdOrString
+# A dotted name spelled without quotes: carlopi.github.io, my-website.com. Matched by DottedNameMatcher, which glues the
+# words, dots and dashes the tokenizer cut it into, as long as nothing separates them (no whitespace or comment in
+# between): labels of words joined by single dashes, separated by single dots. Two dashes in a row start a comment for
+# the tokenizer, so 'xn--bcher-kva.example' cannot be spelled unquoted (it reads as 'xn'); quoted parts ("my-site".com)
+# are not a dotted name either: a name with such parts goes in quotes as a whole
+DottedName <- <[a-z0-9_]i+('-'[a-z0-9_]i+)*('.'[a-z0-9_]i+('-'[a-z0-9_]i+)*)+>
 
 TableMatchRecognizeClause <- 'MATCH_RECOGNIZE' Parens(MatchRecognizeBody) TableAlias?
 MatchRecognizeBody <- MatchRecognizeClause+

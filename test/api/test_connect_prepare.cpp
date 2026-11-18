@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb.h"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -60,7 +62,78 @@ struct RoutingStorageExtension : StorageExtension {
 	}
 };
 
+//! An Arrow stream of one INTEGER column that counts the calls made on it
+struct CountingArrowStream {
+	ArrowSchema child_schema = {};
+	ArrowSchema *schema_children[1] = {&child_schema};
+	idx_t schema_calls = 0;
+	idx_t next_calls = 0;
+	ArrowArrayStream stream = {};
+
+	CountingArrowStream() {
+		stream.get_schema = GetSchema;
+		stream.get_next = GetNext;
+		stream.get_last_error = GetLastError;
+		stream.release = ReleaseStream;
+		stream.private_data = this;
+	}
+
+	static int GetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+		auto &self = *static_cast<CountingArrowStream *>(stream->private_data);
+		self.schema_calls++;
+		self.child_schema = {};
+		self.child_schema.format = "i";
+		self.child_schema.name = "value";
+		self.child_schema.flags = ARROW_FLAG_NULLABLE;
+		self.child_schema.release = ReleaseSchema;
+		*out = {};
+		out->format = "+s";
+		out->n_children = 1;
+		out->children = self.schema_children;
+		out->release = ReleaseSchema;
+		return 0;
+	}
+	static int GetNext(ArrowArrayStream *stream, ArrowArray *out) {
+		static_cast<CountingArrowStream *>(stream->private_data)->next_calls++;
+		*out = {};
+		return 0;
+	}
+	static const char *GetLastError(ArrowArrayStream *) {
+		return nullptr;
+	}
+	static void ReleaseSchema(ArrowSchema *schema) {
+		schema->release = nullptr;
+	}
+	static void ReleaseStream(ArrowArrayStream *stream) {
+		stream->release = nullptr;
+	}
+};
+
 } // namespace
+
+TEST_CASE("duckdb_arrow_scan fails while CONNECT-ed", "[api][connect][capi][arrow]") {
+	DBConfig config;
+	StorageExtension::Register(config, "connect_routing_test", make_shared_ptr<RoutingStorageExtension>());
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto c_connection = reinterpret_cast<duckdb_connection>(&con);
+
+	REQUIRE_NO_FAIL(con.Query("ATTACH 'routed' AS remote (TYPE connect_routing_test)"));
+	REQUIRE_NO_FAIL(con.Query("CONNECT remote"));
+	routed_queries.clear();
+
+	CountingArrowStream arrow_stream;
+	REQUIRE(duckdb_arrow_scan(c_connection, "arrow_input",
+	                          reinterpret_cast<duckdb_arrow_stream>(&arrow_stream.stream)) == DuckDBError);
+	REQUIRE(routed_queries.empty());
+	REQUIRE(arrow_stream.schema_calls == 1);
+	REQUIRE(arrow_stream.next_calls == 0);
+	REQUIRE(con.context->IsConnected());
+
+	REQUIRE_NO_FAIL(con.Query("DISCONNECT"));
+	auto result = con.Query("SELECT count(*) FROM duckdb_views() WHERE view_name = 'arrow_input'");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
 
 TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	DBConfig config;

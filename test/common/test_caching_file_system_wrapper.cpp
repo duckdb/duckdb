@@ -1056,4 +1056,72 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	}
 }
 
+TEST_CASE("Caching modes return null for missing file with FILE_FLAGS_NULL_IF_NOT_EXISTS", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
+
+	auto missing_path = TestCreatePath("test_caching_missing_file.bin");
+	FileSystem::CreateLocal()->TryRemoveFile(missing_path);
+
+	auto validate = GENERATE(true, false);
+	OpenFileInfo file_info(missing_path);
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(validate);
+
+	for (auto mode : {CachingMode::NO_CACHING, CachingMode::CACHE_REMOTE_ONLY, CachingMode::ALWAYS_CACHE}) {
+		FileOpenFlags flags {FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS};
+		flags.SetCachingMode(mode);
+		REQUIRE(opener_filesystem.OpenFile(file_info, flags) == nullptr);
+
+		FileOpenFlags throwing_flags {FileFlags::FILE_FLAGS_READ};
+		throwing_flags.SetCachingMode(mode);
+		REQUIRE_THROWS_WITH(opener_filesystem.OpenFile(file_info, throwing_flags), Catch::Contains("Cannot open file"));
+	}
+
+	LocalFileSystem local_fs;
+	auto caching_wrapper = make_shared_ptr<CachingFileSystemWrapper>(local_fs, db_instance, CachingMode::ALWAYS_CACHE);
+	REQUIRE(caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ |
+	                                                 FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS) == nullptr);
+
+	CachingFileSystem cfs(local_fs, db_instance);
+	REQUIRE(cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS) == nullptr);
+}
+
+TEST_CASE("Cached file removed after caching with FILE_FLAGS_NULL_IF_NOT_EXISTS", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	LocalFileSystem local_fs;
+	CachingFileSystem cfs(local_fs, db_instance);
+
+	const string content = "Content that gets cached and then removed from disk.";
+	TestFileGuard test_file("test_caching_removed_file.bin", content);
+
+	auto make_file_info = [&](bool validate) {
+		OpenFileInfo info(test_file.GetPath());
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(validate);
+		return info;
+	};
+	const FileOpenFlags flags {FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS};
+
+	{
+		auto handle = cfs.OpenFile(make_file_info(false), flags);
+		REQUIRE(handle);
+		auto group = handle->Read(content.size(), 0);
+		string result(content.size(), '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), content.size());
+		REQUIRE(result == content);
+	}
+	local_fs.RemoveFile(test_file.GetPath());
+
+	// Validation must open the file, so the missing file is reported as a null handle
+	REQUIRE(cfs.OpenFile(make_file_info(true), flags) == nullptr);
+
+	// Without validation the cached blocks defer opening the file; opening it later throws a regular IO error
+	auto handle = cfs.OpenFile(make_file_info(false), flags);
+	REQUIRE(handle);
+	REQUIRE_THROWS_WITH(handle->GetFileHandle(), Catch::Contains("file does not exist"));
+}
+
 } // namespace duckdb

@@ -406,6 +406,12 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
@@ -764,6 +770,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);

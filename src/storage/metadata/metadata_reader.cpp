@@ -7,7 +7,8 @@ namespace duckdb {
 MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
                                optional_ptr<vector<MetaBlockPointer>> read_pointers_p, BlockReaderType type)
     : manager(manager), type(type), next_pointer(pointer), has_next_block(true), read_pointers(read_pointers_p),
-      index(0), offset(0), next_offset(pointer.offset), capacity(0) {
+      index(0), offset(0), next_offset(pointer.offset), capacity(0), cycle_check_pointer(DConstants::INVALID_INDEX),
+      cycle_check_at(1), blocks_read(0) {
 }
 
 MetadataReader::MetadataReader(MetadataManager &manager, BlockPointer pointer)
@@ -63,6 +64,7 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 	if (!has_next_block) {
 		throw IOException("No more data remaining in MetadataReader");
 	}
+	CheckForCycle();
 	if (read_pointers) {
 		read_pointers->push_back(next_pointer);
 	}
@@ -85,6 +87,21 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 	offset = next_offset;
 	next_offset = sizeof(block_id_t);
 	capacity = GetMetadataManager().GetMetadataBlockSize();
+}
+
+void MetadataReader::CheckForCycle() {
+	// the pointers to the next block are read from the file - a chain that points back into itself never ends
+	// we use Brent's algorithm to detect this: remember the block read at every power of two and compare against it
+	if (next_pointer.block_pointer == cycle_check_pointer) {
+		throw DataCorruptionException(
+		    "Corrupt database file: metadata block chain contains a cycle (block id %lld, index %llu)",
+		    next_pointer.GetBlockId(), next_pointer.GetBlockIndex());
+	}
+	blocks_read++;
+	if (blocks_read == cycle_check_at) {
+		cycle_check_pointer = next_pointer.block_pointer;
+		cycle_check_at *= 2;
+	}
 }
 
 data_ptr_t MetadataReader::BasePtr() {

@@ -7,7 +7,8 @@ namespace duckdb {
 // TopNHeap
 //===--------------------------------------------------------------------===//
 TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<LogicalType> &payload_types_p,
-                   const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
+                   const vector<BoundOrderByNode> &orders_p, const vector<unique_ptr<Expression>> &not_distinct_from_p,
+                   idx_t limit, idx_t offset)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), arena_allocator(allocator),
       heap(arena_allocator), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset),
       heap_size(limit + offset), executor(context), sort_key_heap(allocator), matching_sel(STANDARD_VECTOR_SIZE),
@@ -19,6 +20,8 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 		auto &expr = order.expression;
 		sort_types.push_back(expr->GetReturnType());
 		executor.AddExpression(*expr);
+		not_distinct_from.push_back(
+		    make_uniq<ExpressionExecutor>(executor.GetContext(), *not_distinct_from_p[not_distinct_from.size()]));
 		modifiers.emplace_back(order.type, order.null_order);
 	}
 	heap.reserve(InitialHeapAllocSize());
@@ -29,16 +32,22 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	sort_chunk.Initialize(allocator, sort_types);
 	compare_chunk.Initialize(allocator, sort_types);
 	boundary_values.Initialize(allocator, sort_types);
+	auto boundary_compare_types = sort_types;
+	boundary_compare_types.insert(boundary_compare_types.end(), sort_types.begin(), sort_types.end());
+	boundary_compare_chunk.InitializeEmpty(boundary_compare_types);
 }
 
 TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(context, BufferAllocator::Get(context), payload_types, orders, limit, offset) {
+                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+                   idx_t limit, idx_t offset)
+    : TopNHeap(context, BufferAllocator::Get(context), payload_types, orders, not_distinct_from, limit, offset) {
 }
 
 TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, limit, offset) {
+                   const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+                   idx_t limit, idx_t offset)
+    : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, not_distinct_from, limit,
+               offset) {
 }
 
 bool TopNHeap::CanOptimize(idx_t limit, idx_t cardinality) {
@@ -138,6 +147,11 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 		}
 	}
 	boundary_values.SetChildCardinality(sort_chunk.size());
+	for (idx_t i = 0; i < orders.size(); i++) {
+		boundary_compare_chunk.data[i].Reference(sort_chunk.data[i]);
+		boundary_compare_chunk.data[orders.size() + i].Reference(boundary_values.data[i]);
+	}
+	boundary_compare_chunk.CheckCardinality(sort_chunk.size());
 
 	// we have boundary values
 	// from these boundary values, determine which values we should insert (if any)
@@ -182,9 +196,8 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 		idx_t false_count = remaining_count - true_count;
 		if (!is_last && false_count > 0) {
 			// check what we should continue to check
-			compare_chunk.data[i].Slice(sort_chunk.data[i], false_sel, false_count);
-			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], boundary_values.data[i],
-			                                                    &false_sel, false_count, &new_remaining_sel, nullptr);
+			remaining_count = not_distinct_from[i]->SelectExpression(boundary_compare_chunk, &new_remaining_sel,
+			                                                         nullptr, &false_sel, false_count);
 			remaining_sel.Initialize(new_remaining_sel);
 		} else {
 			break;

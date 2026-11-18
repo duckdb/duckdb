@@ -20,11 +20,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::WINDOW;
 
 public:
-	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	               idx_t estimated_cardinality, vector<column_t> partitions,
+	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality, vector<column_t> partitions,
 	               optional_idx partition_limit = optional_idx());
-	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	               idx_t estimated_cardinality, optional_idx partition_limit = optional_idx());
+	PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+	               optional_idx partition_limit = optional_idx());
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;
@@ -37,6 +38,10 @@ public:
 	OperatorPartitionInfo partition_info;
 	//! The partition size limit (if any)
 	optional_idx partition_limit;
+	//! DISTINCT FROM comparison of the partition keys
+	unique_ptr<Expression> partition_distinct_from;
+	//! DISTINCT FROM comparison of the order keys of every window expression, by the end of its order key prefix
+	unordered_map<idx_t, unique_ptr<Expression>> order_distinct_from;
 
 public:
 	// Source interface

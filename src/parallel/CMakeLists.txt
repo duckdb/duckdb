@@ -21,6 +21,7 @@ add_library_unity(
   runtime_filter_schedule.cpp
   scan_affinity_queue.cpp
   scan_read_ahead.cpp
+  sharded_counter.cpp
   task_executor.cpp
   task_notifier.cpp
   task_scheduler.cpp

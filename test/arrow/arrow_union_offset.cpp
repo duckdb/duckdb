@@ -4,6 +4,8 @@
 
 #include "arrow/arrow_test_helper.hpp"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include <string>
 #include <vector>
@@ -131,8 +133,11 @@ bool ScanMatches(ArrowSchema &col_schema, ArrowArray &col_array, const string &q
 	if (projection.empty()) {
 		return ArrowTestHelper::RunArrowComparison(con, query, stream);
 	}
-	auto arrow_scan = con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(stream));
-	auto result = arrow_scan->Project(projection)->Execute();
+	auto arrow_scan = ArrowTestHelper::ArrowScanSelect(ArrowTestHelper::ConstructArrowScan(stream));
+	auto &select_node = arrow_scan->node->Cast<SelectNode>();
+	select_node.select_list = Parser(*con.context).ParseExpressionList(projection);
+	select_node.aggregate_handling = AggregateHandling::NO_AGGREGATES_ALLOWED;
+	auto result = con.Query(std::move(arrow_scan));
 	stream.release = nullptr;
 	return result->Equals(*con.Query(query));
 }

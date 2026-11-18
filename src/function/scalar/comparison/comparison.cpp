@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -96,7 +97,7 @@ static unique_ptr<FunctionData> ComparisonBind(BindScalarFunctionInput &input) {
 }
 
 //! The arguments of a deserialized comparison have already been cast - so it should not be bound again
-static void ComparisonSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+static void ComparisonSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                 const BoundScalarFunction &function) {
 }
 
@@ -180,6 +181,14 @@ ScalarFunction IsNotDistinctFromFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // BoundComparisonExpression
 //===--------------------------------------------------------------------===//
+unique_ptr<Expression> BoundComparisonExpression::CreateOnColumns(ClientContext &context, ExpressionType type,
+                                                                  const LogicalType &left_type, idx_t left_idx,
+                                                                  const LogicalType &right_type, idx_t right_idx) {
+	(void)context;
+	return Create(type, make_uniq<BoundReferenceExpression>(left_type, left_idx),
+	              make_uniq<BoundReferenceExpression>(right_type, right_idx));
+}
+
 unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, unique_ptr<Expression> left,
                                                          unique_ptr<Expression> right) {
 	vector<unique_ptr<Expression>> children;

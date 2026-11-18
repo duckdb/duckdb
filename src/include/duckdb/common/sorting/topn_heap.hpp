@@ -82,11 +82,13 @@ public:
 	static bool CanOptimize(idx_t limit, idx_t cardinality);
 
 	TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders,
-	         idx_t limit, idx_t offset);
+	         const vector<unique_ptr<Expression>> &not_distinct_from, idx_t limit, idx_t offset);
 	TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
-	         const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset);
+	         const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	         idx_t limit, idx_t offset);
 	TopNHeap(ClientContext &context, Allocator &allocator, const vector<LogicalType> &payload_types,
-	         const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset);
+	         const vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &not_distinct_from,
+	         idx_t limit, idx_t offset);
 
 	Allocator &allocator;
 	BufferManager &buffer_manager;
@@ -99,6 +101,8 @@ public:
 	idx_t offset;
 	idx_t heap_size;
 	ExpressionExecutor executor;
+	//! NOT DISTINCT FROM comparison of every sort column
+	vector<unique_ptr<ExpressionExecutor>> not_distinct_from;
 	DataChunk sort_chunk;
 	DataChunk heap_data;
 	DataChunk payload_chunk;
@@ -110,6 +114,8 @@ public:
 	DataChunk compare_chunk;
 	//! Cached global boundary value as a set of constant vectors
 	DataChunk boundary_values;
+	//! The input of not_distinct_from: [sort columns..., boundary values...]
+	DataChunk boundary_compare_chunk;
 	//! Cached global boundary value in sort-key format
 	string boundary_val;
 	SelectionVector final_sel;

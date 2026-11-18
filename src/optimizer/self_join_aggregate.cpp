@@ -89,27 +89,6 @@ bool JoinConditionsVolatile(const LogicalOperator &op) {
 	return false;
 }
 
-//! A GROUP BY whose result is the same over its input with or without repeated rows
-bool AggregateIgnoresDuplicates(const LogicalAggregate &aggregate) {
-	if (AnyVolatile(aggregate.groups)) {
-		return false;
-	}
-	for (auto &expr : aggregate.expressions) {
-		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE || expr->IsVolatile()) {
-			return false;
-		}
-		auto &bound = expr->Cast<BoundAggregateExpression>();
-		if (bound.IsDistinct()) {
-			continue;
-		}
-		auto &name = bound.Function().GetName().GetIdentifierName();
-		if ((name != "min" && name != "max") || bound.GetChildren().size() != 1) {
-			return false;
-		}
-	}
-	return true;
-}
-
 //! The column bindings the plan reads, visited from the root down so that a candidate projection's expressions count
 //! only when the column they compute is itself read: everything above a candidate reads it through expressions, so
 //! an unreferenced column of it is dead, and so is whatever only that column referenced (an inlined CTE's identity
@@ -334,7 +313,7 @@ private:
 			return;
 		}
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			Walk(op.children[0], AggregateIgnoresDuplicates(op.Cast<LogicalAggregate>()));
+			Walk(op.children[0], op.Cast<LogicalAggregate>().IgnoresDuplicates());
 			return;
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 			// its references are all below its second child, so they are all seen before its definition is

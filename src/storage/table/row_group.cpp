@@ -1383,6 +1383,7 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		WriteRows(transaction, table_entry, vector_idx, vector_start, ids + offset, count,
 		          UnsafeNumericCast<row_t>(vector_start), true, written);
 	}
+	lock_guard<mutex> update_guard(update_lock);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		auto &col_data = GetColumn(column.index);

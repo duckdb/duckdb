@@ -40,7 +40,6 @@ struct CreatePragmaFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
-struct CreateCollationInfo;
 struct CreateCoordinateSystemInfo;
 struct CreateIndexInfo;
 struct CreateTypeInfo;
@@ -55,7 +54,6 @@ class QueryContext;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
-class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
@@ -195,9 +193,6 @@ public:
 	//! Creates a Enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(ClientContext &context, CreateTypeInfo &info);
-	//! Creates a collation in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(ClientContext &context, CreateCollationInfo &info);
 	//! Creates a coordinate system in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                             CreateCoordinateSystemInfo &info);
@@ -231,9 +226,6 @@ public:
 	//! Creates a enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                 CreateTypeInfo &info);
-	//! Creates a collation in the catalog
-	DUCKDB_API static optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction,
-	                                                             SchemaCatalogEntry &schema, CreateCollationInfo &info);
 	//! Creates a coordinate system in the catalog
 	DUCKDB_API static optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                                    SchemaCatalogEntry &schema,
@@ -251,7 +243,10 @@ public:
 	virtual bool SupportsNestedSchemas() const {
 		return false;
 	}
-	//! Reject unsupported nested paths before invoking extension catalog methods.
+	//! Whether the schema path of name is not nested, or nested and supported by this catalog. Lookups of an
+	//! unsupported path find nothing, without passing the path to the catalog's LookupSchema.
+	DUCKDB_API bool SupportsSchemaPath(const QualifiedName &name, CatalogType type) const;
+	//! Reject unsupported nested paths when creating a schema.
 	DUCKDB_API void CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const;
 	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
 	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
