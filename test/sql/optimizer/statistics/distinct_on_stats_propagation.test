@@ -442,6 +442,93 @@ SELECT count(*) FROM (SELECT first(k) AS k FROM lhs GROUP BY id) s JOIN rhs r ON
 ----
 16
 
+# Ordinary injective casts retain the singleton proof.
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
+
+query II
+SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT) r USING (k);
+----
+32	224
+
+# Common-subplan extraction retains the domains in a self join as well.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) l
+JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
+
+# Successful strict narrowing casts are injective too.
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::TINYINT) l
+JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::TINYINT) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
+
+statement ok
+CREATE TABLE overflowing_keys(id INTEGER PRIMARY KEY, x INTEGER);
+
+statement ok
+INSERT INTO overflowing_keys VALUES (128, 0), (129, 1);
+
+statement error
+SELECT first(x) FROM overflowing_keys GROUP BY id::TINYINT;
+----
+out of range
+
+# The grouping alias can coexist with another projection of its source key.
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z
+      FROM (SELECT id::BIGINT AS gid, id, x FROM unique_list_values) p GROUP BY gid) l
+JOIN (SELECT first(x) AS k, max(id) AS z
+      FROM (SELECT id::BIGINT AS gid, id, x FROM unique_list_values_right) p GROUP BY gid) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
+
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z
+      FROM (SELECT id AS gid, id, x FROM unique_list_values) p GROUP BY gid) l
+JOIN (SELECT first(x) AS k, max(id) AS z
+      FROM (SELECT id AS gid, id, x FROM unique_list_values_right) p GROUP BY gid) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
+
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z)
+FROM (SELECT first(x) AS k, max(id) AS z FROM unique_list_values GROUP BY id::BIGINT::HUGEINT) l
+JOIN (SELECT first(x) AS k, max(id) AS z FROM unique_list_values_right GROUP BY id::BIGINT::HUGEINT) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*
+
+# Retain a window output so pruning cannot remove the window boundary.
+query II
+EXPLAIN SELECT count(*), sum(l.z + r.z), sum(l.w + r.w)
+FROM (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+      FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values) p GROUP BY id) l
+JOIN (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+      FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values_right) p GROUP BY id) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~32 rows.*Window.*
+
+query III
+SELECT count(*), sum(l.z + r.z), sum(l.w + r.w)
+FROM (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+      FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values) p GROUP BY id) l
+JOIN (SELECT first(x) AS k, max(id) AS z, max(rn) AS w
+      FROM (SELECT *, row_number() OVER (ORDER BY x, id DESC) AS rn FROM unique_list_values_right) p GROUP BY id) r USING (k);
+----
+32	224	288
+
 # Temporary tables support deferred constraints with v1 storage.
 # Keep this last so earlier cases can still exercise forced restarts.
 statement ok

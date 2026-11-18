@@ -1,15 +1,85 @@
 #include "duckdb/optimizer/distinctness.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expression, ClientContext &context) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return expression.Cast<BoundColumnRefExpression>().Binding();
+	}
+	if (!BoundCastExpression::IsCast(expression)) {
+		return {};
+	}
+	auto &cast = expression.Cast<BoundFunctionExpression>();
+	auto source_type = BoundCastExpression::SourceType(cast);
+	auto &target_type = BoundCastExpression::TargetType(cast);
+	if (BoundCastExpression::IsTryCast(cast) ||
+	    CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
+		return {};
+	}
+	// Successful strict integral casts do not merge distinct input values.
+	if (source_type != target_type && !(source_type.IsIntegral() && target_type.IsIntegral()) &&
+	    !BoundCastExpression::CastIsInvertibleForEquality(source_type, target_type)) {
+		return {};
+	}
+	return GetInjectiveColumnBinding(BoundCastExpression::Child(cast), context);
+}
+
+bool Distinctness::IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys,
+                                ClientContext &context) {
+	column_binding_set_t bindings;
+	for (auto &key : keys) {
+		auto binding = GetInjectiveColumnBinding(*key, context);
+		if (binding) {
+			bindings.insert(*binding);
+		}
+	}
+	return IsDistinctOn(op, bindings, context);
+}
+
+bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys, ClientContext &context) {
+	if (keys.empty()) {
+		return false;
+	}
+	if (IsDistinctOn(op, keys)) {
+		return true;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		column_binding_set_t child_keys;
+		auto bindings = op.GetColumnBindings();
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			if (!keys.count(bindings[i])) {
+				continue;
+			}
+			auto binding = GetInjectiveColumnBinding(*op.expressions[i], context);
+			if (binding) {
+				child_keys.insert(*binding);
+			}
+		}
+		return IsDistinctOn(*op.children[0], child_keys, context);
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return IsDistinctOn(*op.children[0], keys, context);
+	default:
+		return false;
+	}
+}
 
 bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys) {
 	if (keys.empty()) {

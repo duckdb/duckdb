@@ -9,11 +9,14 @@
 #pragma once
 
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
+class ClientContext;
+class Expression;
 class LogicalAggregate;
 class LogicalComparisonJoin;
 class LogicalGet;
@@ -52,6 +55,8 @@ public:
 
 	//! Whether the output of the operator has at most one row per value of the keys
 	bool IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys);
+	//! Checks expression keys, including aliases and built-in injective casts.
+	bool IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys, ClientContext &context);
 	//! The sets of columns the output of the operator is distinct on (cached)
 	const vector<column_binding_set_t> &GetUniqueSets(LogicalOperator &op);
 	//! Gets the equality keys (= or IS NOT DISTINCT FROM) of the left (child_idx 0) or right (child_idx 1) side of a
@@ -59,6 +64,7 @@ public:
 	static bool GetJoinEqualityKeys(const LogicalComparisonJoin &join, idx_t child_idx, column_binding_set_t &keys);
 
 private:
+	bool IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys, ClientContext &context);
 	vector<column_binding_set_t> ComputeUniqueSets(LogicalOperator &op);
 	static vector<column_binding_set_t> ComputeScanUniqueSets(LogicalGet &get);
 	static vector<column_binding_set_t> ComputeAggregateUniqueSets(LogicalAggregate &aggr);
