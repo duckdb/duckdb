@@ -20,7 +20,7 @@ class RadixHTLocalSinkState;
 //! Lookup decisions are independent of HLL and external aggregation.
 class RadixHTAdaptivity {
 public:
-	enum class SinkResult : uint8_t { UNCHANGED, ABANDONED, GROWN };
+	enum class SinkResult { UNCHANGED, ABANDONED, GROWN };
 
 public:
 	//! Handle a full local table or memory pressure.
