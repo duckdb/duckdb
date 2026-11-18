@@ -28,6 +28,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_redundant_distinct.hpp"
 #include "duckdb/optimizer/remove_redundant_order.hpp"
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -346,6 +347,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		outer_join_simplification.VisitOperator(*plan);
 	});
 
+	// removes duplicate eliminations (DISTINCT, GROUP BY without aggregates) over an input that is already distinct
+	RunOptimizer(OptimizerType::REDUNDANT_DISTINCT, [&]() {
+		RemoveRedundantDistinct remove_redundant_distinct;
+		remove_redundant_distinct.VisitOperator(plan);
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -366,6 +373,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
 		PartialAggregatePushdown partial_aggregate_pushdown(*this);
 		partial_aggregate_pushdown.VisitOperator(plan);
+	});
+
+	// Rewrites f(CASE WHEN c THEN x END) -> f(x) FILTER (WHERE c). Runs after the rewrites that match aggregates
+	// without a filter (aggregate reuse, partial aggregate pushdown), so that these still see the CASE.
+	RunOptimizer(OptimizerType::CASE_TO_FILTER_AGGREGATE, [&]() {
+		AggregateFunctionRewriter aggregate_function_rewriter(*this);
+		// DML CTEs can invalidate the table statistics captured during planning.
+		aggregate_function_rewriter.RewriteCaseToFilter(plan, !CTEContainsDML(*plan));
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
@@ -604,18 +619,19 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
+                                                     Identifier alias) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
-	return BindScalarFunction(name, std::move(children));
+	return BindScalarFunction(name, std::move(children), std::move(alias));
 }
 
 unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
-                                                     unique_ptr<Expression> c2) {
+                                                     unique_ptr<Expression> c2, Identifier alias) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	children.push_back(std::move(c2));
-	return BindScalarFunction(name, std::move(children));
+	return BindScalarFunction(name, std::move(children), std::move(alias));
 }
 
 unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
@@ -627,10 +643,12 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, uni
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children,
+                                                     Identifier alias) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
+	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error, false, nullptr,
+	                                      std::move(alias));
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

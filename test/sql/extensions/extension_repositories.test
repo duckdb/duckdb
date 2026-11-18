@@ -35,11 +35,40 @@ SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PRO
 acme
 other
 
-# a repository with the same name cannot be created twice
+# the built-in repositories are not stored and cannot be dropped, with or without IF EXISTS
+statement error
+DROP EXTENSION REPOSITORY core
+----
+<REGEX>:Not implemented Error.*'core' is built in and cannot be dropped.*
+
+statement error
+DROP EXTENSION REPOSITORY IF EXISTS core_nightly
+----
+<REGEX>:Not implemented Error.*'core_nightly' is built in and cannot be dropped.*
+
+# a repository with the same name cannot be created twice with another definition: the stored prefix is reported
 statement error
 CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://other.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
-<REGEX>:Catalog Error.*already exists.*
+<REGEX>:Catalog Error.*already exists, with prefix 'http://extensions.acme.com'.*CREATE OR REPLACE.*
+
+# ...nor with the same prefix and other keys
+statement error
+CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyjug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoNPjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpAbYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9ZQIDAQAB'
+----
+<REGEX>:Catalog Error.*already exists, with other public keys \(sha256:.*
+
+# the same statement again passes, without changing anything: a trailing slash or a left-out key is not a difference
+statement ok
+CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+statement ok
+CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com/'
+
+query I
+SELECT prefix FROM duckdb_extension_repositories() WHERE repository_name='acme'
+----
+http://extensions.acme.com
 
 # ...unless IF NOT EXISTS or OR REPLACE is used
 statement ok
@@ -264,12 +293,12 @@ SELECT count(*) FROM duckdb_extension_repositories() WHERE prefix='http://evil.e
 ----
 0
 
-# while the database is running the setting can only move down ('undecided' -> 'allowed' -> 'forbidden'): once
-# repositories are allowed, the decision cannot be reverted to the 'undecided' default
+# while the database is running the setting can only move down ('hosts' -> 'allowed' -> 'hosts_only' -> 'forbidden'):
+# once repositories are allowed, the setting cannot be reverted to the 'hosts' default
 statement error
-SET allow_extension_repositories='undecided'
+SET allow_extension_repositories='hosts'
 ----
-<REGEX>:.*can only be changed from 'undecided'.*
+<REGEX>:.*can only be tightened.*
 
 # existing repositories are still listed and trusted
 query I
@@ -278,7 +307,7 @@ SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PRO
 acme
 
 # repositories can be forbidden. this distrusts the keys of existing repositories (so extensions installed from them
-# can no longer be loaded), but the repositories can still be listed and dropped. the 'undecided' default is weaker:
+# can no longer be loaded), but the repositories can still be listed and dropped. the 'hosts' default is weaker:
 # it only blocks *adding* new repositories while still trusting existing ones (see the api tests for the trust checks)
 statement ok
 SET allow_extension_repositories='forbidden'
@@ -305,13 +334,13 @@ INSTALL some_extension FROM acme
 statement ok
 DROP EXTENSION REPOSITORY acme
 
-# once forbidden, repositories cannot be re-enabled or reset to 'undecided' while the database is running
+# once forbidden, repositories cannot be re-enabled or reset to 'hosts' while the database is running
 statement error
 SET allow_extension_repositories='allowed'
 ----
-<REGEX>:.*can only be changed from 'undecided'.*
+<REGEX>:.*can only be tightened.*
 
 statement error
-SET allow_extension_repositories='undecided'
+SET allow_extension_repositories='hosts'
 ----
-<REGEX>:.*can only be changed from 'undecided'.*
+<REGEX>:.*can only be tightened.*

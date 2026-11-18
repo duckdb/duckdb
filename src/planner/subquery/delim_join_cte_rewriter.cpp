@@ -66,15 +66,6 @@ static BindingReplacementGraph CreateConstructedBindingReplacements(const vector
 	return result;
 }
 
-static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, unique_ptr<LogicalOperator> child,
-                                                            BindingReplacementGraph &replacements) {
-	auto projection = LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(child));
-	projection->ResolveOperatorTypes();
-	auto bindings = projection->children[0]->GetColumnBindings();
-	replacements = CreateConstructedBindingReplacements(bindings, projection->GetColumnBindings());
-	return std::move(projection);
-}
-
 static idx_t RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIndex delim_scan_index) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op->children.empty()) {
@@ -366,23 +357,23 @@ static bool RewriteFilterThroughProjections(unique_ptr<Expression> &expr,
                                             const vector<reference<LogicalProjection>> &projections) {
 	for (auto &projection : projections) {
 		bool can_push = true;
-		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-		    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+		expr = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+		    std::move(expr), [&](const BoundColumnRefExpression &colref) -> unique_ptr<Expression> {
 			    if (colref.Depth() != 0) {
 				    can_push = false;
-				    return;
+				    return nullptr;
 			    }
 			    auto &projected = projection.get().GetExpression(colref.Binding());
 			    if (projected.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				    can_push = false;
-				    return;
+				    return nullptr;
 			    }
 			    auto &input = projected.Cast<BoundColumnRefExpression>();
 			    if (input.Depth() != 0) {
 				    can_push = false;
-				    return;
+				    return nullptr;
 			    }
-			    colref.BindingMutable() = input.Binding();
+			    return colref.WithBinding(input.Binding());
 		    });
 		if (!can_push) {
 			return false;
@@ -1029,9 +1020,8 @@ struct GeneratedDomainReplacement {
 				}
 				auto &base_expression =
 				    FindDomainOutput(condition.GetLHS(), domain).IsValid() ? condition.GetRHS() : condition.GetLHS();
-				auto null_check =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				null_check->GetChildrenMutable().push_back(base_expression.Copy());
+				auto null_check = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
+				                                                     LogicalType::BOOLEAN, base_expression.Copy());
 				filters.push_back(std::move(null_check));
 			}
 			return !domain.has_projection;
@@ -1052,9 +1042,8 @@ struct GeneratedDomainReplacement {
 			if (comparison->GetExpressionType() == ExpressionType::COMPARE_EQUAL &&
 			    left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF && !left.GetReturnType().IsNested() &&
 			    left.Equals(right)) {
-				auto null_check =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				null_check->GetChildrenMutable().push_back(left.Copy());
+				auto null_check = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
+				                                                     LogicalType::BOOLEAN, left.Copy());
 				comparison = std::move(null_check);
 			}
 			filters.push_back(std::move(comparison));
@@ -1920,11 +1909,17 @@ static bool HasPartitionedRecursiveKeys(LogicalRecursiveCTE &cte) {
 // Decorrelation partitions the RHS by its domain. Only retain this fact for repeatable, locally owned inputs.
 static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<TableIndex> &local_ctes) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		if (!op.Cast<LogicalGet>().GetTable()) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		// a table in-out function without a final step turns each input row into rows of its own
+		auto &get = op.Cast<LogicalGet>();
+		auto &function = get.function;
+		const bool row_by_row = function.in_out_function && !function.in_out_function_final &&
+		                        function.stability != FunctionStability::VOLATILE;
+		if (!get.GetTable() && !row_by_row) {
 			return false;
 		}
 		break;
+	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &cte = op.Cast<LogicalRecursiveCTE>();
 		if (!HasPartitionedRecursiveKeys(cte)) {
@@ -1953,6 +1948,7 @@ static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<Tabl
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_UNNEST:
 		break;
 	default:
 		return false;
@@ -2118,15 +2114,11 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	dedup->children.push_back(std::move(dedup_child));
 
 	auto dedup_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(dedup_cte_index.index));
-	BindingReplacementGraph dedup_output_replacements;
-	auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan), dedup_output_replacements);
-	output_replacements.Merge(dedup_output_replacements);
+	auto dedup_cte_child = std::move(plan);
 	auto dedup_cte =
 	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
 	                                      std::move(dedup_cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	BindingReplacementGraph cte_output_replacements;
-	auto cte_child = CreateIdentityProjection(binder, std::move(dedup_cte), cte_output_replacements);
-	output_replacements.Merge(cte_output_replacements);
+	auto cte_child = std::move(dedup_cte);
 	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
 	                                             std::move(cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	if (can_restrict_input) {

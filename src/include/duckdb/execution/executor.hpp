@@ -153,11 +153,14 @@ private:
 	//! Whether this query's store can park a producer for the consumer at all. A store settled on
 	//! retained never parks, so the retained hot path skips the readiness checks
 	bool ResultStoreCanPark();
+	//! The chunks a task slice run by ExecuteTask processes before control returns to the caller
+	idx_t PartialChunkCount();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
-	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
-	                    unique_ptr<PipelineSchedule> resolved_schedule = nullptr);
+	//! Create the events of the pipelines and collect the ones without dependencies, which start the schedule
 	void ScheduleEventsInternal(ScheduleEventData &event_data);
+	//! Schedule the events without dependencies: this creates tasks, so the caller must not hold executor_lock
+	static void ScheduleReadyEvents(const vector<shared_ptr<Event>> &ready_events);
 
 	static void VerifyScheduledEvents(const vector<shared_ptr<Event>> &events);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,

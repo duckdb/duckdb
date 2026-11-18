@@ -377,9 +377,6 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 				output.right_payload.erase(right_entry);
 			}
 		}
-		auto left_child_requires_domain = RequiresDomain(*plan->children[0]);
-		auto requires_full_rhs_decorrelation = left_child_requires_domain || op.join_type != JoinType::SINGLE;
-
 		// Phase 1: prepare the left side in the current flattener context.
 		auto outer_state = PrepareDependentJoinLeft(plan, propagate_null_values, std::move(state));
 		// Phase 2: push the active correlated state through the right subtree in a child flattener.
@@ -399,13 +396,6 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 				                                   definition_state.replacement_graph);
 				// the domain probe above cached access entries for definition operators this replaced
 				child_flatten.InvalidateAccessCache();
-				if (requires_full_rhs_decorrelation) {
-					auto result = DecorrelateSubtree(plan, propagate_null_values, std::move(outer_state.bindings));
-					result.replacement_graph.Merge(outer_state.replacement_graph);
-					detached_cte->children[1] = std::move(plan);
-					plan = std::move(detached_cte);
-					return result;
-				}
 			}
 		}
 
@@ -1203,11 +1193,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownFullOuterJo
 		expressions.push_back(make_uniq<BoundColumnRefExpression>(join_types[position], binding));
 	}
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto coalesce =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, correlated_columns[i].type);
-		coalesce->GetChildrenMutable().push_back(
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state.bindings[i]));
-		coalesce->GetChildrenMutable().push_back(
+		auto coalesce = make_uniq<BoundOperatorExpression>(
+		    ExpressionType::OPERATOR_COALESCE, correlated_columns[i].type,
+		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state.bindings[i]),
 		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_state.bindings[i]));
 		expressions.push_back(std::move(coalesce));
 	}

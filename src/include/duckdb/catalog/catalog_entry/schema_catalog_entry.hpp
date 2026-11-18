@@ -25,7 +25,6 @@ enum class OnCreateConflict : uint8_t;
 struct AlterTableInfo;
 struct CreateIndexInfo;
 struct CreateFunctionInfo;
-struct CreateCollationInfo;
 struct CreateCoordinateSystemInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
@@ -65,7 +64,7 @@ public:
 	}
 
 	//! The full path of this schema (its parent chain outermost first, ending with this schema's own name)
-	vector<Identifier> GetSchemaPath() const;
+	DUCKDB_API vector<Identifier> GetSchemaPath() const;
 	//! The schema path formatted as a SQL name, without the catalog.
 	DUCKDB_API string GetSchemaName() const;
 	//! The fully qualified name of an entry in this schema: [catalog, schema path..., entry_name]
@@ -116,10 +115,6 @@ public:
 	virtual optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                        CreatePragmaFunctionInfo &info) {
 		throw NotImplementedException("Pragma functions are not supported in schema %s", name);
-	}
-	//! Create a collation within the given schema
-	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
-		throw NotImplementedException("Collations are not supported in schema %s", name);
 	}
 	//! Create a coordinate system within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,

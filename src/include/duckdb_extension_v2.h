@@ -1570,6 +1570,20 @@ typedef struct {
 	(duckdb_v2_sql_statement_handle statement, const char *name, idx_t name_length,
 	 duckdb_v2_column_data_collection_handle collection, const char **column_names, const idx_t *column_names_lengths,
 	 idx_t column_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_add_virtual_column)
+	(duckdb_v2_table_function_handle function, DUCKDB_V2_TABLE_VIRTUAL_COLUMN column, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_metrics_get_bind_data)
+	(duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_metrics_get_global_state)
+	(duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_metrics_get_user_data)
+	(duckdb_v2_table_function_metrics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_metrics_set)
+	(duckdb_v2_table_function_metrics_info_handle info, const char *name, idx_t name_length, uint64_t value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_metrics_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_metrics_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_expression_check_statistics)
 	(duckdb_v2_context_handle context, duckdb_v2_expression_handle expression, duckdb_v2_stats_handle stats,
 	 DUCKDB_V2_FILTER_PROPAGATE_RESULT *result, duckdb_v2_error_info_handle *err);
@@ -1585,6 +1599,21 @@ typedef struct {
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_stats_set_value)
 	(duckdb_v2_stats_handle stats, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_get_generic_property)
+	(duckdb_v2_aggregate_function_handle function, const char *name, idx_t name_length,
+	 duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_generic_property)
+	(duckdb_v2_aggregate_function_handle function, const char *name, idx_t name_length, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_get_generic_property)
+	(duckdb_v2_scalar_function_handle function, const char *name, idx_t name_length, duckdb_v2_value_handle *out_value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_generic_property)
+	(duckdb_v2_scalar_function_handle function, const char *name, idx_t name_length, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_schema)
+	(duckdb_v2_scalar_function_handle function, const char *schema, idx_t schema_length,
+	 duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -3599,6 +3628,25 @@ typedef struct {
 #define duckdb_v2_statement_add_collection duckdb_ext_api.duckdb_v2_statement_add_collection
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_add_virtual_column duckdb_ext_api.duckdb_v2_table_function_add_virtual_column
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_metrics_get_bind_data duckdb_ext_api.duckdb_v2_table_function_metrics_get_bind_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_metrics_get_global_state                                                              \
+	duckdb_ext_api.duckdb_v2_table_function_metrics_get_global_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_metrics_get_user_data duckdb_ext_api.duckdb_v2_table_function_metrics_get_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_metrics_set duckdb_ext_api.duckdb_v2_table_function_metrics_set
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_set_metrics_callback duckdb_ext_api.duckdb_v2_table_function_set_metrics_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_expression_check_statistics duckdb_ext_api.duckdb_v2_expression_check_statistics
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3618,6 +3666,23 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_stats_set_value duckdb_ext_api.duckdb_v2_stats_set_value
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_aggregate_function_get_generic_property                                                              \
+	duckdb_ext_api.duckdb_v2_aggregate_function_get_generic_property
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_aggregate_function_set_generic_property                                                              \
+	duckdb_ext_api.duckdb_v2_aggregate_function_set_generic_property
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_scalar_function_get_generic_property duckdb_ext_api.duckdb_v2_scalar_function_get_generic_property
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_scalar_function_set_generic_property duckdb_ext_api.duckdb_v2_scalar_function_set_generic_property
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_scalar_function_set_schema duckdb_ext_api.duckdb_v2_scalar_function_set_schema
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

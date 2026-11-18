@@ -1,0 +1,31 @@
+# name: benchmark/micro/compression/rle/adaptive_bloom_filter.benchmark
+# description: Adaptive Bloom filtering over short RLE runs
+# group: [rle]
+
+name Adaptive Bloom Filter over RLE
+group rle
+storage persistent
+
+load
+CREATE TABLE probe(k BIGINT USING COMPRESSION RLE);
+INSERT INTO probe
+SELECT (((i // 32) % 2000 - 1000) * 1000000000)::BIGINT FROM range(32000000) t(i);
+CREATE TABLE build AS
+SELECT ((i - 1000) * 1000000000)::BIGINT k, i % 17 = 0 keep FROM range(2000) t(i);
+CHECKPOINT;
+
+assert TI
+SELECT DISTINCT compression, persistent
+FROM pragma_storage_info('probe')
+WHERE column_name='k' AND segment_type='BIGINT';
+----
+RLE	true
+
+init
+SET threads=1;
+
+run
+SELECT count(*) FROM probe p JOIN build b ON p.k=b.k WHERE b.keep;
+
+result I
+1888000
