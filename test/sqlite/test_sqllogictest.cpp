@@ -321,7 +321,7 @@ static bool IsExtensionTestPath(const string &path) {
 }
 
 void RegisterSqllogictests(const vector<string> &test_paths) {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	for (const auto &path : test_paths) {
 		if (IsSQLiteLogicTestPath(*fs, path)) {
 			if (!IsExcludedSQLiteLogicTest(path)) {
@@ -336,7 +336,7 @@ void RegisterSqllogictests(const vector<string> &test_paths) {
 }
 
 void RegisterSqllogictests() {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			if (IsExcludedSQLiteLogicTest(path)) {

@@ -138,8 +138,8 @@ public:
 } // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
-	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), fs->GetWorkingDirectory());
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), FileSystem::GetWorkingDirectory());
 	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
 
 	// handle differences between windows and linux
@@ -200,7 +200,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestCreatePath("TEST_DIR");
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
@@ -245,7 +245,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 
 #ifndef _WIN32
 TEST_CASE("Character devices use streaming file semantics", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	REQUIRE(fs->IsPipe("/dev/null"));
 	auto handle = fs->OpenFile("/dev/null", FileFlags::FILE_FLAGS_WRITE);
 	REQUIRE(handle->GetWriteMode() == FileWriteMode::SEQUENTIAL);
@@ -313,7 +313,7 @@ TEST_CASE("Extended directory operations report target ownership", "[file_system
 	REQUIRE(!existing_directory_fs.create_called);
 	REQUIRE(!existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}));
 
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto directory = TestCreatePath("try_create_directory");
 	if (fs->DirectoryExists(directory)) {
 		fs->RemoveDirectory(directory);
@@ -370,7 +370,7 @@ TEST_CASE("Extended directory operations forward the file opener", "[file_system
 	DuckDB db(nullptr);
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto home_directory = TestCreatePath("extended_directory_opener");
 	if (fs->DirectoryExists(home_directory)) {
 		fs->RemoveDirectory(home_directory);
@@ -392,7 +392,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 	DuckDB db(nullptr);
 	Connection con(db);
 	ClientContextFileOpener opener(con.context->GetContext());
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	TestContextFileSystem opener_fs(*fs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
 	if (fs->DirectoryExists(base)) {
@@ -413,7 +413,7 @@ TEST_CASE("Recursive directory creation checks access for every ancestor", "[fil
 #define INTEGER_COUNT 512
 
 TEST_CASE("Test file operations", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<FileHandle> handle, handle2;
 	int64_t test_data[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
@@ -453,7 +453,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 }
 
 TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto fname = TestCreatePath("stats_if_exists");
 	fs->TryRemoveFile(fname);
 
@@ -481,7 +481,7 @@ TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
 
 #ifndef _WIN32
 TEST_CASE("Local modification times keep the fraction of a second", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	const auto fname = TestCreatePath("subsecond_modification_time");
 	fs->TryRemoveFile(fname);
 	CreateDummyFile(fname);
@@ -538,7 +538,7 @@ TEST_CASE("absolute paths", "[file_system]") {
 }
 
 TEST_CASE("Test RemoveFiles", "[file_system]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestCreatePath("test_remove_files");
 
 	if (fs->DirectoryExists(dname)) {
@@ -570,7 +570,7 @@ TEST_CASE("Test RemoveFiles", "[file_system]") {
 
 TEST_CASE("extract subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
-	auto local_filesystem = BaseFileSystem::CreateLocal();
+	auto local_filesystem = FileSystem::CreateLocal();
 	auto *local_filesystem_ptr = local_filesystem.get();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
@@ -596,11 +596,11 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
 
 	// First time registration should succeed.
-	auto local_filesystem = BaseFileSystem::CreateLocal();
+	auto local_filesystem = FileSystem::CreateLocal();
 	vfs.RegisterSubSystem(std::move(local_filesystem));
 
 	// Re-register an already registered subfilesystem should throw.
-	auto second_local_filesystem = BaseFileSystem::CreateLocal();
+	auto second_local_filesystem = FileSystem::CreateLocal();
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
 }
 
@@ -617,7 +617,7 @@ struct CanonicalizationTest {
 };
 
 void CanonicalizationTest::Test(const std::vector<CanonicalizationTest> &test_cases) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	std::vector<string> failures;
 	for (auto &test : test_cases) {
 		// test canonicalization
@@ -630,8 +630,8 @@ void CanonicalizationTest::Test(const std::vector<CanonicalizationTest> &test_ca
 		}
 		if (!fs->IsPathAbsolute(test.a)) {
 			// verify absolute and relative paths resolve to the same path
-			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
-			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
+			auto abs_a = fs->JoinPath(FileSystem::GetWorkingDirectory(), test.a);
+			auto abs_b = fs->JoinPath(FileSystem::GetWorkingDirectory(), test.b);
 			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
 			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
 			if (canonical_abs_a != canonical_abs_b) {
@@ -682,8 +682,8 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("a/b/c/../../d/e/../f", "a/d/f", "interleaved parents");
 
 #ifdef _WIN32
-	auto fs = BaseFileSystem::CreateLocal();
-	auto current_drive = fs->GetWorkingDirectory().substr(0, 1);
+	auto fs = FileSystem::CreateLocal();
+	auto current_drive = FileSystem::GetWorkingDirectory().substr(0, 1);
 
 	// Backslash handling
 	test_cases.emplace_back("src\\common", "src/common", "backslash separator equivalant to forward slash");
@@ -736,7 +736,7 @@ void TestCreateSymlink(const string &source, const string &target, bool director
 }
 
 TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 
 	TestCreateDirectory("real_dir");
 	auto real_dir = TestCreatePath("real_dir");
@@ -752,9 +752,9 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 42 i"));
 	}
 	// create symlink from fake_dir -> real_dir
-	TestCreateSymlink(fake_dir, fs->JoinPath(fs->GetWorkingDirectory(), real_dir), true);
+	TestCreateSymlink(fake_dir, fs->JoinPath(FileSystem::GetWorkingDirectory(), real_dir), true);
 	// create symlink from fake_file -> real_file
-	TestCreateSymlink(fs->JoinPath(fake_dir, "fake_file"), fs->JoinPath(fs->GetWorkingDirectory(), real_file), false);
+	TestCreateSymlink(fs->JoinPath(fake_dir, "fake_file"), fs->JoinPath(FileSystem::GetWorkingDirectory(), real_file), false);
 
 	// all of these tests are in the test dir
 	std::vector<CanonicalizationTest> test_cases;
@@ -769,9 +769,9 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 #ifndef _WIN32
 	// dangling symlinks resolve to the (non-existent) file they point to
 	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_link"),
-	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "missing_file"), false);
+	                  fs->JoinPath(fs->JoinPath(FileSystem::GetWorkingDirectory(), real_dir), "missing_file"), false);
 	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_chain"),
-	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "dangling_link"), false);
+	                  fs->JoinPath(fs->JoinPath(FileSystem::GetWorkingDirectory(), real_dir), "dangling_link"), false);
 	test_cases.emplace_back("real_dir/dangling_link", "real_dir/missing_file", "follow dangling symlink");
 	test_cases.emplace_back("fake_dir/dangling_link", "real_dir/missing_file",
 	                        "follow dangling symlink in symlink dir");
@@ -788,7 +788,7 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 }
 
 TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 
 	auto fname = TestCreatePath("concurrent_delete_test_file");
 	const string payload = "DELETE_WHILE_OPEN_CONTENT";
@@ -820,7 +820,7 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 }
 
 TEST_CASE("Moving over an open file preserves existing handles", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto source = TestCreatePath("move_over_open_file_source");
 	auto target = TestCreatePath("move_over_open_file_target");
 	const vector<char> source_data {'s', 'o', 'u', 'r', 'c', 'e'};
@@ -854,7 +854,7 @@ TEST_CASE("Moving over an open file preserves existing handles", "[file_system]"
 }
 
 TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto fname = TestCreatePath("exclusive_create_test_file");
 	for (auto create_flag : {FileFlags::FILE_FLAGS_FILE_CREATE, FileFlags::FILE_FLAGS_FILE_CREATE_NEW}) {
 		for (auto null_if_exists : {false, true}) {
@@ -1405,8 +1405,8 @@ TEST_CASE("Path one-off tests", "[file_system]") {
 
 #ifdef _WIN32
 TEST_CASE("Check path canonicalization on Windows", "[file_system]") {
-	auto fs = BaseFileSystem::CreateLocal();
-	auto canonical_work_dir = fs->CanonicalizePath(fs->GetWorkingDirectory());
+	auto fs = FileSystem::CreateLocal();
+	auto canonical_work_dir = fs->CanonicalizePath(FileSystem::GetWorkingDirectory());
 	// check that long path prefix "\\?\" or "\\?\UNC\" is not present
 	REQUIRE(!StringUtil::StartsWith(canonical_work_dir, "\\\\"));
 }
@@ -1446,8 +1446,8 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 	idx_t max_dir_path_len = 247;
 	idx_t work_dir_path_len = 240;
 
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
-	string cwd = fs->GetWorkingDirectory();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
+	string cwd = FileSystem::GetWorkingDirectory();
 	string test_dir = TestDirectoryPath();
 	test_dir = fs->JoinPath(test_dir, "test_long_path");
 	test_dir = fs->JoinPath(cwd, test_dir);
@@ -1543,7 +1543,7 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	// Create a local file which pretends to be fake-compressed.
 	auto filepath = TestCreatePath("fake_compression_file.compress");
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	{
 		const string payload = "CREATE_COMPRESSED_FILE";
 		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);

@@ -30,7 +30,7 @@ void ClientConfig::ResetUserVariable(const String &name) {
 }
 
 void ClientConfig::SetDefaultStreamingBufferSize() {
-	auto memory = BaseFileSystem::GetAvailableMemory();
+	auto memory = FileSystem::GetAvailableMemory();
 	auto default_size = ClientConfig().max_streaming_buffer_size;
 	if (!memory.IsValid()) {
 		max_streaming_buffer_size = default_size;

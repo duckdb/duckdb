@@ -31,6 +31,35 @@ public:
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
 public:
+	//! Static helpers that do not depend on a file system instance
+	//! Create a LocalFileSystem
+	DUCKDB_API static unique_ptr<BaseFileSystem> CreateLocal();
+	//! Whether or not a file is remote or local, based only on file path
+	DUCKDB_API static bool IsRemoteFile(const string &path);
+	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
+	//! Whether there is a glob in the string
+	DUCKDB_API static bool HasGlob(const string &str);
+	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
+	//! Sets the working directory
+	DUCKDB_API static void SetWorkingDirectory(const string &path);
+	//! Gets the working directory
+	DUCKDB_API static string GetWorkingDirectory();
+	//! Gets the users home directory
+	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
+	//! Expands a given path, including e.g. expanding the home directory of the user
+	DUCKDB_API static string ExpandPath(const string &path, optional_ptr<FileOpener> opener);
+	//! Returns the system-available memory in bytes. Returns an invalid index if the system function fails.
+	DUCKDB_API static optional_idx GetAvailableMemory();
+	//! Returns the space available on the disk. Returns an invalid index if the information was not available.
+	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
+	//! Returns the soft limit on open file descriptors, or an invalid index when it is unlimited or unknown.
+	DUCKDB_API static optional_idx GetFileDescriptorLimit();
+	//! Returns the share of the file descriptor limit that one consumer of descriptors may hold open.
+	DUCKDB_API static idx_t GetFileDescriptorShare(idx_t file_descriptor_limit);
+	//! Returns the value of an environment variable - or the empty string if it is not set
+	DUCKDB_API static string GetEnvVariable(const string &name);
+
+public:
 	DUCKDB_API void VerifyCanAccessDirectory(const string &path);
 	DUCKDB_API void VerifyCanAccessFile(const string &path);
 	void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
@@ -115,15 +144,6 @@ public:
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 	DUCKDB_API string CanonicalizePath(const string &path);
-	static bool IsRemoteFile(const string &path) {
-		return BaseFileSystem::IsRemoteFile(path);
-	}
-	static bool IsRemoteFile(const string &path, string &extension) {
-		return BaseFileSystem::IsRemoteFile(path, extension);
-	}
-	static bool HasGlob(const string &str) {
-		return BaseFileSystem::HasGlob(str);
-	}
 	DUCKDB_API string GetHomeDirectory();
 	DUCKDB_API string ExpandPath(const string &path);
 

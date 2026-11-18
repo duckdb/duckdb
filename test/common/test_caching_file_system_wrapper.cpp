@@ -411,7 +411,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 
 	// Create a test directory
 	auto test_dir = TestCreatePath("test_list_dir");
-	auto local_fs = BaseFileSystem::CreateLocal();
+	auto local_fs = FileSystem::CreateLocal();
 	local_fs->CreateDirectory(test_dir);
 
 	// Create several test files in the directory.

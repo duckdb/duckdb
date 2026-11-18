@@ -563,7 +563,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(BaseFileSystem::CreateLocal());
+		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
@@ -578,11 +578,12 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
+	BoundFileSystem system_fs(*config.file_system, nullptr);
 	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
-		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+		config.options.maximum_threads = config.GetSystemMaxThreads(system_fs);
 	}
 	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
-		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+		config.options.async_threads = config.GetSystemMaxAsyncThreads(system_fs);
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
@@ -592,7 +593,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
 		config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
-		                                                   DBConfig::GetSystemAvailableMemory(*config.file_system));
+		                                                   DBConfig::GetSystemAvailableMemory(system_fs));
 	}
 	config.block_allocator->SetEnabled(config.options.enable_block_allocator);
 	config.replacement_scans = std::move(new_config.replacement_scans);

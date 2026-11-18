@@ -91,14 +91,14 @@ private:
 
 idx_t ExternalFileCache::GetCacheMaxBlockSize(const string &path) const {
 	auto &db = buffer_manager.GetDatabase();
-	if (BaseFileSystem::IsRemoteFile(path)) {
+	if (FileSystem::IsRemoteFile(path)) {
 		return Settings::Get<ExternalFileCacheRemoteMaxBlockSizeSetting>(db);
 	}
 	return Settings::Get<ExternalFileCacheLocalMaxBlockSizeSetting>(db);
 }
 
 idx_t ExternalFileCache::GetCacheMinBlockSize(const string &path) const {
-	if (!BaseFileSystem::IsRemoteFile(path)) {
+	if (!FileSystem::IsRemoteFile(path)) {
 		return 1;
 	}
 	auto &db = buffer_manager.GetDatabase();
@@ -106,7 +106,7 @@ idx_t ExternalFileCache::GetCacheMinBlockSize(const string &path) const {
 }
 
 bool ExternalFileCache::ShouldCacheFile(const string &path) const {
-	if (BaseFileSystem::IsRemoteFile(path)) {
+	if (FileSystem::IsRemoteFile(path)) {
 		return true;
 	}
 	// Local files are not cached: the OS page cache already serves repeated reads
@@ -414,7 +414,7 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 
 BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, const string &path, idx_t nr_bytes) {
 	const bool spill = Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase()) &&
-	                   BaseFileSystem::IsRemoteFile(path) && buffer_manager.HasTemporaryDirectory() &&
+	                   FileSystem::IsRemoteFile(path) && buffer_manager.HasTemporaryDirectory() &&
 	                   nr_bytes >= buffer_manager.GetBlockAllocSize();
 	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, !spill);
 }

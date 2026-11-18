@@ -67,8 +67,9 @@ TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// FIXME: not yet
 	{
 		DuckDB db(nullptr);
-		auto file_system = make_uniq<VirtualFileSystem>();
-		REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
+		VirtualFileSystem file_system;
+		BoundFileSystem bound_fs(file_system, nullptr);
+		REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(bound_fs));
 	}
 	// but we can set another value
 	{
@@ -120,9 +121,10 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("RESET threads");
-	auto file_system = make_uniq<VirtualFileSystem>();
-	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(*file_system));
-	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
+	VirtualFileSystem file_system;
+	BoundFileSystem bound_fs(file_system, nullptr);
+	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(bound_fs));
+	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(bound_fs));
 }
 
 #ifndef DUCKDB_NO_THREADS

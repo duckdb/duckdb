@@ -224,7 +224,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_path_is_remote(duckdb_v2_file_system_handl
 	DUCKDB_CHECK_STR_ARG(path, path_length);
 	DUCKDB_CHECK_ARG(out_is_remote);
 	return WithErrorHandler(err, [&]() {
-		*out_is_remote = duckdb::BaseFileSystem::IsRemoteFile(duckdb::string(Convert(path, path_length)));
+		*out_is_remote = duckdb::FileSystem::IsRemoteFile(duckdb::string(Convert(path, path_length)));
 	});
 }
 

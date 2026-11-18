@@ -1,5 +1,6 @@
 #include "duckdb/main/context.hpp"
 #include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/time_point.hpp"
@@ -113,7 +114,7 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
-string BaseFileSystem::GetEnvVariable(const string &name) {
+string FileSystem::GetEnvVariable(const string &name) {
 	const char *env = getenv(name.c_str());
 	if (!env) {
 		return string();
@@ -130,13 +131,13 @@ string BaseFileSystem::PathSeparator(const string &path) {
 	return "/";
 }
 
-void BaseFileSystem::SetWorkingDirectory(const string &path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	if (chdir(path.c_str()) != 0) {
 		throw IOException("Could not change working directory!");
 	}
 }
 
-optional_idx BaseFileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -152,7 +153,7 @@ optional_idx BaseFileSystem::GetAvailableMemory() {
 	return max_memory;
 }
 
-optional_idx BaseFileSystem::GetAvailableDiskSpace(const string &path) {
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
 	struct statvfs vfs;
 
 	auto ret = statvfs(path.c_str(), &vfs);
@@ -170,7 +171,7 @@ optional_idx BaseFileSystem::GetAvailableDiskSpace(const string &path) {
 	return available_disk_space;
 }
 
-string BaseFileSystem::GetWorkingDirectory() {
+string FileSystem::GetWorkingDirectory() {
 	auto buffer = make_unsafe_uniq_array<char>(PATH_MAX);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
 	if (!ret) {
@@ -181,7 +182,7 @@ string BaseFileSystem::GetWorkingDirectory() {
 
 #else
 
-string BaseFileSystem::GetEnvVariable(const string &env) {
+string FileSystem::GetEnvVariable(const string &env) {
 	// first convert the environment variable name to the correct encoding
 	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
 	// use _wgetenv to get the value
@@ -239,14 +240,14 @@ string BaseFileSystem::PathSeparator(const string &path) {
 	}
 }
 
-void BaseFileSystem::SetWorkingDirectory(const string &path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	if (!SetCurrentDirectoryW(unicode_path.c_str())) {
 		throw IOException("Could not change working directory to \"%s\"", path);
 	}
 }
 
-optional_idx BaseFileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
@@ -261,7 +262,7 @@ optional_idx BaseFileSystem::GetAvailableMemory() {
 	return optional_idx();
 }
 
-optional_idx BaseFileSystem::GetAvailableDiskSpace(const string &path) {
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
 	ULARGE_INTEGER available_bytes, total_bytes, free_bytes;
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
@@ -273,7 +274,7 @@ optional_idx BaseFileSystem::GetAvailableDiskSpace(const string &path) {
 	return NumericCast<idx_t>(available_bytes.QuadPart);
 }
 
-string BaseFileSystem::GetWorkingDirectory() {
+string FileSystem::GetWorkingDirectory() {
 	idx_t count = GetCurrentDirectoryW(0, nullptr);
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
@@ -288,7 +289,7 @@ string BaseFileSystem::GetWorkingDirectory() {
 
 #endif
 
-optional_idx BaseFileSystem::GetFileDescriptorLimit() {
+optional_idx FileSystem::GetFileDescriptorLimit() {
 #if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
 	struct rlimit limit;
 	if (getrlimit(RLIMIT_NOFILE, &limit) != 0 || limit.rlim_cur == RLIM_INFINITY) {
@@ -303,7 +304,7 @@ optional_idx BaseFileSystem::GetFileDescriptorLimit() {
 #endif
 }
 
-idx_t BaseFileSystem::GetFileDescriptorShare(idx_t file_descriptor_limit) {
+idx_t FileSystem::GetFileDescriptorShare(idx_t file_descriptor_limit) {
 	return MaxValue<idx_t>(file_descriptor_limit / 8, 1);
 }
 
@@ -363,7 +364,7 @@ string BaseFileSystem::ExtractExtension(const string &path) {
 	return vec.back();
 }
 
-string BaseFileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
+string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
 		Value result;
@@ -375,14 +376,14 @@ string BaseFileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	return BaseFileSystem::GetEnvVariable("USERPROFILE");
+	return FileSystem::GetEnvVariable("USERPROFILE");
 #else
-	return BaseFileSystem::GetEnvVariable("HOME");
+	return FileSystem::GetEnvVariable("HOME");
 #endif
 }
 
 string BaseFileSystem::GetHomeDirectory() {
-	return GetHomeDirectory(nullptr);
+	return FileSystem::GetHomeDirectory(nullptr);
 }
 
 // Helper function to handle file:/ URLs
@@ -422,12 +423,12 @@ static idx_t GetFileUrlOffset(const string &path) {
 	return 0;
 }
 
-string BaseFileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
+string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
-		return GetHomeDirectory(opener) + path.substr(1);
+		return FileSystem::GetHomeDirectory(opener) + path.substr(1);
 	}
 	// handle file URIs
 	auto file_offset = GetFileUrlOffset(path);
@@ -438,7 +439,7 @@ string BaseFileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> o
 }
 
 string BaseFileSystem::ExpandPath(const string &path) {
-	return BaseFileSystem::ExpandPath(path, nullptr);
+	return FileSystem::ExpandPath(path, nullptr);
 }
 
 // LCOV_EXCL_START
@@ -608,7 +609,7 @@ bool BaseFileSystem::RemoveDirectoryExtended(const string &directory, const Remo
 	}
 }
 
-bool BaseFileSystem::IsDirectory(const OpenFileInfo &info) {
+bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	if (!info.extended_info) {
 		return false;
 	}
@@ -625,7 +626,7 @@ bool BaseFileSystem::ListFiles(const string &directory, const std::function<void
 		return ListFilesExtended(
 		    directory,
 		    [&](const OpenFileInfo &info) {
-			    bool is_dir = IsDirectory(info);
+			    bool is_dir = FileSystem::IsDirectory(info);
 			    callback(info.path, is_dir);
 		    },
 		    opener);
@@ -690,7 +691,7 @@ void BaseFileSystem::AbortFileWrite(FileHandle &handle) {
 	handle.Close();
 }
 
-bool BaseFileSystem::HasGlob(const string &str) {
+bool FileSystem::HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
 		switch (str[i]) {
 		case '*':
@@ -771,7 +772,7 @@ bool BaseFileSystem::CanHandleFile(const string &fpath) {
 unique_ptr<MultiFileList> BaseFileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
 	auto result = GlobFilesExtended(pattern, input);
 	if (result->IsEmpty()) {
-		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !FileSystem::HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (input.extension.empty()) {
 				throw InternalException("FALLBACK_GLOB requires an extension to be specified");
@@ -1026,12 +1027,12 @@ idx_t FileHandle::GetProgress() {
 	throw NotImplementedException("GetProgress is not implemented for this file handle");
 }
 
-bool BaseFileSystem::IsRemoteFile(const string &path) {
+bool FileSystem::IsRemoteFile(const string &path) {
 	string extension = "";
-	return IsRemoteFile(path, extension);
+	return FileSystem::IsRemoteFile(path, extension);
 }
 
-bool BaseFileSystem::IsRemoteFile(const string &path, string &extension) {
+bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 		if (StringUtil::StartsWith(path, entry.name)) {
 			extension = entry.extension;
@@ -1043,7 +1044,7 @@ bool BaseFileSystem::IsRemoteFile(const string &path, string &extension) {
 
 string BaseFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
 	// TODO: @benfleis - integrate this properly with Path (needs additional work)
-	if (IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
+	if (FileSystem::IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
 		// don't canonicalize remote paths
 		return path_p;
 	}

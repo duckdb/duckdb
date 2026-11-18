@@ -292,7 +292,7 @@ TEST_CASE("V2: several databases on one handle, with an explicit default", "[cap
 TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][db]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_environment_create(&env, nullptr);
-	auto fs = duckdb::BaseFileSystem::CreateLocal();
+	auto fs = duckdb::FileSystem::CreateLocal();
 	auto dir_a = duckdb::TestCreatePath("v2_attach_opts_a");
 	auto dir_b = duckdb::TestCreatePath("v2_attach_opts_b");
 	auto dir_c = duckdb::TestCreatePath("v2_attach_opts_c");

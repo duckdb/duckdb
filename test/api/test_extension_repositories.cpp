@@ -202,7 +202,7 @@ TEST_CASE("Test that adding trusted extension repositories must be opted into", 
 }
 
 static void WriteTextFile(const string &path, const string &contents) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto handle = fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	handle->Write(QueryContext(), (void *)contents.data(), contents.size(), 0);
 	handle->Sync();
@@ -211,7 +211,7 @@ static void WriteTextFile(const string &path, const string &contents) {
 TEST_CASE("Test that a stored repository file is only believed about a host it is named after", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_host_mismatch");
 	auto prefix = TestCreatePath("extension_repositories_host_mismatch_prefix");
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(repository_directory);
 	fs->CreateDirectory(prefix);
 	// a file that claims a host it is not named after was not written by DuckDB: under 'hosts_only' a stored host is
@@ -243,7 +243,7 @@ TEST_CASE("Test that a stored repository file is only believed about a host it i
 TEST_CASE("Test that a repository resolved from its host does not need the opt-in", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_from_host");
 	auto prefix = TestCreatePath("extension_repositories_from_host_prefix");
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(repository_directory);
 	fs->CreateDirectory(prefix);
 	// a repository as the host form stores it: resolving one needs httpfs and a live host, which this test has not,
@@ -381,7 +381,7 @@ static void WriteExtensionFile(BaseFileSystem &fs, const string &path, void *dat
 // Stage an extension plus a .info recording a user-provided origin, in the flat layout a bare load resolves. The
 // binary is a stub: these tests assert the origin handling, not a real load
 static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name, const string &repository_name) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
 	fs->CreateDirectoriesRecursive(dir);
 
@@ -427,7 +427,7 @@ TEST_CASE("Test that a user repository does not block an unsigned load", "[api]"
 
 // Stage a stub extension in the per-repository subfolder that INSTALL ... FROM a user-provided repository writes to
 static void StageUserRepoExtension(DatabaseInstance &db, const string &name, const string &repository_name) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	string dir = fs->JoinPath(ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db)), "repositories");
 	dir = fs->JoinPath(dir, repository_name);
 	fs->CreateDirectoriesRecursive(dir);
@@ -494,7 +494,7 @@ TEST_CASE("Test that a bare load names the user repository an extension is insta
 // per-repository subfolder of folder_repository. The binary is a stub: duckdb_extensions only reads the .info
 static void StageInstalledExtension(DatabaseInstance &db, const string &name, const string &folder_repository,
                                     const ExtensionInstallInfo &info) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
 	if (!folder_repository.empty()) {
 		dir = fs->JoinPath(fs->JoinPath(dir, "repositories"), folder_repository);
@@ -602,7 +602,7 @@ TEST_CASE("Test that duckdb_extensions lists extensions installed from user-prov
 	REQUIRE(ExtensionRows(con, "invalid_ext").empty());
 
 	// an unreadable repository file does not fail the listing, nor hide any installed extension
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto broken_path = fs->JoinPath(repository_directory, "broken.duckdb_extension.repo.json");
 	{
 		auto handle = fs->OpenFile(broken_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -627,7 +627,7 @@ TEST_CASE("Test that duckdb_extensions lists extensions installed from user-prov
 static string CopyInstalledExtension(DatabaseInstance &db, const string &source, const string &name,
                                      const string &folder_repository, const string &repository_name,
                                      const string &version) {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	string dir = ExtensionHelper::ExtensionDirectory(db, FileSystem::GetLocal(db));
 	if (!folder_repository.empty()) {
 		dir = fs->JoinPath(fs->JoinPath(dir, "repositories"), folder_repository);
@@ -665,7 +665,7 @@ TEST_CASE("Test that duckdb_extensions marks the loaded copy", "[api]") {
 	// short names: the test name is part of the path, and LoadLibrary rejects paths over MAX_PATH on Windows
 	auto repository_directory = TestCreatePath("lc_repo");
 	auto extension_directory = TestCreatePath("lc_ext");
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto demo = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
 	if (!fs->FileExists(demo)) {
 		return;
@@ -751,7 +751,7 @@ static vector<string> UpdateRows(Connection &con, const string &statement) {
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
 	if (!fs->FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");
@@ -827,7 +827,7 @@ TEST_CASE("Test UPDATE EXTENSIONS with user-provided repositories", "[api]") {
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
 	if (!fs->FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");
@@ -900,7 +900,7 @@ TEST_CASE("Test UPDATE EXTENSIONS keeps the extension directory", "[api]") {
 }
 
 TEST_CASE("Test UPDATE EXTENSIONS under 'hosts_only'", "[api]") {
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto demo_extension = fs->JoinPath(TestBuildDirectory(), "test/extension/loadable_extension_demo.duckdb_extension");
 	if (!fs->FileExists(demo_extension)) {
 		WARN("loadable_extension_demo is not built, skipping");

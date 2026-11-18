@@ -1,4 +1,5 @@
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/common/base_file_system.hpp"
@@ -140,14 +141,14 @@ idx_t ReadAheadOpenFile::Count() {
 static idx_t GetOpenFileBudget(ClientContext &context) {
 	idx_t file_descriptor_limit = Settings::Get<DebugFileDescriptorLimitSetting>(context);
 	if (file_descriptor_limit == 0) {
-		auto system_limit = BaseFileSystem::GetFileDescriptorLimit();
+		auto system_limit = FileSystem::GetFileDescriptorLimit();
 		if (!system_limit.IsValid()) {
 			return NumericLimits<idx_t>::Maximum();
 		}
 		file_descriptor_limit = system_limit.GetIndex();
 	}
 	// files hold their descriptors until their readers close, so only use a share of the limit
-	return BaseFileSystem::GetFileDescriptorShare(file_descriptor_limit);
+	return FileSystem::GetFileDescriptorShare(file_descriptor_limit);
 }
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,

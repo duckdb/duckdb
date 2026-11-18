@@ -222,7 +222,7 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	// base path
 	equivalent_paths.push_back(test_path);
 	// abs path
-	equivalent_paths.push_back(fs.JoinPath(fs.GetWorkingDirectory(), test_path));
+	equivalent_paths.push_back(fs.JoinPath(FileSystem::GetWorkingDirectory(), test_path));
 	// dot dot
 	auto dot_dot = TestCreatePath(fs.JoinPath("subdir", "..", "instance_cache_canonicalization.db"));
 	equivalent_paths.push_back(dot_dot);
@@ -267,7 +267,7 @@ TEST_CASE("Test database file path manager absolute path", "[api][.]") {
 	Connection con(db);
 
 	auto test_db = TestCreatePath("test_same_db_attach.db");
-	auto test_db_abs = fs.JoinPath(fs.GetWorkingDirectory(), test_db);
+	auto test_db_abs = fs.JoinPath(FileSystem::GetWorkingDirectory(), test_db);
 
 	// we can attach this once
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db + "' AS db1"));

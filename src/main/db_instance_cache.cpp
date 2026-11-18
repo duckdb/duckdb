@@ -13,8 +13,8 @@ DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DatabaseInstance> &insta
 DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
-static string GetDBAbsolutePath(const string &database_p, BaseFileSystem &fs) {
-	auto database = BaseFileSystem::ExpandPath(database_p, nullptr);
+static string GetDBAbsolutePath(const string &database_p, FileSystem &&fs) {
+	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
 	}
@@ -35,10 +35,10 @@ static string GetCacheKey(const string &database_p, const DBConfig &config) {
 	// but it can apply more transformations to the path if necessary
 	string abs_database_path;
 	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
+		abs_database_path = GetDBAbsolutePath(database_p, BoundFileSystem(*config.file_system, nullptr));
 	} else {
-		auto tmp_fs = BaseFileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database_p, *tmp_fs);
+		auto tmp_fs = FileSystem::CreateLocal();
+		abs_database_path = GetDBAbsolutePath(database_p, BoundFileSystem(*tmp_fs, nullptr));
 	}
 #if defined(_WIN32) || defined(__APPLE__)
 	return StringUtil::Lower(abs_database_path);
@@ -115,10 +115,10 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	D_ASSERT(db_instances_lock.owns_lock());
 	string abs_database_path;
 	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
+		abs_database_path = GetDBAbsolutePath(database, BoundFileSystem(*config.file_system, nullptr));
 	} else {
-		auto tmp_fs = BaseFileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
+		auto tmp_fs = FileSystem::CreateLocal();
+		abs_database_path = GetDBAbsolutePath(database, BoundFileSystem(*tmp_fs, nullptr));
 	}
 	// Creates new instance
 	string instance_path = abs_database_path;

@@ -278,26 +278,10 @@ public:
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Abandon an incomplete write represented by this file handle.
 	DUCKDB_API virtual void AbortFileWrite(FileHandle &handle);
-	//! Sets the working directory
-	DUCKDB_API static void SetWorkingDirectory(const string &path);
-	//! Gets the working directory
-	DUCKDB_API static string GetWorkingDirectory();
-	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
 	//! Gets the users home directory
 	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
-	DUCKDB_API static string ExpandPath(const string &path, optional_ptr<FileOpener> opener);
-	//! Expands a given path, including e.g. expanding the home directory of the user
 	DUCKDB_API virtual string ExpandPath(const string &path);
-	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
-	DUCKDB_API static optional_idx GetAvailableMemory();
-	//! Returns the space available on the disk. Returns DConstants::INVALID_INDEX if the information was not available.
-	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
-	//! Returns the soft limit on open file descriptors, or an invalid index when it is unlimited or unknown.
-	DUCKDB_API static optional_idx GetFileDescriptorLimit();
-	//! Returns the share of the file descriptor limit that one consumer of descriptors may hold open.
-	DUCKDB_API static idx_t GetFileDescriptorShare(idx_t file_descriptor_limit);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is is an absolute path
@@ -318,11 +302,6 @@ public:
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API string ExtractName(const string &path);
 
-	//! Returns the value of an environment variable - or the empty string if it is not set
-	DUCKDB_API static string GetEnvVariable(const string &name);
-
-	//! Whether there is a glob in the string
-	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
@@ -372,26 +351,17 @@ public:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
 
-	//! Create a LocalFileSystem.
-	DUCKDB_API static unique_ptr<BaseFileSystem> CreateLocal();
-
 	//! Whether this is a LocalFileSystem instance.
 	DUCKDB_API virtual bool IsLocalFileSystem() const;
 
 	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 
-	//! Whether or not a file is remote or local, based only on file path
-	DUCKDB_API static bool IsRemoteFile(const string &path);
-	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
-
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 	DUCKDB_API virtual vector<string> GetDisabledFileSystems();
 	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
 	//! Check if the filesystem that would handle this path is disabled
 	DUCKDB_API virtual bool IsDisabledForPath(const string &path);
-
-	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
 	//! Canonicalize a path
 	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener = nullptr);

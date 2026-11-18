@@ -1,3 +1,4 @@
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
@@ -12,7 +13,7 @@ static string GetSeparator(const string_t &input) {
 	string option = input.GetString();
 
 	// system's path separator
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto system_sep = fs->PathSeparator(option);
 
 	string separator;

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -41,7 +42,7 @@ public:
 	string cgroup_path;
 };
 
-static vector<CGroupEntry> ParseGroupEntries(BaseFileSystem &fs) {
+static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	vector<CGroupEntry> result;
 	if (!fs.FileExists(CGROUP_PATH)) {
 		return result;
@@ -87,7 +88,7 @@ static vector<CGroupEntry> ParseGroupEntries(BaseFileSystem &fs) {
 	return result;
 }
 
-static optional_idx GetCPUCountV2(const string &cgroup_path, BaseFileSystem &fs) {
+static optional_idx GetCPUCountV2(const string &cgroup_path, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup%s/cpu.max";
 
 	auto cpu_max = StringUtil::Format(CPU_MAX, cgroup_path);
@@ -117,7 +118,7 @@ static optional_idx GetCPUCountV2(const string &cgroup_path, BaseFileSystem &fs)
 	return optional_idx();
 }
 
-static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs) {
+static optional_idx GetCPUCountV1(const string &cgroup_path, FileSystem &fs) {
 	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu%s/cpu.cfs_quota_us";
 	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu%s/cpu.cfs_period_us";
 
@@ -159,7 +160,7 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs)
 	return optional_idx();
 }
 
-static optional_idx ReadMemoryLimit(BaseFileSystem &fs, const string &file_path) {
+static optional_idx ReadMemoryLimit(FileSystem &fs, const string &file_path) {
 	if (!fs.FileExists(file_path)) {
 		return optional_idx();
 	}
@@ -179,7 +180,7 @@ static optional_idx ReadMemoryLimit(BaseFileSystem &fs, const string &file_path)
 
 } // namespace
 
-optional_idx CGroups::GetMemoryLimit(BaseFileSystem &fs) {
+optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	static constexpr const char *MEMORY_LIMIT_IN_BYTES = "/sys/fs/cgroup/memory%s/memory.limit_in_bytes";
 	static constexpr const char *MEMORY_MAX = "/sys/fs/cgroup%s/memory.max";
 
@@ -236,7 +237,7 @@ optional_idx CGroups::GetMemoryLimit(BaseFileSystem &fs) {
 	return optional_idx();
 }
 
-idx_t CGroups::GetCPULimit(BaseFileSystem &fs, idx_t physical_cores) {
+idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	optional_idx root_entry;
 	optional_idx cpu_entry;
 
@@ -288,11 +289,11 @@ idx_t CGroups::GetCPULimit(BaseFileSystem &fs, idx_t physical_cores) {
 
 #else
 
-optional_idx CGroups::GetMemoryLimit(BaseFileSystem &fs) {
+optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	return optional_idx();
 }
 
-idx_t CGroups::GetCPULimit(BaseFileSystem &fs, idx_t physical_cores) {
+idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	return physical_cores;
 }
 

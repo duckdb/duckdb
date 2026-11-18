@@ -64,7 +64,7 @@ bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
 		return false;
 	}
 	D_ASSERT(caching_mode == CachingMode::CACHE_REMOTE_ONLY);
-	return BaseFileSystem::IsRemoteFile(path);
+	return FileSystem::IsRemoteFile(path);
 }
 
 CachingFileHandle *CachingFileSystemWrapper::GetCachingHandleIfPossible(FileHandle &handle) {

@@ -35,7 +35,7 @@ void GatheredMetrics::InitTrackedMetrics(const vector<string> &patterns) {
 		if (pattern == "*") {
 			track_all = true;
 			return;
-		} else if (!BaseFileSystem::HasGlob(pattern)) {
+		} else if (!FileSystem::HasGlob(pattern)) {
 			tracked_exact.insert(pattern);
 		} else if (IsPrefixPattern(pattern)) {
 			tracked_prefixes.insert(pattern.substr(0, pattern.size() - 1));

@@ -17,7 +17,7 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	Connection con(db);
 
 	// what an install writes before it moves the files in place, first the extension and then its .info
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	auto directory = ExtensionHelper::ExtensionDirectory(*db.instance, FileSystem::GetLocal(*db.instance));
 	auto temp_path = fs->JoinPath(directory, "in_progress.duckdb_extension.tmp-0b0e7d6c-5a0e-4e76-9d1f-"
 	                                         "3c1a5e9b2f40.duckdb_extension");

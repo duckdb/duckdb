@@ -4222,12 +4222,12 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	// This is a relative path fragment, not a file to resolve through the VFS. Resolving it
 	// would require the local filesystem even when the COPY target is remote.
 	auto parsed_path = Path::FromString(partition_path);
-	if (parsed_path.IsAbsolute() || BaseFileSystem::IsRemoteFile(partition_path)) {
+	if (parsed_path.IsAbsolute() || FileSystem::IsRemoteFile(partition_path)) {
 		throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
 		                            partition_path);
 	}
 	auto separator = fs.PathSeparator(result.path);
-	if (!BaseFileSystem::IsRemoteFile(result.path)) {
+	if (!FileSystem::IsRemoteFile(result.path)) {
 		partition_path = fs.ConvertSeparators(partition_path);
 	}
 	vector<string> components;

@@ -67,7 +67,7 @@ void CV2Instance::Attach(const string &path, const Identifier &name,
 		}
 		// The host opening a file is not external access: allow it the way the main database path is allowed.
 		if (options.db_type.empty() && !DBConfig::IsInMemoryDatabase(info.path.c_str()) &&
-		    !BaseFileSystem::IsRemoteFile(info.path) && !Settings::Get<EnableExternalAccessSetting>(instance)) {
+		    !FileSystem::IsRemoteFile(info.path) && !Settings::Get<EnableExternalAccessSetting>(instance)) {
 			instance.config.AddAllowedDatabasePath(info.path);
 		}
 		auto &db_manager = DatabaseManager::Get(instance);

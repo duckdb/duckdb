@@ -8,7 +8,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	constexpr idx_t VALUE_COUNT = 10000;
 	idx_t expected_sum = 0;
 
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	auto config = GetTestConfig();
 	duckdb::unique_ptr<DuckDB> database;
 	duckdb::unique_ptr<QueryResult> result;

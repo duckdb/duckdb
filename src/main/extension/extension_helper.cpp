@@ -435,7 +435,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 
 void ExtensionHelper::AutoLoadExtensionForPath(DatabaseInstance &db, const string &path, const string &path_kind) {
 	string extension_name;
-	if (!BaseFileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
+	if (!FileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
 		return;
 	}
 	if (!CanAutoloadExtension(db, extension_name) || !Settings::Get<AutoloadKnownExtensionsSetting>(db)) {

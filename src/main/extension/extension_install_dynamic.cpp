@@ -341,7 +341,7 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 	}
 
 	QueryContext query_context(context);
-	auto local_fs = BaseFileSystem::CreateLocal();
+	auto local_fs = FileSystem::CreateLocal();
 	BoundFileSystem fs(*local_fs, nullptr);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
@@ -459,14 +459,14 @@ unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, 
 	fs.TryRemoveFile(temp_path);
 
 	// Install extension from local, direct url
-	if (ExtensionHelper::IsFullPath(extension) && !BaseFileSystem::IsRemoteFile(extension)) {
+	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
 		auto &local_fs = FileSystem::GetLocal(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
-	if (options.repository && !BaseFileSystem::IsRemoteFile(options.repository->path)) {
+	if (options.repository && !FileSystem::IsRemoteFile(options.repository->path)) {
 		auto &local_fs = FileSystem::GetLocal(db);
 		return InstallFromRepository(db, local_fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);

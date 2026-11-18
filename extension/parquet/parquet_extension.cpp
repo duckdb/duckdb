@@ -974,7 +974,7 @@ static unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, Repla
 	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 
-	if (!BaseFileSystem::HasGlob(table_name)) {
+	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}

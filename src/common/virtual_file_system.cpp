@@ -110,7 +110,7 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::ExtractSubSystem(const string
 	return nullptr;
 }
 
-VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(BaseFileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<BaseFileSystem> &&inner)

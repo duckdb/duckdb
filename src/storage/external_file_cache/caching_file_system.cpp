@@ -575,7 +575,7 @@ bool CachingFileHandle::Validate() const {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;
 	case CacheValidationMode::VALIDATE_REMOTE:
-		return BaseFileSystem::IsRemoteFile(path.path);
+		return FileSystem::IsRemoteFile(path.path);
 	case CacheValidationMode::NO_VALIDATION:
 		return false;
 	default:
@@ -593,7 +593,7 @@ bool CachingFileHandle::CanSeek() {
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
-	return BaseFileSystem::IsRemoteFile(path.path);
+	return FileSystem::IsRemoteFile(path.path);
 }
 
 bool CachingFileHandle::OnDiskFile() {

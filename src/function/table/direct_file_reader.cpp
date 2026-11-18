@@ -64,7 +64,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 	unique_ptr<FileHandle> file_handle = nullptr;
 	optional<FileMetadata> file_metadata;
-	const bool is_remote = BaseFileSystem::IsRemoteFile(file.path);
+	const bool is_remote = FileSystem::IsRemoteFile(file.path);
 
 	// Remote metadata is obtained from the opened handle so it can use the remote file cache and validators.
 	if (state.requires_file_open || (state.requires_file_metadata && is_remote)) {

@@ -25,7 +25,7 @@ static void test_in_memory_initialization(string dbdir) {
 	// Exercise the default ".tmp" path without sharing it with concurrent unittest processes.
 	// Restore the working directory after the database closes, including on assertion failure.
 	InMemoryTestDirectory test_directory;
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<DuckDB> db;
 	duckdb::unique_ptr<Connection> con;
 	string in_memory_tmp = ".tmp";

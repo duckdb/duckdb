@@ -272,7 +272,7 @@ static bool TryReadSecretName(FileSystem &fs, const string &path, string &name) 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
                                                const string &secret_path_p)
     : CatalogSetSecretStorage(db_p, name_p, LOCAL_FILE_STORAGE_OFFSET), files(make_shared_ptr<PersistentSecretFiles>()),
-      secret_path(BaseFileSystem::ExpandPath(secret_path_p, nullptr)) {
+      secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
 	persistent = true;
 
 	// Check existence of persistent secret dir

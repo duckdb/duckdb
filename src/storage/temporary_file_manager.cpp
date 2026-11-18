@@ -636,7 +636,7 @@ optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
 
 static idx_t GetDefaultMax(const string &path) {
 	D_ASSERT(!path.empty());
-	auto disk_space = BaseFileSystem::GetAvailableDiskSpace(path);
+	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
 	// Use the available disk space
 	// We have made sure that the file exists before we call this, it shouldn't fail
 	if (!disk_space.IsValid()) {

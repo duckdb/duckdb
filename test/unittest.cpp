@@ -306,7 +306,7 @@ static bool TryReadExactSQLLogicTestFilter(const vector<string> &input_files, ve
 	if (input_files.empty()) {
 		return false;
 	}
-	auto fs = BaseFileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
 	unordered_set<string> seen_paths;
 	for (auto &input_file : input_files) {
 		std::ifstream file(input_file.c_str());

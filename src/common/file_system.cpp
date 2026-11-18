@@ -148,7 +148,7 @@ unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInp
 unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
 	auto result = Glob(pattern, input);
 	if (result->IsEmpty()) {
-		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !BaseFileSystem::HasGlob(pattern)) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !FileSystem::HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (input.extension.empty()) {
 				throw InternalException("FALLBACK_GLOB requires an extension to be specified");
@@ -176,11 +176,11 @@ string FileSystem::CanonicalizePath(const string &path) {
 }
 
 string FileSystem::GetHomeDirectory() {
-	return BaseFileSystem::GetHomeDirectory(GetOpener());
+	return FileSystem::GetHomeDirectory(GetOpener());
 }
 
 string FileSystem::ExpandPath(const string &path) {
-	return BaseFileSystem::ExpandPath(path, GetOpener());
+	return FileSystem::ExpandPath(path, GetOpener());
 }
 
 void FileSystem::VerifyCanAccessFileInternal(const string &path, FileType type) {

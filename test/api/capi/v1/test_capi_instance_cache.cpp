@@ -99,7 +99,7 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 	// Check that file on disk is created in user-specified case
 	// independently whether FS is case-sensitive or not.
 	// FS access can be eventually changed to CAPI FS.
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	string work_dir = TestDirectoryPath();
 	auto instance_cache = duckdb_create_instance_cache();
 

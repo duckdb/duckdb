@@ -5,7 +5,7 @@
 using namespace duckdb;
 
 TEST_CASE("Test functioning of checksum", "[storage]") {
-	duckdb::unique_ptr<BaseFileSystem> fs = BaseFileSystem::CreateLocal();
+	duckdb::unique_ptr<BaseFileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<DuckDB> database;
 	auto storage_database = TestCreatePath("checksum_test");
 	auto config = GetTestConfig();

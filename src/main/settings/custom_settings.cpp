@@ -98,10 +98,12 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 //! options can be configured before that, so fall back to a temporary local filesystem.
 static idx_t GetAvailableSystemMemory(DBConfig &config) {
 	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
+		BoundFileSystem fs(*config.file_system, nullptr);
+		return DBConfig::GetSystemAvailableMemory(fs);
 	}
-	auto local_fs = BaseFileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
+	auto local_fs = FileSystem::CreateLocal();
+	BoundFileSystem fs(*local_fs, nullptr);
+	return DBConfig::GetSystemAvailableMemory(fs);
 }
 
 } // namespace
@@ -1166,7 +1168,7 @@ void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!input.IsNull()) {
 		auto new_home_directory = input.ToString();
-		if (BaseFileSystem::IsRemoteFile(new_home_directory)) {
+		if (FileSystem::IsRemoteFile(new_home_directory)) {
 			throw InvalidInputException("Cannot set the home directory to a remote path");
 		}
 	}
@@ -1210,7 +1212,7 @@ void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Val
 }
 
 void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
-	config.options.http_proxy = BaseFileSystem::GetEnvVariable("HTTP_PROXY");
+	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
 }
 
 //===----------------------------------------------------------------------===//
@@ -1736,7 +1738,8 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 }
 
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	BoundFileSystem fs(*config.file_system, nullptr);
+	idx_t new_maximum_threads = config.GetSystemMaxThreads(fs);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
@@ -1775,7 +1778,8 @@ void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+	BoundFileSystem fs(*config.file_system, nullptr);
+	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(fs);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
