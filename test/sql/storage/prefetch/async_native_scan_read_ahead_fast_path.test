@@ -1,0 +1,58 @@
+# name: test/sql/storage/prefetch/async_native_scan_read_ahead_fast_path.test
+# description: Read-ahead decodes buffered row groups without queueing jobs, reads cold ones ahead and keeps the order
+# group: [prefetch]
+
+load {TEST_DIR}/async_native_scan_read_ahead_fast_path.db
+
+# h is uncompressed, so every row group has blocks of its own
+statement ok
+CREATE TABLE integers AS SELECT range AS i, hash(range) AS h FROM range(2000000);
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+SET threads=8
+
+statement ok
+SET storage_block_prefetch='debug_force_always'
+
+# PushJob logs ReadAheadBudget per queued job, ScheduleJobIO logs AsyncTaskSchedule for the READ_AHEAD pool
+statement ok
+CALL enable_logging(['ReadAheadBudget', 'AsyncTaskSchedule'], storage='memory', level='debug')
+
+# buffer the first half
+query I
+SELECT sum(h) FROM integers WHERE i < 1000000
+----
+9226669975324756220672671
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# the buffered row groups skip the queue, the cold ones are read ahead, rows keep their order
+query I
+SELECT count(*) FROM (SELECT i, h, row_number() OVER () AS rn FROM integers) WHERE i + 1 <> rn OR h <> hash(i)
+----
+0
+
+query II
+SELECT count(*) FILTER (WHERE type = 'ReadAheadBudget') < (SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('integers')), count(*) FILTER (WHERE type = 'AsyncTaskSchedule' AND message LIKE '%READ_AHEAD%') > 0 FROM duckdb_logs
+----
+true	true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# with everything buffered no job is queued and nothing is read
+query I
+SELECT sum(h) FROM integers
+----
+18442665268270631852892036
+
+query II
+SELECT count(*) FILTER (WHERE type = 'ReadAheadBudget'), count(*) FILTER (WHERE type = 'AsyncTaskSchedule') FROM duckdb_logs
+----
+0	0

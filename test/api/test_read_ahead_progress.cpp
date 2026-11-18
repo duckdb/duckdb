@@ -290,7 +290,7 @@ TEST_CASE("A job that is not queued holds its budget charge until it settles", "
 	REQUIRE(executions == 1);
 	REQUIRE(read_ahead->AcquireJob(*con.context, input, produce, job) == ScanReadAheadAcquire::ACQUIRED);
 	REQUIRE(job->batch_index == 1);
-	REQUIRE(produced >= 2);
+	REQUIRE(produced > 2);
 	job.reset();
 
 	// the queued jobs keep their order and every one is consumed
