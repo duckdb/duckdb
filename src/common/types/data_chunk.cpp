@@ -1,6 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
@@ -356,6 +357,14 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 		auto type = list.ReadElement<LogicalType>();
 		types.push_back(type);
 	});
+
+	for (auto &type : types) {
+		if (!type.HasPhysicalType()) {
+			// the type is named by its id: it can lack the type info that ToString reads
+			throw SerializationException("Failed to deserialize data chunk: a vector cannot hold the type %s",
+			                             EnumUtil::ToString(type.id()));
+		}
+	}
 
 	// initialize the data chunk
 	D_ASSERT(!types.empty());

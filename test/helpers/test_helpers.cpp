@@ -11,6 +11,12 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -93,6 +99,25 @@ duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> 
 	}
 	return duckdb::make_uniq<duckdb::QueryResult>(statement_type, properties, names, std::move(collection),
 	                                              client_properties);
+}
+
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary) {
+	// construct the `SELECT * FROM <table_ref>` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(table_ref);
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	// construct the `CREATE [OR REPLACE] [TEMP] VIEW <name> AS` statement using the select statement
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
+	info->temporary = temporary;
+	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
+	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto statement = make_uniq<CreateStatement>();
+	statement->info = std::move(info);
+	// Execute the CREATE VIEW
+	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
