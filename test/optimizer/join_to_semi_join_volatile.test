@@ -283,11 +283,11 @@ select distinct t.x from (select a.x from a, p where a.y > p.lo) t left join b o
 7
 NULL
 
-# the sequence was advanced as often as without the optimizer
+# the sequence was advanced as often as without the optimizer: the LEFT join stays, its condition is volatile
 query I
 select nextval('seq');
 ----
-1
+34
 
 # a volatile condition of the SEMI join whose right side the region is
 statement ok
