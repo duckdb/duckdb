@@ -23,7 +23,11 @@
 //   that can throw (a cast that can fail, arithmetic that can overflow) on other rows than before, because the
 //   SEMI join changes which joins of the region run first and which relations are read to the end. That is within
 //   what the join order may do anyway, but a query that ran must not start to fail because of this rewrite, nor
-//   the other way round;
+//   the other way round. For the same reason no relation of the region does more than return rows: none modifies
+//   data (an INSERT, UPDATE, DELETE or MERGE INTO read through a CTE) and none scans a table function that declares
+//   itself VOLATILE (duckdb_memory(), glob()). The SEMI join reads such a relation once in full, as the INNER join
+//   did, so the rewrite changes neither its effects nor its rows; it is left alone all the same, as join elimination
+//   leaves it, so that what a query does besides returning rows never depends on this rewrite;
 // - repeats of the region's rows do not matter: the parent chain ignores duplicates (a GROUP BY whose aggregates
 //   ignore them, LogicalAggregate::IgnoresDuplicates: min, max, bool_and, bool_or and DISTINCT ones; a DISTINCT; the
 //   right side of a SEMI / ANTI / MARK join, through projections, filters and joins without volatile expressions), or R
@@ -63,6 +67,7 @@
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
@@ -77,8 +82,8 @@ public:
 	}
 
 	void Initialize(LogicalOperator &plan) {
-		// the CTEs whose definition holds an expression that is volatile or can throw, directly or through another
-		// CTE: a fixpoint, a definition may read a CTE that is found later
+		// the CTEs whose definition is unstable (IsUnstable), directly or through another CTE: a fixpoint, a
+		// definition may read a CTE that is found later
 		vector<reference<LogicalOperator>> ctes;
 		CollectCTEs(plan, ctes);
 		for (bool changed = true; changed;) {
@@ -114,7 +119,7 @@ public:
 		table_set_t tables;
 		bool one_row;
 		bool at_most_one_row;
-		//! Whether an expression below the relation is volatile or can throw
+		//! Whether the relation is unstable (IsUnstable)
 		bool unstable;
 	};
 
@@ -344,11 +349,28 @@ public:
 		}
 	}
 
-	//! Whether an expression of `op` or below it, or of the definition of a CTE read there, is volatile or can throw
+	//! Whether evaluating `op` does more than return rows, or may fail: an expression of it or below it, or of the
+	//! definition of a CTE read there, is volatile or can throw; an operator modifies data; a scan runs a table
+	//! function that declares itself VOLATILE
 	bool IsUnstable(const LogicalOperator &op) const {
-		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF &&
-		    unstable_ctes.count(op.Cast<LogicalCTERef>().cte_index) > 0) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_CTE_REF:
+			if (unstable_ctes.count(op.Cast<LogicalCTERef>().cte_index) > 0) {
+				return true;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_GET:
+			if (op.Cast<LogicalGet>().function.stability == FunctionStability::VOLATILE) {
+				return true;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_INSERT:
+		case LogicalOperatorType::LOGICAL_DELETE:
+		case LogicalOperatorType::LOGICAL_UPDATE:
+		case LogicalOperatorType::LOGICAL_MERGE_INTO:
 			return true;
+		default:
+			break;
 		}
 		bool result = false;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expr) {
@@ -455,7 +477,8 @@ public:
 		}
 		for (auto &leaf : leaves) {
 			// the same for the expressions inside the relations: which of them run to the end, and which stop
-			// early because another one turned out empty, depends on how the region is joined
+			// early because another one turned out empty, depends on how the region is joined; and a relation that
+			// modifies data or scans a VOLATILE table function stays where it is
 			if (leaf.unstable) {
 				return false;
 			}
@@ -636,7 +659,7 @@ public:
 	ClientContext &context;
 	//! The materialized CTEs seen so far whose definition holds at most one row
 	table_set_t single_row_ctes;
-	//! The CTEs whose definition holds an expression that is volatile or can throw
+	//! The CTEs whose definition is unstable (IsUnstable)
 	table_set_t unstable_ctes;
 };
 

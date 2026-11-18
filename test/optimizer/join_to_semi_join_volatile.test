@@ -1,5 +1,5 @@
 # name: test/optimizer/join_to_semi_join_volatile.test
-# description: join_to_semi_join does not change how often a volatile expression is evaluated: in its region, or between the region and a consumer that ignores duplicates
+# description: join_to_semi_join does not change how often a volatile expression is evaluated: in its region, or between the region and a consumer that ignores duplicates; and it leaves a relation that modifies data or scans a VOLATILE table function alone
 # group: [optimizer]
 
 statement ok
@@ -25,6 +25,9 @@ create table s as select * from (values ('1'), ('20'), ('x'), (NULL)) t(v);
 
 statement ok
 create sequence seq;
+
+statement ok
+create table log_t (lo integer);
 
 # a volatile predicate of the region is evaluated once per row of the region
 query II
@@ -95,6 +98,30 @@ physical_plan	<!REGEX>:.*Join Type: SEMI.*
 # and as the relation they filter
 query II
 explain with d as materialized (select x, y, nextval('seq') as n from a) select distinct d.x from d, p where d.n > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a materialized CTE whose definition modifies data: an INSERT ... RETURNING as the relation the predicates read
+query II
+explain with d as materialized (insert into log_t select lo from p returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# an UPDATE ... RETURNING read through a plain CTE (a CTE that modifies data runs to completion either way)
+query II
+explain with d as (update log_t set lo = 0 returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a scan of a table function that declares itself VOLATILE: as the relation the predicates read
+query II
+explain select distinct a.x from a, duckdb_memory() m where a.y > least(m.memory_usage_bytes, 0);
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# and as the relation they filter
+query II
+explain select distinct length(m.tag) > 0 as b from duckdb_memory() m, p where length(m.tag) > p.lo;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
 
@@ -343,6 +370,62 @@ query I
 select nextval('seq');
 ----
 11
+
+# a materialized CTE whose definition modifies data: the INSERT runs once either way, its RETURNING rows are the
+# relation the predicates read
+statement ok
+delete from log_t;
+
+query I rowsort
+with d as materialized (insert into log_t select lo from p returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the rows of p were inserted once
+query I
+select count(*) from log_t;
+----
+7
+
+# an UPDATE ... RETURNING read through a plain CTE, which runs to completion as well
+query I rowsort
+with d as (update log_t set lo = 0 returning lo) select distinct a.x from a, d where a.y > d.lo;
+----
+1
+2
+3
+6
+7
+NULL
+
+# every row was updated once
+query II
+select count(*), count(*) filter (where lo = 0) from log_t;
+----
+7	7
+
+# a scan of a table function that declares itself VOLATILE runs once in either plan; the predicate does not depend on
+# the live state, so that the result can be pinned
+query I rowsort
+select distinct a.x from a, duckdb_memory() m where a.y > least(m.memory_usage_bytes, 0);
+----
+1
+2
+3
+6
+7
+NULL
+
+# and as the relation the predicates filter
+query I
+select distinct length(m.tag) > 0 as b from duckdb_memory() m, p where length(m.tag) > p.lo;
+----
+true
 
 endloop
 
