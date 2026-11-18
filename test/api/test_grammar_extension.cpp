@@ -2127,10 +2127,9 @@ TEST_CASE("Deep leading list chains retain heap-owned state through exceptions",
 }
 
 static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
-	vector<MatcherToken> tokens;
-	ParserTokenizerBehavior behavior(sql, tokens);
+	ParserTokenizerBehavior behavior(sql);
 	grammar.GetTokenizer().TokenizeInput(behavior);
-	return tokens;
+	return std::move(behavior.tokens);
 }
 
 TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]") {
@@ -3525,4 +3524,90 @@ TEST_CASE("Generated list finalization validates its tree before consuming child
 			REQUIRE(*values == expected);
 		}
 	}
+}
+
+//! SOURCE_TEXT (<select>) returns the select's text as written, which only the query text itself still contains.
+class SourceTextTransformProcess final : public TransformProcess {
+public:
+	SourceTextTransformProcess(PEGTransformer &transformer_p, ParseResult &parse_result_p)
+	    : transformer(transformer_p), parse_result(parse_result_p) {
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		auto source = transformer.token_iterator.Source();
+		if (!source) {
+			throw InternalException("SOURCE_TEXT needs the query text");
+		}
+		auto &list = parse_result.Cast<ListParseResult>();
+		auto open = list.GetChild(1).GetOffset().GetIndex() + 1;
+		auto close = list.GetChild(3).GetOffset().GetIndex();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(ConstantExpression::String(source->substr(open, close - open)));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		unique_ptr<SQLStatement> statement = make_uniq<SelectStatement>();
+		statement->Cast<SelectStatement>().node = std::move(select_node);
+		return TransformStep::Complete(transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(statement)));
+	}
+
+private:
+	PEGTransformer &transformer;
+	ParseResult &parse_result;
+};
+
+class SourceTextGrammarExtension final : public GrammarExtension {
+public:
+	SourceTextGrammarExtension() : GrammarExtension("source_text", "SOURCE_TEXT (<select>)") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule(
+		    "SourceTextStatement <- 'SOURCE_TEXT' '(' SelectStatementInternal ')'",
+		    [](PEGTransformer &transformer, ParseResult &parse_result) -> arena_ptr<TransformProcess> {
+			    return transformer.MakeProcess<SourceTextTransformProcess>(transformer, parse_result);
+		    }));
+		changes.push_back(GrammarChange::PrependChoice("Statement", "SourceTextStatement"));
+		return changes;
+	}
+};
+
+TEST_CASE("Grammar extension transforms can read the query text", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SourceTextGrammarExtension>());
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['source_text']"));
+
+	const string body = "SELECT 42 /* kept */\n-- also kept\n";
+	auto result = con.Query("/* leading */ SOURCE_TEXT (" + body + ")");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value(body));
+}
+
+TEST_CASE("The parser's tokens keep the literal info the tokenizer cached", "[api][grammar_extension]") {
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto &table = grammar->GetKeywordHelper().GetLiteralTable();
+	const string sql = "SELECT a.b, 42, 'text', \"quoted\" FROM tbl WHERE x <= 1.5e3 AND y::INT IN (1, 2);";
+	// the owning iterator is what Parser::ParseQuery matches on: a word the tokenizer looked up is not looked up again
+	ParserTokenizerBehavior behavior(sql);
+	grammar->GetTokenizer().TokenizeInput(behavior);
+	TokenIterator iterator(behavior);
+	REQUIRE(iterator.Size() > 20);
+	idx_t words = 0;
+	for (idx_t i = 0; i < iterator.Size(); i++) {
+		auto &token = iterator.GetToken(i);
+		const bool quoted = !token.text.empty() && token.text[0] == '"';
+		if (token.type != TokenType::KEYWORD && (token.type != TokenType::IDENTIFIER || quoted)) {
+			continue;
+		}
+		INFO("token " << i << ": " << token.text);
+		REQUIRE(token.HasLiteralInfo(table));
+		words++;
+	}
+	REQUIRE(words == 11);
+	// a borrowed token vector may have been edited by its owner, so its cache is dropped
+	auto borrowed = TokenizeFirstSetTestInput(*grammar, sql);
+	TokenIterator borrowing_iterator(borrowed);
+	REQUIRE_FALSE(borrowing_iterator.GetToken(0).HasLiteralInfo(table));
+	REQUIRE(borrowed[0].GetLiteralInfo(table).LiteralId() == table.Lookup("SELECT").LiteralId());
 }

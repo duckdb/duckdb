@@ -175,7 +175,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		if (info->constraint_type == IndexConstraintType::PRIMARY) {
 			for (const auto &column_id : storage_ids) {
 				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
-				local_storage.VerifyNewConstraint(storage, not_null);
+				local_storage.VerifyNewConstraint(context.GetContext(), storage, not_null);
 			}
 		}
 		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();

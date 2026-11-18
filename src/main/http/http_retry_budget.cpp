@@ -396,7 +396,7 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision, optional
 		if (!context) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
 		} else {
-			ThreadUtil::SleepMs(sleep_ms, context);
+			ThreadUtil::SleepMs(sleep_ms, context->GetContext());
 		}
 	}
 	if (request) {

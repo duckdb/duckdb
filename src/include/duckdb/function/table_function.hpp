@@ -20,6 +20,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/pipeline_execution_order.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -166,6 +167,9 @@ struct TableFunctionInitInput {
 	optional_ptr<const PhysicalOperator> op;
 	//! (Optional) Set when a multi-file scan initializes this function to read one of its files
 	optional_ptr<const TableFunctionFileInitInput> multi_file_input;
+	//! Runtime pipeline requirements, supplied only when initializing the source's local state.
+	PipelineExecutionOrder execution_order = PipelineExecutionOrder::ORDERED;
+	idx_t max_threads = 1;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -215,7 +219,7 @@ struct TableFunctionPartitionInput {
 };
 
 struct TableFunctionProjectionExpressionInput {
-	const LogicalGet &get;
+	LogicalGet &get;
 	const Expression &expr;
 	//! Position of pushed down column within get, usage: get.GetColumnIds()[column_index]
 	ProjectionIndex column_index;
@@ -268,13 +272,13 @@ struct GetPartitionStatsInput {
 
 struct TableFunctionGetBindInfoInput {
 public:
-	TableFunctionGetBindInfoInput(ClientContext &context, optional_ptr<FunctionData> bind_data_p)
+	TableFunctionGetBindInfoInput(ClientContext &context, optional_ptr<const FunctionData> bind_data_p)
 	    : context(context), bind_data(bind_data_p) {
 	}
 
 public:
 	ClientContext &context;
-	optional_ptr<FunctionData> bind_data;
+	optional_ptr<const FunctionData> bind_data;
 };
 
 struct TableFunctionGetMetricsInput {
@@ -385,7 +389,7 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_get_metrics_t)(TableFunctionGetMetricsInput &input);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
-                                                         FunctionData *bind_data,
+                                                         optional_ptr<const FunctionData> bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
@@ -399,7 +403,7 @@ struct TableFunctionToSQLResult {
 //! Return an owned table reference without executing the source, or a reason why reconstruction is unsupported.
 typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get);
 
-typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                            const BoundTableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer,
                                                                  BoundTableFunction &function);
@@ -412,17 +416,18 @@ typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext 
 typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(ClientContext &context,
                                                                             GetPartitionStatsInput &input);
 
+//! Called while binding: the bind data is not shared yet and may be modified
 typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientContext &context,
                                                                      optional_ptr<FunctionData> bind_data);
 
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
-                                                              optional_ptr<FunctionData> bind_data);
+                                                              optional_ptr<const FunctionData> bind_data);
 
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
-                                              optional_ptr<FunctionData> bind_data);
+                                              cow_ptr<FunctionData> &bind_data);
 
 typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_indices,
-                                                        optional_ptr<FunctionData> bind_data);
+                                                        cow_ptr<FunctionData> &bind_data);
 
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };

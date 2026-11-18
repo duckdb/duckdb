@@ -226,17 +226,17 @@ OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
 		return OperatorCachingMode::NONE;
-	} else {
-		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
-		if (partition_info.AnyRequired()) {
-			return OperatorCachingMode::PARTITIONED;
-		}
 	}
-	if (context.pipeline->IsOrderDependent()) {
+	switch (context.pipeline->GetExecutionOrder()) {
+	case PipelineExecutionOrder::PARTITIONED:
+		return OperatorCachingMode::PARTITIONED;
+	case PipelineExecutionOrder::ORDERED:
 		return OperatorCachingMode::ORDERED;
+	case PipelineExecutionOrder::UNORDERED:
+		return OperatorCachingMode::UNORDERED;
+	default:
+		throw InternalException("Unknown pipeline execution order");
 	}
-
-	return OperatorCachingMode::UNORDERED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -532,13 +532,8 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 				}
 				continue;
 			}
-			// A global dictionary wraps the same entry for the producer's lifetime, so a change is a producer bug
-			// that would desync the downstream sink layout -> fail loudly. A non-global dict rotating is normal.
-			if (slot.entry->global_dictionary) {
-				throw InternalException("dict-surviving cache: global dictionary column %llu changed identity "
-				                        "after being seeded for dictionary caching",
-				                        static_cast<uint64_t>(col_idx));
-			}
+			// an operator above the producer may forward its global dictionary for some chunks only (a CASE branch, a
+			// spilled probe, a cross product): demote the column to flat
 			FlattenDictColumn(state, cache, col_idx, base);
 		}
 		// reached by originally-flat and just-demoted columns

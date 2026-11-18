@@ -12,11 +12,13 @@ add_library_unity(
   test_dictionary_hash_cache.cpp
   test_vector_hash.cpp
   test_column_data_allocator.cpp
+  test_cow_ptr.cpp
   test_column_data_compact.cpp
   test_file_buffer_handle_group.cpp
   test_file_system.cpp
   test_fsst.cpp
   test_gzip_file_system.cpp
+  test_geometry_extent.cpp
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_expression_executor.cpp
@@ -42,7 +44,9 @@ add_library_unity(
   test_parse_memory_limit_slurm.cpp
   test_pipeline_broadcast_exchange.cpp
   test_recursive_cte_metrics.cpp
+  test_scan_affinity.cpp
   test_scalar_executor.cpp
+  test_shared_ptr.cpp
   test_string_stats.cpp
   test_logical_type_is_complete.cpp
   test_logical_type_immutable.cpp
@@ -64,10 +68,14 @@ add_library_unity(
   test_versioning_utils.cpp
   test_value_to_sql_string.cpp
   test_value_to_expression.cpp
+  test_variant_cast.cpp
   test_variant_size.cpp
   test_vector_buffer_validity.cpp
   test_lazy_vector.cpp
   test_musl_stack_size.cpp)
+
+# Keep platform semaphore headers separate from DuckDB using-directives.
+target_sources(test_common PRIVATE test_concurrentqueue.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_common>

@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/main/context.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
@@ -81,7 +82,7 @@ bool SelectivityOptionalFilterFunctionData::Equals(const FunctionData &other_p) 
 	return child_filter_expr->Equals(*other.child_filter_expr);
 }
 
-static void SelectivityOptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+static void SelectivityOptionalFilterSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                                const BoundScalarFunction &function) {
 	if (!bind_data) {
 		return;
@@ -103,8 +104,8 @@ static unique_ptr<FunctionData> SelectivityOptionalFilterDeserialize(Deserialize
 }
 
 struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
-	SelectivityOptionalFilterLocalState(ClientContext &context, const Expression &child_filter_expr,
-	                                    idx_t n_vectors_to_check, float selectivity_threshold)
+	SelectivityOptionalFilterLocalState(Context &context, const Expression &child_filter_expr, idx_t n_vectors_to_check,
+	                                    float selectivity_threshold)
 	    : stats(n_vectors_to_check, selectivity_threshold), executor(context, child_filter_expr) {
 	}
 
@@ -119,9 +120,9 @@ struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
 	ExpressionExecutor executor;
 };
 
-static unique_ptr<FunctionLocalState> SelectivityOptionalFilterInitLocalState(ExpressionState &state,
-                                                                              const BoundFunctionExpression &expr,
-                                                                              FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState>
+SelectivityOptionalFilterInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                        optional_ptr<const FunctionData> bind_data) {
 	auto &data = bind_data->Cast<SelectivityOptionalFilterFunctionData>();
 	if (!data.child_filter_expr) {
 		return nullptr;

@@ -70,11 +70,11 @@ bool RowIsValid(const unique_ptr<VectorIterator<T>> &entries, idx_t i) {
 }
 
 unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                    FunctionData *bind_data) {
+                                                    optional_ptr<const FunctionData> bind_data) {
 	if (!bind_data) {
 		return nullptr;
 	}
-	auto &context = state.GetContext();
+	auto &context = state.GetClientContext();
 	auto &info = bind_data->Cast<NextvalBindData>();
 	auto &sequence = info.sequence;
 	auto &transaction = DuckTransaction::Get(context, sequence.catalog);
@@ -132,7 +132,7 @@ unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	return make_uniq<NextvalBindData>(seq);
 }
 
-void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const BoundScalarFunction &) {
+void Serialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data, const BoundScalarFunction &) {
 	auto &next_val_bind_data = bind_data->Cast<NextvalBindData>();
 	serializer.WritePropertyWithDefault(100, "sequence_create_info", next_val_bind_data.create_info);
 }

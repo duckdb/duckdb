@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -308,6 +309,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		}
 	}
 	const bool used_late_materialization = late_mat_lhs != nullptr;
+	any_late_materialization |= used_late_materialization;
 
 	op = CreateAggregateOperator(window, std::move(aggregate_payload), params);
 	op = TryCreateUnnestOperator(std::move(op), params);
@@ -486,8 +488,8 @@ void TopNWindowElimination::AddStructExtractExprs(
 		fun_args[0] = aggregate_column_ref->Copy();
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 
-		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
-		bound_function->SetAlias(alias);
+		auto bound_function =
+		    function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args), false, nullptr, alias);
 		exprs.push_back(std::move(bound_function));
 	}
 }
@@ -708,10 +710,15 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	const auto window_child_bindings = window.children[0]->GetColumnBindings();
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 
-	// Remember order of group columns to recreate that order in new bindings later
+	// Remember order of group columns to recreate that order in new bindings later.
+	// A FLOAT or DOUBLE group holds both 0.0 and -0.0, so such a column is carried in the payload instead.
 	column_binding_map_t<idx_t> group_bindings;
-	for (idx_t i = 0; i < window_expr.PartitionsMutable().size(); i++) {
+	for (idx_t i = 0; i < window_expr.Partitions().size(); i++) {
 		auto &expr = window_expr.PartitionsMutable()[i];
+		const auto &type = expr->GetReturnType();
+		if (TypeVisitor::Contains(type, LogicalTypeId::FLOAT) || TypeVisitor::Contains(type, LogicalTypeId::DOUBLE)) {
+			continue;
+		}
 		auto column_references = ColumnReferenceExtractor::GetReferences(&expr);
 		group_bindings[column_references.begin()->first] = i;
 	}
@@ -953,7 +960,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	vector<ColumnBinding> projections(window_expr.Partitions().size() + args.size());
 
 	// Build a projection list for an LHS table scan to recreate the column order of an aggregate with struct packing
-	for (idx_t i = 0; i < window_expr.PartitionsMutable().size(); i++) {
+	for (idx_t i = 0; i < window_expr.Partitions().size(); i++) {
 		auto &partition = window_expr.PartitionsMutable()[i];
 		if (!ExtractSingleBinding(&partition, projections[i])) {
 			return false;

@@ -5,15 +5,10 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
-      "reason": "Checks dependencies of tables on types that serialization discards",
-      "paths": [
-        "test/sql/catalog/dependencies/test_drop_type_table_dependency.test"
-      ]
-    },
-    {
       "reason": "Measures CTE restrictions using planner dependencies deliberately discarded by serialization",
       "paths": [
-        "test/optimizer/pushdown/cte_domain_join_filter.test"
+        "test/optimizer/pushdown/cte_domain_join_filter.test",
+        "test/sql/subquery/lateral/lateral_filter_into_delim_cte.test"
       ]
     },
     {
