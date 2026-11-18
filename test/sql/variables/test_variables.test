@@ -87,3 +87,20 @@ query I
 SELECT GETVARIABLE('qualified')
 ----
 a.b.c
+
+# so are ON and OFF, even though ON is a reserved keyword
+statement ok
+SET VARIABLE my_var = on
+
+query I
+SELECT GETVARIABLE('my_var')
+----
+on
+
+statement ok
+SET VARIABLE my_var = off
+
+query I
+SELECT GETVARIABLE('my_var')
+----
+off

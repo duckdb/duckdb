@@ -157,6 +157,12 @@ PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
 	return expression;
 }
 
+// VariableOn <- 'ON'
+// ON is a reserved keyword, so unlike OFF it doesn't parse as an identifier.
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformVariableOn(PEGTransformer &transformer) {
+	return ConstantExpression::String("on");
+}
+
 // VariableScope <- 'VARIABLE'
 SetScope PEGTransformerFactory::TransformVariableScope(PEGTransformer &transformer) {
 	return SetScope::VARIABLE;

@@ -1197,6 +1197,8 @@ enum class PEGRuleId : uint32_t {
 	SetAssignment,
 	VariableAssign,
 	VariableList,
+	VariableValue,
+	VariableOn,
 	TransactionStatement,
 	BeginTransaction,
 	RollbackTransaction,

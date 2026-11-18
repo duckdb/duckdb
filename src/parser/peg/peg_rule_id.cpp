@@ -1196,6 +1196,8 @@ static const char *const PEG_RULE_NAMES[] = {
     "SetAssignment",
     "VariableAssign",
     "VariableList",
+    "VariableValue",
+    "VariableOn",
     "TransactionStatement",
     "BeginTransaction",
     "RollbackTransaction",

@@ -32,4 +32,6 @@ GlobalScope <- 'GLOBAL'
 SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
-VariableList <- List(Expression)
+VariableList <- List(VariableValue)
+VariableValue <- Expression / VariableOn
+VariableOn <- 'ON'
