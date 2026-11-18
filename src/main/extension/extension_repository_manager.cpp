@@ -15,6 +15,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "yyjson.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 using namespace duckdb_yyjson; // NOLINT
@@ -294,34 +295,48 @@ bool ExtensionRepositoryManager::TrustsRepository(DatabaseInstance &db, const Ex
 void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	// modifying the trusted repositories changes the set of keys that are trusted to sign extensions, so it is gated
 	// by the configuration lock: a locked configuration freezes the trust store
+	if (Settings::Get<LockConfigurationSetting>(db)) {
+		throw InvalidInputException("Cannot add or drop extension repositories while the configuration is locked "
+		                            "(lock_configuration is true): they decide which signing keys are trusted, so they "
+		                            "are part of the configuration");
+	}
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
 }
 
-void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, bool from_host) {
+static constexpr const char *REPOSITORIES_DOCS = "https://duckdb.org/docs/stable/extensions/extension_repositories";
+
+void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host) {
 	CheckNotLocked(db);
 	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first - except for a
 	// repository resolved from its host: the name says who is trusted, and the host's own file says what, so the
 	// 'hosts' default lets it through
-	switch (GetAccess(db)) {
-	case ExtensionRepositoryAccess::ALLOWED:
+	auto access = GetAccess(db);
+	if (access == ExtensionRepositoryAccess::ALLOWED || (from_host && access != ExtensionRepositoryAccess::FORBIDDEN)) {
 		return;
-	case ExtensionRepositoryAccess::FORBIDDEN:
-		throw PermissionException("Adding extension repositories has been forbidden through configuration");
-	case ExtensionRepositoryAccess::HOSTS_ONLY:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories by prefix is not permitted while "
-		                          "allow_extension_repositories='hosts_only': use `CREATE EXTENSION REPOSITORY <host>` "
-		                          "without a prefix, so that the host names its repository");
-	default:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories is not enabled: set "
-		                          "allow_extension_repositories='allowed' to opt in, or use `CREATE EXTENSION "
-		                          "REPOSITORY <host>` without a prefix, so that the host names its repository");
 	}
+	string message;
+	if (access == ExtensionRepositoryAccess::FORBIDDEN) {
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is "
+		                             "'forbidden', which does not allow adding any repository.",
+		                             name);
+	} else {
+		// 'hosts' or 'hosts_only', and a prefix was given
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is '%s', "
+		                             "which does not allow adding arbitrary repositories, only repositories named by "
+		                             "their host.",
+		                             name, AccessToString(access));
+		auto host_form = IsHostName(name)
+		                     ? StringUtil::Format("`CREATE EXTENSION REPOSITORY %s` without a prefix", name)
+		                     : string("`CREATE EXTENSION REPOSITORY <host>` without a prefix");
+		if (access == ExtensionRepositoryAccess::HOSTS) {
+			// the default can still be opened up; 'hosts_only' cannot, the setting only tightens
+			message += "\nConsider changing the setting, or creating the repository by its host: " + host_form + ".";
+		} else {
+			message += "\nConsider creating the repository by its host: " + host_form + ".";
+		}
+	}
+	message += StringUtil::Format("\nCheck the docs: %s", REPOSITORIES_DOCS);
+	throw PermissionException(message);
 }
 
 bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, string &result) {
@@ -540,10 +555,14 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 		// a policy refusal (verification switched off for the url): not something the host did
 		throw;
 	} catch (std::exception &ex) {
+		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
+		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
 		ErrorData error(ex);
-		throw IOException("Cannot create extension repository '%s': the host does not serve a metadata file (failed to "
-		                  "read '%s': %s)\nUse `WITH PREFIX '<url>'` to name the repository's location directly",
-		                  name, metadata_path, error.RawMessage());
+		throw IOException(
+		    "Cannot create extension repository '%s': %s\nA repository is resolved from its host through "
+		    "https://<host>/.well-known/duckdb-extension-repo.json; use `WITH PREFIX '<url>'` to name the "
+		    "repository's location directly",
+		    name, error.RawMessage());
 	}
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	auto root = ReadVersionedObject(document, metadata_path);
@@ -670,6 +689,47 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	return result;
 }
 
+//! How a stored repository differs from what a plain CREATE asks for, or empty when the request describes the stored
+//! repository: a repeated CREATE then passes without fetching anything. Without a prefix the request only names a host,
+//! so it describes the stored repository when that was resolved from the host; with a prefix, the prefix must match
+//! and so must the keys when the request gives any (keys that were not given were fetched from the prefix, and are not
+//! fetched again to compare). Nothing here reaches the network: what the host or the prefix serve today is checked
+//! only by OR REPLACE
+static string DescribeDifference(const ExtensionRepository &stored, const ExtensionRepository &requested,
+                                 bool from_host) {
+	if (from_host) {
+		if (!stored.host.empty()) {
+			return string();
+		}
+		return StringUtil::Format("added with prefix '%s' rather than resolved from its host", stored.path);
+	}
+	if (!stored.host.empty()) {
+		return StringUtil::Format("resolved from its host (prefix '%s') rather than added with a prefix", stored.path);
+	}
+	auto requested_path = requested.path;
+	StringUtil::RTrim(requested_path, "/");
+	auto stored_path = stored.path;
+	StringUtil::RTrim(stored_path, "/");
+	if (requested_path != stored_path) {
+		return StringUtil::Format("with prefix '%s'", stored.path);
+	}
+	if (requested.public_keys.empty()) {
+		return string();
+	}
+	auto requested_keys = ExtensionRepositoryManager::NormalizePublicKeys(requested.public_keys);
+	std::sort(requested_keys.begin(), requested_keys.end());
+	auto stored_keys = stored.public_keys;
+	std::sort(stored_keys.begin(), stored_keys.end());
+	if (requested_keys != stored_keys) {
+		vector<string> fingerprints;
+		for (auto &key : stored.public_keys) {
+			fingerprints.push_back(ExtensionRepositoryManager::GetPublicKeyFingerprint(key));
+		}
+		return StringUtil::Format("with other public keys (%s)", StringUtil::Join(fingerprints, ", "));
+	}
+	return string();
+}
+
 ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstance &db, FileSystem &fs,
                                                                  optional_ptr<ClientContext> context,
                                                                  const ExtensionRepository &requested,
@@ -677,7 +737,9 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	// no prefix: the name is the host, and the host names the prefix. The host is derived here, never taken from the
 	// caller, so a stored host always means the repository was resolved from it
 	bool from_host = requested.path.empty();
-	CheckCanCreate(db, from_host);
+	// a locked configuration freezes the trust store, whatever the statement; the opt-in is checked once it is known
+	// that the statement would add something (see below)
+	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(requested.name);
 	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
@@ -694,21 +756,32 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		    name);
 	}
 
-	// the conflict is decided before anything is fetched: IF NOT EXISTS returns the stored definition, a plain CREATE
-	// reports the duplicate, and only OR REPLACE goes on to resolve - keeping the old definition if that fails
+	// the conflict is decided before anything is fetched, and before the opt-in: IF NOT EXISTS returns the stored
+	// definition, a plain CREATE returns it too when it asks for the same repository and reports the difference
+	// otherwise, and only OR REPLACE goes on to resolve - keeping the old definition if that fails. Returning what is
+	// stored adds no trust, so it needs no opt-in, and a difference is a difference whatever the access level
 	auto directory = GetRepositoryDirectory(db, fs);
 	auto file_path = fs.JoinPath(directory, name + FILE_EXTENSION);
 	if (fs.FileExists(file_path)) {
 		switch (on_conflict) {
-		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException(
-			    "Extension repository with name \"%s\" already exists!\nUse CREATE OR REPLACE to overwrite it", name);
+		case OnCreateConflict::ERROR_ON_CONFLICT: {
+			auto stored = ReadRepository(fs, file_path);
+			auto difference = DescribeDifference(stored, requested, from_host);
+			if (difference.empty()) {
+				return stored;
+			}
+			throw CatalogException("Extension repository with name \"%s\" already exists, %s\nUse CREATE OR REPLACE to "
+			                       "overwrite it",
+			                       name, difference);
+		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
 			return ReadRepository(fs, file_path);
 		default:
 			break;
 		}
 	}
+	// from here on something is added: the opt-in applies
+	CheckCanCreate(db, name, from_host);
 
 	ExtensionRepository repository(name, requested.path, requested.public_keys);
 	vector<string> public_keys;
@@ -732,7 +805,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		                            name);
 	}
 	// the fetches took time: the access may have been tightened meanwhile, so check again before persisting
-	CheckCanCreate(db, from_host);
+	CheckCanCreate(db, name, from_host);
 
 	if (!fs.DirectoryExists(directory)) {
 		fs.CreateDirectoriesRecursive(directory);
@@ -787,6 +860,10 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(name_p);
+	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
+		// the built-in repositories are not stored files: there is nothing to remove, and no way to distrust them
+		throw NotImplementedException("Extension repository '%s' is built in and cannot be dropped", name);
+	}
 	auto file_path = GetRepositoryPath(db, fs, name);
 	if (!fs.FileExists(file_path)) {
 		if (on_entry_not_found == OnEntryNotFound::RETURN_NULL) {

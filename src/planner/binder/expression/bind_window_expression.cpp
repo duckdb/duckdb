@@ -44,6 +44,9 @@ static bool IsRangeType(const LogicalType &type) {
 	case PhysicalType::DOUBLE:
 	case PhysicalType::INTERVAL:
 		return true;
+	case PhysicalType::VARCHAR:
+		// wide decimals are BIGNUM blobs whose byte order is their numeric order
+		return type.id() == LogicalTypeId::DECIMAL;
 	default:
 		return false;
 	}
@@ -251,7 +254,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	LogicalType sql_type;
 	unique_ptr<BoundAggregateFunction> aggregate;
 	unique_ptr<BoundWindowFunction> window_func;
-	unique_ptr<FunctionData> bind_info;
+	cow_ptr<FunctionData> bind_info;
 	vector<unique_ptr<Expression>> children;
 
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {

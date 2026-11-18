@@ -34,7 +34,7 @@ struct Settings {
 		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return FromValue<typename OP::RETURN_TYPE>(result);
 		}
-		return FromDefault<typename OP::RETURN_TYPE>(OP::DefaultValue);
+		return GetDefault<OP>(source, 0);
 	}
 
 	template <class SOURCE>
@@ -54,6 +54,18 @@ struct Settings {
 	}
 
 private:
+	//! The default of a setting with a default function
+	template <class OP, class SOURCE>
+	static auto GetDefault(const SOURCE &source, int)
+	    -> decltype(OP::GetDefaultValue(std::declval<const DBConfig &>()), typename OP::RETURN_TYPE()) {
+		return FromValue<typename OP::RETURN_TYPE>(OP::GetDefaultValue(GetConfigInternal(source)));
+	}
+	//! The default of a setting with a constant default
+	template <class OP, class SOURCE>
+	static typename OP::RETURN_TYPE GetDefault(const SOURCE &, long) {
+		return FromDefault<typename OP::RETURN_TYPE>(OP::DefaultValue);
+	}
+
 	//! Converts the value of a setting to its return type
 	template <class T>
 	static typename std::enable_if<std::is_enum<T>::value, T>::type FromValue(const Value &value) {
@@ -212,6 +224,10 @@ private:
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const Context &context, idx_t setting_index, Value &result);
+	static const DBConfig &GetConfigInternal(const DatabaseInstance &db);
+	static const DBConfig &GetConfigInternal(const DBConfig &config);
+	static const DBConfig &GetConfigInternal(const ClientContext &context);
+	static const DBConfig &GetConfigInternal(const Context &context);
 
 	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
 	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
@@ -520,9 +536,10 @@ struct AsyncThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AutoCheckpointSkipWalThresholdSetting {
@@ -1928,9 +1945,10 @@ struct HTTPProxySetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct HTTPProxyPasswordSetting {
@@ -2225,6 +2243,24 @@ struct MatchRecognizeMaxStatesSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct MaxDecimalWidthSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "max_decimal_width";
+	static constexpr const char *Description =
+	    "The maximum width (number of digits) of a DECIMAL type, at least 38. Decimals wider than 38 digits are "
+	    "computed on BIGNUM blobs whose cost grows with the width, so the bound limits the time and memory a single "
+	    "value can take: a type declaration, a cast or a literal wider than the bound raises an error, and above 38 so "
+	    "does an arithmetic result that would need a wider DECIMAL. At 38, the setting preserves the types of the "
+	    "versions before wide decimals: arithmetic results stay within 38 digits, as they did there. Index keys are "
+	    "bound independently of the setting.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "1000000";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct MaxExecutionTimeSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "max_execution_time";
@@ -2258,9 +2294,10 @@ struct MaxMemorySetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct MaxStreamingBufferSizeSetting {
@@ -2273,9 +2310,10 @@ struct MaxStreamingBufferSizeSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "10.0 MiB";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct MaxTempDirectorySizeSetting {
@@ -2766,9 +2804,10 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "latest";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TableFunctionIdentifierConversionSetting {
@@ -2817,9 +2856,10 @@ struct ThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static Value GetDefaultValue(const DBConfig &config);
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TrackedMetricsSetting {

@@ -70,7 +70,7 @@ public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
-	                        OptionalOrderTypes arg_order_types_p = nullptr);
+	                        OptionalOrderTypes arg_order_types_p = nullptr, optional_ptr<Binder> binder_p = nullptr);
 
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
@@ -140,7 +140,7 @@ typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &i
                                          idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
-typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                    const BoundWindowFunction &function);
 typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, BoundWindowFunction &function);
 
