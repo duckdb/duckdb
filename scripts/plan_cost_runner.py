@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 
@@ -14,8 +15,7 @@ else:
     from regression.local_extensions import extension_loading_args
 
 
-OLD_DB_NAME = "old.duckdb"
-NEW_DB_NAME = "new.duckdb"
+DB_NAME = "plan_cost.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"
 
 ENABLE_PROFILING = "PRAGMA enable_profiling=json"
@@ -252,11 +252,16 @@ def measure_query_timings(old, new, query):
         old_timings = []
         new_timings = []
         for index, batch_size in enumerate(sampling_batch_sizes(runs)):
-            variants = [(old, OLD_DB_NAME, old_timings), (new, NEW_DB_NAME, new_timings)]
+            variants = [(old, old_timings), (new, new_timings)]
             if index % 2:
                 variants.reverse()
-            for cli, dbname, timings in variants:
-                timings.extend(query_timings(cli, dbname, query, batch_size))
+            for cli, timings in variants:
+                timings.extend(query_timings(cli, DB_NAME, query, batch_size))
+            print(
+                f"  batch {index + 1} ({'new/old' if index % 2 else 'old/new'}): "
+                f"median old={statistics.median(old_timings[-batch_size:]):.6f}s, "
+                f"new={statistics.median(new_timings[-batch_size:]):.6f}s"
+            )
         return benchmark_measurement(old_timings, new_timings)
 
     measurement = measure(10)
@@ -304,8 +309,8 @@ def main():
     new = args.new
     benchmark_dir = args.dir
 
-    init_db(old, OLD_DB_NAME, benchmark_dir, args.extension)
-    init_db(new, NEW_DB_NAME, benchmark_dir, args.extension)
+    # Compare both readers on the same persisted data and statistics.
+    init_db(old, DB_NAME, benchmark_dir, args.extension)
 
     improvements = []
     regressions = []
@@ -321,10 +326,11 @@ def main():
         with open(f, "r") as file:
             query = file.read()
 
-        old_cost = query_plan_cost(old, OLD_DB_NAME, query)
-        new_cost = query_plan_cost(new, NEW_DB_NAME, query)
+        old_cost = query_plan_cost(old, DB_NAME, query)
+        new_cost = query_plan_cost(new, DB_NAME, query)
 
         if old_cost.needs_timing(new_cost):
+            print(f"{query_name}: comparing hot query timings")
             measurement = measure_query_timings(old, new, query)
             old_cost.time = measurement.old_timing
             new_cost.time = measurement.new_timing
@@ -349,8 +355,7 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
+    os.remove(DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)

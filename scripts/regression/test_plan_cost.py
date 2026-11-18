@@ -175,8 +175,7 @@ class TestPlanCost(unittest.TestCase):
                                 )
                             )
                             for name, value in (
-                                ('OLD_DB_NAME', root / 'old.duckdb'),
-                                ('NEW_DB_NAME', root / 'new.duckdb'),
+                                ('DB_NAME', root / 'plan_cost.duckdb'),
                                 ('PROFILE_FILENAME', profile_path),
                             ):
                                 stack.enter_context(patch.object(plan_cost_runner, name, str(value)))
@@ -189,6 +188,53 @@ class TestPlanCost(unittest.TestCase):
                         self.assertEqual(result.exception.code, int(regressed))
                         self.assertEqual('REGRESSIONS DETECTED' in output.getvalue(), regressed)
                         self.assertNotIn('IMPROVEMENTS DETECTED', output.getvalue())
+
+    def test_shared_fixture_isolates_reader_regressions(self):
+        for scenario in ('image', 'reader', 'structural'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'queries').mkdir()
+                (root / 'queries/q.sql').write_text('SELECT 1;')
+                database = root / 'plan_cost.duckdb'
+                profile = root / 'profile.json'
+
+                def init_db(cli, dbname, benchmark_dir, extensions):
+                    Path(dbname).write_text(cli)
+
+                def run_command(command, **kwargs):
+                    cli, readonly, dbname = command[:3]
+                    self.assertEqual(readonly, '--readonly')
+                    self.assertEqual(dbname, str(database))
+                    changed = Path(dbname).read_text() == 'new' or (scenario != 'image' and cli == 'new')
+                    if '.timer on 6' in command:
+                        self.assertNotEqual(scenario, 'structural')
+                        seconds = 1.06 if changed else 1.0
+                        runs = command.count('SELECT 1;') - 1
+                        output = f'Run Time (s): real {seconds} user 0 sys 0\n' * runs
+                    else:
+                        rows, probe_rows, build_rows = (30, 100, 40 if scenario == 'structural' else 10)
+                        tree = (
+                            join('INNER', rows, scan(probe_rows), scan(build_rows))
+                            if changed
+                            else join('INNER', 20, scan(20), scan(10))
+                        )
+                        profile.write_text(json.dumps({'children': [tree], 'latency': 1.0}))
+                        output = ''
+                    return subprocess.CompletedProcess(command, 0, stdout=output, stderr='')
+
+                with contextlib.ExitStack() as stack:
+                    initialize = stack.enter_context(patch.object(plan_cost_runner, 'init_db', side_effect=init_db))
+                    stack.enter_context(patch.object(plan_cost_runner, 'run_command', side_effect=run_command))
+                    stack.enter_context(patch.object(plan_cost_runner, 'DB_NAME', str(database)))
+                    stack.enter_context(patch.object(plan_cost_runner, 'PROFILE_FILENAME', str(profile)))
+                    stack.enter_context(
+                        patch('sys.argv', ['runner', '--old', 'old', '--new', 'new', '--dir', directory])
+                    )
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    with self.assertRaises(SystemExit) as result:
+                        plan_cost_runner.main()
+                    initialize.assert_called_once_with('old', str(database), directory, [])
+                self.assertEqual(result.exception.code, int(scenario != 'image'))
 
 
 if __name__ == '__main__':
