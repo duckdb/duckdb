@@ -204,7 +204,8 @@ static bool IsThrowingProjectionFilter(const Expression &expr,
 }
 
 void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map,
-                                      bool keep_throwing_filters_above, bool &can_pull_through) {
+                                      const LogicalProjection &proj, bool &can_pull_through) {
+	const auto keep_throwing_filters_above = HasJoinBelow(proj);
 	// if expressions in the projections are colrefs, we can always pull it up
 	// if it's not a colref, we can pull it up only if it does not appear in the operator enumerate expressions
 	for (idx_t i = parents.size(); i > 0; i--) {
@@ -213,6 +214,11 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 		can_pull_through = true;
 
 		if (parent_op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			// Aggregate output projections do not hide join relations.
+			if (proj.children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+				can_pull_through = false;
+				break;
+			}
 			// Keep computations below a cross product to avoid multiplying their evaluation.
 			for (auto &entry : projection_map) {
 				auto type = entry.second->GetExpressionType();
@@ -346,7 +352,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 		// if expressions in the projections are colrefs, we can always pull it up
 		// if it's not a colref, we can pull it up only if it does not appear in the operator enumerate expressions
 		idx_t pull_up_to_here = parents.size();
-		CanPullThrough(projection_map, HasJoinBelow(proj), can_pull_through);
+		CanPullThrough(projection_map, proj, can_pull_through);
 
 		// Partial pullup is intentionally not implemented.
 		// Pulling a projection only partially up could leave it in an intermediate state between operators. This would
