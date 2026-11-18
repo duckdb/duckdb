@@ -94,7 +94,7 @@ inline void SetStringOut(const char **out, idx_t *out_length, const Identifier &
 //! reads as all-empty entries.
 class string_view_array {
 public:
-	string_view_array(const char **ptrs, const idx_t *lengths, idx_t count)
+	string_view_array(const char *const *ptrs, const idx_t *lengths, idx_t count)
 	    : ptrs(ptrs), lengths(lengths), count(count) {
 	}
 
@@ -106,7 +106,7 @@ public:
 	std::string_view operator[](idx_t i) const;
 
 private:
-	const char **ptrs;
+	const char *const *ptrs;
 	const idx_t *lengths;
 	idx_t count;
 };

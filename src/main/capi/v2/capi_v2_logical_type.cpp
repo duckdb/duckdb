@@ -289,7 +289,7 @@ static void CreateLogicalTypeFromIdV2(CV2Factory &factory, DUCKDB_V2_LOGICAL_TYP
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(duckdb_v2_factory_handle factory,
-                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char **param_names,
+                                                      DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char *const *param_names,
                                                       const idx_t *param_names_lengths,
                                                       const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                       duckdb_v2_logical_type_handle *out_type,
@@ -344,7 +344,8 @@ static void CreateLogicalTypeFromArgsV2(CV2Factory &factory, duckdb_v2_qname_han
 }
 
 DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_name(duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name,
-                                                        const char **param_names, const idx_t *param_names_lengths,
+                                                        const char *const *param_names,
+                                                        const idx_t *param_names_lengths,
                                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
                                                         duckdb_v2_logical_type_handle *out_type,
                                                         duckdb_v2_error_info_handle *err) {
