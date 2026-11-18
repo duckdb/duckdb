@@ -322,6 +322,8 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<const Fun
 	                                          function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 }
 
+bool TryUseNoOverflowSum(BoundAggregateFunction &function);
+
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	bool fallible = false;
 	deserializer.ReadPropertyWithExplicitDefault<bool>(100, "fallible", fallible, false);
@@ -339,7 +341,9 @@ unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, Bo
 	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
 		throw SerializationException("Cannot reconstruct the logical sum signature");
 	}
-	logical.first.ReplaceImplementation(function);
+	if (!TryUseNoOverflowSum(logical.first)) {
+		throw SerializationException("Cannot reconstruct the no-overflow sum implementation");
+	}
 	function = std::move(logical.first);
 	function.SetReturnType(return_type);
 	if (fallible) {
@@ -379,6 +383,21 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	}
 }
 
+//! Swaps in the int64 accumulator but keeps the bound signature (e.g. DECIMAL(15,2) -> DECIMAL(38,2)), so that binding
+//! sum_no_overflow by that signature (e.g. to finalize an exported state) yields the same implementation
+bool TryUseNoOverflowSum(BoundAggregateFunction &function) {
+	const auto internal_type = function.GetArguments()[0].InternalType();
+	if (internal_type != PhysicalType::INT32 && internal_type != PhysicalType::INT64) {
+		return false;
+	}
+	auto arguments = function.GetArguments();
+	auto return_type = function.GetReturnType();
+	function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+	function.GetArguments() = std::move(arguments);
+	function.SetReturnType(std::move(return_type));
+	return true;
+}
+
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
@@ -392,17 +411,13 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 //! Binding sum_no_overflow by name (e.g. when re-binding an exported aggregate state) delegates to the regular sum,
 //! with the no-overflow implementation swapped in as statistics propagation does
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	const auto parameter_type = function.GetArguments()[0];
 	auto binder = input.NestedFunctionBinder();
-	auto logical = BindLogicalSum(binder, arguments);
-	if (parameter_type.id() != LogicalTypeId::DECIMAL) {
-		logical.first.ReplaceImplementation(GetSumAggregateNoOverflow(parameter_type.InternalType()));
+	auto logical = BindLogicalSum(binder, input.GetArguments());
+	if (TryUseNoOverflowSum(logical.first)) {
 		// bound by name there is no statistics proof that the int64 accumulator cannot overflow
 		logical.first.SetFallible();
 	}
-	function = std::move(logical.first);
+	input.GetBoundFunction() = std::move(logical.first);
 	return std::move(logical.second);
 }
 
@@ -424,13 +439,9 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		return nullptr;
 	}
 
-	// Replace with fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to
-	// swap in.
-	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
-	const bool sum_fits_in_int64 =
-	    bounds->min > NumericLimits<int64_t>::Minimum() && bounds->max < NumericLimits<int64_t>::Maximum();
-	if (has_no_overflow_variant && sum_fits_in_int64) {
-		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+	// Replace with fast implementation when possible
+	if (bounds->min > NumericLimits<int64_t>::Minimum() && bounds->max < NumericLimits<int64_t>::Maximum()) {
+		TryUseNoOverflowSum(expr.FunctionMutable());
 	}
 
 	// Propagate stats.
