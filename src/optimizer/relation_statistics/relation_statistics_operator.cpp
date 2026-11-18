@@ -91,6 +91,10 @@ static vector<SemiAntiJoinDomain> ExtractSemiAntiJoinDomains(LogicalComparisonJo
 			has_residual = true;
 			continue;
 		}
+		// Row-count fallbacks bound domains but do not estimate membership coverage.
+		if (total_domain->source == DistinctCountSource::CARDINALITY) {
+			has_residual = true;
+		}
 		domains.push_back(
 		    {total_domain->distinct_count, rhs_current_domain.GetIndex(), lhs_preserved->binding, rhs_column->binding});
 	}

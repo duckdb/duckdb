@@ -1302,6 +1302,7 @@ TEST_CASE("Constant membership uses a selectivity floor without discarding domai
 					join.children[1] = std::move(projection);
 				}
 				auto constants = CreateStats({list_binding}, {list_size}, list_size);
+				constants.columns[0].total_domain = DistinctCount(list_size, DistinctCountSource::CARDINALITY);
 				constants.columns[0].semi_anti_join_domain_evidence.TightenDomainBound(list_size);
 				auto preserve_right = join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI;
 				auto is_semi = join_type == JoinType::SEMI || join_type == JoinType::RIGHT_SEMI;
@@ -1324,6 +1325,19 @@ TEST_CASE("Constant membership uses a selectivity floor without discarding domai
 				auto result = CreateStats({binding}, {1000}, 10000);
 				RelationStatisticsHelper::ApplySemiAntiJoinStats(join, left, right, result);
 				REQUIRE(result.cardinality == expected);
+				if (is_semi) {
+					REQUIRE(result.columns[0].current_domain.distinct_count <= list_size);
+				}
+
+				preserved.columns[0].total_domain =
+				    DistinctCount(preserved.cardinality, DistinctCountSource::CARDINALITY);
+				auto unknown = RelationStatisticsHelper::EstimateSemiAntiJoinCardinality(join, left, right);
+				auto unknown_expected = list_size > 0 ? idx_t(2000) : (is_semi ? idx_t(0) : preserved.cardinality);
+				REQUIRE(unknown.cardinality == unknown_expected);
+				REQUIRE_FALSE(unknown.used_domain_evidence);
+				result = preserved;
+				RelationStatisticsHelper::ApplySemiAntiJoinStats(join, left, right, result);
+				REQUIRE(result.cardinality == unknown_expected);
 				if (is_semi) {
 					REQUIRE(result.columns[0].current_domain.distinct_count <= list_size);
 				}
