@@ -39,8 +39,10 @@ TEST_CASE("TableFunctionMultiFileList lists the files a table function produces"
 		REQUIRE(display[0].path == glob);
 	}
 	SECTION("A MAP column holds the options to open the files with") {
-		TableFunctionMultiFileList files(context, Identifier("glob_extended"),
-		                                 {Value::LIST(LogicalType::VARCHAR, {Value(glob)})});
+		named_argument_map_t parameters;
+		parameters["full_file_info"] = Value::BOOLEAN(true);
+		TableFunctionMultiFileList files(context, Identifier("glob"),
+		                                 {Value::LIST(LogicalType::VARCHAR, {Value(glob)})}, std::move(parameters));
 		auto all_files = files.GetAllFiles();
 		REQUIRE(all_files.size() == 5);
 		for (auto &file : all_files) {
@@ -55,6 +57,9 @@ TEST_CASE("TableFunctionMultiFileList lists the files a table function produces"
 	SECTION("The first column must hold files") {
 		REQUIRE_THROWS_WITH(TableFunctionMultiFileList(context, Identifier("test_all_types"), {}),
 		                    Catch::Contains("its first column must be a VARCHAR path or a file struct"));
+		// a function with a local state cannot be run outside of a pipeline
+		REQUIRE_THROWS_WITH(TableFunctionMultiFileList(context, Identifier("range"), {Value::BIGINT(3)}),
+		                    Catch::Contains("cannot provide a file list"));
 		REQUIRE_THROWS_WITH(TableFunctionMultiFileList(context, Identifier("no_such_function"), {Value(glob)}),
 		                    Catch::Contains("no_such_function"));
 	}

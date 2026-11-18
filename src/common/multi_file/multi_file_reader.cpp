@@ -224,7 +224,7 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	return files;
 }
 
-//! A file list that expands the globs with the glob_extended table function. Files that are given together with
+//! A file list that expands the globs with the glob table function. Files that are given together with
 //! the options to open them with are passed as file structs, which are listed as-is instead of being globbed
 static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, const vector<OpenFileInfo> &files,
                                                     const FileGlobInput &glob_input) {
@@ -261,11 +261,12 @@ static unique_ptr<MultiFileList> CreateGlobFileList(ClientContext &context, cons
 	auto glob_type = has_open_options ? LogicalType::VARIANT() : LogicalType::VARCHAR;
 	vector<Value> inputs {Value::LIST(glob_type, std::move(globs))};
 	named_argument_map_t named_parameters;
+	named_parameters["full_file_info"] = Value::BOOLEAN(true);
 	named_parameters["allow_empty"] = Value::BOOLEAN(glob_input.AllowsEmpty());
 	if (glob_input.behavior == FileGlobOptions::FALLBACK_GLOB) {
 		named_parameters["fallback_extension"] = Value(glob_input.extension);
 	}
-	return make_uniq<TableFunctionMultiFileList>(context, Identifier("glob_extended"), std::move(inputs),
+	return make_uniq<TableFunctionMultiFileList>(context, Identifier("glob"), std::move(inputs),
 	                                             std::move(named_parameters));
 }
 

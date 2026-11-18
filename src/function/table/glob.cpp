@@ -23,29 +23,18 @@ struct GlobFunctionBindData : public TableFunctionData {
 	vector<OpenFileInfo> globs;
 	//! How the globs are expanded
 	FileGlobInput glob_input;
+	//! Whether to also return the options to open every file with
+	bool full_file_info = false;
 
 	bool SupportStatementCache() const override {
 		return false;
 	}
 };
 
-static unique_ptr<GlobFunctionBindData> BindGlobs(TableFunctionBindInput &input, FileGlobInput glob_input) {
-	auto result = make_uniq<GlobFunctionBindData>(std::move(glob_input));
-	auto multi_file_reader = MultiFileReader::Create(input.table_function);
-	result->globs = multi_file_reader->ParseFileList(input.inputs[0]);
-	return result;
-}
-
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
-	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("file");
-	return BindGlobs(input, FileGlobOptions::ALLOW_EMPTY);
-}
-
-static unique_ptr<FunctionData> GlobExtendedFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                         vector<LogicalType> &return_types, vector<Identifier> &names) {
 	bool allow_empty = true;
+	bool full_file_info = false;
 	string fallback_extension;
 	for (auto &entry : input.named_parameters) {
 		if (entry.second.IsNull()) {
@@ -55,6 +44,8 @@ static unique_ptr<FunctionData> GlobExtendedFunctionBind(ClientContext &context,
 			allow_empty = BooleanValue::Get(entry.second);
 		} else if (entry.first == "fallback_extension") {
 			fallback_extension = StringValue::Get(entry.second);
+		} else if (entry.first == "full_file_info") {
+			full_file_info = BooleanValue::Get(entry.second);
 		}
 	}
 	FileGlobInput glob_input(allow_empty ? FileGlobOptions::ALLOW_EMPTY : FileGlobOptions::DISALLOW_EMPTY);
@@ -65,9 +56,15 @@ static unique_ptr<FunctionData> GlobExtendedFunctionBind(ClientContext &context,
 	}
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
-	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARIANT()));
-	names.emplace_back("options");
-	return BindGlobs(input, std::move(glob_input));
+	if (full_file_info) {
+		return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARIANT()));
+		names.emplace_back("options");
+	}
+	auto result = make_uniq<GlobFunctionBindData>(std::move(glob_input));
+	result->full_file_info = full_file_info;
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->globs = multi_file_reader->ParseFileList(input.inputs[0]);
+	return std::move(result);
 }
 
 struct GlobFunctionState : public GlobalTableFunctionState {
@@ -241,24 +238,16 @@ static void WriteFileOptions(ClientContext &context, GlobFunctionState &state, V
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 	auto count = GlobNextFiles(context, data_p);
 	if (count == 0) {
 		return;
 	}
 	WriteFiles(state, output.data[0], count);
-	state.pending_offset += count;
-	state.files_returned.fetch_add(count, std::memory_order_relaxed);
-}
-
-static void GlobExtendedFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &state = data_p.global_state->Cast<GlobFunctionState>();
-	auto count = GlobNextFiles(context, data_p);
-	if (count == 0) {
-		return;
+	if (bind_data.full_file_info) {
+		WriteFileOptions(context, state, output.data[1], count);
 	}
-	WriteFiles(state, output.data[0], count);
-	WriteFileOptions(context, state, output.data[1], count);
 	state.pending_offset += count;
 	state.files_returned.fetch_add(count, std::memory_order_relaxed);
 }
@@ -281,23 +270,17 @@ static double GlobFunctionProgress(ClientContext &context, const FunctionData *b
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction glob_function("glob", FunctionSignature().AddPositionalOnly("pattern", LogicalType::VARCHAR),
+	TableFunction glob_function("glob",
+	                            FunctionSignature()
+	                                .AddPositionalOnly("pattern", LogicalType::VARCHAR)
+	                                .AddKeywordOnly("allow_empty", LogicalType::BOOLEAN, Value::BOOLEAN(true))
+	                                .AddKeywordOnly("fallback_extension", LogicalType::VARCHAR, Value())
+	                                .AddKeywordOnly("full_file_info", LogicalType::BOOLEAN, Value::BOOLEAN(false)),
 	                            GlobFunction, GlobFunctionBind, GlobFunctionInit);
 	glob_function.table_scan_progress = GlobFunctionProgress;
 	// lists the filesystem at execution time
 	glob_function.stability = FunctionStability::VOLATILE;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
-
-	// glob_extended also returns the options to open every file with - e.g. its size and modification time
-	TableFunction glob_extended("glob_extended",
-	                            FunctionSignature()
-	                                .AddPositionalOnly("pattern", LogicalType::VARCHAR)
-	                                .AddKeywordOnly("allow_empty", LogicalType::BOOLEAN, Value::BOOLEAN(true))
-	                                .AddKeywordOnly("fallback_extension", LogicalType::VARCHAR, Value()),
-	                            GlobExtendedFunction, GlobExtendedFunctionBind, GlobFunctionInit);
-	glob_extended.table_scan_progress = GlobFunctionProgress;
-	glob_extended.stability = FunctionStability::VOLATILE;
-	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_extended));
 }
 
 } // namespace duckdb

@@ -5,11 +5,9 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/async_result.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
@@ -50,7 +48,8 @@ TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p,
 		input_types.push_back(input.type());
 	}
 	function = *entry.functions.GetFunctionByArguments(context, input_types);
-	if (!function.bind || !function.function) {
+	if (!function.bind || !function.function || function.init_local) {
+		// functions with a local state need an execution context, which a file list does not have
 		throw BinderException("Table function %s cannot provide a file list", function.name);
 	}
 	auto &signature = function.GetSignature();
@@ -103,13 +102,8 @@ void TableFunctionMultiFileList::InitializeFunction() const {
 	if (initialized) {
 		return;
 	}
-	// only the files (and their options) are needed
 	vector<column_t> column_ids;
-	idx_t column_count = return_types.size() > 1 && IsOptionsColumn(return_types[1]) ? 2 : 1;
-	if (!function.projection_pushdown) {
-		column_count = return_types.size();
-	}
-	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+	for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
 		column_ids.push_back(col_idx);
 	}
 	vector<idx_t> projection_ids;
@@ -117,16 +111,7 @@ void TableFunctionMultiFileList::InitializeFunction() const {
 	if (function.init_global) {
 		global_state = function.init_global(context, init_input);
 	}
-	if (function.init_local) {
-		thread_context = make_uniq<ThreadContext>(context);
-		ExecutionContext execution_context(context, *thread_context, nullptr);
-		local_state = function.init_local(execution_context, init_input, global_state.get());
-	}
-	vector<LogicalType> chunk_types;
-	for (auto &col_id : column_ids) {
-		chunk_types.push_back(return_types[col_id]);
-	}
-	chunk.Initialize(Allocator::Get(context), chunk_types);
+	chunk.Initialize(Allocator::Get(context), return_types);
 	initialized = true;
 }
 
@@ -191,7 +176,7 @@ void TableFunctionMultiFileList::ReadFiles(DataChunk &output) const {
 
 bool TableFunctionMultiFileList::ExpandNextPath() const {
 	InitializeFunction();
-	TableFunctionInput input(bind_data.get(), local_state.get(), global_state.get());
+	TableFunctionInput input(bind_data.get(), nullptr, global_state.get());
 	// the function is run synchronously, outside of a pipeline
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;

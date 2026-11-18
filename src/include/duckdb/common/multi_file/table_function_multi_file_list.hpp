@@ -13,12 +13,12 @@
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
-class ThreadContext;
 
 //! MultiFileList whose files are produced by a table function from the catalog, which is run lazily - one chunk at
 //! a time - as files are requested. The first column the function produces holds the files: a VARCHAR path, or a
 //! file struct (a STRUCT or VARIANT) that holds the options to open the file with - see OpenFileInfo::FromValue.
-//! An optional second column of type MAP(VARCHAR, ...) holds (further) options to open the file with
+//! An optional second column of type MAP(VARCHAR, ...) holds (further) options to open the file with.
+//! The function is run outside of a pipeline, so it cannot have a local state
 class TableFunctionMultiFileList : public LazyMultiFileList {
 public:
 	//! Look up the table function in the catalog, bind it over the given inputs and list the files it produces
@@ -50,9 +50,7 @@ private:
 	vector<OpenFileInfo> input_files;
 
 	mutable bool initialized = false;
-	mutable unique_ptr<ThreadContext> thread_context;
 	mutable unique_ptr<GlobalTableFunctionState> global_state;
-	mutable unique_ptr<LocalTableFunctionState> local_state;
 	mutable DataChunk chunk;
 };
 
