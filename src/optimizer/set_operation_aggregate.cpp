@@ -29,6 +29,7 @@
 //
 // The join is also kept where the left child is estimated to have few distinct rows with many copies each: the few
 // groups of the aggregate cannot feed all threads, so the expansion and what follows it would run on one thread.
+// Without an estimate of the distinct rows, a left child with enough rows for many copies of each is taken for one.
 //
 // The pass runs before the join order, statistics propagation and compressed materialization, which then see an
 // ordinary aggregate or join.
@@ -272,7 +273,8 @@ bool SetOperationAggregate::CanUseAggregate(LogicalSetOperation &setop) {
 //! Whether the left child, whose rows the set operation returns, is estimated to have few distinct rows with many
 //! copies each. The aggregate plan then expands a few groups into many rows, and since the scan of its few groups
 //! is the source of that pipeline, the expansion and everything above it up to the next pipeline breaker run on
-//! one thread, where the rows of the join plan come from all threads. Without an estimate the aggregate is used.
+//! one thread, where the rows of the join plan come from all threads. Without an estimate of the distinct rows,
+//! the child is taken for one group, so that the join is kept where there are enough rows for many copies of it.
 bool SetOperationAggregate::FewGroupsOfManyRows(LogicalSetOperation &setop) {
 	auto &context = optimizer.context;
 	auto threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -285,11 +287,9 @@ bool SetOperationAggregate::FewGroupsOfManyRows(LogicalSetOperation &setop) {
 	for (auto &binding : left.GetColumnBindings()) {
 		groups = MultiplyCounts(groups, estimator.ColumnDistinctCount(left, binding));
 	}
-	if (!groups.IsValid()) {
-		return false;
-	}
+	idx_t group_count = groups.IsValid() ? groups.GetIndex() : 1;
 	auto rows = left.EstimateCardinality(context);
-	return groups.GetIndex() < threads * MIN_GROUPS_PER_THREAD && groups.GetIndex() * MIN_COPIES_PER_GROUP <= rows;
+	return group_count < threads * MIN_GROUPS_PER_THREAD && group_count * MIN_COPIES_PER_GROUP <= rows;
 }
 
 //! The columns of a child followed by its side markers: in_left is TRUE for the rows of the left child and NULL for

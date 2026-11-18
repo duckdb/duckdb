@@ -213,8 +213,32 @@ SELECT g, count(*) FROM (SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_g
 1	33330
 2	33330
 
+# ---- Without an estimate of the distinct rows, enough rows for many copies of one group keep the join ---------------
+
 statement ok
 SET threads = 4;
+
+# range() has no statistics
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(2000) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(2000) t(i) INTERSECT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query I
+SELECT sum(length(sha256(x::VARCHAR || random()::VARCHAR))) FROM (SELECT i % 10 AS x FROM range(2000) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+127808
+
+# too few rows for many copies of a group
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(100) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
 
 # ---- The estimate of the distinct rows reads the plan once per column ----------------------------------------------
 
