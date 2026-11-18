@@ -21,7 +21,7 @@ from scripts.ci import run_tests
 TEST_FLAGS = "--autoloading available --skip-compiled"
 
 
-def read_extension_configs(repo_root: Path, configs: str, system_name: str | None = None):
+def read_extension_configs(repo_root: Path, configs: str, system_name: str | None = None, duckdb_platform: str = ""):
     with tempfile.TemporaryDirectory(prefix="duckdb-extension-test-config-") as directory:
         output = Path(directory) / "extensions.json"
         subprocess.run(
@@ -30,6 +30,8 @@ def read_extension_configs(repo_root: Path, configs: str, system_name: str | Non
                 f"-DPROJECT_SOURCE_DIR={repo_root}",
                 f"-DEXTENSION_CONFIGS={configs}",
                 f"-DCMAKE_SYSTEM_NAME={system_name or platform.system()}",
+                f"-DMUSL_ENABLED={'1' if 'musl' in duckdb_platform else '0'}",
+                f"-DMINGW={'ON' if duckdb_platform.endswith(('_mingw', '_rtools')) else 'OFF'}",
                 f"-DOUTPUT_FILE={output}",
                 "-P",
                 str(REPO_ROOT / "scripts" / "ci" / "export_extension_test_config.cmake"),
@@ -41,13 +43,17 @@ def read_extension_configs(repo_root: Path, configs: str, system_name: str | Non
         return json.loads(output.read_text(encoding="utf8"))
 
 
-def prepare_test_roots(repo_root: Path, extensions):
+def prepare_test_roots(repo_root: Path, extensions, build_dir: Path | None = None, *, allow_empty: bool = False):
     roots = []
     for extension in extensions:
         name = extension["name"]
         if extension["git_url"]:
-            sync_out_of_tree_extensions.sync_extension(extension, repo_root / "extension" / "external", repo_root)
-            source = repo_root / "extension" / "external" / name
+            fetched_source = build_dir / "_deps" / f"{name}_extension_fc-src" if build_dir else None
+            if fetched_source and fetched_source.is_dir():
+                source = fetched_source
+            else:
+                sync_out_of_tree_extensions.sync_extension(extension, repo_root / "extension" / "external", repo_root)
+                source = repo_root / "extension" / "external" / name
             root = source / (extension["test_dir"] or "test/sql")
         else:
             source = Path(extension["source_dir"]) if extension["source_dir"] else repo_root / "extension" / name
@@ -62,19 +68,43 @@ def prepare_test_roots(repo_root: Path, extensions):
         if root not in roots:
             roots.append(root)
         print(f"Extension SQL tests: {name}: {root}", flush=True)
-    if not roots:
+    if not roots and not allow_empty:
         raise RuntimeError("No extension SQL test roots selected by the extension configs")
     return roots
 
 
-def run_extension_tests(duckdb: Path, roots: list[Path], repo_root: Path, *, list_tests: bool = False):
+def run_extension_tests(
+    duckdb: Path,
+    roots: list[Path],
+    repo_root: Path,
+    *,
+    list_tests: bool = False,
+    test_extension: Path | None = None,
+    test_flags: str = TEST_FLAGS,
+):
+    extension = test_extension or run_tests.resolve_test_extension_path(duckdb.parent)
+    subprocess.run(
+        [
+            str(duckdb),
+            "-unsigned",
+            "-no-agent",
+            "-batch",
+            "-bail",
+            "-c",
+            f"LOAD {run_tests.sql_string(extension)};",
+        ],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     command = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "ci" / "run_tests.py"),
         str(duckdb),
         "--test-extension",
-        str(run_tests.resolve_test_extension_path(duckdb.parent)),
-        f"--test-flags={TEST_FLAGS}",
+        str(extension),
+        f"--test-flags={test_flags}",
     ]
     for root in roots:
         command.extend(["--test-root", str(root)])
@@ -93,14 +123,34 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--duckdb", type=Path, default=REPO_ROOT / "build" / "release" / "duckdb")
     parser.add_argument("--extension-configs", default=os.environ.get("EXTENSION_CONFIGS", ""))
+    parser.add_argument("--source-root", type=Path, default=REPO_ROOT)
+    parser.add_argument("--test-root-directory", type=Path)
+    parser.add_argument("--test-root", action="append", type=Path, default=[])
+    parser.add_argument("--test-extension", type=Path)
+    parser.add_argument("--test-flags", default=TEST_FLAGS)
+    parser.add_argument("--platform", default="")
     parser.add_argument("--list-tests", action="store_true")
     args = parser.parse_args(argv)
-    if not args.extension_configs:
-        parser.error("--extension-configs or EXTENSION_CONFIGS must be set")
+    if not args.extension_configs and not args.test_root:
+        parser.error("--extension-configs or --test-root must be set")
     try:
-        extensions = read_extension_configs(REPO_ROOT, args.extension_configs)
-        roots = prepare_test_roots(REPO_ROOT, extensions)
-        return run_extension_tests(args.duckdb.resolve(), roots, REPO_ROOT, list_tests=args.list_tests)
+        extensions = (
+            read_extension_configs(args.source_root, args.extension_configs, duckdb_platform=args.platform)
+            if args.extension_configs
+            else []
+        )
+        roots = prepare_test_roots(
+            args.source_root, extensions, args.duckdb.resolve().parent, allow_empty=bool(args.test_root)
+        )
+        roots = list(dict.fromkeys([*roots, *(root.resolve() for root in args.test_root)]))
+        return run_extension_tests(
+            args.duckdb.resolve(),
+            roots,
+            args.test_root_directory or args.source_root,
+            list_tests=args.list_tests,
+            test_extension=args.test_extension,
+            test_flags=args.test_flags,
+        )
     except subprocess.CalledProcessError as error:
         print(f"error: {shlex.join(map(str, error.cmd))} exited with status {error.returncode}", file=sys.stderr)
         if error.stdout:

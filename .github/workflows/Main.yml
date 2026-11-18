@@ -504,6 +504,20 @@ jobs:
 
           ls "$RUNNER_TEMP"/repository_generation/*/*/*.duckdb_extension*
 
+      - name: Verify native test extensions
+        shell: bash
+        run: |
+          for platform_dir in "$RUNNER_TEMP"/repository_generation/*/*; do
+            case "$(basename "$platform_dir")" in
+              linux_amd64|linux_arm64|linux_amd64_musl|linux_arm64_musl|osx_amd64|osx_arm64|windows_amd64|windows_arm64|windows_amd64_mingw)
+                test -f "$platform_dir/test.duckdb_extension" || {
+                  echo "Missing native test extension in $platform_dir" >&2
+                  exit 1
+                }
+                ;;
+            esac
+          done
+
       - name: Validate extension signing
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
@@ -541,18 +555,18 @@ jobs:
         run: |
           make upload-extensions EXTENSION_REPOSITORY_PATH="$RUNNER_TEMP/repository_generation"
 
-      - name: Download DuckDB shell
+      - name: Download DuckDB test binaries
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         uses: actions/download-artifact@v8
         with:
-          name: duckdb-cli-linux-amd64.tar.gz
+          name: duckdb-test-linux-amd64.tar.gz
           path: ${{ runner.temp }}/duckdb-cli
 
-      - name: Extract DuckDB shell
+      - name: Extract DuckDB test binaries
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: |
           mkdir -p build/release
-          tar -xzf "$RUNNER_TEMP/duckdb-cli/duckdb-cli-linux-amd64.tar.gz" -C build/release
+          tar -xzf "$RUNNER_TEMP/duckdb-cli/duckdb-test-linux-amd64.tar.gz" -C build/release
 
       - name: Copy over local extension repository
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -749,8 +763,9 @@ jobs:
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
           make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+          make test-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb TEST_EXTENSION_BINARY=build/release/extension/test/test.duckdb_extension
           make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
+          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         ./scripts/upload-assets-to-staging.sh github_release "${assets[@]}"
 
@@ -758,6 +773,12 @@ jobs:
       if: ${{ matrix.config.is_canonical_build }}
       with:
         path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.is_canonical_build }}
+      with:
+        path: duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7
@@ -969,16 +990,23 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+        make test-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb TEST_EXTENSION_BINARY=build/release/extension/test/test.duckdb_extension
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
         make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
         path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7

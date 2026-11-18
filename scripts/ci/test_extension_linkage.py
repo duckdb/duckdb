@@ -13,6 +13,62 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which("cmake") and shutil.which("ninja"), "requires CMake and Ninja")
 class ExtensionLinkageTest(unittest.TestCase):
+    def test_extensions_only_has_no_shell_or_test_runner_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            archives = build / "prebuilt"
+            archives.mkdir()
+            names = ["core_functions", "icu", "json", "parquet", "autocomplete", "tpcds", "tpch"]
+            core_archive = archives / ("duckdb_static.lib" if sys.platform == "win32" else "libduckdb_static.a")
+            core_archive.touch()
+            for name in names:
+                (archives / (f"{name}_extension.lib" if sys.platform == "win32" else f"lib{name}_extension.a")).touch()
+            config = build / "extensions.cmake"
+            config.write_text(
+                'set(DUCKDB_MAIN_EXTENSION_CONFIG_TYPE "IN_TREE")\n'
+                f'include("{REPO_ROOT.as_posix()}/.github/config/core.cmake")\n'
+            )
+            query = build / ".cmake/api/v1/query"
+            query.mkdir(parents=True)
+            (query / "codemodel-v2").touch()
+            result = subprocess.run(
+                [
+                    "cmake",
+                    "-S",
+                    str(REPO_ROOT),
+                    "-B",
+                    str(build),
+                    "-G",
+                    "Ninja",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DBUILD_EXTENSIONS_ONLY=ON",
+                    f"-DPREBUILT_BINARY={core_archive}",
+                    f"-DPREBUILT_EXTENSIONS={';'.join(names)}",
+                    f"-DDUCKDB_EXTENSION_CONFIGS={config}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            reply = build / ".cmake/api/v1/reply"
+            index = json.loads(next(reply.glob("index-*.json")).read_text())
+            model = json.loads((reply / index["reply"]["codemodel-v2"]["jsonFile"]).read_text())
+            targets = {target["name"] for target in model["configurations"][0]["targets"]}
+            self.assertIn("tpch_loadable_extension", targets)
+            self.assertFalse(
+                targets.intersection(
+                    {
+                        "shell",
+                        "test_extension",
+                        "test_loadable_extension",
+                        "test_helpers",
+                        "test_sqlite_runner",
+                        "duckdb_tests_loadable_extension",
+                    }
+                ),
+                targets,
+            )
+
     def check_linkage(self, static_build, wasm_source_build=False, prebuilt=False, sanitized=False):
         with tempfile.TemporaryDirectory() as directory:
             build = Path(directory)

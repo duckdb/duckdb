@@ -2,6 +2,7 @@
 
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -99,6 +100,36 @@ class ExtensionTestConfigTest(unittest.TestCase):
         os.environ["BUILD_COMPLETE_EXTENSION_SET"] = "0"
         self.assertEqual(self.read(config), [])
 
+    def test_platform_guards_include_musl_and_mingw(self):
+        config = self.root / "platform.cmake"
+        config.write_text(
+            '''
+            if(NOT MUSL_ENABLED)
+                duckdb_extension_load(glibc LOAD_TESTS)
+            endif()
+            if(MINGW)
+                duckdb_extension_load(mingw LOAD_TESTS)
+            endif()
+            '''
+        )
+        self.assertEqual(runner.read_extension_configs(self.root, str(config), "Linux", "linux_amd64_musl"), [])
+        self.assertEqual(
+            [
+                entry["name"]
+                for entry in runner.read_extension_configs(self.root, str(config), "Windows", "windows_amd64_mingw")
+            ],
+            ["glibc", "mingw"],
+        )
+
+    def test_existing_build_sources_are_used_without_reapplying_patches(self):
+        entries = self.read("duckdb_extension_load(remote LOAD_TESTS GIT_URL url GIT_TAG pin)")
+        build = self.root / "build/release"
+        test_root = build / "_deps/remote_extension_fc-src/test/sql"
+        test_root.mkdir(parents=True)
+        with mock.patch.object(runner.sync_out_of_tree_extensions, "sync_extension") as sync:
+            self.assertEqual(runner.prepare_test_roots(self.root, entries, build), [test_root])
+        sync.assert_not_called()
+
     def test_empty_selection_and_missing_directory_fail(self):
         with self.assertRaisesRegex(RuntimeError, "No extension SQL test roots"):
             runner.prepare_test_roots(self.root, [])
@@ -113,7 +144,17 @@ class ExtensionTestInvocationTest(unittest.TestCase):
         with mock.patch.object(runner.subprocess, "run", return_value=result) as run:
             with self.assertRaisesRegex(RuntimeError, "No extension SQL tests selected"):
                 runner.run_extension_tests(Path("/build/duckdb"), [Path("/extension/tests")], Path("/source"))
+        self.assertEqual(run.call_count, 2)
+
+    def test_load_failure_precedes_discovery(self):
+        failure = subprocess.CalledProcessError(
+            1, ["duckdb", "-c", "LOAD test"], stderr="Invalid access to memory location"
+        )
+        with mock.patch.object(runner.subprocess, "run", side_effect=failure) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                runner.run_extension_tests(Path("/build/duckdb"), [Path("/extension/tests")], Path("/source"))
         self.assertEqual(run.call_count, 1)
+        self.assertIn("-bail", run.call_args.args[0])
 
     def test_failed_discovery_preserves_cause(self):
         failure = subprocess.CalledProcessError(1, ["duckdb"], output="output", stderr="extension load failed")
@@ -129,19 +170,38 @@ class ExtensionTestInvocationTest(unittest.TestCase):
 class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
     def test_downloaded_artifacts_run_only_fast_extension_sql_tests_and_report_skips(self):
         binary = Path(os.environ["DUCKDB_TEST_BINARY"]).resolve()
+        metadata = subprocess.run(
+            [
+                str(binary),
+                "-no-agent",
+                "-batch",
+                "-bail",
+                "-jsonlines",
+                "-c",
+                "SELECT CASE WHEN regexp_full_match(library_version, 'v[0-9]+[.][0-9]+[.][0-9]+') "
+                "THEN library_version ELSE source_id END AS version, platform FROM pragma_version(), pragma_platform();",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        metadata = json.loads(metadata.stdout)
         with tempfile.TemporaryDirectory(prefix="duckdb-artifact-extension-tests-") as directory:
             root = Path(directory).resolve()
             build_dir = root / "build" / "release"
-            repository = build_dir / "repository" / "version" / "platform"
+            repository = build_dir / "repository" / metadata["version"] / metadata["platform"]
             repository.mkdir(parents=True)
             shutil.copy2(binary, build_dir / binary.name)
             shutil.copy2(
                 binary.parent / "extension" / "test" / "test.duckdb_extension",
                 repository / "test.duckdb_extension",
             )
+            shutil.copy2(binary.parent / "extension/json/json.duckdb_extension", repository / "json.duckdb_extension")
             test_root = root / "extension" / "fixture" / "test" / "sql"
             test_root.mkdir(parents=True)
             (test_root / "pass.test").write_text("query I\nSELECT 42\n----\n42\n")
+            (test_root / "present_extension.test").write_text("require json\n\nquery I\nSELECT 42\n----\n42\n")
             (test_root / "environment.test").write_text(
                 "require-env DUCKDB_ARTIFACT_TEST_UNSET\n\nstatement error\nSELECT 'never reached';\n----\nmissing\n"
             )
@@ -183,14 +243,45 @@ class ExtensionTestArtifactIntegrationTest(unittest.TestCase):
                 )
             text = output.read_text()
             self.assertEqual(result.returncode, 0, text)
-            self.assertIn("Selected 3 extension SQL tests from 1 test roots", text)
+            self.assertIn("Selected 4 extension SQL tests from 1 test roots", text)
             self.assertIn("skipped tests", text)
             self.assertIn("DUCKDB_ARTIFACT_TEST_UNSET", text)
             self.assertIn("require delta", text)
             self.assertNotIn("core.test", text)
             self.assertNotIn("sqlite.test", text)
             self.assertNotIn("slow.test_slow", text)
+            self.assertNotIn("require json:", text)
             self.assertEqual(roots, [test_root])
+
+    def test_installed_cli_can_install_load_and_discover_local_tests(self):
+        binary = Path(os.environ["DUCKDB_TEST_BINARY"]).resolve()
+        extension = binary.parent / "extension/test/test.duckdb_extension"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / "tests"
+            tests.mkdir()
+            fixture = tests / "example.test"
+            fixture.write_text("query I\nSELECT 42\n----\n42\n")
+            flags = runner.run_tests.sql_string_list(["--skip-compiled"])
+            sql = (
+                f"SET extension_directory={runner.run_tests.sql_string(root / 'installed')};"
+                f"INSTALL {runner.run_tests.sql_string(extension)}; LOAD test;"
+                "SELECT count(*) AS selected FROM scan_tests(['*'], "
+                f"test_roots={runner.run_tests.sql_string_list([tests])}, test_flags={flags});"
+                f"SELECT * FROM run_tests({runner.run_tests.sql_string_list(['sql:' + fixture.as_posix()])}, "
+                f"test_roots={runner.run_tests.sql_string_list([tests])}, test_flags={flags});"
+            )
+            result = subprocess.run(
+                [str(binary), "-unsigned", "-no-agent", "-batch", "-bail", "-jsonlines", "-c", sql],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            rows = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+            self.assertEqual(rows[0], {"selected": 1})
+            self.assertEqual(int(rows[-1]["test_count"]), 1)
 
 
 if __name__ == "__main__":
