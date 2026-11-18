@@ -20,6 +20,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -99,8 +100,8 @@ static idx_t GetAvailableSystemMemory(DBConfig &config) {
 	if (config.file_system) {
 		return DBConfig::GetSystemAvailableMemory(*config.file_system);
 	}
-	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
+	LocalFileSystem local_fs;
+	return DBConfig::GetSystemAvailableMemory(local_fs);
 }
 
 } // namespace

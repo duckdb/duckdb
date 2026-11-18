@@ -1,4 +1,5 @@
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 
@@ -37,8 +38,8 @@ static string GetCacheKey(const string &database_p, const DBConfig &config) {
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
 	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database_p, *tmp_fs);
+		LocalFileSystem tmp_fs;
+		abs_database_path = GetDBAbsolutePath(database_p, tmp_fs);
 	}
 #if defined(_WIN32) || defined(__APPLE__)
 	return StringUtil::Lower(abs_database_path);
@@ -117,8 +118,8 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
 	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
+		LocalFileSystem tmp_fs;
+		abs_database_path = GetDBAbsolutePath(database, tmp_fs);
 	}
 	// Creates new instance
 	string instance_path = abs_database_path;

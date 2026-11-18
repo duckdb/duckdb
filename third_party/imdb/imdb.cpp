@@ -9,13 +9,13 @@ namespace imdb {
 
 void dbgen(DuckDB &db) {
 	Connection con(db);
+	auto &file_system = FileSystem::GetLocal(*db.instance);
 	con.Query("BEGIN TRANSACTION");
 	for (int t = 0; t < IMDB_TABLE_COUNT; t++) {
 		con.Query(IMDB_TABLE_DDL[t]);
 		string table_name = string(IMDB_TABLE_NAMES[t]);
 		string data_file_name = "third_party/imdb/data/"+table_name+".csv.gz";
-		auto file_system = FileSystem::CreateLocal();
-		if (!file_system->FileExists(data_file_name)) {
+		if (!file_system.FileExists(data_file_name)) {
 			throw InvalidInputException("IMDB data file missing, try `make imdb` to download.");
 		}
 		con.Query("COPY "+table_name+" FROM '"+data_file_name+"' DELIMITER ',' ESCAPE '\\';");
