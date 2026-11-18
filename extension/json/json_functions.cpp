@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -142,17 +143,17 @@ JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
     : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
+JSONFunctionLocalState::JSONFunctionLocalState(Context &context)
     : JSONFunctionLocalState(BufferAllocator::Get(context)) {
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data) {
+                                                            optional_ptr<const FunctionData> bind_data) {
 	return make_uniq<JSONFunctionLocalState>(state.GetContext());
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
-	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(parameters.context->GetContext())
 	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 

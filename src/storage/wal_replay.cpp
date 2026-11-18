@@ -489,7 +489,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+	MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
@@ -527,7 +527,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			con.Rollback();
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
@@ -680,7 +680,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
+				MetaTransaction::Get(*con.context).ModifyDatabase(*con.context, database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -690,7 +690,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		// serialization failure means a truncated WAL
 		// these failures are ignored unless abort_on_wal_failure is true
 		// other failures always result in an error
-		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+		if (Settings::Get<DebugAbortOnWalFailureSetting>(config) || error.Type() != ExceptionType::SERIALIZATION) {
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} catch (...) {

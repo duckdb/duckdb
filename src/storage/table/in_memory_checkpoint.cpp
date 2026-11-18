@@ -21,16 +21,16 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
                                            StorageManager &storage_manager, CheckpointOptions options_p,
-                                           optional_ptr<ClientContext> client_context)
-    : CheckpointWriter(db, context, client_context),
-      partial_block_manager(GetContext(), block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT),
-      storage_manager(storage_manager), options(options_p) {
+                                           optional_ptr<ClientContext> checkpoint_context)
+    : CheckpointWriter(db, context, checkpoint_context),
+      partial_block_manager(block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT), storage_manager(storage_manager),
+      options(options_p) {
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	// appends that run alongside the checkpoint start new row groups, index changes go to the checkpoint deltas
-	ActiveCheckpointWrapper active_checkpoint(GetContext(), db, transaction_manager);
+	ActiveCheckpointWrapper active_checkpoint(checkpoint_context, db, transaction_manager);
 	{
 		unique_lock<mutex> commit_lock;
 		if (!options.commit_lock) {
@@ -145,7 +145,7 @@ unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(Storag
 
 void InMemoryTableDataWriter::FlushPartialBlocks() {
 	// Finalize packed buffers before the checkpoint row groups become visible.
-	checkpoint_manager.GetPartialBlockManager().FlushPartialBlocks();
+	checkpoint_manager.GetPartialBlockManager().FlushPartialBlocks(checkpoint_manager.GetContext());
 }
 
 CheckpointOptions InMemoryTableDataWriter::GetCheckpointOptions() const {

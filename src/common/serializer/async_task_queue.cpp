@@ -80,6 +80,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "AsyncTaskQueueTask";
+	}
+
 private:
 	AsyncTaskQueue &queue;
 	bool owns_scheduled_slot = true;

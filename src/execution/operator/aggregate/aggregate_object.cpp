@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
-                                 idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
-                                 optional_ptr<const Expression> filter)
+AggregateObject::AggregateObject(BoundAggregateFunction function, optional_ptr<const FunctionData> bind_data,
+                                 idx_t child_count, idx_t payload_size, AggregateType aggr_type,
+                                 PhysicalType return_type, optional_ptr<const Expression> filter)
     : function(std::move(function)),
       bind_data_wrapper(bind_data ? make_shared_ptr<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
       child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
@@ -17,8 +17,8 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
-    : AggregateObject(aggr.Function(), aggr.BindInfoMutable().get(), aggr.GetChildren().size(),
-                      AlignValue(aggr.Function().GetStateSize(aggr.BindInfoMutable().get())), aggr.GetAggregateType(),
+    : AggregateObject(aggr.Function(), aggr.BindInfo().get(), aggr.GetChildren().size(),
+                      AlignValue(aggr.Function().GetStateSize(aggr.BindInfo().get())), aggr.GetAggregateType(),
                       aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
 }
 
