@@ -37,8 +37,9 @@ ANTI JOIN (SELECT id + 1 AS id FROM odd_keys) excluded USING (id);
 1
 1
 
+# Both possible output rows produce 1 without casting the unselected branch.
 query I
-SELECT {FIELD}.k::INTEGER FROM (
+SELECT CASE WHEN id = 1 THEN {FIELD}.k::INTEGER ELSE 1 END FROM (
     SELECT id, {FIELD} FROM cast_rows UNION ALL SELECT id, {FIELD} FROM cast_rows LIMIT 1);
 ----
 1
