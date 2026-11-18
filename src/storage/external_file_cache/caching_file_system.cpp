@@ -209,12 +209,16 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                           optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener);
+	return OpenFile(QueryContext(), path, flags, opener);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
                                                           const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
+	auto handle = make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
+	if (handle->file_not_found) {
+		return nullptr;
+	}
+	return handle;
 }
 
 //===----------------------------------------------------------------------===//
@@ -315,7 +319,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
-		GetFileHandle();
+		file_not_found = !TryGetFileHandle();
 		return;
 	}
 	// If we don't have any cached blocks, we must also open the file.
@@ -324,8 +328,9 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
 		needs_open = cached_file->blocks.empty();
 	}
-	if (needs_open) {
-		GetFileHandle();
+	if (needs_open && !TryGetFileHandle()) {
+		file_not_found = true;
+		return;
 	}
 	auto needs_full_download = StripForceFullDownloadIfPresent();
 	if (needs_full_download) {
@@ -337,6 +342,14 @@ CachingFileHandle::~CachingFileHandle() {
 }
 
 shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
+	auto handle = TryGetFileHandle();
+	if (!handle) {
+		throw IOException("Cannot open file \"%s\": file does not exist", path.path);
+	}
+	return handle;
+}
+
+shared_ptr<FileHandle> CachingFileHandle::TryGetFileHandle() {
 	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
 	if (file_handle) {
 		return file_handle;
@@ -347,6 +360,9 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	file_handle = file_system.OpenFile(path, internal_flags, opener);
+	if (!file_handle) {
+		return nullptr;
+	}
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
 	validation_info = GetValidationInfo(file_system, *file_handle);
 
