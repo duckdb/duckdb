@@ -241,6 +241,8 @@ jobs:
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
+          make test-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb TEST_EXTENSION_BINARY=build/release_arm64/extension/test/test.duckdb_extension
+          make test-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb TEST_EXTENSION_BINARY=build/release_amd64/extension/test/test.duckdb_extension
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-universal SHARED_LIBRARIES="build/release/src/libduckdb*.dylib"
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-arm64 SHARED_LIBRARIES="build/release_arm64/src/libduckdb*.dylib"
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-amd64 SHARED_LIBRARIES="build/release_amd64/src/libduckdb*.dylib"
@@ -251,6 +253,8 @@ jobs:
             duckdb-cli-osx-universal.tar.gz \
             duckdb-cli-osx-arm64.tar.gz \
             duckdb-cli-osx-amd64.tar.gz \
+            duckdb-test-osx-arm64.tar.gz \
+            duckdb-test-osx-amd64.tar.gz \
             duckdb-shared-libs-osx-universal.tar.gz \
             duckdb-shared-libs-osx-arm64.tar.gz \
             duckdb-shared-libs-osx-amd64.tar.gz \
@@ -277,6 +281,16 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           path: duckdb-cli-osx-amd64.tar.gz
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: duckdb-test-osx-arm64.tar.gz
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: duckdb-test-osx-amd64.tar.gz
           archive: false
 
       - uses: actions/upload-artifact@v7

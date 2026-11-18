@@ -704,6 +704,11 @@ release-artifact:
 cli-release-artifact:
 	bash scripts/package_release_artifact.sh cli "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)"
 
+.PHONY: test-release-artifact
+
+test-release-artifact:
+	bash scripts/package_release_artifact.sh test "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)" "$(TEST_EXTENSION_BINARY)"
+
 .PHONY: cli-zip-release-artifact
 
 cli-zip-release-artifact:

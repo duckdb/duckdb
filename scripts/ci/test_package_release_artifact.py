@@ -67,6 +67,30 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                 self.assertEqual(archive.getinfo("duckdb.exe").compress_type, zipfile.ZIP_DEFLATED)
                 self.assertEqual(archive.read("duckdb.exe"), b"binary")
 
+    def test_test_release_artifact(self):
+        for executable, suffix in (("duckdb", "linux-amd64"), ("duckdb.exe", "windows-amd64")):
+            with self.subTest(executable=executable), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                cli = root / executable
+                cli.write_bytes(b"shell")
+                cli.chmod(0o755)
+                extension = root / "test.duckdb_extension"
+                extension.write_bytes(b"test extension")
+                self.run_make(
+                    "test-release-artifact",
+                    root,
+                    ARTIFACT_SUFFIX=suffix,
+                    CLI_BINARY=str(cli),
+                    TEST_EXTENSION_BINARY=str(extension),
+                )
+                with tarfile.open(root / f"duckdb-test-{suffix}.tar.gz", "r:gz") as archive:
+                    self.assertEqual(archive.getnames(), [executable, "extension/test/test.duckdb_extension"])
+                    self.assertEqual(archive.extractfile(executable).read(), b"shell")
+                    self.assertTrue(archive.getmember(executable).mode & stat.S_IXUSR)
+                    self.assertEqual(
+                        archive.extractfile("extension/test/test.duckdb_extension").read(), b"test extension"
+                    )
+
     def test_shared_libraries_release_artifact(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
