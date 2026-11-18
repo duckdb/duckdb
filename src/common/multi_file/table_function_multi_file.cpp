@@ -2,8 +2,10 @@
 #include "duckdb/common/operator/add.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function_set.hpp"
@@ -613,12 +615,22 @@ void TableFunctionMultiFileWrapper::ReadFilesForStatistics(ClientContext &contex
 	                                                    bind_data.file_options);
 }
 
+//! The size of a file, when the file list gave it (a glob lists it, as does a list of {filename, file_size} structs)
+static optional_idx FileSizeOf(const OpenFileInfo &file) {
+	idx_t file_size;
+	if (!file.extended_info || !file.extended_info->TryGetOption("file_size", file_size)) {
+		return optional_idx();
+	}
+	return optional_idx(file_size);
+}
+
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
 	if (multi_file_data.initial_reader) {
 		// the cardinality estimate comes from the first file - keep it, as a filter pushdown can prune that file's
 		// reader before the optimizer asks for the estimate
 		data.cardinality = multi_file_data.initial_reader->Cast<TableFunctionFileReader>().GetCardinality();
+		data.cardinality_file_size = FileSizeOf(multi_file_data.initial_reader->file);
 		if (multi_file_data.union_readers.empty()) {
 			auto file = multi_file_data.initial_reader->GetUnionData(0);
 			file->reader.reset();
@@ -762,6 +774,131 @@ static optional_idx ExplicitCardinality(Context &context, const TableFunctionMul
 	return optional_idx(cardinality);
 }
 
+//! The sizes of the files listed so far, without listing more of them. Empty when a file has no size
+static optional<ListedFileSizes> ListFileSizes(const MultiFileList &file_list) {
+	ListedFileSizes sizes;
+	sizes.file_list = &file_list;
+	MultiFileListScanData scan_data;
+	scan_data.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	file_list.InitializeScan(scan_data);
+	OpenFileInfo file;
+	while (file_list.Scan(scan_data, file)) {
+		auto file_size = FileSizeOf(file);
+		if (!file_size.IsValid()) {
+			return nullopt;
+		}
+		auto size = file_size.GetIndex();
+		if (sizes.count == 0 || size < sizes.min) {
+			sizes.min = size;
+		}
+		if (sizes.count == 0 || size > sizes.max) {
+			sizes.max = size;
+			sizes.largest = file;
+		}
+		sizes.total += size;
+		sizes.count++;
+	}
+	if (sizes.count == 0) {
+		return nullopt;
+	}
+	return sizes;
+}
+
+//! Files whose sizes are within this factor of each other hold about the same rows, so the rows of one file times
+//! the file count is the estimate. Beyond it the count says nothing, and only the bytes tell the files apart. As
+//! the Hive scan of duckdb-aws-glue estimates (HiveScanCardinality)
+static constexpr idx_t SIMILAR_FILE_SIZE_RATIO = 2;
+//! The most bytes a row is taken to have when the rows per byte come from the first file rather than the largest:
+//! a first file of a few rows is mostly fixed metadata. The Hive scan's floor too
+static constexpr idx_t FLOOR_BYTES_PER_ROW = 100;
+
+double TableFunctionMultiFileWrapper::MeasuredRowsPerByte(ClientContext &context, const MultiFileBindData &bind_data,
+                                                          const OpenFileInfo &largest, idx_t largest_size) {
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	lock_guard<mutex> guard(data.rows_per_byte_lock);
+	if (data.rows_per_byte > 0) {
+		return data.rows_per_byte;
+	}
+	if (!data.cardinality.IsValid() || !data.cardinality_file_size.IsValid() ||
+	    data.cardinality_file_size.GetIndex() == 0) {
+		return 0;
+	}
+	idx_t rows = data.cardinality.GetIndex();
+	idx_t bytes = data.cardinality_file_size.GetIndex();
+	if (settings.file_cardinality_is_row_count && largest_size <= bytes) {
+		// no listed file is larger than the first, whose count is already a measurement
+		data.rows_per_byte_measured = true;
+	} else if (settings.file_cardinality_is_row_count) {
+		// the largest file holds the most rows per byte of fixed metadata, so measure it, as the Hive scan does
+		try {
+			auto options = data.options;
+			auto reader = CreateReader(context, largest, options, bind_data.file_options);
+			auto largest_rows = reader->Cast<TableFunctionFileReader>().GetCardinality();
+			if (largest_rows.IsValid()) {
+				rows = largest_rows.GetIndex();
+				bytes = largest_size;
+				data.rows_per_byte_measured = true;
+			}
+		} catch (std::exception &ex) {
+			// a file that cannot be read leaves the first file's ratio, which is still an estimate
+			const auto type = ErrorData(ex).Type();
+			if (type == ExceptionType::INTERRUPT || type == ExceptionType::INTERNAL ||
+			    Exception::InvalidatesDatabase(type)) {
+				throw;
+			}
+		}
+	}
+	data.rows_per_byte = double(MaxValue<idx_t>(rows, 1)) / double(bytes);
+	return data.rows_per_byte;
+}
+
+optional_idx TableFunctionMultiFileWrapper::SizeScaledCardinality(ClientContext &context,
+                                                                  const MultiFileBindData &bind_data,
+                                                                  idx_t file_count) {
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	if (!data.cardinality_file_size.IsValid()) {
+		return optional_idx();
+	}
+	ListedFileSizes sizes;
+	{
+		lock_guard<mutex> guard(data.rows_per_byte_lock);
+		const auto listed = bind_data.file_list->GetFileCount().count;
+		if (data.listed_sizes.file_list != bind_data.file_list.get() || data.listed_sizes.count != listed) {
+			auto fresh = ListFileSizes(*bind_data.file_list);
+			if (!fresh) {
+				return optional_idx();
+			}
+			data.listed_sizes = std::move(*fresh);
+		}
+		sizes = data.listed_sizes;
+	}
+	// the first file counts too: a filter can prune it from the list, and its rows then stand for none of the others
+	const auto first_size = data.cardinality_file_size.GetIndex();
+	const auto min = MinValue(sizes.min, first_size);
+	const auto max = MaxValue(sizes.max, first_size);
+	if (max <= min * SIMILAR_FILE_SIZE_RATIO) {
+		return optional_idx();
+	}
+	auto rows_per_byte = MeasuredRowsPerByte(context, bind_data, sizes.largest, sizes.max);
+	if (rows_per_byte <= 0) {
+		return optional_idx();
+	}
+	bool measured;
+	{
+		lock_guard<mutex> guard(data.rows_per_byte_lock);
+		measured = data.rows_per_byte_measured;
+	}
+	// the files not listed yet are taken to be the average size of those that are
+	const auto bytes = double(sizes.total) / double(sizes.count) * double(file_count);
+	auto rows = bytes * rows_per_byte;
+	if (!measured) {
+		rows = MaxValue<double>(rows, bytes / double(FLOOR_BYTES_PER_ROW));
+	}
+	// a footer's row count is not checked, so bound the estimate before converting it
+	rows = MinValue<double>(std::round(rows), double(NumericLimits<idx_t>::Maximum()) / 2);
+	return optional_idx(MaxValue<idx_t>(LossyNumericCast<idx_t>(rows), file_count));
+}
+
 unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientContext &context,
                                                                          const MultiFileBindData &bind_data,
                                                                          idx_t file_count) {
@@ -775,8 +912,10 @@ unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientC
 		result->has_estimated_cardinality = true;
 		result->estimated_cardinality = explicit_cardinality.GetIndex();
 	} else if (data.cardinality.IsValid()) {
+		// files of very different sizes, e.g. the partitions of a table by date, are estimated from their bytes
+		auto scaled = SizeScaledCardinality(context, bind_data, file_count);
 		result->has_estimated_cardinality = true;
-		result->estimated_cardinality = data.cardinality.GetIndex() * file_count;
+		result->estimated_cardinality = scaled.IsValid() ? scaled.GetIndex() : data.cardinality.GetIndex() * file_count;
 	} else {
 		// no file was opened at bind (e.g. because the schema was given): estimate from the sizes of the files, when
 		// the file list carries them (a local glob, or a list of {filename, file_size} structs)

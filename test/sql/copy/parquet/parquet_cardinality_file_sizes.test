@@ -1,0 +1,172 @@
+# name: test/sql/copy/parquet/parquet_cardinality_file_sizes.test
+# description: A scan of files of very different sizes is estimated from their bytes, not the first file's rows
+# group: [parquet]
+
+require parquet
+
+require json
+
+# partitions of very different sizes, the first nearly empty (as the first dates of a table partitioned by date)
+statement ok
+COPY (SELECT CASE WHEN i < 2 THEN 0 ELSE 1 + i % 3 END AS p, i AS v, i * 7 AS w FROM range(0, 300002) t(i))
+TO '{TEST_DIR}/skewed' (FORMAT PARQUET, PARTITION_BY (p));
+
+# the largest file is opened for its rows per byte (the estimate was 2 rows times 4 files)
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/skewed/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~(29[0-9]|30[0-9]),[0-9]{3} rows.*
+
+# files within a factor of two of each other: the first file's rows times the file count, even when their rows per byte
+# differ (100,000 short strings, then 700 md5 strings in a larger file; scaled by the larger file, ~1,200 rows)
+statement ok
+COPY (SELECT 0 AS p, (i % 1000)::VARCHAR AS s FROM range(0, 100000) t(i)) TO '{TEST_DIR}/even' (FORMAT PARQUET, PARTITION_BY (p));
+
+statement ok
+COPY (SELECT 1 AS p, md5(i::VARCHAR) AS s FROM range(0, 700) t(i)) TO '{TEST_DIR}/even' (FORMAT PARQUET, PARTITION_BY (p), APPEND true);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/even/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~200,000 rows.*
+
+# a largest file that cannot be opened leaves the first file's rows per byte
+statement ok
+COPY (SELECT 0 AS p, i AS v, i * 7 AS w FROM range(0, 1000) t(i)) TO '{TEST_DIR}/broken' (FORMAT PARQUET, PARTITION_BY (p));
+
+statement ok
+COPY (SELECT 1 AS p, repeat('x', 2000000) AS junk) TO '{TEST_DIR}/broken'
+(FORMAT CSV, HEADER false, PARTITION_BY (p), FILE_EXTENSION 'parquet', APPEND true);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/broken/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~[0-9]{3},[0-9]{3} rows.*
+
+# JSON's count for a file bound with a known schema is a placeholder, so the first file gives the rows per byte
+statement ok
+COPY (SELECT CASE WHEN i < 2 THEN 0 ELSE 1 + i % 3 END AS p, i AS v, i * 7 AS w FROM range(0, 300002) t(i))
+TO '{TEST_DIR}/skewed_json' (FORMAT JSON, PARTITION_BY (p));
+
+query II
+EXPLAIN SELECT * FROM read_json('{TEST_DIR}/skewed_json/*/*.json')
+----
+physical_plan	<REGEX>:.*~[3-6][0-9]{2},[0-9]{3} rows.*
+
+# a first file of one wide row would price the others at a few rows each: the bytes floor the estimate at 100 a row
+statement ok
+COPY (SELECT CASE WHEN i < 1 THEN 0 ELSE 1 + i % 3 END AS p, CASE WHEN i < 1 THEN repeat('x', 100000) ELSE 'y' END AS s
+      FROM range(0, 300001) t(i)) TO '{TEST_DIR}/wide_json' (FORMAT JSON, PARTITION_BY (p));
+
+query II
+EXPLAIN SELECT * FROM read_json('{TEST_DIR}/wide_json/*/*.json')
+----
+physical_plan	<REGEX>:.*~[0-9]{2},[0-9]{3} rows.*
+
+# a list of files gives their sizes too
+query II
+EXPLAIN SELECT * FROM read_parquet(['{TEST_DIR}/skewed/p=0/data_0.parquet', '{TEST_DIR}/skewed/p=1/data_0.parquet'])
+----
+physical_plan	<REGEX>:.*~(9[0-9]|10[0-9]),[0-9]{3} rows.*
+
+# sizes given with the files set the 2x boundary exactly: both entries are the same 1,000-row file, the second with
+# a declared size, so the byte estimate is (size + declared) x 1,000 / declared rows
+statement ok
+COPY (SELECT i AS v FROM range(0, 1000) t(i)) TO '{TEST_DIR}/sized.parquet';
+
+statement ok
+SET VARIABLE sized = (SELECT size FROM read_blob('{TEST_DIR}/sized.parquet'));
+
+# exactly twice the size: the first file's rows times the count
+query II
+EXPLAIN SELECT * FROM read_parquet([{filename: '{TEST_DIR}/sized.parquet', file_size: getvariable('sized')},
+                                    {filename: '{TEST_DIR}/sized.parquet', file_size: getvariable('sized') * 2}])
+----
+physical_plan	<REGEX>:.*~2,000 rows.*
+
+# one byte more: the bytes, (1 + 2) / 2 x 1,000
+query II
+EXPLAIN SELECT * FROM read_parquet([{filename: '{TEST_DIR}/sized.parquet', file_size: getvariable('sized')},
+                                    {filename: '{TEST_DIR}/sized.parquet', file_size: getvariable('sized') * 2 + 1}])
+----
+physical_plan	<REGEX>:.*~1,500 rows.*
+
+# a listed file without a size keeps the first file's rows times the count
+query II
+EXPLAIN SELECT * FROM read_parquet([{filename: '{TEST_DIR}/sized.parquet', file_size: getvariable('sized')},
+                                    {filename: '{TEST_DIR}/sized.parquet', file_size: NULL}])
+----
+physical_plan	<REGEX>:.*~2,000 rows.*
+
+# a filter that prunes the first file leaves its rows standing for none of the others
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/skewed/*/*.parquet', hive_partitioning = true) WHERE p > 0
+----
+physical_plan	<REGEX>:.*~(29[0-9]|30[0-9]),[0-9]{3} rows.*
+
+# rows much wider than the floor's 100 bytes keep the rows per byte of the largest file
+statement ok
+COPY (SELECT CASE WHEN i < 2 THEN 0 ELSE 1 + i % 3 END AS p,
+             array_to_string(list_transform(range(64), lambda k: md5((i * 64 + k)::VARCHAR)), '') AS s
+      FROM range(0, 6002) t(i)) TO '{TEST_DIR}/wide' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/wide/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~(5,[5-9]|6,[0-4])[0-9]{2} rows.*
+
+# the same when the first file is the largest: its own count is measured, so the floor does not apply
+statement ok
+COPY (SELECT CASE WHEN i < 6000 THEN 0 ELSE 1 END AS p,
+             array_to_string(list_transform(range(64), lambda k: md5((i * 64 + k)::VARCHAR)), '') AS s
+      FROM range(0, 8000) t(i)) TO '{TEST_DIR}/wide_first' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/wide_first/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~(7,[5-9]|8,[0-4])[0-9]{2} rows.*
+
+# explicit_cardinality is still the estimate
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/skewed/*/*.parquet', explicit_cardinality = 1234)
+----
+physical_plan	<REGEX>:.*~1,234 rows.*
+
+# explicit_cardinality wins over the row count of a single opened file too
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/skewed/p=1/*.parquet', explicit_cardinality = 1234567)
+----
+physical_plan	<REGEX>:.*~1,234,567 rows.*
+
+# a first file of 2 wide rows makes the bytes imply more rows than the files hold (~324,000)
+statement ok
+COPY (SELECT 0 AS p, i AS v, i * 7 AS w,
+             array_to_string(list_transform(range(3000), lambda k: md5((i * 3000 + k)::VARCHAR)), '') AS s
+      FROM range(0, 2) t(i)) TO '{TEST_DIR}/capped' (FORMAT PARQUET, PARTITION_BY (p));
+
+statement ok
+COPY (SELECT 1 + i % 3 AS p, i AS v, i * 7 AS w, NULL::VARCHAR AS s FROM range(0, 300000) t(i))
+TO '{TEST_DIR}/capped' (FORMAT PARQUET, PARTITION_BY (p), APPEND true);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/capped/*/*.parquet')
+----
+physical_plan	<REGEX>:.*~3[12][0-9],[0-9]{3} rows.*
+
+# with union_by_name every file is opened at bind, and their row counts are the estimate, not their bytes
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/capped/*/*.parquet', union_by_name = true)
+----
+physical_plan	<REGEX>:.*~300,002 rows.*
+
+# a single file is estimated at its rows
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/skewed/p=1/*.parquet')
+----
+physical_plan	<REGEX>:.*~100,000 rows.*
+
+# the results are unaffected
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/skewed/*/*.parquet')
+----
+300002

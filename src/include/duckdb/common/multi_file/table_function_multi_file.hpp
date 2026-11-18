@@ -158,11 +158,32 @@ public:
 	bool multi_file_scan = false;
 };
 
+//! The sizes of the files a scan has listed so far
+struct ListedFileSizes {
+	//! The list and the number of files the summary was taken over: a filter replaces the list, and a lazy list
+	//! lists more files
+	const MultiFileList *file_list = nullptr;
+	idx_t count = 0;
+	idx_t total = 0;
+	idx_t min = 0;
+	idx_t max = 0;
+	OpenFileInfo largest;
+};
+
 //! Bind data of a multi-file function that wraps a single-file table function
 struct TableFunctionMultiFileData : public TableFunctionData {
 	TableFunctionFileReaderOptions options;
 	//! The cardinality estimate of the first file, kept here because its reader can be released or pruned
 	optional_idx cardinality;
+	//! The size of that file, when the file list gave it
+	optional_idx cardinality_file_size;
+	//! The rows per byte the estimate scales the sizes of the files by, measured once (see GetCardinality), and
+	//! whether they come from the largest file's row count rather than the first file's
+	mutable mutex rows_per_byte_lock;
+	mutable double rows_per_byte = 0;
+	mutable bool rows_per_byte_measured = false;
+	//! The sizes of the listed files, kept for the next estimate of the same list
+	mutable ListedFileSizes listed_sizes;
 
 	//! Whether the schema every file is read with is known upfront - because it was combined from several files,
 	//! taken from the file the schema was determined on, or given by COPY from the target table
@@ -174,6 +195,12 @@ struct TableFunctionMultiFileData : public TableFunctionData {
 		auto result = make_uniq<TableFunctionMultiFileData>();
 		result->options = options;
 		result->cardinality = cardinality;
+		result->cardinality_file_size = cardinality_file_size;
+		{
+			lock_guard<mutex> guard(rows_per_byte_lock);
+			result->rows_per_byte = rows_per_byte;
+			result->rows_per_byte_measured = rows_per_byte_measured;
+		}
 		return std::move(result);
 	}
 };
@@ -211,6 +238,9 @@ struct TableFunctionMultiFileSettings {
 	bool supports_cast_map = false;
 	//! Whether the function counts the bytes it scans, reported as operator.bytes_scanned of the scan
 	bool reports_bytes_scanned = false;
+	//! Whether the cardinality the function reports for a file is that file's row count, whatever schema the file is
+	//! bound with. A scan of files of very different sizes then opens the largest one for its row count
+	bool file_cardinality_is_row_count = false;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -437,6 +467,12 @@ public:
 	                                        const MultiFileOptions &file_options) override;
 	unique_ptr<NodeStatistics> GetCardinality(ClientContext &context, const MultiFileBindData &bind_data,
 	                                          idx_t file_count) override;
+	//! The estimate from the bytes of the files, when their sizes are known and differ by more than a factor of two
+	optional_idx SizeScaledCardinality(ClientContext &context, const MultiFileBindData &bind_data, idx_t file_count);
+	//! The rows per byte of the largest listed file, or of the first file when the format's per-file count depends on
+	//! the schema it is bound with. Measured once per bind; 0 when the first file has no size
+	double MeasuredRowsPerByte(ClientContext &context, const MultiFileBindData &bind_data, const OpenFileInfo &largest,
+	                           idx_t largest_size);
 	unique_ptr<MultiFileReaderInterface> Copy() override;
 	FileGlobInput GetGlobInput() override;
 
