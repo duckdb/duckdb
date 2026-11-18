@@ -46,6 +46,8 @@ enum class AccessMode : uint8_t;
 
 enum class AdaptiveFilterSource : uint8_t;
 
+enum class AggregateCombineSourceRetention : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateDistinctDependent : uint8_t;
@@ -478,6 +480,8 @@ enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
 enum class PipelineBroadcastExchangeScanMode : uint8_t;
 
+enum class PipelineExecutionOrder : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PipelineScheduleGraph : uint8_t;
@@ -558,6 +562,8 @@ enum class SamplingState : uint8_t;
 
 enum class ScanReadAheadAcquire : uint8_t;
 
+enum class ScanReadAheadPolicy : uint8_t;
+
 enum class ScanType : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
@@ -601,6 +607,8 @@ enum class SortKeyType : uint8_t;
 enum class SourceBatchIndexState : uint8_t;
 
 enum class SourceResultType : uint8_t;
+
+enum class StandardByteClass : uint8_t;
 
 enum class StarExpressionType : uint8_t;
 
@@ -733,6 +741,9 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
 const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateCombineSourceRetention>(AggregateCombineSourceRetention value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
@@ -1383,6 +1394,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineExecutionOrder>(PipelineExecutionOrder value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1503,6 +1517,9 @@ template<>
 const char* EnumUtil::ToChars<ScanReadAheadAcquire>(ScanReadAheadAcquire value);
 
 template<>
+const char* EnumUtil::ToChars<ScanReadAheadPolicy>(ScanReadAheadPolicy value);
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
 
 template<>
@@ -1567,6 +1584,9 @@ const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
+
+template<>
+const char* EnumUtil::ToChars<StandardByteClass>(StandardByteClass value);
 
 template<>
 const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
@@ -1754,6 +1774,9 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
 AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value);
+
+template<>
+AggregateCombineSourceRetention EnumUtil::FromString<AggregateCombineSourceRetention>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
@@ -2404,6 +2427,9 @@ template<>
 PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value);
 
 template<>
+PipelineExecutionOrder EnumUtil::FromString<PipelineExecutionOrder>(const char *value);
+
+template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
@@ -2524,6 +2550,9 @@ template<>
 ScanReadAheadAcquire EnumUtil::FromString<ScanReadAheadAcquire>(const char *value);
 
 template<>
+ScanReadAheadPolicy EnumUtil::FromString<ScanReadAheadPolicy>(const char *value);
+
+template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
 
 template<>
@@ -2588,6 +2617,9 @@ SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *va
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StandardByteClass EnumUtil::FromString<StandardByteClass>(const char *value);
 
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);

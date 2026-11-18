@@ -411,7 +411,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             parameter_types,
             return_type
         from duckdb_functions()
-        where function_type <> 'window'
+        where function_type <> 'window' and schema_name <> 'collations'
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']

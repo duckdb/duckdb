@@ -5,6 +5,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -259,12 +260,13 @@ void HTTPTransportManager::Initialize(const DBConfig &config) {
 	initialized = true;
 }
 
-idx_t HTTPTransportManager::AutomaticCapacity(const DBConfig &config) {
+idx_t HTTPTransportManager::AutomaticCapacity(const DBConfig &config, optional_idx async_threads) {
 	auto &fs = *config.file_system;
-	auto io_concurrency = config.options.async_threads == DConstants::INVALID_INDEX
-	                          ? DBConfig::GetSystemMaxAsyncThreads(fs)
-	                          : config.options.async_threads;
-	return CalculateCapacity(DBConfig::GetSystemMaxThreads(fs), FileSystem::GetFileDescriptorLimit(), io_concurrency);
+	if (!async_threads.IsValid()) {
+		async_threads = NumericCast<idx_t>(Settings::Get<AsyncThreadsSetting>(config));
+	}
+	return CalculateCapacity(DBConfig::GetSystemMaxThreads(fs), FileSystem::GetFileDescriptorLimit(),
+	                         async_threads.GetIndex());
 }
 
 idx_t HTTPTransportManager::GetCapacity() const {
