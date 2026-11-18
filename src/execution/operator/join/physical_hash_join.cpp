@@ -523,7 +523,7 @@ public:
 
 	~HashJoinGlobalSinkState() override {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, op, "PhysicalHashJoin", "GetData",
-		           {{"total_probe_matches", to_string(hash_table->total_probe_matches)}});
+		           {{"total_probe_matches", to_string(hash_table->GetTotalProbeMatches())}});
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
