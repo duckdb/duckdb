@@ -580,8 +580,12 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	}
 	auto &like_string = StringValue::Get(constant_value_expr.GetValue());
 	if (like_string[0] == '%' || like_string[0] == '_') {
-		//! If the like starts with a special character we have no fixed prefix so nothing to pushdown
-		return FilterPushdownResult::NO_PUSHDOWN;
+		//! There is no ordered prefix bound, but scans can use the full expression for conservative
+		//! substring pruning. Keep the original expression above the scan because this is only partial.
+		auto filter_expr = expr.Copy();
+		ReplaceWithBoundReference(filter_expr);
+		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(filter_expr)));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	string prefix;
 	bool equality = true;
@@ -600,10 +604,17 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	if (case_insensitive) {
+		if (equality) {
+			//! A scan can use the original ILIKE as equality ignoring case. DuckDB still evaluates it above
+			//! the scan because the pushed expression is only a conservative filter.
+			auto filter_expr = expr.Copy();
+			ReplaceWithBoundReference(filter_expr);
+			table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(filter_expr)));
+		}
 		string min_prefix;
 		string max_prefix;
 		if (!GetCaseInsensitivePrefixBounds(prefix, min_prefix, max_prefix)) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+			return equality ? FilterPushdownResult::PUSHED_DOWN_PARTIALLY : FilterPushdownResult::NO_PUSHDOWN;
 		}
 		auto lower_bound = CreateComparisonExpression(
 		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(std::move(min_prefix)));

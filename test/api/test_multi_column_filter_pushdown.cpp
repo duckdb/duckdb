@@ -132,6 +132,49 @@ void RequireNotOffered(const PlannedScan &scan) {
 	REQUIRE(scan.get->table_filters.GetMultiColumnFilters().empty());
 }
 
+//! The single-column filter pushed for the scan column with `primary_index`
+const ExpressionFilter &PushedFilter(const PlannedScan &scan, column_t primary_index) {
+	CAPTURE(scan.query);
+	optional_idx projection_index;
+	auto &column_ids = scan.get->GetColumnIds();
+	for (idx_t index = 0; index < column_ids.size(); index++) {
+		if (column_ids[index].GetPrimaryIndex() == primary_index) {
+			projection_index = index;
+			break;
+		}
+	}
+	REQUIRE(projection_index.IsValid());
+	auto filter = scan.get->table_filters.TryGetFilterByColumnIndex(ProjectionIndex(projection_index.GetIndex()));
+	REQUIRE(filter);
+	return filter->Cast<ExpressionFilter>();
+}
+
+//! Whether an expression tree contains the named bound function
+bool ContainsFunction(const Expression &expr, const string &name) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+	    expr.Cast<BoundFunctionExpression>().Function().GetName() == name) {
+		return true;
+	}
+	bool found = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (!found) {
+			found = ContainsFunction(child, name);
+		}
+	});
+	return found;
+}
+
+//! Requires every pushed column reference to be local to its single-column table filter
+void RequireLocallyBound(const Expression &expr) {
+	REQUIRE(expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF);
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		REQUIRE(expr.Cast<BoundReferenceExpression>().Index() == 0);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		RequireLocallyBound(child);
+	});
+}
+
 } // namespace
 
 TEST_CASE("A scan offering multi-column filters receives them as partial filters", "[api][multi_column_filter]") {
@@ -239,4 +282,41 @@ TEST_CASE("A multi-column filter references the scan columns it was written over
 	REQUIRE(column_of_constant[2] == 1);
 
 	con.Rollback();
+}
+
+TEST_CASE("A leading-wildcard LIKE is offered to a scan as a partial filter", "[api][filter_pushdown][like]") {
+	ScanFixture fixture;
+	fixture.con.BeginTransaction();
+
+	// c is the third declared scan column. Selecting a leaves earlier columns in the projection and verifies that
+	// the pushed expression is rebound to the filtered column rather than retaining its query-plan binding.
+	auto scan = PlanScan(fixture.con, "SELECT a FROM offering_scan() WHERE c LIKE '%nee_le%'");
+	REQUIRE(!scan.filter->expressions.empty());
+	auto &pushed = PushedFilter(scan, 2);
+	REQUIRE(ContainsFunction(*pushed.expr, "~~"));
+	RequireLocallyBound(*pushed.expr);
+
+	fixture.con.Rollback();
+}
+
+TEST_CASE("A wildcard-free ILIKE is offered as case-insensitive equality", "[api][filter_pushdown][like]") {
+	ScanFixture fixture;
+	fixture.con.BeginTransaction();
+
+	SECTION("ASCII also keeps DuckDB's ordered prefix bounds") {
+		auto scan = PlanScan(fixture.con, "SELECT a FROM offering_scan() WHERE c ILIKE 'Needle'");
+		REQUIRE(!scan.filter->expressions.empty());
+		auto &pushed = PushedFilter(scan, 2);
+		REQUIRE(ContainsFunction(*pushed.expr, "~~*"));
+		RequireLocallyBound(*pushed.expr);
+	}
+	SECTION("non-ASCII remains available when ordered prefix bounds cannot be derived") {
+		auto scan = PlanScan(fixture.con, "SELECT a FROM offering_scan() WHERE c ILIKE 'École'");
+		REQUIRE(!scan.filter->expressions.empty());
+		auto &pushed = PushedFilter(scan, 2);
+		REQUIRE(ContainsFunction(*pushed.expr, "~~*"));
+		RequireLocallyBound(*pushed.expr);
+	}
+
+	fixture.con.Rollback();
 }
