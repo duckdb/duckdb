@@ -165,7 +165,7 @@ public:
 	}
 
 	template <class... ARGS>
-	void emplace_back(ARGS &&... args) { // NOLINT
+	void emplace_back(ARGS &&...args) { // NOLINT
 		auto scan = make_shared_ptr<ReplacementScan>(std::forward<ARGS>(args)...);
 		lock_guard<mutex> guard(lock);
 		scans.push_back(std::move(scan));
@@ -201,6 +201,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+	//! File system for system queries before the database has started (and file_system is set)
+	unique_ptr<FileSystem> bootstrap_file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
@@ -327,6 +329,8 @@ public:
 	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
+	//! The file system if the database has started, otherwise the bootstrap file system
+	DUCKDB_API FileSystem &GetBootstrapFileSystem() const;
 	idx_t GetDefaultMaxMemory() const;
 	//! The number of threads used when the threads setting is not set
 	idx_t GetDefaultThreads() const;

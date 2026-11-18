@@ -20,7 +20,6 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -92,16 +91,6 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 		return NumericLimits<idx_t>::Maximum();
 	}
 	return LossyNumericCast<idx_t>(result);
-}
-
-//! The available system memory. The config's filesystem is not set until the database starts, but
-//! options can be configured before that, so fall back to a temporary local filesystem.
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
-	}
-	LocalFileSystem local_fs;
-	return DBConfig::GetSystemAvailableMemory(local_fs);
 }
 
 } // namespace
@@ -1288,8 +1277,9 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 			throw InvalidInputException("%s setting cannot be NULL", MaxMemorySetting::Name);
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-		maximum_memory =
-		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(info.config); });
+		maximum_memory = ParseMemoryLimitOrPercentage(input.ToString(), [&]() {
+			return DBConfig::GetSystemAvailableMemory(info.config.GetBootstrapFileSystem());
+		});
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);

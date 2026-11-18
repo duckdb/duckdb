@@ -115,7 +115,8 @@ VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(make_uniq<LocalFileSy
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
-    : file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
+    : owned_local_file_system(inner->IsLocalFileSystem() ? nullptr : make_uniq<LocalFileSystem>()),
+      file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
 	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
 }
 
@@ -166,6 +167,14 @@ static FileCompressionType CompressionFromExtension(const string &lower_path) {
 		}
 	}
 	return FileCompressionType::UNCOMPRESSED;
+}
+
+FileSystem &VirtualFileSystem::GetLocalFileSystem() {
+	auto &fs = *file_system_registry->default_fs->file_system;
+	if (fs.IsLocalFileSystem()) {
+		return fs;
+	}
+	return *owned_local_file_system;
 }
 
 optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
