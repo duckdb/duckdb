@@ -31,7 +31,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	shared_ptr<BlockHandle> block;
 
 	auto &type = statistics.GetType();
-	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
+	// the compression type is read from the file - it might not exist (for the type of this column)
+	auto compression_function = config.TryGetCompressionFunction(compression_type, type.InternalType());
+	if (!compression_function) {
+		throw DataCorruptionException(
+		    "Persistent segment has compression type %llu, which does not exist for physical type %s",
+		    static_cast<idx_t>(compression_type), EnumUtil::ToString(type.InternalType()));
+	}
+	reference<const CompressionFunction> function(*compression_function);
 	if (block_id == INVALID_BLOCK && !function.get().supports_null_block) {
 		throw DataCorruptionException("Persistent %s segment is missing its data block",
 		                              CompressionTypeToString(compression_type));

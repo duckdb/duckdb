@@ -24,8 +24,8 @@ namespace {
 
 //! Throw if reading 'size' bytes starting at 'ptr' would read past the end of the value buffer
 void CheckBinaryRead(const_data_ptr_t ptr, idx_t size, const_data_ptr_t end) {
-	if (ptr + size > end) {
-		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity", size);
+	if (ptr > end || size > NumericCast<idx_t>(end - ptr)) {
+		throw DataCorruptionException("Corrupted VARIANT 'value' buffer, read of %llu bytes is out of bounds", size);
 	}
 }
 
@@ -62,6 +62,8 @@ struct BinaryObjectReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The field ids and offsets of 'count' fields must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, (count * field_id_size) + (NumericCast<idx_t>(count + 1) * field_offset_size), end);
 		field_ids = data;
 		field_offsets = data + (count * field_id_size);
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
@@ -108,6 +110,8 @@ struct BinaryArrayReader {
 			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
+		//! The offsets of 'count' elements must fit in the value, before anything is sized by 'count'
+		CheckBinaryRead(data, NumericCast<idx_t>(count + 1) * field_offset_size, end);
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
