@@ -186,3 +186,23 @@ SELECT finalize(to_aggregate_state({
 }, 'approx_top_k', ['VARCHAR', 'BIGINT']));
 ----
 <REGEX>:Invalid Input Error: Invalid approx_top_k state - the filter must be empty.*
+
+# an imported state with zero values finalizes to NULL
+query I
+SELECT finalize(to_aggregate_state({
+	'k': 3::UBIGINT,
+	'values': []::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(128), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']));
+----
+NULL
+
+# combining an imported empty state with a different k takes the k of the other state
+query I
+SELECT finalize(combine(to_aggregate_state({
+	'k': 3::UBIGINT,
+	'values': []::STRUCT("value" VARCHAR, "count" UBIGINT)[],
+	'filter': list_transform(range(128), lambda x: 0::UBIGINT)
+}, 'approx_top_k', ['VARCHAR', 'BIGINT']), (SELECT approx_top_k(y, 2) EXPORT_STATE FROM (VALUES ('a'), ('b'), ('a')) s(y))));
+----
+[a, b]

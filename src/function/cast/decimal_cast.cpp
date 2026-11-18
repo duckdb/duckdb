@@ -216,7 +216,7 @@ struct BignumDecimalScaleInput {
 	                        uint32_t source_scale_p, uint32_t target_width_p, uint32_t target_scale_p)
 	    : result(result_p), vector_cast_data(result, parameters), source_width(source_width_p),
 	      source_scale(source_scale_p), target_width(target_width_p), target_scale(target_scale_p),
-	      context(DefaultCasts::WideDecimalCastContext(parameters)) {
+	      rescale_state(DefaultCasts::WideDecimalCastContext(parameters)) {
 	}
 
 	Vector &result;
@@ -225,7 +225,7 @@ struct BignumDecimalScaleInput {
 	uint32_t source_scale;
 	uint32_t target_width;
 	uint32_t target_scale;
-	optional_ptr<ClientContext> context;
+	DecimalHelper<bignum_t>::RescaleState rescale_state;
 };
 
 //! The unscaled value of a decimal as a BIGNUM (the blob of a fixed-size tier is written into "blob")
@@ -245,8 +245,8 @@ struct BignumDecimalScaleOperator {
 		string unscaled_blob;
 		auto unscaled = UnscaledBignum(input, unscaled_blob);
 		string rescaled;
-		if (!DecimalHelper<bignum_t>::TryRescale(unscaled, data.source_scale, data.target_width, data.target_scale,
-		                                         rescaled, data.context)) {
+		if (!DecimalHelper<bignum_t>::TryRescale(data.rescale_state, unscaled, data.source_scale, data.target_width,
+		                                         data.target_scale, rescaled)) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data.source_width, data.source_scale),
 			                                data.result.GetType().ToString());

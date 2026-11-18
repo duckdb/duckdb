@@ -142,7 +142,7 @@ TEST_CASE("Aliased table function overloads retain catalog identity", "[api][tab
 		QualifiedName name(std::move(path), "qualified_range");
 		auto &catalog = Catalog::GetCatalog(*connection.context, Identifier(catalog_name));
 		MetaTransaction::Get(*connection.context)
-		    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+		    .ModifyDatabase(*connection.context, catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		for (auto &function : vector<reference<TableFunction>> {one, two}) {
 			CreateTableFunctionInfo info(function.get());
 			info.internal = false;
@@ -296,7 +296,7 @@ TEST_CASE("Test that Catalog::CreateSchema rejects unsupported options", "[api]"
 
 	auto &catalog = Catalog::GetCatalog(*conn.context, "memory");
 	MetaTransaction::Get(*conn.context)
-	    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	    .ModifyDatabase(*conn.context, catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
 
 	CreateSchemaInfo info;
 	info.SetQualifiedName(QualifiedName(vector<Identifier> {"memory", "s1"}, Identifier()));
