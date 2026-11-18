@@ -215,7 +215,8 @@ void MatcherAllocator::InitializeListChains() {
 	}
 }
 
-ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator(), 16384), pending_destructors(arena) {
+ParseResultAllocator::ParseResultAllocator()
+    : arena(Allocator::DefaultAllocator(), PARSER_ARENA_INITIAL_CAPACITY), pending_destructors(arena) {
 }
 
 ParseResultAllocator::~ParseResultAllocator() = default;

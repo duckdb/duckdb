@@ -470,6 +470,10 @@ private:
 	vector<unique_ptr<ListMatchChain>> list_chains;
 };
 
+//! The arenas of a parse (parse results, matcher frames, packrat entries, transform results) start with room for
+//! a typical statement, so that it does not grow them through several chunks first
+static constexpr idx_t PARSER_ARENA_INITIAL_CAPACITY = 8 * ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY;
+
 class ParseResultAllocator {
 public:
 	ParseResultAllocator();
