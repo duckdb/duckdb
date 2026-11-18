@@ -61,6 +61,8 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -2952,6 +2954,15 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	return parser.IsQueryComplete(zSql);
 }
 
+bool ShellState::UnsplitInput() {
+	auto &state = ShellState::Get();
+	if (!state.conn || !state.conn->context || !state.conn->context->IsConnected()) {
+		return false;
+	}
+	auto connected = state.conn->context->TryGetConnectedCatalog();
+	return connected && connected->GetCatalog().Supports(duckdb::RemoteCapability::UNSPLIT_INPUT);
+}
+
 void ShellState::ShellAddHistory(const char *history) {
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
@@ -3144,7 +3155,8 @@ int ShellState::ProcessInput(InputMode mode) {
 			memcpy(zSql + nSql, zLine, nLine + 1);
 			nSql += nLine;
 		}
-		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql)) {
+		bool complete = line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql);
+		if (nSql && (complete || UnsplitInput())) {
 			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {

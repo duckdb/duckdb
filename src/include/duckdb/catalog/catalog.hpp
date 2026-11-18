@@ -100,6 +100,7 @@ enum class RemoteCapability : uint8_t {
 	EXECUTE_QUERY_NODE,
 	EXECUTE_STATEMENT,
 	CONNECT,
+	UNSPLIT_INPUT,
 };
 
 //! The Catalog object represents the catalog of the database.
