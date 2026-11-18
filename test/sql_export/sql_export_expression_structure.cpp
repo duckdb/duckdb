@@ -332,8 +332,9 @@ TEST_CASE("Bound expression SQL export rejects repeated volatile exclusive BETWE
 		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "random";
 	});
 	REQUIRE(random_expression);
-	auto volatile_between = BoundBetweenExpression::Create(random_expression->Copy(), Constant(Value::DOUBLE(0)),
-	                                                       Constant(Value::DOUBLE(1)), false, false);
+	auto volatile_between =
+	    BoundBetweenExpression::Create(*connection.context, random_expression->Copy(), Constant(Value::DOUBLE(0)),
+	                                   Constant(Value::DOUBLE(1)), false, false);
 	BoundExpressionSQLExportContext empty_context;
 	auto volatile_result = BoundExpressionSQLExporter::Export(*volatile_between, empty_context);
 	REQUIRE(volatile_result.HasError());

@@ -224,9 +224,14 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 	}
 
-	// every thread-local table shares this operator's filter - a different one here would mean its rows
+	// Every thread-local table shares this operator's filters - a different one here would mean its rows
 	// never reached the filter that gets published
-	D_ASSERT(!other.bloom_filter || bloom_filter.get() == other.bloom_filter.get());
+#ifdef DEBUG
+	for (idx_t key_idx = 0; key_idx < other.bloom_filters.size(); key_idx++) {
+		D_ASSERT(!other.bloom_filters[key_idx] ||
+		         (key_idx < bloom_filters.size() && bloom_filters[key_idx] == other.bloom_filters[key_idx]));
+	}
+#endif
 
 	sink_collection->Combine(*other.sink_collection);
 
@@ -785,14 +790,17 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
-	if (bloom_filter) {
-		bloom_filter->InsertHashes(hash_values, *current_sel, added_count);
-	}
-	if (!key_bloom_filters.empty()) {
+	if (!bloom_filters.empty() && HasSingleEqualityKey()) {
+		// The hash-table hashes already describe this one key.
+		auto &filter = bloom_filters[0];
+		if (filter) {
+			filter->InsertHashes(hash_values, *current_sel, added_count);
+		}
+	} else if (!bloom_filters.empty()) {
 		// the per-key-column filters of an external join with several equality keys
 		Vector key_hashes(LogicalType::HASH);
-		for (idx_t key_idx = 0; key_idx < key_bloom_filters.size(); key_idx++) {
-			auto &filter = key_bloom_filters[key_idx];
+		for (idx_t key_idx = 0; key_idx < bloom_filters.size(); key_idx++) {
+			auto &filter = bloom_filters[key_idx];
 			if (!filter) {
 				continue;
 			}
@@ -1104,8 +1112,11 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
                                  bool parallel) {
 	// a sealed filter was accumulated during Sink and is already complete; only a finalize-built one fills here
-	if (bloom_filter && !bloom_filter->IsSealed()) {
-		bloom_filter->InsertHashes(hashes_v);
+	if (!bloom_filters.empty() && HasSingleEqualityKey()) {
+		auto &filter = bloom_filters[0];
+		if (filter && !filter->IsSealed()) {
+			filter->InsertHashes(hashes_v);
+		}
 	}
 	auto atomic_entries = GetAtomicEntries();
 	auto &row_locations = chunk_state.row_locations;
@@ -1139,59 +1150,43 @@ idx_t JoinHashTable::GetPrefixRangeBuildStateSize() const {
 }
 
 void JoinHashTable::SetBuildBloomFilter(idx_t key_idx) {
-	if (HasSingleEqualityKey()) {
-		D_ASSERT(key_idx == 0);
-		should_build_bloom_filter = true;
-		return;
-	}
-	should_build_key_bloom_filters.resize(equality_predicate_columns.size(), false);
-	should_build_key_bloom_filters[key_idx] = true;
+	D_ASSERT(key_idx < equality_predicate_columns.size());
+	should_build_bloom_filters.resize(equality_predicate_columns.size(), false);
+	should_build_bloom_filters[key_idx] = true;
 }
 
-void JoinHashTable::InitializeKeyBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate,
-                                              idx_t memory_budget) {
-	key_bloom_filters.clear();
+void JoinHashTable::InitializeBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget) {
+	bloom_filters.clear();
 	if (key_idxs.empty()) {
 		return;
 	}
-	key_bloom_filters.resize(equality_predicate_columns.size());
+	bloom_filters.resize(equality_predicate_columns.size());
 	// The key columns share one bitmap budget.
 	const auto key_budget = memory_budget / key_idxs.size();
 	for (auto &key_idx : key_idxs) {
-		auto &filter = key_bloom_filters[key_idx];
+		auto &filter = bloom_filters[key_idx];
 		filter = make_shared_ptr<BloomFilter>();
 		filter->Initialize(context, build_estimate, key_budget);
 	}
 }
 
-shared_ptr<BloomFilter> JoinHashTable::GetBloomFilter(idx_t key_idx) {
-	if (HasSingleEqualityKey()) {
-		D_ASSERT(key_idx == 0);
-		return bloom_filter;
-	}
-	return key_idx < key_bloom_filters.size() ? key_bloom_filters[key_idx] : nullptr;
+shared_ptr<BloomFilter> JoinHashTable::GetBloomFilter(idx_t key_idx) const {
+	return key_idx < bloom_filters.size() ? bloom_filters[key_idx] : nullptr;
 }
 
-void JoinHashTable::SealBloomFilter() {
-	if (bloom_filter) {
-		bloom_filter->Seal(context);
-	}
-	for (auto &key_bloom_filter : key_bloom_filters) {
-		if (key_bloom_filter && !key_bloom_filter->IsSealed()) {
-			key_bloom_filter->Seal(context);
+void JoinHashTable::SealBloomFilters() {
+	for (auto &filter : bloom_filters) {
+		if (filter && !filter->IsSealed()) {
+			filter->Seal(context);
 		}
 	}
 }
 
 bool JoinHashTable::HasPublishableBloomFilter(idx_t key_idx) const {
-	if (HasSingleEqualityKey()) {
-		D_ASSERT(key_idx == 0);
-		return HasPublishableBloomFilter();
-	}
-	if (key_idx >= key_bloom_filters.size()) {
+	if (key_idx >= bloom_filters.size()) {
 		return false;
 	}
-	auto &filter = key_bloom_filters[key_idx];
+	auto &filter = bloom_filters[key_idx];
 	return filter && filter->IsSealed() && filter->IsUseful();
 }
 
@@ -1237,7 +1232,7 @@ void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeBuildStates &states) {
 	D_ASSERT(states.size() == prefix_range_filters.size());
 	for (idx_t key_idx = 0; key_idx < prefix_range_filters.size(); key_idx++) {
 		if (prefix_range_filters[key_idx]) {
-			prefix_range_filters[key_idx]->MergeBuildState(*states[key_idx]);
+			prefix_range_filters[key_idx]->MergeBuildState(std::move(states[key_idx]));
 		}
 	}
 }
@@ -1253,8 +1248,8 @@ JoinHashTable::KeyFilterBuildScratch::KeyFilterBuildScratch(JoinHashTable &ht) :
 void JoinHashTable::InsertKeyBloomFilterChunk(TupleDataChunkState &chunk_state, idx_t count,
                                               KeyFilterBuildScratch &scratch) {
 	scratch.keys.Reset();
-	for (idx_t key_idx = 0; key_idx < key_bloom_filters.size(); key_idx++) {
-		auto &filter = key_bloom_filters[key_idx];
+	for (idx_t key_idx = 0; key_idx < bloom_filters.size(); key_idx++) {
+		auto &filter = bloom_filters[key_idx];
 		if (!filter || filter->IsSealed()) {
 			continue;
 		}
@@ -1311,21 +1306,19 @@ void JoinHashTable::AllocateHashMap(bool use_radix_layout) {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	if (should_build_bloom_filter && (!bloom_filter || bloom_filter->IsSealed())) {
-		// (re)create the finalize-built filter now that the actual build count is known
-		bloom_filter = recycled_bloom_filter ? std::move(recycled_bloom_filter) : make_shared_ptr<BloomFilter>();
-		bloom_filter->Initialize(context, MaxValue<idx_t>(Count(), 1));
-	}
 	// filters accumulated during Sink stay in place
-	if (key_bloom_filters.size() < should_build_key_bloom_filters.size()) {
-		key_bloom_filters.resize(should_build_key_bloom_filters.size());
+	if (bloom_filters.size() < should_build_bloom_filters.size()) {
+		bloom_filters.resize(should_build_bloom_filters.size());
 	}
-	// The key columns share one bitmap budget with prefix-range filters.
-	for (idx_t key_idx = 0; key_idx < should_build_key_bloom_filters.size(); key_idx++) {
-		auto &filter = key_bloom_filters[key_idx];
-		if (should_build_key_bloom_filters[key_idx] && (!filter || filter->IsSealed())) {
-			filter = make_shared_ptr<BloomFilter>();
-			filter->Initialize(context, MaxValue<idx_t>(Count(), 1), key_bloom_filter_budget);
+	const auto max_bitmap_bytes = HasSingleEqualityKey() ? NumericLimits<idx_t>::Maximum() : bloom_filter_budget;
+	for (idx_t key_idx = 0; key_idx < should_build_bloom_filters.size(); key_idx++) {
+		auto &filter = bloom_filters[key_idx];
+		if (should_build_bloom_filters[key_idx] && (!filter || filter->IsSealed())) {
+			filter = HasSingleEqualityKey() && recycled_bloom_filter ? std::move(recycled_bloom_filter)
+			                                                         : make_shared_ptr<BloomFilter>();
+			// Pointer-table initialization clears these buffers before any finalize task inserts keys.
+			filter->Initialize(context, MaxValue<idx_t>(Count(), 1), max_bitmap_bytes,
+			                   BloomFilter::Initialization::DEFERRED);
 		}
 	}
 
@@ -1359,6 +1352,11 @@ void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx
 	// initialize HT with all-zero entries
 	auto entries = GetEntries();
 	std::fill_n(entries.get() + entry_idx_from, entry_idx_to - entry_idx_from, ht_entry_t());
+	for (auto &filter : bloom_filters) {
+		if (filter) {
+			filter->InitializeRange(entry_idx_from, entry_idx_to, capacity);
+		}
+	}
 }
 
 void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
@@ -1369,8 +1367,8 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to, false);
 	if (perfect_hash_table) {
-		// Perfect hash joins have a single key and no per-key Bloom filters.
-		D_ASSERT(key_bloom_filters.empty());
+		// Perfect hash joins have one key; any Sink-built Bloom filter is already complete.
+		D_ASSERT(HasSingleEqualityKey());
 		unique_ptr<KeyFilterBuildScratch> key_filter_scratch;
 		if (prefix_range_states) {
 			key_filter_scratch = make_uniq<KeyFilterBuildScratch>(*this);
@@ -1395,7 +1393,8 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	Vector hashes(LogicalType::HASH);
 	InsertState insert_state(*this);
 	unique_ptr<KeyFilterBuildScratch> key_filter_scratch;
-	if (!key_bloom_filters.empty() || prefix_range_states) {
+	const bool build_key_bloom_filters = !bloom_filters.empty() && !HasSingleEqualityKey();
+	if (build_key_bloom_filters || prefix_range_states) {
 		key_filter_scratch = make_uniq<KeyFilterBuildScratch>(*this);
 	}
 	do {
@@ -1410,7 +1409,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 			}
 		}
 		InsertHashes(hashes, chunk_state, insert_state, parallel);
-		if (!key_bloom_filters.empty()) {
+		if (build_key_bloom_filters) {
 			InsertKeyBloomFilterChunk(chunk_state, count, *key_filter_scratch);
 		}
 		if (prefix_range_states) {
@@ -3015,11 +3014,9 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	probe_matches.Reset();
 	load_factor = DEFAULT_LOAD_FACTOR;
-	bloom_filter.reset();
-	should_build_bloom_filter = false;
-	key_bloom_filters.clear();
-	should_build_key_bloom_filters.clear();
-	key_bloom_filter_budget = NumericLimits<idx_t>::Maximum();
+	bloom_filters.clear();
+	should_build_bloom_filters.clear();
+	bloom_filter_budget = NumericLimits<idx_t>::Maximum();
 	prefix_range_filters.clear();
 	should_build_prefix_range_filter = false;
 	ResetMarkJoinInfo(*this);

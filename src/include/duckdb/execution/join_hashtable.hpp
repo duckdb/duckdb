@@ -614,21 +614,16 @@ private:
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
-	//! Bloom filter over the join keys. An external join fills it during Sink, an in-memory join during
-	//! finalize. Shared by every thread-local hash table of this operator, and shared again with any scan it
-	//! gets published to, so it outlives a reset of this table
-	shared_ptr<BloomFilter> bloom_filter;
+	//! Bloom filters indexed by equality key. External joins fill them during Sink, in-memory joins during
+	//! finalize. Shared with thread-local hash tables and published scans, so they can outlive a table reset.
+	vector<shared_ptr<BloomFilter>> bloom_filters;
+	//! Which key filters finalize should build from the materialized build side.
+	vector<bool> should_build_bloom_filters;
 	//! Unpublished filter kept from a previous recursive iteration so finalize can reuse its allocation.
-	//! Only ever set on the global hash table, never on the thread-local ones that share bloom_filter
+	//! Used only by the global hash table of a single-key join.
 	shared_ptr<BloomFilter> recycled_bloom_filter;
-	//! Whether finalize should build the bloom filter from the materialized build side
-	bool should_build_bloom_filter = false;
-
-	//! Per-key-column bloom filters of a join with several equality keys, filled and shared like bloom_filter
-	vector<shared_ptr<BloomFilter>> key_bloom_filters;
-	vector<bool> should_build_key_bloom_filters;
-	//! Per-column bitmap budget after sharing memory with the other runtime filters.
-	idx_t key_bloom_filter_budget = NumericLimits<idx_t>::Maximum();
+	//! Per-column bitmap budget for multi-key joins, shared with the other runtime filters.
+	idx_t bloom_filter_budget = NumericLimits<idx_t>::Maximum();
 
 	//! Prefix-range filters, indexed by key column
 	vector<unique_ptr<PrefixRangeFilter>> prefix_range_filters;
@@ -711,8 +706,10 @@ public:
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
-	void SetBloomFilter(shared_ptr<BloomFilter> filter) {
-		bloom_filter = std::move(filter);
+	void SetBloomFilter(idx_t key_idx, shared_ptr<BloomFilter> filter) {
+		D_ASSERT(key_idx < equality_predicate_columns.size());
+		bloom_filters.resize(equality_predicate_columns.size());
+		bloom_filters[key_idx] = std::move(filter);
 	}
 	//! Whether the join has one equality key, so the hash table hashes are that key's hashes
 	bool HasSingleEqualityKey() const {
@@ -720,35 +717,34 @@ public:
 	}
 	//! Creates the per-key-column bloom filters that an external join with several equality keys fills during
 	//! Sink. They split the memory budget between them
-	void InitializeKeyBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget);
-	void SetKeyBloomFilters(vector<shared_ptr<BloomFilter>> filters) {
-		key_bloom_filters = std::move(filters);
+	void InitializeBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate, idx_t memory_budget);
+	void SetBloomFilters(vector<shared_ptr<BloomFilter>> filters) {
+#ifdef DEBUG
+		for (auto &filter : filters) {
+			D_ASSERT(!filter || !filter->IsSealed());
+		}
+#endif
+		bloom_filters = std::move(filters);
 	}
-	const vector<shared_ptr<BloomFilter>> &GetKeyBloomFilters() const {
-		return key_bloom_filters;
+	const vector<shared_ptr<BloomFilter>> &GetBloomFilters() const {
+		return bloom_filters;
 	}
 	//! Requests a finalize-built bloom filter for a key column (in-memory joins only)
 	void SetBuildBloomFilter(idx_t key_idx);
-	void SetKeyBloomFilterBudget(idx_t bytes) {
-		key_bloom_filter_budget = bytes;
+	void SetBloomFilterBudget(idx_t bytes) {
+		bloom_filter_budget = bytes;
 	}
 
-	shared_ptr<BloomFilter> GetBloomFilter() {
-		return bloom_filter;
-	}
-	shared_ptr<BloomFilter> GetBloomFilter(idx_t key_idx);
+	shared_ptr<BloomFilter> GetBloomFilter(idx_t key_idx) const;
 	//! Hands an unpublished filter from a previous recursive iteration to the finalize-built filter path
 	void SetRecycledBloomFilter(shared_ptr<BloomFilter> filter) {
 		// a null argument would drop a parked filter; callers must only hand over live, unpublished filters
 		D_ASSERT(filter && !filter->IsPublished());
 		recycled_bloom_filter = std::move(filter);
 	}
-	//! Marks the bloom filter complete. The reference stays, because the thread-local tables hold it too
-	void SealBloomFilter();
+	//! Marks all bloom filters complete, retaining references shared with thread-local tables.
+	void SealBloomFilters();
 	//! Whether the filter is complete and rejects enough for pushing it into a scan to pay off
-	bool HasPublishableBloomFilter() const {
-		return bloom_filter && bloom_filter->IsSealed() && bloom_filter->IsUseful();
-	}
 	bool HasPublishableBloomFilter(idx_t key_idx) const;
 
 	void SetPrefixRangeFilter(idx_t key_idx, unique_ptr<PrefixRangeFilter> filter) {
