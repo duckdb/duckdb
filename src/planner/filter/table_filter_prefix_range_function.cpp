@@ -340,6 +340,10 @@ public:
 		return initialized;
 	}
 
+	bool IsDense() const {
+		return dense;
+	}
+
 	U Min() const {
 		return min;
 	}
@@ -409,6 +413,7 @@ private:
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = NumericConverter<T>::Convert(min_val.GetValueUnsafe<T>());
@@ -421,16 +426,19 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<T, NumericConverter<T>, true>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
+		D_ASSERT(!IsPublished());
 		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
 	}
 
@@ -462,6 +470,9 @@ public:
 		if (ub < bitmap_min || lb > bitmap_max) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		if (bitmap.IsDense() && lb >= bitmap_min && ub <= bitmap_max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
 
 		const auto adjusted_lb = NumericConverter<T>::Convert(MaxValue<T>(lb, bitmap_min));
 		const auto adjusted_ub = NumericConverter<T>::Convert(MinValue<T>(ub, bitmap_max));
@@ -480,6 +491,7 @@ class StringPrefixRangeFilter : public PrefixRangeFilter {
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
 	                idx_t max_bits) override {
+		D_ASSERT(!IsPublished());
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = StringPrefixConverter::Convert(min_val.GetValueUnsafe<string_t>());
@@ -493,16 +505,19 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, false>(keys, bitmap_state.bitmap);
 	}
 
 	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		D_ASSERT(!IsPublished());
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		bitmap.template InsertKeys<string_t, StringPrefixConverter, true>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
+		D_ASSERT(!IsPublished());
 		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
 	}
 
@@ -715,8 +730,9 @@ static idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &fun
 	return result_count;
 }
 
-static unique_ptr<FunctionLocalState>
-PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+static unique_ptr<FunctionLocalState> PrefixRangeInitLocalState(ExpressionState &state,
+                                                                const BoundFunctionExpression &expr,
+                                                                optional_ptr<const FunctionData> bind_data) {
 	auto &data = bind_data->Cast<PrefixRangeFunctionData>();
 	if (!data.filter) {
 		return nullptr;
@@ -795,7 +811,11 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 		if (min > max) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return data.filter->LookupRange(min, max);
+		const auto result = data.filter->LookupRange(min, max);
+		if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return result;
 	}
 	case StatisticsType::STRING_STATS: {
 		if (!StringStats::HasMinMax(stats)) {

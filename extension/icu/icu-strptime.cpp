@@ -135,7 +135,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static inline void ParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
-	                            vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
+	                            const vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -155,7 +155,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static inline void ParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
-	                            vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
+	                            const vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -195,7 +195,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static inline bool TryParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
-	                               vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
+	                               const vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -215,7 +215,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static inline bool TryParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
-	                               vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
+	                               const vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -295,6 +295,7 @@ struct ICUStrptime : public ICUDateFunc {
 				bound_function.SetFunctionCallback(function);
 				bound_function.SetInitStateCallback(InitCalendarCache);
 				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
+				bound_function.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
 		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -323,6 +324,7 @@ struct ICUStrptime : public ICUDateFunc {
 				bound_function.SetFunctionCallback(function);
 				bound_function.SetInitStateCallback(InitCalendarCache);
 				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
+				bound_function.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 				return make_uniq<ICUStrptimeBindData>(context, formats);
 			}
 		}
@@ -511,7 +513,7 @@ struct ICUStrptime : public ICUDateFunc {
 			throw InternalException("Missing context for VARCHAR to TIME/TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		auto cast_data = BindCastData(input);
 
 		switch (target.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:
@@ -655,6 +657,7 @@ struct ICUStrftime : public ICUDateFunc {
 		set.AddFunction(tstz_ns_fun);
 		// throws for unsupported format specifiers
 		set.SetFallible();
+		set.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 		loader.RegisterFunction(set);
 	}
 
@@ -718,7 +721,7 @@ struct ICUStrftime : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMPTZ to VARCHAR cast.");
 		}
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		auto cast_data = BindCastData(input);
 
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:

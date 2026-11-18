@@ -16,19 +16,19 @@ namespace {
 
 // current_query
 void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(state.GetContext().GetCurrentQuery());
+	Value val(state.GetClientContext().GetCurrentQuery());
 	result.Reference(val, count_t(input.size()));
 }
 
 // current_schema
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().GetSchema());
+	Value val(ClientData::Get(state.GetClientContext()).catalog_search_path->GetDefault().GetSchemaName());
 	result.Reference(val, count_t(input.size()));
 }
 
 // current_database
 void CurrentDatabaseFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(DatabaseManager::GetDefaultDatabase(state.GetContext()));
+	Value val(DatabaseManager::GetDefaultDatabase(state.GetClientContext()));
 	result.Reference(val, count_t(input.size()));
 }
 
@@ -67,7 +67,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
 		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-		               [](const CatalogSearchEntry &s) -> Value { return Value(s.GetSchema()); });
+		               [](const CatalogSearchEntry &s) -> Value { return Value(s.GetSchemaName()); });
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	}
 	return make_uniq<CurrentSchemasBindData>(std::move(result_val));
@@ -82,7 +82,7 @@ void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &re
 
 // in_search_path
 void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &context = state.GetContext();
+	auto &context = state.GetClientContext();
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	BinaryExecutor::Execute<string_t, string_t, bool>(
 	    input.data[0], input.data[1], result, [&](string_t db_name, string_t schema_name) {
@@ -93,7 +93,7 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 
 // txid_current
 void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &transaction = MetaTransaction::Get(state.GetContext());
+	auto &transaction = MetaTransaction::Get(state.GetClientContext());
 	auto val = Value::UBIGINT(transaction.global_transaction_id);
 	result.Reference(val, count_t(input.size()));
 }

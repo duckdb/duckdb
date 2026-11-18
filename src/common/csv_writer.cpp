@@ -25,12 +25,7 @@ CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p)
     : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(BufferAllocator::Get(db), flush_size)) {
 }
 
-CSVWriterState::~CSVWriterState() {
-	if (stream && !Exception::UncaughtException()) {
-		// Ensure we don't accidentally destroy unflushed data
-		D_ASSERT(stream->GetPosition() == 0);
-	}
-}
+CSVWriterState::~CSVWriterState() = default;
 
 CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline,
                                    char comment_char) {
@@ -47,6 +42,7 @@ CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const
 
 	if (!write_newline.empty()) {
 		newline = TransformNewLine(write_newline);
+		requires_quotes[static_cast<uint8_t>(newline[0])] = true;
 	}
 }
 
@@ -75,7 +71,7 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool sha
 	}
 }
 
-CSVWriter::CSVWriter(CSVReaderOptions &options_p, AsyncFileWriter &file_writer_p, bool shared)
+CSVWriter::CSVWriter(const CSVReaderOptions &options_p, AsyncFileWriter &file_writer_p, bool shared)
     : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                                          options.dialect_options.state_machine_options.quote.GetValue(),
                                          options.write_newline, GetWriteCommentChar(options)),
@@ -85,7 +81,7 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, AsyncFileWriter &file_writer_p
 	}
 }
 
-CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
+CSVWriter::CSVWriter(const CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
                      FileCompressionType compression, QueryContext context, bool shared)
     : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                                          options.dialect_options.state_machine_options.quote.GetValue(),

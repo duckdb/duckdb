@@ -49,7 +49,7 @@ AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocat
 }
 
 AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
-                                                       optional_ptr<FunctionData> bind_data_p,
+                                                       optional_ptr<const FunctionData> bind_data_p,
                                                        ArenaAllocator &allocator_p,
                                                        optional_ptr<FunctionLocalState> local_state_p)
     : AggregateInputData(function_p, bind_data_p, allocator_p), local_state(local_state_p) {
@@ -84,7 +84,7 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity &&
-	       is_holistic == rhs.is_holistic;
+	       is_holistic == rhs.is_holistic && combine_source_retention == rhs.combine_source_retention;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);
@@ -183,8 +183,11 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 
 BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
                                                        BoundAggregateFunction &bound_function_p,
-                                                       vector<unique_ptr<Expression>> &arguments_p)
-    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p),
+                                                       vector<unique_ptr<Expression>> &arguments_p,
+                                                       optional_ptr<Binder> binder_p,
+                                                       optional_ptr<const DecimalWidthLimit> decimal_width_limit_p)
+    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p,
+                        binder_p, decimal_width_limit_p),
       bound_function(bound_function_p) {
 }
 

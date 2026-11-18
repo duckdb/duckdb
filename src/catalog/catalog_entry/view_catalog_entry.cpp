@@ -9,6 +9,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -45,6 +47,23 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	Initialize(info);
 }
 
+//! Whether the column types of a view can be stored in its database. A view with a wide DECIMAL result in a database
+//! written before wide decimals is stored without types, like a view that was never bound, so that older engines read
+//! it and bind it by their rules.
+static bool CanStoreViewTypes(const Catalog &catalog, const vector<LogicalType> &types) {
+	auto &db = catalog.GetAttached();
+	if (!db.HasStorageManager()) {
+		return true;
+	}
+	auto &storage_manager = db.GetStorageManager();
+	for (auto &type : types) {
+		if (!storage_manager.GetUnsupportedDecimalWidthReason(type).empty()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
 	result->SetQualifiedName(schema.GetQualifiedName(name));
@@ -53,7 +72,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->aliases = aliases;
 	result->security_type = security_type;
 	auto view_columns = GetColumnInfo();
-	if (view_columns) {
+	if (view_columns && CanStoreViewTypes(ParentCatalog(), view_columns->types)) {
 		result->names = view_columns->names;
 		result->types = view_columns->types;
 	}
@@ -159,8 +178,8 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	bind_thread = ThreadUtil::GetThreadId();
 	try {
 		auto columns = make_shared_ptr<ViewColumnInfo>();
-		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
-		                 columns->types, columns->names);
+		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().GetSchemaPath(), nullptr,
+		                 aliases, columns->types, columns->names);
 		view_columns.atomic_store(columns);
 	} catch (...) {
 		bind_state = prev_bind_state;
@@ -186,10 +205,6 @@ void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const v
 }
 
 string ViewCatalogEntry::ToSQL() const {
-	if (sql.empty()) {
-		//! Return empty sql with view name so pragma view_tables don't complain
-		return sql;
-	}
 	auto info = GetInfo();
 	info->StripCatalogQualification();
 	auto result = info->ToString();

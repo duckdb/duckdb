@@ -134,9 +134,10 @@ TEST_CASE("Stable C++API: LibraryVersion reports the engine version", "[cpp_api]
 	REQUIRE_FALSE(version.empty());
 
 	// The engine agrees; the C entry point reports the same text as a borrowed view.
-	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_library_version(&raw, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(version == std::string(raw.ptr, raw.len));
+	const char *raw = nullptr;
+	idx_t raw_length = 0;
+	REQUIRE(duckdb_v2_library_version(&raw, &raw_length, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(version == std::string(raw, raw_length));
 }
 
 TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_api]") {
@@ -396,4 +397,32 @@ TEST_CASE("Stable C++API: StartupOptions reach the instance's settings", "[cpp_a
 	auto defaults = Instance(":memory:");
 	REQUIRE(defaults.GetConfig().GetOption("allow_unsigned_extensions").value.ToText() == "false");
 	REQUIRE(defaults.GetConfig().GetOption("disable_database_invalidation").value.ToText() == "false");
+}
+
+TEST_CASE("Stable C++API: StartupOptions::Set passes options by name", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	// Startup-only options without a dedicated setter.
+	auto instance = Instance(":memory:", StartupOptions()
+	                                         .Set("duckdb_api", "cpp_api_test")
+	                                         .Set("extension_repository_directory", "cpp_api_test_extensions")
+	                                         .Set("threads", "1"));
+	auto &config = instance.GetConfig();
+	REQUIRE(config.GetOption("duckdb_api").value.ToText() == "cpp_api_test");
+	REQUIRE(config.GetOption("extension_repository_directory").value.ToText() == "cpp_api_test_extensions");
+	REQUIRE(config.GetOption("threads").value.ToText() == "1");
+
+	// Aliases resolve, and a later value wins, also over a dedicated setter.
+	auto overridden = Instance(StartupOptions()
+	                               .EnableUnsignedExtensions(false)
+	                               .Set("allow_unsigned_extensions", "true")
+	                               .Set("worker_threads", "2")
+	                               .Set("threads", "3"));
+	REQUIRE(overridden.GetConfig().GetOption("allow_unsigned_extensions").value.ToText() == "true");
+	REQUIRE(overridden.GetConfig().GetOption("threads").value.ToText() == "3");
+
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("threads", "not a number")), Exception);
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("no_such_option_xyz", "1")), Exception);
+	// Options that need a running instance go through the instance's config instead.
+	REQUIRE_THROWS_AS(Instance(StartupOptions().Set("allowed_directories", "['/tmp']")), Exception);
 }

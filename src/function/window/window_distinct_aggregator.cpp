@@ -498,7 +498,11 @@ bool WindowDistinctSortTree::TryNextRun(idx_t &level_idx, idx_t &run_idx) {
 
 		++build_level;
 		if (build_level >= tree.size()) {
-			zipped_tree.tree.clear();
+			//	Release the levels but keep the vector intact, as other threads may still be reading its size
+			for (auto &level : zipped_tree.tree) {
+				auto released_elements = std::move(level.first);
+				auto released_offsets = std::move(level.second);
+			}
 			return false;
 		}
 
@@ -647,7 +651,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gdstate.aggr;
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateInputData aggr_input_data(aggr, statef.allocator);
 	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
@@ -664,6 +668,8 @@ void WindowDistinctAggregatorLocalState::Evaluate(ExecutionContext &context,
 	const auto &levels_flat_native = gdstate.levels_flat_native;
 	const auto exclude_mode = gdstate.aggregator.exclude_mode;
 
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	statef.allocator.Reset();
 	//	Build the finalise vector that just points to the result states
 	statef.Initialize(count);
 
