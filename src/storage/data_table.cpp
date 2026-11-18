@@ -326,9 +326,23 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 
 optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
                                          TableScanState &scan_state, bool initialize_columns) {
+	return NextParallelScanInternal(context, state, scan_state, initialize_columns, nullptr);
+}
+
+bool DataTable::NextParallelScanAssignment(ClientContext &context, ParallelTableScanState &state,
+                                           TableScanState &scan_state, TableScanAssignment &assignment) {
+	return NextParallelScanInternal(context, state, scan_state, false, assignment).IsValid();
+}
+
+optional_idx DataTable::NextParallelScanInternal(ClientContext &context, ParallelTableScanState &state,
+                                                 TableScanState &scan_state, bool initialize_columns,
+                                                 optional_ptr<TableScanAssignment> assignment) {
 	const auto rows =
 	    row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state, initialize_columns);
 	if (rows.IsValid()) {
+		if (assignment) {
+			*assignment = TableScanAssignment(scan_state.table_state, TableScanSource::PERSISTENT);
+		}
 		return rows;
 	}
 	if (state.scan_state.row_number_base.IsValid()) {
@@ -336,8 +350,12 @@ optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableSc
 		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state,
-	                                      initialize_columns);
+	const auto local_rows =
+	    local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state, initialize_columns);
+	if (local_rows.IsValid() && assignment) {
+		*assignment = TableScanAssignment(scan_state.local_state, TableScanSource::TRANSACTION_LOCAL);
+	}
+	return local_rows;
 }
 
 void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state) {

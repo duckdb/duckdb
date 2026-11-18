@@ -788,6 +788,23 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	if (bloom_filter) {
 		bloom_filter->InsertHashes(hash_values, *current_sel, added_count);
 	}
+	if (!key_bloom_filters.empty()) {
+		// the per-key-column filters of an external join with several equality keys
+		Vector key_hashes(LogicalType::HASH);
+		for (idx_t key_idx = 0; key_idx < key_bloom_filters.size(); key_idx++) {
+			auto &filter = key_bloom_filters[key_idx];
+			if (!filter) {
+				continue;
+			}
+			D_ASSERT(!filter->IsSealed());
+			if (added_count == keys.size()) {
+				VectorOperations::Hash(keys.data[key_idx], key_hashes, added_count);
+			} else {
+				VectorOperations::Hash(keys.data[key_idx], key_hashes, *current_sel, added_count);
+			}
+			filter->InsertHashes(key_hashes, *current_sel, added_count);
+		}
+	}
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
@@ -1131,6 +1148,22 @@ void JoinHashTable::SetBuildBloomFilter(idx_t key_idx) {
 	should_build_key_bloom_filters[key_idx] = true;
 }
 
+void JoinHashTable::InitializeKeyBloomFilters(const vector<idx_t> &key_idxs, idx_t build_estimate,
+                                              idx_t memory_budget) {
+	key_bloom_filters.clear();
+	if (key_idxs.empty()) {
+		return;
+	}
+	key_bloom_filters.resize(equality_predicate_columns.size());
+	// The key columns share one bitmap budget.
+	const auto key_budget = memory_budget / key_idxs.size();
+	for (auto &key_idx : key_idxs) {
+		auto &filter = key_bloom_filters[key_idx];
+		filter = make_shared_ptr<BloomFilter>();
+		filter->Initialize(context, build_estimate, key_budget);
+	}
+}
+
 shared_ptr<BloomFilter> JoinHashTable::GetBloomFilter(idx_t key_idx) {
 	if (HasSingleEqualityKey()) {
 		D_ASSERT(key_idx == 0);
@@ -1283,7 +1316,10 @@ void JoinHashTable::AllocateHashMap(bool use_radix_layout) {
 		bloom_filter = recycled_bloom_filter ? std::move(recycled_bloom_filter) : make_shared_ptr<BloomFilter>();
 		bloom_filter->Initialize(context, MaxValue<idx_t>(Count(), 1));
 	}
-	key_bloom_filters.resize(should_build_key_bloom_filters.size());
+	// filters accumulated during Sink stay in place
+	if (key_bloom_filters.size() < should_build_key_bloom_filters.size()) {
+		key_bloom_filters.resize(should_build_key_bloom_filters.size());
+	}
 	// The key columns share one bitmap budget with prefix-range filters.
 	for (idx_t key_idx = 0; key_idx < should_build_key_bloom_filters.size(); key_idx++) {
 		auto &filter = key_bloom_filters[key_idx];

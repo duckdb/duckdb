@@ -1,0 +1,78 @@
+# name: test/sql/storage/prefetch/scan_affinity_execution_order.test
+# description: Scan affinity uses runtime order and concurrency independently of caching and prefetch
+# group: [prefetch]
+
+load {TEST_DIR}/scan_affinity_execution_order.db
+
+statement ok
+CREATE TABLE integers AS SELECT range AS i FROM range(250000)
+
+statement ok
+CHECKPOINT
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+SET threads=4
+
+statement ok
+SET async_threads=0
+
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+SET enable_caching_operators=false
+
+statement ok
+CALL enable_logging('ReadAheadBudget')
+
+# An unordered aggregate still schedules cached assignments with caching and prefetch disabled.
+query II
+SELECT count(*), sum(i) FROM integers
+----
+250000	31249875000
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs_parsed('ReadAheadBudget')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# A result requiring insertion order cannot use affinity.
+statement ok
+SET preserve_insertion_order=true
+
+query I
+SELECT i FROM integers WHERE i % 50000 = 0
+----
+0
+50000
+100000
+150000
+200000
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('ReadAheadBudget')
+----
+0
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Runtime thread limits also rule out affinity for otherwise unordered work.
+statement ok
+SET threads=1
+
+query II
+SELECT count(*), sum(i) FROM integers
+----
+250000	31249875000
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('ReadAheadBudget')
+----
+0
