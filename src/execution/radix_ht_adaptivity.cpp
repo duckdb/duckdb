@@ -23,9 +23,7 @@ RadixHTAdaptivity::SinkResult RadixHTAdaptivity::HandleSinkBoundary(RadixHTGloba
 		// Keep the materialized rows and clear only the local pointer table.
 		gstate.any_abandoned = true;
 		ht.Abandon();
-		if (!memory_pressure) {
-			MaybeResumeLookups(ht);
-		}
+		MaybeResumeLookups(ht);
 		return SinkResult::ABANDONED;
 	}
 	return SinkResult::UNCHANGED;
