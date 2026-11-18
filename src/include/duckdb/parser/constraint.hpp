@@ -74,8 +74,6 @@ public:
 	DUCKDB_API virtual void Serialize(Serializer &serializer) const;
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
 
-	//! Whether the table enforces this constraint through an index it owns.
-	bool NeedsBackingIndex() const;
 	idx_t GetBackingIndexOid() const;
 	void SetBackingIndexOid(idx_t oid);
 
@@ -97,6 +95,9 @@ public:
 	}
 
 private:
+	//! Whether the table enforces this constraint through an index it owns.
+	bool NeedsBackingIndex() const;
+
 	//! The backing index identity is local to this database instance and is never persisted.
 	optional_idx backing_index_oid;
 };

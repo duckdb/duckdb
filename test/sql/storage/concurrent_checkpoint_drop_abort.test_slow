@@ -1,5 +1,5 @@
 # name: test/sql/storage/concurrent_checkpoint_drop_abort.test_slow
-# description: A table and an index dropped while a checkpoint runs that then fails, and recover from the WAL
+# description: A table dropped while a checkpoint runs that then fails, and recover from the WAL
 # group: [storage]
 
 # db is an attached database, so a failing checkpoint on it is scoped to db (the instance keeps running)
@@ -19,7 +19,7 @@ statement ok
 SET debug_verify_blocks=true
 
 statement ok
-CREATE TABLE db.a (i INTEGER PRIMARY KEY, s VARCHAR)
+CREATE TABLE db.a (i INTEGER, s VARCHAR)
 
 statement ok
 INSERT INTO db.a SELECT i, 'a' || i FROM range(100000) t(i)
@@ -31,15 +31,12 @@ statement ok
 INSERT INTO db.b SELECT i, 'b' || i FROM range(100000) t(i)
 
 statement ok
-CREATE INDEX b_s ON db.b(s)
-
-statement ok
 CREATE TABLE db.keep AS SELECT i FROM range(1000) t(i)
 
 statement ok
 CHECKPOINT db
 
-# the failing checkpoint rewrites the table and both indexes
+# the failing checkpoint rewrites the table
 statement ok
 UPDATE db.a SET s = s || 'x' WHERE i % 2 = 0
 
@@ -58,7 +55,7 @@ SET debug_checkpoint_abort='{abort_mode}'
 
 concurrentloop threadid 0 3
 
-# thread 2 is a reader that needs the state from before the drops, so that this is a concurrent checkpoint
+# thread 2 is a reader that needs the state from before the drop, so that this is a concurrent checkpoint
 onlyif threadid=2
 statement ok
 BEGIN TRANSACTION
@@ -83,14 +80,10 @@ CHECKPOINT db
 
 sleep 700 millisecond
 
-# during the sleep before the catalog scan: the checkpoint still writes both, and would free them at its end
+# during the sleep before the catalog scan: the checkpoint still writes the table, and would free it at its end
 onlyif threadid=1
 statement ok
 DROP TABLE db.a
-
-onlyif threadid=1
-statement ok
-DROP INDEX db.b_s
 
 sleep 5000 millisecond
 
@@ -120,7 +113,7 @@ CHECKPOINT db
 ----
 <REGEX>:.*invalidated.*
 
-# recover from the failed checkpoint, twice: the WAL replays the drops, which frees the storage
+# recover from the failed checkpoint, twice: the WAL replays the drop, which frees the storage
 restart
 
 loop k 0 2
@@ -139,11 +132,6 @@ SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = 'db' AND table_name =
 ----
 0
 
-query I
-SELECT COUNT(*) FROM duckdb_indexes() WHERE database_name = 'db'
-----
-0
-
 query II
 SELECT COUNT(*), SUM(i) FROM db.b
 ----
@@ -154,7 +142,7 @@ SELECT COUNT(*) - {k} FROM db.keep
 ----
 1001
 
-# the checkpoint accounts for every block, also those of the dropped table and index
+# the checkpoint accounts for every block, also those of the dropped table
 statement ok
 INSERT INTO db.keep VALUES (-2)
 

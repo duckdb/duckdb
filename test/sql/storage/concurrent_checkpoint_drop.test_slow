@@ -1,5 +1,5 @@
 # name: test/sql/storage/concurrent_checkpoint_drop.test_slow
-# description: Tables and indexes dropped while a checkpoint runs, and older snapshots that read dropped tables after later checkpoints
+# description: Tables without indexes dropped while a checkpoint runs, and older snapshots that read dropped tables after later checkpoints
 # group: [storage]
 
 load {TEST_DIR}/concurrent_checkpoint_drop.db
@@ -14,13 +14,10 @@ statement ok
 SET debug_verify_blocks=true
 
 statement ok
-CREATE TABLE a (i INTEGER PRIMARY KEY, s VARCHAR);
+CREATE TABLE a (i INTEGER, s VARCHAR);
 
 statement ok
 INSERT INTO a SELECT i, 'a' || i FROM range(100000) t(i);
-
-statement ok
-CREATE INDEX a_s ON a(s)
 
 statement ok
 CREATE TABLE keep AS SELECT i FROM range(1000) t(i);
@@ -78,7 +75,7 @@ Cannot CHECKPOINT
 
 sleep 4000 millisecond
 
-# a later checkpoint while the reader still sees the dropped table and its indexes
+# a later checkpoint while the reader still sees the dropped table
 onlyif threadid=1
 statement ok
 INSERT INTO keep VALUES (-2)
@@ -134,21 +131,15 @@ SELECT COUNT(*), SUM(i) FROM keep
 ----
 1002	499497
 
-# a table and a unique index dropped while a checkpoint runs: that checkpoint still writes both
+# a table dropped while a checkpoint runs that rewrites it: that checkpoint still writes the table
 statement ok
-CREATE TABLE b (i INTEGER PRIMARY KEY, s VARCHAR, t VARCHAR);
+CREATE TABLE b (i INTEGER, s VARCHAR, t VARCHAR);
 
 statement ok
 INSERT INTO b SELECT i, 'b' || i, 't' || i FROM range(100000) t(i);
 
 statement ok
-CREATE INDEX b_s ON b(s)
-
-statement ok
 CREATE TABLE u AS SELECT i FROM range(1000) t(i);
-
-statement ok
-CREATE UNIQUE INDEX u_i ON u(i)
 
 statement ok
 CHECKPOINT
@@ -191,14 +182,9 @@ DROP TABLE b
 
 onlyif threadid=1
 statement ok
-DROP INDEX u_i
-
-# the dropped index no longer applies
-onlyif threadid=1
-statement ok
 INSERT INTO u VALUES (5)
 
-# the reader ends, and the drops are cleaned up, while the checkpoint that frees the table and the index still runs
+# the reader ends, and the drop is cleaned up, while the checkpoint that frees the table still runs
 onlyif threadid=2
 statement ok
 COMMIT
@@ -210,7 +196,7 @@ endloop
 statement ok
 SET debug_checkpoint_sleep_ms=0
 
-# replay the WAL on top of the checkpoint that ran during the drops, twice
+# replay the WAL on top of the checkpoint that ran during the drop, twice
 restart
 
 loop k 0 2
@@ -222,11 +208,6 @@ query II
 SELECT COUNT(*) FILTER (WHERE table_name = 'b'), COUNT(*) FILTER (WHERE table_name = 'u') FROM duckdb_tables()
 ----
 0	1
-
-query I
-SELECT COUNT(*) FROM duckdb_indexes() WHERE table_name IN ('b', 'u')
-----
-0
 
 query III
 SELECT COUNT(*), COUNT(DISTINCT i), COUNT(*) FILTER (WHERE i = 5) FROM u

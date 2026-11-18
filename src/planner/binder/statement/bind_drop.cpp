@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
@@ -100,7 +101,15 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
 		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
-		properties.RegisterDBModify(entry->ParentCatalog(), context, stmt.info->GetModifications());
+		auto modifications = stmt.info->GetModifications();
+		if (entry->type == CatalogType::TABLE_ENTRY && !stmt.info->cascade) {
+			auto &table = entry->Cast<TableCatalogEntry>();
+			if (table.IsDuckTable() && !table.GetStorage().HasIndexes()) {
+				// without indexes, also uncommitted ones, a checkpoint that runs when the drop commits frees the table
+				modifications = DatabaseModificationType();
+			}
+		}
+		properties.RegisterDBModify(entry->ParentCatalog(), context, modifications);
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {

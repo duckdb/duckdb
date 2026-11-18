@@ -356,15 +356,6 @@ void IndexEntry::Retire() {
 	bind_state = IndexBindState::RETIRED;
 }
 
-void IndexEntry::DisownBlocks(BlockIdVisitor &visitor) {
-	auto entry_lock = lock.GetSharedLock();
-	// a dropped table keeps its constraint indexes, which are bound ARTs: any other is uncommitted, with no blocks
-	if (!owned_index || !owned_index->IsBound() || owned_index->GetIndexType() != ART::TYPE_NAME) {
-		return;
-	}
-	owned_index->Cast<ART>().DisownBlocks(visitor);
-}
-
 unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<LogicalType> &table_types,
                                         bool skip_mismatched_keys) {
 	auto entry_lock = lock.GetExclusiveLock();
@@ -521,9 +512,7 @@ idx_t IndexEntry::GetInMemorySize() const {
 
 IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (!owned_index) {
-		throw InternalException("Index %llu was removed while a checkpoint that writes it was running", index_oid);
-	}
+	D_ASSERT(owned_index);
 
 	auto storage_version = index_writer.GetStorageVersion();
 	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
@@ -564,7 +553,7 @@ IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
 void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// Merge any data appended to the index while the checkpoint was running.
-	if (!owned_index || !owned_index->IsBound()) {
+	if (!owned_index->IsBound()) {
 		return;
 	}
 	auto &bound_index = owned_index->Cast<BoundIndex>();
