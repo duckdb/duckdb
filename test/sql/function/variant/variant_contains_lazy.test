@@ -1,0 +1,64 @@
+# name: test/sql/function/variant/variant_contains_lazy.test
+# description: Containment of wide collections and deep outer traversal
+# group: [variant]
+
+require json
+
+# Early, late, and absent matches in a wide array.
+statement ok
+CREATE TABLE wide_array AS SELECT range(100000)::VARIANT AS v;
+
+query IIII
+SELECT variant_contains(v, 0::VARIANT),
+       variant_contains(v, 99999::VARIANT),
+       variant_contains(v, (-1)::VARIANT),
+       variant_contains(v, []::INTEGER[]::VARIANT)
+FROM wide_array;
+----
+true	true	false	true
+
+# Empty needles and field searches in a wide object.
+statement ok
+CREATE TABLE wide_object AS
+SELECT json_group_object(i::VARCHAR, i)::VARIANT AS v FROM range(10000) t(i);
+
+query IIII
+SELECT variant_contains(v, {}::VARIANT),
+       variant_contains(v, {'0': 0}::VARIANT),
+       variant_contains(v, {'9999': 9999, '0': 0}::VARIANT),
+       variant_contains(v, {'missing': 0}::VARIANT)
+FROM wide_object;
+----
+true	true	true	false
+
+# Resume siblings after nested candidates fail, including NULL values.
+query IIII
+SELECT variant_contains([{'a': [NULL, 1]}, {'b': [2, 3]}]::VARIANT, 3::VARIANT),
+       variant_contains({'a': [NULL, 1], 'b': [2, 3]}::VARIANT, 3::VARIANT),
+       variant_contains({'a': [NULL, 1], 'b': [2, 3]}::VARIANT, 4::VARIANT),
+       variant_contains([{'a': [NULL, 1]}, {'b': [2, 3]}]::VARIANT, {'b': [3]}::VARIANT);
+----
+true	true	false	true
+
+# The outer walk must also be stack-safe when the match is at the deepest leaf.
+query II
+WITH RECURSIVE nested(i, v) AS (
+    SELECT 0, 42::VARIANT
+    UNION ALL
+    SELECT i + 1, [v]::VARIANT FROM nested WHERE i < 5000
+)
+SELECT variant_contains(v, 42::VARIANT), variant_contains(v, 43::VARIANT)
+FROM nested WHERE i = 5000;
+----
+true	false
+
+query II
+WITH RECURSIVE nested(i, v) AS (
+    SELECT 0, 42::VARIANT
+    UNION ALL
+    SELECT i + 1, struct_pack(a := v)::VARIANT FROM nested WHERE i < 5000
+)
+SELECT variant_contains(v, 42::VARIANT), variant_contains(v, 43::VARIANT)
+FROM nested WHERE i = 5000;
+----
+true	false
