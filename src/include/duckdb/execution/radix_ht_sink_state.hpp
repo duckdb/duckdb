@@ -11,6 +11,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/aggregate_state_spilling.hpp"
+#include "duckdb/execution/radix_ht_adaptivity.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
@@ -190,6 +191,8 @@ public:
 	idx_t local_sink_capacity;
 	//! Spillable size of the HT after it was last abandoned
 	idx_t size_after_abandon = 0;
+	//! Adaptivity policy for this local sink
+	RadixHTAdaptivity adaptivity;
 	//! Data that is abandoned ends up here (only if we're doing external aggregation)
 	unique_ptr<PartitionedTupleData> abandoned_data;
 	//! Exported abandoned aggregate states, aligned one-to-one with the partitions of abandoned_data

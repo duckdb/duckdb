@@ -47,6 +47,7 @@
         "test/sql/function/generic/test_stats.test",
         "test/sql/storage/distinct_statistics_sample.test",
         "test/sql/storage/nan_min_statistics.test",
+        "test/sql/storage/infinity_min_max_statistics.test",
         "test/sql/function/timetz/test_date_part.test",
         "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/storage/types/variant/variant_comparator_stats.test",

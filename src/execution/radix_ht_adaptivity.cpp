@@ -1,11 +1,33 @@
 #include "duckdb/execution/radix_ht_adaptivity.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/radix_ht_sink_state.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
+
+RadixHTAdaptivity::SinkResult RadixHTAdaptivity::HandleSinkBoundary(RadixHTGlobalSinkState &gstate,
+                                                                    RadixHTLocalSinkState &lstate,
+                                                                    const bool memory_pressure) {
+	auto &ht = *lstate.ht;
+	if (!memory_pressure) {
+		if (TryGrow(gstate, lstate)) {
+			return SinkResult::GROWN;
+		}
+		MaybeSkipLookups(gstate, ht);
+	}
+
+	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
+		// Keep the materialized rows and clear only the local pointer table.
+		gstate.any_abandoned = true;
+		ht.Abandon();
+		MaybeResumeLookups(ht);
+		return SinkResult::ABANDONED;
+	}
+	return SinkResult::UNCHANGED;
+}
 
 bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
 	if (gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
@@ -86,31 +108,46 @@ bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSink
 	return true;
 }
 
-void RadixHTAdaptivity::MaybeSkipLookups(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
-	auto &ht = *lstate.ht;
-	const auto &adaptivity = ht.GetAdaptivityState();
-	if (gstate.external || !adaptivity.HLLEnabled() || adaptivity.LookupsSkipped() ||
-	    gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD ||
-	    adaptivity.GetSinkCount() < LOOKUP_SAMPLE_SIZE || ht.Capacity() != gstate.config.sink_capacity) {
+void RadixHTAdaptivity::MaybeSkipLookups(const RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht) {
+	const auto &state = ht.GetAdaptivityState();
+	if (state.LookupsSkipped() || gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD ||
+	    ht.Capacity() != gstate.config.sink_capacity) {
 		return;
 	}
 
-	const auto cycle_input = adaptivity.GetCycleInputCount();
+	const auto cycle_input = state.GetCycleInputCount();
 	D_ASSERT(cycle_input >= ht.Count());
-	const auto reduction =
-	    cycle_input ? static_cast<double>(cycle_input - ht.Count()) / static_cast<double>(cycle_input) : 0;
-	if (reduction < MINIMUM_SMALL_TABLE_REDUCTION) {
+	if (cycle_input == 0) {
+		// Failed growth already abandoned this cycle.
+		return;
+	}
+	if (recent_input_rows >= LOOKUP_HISTORY_DECAY_THRESHOLD_ROWS) {
+		recent_input_rows /= 2;
+		recent_reduced_rows /= 2;
+	}
+	recent_input_rows += cycle_input;
+	recent_reduced_rows += cycle_input - ht.Count();
+	if (state.GetSinkCount() < MIN_INPUT_ROWS_BEFORE_LOOKUP_SKIP) {
+		return;
+	}
+	const auto recent_reduction = static_cast<double>(recent_reduced_rows) / static_cast<double>(recent_input_rows);
+	const auto reduction = static_cast<double>(cycle_input - ht.Count()) / static_cast<double>(cycle_input);
+	if (reduction < MINIMUM_SMALL_TABLE_REDUCTION && recent_reduction < MINIMUM_SMALL_TABLE_REDUCTION) {
+		retry_interval_rows = ClampValue(ht.GetMaterializedCount() / LOOKUP_RETRY_MATERIALIZED_ROWS_DIVISOR,
+		                                 MIN_LOOKUP_RETRY_ROWS, MAX_LOOKUP_RETRY_ROWS);
 		ht.SkipLookups();
 	}
 }
 
-void RadixHTAdaptivity::MaybeResumeLookups(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
-	auto &ht = *lstate.ht;
-	const auto &adaptivity = ht.GetAdaptivityState();
-	if (!gstate.external && !lstate.spilling && adaptivity.HLLEnabled() && adaptivity.LookupsSkipped() &&
-	    adaptivity.GetSkippedInputCount() >= LOOKUP_SAMPLE_SIZE) {
+void RadixHTAdaptivity::MaybeResumeLookups(GroupedAggregateHashTable &ht) const {
+	const auto &state = ht.GetAdaptivityState();
+	if (state.LookupsSkipped() && state.GetSkippedInputCount() >= retry_interval_rows) {
 		ht.ResumeLookups();
 	}
+}
+
+void RadixHTAdaptivity::Reset() {
+	*this = RadixHTAdaptivity();
 }
 
 } // namespace duckdb

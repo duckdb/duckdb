@@ -1528,15 +1528,20 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
 
 	// now perform the actual update
-	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
 	updates_slice.InitializeEmpty(updates.GetTypes());
 
 	SelectionVector sel_local_update(count), sel_global_update(count);
-	auto n_local_update = VectorOperations::GreaterThanEquals(row_ids, max_row_id_vec, nullptr, count,
-	                                                          &sel_local_update, &sel_global_update);
-	auto n_global_update = count - n_local_update;
+	idx_t n_local_update = 0;
+	idx_t n_global_update = 0;
+	for (auto row_id : row_ids.Values<row_t>()) {
+		if (row_id.GetValue() >= MAX_ROW_ID) {
+			sel_local_update.set_index(n_local_update++, row_id.GetIndex());
+		} else {
+			sel_global_update.set_index(n_global_update++, row_id.GetIndex());
+		}
+	}
 
 	// row id > MAX_ROW_ID? transaction-local storage
 	if (n_local_update > 0) {

@@ -489,7 +489,7 @@ public:
 			recycled_filter.reset();
 		}
 		if (!ShouldBuildBloomFilterInSink(context, op)) {
-			hash_table->SetBloomFilter(nullptr);
+			hash_table->SetBloomFilters({});
 			// an in-memory join builds its filter during finalize, which can still reuse the allocation;
 			// an iteration without a filter must not clear a slot that finalize has not consumed yet
 			if (recycled_filter) {
@@ -511,14 +511,14 @@ public:
 					}
 				}
 			}
-			hash_table->InitializeKeyBloomFilters(key_idxs, build_estimate, GetJoinRuntimeFilterMemoryBudget(context));
+			hash_table->InitializeBloomFilters(key_idxs, build_estimate, GetJoinRuntimeFilterMemoryBudget(context));
 			return;
 		}
 		if (!recycled_filter) {
 			recycled_filter = make_shared_ptr<BloomFilter>();
 		}
 		recycled_filter->Initialize(context, build_estimate);
-		hash_table->SetBloomFilter(std::move(recycled_filter));
+		hash_table->SetBloomFilter(0, std::move(recycled_filter));
 	}
 
 	~HashJoinGlobalSinkState() override {
@@ -538,7 +538,7 @@ public:
 
 	void Reset(ClientContext &context) override {
 		// Keep the previous iteration's bloom filter so its allocation can be reused.
-		auto recycled_bloom_filter = hash_table->GetBloomFilter();
+		auto recycled_bloom_filter = hash_table->HasSingleEqualityKey() ? hash_table->GetBloomFilter(0) : nullptr;
 		// Use single-partition mode on subsequent iterations to avoid 16-partition overhead for small joins.
 		hash_table->ResetForNewIterationSinglePartition();
 		finalized = false;
@@ -647,9 +647,8 @@ public:
 		}
 
 		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
-		// every thread inserts into this one filter - InsertOne is an atomic fetch_or, so it needs no lock
-		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
-		hash_table->SetKeyBloomFilters(gstate.hash_table->GetKeyBloomFilters());
+		// All threads share these filters; insertion uses atomic updates.
+		hash_table->SetBloomFilters(gstate.hash_table->GetBloomFilters());
 		// sink_collection exists only after the layout is published on the first build chunk, so
 		// InitializeAppendState runs lazily inside Sink.
 		keep_hash_table = gstate.keep_local_hash_tables;
@@ -696,10 +695,8 @@ public:
 			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
 		}
 		append_state_initialised = false;
-		// the global state resets before any local one, so the filter this picks up is always a fresh one
-		D_ASSERT(!gstate.hash_table->GetBloomFilter() || !gstate.hash_table->GetBloomFilter()->IsSealed());
-		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
-		hash_table->SetKeyBloomFilters(gstate.hash_table->GetKeyBloomFilters());
+		// The global state resets before any local one, so these filters belong to the new iteration.
+		hash_table->SetBloomFilters(gstate.hash_table->GetBloomFilters());
 		keep_hash_table = gstate.keep_local_hash_tables;
 		gstate.active_local_states++;
 		if (gstate.global_filter_state) {
@@ -1368,7 +1365,7 @@ private:
 		if (sink.global_filter_state) {
 			// a finalize-built bloom filter is complete once the tasks are done; a sink-built one is
 			// already sealed and this is a no-op
-			sink.hash_table->SealBloomFilter();
+			sink.hash_table->SealBloomFilters();
 			PublishDeferredRuntimeFilters(sink.context, *sink.hash_table, *sink.global_filter_state);
 		}
 		sink.hash_table->finalized = true;
@@ -2087,7 +2084,7 @@ idx_t JoinFilterPushdownInfo::FilterFinalizer::SetRuntimeFilterBudget(
 	}
 	const auto budget_share = MaxValue<idx_t>(runtime_filter_count, 1);
 	const auto memory_budget = GetJoinRuntimeFilterMemoryBudget(context);
-	ht->SetKeyBloomFilterBudget(memory_budget / budget_share);
+	ht->SetBloomFilterBudget(memory_budget / budget_share);
 	// Leave room for at least one complete build lane as well as the published bitmaps.
 	const auto prefix_range_budget = MinValue(memory_budget, MAX_PREFIX_RANGE_BUILD_MEMORY);
 	const auto column_budget = prefix_range_budget / budget_share;
@@ -2217,7 +2214,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &ht = *sink.hash_table;
 
 	// the filter covers the whole build side once Sink is done
-	ht.SealBloomFilter();
+	ht.SealBloomFilters();
 
 	sink.temporary_memory_state->UpdateReservation(context.GetContext());
 	sink.external = sink.GetMaxInMemoryHTSize() < sink.total_size;
