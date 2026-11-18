@@ -69,6 +69,45 @@ EXECUTE membership
 100000
 
 statement ok
+DEALLOCATE membership
+
+statement ok
+DROP TABLE p
+
+statement ok
+DROP TABLE b
+
+statement ok
+CREATE TABLE p AS SELECT i * 25 k FROM range(4000000) t(i)
+
+statement ok
+INSERT INTO p VALUES (NULL), (NULL)
+
+statement ok
+CREATE TABLE b AS SELECT (i * 7919) % 100000000 k FROM range(8000000) t(i)
+
+statement ok
+INSERT INTO b VALUES (NULL)
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query II
+SELECT count(*), sum(k) FROM p SEMI JOIN b USING (k)
+----
+320000	15992924000000
+
+statement ok
+CALL disable_logging()
+
+query I
+SELECT NOT getvariable('check_activation') OR list_sort(list(parameters['Join Type'] || '/' || info['backend'])) = ['RIGHT_SEMI/bitmap']
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class='PhysicalHashJoin' AND event='Lookup' AND parameters['Join Type']='RIGHT_SEMI'
+----
+true
+
+statement ok
 DROP TABLE p
 
 statement ok
