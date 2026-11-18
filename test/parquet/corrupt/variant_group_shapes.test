@@ -1,0 +1,24 @@
+# name: test/parquet/corrupt/variant_group_shapes.test
+# description: Reject VARIANT groups that lack 'metadata' / 'value' or whose shredded 'value' is not binary
+# group: [corrupt]
+
+require parquet
+
+# Both files are written by DuckDB, with one change in the schema of the footer each.
+
+# The VARIANT group has a single child: its 'value' and 'typed_value' are siblings of the group.
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_group_one_child.parquet');
+----
+VARIANT column "var" must have a 'metadata' and a 'value' column
+
+# The 'value' of the field 'd' below 'typed_value' is an INT32 column.
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
+----
+the 'value' column of a shredded field of VARIANT column "var" must be a binary BYTE_ARRAY column
+
+statement error
+SELECT var.d FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/variant_shredded_value_not_binary.parquet');
+----
+the 'value' column of a shredded field of VARIANT column "var" must be a binary BYTE_ARRAY column
