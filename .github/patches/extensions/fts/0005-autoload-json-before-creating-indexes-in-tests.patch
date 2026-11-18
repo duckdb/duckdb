@@ -1,0 +1,60 @@
+diff --git a/test/sql/fts/test_near_search.test b/test/sql/fts/test_near_search.test
+index 1c14542..8ed1198 100644
+--- a/test/sql/fts/test_near_search.test
++++ b/test/sql/fts/test_near_search.test
+@@ -10,6 +10,10 @@ require json
+
+ require no_alternative_verify
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
++statement ok
++SELECT json_valid('{}')
++
+ statement ok
+ CREATE TABLE near_docs(id VARCHAR NOT NULL, body VARCHAR)
+
+diff --git a/test/sql/fts/test_pattern_persistence.test b/test/sql/fts/test_pattern_persistence.test
+index 1ab47b4..2d2c2c5 100644
+--- a/test/sql/fts/test_pattern_persistence.test
++++ b/test/sql/fts/test_pattern_persistence.test
+@@ -10,6 +10,10 @@ require no_alternative_verify
+
+ load {TEST_DIR}/pattern_persistence.db
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
++statement ok
++SELECT json_valid('{}')
++
+ statement ok
+ SET extension_directory='{TEST_DIR}/pp_ext'
+
+diff --git a/test/sql/fts/test_pattern_search.test b/test/sql/fts/test_pattern_search.test
+index 766e32b..c58d3e7 100644
+--- a/test/sql/fts/test_pattern_search.test
++++ b/test/sql/fts/test_pattern_search.test
+@@ -10,6 +10,10 @@ require json
+
+ require no_alternative_verify
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
++statement ok
++SELECT json_valid('{}')
++
+ # The native analyzer preserves Unicode literal lengths and extracts the same
+ # indexed prefix or gram used by the relational candidate path.
+ query TTT
+diff --git a/test/sql/fts/test_phrase_search.test b/test/sql/fts/test_phrase_search.test
+index b7778ee..3e6ca2f 100644
+--- a/test/sql/fts/test_phrase_search.test
++++ b/test/sql/fts/test_phrase_search.test
+@@ -10,6 +10,10 @@ require json
+
+ require no_alternative_verify
+
++# autoload json first: create_fts_index only registers the _query macros when json is loaded
++statement ok
++SELECT json_valid('{}')
++
+ statement ok
+ CREATE TABLE phrase_docs(
+     id VARCHAR NOT NULL,

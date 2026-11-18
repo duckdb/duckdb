@@ -1,0 +1,13 @@
+diff --git a/test/sql/fts/test_pattern_persistence.test b/test/sql/fts/test_pattern_persistence.test
+index 2d2c2c5..75e79bc 100644
+--- a/test/sql/fts/test_pattern_persistence.test
++++ b/test/sql/fts/test_pattern_persistence.test
+@@ -8,6 +8,8 @@ require json
+ 
+ require no_alternative_verify
+ 
++require no_extension_autoloading "EXPECTED: Test installs fts from the build directory into its own extension directory"
++
+ load {TEST_DIR}/pattern_persistence.db
+ 
+ # autoload json first: create_fts_index only registers the _query macros when json is loaded
