@@ -164,6 +164,8 @@ public:
 	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
 	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<ScanReadAheadJob> &job);
 
+	//! Schedule a job's I/O on the async pool and charge it to the budget, less the bytes its slot already charged
+	void ScheduleJobIO(ScanReadAheadJob &job, vector<unique_ptr<AsyncTask>> io_tasks, idx_t slot_bytes = 0);
 	//! Push an error onto the async executor
 	void PushError(ErrorData error);
 
