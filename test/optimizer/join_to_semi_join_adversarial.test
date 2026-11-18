@@ -23,6 +23,9 @@ create table e (lo integer, hi integer);
 statement ok
 create table s as select * from (values ('1'), ('20'), ('x'), (NULL)) t(v);
 
+statement ok
+create sequence seq;
+
 # an empty relation: no row either way
 query II
 explain select distinct a.x from a, e where a.y > e.lo;
@@ -334,6 +337,36 @@ query II
 explain with m as materialized (select a.x from a, p where a.y > p.lo) select count(*) from m m1, m m2 where m1.x = m2.x;
 ----
 physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a sample between the region and the DISTINCT
+query II
+explain select distinct x from (select a.x from a, p where a.y > p.lo) t using sample 1000 rows;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a count in a subquery between the region and the DISTINCT
+query II
+explain select distinct x from (select a.x, count(*) as n from a, p where a.y > p.lo group by a.x) t where n > 2;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a window count between the region and the DISTINCT
+query II
+explain select distinct x, n from (select a.x, count(*) over (partition by a.x) as n from a, p where a.y > p.lo) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a join above that multiplies the rows again: still a set
+query II
+explain select distinct t.x from (select a.x from a, p where a.y > p.lo) t, b where t.x = b.x;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# an expression above the region that can throw sees the same rows as a set
+query II
+explain select distinct x::utinyint from (select a.x from a, p where a.y > p.lo) t;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
 
 # the results, with the optimizer on and off
 # ('extension' disables nothing that is used here: that is the run with the optimizer on)
@@ -835,7 +868,7 @@ select b.x, (select count(*) from a, p where a.y > p.lo and a.x = b.x) from b;
 9	0
 NULL	0
 
-# read by a correlated subquery
+# read by a correlated subquery: the join of a and p stays an INNER join (the EXISTS is a SEMI join of its own)
 query I rowsort
 select distinct a.x from a, p where a.y > p.lo and exists (select 1 from b where b.x = p.hi - 34);
 ----
@@ -903,19 +936,57 @@ NULL	5
 NULL	9
 NULL	NULL
 
-# a volatile predicate of the region is evaluated once per row of the region
-statement ok
-create or replace sequence seq;
-
-query I
-select count(*) from (select distinct a.x from a, p where a.y > p.lo and nextval('seq') > 0);
+# a sample between the region and the DISTINCT
+query I rowsort
+select distinct x from (select a.x from a, p where a.y > p.lo) t using sample 1000 rows;
 ----
+1
+2
+3
 6
+7
+NULL
 
-query I
-select nextval('seq');
+# a count in a subquery between the region and the DISTINCT
+query I rowsort
+select distinct x from (select a.x, count(*) as n from a, p where a.y > p.lo group by a.x) t where n > 2;
 ----
-28
+2
+3
+6
+7
+NULL
+
+# a window count between the region and the DISTINCT
+query II rowsort
+select distinct x, n from (select a.x, count(*) over (partition by a.x) as n from a, p where a.y > p.lo) t;
+----
+1	1
+2	4
+3	4
+6	4
+7	10
+NULL	4
+
+# a join above that multiplies the rows again: still a set
+query I rowsort
+select distinct t.x from (select a.x from a, p where a.y > p.lo) t, b where t.x = b.x;
+----
+1
+2
+3
+7
+
+# an expression above the region that can throw sees the same rows as a set
+query I rowsort
+select distinct x::utinyint from (select a.x from a, p where a.y > p.lo) t;
+----
+1
+2
+3
+6
+7
+NULL
 
 endloop
 
