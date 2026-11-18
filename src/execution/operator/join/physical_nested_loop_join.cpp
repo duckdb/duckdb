@@ -141,6 +141,11 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 	if (join_type == JoinType::MARK) {
 		return true;
 	}
+	if (join_type == JoinType::RIGHT_SEMI) {
+		// one comparison that marks the build rows a probe chunk matches, no further predicate: the mark kernel
+		// compares nested keys as well
+		return conditions.size() == 1 && conditions[0].IsComparison();
+	}
 	idx_t comparison_count = 0;
 	for (auto &cond : conditions) {
 		if (!cond.IsComparison()) {
@@ -163,10 +168,6 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 	// with one condition, we can use mark join logic, otherwise we should use physical blockwise nl join
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		return comparison_count == 1;
-	}
-	if (join_type == JoinType::RIGHT_SEMI) {
-		// one comparison that marks the build rows a probe chunk matches, no further predicate
-		return conditions.size() == 1;
 	}
 	return true;
 }
