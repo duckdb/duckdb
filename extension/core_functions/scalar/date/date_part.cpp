@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -2169,6 +2170,10 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	}
 	bound_function.SetFunctionCallback(DatePartUnaryCallback(part_code, type));
 	bound_function.SetStatisticsCallback(DatePartUnaryStatistics(part_code, type));
+	// the unary function's argument properties, such as its monotonicity
+	auto unary = TryGetBuiltinScalarFunction(input.GetClientContext(), bound_function.GetName(),
+	                                         {bound_function.GetArguments()[0]});
+	bound_function.SetArgProperties(unary ? unary->GetAllArgProperties() : vector<ArgProperties>());
 
 	return nullptr;
 }
