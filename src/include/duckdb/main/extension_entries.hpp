@@ -55,11 +55,11 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"@>", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^@", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__resolve", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__resolve", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__expired", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"__aws__s3__bucket__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__s3__bucket__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1606,10 +1606,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 
 // Resource types registered by extensions: CREATE/REGISTER EXTERNAL RESOURCE '<type>' autoloads the extension
 static constexpr ExtensionEntry EXTENSION_EXTERNAL_RESOURCE_TYPES[] = {
-    {"aws:cloudformation:quack-on-ec2", "aws"},
-    {"aws:s3:bucket", "aws"},
-    {"aws:s3tables:bucket", "aws"},
-    {"aws:system-table", "aws"},
+    {"aws.cloudformation.stack", "aws"},
+    {"aws.s3.bucket", "aws"},
+    {"aws.s3tables.bucket", "aws"},
+    {"aws.system-table", "aws"},
 }; // END_OF_EXTENSION_EXTERNAL_RESOURCE_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
