@@ -1066,3 +1066,243 @@ explain select min(outer_rows.i order by outer_rows.i) from outer_rows left join
 ----
 physical_plan	<!REGEX>:.*JOIN.*
 
+
+# ---- Row multiplicity that is visible between the consumer that ignores duplicates and the join ---------------------
+# n2 holds the key of n1 twice. A volatile expression above the join is evaluated once per repeated row: the join stays,
+# also below a DISTINCT, and the sequence is advanced as often with the optimizer enabled (i = 1) as disabled (i = 0)
+statement ok
+create table u1(i integer primary key, v integer);
+
+statement ok
+insert into u1 values (1, 10), (2, 20);
+
+loop i 0 2
+
+statement ok
+SET disabled_optimizers = CASE WHEN {i} = 0 THEN 'join_elimination' ELSE '' END;
+
+# a volatile condition of a join above: the second evaluation is the one that passes
+statement ok
+create or replace sequence vseq;
+
+query I
+select distinct n1.i from (n1 left join n2 on n1.i = n2.i) join n3 on n1.i = n3.i and (n1.i + n3.i + nextval('vseq')) % 2 = 0;
+----
+1
+
+statement ok
+create or replace sequence vseq;
+
+query I
+select max(n1.i) from (n1 left join n2 on n1.i = n2.i) join n3 on n1.i = n3.i and (n1.i + n3.i + nextval('vseq')) % 2 = 0;
+----
+1
+
+statement ok
+create or replace sequence vseq;
+
+query I
+select i from n3 where i in (select n1.i from (n1 left join n2 on n1.i = n2.i) join u1 on n1.i = u1.i and (n1.i + u1.i + nextval('vseq')) % 2 = 0);
+----
+1
+
+# a volatile filter between the DISTINCT and the join
+statement ok
+create or replace sequence vseq;
+
+query I
+select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where (i + nextval('vseq')) % 2 = 1;
+----
+1
+
+# a volatile expression on the inner side: a join inside it, a filter below a DISTINCT that makes it unique, and a
+# volatile condition on a unique inner side. The sequence is advanced twice by each
+statement ok
+create or replace sequence vseq;
+
+query I
+select distinct n1.i from n1 left join (n2 join n3 on n2.i = n3.i and nextval('vseq') > 0) on n1.i = n2.i;
+----
+1
+
+query I
+select nextval('vseq');
+----
+3
+
+statement ok
+create or replace sequence vseq;
+
+query I
+select n1.i from n1 left join (select distinct i from n2 where nextval('vseq') > 0) d on n1.i = d.i;
+----
+1
+
+query I
+select nextval('vseq');
+----
+3
+
+statement ok
+create or replace sequence vseq;
+
+query I
+select n1.i from n1 left join u1 on n1.i = u1.i and nextval('vseq') > 0;
+----
+1
+
+query I
+select nextval('vseq');
+----
+2
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';
+
+# the plans: every one of these joins stays
+query II
+explain select distinct n1.i from (n1 left join n2 on n1.i = n2.i) join n3 on n1.i = n3.i and (n1.i + n3.i + nextval('vseq')) % 2 = 0;
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*
+
+query II
+explain select max(n1.i) from (n1 left join n2 on n1.i = n2.i) join n3 on n1.i = n3.i and (n1.i + n3.i + nextval('vseq')) % 2 = 0;
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*
+
+query II
+explain select i from n3 where i in (select n1.i from (n1 left join n2 on n1.i = n2.i) join u1 on n1.i = u1.i and (n1.i + u1.i + nextval('vseq')) % 2 = 0);
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*JOIN.*
+
+query II
+explain select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where (i + nextval('vseq')) % 2 = 1;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select distinct n1.i from n1 left join (n2 join n3 on n2.i = n3.i and nextval('vseq') > 0) on n1.i = n2.i;
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*
+
+query II
+explain select n1.i from n1 left join (select distinct i from n2 where nextval('vseq') > 0) d on n1.i = d.i;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select n1.i from n1 left join u1 on n1.i = u1.i and nextval('vseq') > 0;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# without the volatile expression the same joins are removed: the DISTINCT, min / max and the IN ignore the repeated rows
+query II
+explain select distinct n1.i from (n1 left join n2 on n1.i = n2.i) join n3 on n1.i = n3.i and (n1.i + n3.i) % 2 = 0;
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query II
+explain select distinct i from (select n1.i from n1 left join n2 on n1.i = n2.i) where i % 2 = 1;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# ---- The inner side is distinct on the join keys: the join returns exactly its outer rows, whatever is above it ------
+# a PRIMARY KEY, also below a counting aggregate, a window and a LIMIT, with a further condition, and through a join
+# that keeps the keys distinct
+query II
+explain select n2.i, count(*), sum(n2.i) from n2 left join u1 on n2.i = u1.i group by n2.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query III
+select n2.i, count(*), sum(n2.i) from n2 left join u1 on n2.i = u1.i group by n2.i;
+----
+1	2	2
+
+query II
+explain select i, row_number() over (order by i) from (select n2.i from n2 left join u1 on n2.i = u1.i limit 5);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select n2.i from n2 left join u1 on n2.i = u1.i and n2.i < u1.v;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select n2.i from n2 left join (select u1.i from u1 join (select distinct i from n3) d on u1.i = d.i) k on n2.i = k.i;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select n2.i from n2 left join (select u1.i from u1 join (select distinct i from n3) d on u1.i = d.i) k on n2.i = k.i;
+----
+1
+1
+
+# must not fire: the key is not compared as a whole or not by an equality, or the join below repeats the keys
+query II
+explain select n2.i from n2 left join u1 on n2.i = u1.v;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select n2.i from n2 left join u1 on n2.i < u1.i;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select n2.i from n2 left join (select u1.i from u1 join n2 d on u1.i = d.i) k on n2.i = k.i;
+----
+physical_plan	<REGEX>:.*JOIN.*JOIN.*
+
+query I
+select n2.i from n2 left join (select u1.i from u1 join n2 d on u1.i = d.i) k on n2.i = k.i;
+----
+1
+1
+1
+1
+
+# a SINGLE join is removed by this proof only: with a PRIMARY KEY on the correlated column the subquery cannot return
+# a second row. The filter is always true (the statistics of n2 show it), so nothing reads the subquery
+query II
+explain select n2.i from n2 where n2.i > 0 or (select u1.v from u1 where u1.i = n2.i) > 0;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select n2.i from n2 where n2.i > 0 or (select u1.v from u1 where u1.i = n2.i) > 0;
+----
+1
+1
+
+# ---- Operators that return a repeated input row once per repeat keep the duplicate-insensitivity -------------------
+# UNNEST, and the left side of the MARK join of a NOT IN
+query II
+explain select distinct i from (select n1.i, unnest([1, 2]) as e from n1 left join n2 on n1.i = n2.i);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select distinct i from (select n1.i, unnest([1, 2]) as e from n1 left join n2 on n1.i = n2.i);
+----
+1
+
+query II
+explain select distinct n1.i from n1 left join n2 on n1.i = n2.i where n1.i not in (select i + 1 from n3);
+----
+physical_plan	<!REGEX>:.*JOIN.*JOIN.*
+
+query I
+select distinct n1.i from n1 left join n2 on n1.i = n2.i where n1.i not in (select i + 1 from n3);
+----
+1
+
+# must not fire: the UNNEST is volatile
+query II
+explain select distinct i from (select n1.i, unnest([random(), 2]) as e from n1 left join n2 on n1.i = n2.i) where e > 1;
+----
+physical_plan	<REGEX>:.*JOIN.*
