@@ -206,6 +206,20 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
+	if (!is_closed && is_detached) {
+		// a reference held outside of a transaction outlived the detach
+		auto action = Exception::UncaughtException() ? DatabaseCloseAction::SKIP_CHECKPOINT : detach_close_action;
+		try {
+			Close(action);
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in ~AttachedDatabase():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} catch (...) { // NOLINT
+		}
+	}
 	D_ASSERT(is_closed || Exception::UncaughtException());
 }
 
@@ -263,7 +277,7 @@ Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSyste
 	return Identifier(name);
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+DatabaseCloseAction AttachedDatabase::GetDetachCloseAction(ClientContext &context) {
 	auto close_action = DatabaseCloseAction::CHECKPOINT;
 	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
 	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
@@ -273,8 +287,20 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	} else if (!Settings::Get<CheckpointOnShutdownSetting>(context)) {
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	}
+	return close_action;
+}
 
-	InvokeCloseIfLastReference(attached_db, close_action);
+void AttachedDatabase::MarkDetached(DatabaseCloseAction close_action) {
+	lock_guard<mutex> guard(*close_lock);
+	if (is_detached) {
+		return;
+	}
+	is_detached = true;
+	detach_close_action = close_action;
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+	InvokeCloseIfLastReference(attached_db, GetDetachCloseAction(context));
 }
 
 void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
@@ -287,6 +313,9 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			return;
 		}
 		attached_db->is_closing = true;
+		if (attached_db->is_detached) {
+			close_action = attached_db->detach_close_action;
+		}
 	}
 	attached_db->Close(close_action);
 	attached_db.reset();
