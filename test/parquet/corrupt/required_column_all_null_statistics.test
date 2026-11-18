@@ -35,6 +35,46 @@ FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_nested_column_all
 ----
 Column "x" cannot hold NULL values but its statistics count 6001 NULL values
 
+# A REQUIRED GEOMETRY column (10 rows) with null_count = 10: the schema of the column wraps its BLOB column.
+statement error
+SELECT count(*)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_geometry_column_all_null_statistics.parquet')
+WHERE g IS NOT NULL;
+----
+Column "g" cannot hold NULL values but its statistics count 10 NULL values
+
+statement error
+SELECT count(g)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_geometry_column_all_null_statistics.parquet');
+----
+Column "g" cannot hold NULL values but its statistics count 10 NULL values
+
+# The REQUIRED 'metadata' column of a REQUIRED shredded VARIANT with null_count = 10.
+statement error
+SELECT count(var)
+FROM read_parquet('{DATA_DIR}/parquet-testing/corrupt/required_variant_metadata_null_count.parquet');
+----
+Column "metadata" cannot hold NULL values but its statistics count 10 NULL values
+
+# A REQUIRED column below an OPTIONAL group has definition levels: its null count (1 of 4 here) is left alone.
+query III
+SELECT count(*), count(geometry), count(geometry.x)
+FROM read_parquet('{DATA_DIR}/geoparquet/data-point-encoding_native.parquet');
+----
+4	3	3
+
+query I
+SELECT count(*) FROM read_parquet('{DATA_DIR}/geoparquet/data-point-encoding_native.parquet') WHERE geometry.x IS NULL;
+----
+1
+
+# So has a REQUIRED column below a REPEATED group: the keys of this MAP have a null count of 18.
+query III
+SELECT count(*), count(raw_header), sum(cardinality(raw_header))
+FROM read_parquet('{DATA_DIR}/parquet-testing/map.parquet');
+----
+1127	1109	14396
+
 # the unchanged file
 query III
 SELECT count(*), count(x), sum(x)

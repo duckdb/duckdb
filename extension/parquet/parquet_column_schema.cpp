@@ -60,18 +60,6 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 		throw DataCorruptionException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
 		                              metadata.num_values);
 	}
-	if (children.empty() && max_define == 0 && metadata.__isset.statistics && metadata.statistics.__isset.null_count &&
-	    metadata.statistics.null_count > 0) {
-		// the column has no definition levels, so its values cannot be NULL
-		if (file_name) {
-			throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Column \"%s\" cannot "
-			                              "hold NULL values but its statistics count %lld NULL values",
-			                              file_name, name, metadata.statistics.null_count);
-		}
-		throw DataCorruptionException("Parquet metadata is corrupt. Column \"%s\" cannot hold NULL values but its "
-		                              "statistics count %lld NULL values",
-		                              name, metadata.statistics.null_count);
-	}
 	if (validate_row_count && !type.IsNested() && max_repeat == 0 && metadata.num_values != row_group_num_rows) {
 		if (file_name) {
 			throw DataCorruptionException(
@@ -81,6 +69,25 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 		throw DataCorruptionException("Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
 		                              metadata.num_values, row_group_num_rows);
 	}
+}
+
+void ParquetColumnSchema::ValidateNullCount(const ColumnChunk &column, const char *file_name) const {
+	if (max_define != 0 || !column.__isset.meta_data || !column.meta_data.__isset.statistics) {
+		return;
+	}
+	auto &statistics = column.meta_data.statistics;
+	if (!statistics.__isset.null_count || statistics.null_count <= 0) {
+		return;
+	}
+	// the column has no definition levels, so its values cannot be NULL
+	if (file_name) {
+		throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Column \"%s\" cannot hold "
+		                              "NULL values but its statistics count %lld NULL values",
+		                              file_name, name, statistics.null_count);
+	}
+	throw DataCorruptionException("Parquet metadata is corrupt. Column \"%s\" cannot hold NULL values but its "
+	                              "statistics count %lld NULL values",
+	                              name, statistics.null_count);
 }
 
 //! Writer constructors
