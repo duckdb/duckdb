@@ -70,6 +70,17 @@ SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 
 ----
 2049	2049
 
+# The offset is equal to the number of NULL rows
+query II
+EXPLAIN ANALYZE SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
+----
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
+
+query II
+SELECT k, id FROM db.null_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
+----
+2048	2048
+
 # The offset contains all rows that can be NULL: we can skip the NULL-only row group
 query II
 EXPLAIN ANALYZE SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4096
@@ -92,3 +103,12 @@ query I
 SELECT k FROM db.null_groups ORDER BY k NULLS FIRST LIMIT 1 OFFSET 2048
 ----
 NULL
+
+# The statistics still report values for a row group after an UPDATE sets all its values to NULL
+statement ok
+UPDATE db.mixed_groups SET k = NULL WHERE id < 4096
+
+query II
+SELECT k, id FROM db.mixed_groups ORDER BY k NULLS FIRST, id DESC LIMIT 1 OFFSET 4095
+----
+NULL	0
