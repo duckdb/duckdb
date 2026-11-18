@@ -100,6 +100,7 @@
         "test/sql/parallelism/async_task_synchronous_batch.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead.test",
+        "test/sql/storage/prefetch/scan_affinity_execution_order.test",
         "test/sql/storage/prefetch/prefetch_run_size_cap.test",
         "test/sql/progress/test_verify_progress.test"
       ]
@@ -107,7 +108,8 @@
     {
       "reason": "disabled_compression_methods doesn't survive database restarts",
       "paths": [
-        "test/sql/settings/setting_validation_and_reset.test"
+        "test/sql/settings/setting_validation_and_reset.test",
+        "test/sql/storage/compression/alp/alp_sampling_ratio.test"
       ]
     },
     {
@@ -185,7 +187,8 @@
         "test/sql/attach/external_resource_null_handle.test",
         "test/sql/attach/external_resource_show_subquery.test",
         "test/sql/attach/external_resource_show_with_type.test",
-        "test/sql/attach/external_resource_external_access.test"
+        "test/sql/attach/external_resource_external_access.test",
+        "test/sql/attach/external_resource_show_types.test"
       ]
     },
     {

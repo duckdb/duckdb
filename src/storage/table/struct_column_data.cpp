@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -344,13 +345,14 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
-			auto context = transaction.transaction->context.lock();
+			auto &cast_set = CastFunctionSet::Get(GetDatabase());
+			auto cast_input = GetCastFunctionInput::Default();
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);
 				sub_column.FetchRows(transaction, state, child_storage_index, &offset,
 				                     *FlatVector::IncrementalSelectionVector(), /*count=*/1, intermediate, 0);
-				auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
+				auto fetched_row = intermediate.GetValue(0).CastAs(cast_set, cast_input, result.GetType());
 				result.SetValue(result_offset + idx, fetched_row);
 			}
 			return;
@@ -416,9 +418,9 @@ const BaseStatistics &StructColumnData::GetChildStats(const ColumnData &child) c
 }
 
 struct StructColumnCheckpointState : public ColumnCheckpointState {
-	StructColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	StructColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                            PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 		global_stats = StructStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -463,16 +465,17 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                           PartialBlockManager &partial_block_manager) {
-	return make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<StructColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(const RowGroup &row_group,
                                                                ColumnCheckpointInfo &checkpoint_info,
                                                                const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	for (idx_t col_idx = 0; col_idx < sub_columns.size(); col_idx++) {

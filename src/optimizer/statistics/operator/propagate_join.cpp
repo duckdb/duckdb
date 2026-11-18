@@ -109,19 +109,6 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 	}
 }
 
-//! Suspends attaching verification statistics to propagated expressions for the lifetime of the guard
-struct VerificationStatsGuard {
-	explicit VerificationStatsGuard(bool &attach_p) : attach(attach_p), previous(attach_p) {
-		attach = false;
-	}
-	~VerificationStatsGuard() {
-		attach = previous;
-	}
-
-	bool &attach;
-	bool previous;
-};
-
 //! The column a join-derived filter can target: the side itself or the column under an invertible numeric cast
 static optional_ptr<const Expression> GetFilterColumn(ClientContext &context, const Expression &expr) {
 	optional_ptr<const Expression> column = expr;
@@ -134,8 +121,7 @@ static optional_ptr<const Expression> GetFilterColumn(ClientContext &context, co
 		    !BoundCastExpression::CastIsInvertibleForEquality(source_type, target_type)) {
 			return nullptr;
 		}
-		if (!BoundCastExpression::IsDefaultCast(cast) &&
-		    CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
+		if (CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
 			return nullptr;
 		}
 		column = BoundCastExpression::Child(cast);
@@ -164,6 +150,17 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto &condition = join.conditions[i];
 		if (!condition.IsComparison()) {
 			PropagateExpression(condition.JoinExpressionReference());
+			switch (ClassifyFilter(condition.GetJoinExpression())) {
+			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
+				// a residual predicate that never passes: none of the join conditions matter
+				if (HandleJoinNeverMatches(join, node_ptr)) {
+					return;
+				}
+				break;
+			default:
+				break;
+			}
 			continue;
 		}
 
@@ -174,15 +171,26 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			condition.SetComparisonType(SimplifyDistinctComparison(condition.GetComparisonType(), stats_left.get(),
 			                                                       stats_right.get(), ComparisonContext::JOIN));
 		}
+		// a side that holds only NULLs never compares TRUE, whatever the statistics of the other side
+		const bool is_distinct = condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		                         condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		const bool all_null = !is_distinct &&
+		                      (HasNoValidValue(stats_left.get()) || HasNoValidValue(stats_right.get())) &&
+		                      IsRemovable(condition.GetLHS()) && IsRemovable(condition.GetRHS());
+		if (all_null && !(stats_left && stats_right)) {
+			if (HandleJoinNeverMatches(join, node_ptr)) {
+				return;
+			}
+		}
 		if (stats_left && stats_right) {
-			if ((condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
-			     condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
-			    stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
+			if (is_distinct && stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
 			}
-			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.GetComparisonType());
+			auto prune_result = all_null
+			                        ? FilterPropagateResult::FILTER_FALSE_OR_NULL
+			                        : PropagateComparison(*stats_left, *stats_right, condition.GetComparisonType());
 			// Add stats to logical_join for perfect hash join
 			condition.SetLeftStats(stats_left->ToUnique());
 			condition.SetRightStats(stats_right->ToUnique());
@@ -281,14 +289,15 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		}
 	}
 
-	// join conditions can be evaluated over candidate pairs that repeat rows of either side,
-	// so their verification statistics must not carry additive totals
+	// join conditions are evaluated over candidate pairs that repeat rows of either side and that still hold the
+	// NULLs rejected by the earlier conditions, so their verification statistics carry neither additive totals nor
+	// the absence of NULLs
 	for (auto &condition : join.conditions) {
 		if (condition.IsComparison()) {
-			ResetAdditiveVerificationStats(condition.GetLHS());
-			ResetAdditiveVerificationStats(condition.GetRHS());
+			RelaxJoinConditionVerificationStats(condition.GetLHS());
+			RelaxJoinConditionVerificationStats(condition.GetRHS());
 		} else {
-			ResetAdditiveVerificationStats(condition.GetJoinExpression());
+			RelaxJoinConditionVerificationStats(condition.GetJoinExpression());
 		}
 	}
 }
@@ -297,9 +306,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<
 	// propagate the expression into the join condition
 	// note that a condition that is TRUE_OR_NULL does not always match: a NULL condition rejects the pair
 	PropagateExpression(join.condition);
-	// the condition is evaluated over candidate pairs that repeat rows of either side,
-	// so its verification statistics must not carry additive totals
-	ResetAdditiveVerificationStats(*join.condition);
+	// the condition is evaluated over candidate pairs that repeat rows of either side and hold NULLs,
+	// so its verification statistics carry neither additive totals nor the absence of NULLs
+	RelaxJoinConditionVerificationStats(*join.condition);
 	switch (ClassifyFilter(*join.condition)) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		HandleJoinAlwaysMatches(join, node_ptr);
@@ -506,16 +515,16 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 	}
 	// Match the numeric types supported by UpdateFilterStatistics.
 	auto column = GetFilterColumn(context, *expr);
-	if (!column || !expr->GetReturnType().IsNumeric() || !NumericStats::HasMinMax(stats_before) ||
-	    !NumericStats::HasMinMax(stats_after)) {
+	if (!column || !expr->GetReturnType().IsNumeric() || !HasNumericMinMax(stats_before) ||
+	    !HasNumericMinMax(stats_after)) {
 		return;
 	}
 
 	// Retrieve min/max
-	auto min_before = NumericStats::Min(stats_before);
-	auto max_before = NumericStats::Max(stats_before);
-	auto min_after = NumericStats::Min(stats_after);
-	auto max_after = NumericStats::Max(stats_after);
+	auto min_before = NumericMin(stats_before);
+	auto max_before = NumericMax(stats_before);
+	auto min_after = NumericMin(stats_after);
+	auto max_after = NumericMax(stats_after);
 
 	vector<unique_ptr<Expression>> filter_exprs;
 	auto add_filter = [&](ExpressionType comparison_type, const Value &bound) {

@@ -92,6 +92,7 @@ public:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY:
 			return VisitString(type_id, variant, row, values_idx, std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(variant, row, values_idx, std::forward<Args>(args)...);
@@ -179,6 +180,7 @@ public:
 		case VariantLogicalType::BITSTRING:
 		case VariantLogicalType::BIGNUM:
 		case VariantLogicalType::GEOMETRY:
+		case VariantLogicalType::GEOGRAPHY:
 			return VisitString(type_id, node.GetString(), std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(node, std::forward<Args>(args)...);
@@ -318,6 +320,9 @@ private:
 		if (type_id == VariantLogicalType::GEOMETRY) {
 			return Visitor::VisitGeometry(decoded_string, std::forward<Args>(args)...);
 		}
+		if (type_id == VariantLogicalType::GEOGRAPHY) {
+			return Visitor::VisitGeography(decoded_string, std::forward<Args>(args)...);
+		}
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(decoded_string, std::forward<Args>(args)...);
 		}
@@ -338,6 +343,9 @@ private:
 		if (type_id == VariantLogicalType::GEOMETRY) {
 			return Visitor::VisitGeometry(value, std::forward<Args>(args)...);
 		}
+		if (type_id == VariantLogicalType::GEOGRAPHY) {
+			return Visitor::VisitGeography(value, std::forward<Args>(args)...);
+		}
 		if (type_id == VariantLogicalType::BITSTRING) {
 			return Visitor::VisitBitstring(value, std::forward<Args>(args)...);
 		}
@@ -352,7 +360,9 @@ private:
 		auto &scale = decoded_decimal.scale;
 		auto &ptr = decoded_decimal.value_ptr;
 		if (width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			auto blob = VariantUtils::DecodeWideDecimalData(variant, row, values_idx);
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(blob), width, scale, std::forward<Args>(args)...);
 		} else if (width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(Load<hugeint_t>(ptr), width, scale,
 			                                                 std::forward<Args>(args)...);
@@ -372,7 +382,9 @@ private:
 	static ReturnType VisitDecimal(const VariantNode &node, Args &&...args) {
 		auto decimal = node.GetDecimal();
 		if (decimal.width > DecimalWidth<hugeint_t>::max) {
-			throw InternalException("Can't handle decimal of width: %d", decimal.width);
+			// decimals wider than 38 digits are BIGNUM blobs
+			return Visitor::template VisitDecimal<bignum_t>(bignum_t(node.GetWideDecimal()), decimal.width,
+			                                                decimal.scale, std::forward<Args>(args)...);
 		} else if (decimal.width > DecimalWidth<int64_t>::max) {
 			return Visitor::template VisitDecimal<hugeint_t>(node.GetData<hugeint_t>(), decimal.width, decimal.scale,
 			                                                 std::forward<Args>(args)...);
