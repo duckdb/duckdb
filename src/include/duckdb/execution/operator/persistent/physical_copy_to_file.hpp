@@ -31,6 +31,8 @@ struct CopyToFileInfo {
 	Value partition_keys;
 };
 
+class CopyOutputLifecycle;
+
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
@@ -38,7 +40,7 @@ public:
 
 public:
 	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
-	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
+	                   cow_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 	~PhysicalCopyToFile() override;
 
 public:
@@ -48,6 +50,9 @@ public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
+	//! Creates or checks the directory a COPY writes several files into
+	static void PrepareOutputDirectory(ClientContext &context, const string &directory,
+	                                   CopyOverwriteMode overwrite_mode, CopyOutputLifecycle &output_lifecycle);
 	static void ReturnStatistics(Context &context, DataChunk &chunk, CopyToFileInfo &written_file_info);
 	//! Adds the RETURN_STATS row of a COPY that wrote no file, so that RETURN_COLUMN_TYPES can still return the types
 	static void ReturnNoFileStatistics(DataChunk &chunk);
@@ -110,7 +115,7 @@ public:
 public:
 	//! Function and associated bind data
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 
 	//! Names and types going into the file(s)
 	vector<Identifier> names;

@@ -651,7 +651,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gdstate.aggr;
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateInputData aggr_input_data(aggr, statef.allocator);
 	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
@@ -668,6 +668,8 @@ void WindowDistinctAggregatorLocalState::Evaluate(ExecutionContext &context,
 	const auto &levels_flat_native = gdstate.levels_flat_native;
 	const auto exclude_mode = gdstate.aggregator.exclude_mode;
 
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	statef.allocator.Reset();
 	//	Build the finalise vector that just points to the result states
 	statef.Initialize(count);
 

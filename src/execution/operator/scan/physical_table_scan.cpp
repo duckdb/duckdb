@@ -17,7 +17,7 @@
 namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
-                                     BoundTableFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                     BoundTableFunction function_p, cow_ptr<FunctionData> bind_data_p,
                                      vector<LogicalType> returned_types_p, vector<ColumnIndex> column_ids_p,
                                      vector<idx_t> projection_ids_p, vector<string> names_p,
                                      unique_ptr<TableFilterSet> table_filters_p, idx_t estimated_cardinality,
@@ -88,6 +88,10 @@ public:
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
+			if (context.pipeline && context.pipeline->GetSource().get() == &op && context.pipeline->GetSink()) {
+				input.execution_order = context.pipeline->GetExecutionOrder();
+				input.max_threads = context.pipeline->GetMaxThreads();
+			}
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

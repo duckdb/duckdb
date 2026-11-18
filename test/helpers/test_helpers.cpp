@@ -675,12 +675,12 @@ unique_ptr<DBConfig> GetTestConfig() {
 	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
-		result->options.storage_compatibility = StorageCompatibility::FromString(storage_version);
+		result->SetOptionByName("storage_compatibility_version", storage_version);
 	}
 
 	auto max_threads = test_config.GetMaxThreads();
 	if (max_threads.IsValid()) {
-		result->options.maximum_threads = max_threads.GetIndex();
+		Settings::Set<ThreadsSetting>(*result, SetScope::GLOBAL, Value::BIGINT(max_threads.GetIndex()));
 	}
 
 	auto block_alloc_size = test_config.GetBlockAllocSize();

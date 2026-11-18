@@ -102,8 +102,8 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &
 //! Initializes the local state used by the finalize of the aggregate (optional).
 //! The local state can be used to cache expensive intermediates between finalized groups - callers can keep the
 //! local state alive to re-use it across multiple finalize calls (see AggregateFinalizeInputData).
-typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
-                                                                                optional_ptr<FunctionData> bind_data);
+typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(
+    const BoundAggregateFunction &function, optional_ptr<const FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
@@ -136,7 +136,7 @@ typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, co
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
                                     data_ptr_t g_state);
 
-typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                       const BoundAggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
@@ -355,6 +355,9 @@ public:
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 
+	//! Whether combining can leave the target referencing the source's memory
+	AggregateCombineSourceRetention combine_source_retention = AggregateCombineSourceRetention::MAY_RETAIN;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -404,6 +407,10 @@ public: // Properties
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }
 	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+	//! Whether combining can leave the target referencing the source's memory
+	auto GetCombineSourceRetention() const -> AggregateCombineSourceRetention { return properties.combine_source_retention; }
+	auto SetCombineSourceRetention(AggregateCombineSourceRetention value) -> void { properties.combine_source_retention = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -926,7 +933,7 @@ public:
 	const LogicalType &GetLogicalReturnType() const {
 		return logical_return_type;
 	}
-	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
+	AggregateStateLayout GetStateType(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
 		return callbacks.get_state_type(input);

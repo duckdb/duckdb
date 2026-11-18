@@ -82,6 +82,11 @@ public:
 	//! Free backing retained in global queues, thread-local caches, and ongoing reclamation.
 	idx_t GetCachedMemory() const;
 
+	//! Approximate locality of fixed-pool backing, unknown for other allocations
+	optional_idx GetAllocationShard(const_data_ptr_t pointer) const;
+	idx_t GetPoolShardCount() const;
+	idx_t GetLocalPoolShard() const;
+
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
@@ -123,7 +128,6 @@ private:
 	idx_t ModuloBlockSize(idx_t n) const;
 	idx_t DivBlockSize(idx_t n) const;
 
-	idx_t GetLocalPoolShard() const;
 	uint32_t GetBlockID(data_ptr_t pointer) const;
 	data_ptr_t GetPointer(uint32_t block_id) const;
 

@@ -105,10 +105,6 @@ struct DBConfigOptions {
 #endif
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
-	//! The maximum amount of CPU threads used by the database system. Default: all available.
-	idx_t maximum_threads = DConstants::INVALID_INDEX;
-	//! The maximum amount of async threads used by the database system. Default: all available.
-	idx_t async_threads = DConstants::INVALID_INDEX;
 	//! HTTP client limit derived from thread counts unless configured
 	idx_t http_client_pool_capacity = DConstants::INVALID_INDEX;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
@@ -128,8 +124,6 @@ struct DBConfigOptions {
 	identifier_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	identifier_map_t<Value> unrecognized_options;
-	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
-	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
@@ -333,6 +327,11 @@ public:
 	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
+	idx_t GetDefaultMaxMemory() const;
+	//! The number of threads used when the threads setting is not set
+	idx_t GetDefaultThreads() const;
+	//! The number of async threads used when the async_threads setting is not set
+	idx_t GetDefaultAsyncThreads() const;
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
@@ -345,7 +344,7 @@ public:
 	//! Returns the value of a setting set by the user currently
 	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
-	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
+	SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) const;
 	SettingLookupResult TryGetDefaultValue(const Identifier &key, optional_ptr<const ConfigurationOption> option,
 	                                       Value &result) const;
 
@@ -392,6 +391,10 @@ private:
 	mutable mutex disabled_optimizers_lock;
 	//! Whether disabled_optimizers is non-empty
 	atomic<bool> has_disabled_optimizers {false};
+	//! Cache of GetDefaultThreads, which reads the cgroup CPU limit
+	mutable atomic<idx_t> default_threads {0};
+	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit through the file system
+	mutable atomic<idx_t> default_max_memory {0};
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
