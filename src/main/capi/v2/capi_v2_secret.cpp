@@ -17,19 +17,16 @@ public:
 
 	//! A copy of a stored secret, owned by the caller.
 	static unique_ptr<CV2Secret> FromEntry(const SecretEntry &entry) {
-		auto kv_secret = dynamic_cast<const KeyValueSecret *>(entry.secret.get());
-		if (!kv_secret) {
-			throw InvalidInputException("The secret is not a key/value secret.");
-		}
+		auto &kv_secret = entry.secret->Cast<KeyValueSecret>();
 		auto result = make_uniq<CV2Secret>();
-		result->scope = kv_secret->GetScope();
-		result->type = kv_secret->GetType();
-		result->provider = kv_secret->GetProvider();
-		result->name = kv_secret->GetName();
+		result->scope = kv_secret.GetScope();
+		result->type = kv_secret.GetType();
+		result->provider = kv_secret.GetProvider();
+		result->name = kv_secret.GetName();
 		result->storage = entry.storage_mode;
 		result->persist_type = entry.persist_type;
-		result->values = kv_secret->secret_map;
-		result->redacted = kv_secret->redact_keys;
+		result->values = kv_secret.secret_map;
+		result->redacted = kv_secret.redact_keys;
 		return result;
 	}
 
