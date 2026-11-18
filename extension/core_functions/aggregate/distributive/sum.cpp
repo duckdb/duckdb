@@ -248,6 +248,67 @@ struct IntegerSumOperation
 	}
 };
 
+//! Adds to an int64 accumulator, throwing instead of wrapping when the sum does not fit
+struct CheckedInt64Add {
+	static void Add(int64_t &target, int64_t input) {
+		if (!TryAddOperator::Operation(target, input, target)) {
+			throw OutOfRangeException("Overflow in sum_no_overflow: the sum does not fit in a 64-bit accumulator");
+		}
+	}
+
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		Add(state.value, int64_t(input));
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		int64_t total;
+		if (!TryMultiplyOperator::Operation(int64_t(input), Cast::Operation<idx_t, int64_t>(count), total)) {
+			throw OutOfRangeException("Overflow in sum_no_overflow: the sum does not fit in a 64-bit accumulator");
+		}
+		Add(state.value, total);
+	}
+};
+
+struct CheckedSumSetOperation : public SumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+		} else {
+			CheckedInt64Add::Add(target.value, source.value);
+		}
+	}
+};
+
+//! The int64 sum of sum_no_overflow without a statistics proof that it fits (e.g. bound by name)
+struct CheckedIntegerSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<CheckedSumSetOperation, CheckedInt64Add>,
+                                   ClusteredAddOp<CheckedInt64Add>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		if (!source.is_set) {
+			return;
+		}
+		target.is_set = true;
+		CheckedInt64Add::AddConstant(target, source.value, count);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = Hugeint::Convert(state.value);
+		}
+	}
+};
+
 struct SumToHugeintOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>> {
 	template <class STATE, class OP>
@@ -322,7 +383,7 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<const Fun
 	                                          function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 }
 
-bool TryUseNoOverflowSum(BoundAggregateFunction &function);
+bool TryUseNoOverflowSum(BoundAggregateFunction &function, bool checked);
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	bool fallible = false;
@@ -341,58 +402,56 @@ unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, Bo
 	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
 		throw SerializationException("Cannot reconstruct the logical sum signature");
 	}
-	if (!TryUseNoOverflowSum(logical.first)) {
+	if (!TryUseNoOverflowSum(logical.first, fallible)) {
 		throw SerializationException("Cannot reconstruct the no-overflow sum implementation");
 	}
 	function = std::move(logical.first);
 	function.SetReturnType(return_type);
-	if (fallible) {
-		function.SetFallible();
-	}
 	return nullptr;
 }
 
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input);
 
-AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
+template <class INPUT_TYPE, class OP>
+AggregateFunction GetSumAggregateNoOverflow(const LogicalType &input_type) {
+	auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, INPUT_TYPE, hugeint_t, OP>(
+	    input_type, LogicalType::HUGEINT);
+	function.GetSignature().GetParameter(0).SetName("arg");
+	function.SetName("sum_no_overflow");
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetBindCallback(SumNoOverflowBind);
+	function.SetSerializeCallback(SumNoOverflowSerialize);
+	function.SetDeserializeCallback(SumNoOverflowDeserialize);
+	if constexpr (std::is_same<OP, CheckedIntegerSumOperation>::value) {
+		function.SetFallible();
+	}
+	return function;
+}
+
+//! The checked variant throws when the sum overflows the int64 accumulator, it shares the state layout
+AggregateFunction GetSumAggregateNoOverflow(PhysicalType type, bool checked = false) {
 	switch (type) {
-	case PhysicalType::INT32: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.GetSignature().GetParameter(0).SetName("arg");
-		function.SetName("sum_no_overflow");
-		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		function.SetBindCallback(SumNoOverflowBind);
-		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		return function;
-	}
-	case PhysicalType::INT64: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.GetSignature().GetParameter(0).SetName("arg");
-		function.SetName("sum_no_overflow");
-		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		function.SetBindCallback(SumNoOverflowBind);
-		function.SetSerializeCallback(SumNoOverflowSerialize);
-		function.SetDeserializeCallback(SumNoOverflowDeserialize);
-		return function;
-	}
+	case PhysicalType::INT32:
+		return checked ? GetSumAggregateNoOverflow<int32_t, CheckedIntegerSumOperation>(LogicalType::INTEGER)
+		               : GetSumAggregateNoOverflow<int32_t, IntegerSumOperation>(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return checked ? GetSumAggregateNoOverflow<int64_t, CheckedIntegerSumOperation>(LogicalType::BIGINT)
+		               : GetSumAggregateNoOverflow<int64_t, IntegerSumOperation>(LogicalType::BIGINT);
 	default:
 		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
 }
 
 //! Swaps in the int64 accumulator but keeps the bound signature (e.g. DECIMAL(15,2) -> DECIMAL(38,2)), so that binding
-//! sum_no_overflow by that signature (e.g. to finalize an exported state) yields the same implementation
-bool TryUseNoOverflowSum(BoundAggregateFunction &function) {
+//! sum_no_overflow by that signature (e.g. to finalize an exported state) yields the same state layout
+bool TryUseNoOverflowSum(BoundAggregateFunction &function, bool checked) {
 	const auto internal_type = function.GetArguments()[0].InternalType();
 	if (internal_type != PhysicalType::INT32 && internal_type != PhysicalType::INT64) {
 		return false;
 	}
 	auto arguments = function.GetArguments();
 	auto return_type = function.GetReturnType();
-	function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+	function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type, checked));
 	function.GetArguments() = std::move(arguments);
 	function.SetReturnType(std::move(return_type));
 	return true;
@@ -413,10 +472,8 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	auto binder = input.NestedFunctionBinder();
 	auto logical = BindLogicalSum(binder, input.GetArguments());
-	if (TryUseNoOverflowSum(logical.first)) {
-		// bound by name there is no statistics proof that the int64 accumulator cannot overflow
-		logical.first.SetFallible();
-	}
+	// bound by name there is no statistics proof that the int64 accumulator cannot overflow
+	TryUseNoOverflowSum(logical.first, true);
 	input.GetBoundFunction() = std::move(logical.first);
 	return std::move(logical.second);
 }
@@ -441,7 +498,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 
 	// Replace with fast implementation when possible
 	if (bounds->min > NumericLimits<int64_t>::Minimum() && bounds->max < NumericLimits<int64_t>::Maximum()) {
-		TryUseNoOverflowSum(expr.FunctionMutable());
+		TryUseNoOverflowSum(expr.FunctionMutable(), false);
 	}
 
 	// Propagate stats.

@@ -3,7 +3,7 @@
 # group: [aggregates]
 
 statement ok
-CREATE TABLE c AS SELECT i AS id, (i % 5) AS nk, CAST(i AS DECIMAL(15,2)) + 0.25 AS bal, CAST(i AS DECIMAL(9,1)) + 0.5 AS small_bal FROM range(100) t(i);
+CREATE TABLE c AS SELECT i AS id, (i % 5) AS nk, CAST(i AS DECIMAL(15,2)) + 0.25 AS bal, CAST(CAST(i AS DECIMAL(9,1)) + 0.5 AS DECIMAL(9,1)) AS small_bal FROM range(100) t(i);
 
 statement ok
 CREATE TABLE s AS SELECT i AS id, (i % 5) AS nk FROM range(20) t(i);
@@ -43,14 +43,14 @@ SELECT sum_no_overflow(bal), finalize(sum_no_overflow(bal) EXPORT_STATE), sum_no
 ----
 4975.00	4975.00	5000.0	5000.0
 
-query II
-SELECT typeof(sum_no_overflow(bal)), typeof(finalize(sum_no_overflow(bal) EXPORT_STATE)) FROM c;
+query IIII
+SELECT typeof(any_value(bal)), typeof(any_value(small_bal)), typeof(sum_no_overflow(bal)), typeof(finalize(sum_no_overflow(small_bal) EXPORT_STATE)) FROM c;
 ----
-DECIMAL(38,2)	DECIMAL(38,2)
+DECIMAL(16,2)	DECIMAL(9,1)	DECIMAL(38,2)	DECIMAL(38,1)
 
-query I
-SELECT finalize(combine_aggr(state)) FROM (SELECT sum_no_overflow(bal) EXPORT_STATE AS state FROM c GROUP BY nk);
+query II
+SELECT finalize(combine_aggr(state)), finalize(combine_aggr(small_state)) FROM (SELECT sum_no_overflow(bal) EXPORT_STATE AS state, sum_no_overflow(small_bal) EXPORT_STATE AS small_state FROM c GROUP BY nk);
 ----
-4975.00
+4975.00	5000.0
 
 endloop
