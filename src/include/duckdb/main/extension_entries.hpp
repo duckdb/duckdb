@@ -424,6 +424,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"html_unescape", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"iceberg_bucket", "iceberg", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"iceberg_column_stats", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_expire_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_files", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_history", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_load_table_response", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -439,6 +440,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_scan_plan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan_tasks", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_schema_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_schemas", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_table_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_to_ducklake", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1465,12 +1467,14 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"httpfs_connection_caching", "httpfs"},
     {"httpfs_enable_credential_refresh", "httpfs"},
     {"iceberg_default_format_version", "iceberg"},
+    {"iceberg_enable_manifest_cache", "iceberg"},
     {"iceberg_enable_multi_file_scan_tasks", "iceberg"},
     {"iceberg_enable_scan_serialization", "iceberg"},
     {"iceberg_equality_delete_fast_filter", "iceberg"},
     {"iceberg_logging_post_body_truncate_limit", "iceberg"},
     {"iceberg_max_reserved_manifest_entries", "iceberg"},
     {"iceberg_metadata_log_clock_skew_ms", "iceberg"},
+    {"iceberg_store_written_files", "iceberg"},
     {"iceberg_test_force_token_expiry", "iceberg"},
     {"iceberg_unsafe_skip_puffin_verification", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
@@ -1702,8 +1706,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
-    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
-    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},      {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"IcebergDataFileWritten", "iceberg"}, {"PostgresQueryLog", "postgres_scanner"},
+    {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"autocomplete",
