@@ -85,3 +85,23 @@ statement error
 SELECT * FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/does_not_exist.parquet'}])
 ----
 Failed to read delete file
+
+# only the listed rows are scanned
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5]}])
+----
+2
+5
+7
+
+# rows that are also deleted are not produced
+query I
+SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [7, 2, 5], 'deleted_rows': [5]}])
+----
+2
+7
+
+query I
+SELECT count(*) FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'scan_rows': [1, 2, 3]}])
+----
+3

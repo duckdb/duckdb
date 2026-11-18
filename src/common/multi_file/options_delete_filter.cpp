@@ -12,6 +12,7 @@
 namespace duckdb {
 
 static const char *DELETED_ROWS_OPTION = "deleted_rows";
+static const char *SCAN_ROWS_OPTION = "scan_rows";
 static const char *DELETE_FILE_OPTION = "delete_file";
 static const char *SNAPSHOT_FILTER_OPTION = "delete_snapshot_filter";
 static const char *MAX_ROW_COUNT_OPTION = "max_row_count";
@@ -24,7 +25,7 @@ static bool HasOption(const OpenFileInfo &file, const char *name) {
 
 bool OptionsDeleteFilter::HasDeleteOptions(const OpenFileInfo &file) {
 	return file.extended_info && (HasOption(file, DELETED_ROWS_OPTION) || HasOption(file, DELETE_FILE_OPTION) ||
-	                              HasOption(file, MAX_ROW_COUNT_OPTION));
+	                              HasOption(file, SCAN_ROWS_OPTION) || HasOption(file, MAX_ROW_COUNT_OPTION));
 }
 
 unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, const OpenFileInfo &file) {
@@ -48,6 +49,13 @@ unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, 
 		for (auto &position : ListValue::GetChildren(deleted_rows_entry->second)) {
 			result->deleted_rows.push_back(UBigIntValue::Get(position.DefaultCastAs(LogicalType::UBIGINT)));
 		}
+	}
+	if (HasOption(file, SCAN_ROWS_OPTION)) {
+		result->has_scan_rows = true;
+		for (auto &position : ListValue::GetChildren(options.at(SCAN_ROWS_OPTION))) {
+			result->scan_rows.push_back(UBigIntValue::Get(position.DefaultCastAs(LogicalType::UBIGINT)));
+		}
+		sort(result->scan_rows.begin(), result->scan_rows.end());
 	}
 	if (has_delete_file) {
 		result->AddDeleteFile(context, delete_file_entry->second);
@@ -119,6 +127,18 @@ idx_t OptionsDeleteFilter::Filter(row_t start_row_index, idx_t count, SelectionV
 			return 0;
 		}
 		count = MinValue<idx_t>(max_count - start, count);
+	}
+	if (has_scan_rows) {
+		// only the listed rows are produced - and those that are not deleted
+		auto scan_entry = std::lower_bound(scan_rows.begin(), scan_rows.end(), start);
+		idx_t result_count = 0;
+		result_sel.Initialize(STANDARD_VECTOR_SIZE);
+		for (; scan_entry != scan_rows.end() && *scan_entry < start + count; scan_entry++) {
+			if (!std::binary_search(deleted_rows.begin(), deleted_rows.end(), *scan_entry)) {
+				result_sel.set_index(result_count++, *scan_entry - start);
+			}
+		}
+		return result_count;
 	}
 	auto entry = std::lower_bound(deleted_rows.begin(), deleted_rows.end(), start);
 	if (entry == deleted_rows.end() || *entry >= start + count) {

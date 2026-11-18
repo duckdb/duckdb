@@ -19,6 +19,7 @@ class ClientContext;
 //!  delete_file            file (path or file struct) of a parquet file with a "pos" column (and optionally a
 //!                         "_ducklake_internal_snapshot_id" column) that lists more deleted positions
 //!  delete_snapshot_filter only deletions with a snapshot id <= this value apply (delete_file with snapshot ids)
+//!  scan_rows              LIST of row positions - only these rows are produced (the inverse of deleted_rows)
 //!  max_row_count          rows at or past this position are not part of the file
 class OptionsDeleteFilter : public DeleteFilter {
 public:
@@ -36,6 +37,9 @@ private:
 	//! Sorted positions of the deleted rows, and (optionally) the snapshot that deleted each of them
 	vector<idx_t> deleted_rows;
 	vector<idx_t> snapshot_ids;
+	//! When set, only these (sorted) positions are produced
+	vector<idx_t> scan_rows;
+	bool has_scan_rows = false;
 	optional_idx snapshot_filter;
 	optional_idx max_row_count;
 };
