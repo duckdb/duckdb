@@ -53,8 +53,6 @@ public:
 	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
-	Context &context;
-
 	reference<DataTable> table_ref;
 	//! The DuckTableEntry visible to this transaction that references table_ref.
 	//! Updated through the append path (InitializeAppend, Append, LocalMerge) and
@@ -86,8 +84,8 @@ public:
 	void InitializeScan(const QueryContext &context, CollectionScanState &state,
 	                    optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
-	void WriteNewRowGroup(idx_t flushed_row_group_idx);
-	void FlushBlocks();
+	void WriteNewRowGroup(Context &context, idx_t flushed_row_group_idx);
+	void FlushBlocks(Context &context);
 	//! Whether Flush() takes the bulk-append path for this storage: the append covers at least one
 	//! full row group and there are no deletes. Only depends on transaction-local state, i.e. this
 	//! can be decided before taking any locks.
@@ -153,7 +151,7 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Context &context, DuckTransaction &transaction);
+	explicit LocalStorage(DuckTransaction &transaction);
 
 	static LocalStorage &Get(DuckTransaction &transaction);
 	static LocalStorage &Get(ClientContext &context, AttachedDatabase &db);
@@ -170,34 +168,37 @@ public:
 	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	//! Begin appending to the local storage
-	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
+	void InitializeAppend(Context &context, LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 	//! Initialize the storage and its indexes, but no row groups.
-	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
+	void InitializeStorage(Context &context, LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 
 	//! Append a chunk to the local storage
 	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(DataTable &table, DuckTableEntry &table_entry, OptimisticWriteCollection &collection);
+	void LocalMerge(Context &context, DataTable &table, DuckTableEntry &table_entry,
+	                OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
-	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<OptimisticWriteCollection> collection);
+	PhysicalIndex CreateOptimisticCollection(Context &context, DataTable &table,
+	                                         unique_ptr<OptimisticWriteCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	OptimisticWriteCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	OptimisticWriteCollection &GetOptimisticCollection(Context &context, DataTable &table,
+	                                                   const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
-	void ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	void ResetOptimisticCollection(Context &context, DataTable &table, const PhysicalIndex collection_index);
 	//! Returns the optimistic writer.
-	OptimisticDataWriter &GetOptimisticWriter(DataTable &table);
+	OptimisticDataWriter &GetOptimisticWriter(Context &context, DataTable &table);
 
 	//! Delete a set of rows from the local storage
-	idx_t Delete(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, idx_t count);
+	idx_t Delete(Context &context, DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
 	void Update(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
 	            DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(optional_ptr<StorageCommitState> commit_state);
+	void Commit(Context &context, optional_ptr<StorageCommitState> commit_state);
 	//! Rollback the local storage
 	void Rollback();
 
@@ -221,32 +222,29 @@ public:
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);
-	TableIndexList &GetIndexes(DataTable &table);
+	TableIndexList &GetIndexes(Context &context, DataTable &table);
 	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
-	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(Context &context, DataTable &parent, const BoundConstraint &constraint);
 
-	Context &GetContext() const {
-		return context;
-	}
 	DuckTransaction &GetTransaction() const {
 		return transaction;
 	}
 
-	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);
+	void FlushBulkAppendBlocksAndSync(Context &context, AttachedDatabase &db);
 	bool SyncedFlushedBlocks() const {
 		return synced_flushed_blocks;
 	}
 
 private:
-	Context &context;
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 	bool synced_flushed_blocks = false;
 
 private:
 	//! Flushes the local rows into the shared table and indexes; invalidates the database if they cannot be restored
-	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
+	void Flush(Context &context, DataTable &table, LocalTableStorage &storage,
+	           optional_ptr<StorageCommitState> commit_state);
 };
 
 } // namespace duckdb

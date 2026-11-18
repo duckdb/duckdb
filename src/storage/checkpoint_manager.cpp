@@ -107,7 +107,7 @@ SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, Att
                                                        BlockManager &block_manager, CheckpointOptions options_p,
                                                        optional_ptr<ClientContext> checkpoint_context)
     : CheckpointWriter(db, context, checkpoint_context),
-      partial_block_manager(GetContext(), block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
+      partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 SingleFileCheckpointWriter::~SingleFileCheckpointWriter() {
@@ -126,7 +126,7 @@ BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 }
 
 PartialBlockManager SingleFileCheckpointWriter::CreatePerIndexPartialBlockManager() {
-	return PartialBlockManager(GetContext(), GetBlockManager(), PartialBlockType::FULL_CHECKPOINT);
+	return PartialBlockManager(GetBlockManager(), PartialBlockType::FULL_CHECKPOINT);
 }
 
 MetadataWriter &SingleFileCheckpointWriter::GetMetadataWriter() {
@@ -306,7 +306,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	});
 	serializer.End();
 
-	partial_block_manager.FlushPartialBlocks();
+	partial_block_manager.FlushPartialBlocks(GetContext());
 	for (auto &pending : pending_publications) {
 		pending->Publish();
 	}

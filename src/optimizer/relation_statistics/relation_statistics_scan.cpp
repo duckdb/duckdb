@@ -1,9 +1,11 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -17,6 +19,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
@@ -372,6 +375,102 @@ static void ApplyDirectFilterDomain(RelationColumnStats &column, const Expressio
 	                                 expression, binding, column.total_domain.distinct_count));
 }
 
+//===--------------------------------------------------------------------===//
+// Zonemap bound
+//===--------------------------------------------------------------------===//
+struct ZonemapFilter {
+	ZonemapFilter(const Expression &expr, const LogicalType &column_type, StorageIndex storage_index_p)
+	    : expr(expr), column_type(column_type), storage_index(std::move(storage_index_p)) {
+	}
+
+	const Expression &expr;
+	const LogicalType &column_type;
+	StorageIndex storage_index;
+};
+
+//! An upper bound on the rows that a scan of a DuckDB table returns: the rows of the row groups whose zonemaps
+//! can satisfy every table filter of the scan. A row group that cannot be skipped counts whole.
+//! Returns an invalid index if the bound is not below the estimate that the scan already has.
+static optional_idx ZonemapFilterBound(LogicalGet &get, ClientContext &context,
+                                       const vector<BaseStatistics> &scan_statistics, idx_t estimate) {
+	//! The work per plan is limited to the row groups of a table of this many row groups (2 billion rows at the
+	//! default row group size). A larger table keeps its estimate: checking only some of its row groups would not
+	//! give a bound, as the row groups that are not checked can hold all of the matching rows
+	static constexpr idx_t ZONEMAP_MAX_ROW_GROUPS = 16384;
+
+	auto table = get.GetTable();
+	if (!table || !table->IsDuckTable() || !get.function.get_partition_stats) {
+		return optional_idx();
+	}
+	vector<ZonemapFilter> filters;
+	for (auto &entry : get.table_filters) {
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			// optional filters do not restrict the result of the scan
+			continue;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ZonemapFilterBound");
+		if (filter.expr->HasParameter()) {
+			continue;
+		}
+		const auto column_idx = entry.GetIndex().GetIndex();
+		if (column_idx >= get.GetColumnIds().size() || column_idx >= scan_statistics.size()) {
+			continue;
+		}
+		StorageIndex storage_index;
+		if (!get.TryGetStorageIndex(get.GetColumnIds()[column_idx], storage_index)) {
+			continue;
+		}
+		filters.emplace_back(*filter.expr, scan_statistics[column_idx].GetType(), std::move(storage_index));
+	}
+	if (filters.empty()) {
+		return optional_idx();
+	}
+	// the limit is checked before any row group is loaded or collected, and covers the row groups of the table
+	// and the ones that the transaction has added
+	auto &storage = table->Cast<DuckTableEntry>().GetStorage();
+	if (storage.GetRowGroupCountWithoutLoading(context) > ZONEMAP_MAX_ROW_GROUPS) {
+		return optional_idx();
+	}
+
+	GetPartitionStatsInput input(get.function, get.bind_data.get());
+	auto partitions = get.function.get_partition_stats(context, input);
+	if (partitions.empty() || partitions.size() > ZONEMAP_MAX_ROW_GROUPS) {
+		return optional_idx();
+	}
+	// the rows of the row groups that no filter skips
+	idx_t matching_rows = 0;
+	for (auto &partition : partitions) {
+		bool skipped = false;
+		for (auto &filter : filters) {
+			if (!partition.partition_row_group) {
+				break;
+			}
+			auto stats = partition.partition_row_group->GetColumnStatistics(filter.storage_index);
+			if (!stats || !stats->GetType().EqualsIncludingCollation(filter.column_type)) {
+				// without statistics the row group cannot be skipped for this filter
+				continue;
+			}
+			// the check that the scan uses to skip the row group
+			auto pruning = ExpressionFilter::CheckExpressionStatistics(context, filter.expr, *stats);
+			if (pruning == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    pruning == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				skipped = true;
+				break;
+			}
+		}
+		if (skipped) {
+			continue;
+		}
+		matching_rows += partition.count;
+		if (matching_rows >= estimate) {
+			// the bound only grows from here on: it cannot improve on the estimate, so the remaining row groups
+			// need not be read
+			return optional_idx();
+		}
+	}
+	return MaxValue<idx_t>(1, matching_rows);
+}
+
 unique_ptr<BaseStatistics> RelationStatisticsHelper::GetColumnStatistics(LogicalGet &get, ClientContext &context,
                                                                          const ColumnIndex &column_id) {
 	if (!get.bind_data || (!get.function.statistics && !get.function.statistics_extended)) {
@@ -431,6 +530,20 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto range_cardinality =
 			    *fraction == 0 ? 0 : FilterFraction(base_table_cardinality, MaxValue(DEFAULT_SELECTIVITY, *fraction));
 			estimate.Combine({range_cardinality, true});
+		}
+	}
+	if (get.table_filters.HasFilters()) {
+		// the scan skips the row groups whose zonemaps cannot satisfy the filters: their rows bound the estimate
+		auto current_estimate = estimate.cardinality;
+		if (!estimate.supported) {
+			current_estimate = MinValue(current_estimate, FilterFraction(base_table_cardinality, DEFAULT_SELECTIVITY));
+		}
+		// an estimate of at most one row cannot be improved
+		if (current_estimate > 1) {
+			auto zonemap_bound = ZonemapFilterBound(get, context, scan_statistics, current_estimate);
+			if (zonemap_bound.IsValid()) {
+				estimate.Combine({zonemap_bound.GetIndex(), true});
+			}
 		}
 	}
 	ApplyFilterEstimate(result, estimate);

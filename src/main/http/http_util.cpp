@@ -580,7 +580,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto &http_proxy_setting = db->config.options.http_proxy;
+		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(db->config);
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;

@@ -11,6 +11,7 @@
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
 #include <thread>
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -816,8 +817,8 @@ TEST_CASE("Concurrent uncached reads keep their buffers until the last consumer"
 
 TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_buffer_reuse]") {
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	auto &manager = BufferManager::GetBufferManager(*con.context);
@@ -851,8 +852,8 @@ TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_b
 
 TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[caching][read_buffer_reuse]") {
 	DBConfig config;
-	config.options.maximum_threads = 1;
-	config.options.async_threads = 0;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(1));
+	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
 	const idx_t size = 2 * 1024 * 1024 + 1;
 	idx_t memory_limit = 16 * 1024 * 1024;
 	idx_t expected_capacity = 4 * 1024 * 1024;
@@ -860,7 +861,7 @@ TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[cac
 	}
 #ifndef DUCKDB_NO_THREADS
 	SECTION("Keep exact sizes when each worker has little memory") {
-		config.options.maximum_threads = 4;
+		Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(4));
 		expected_capacity = BufferManager::GetAllocSize(size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 	}
 #endif

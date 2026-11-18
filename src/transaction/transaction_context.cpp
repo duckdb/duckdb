@@ -40,7 +40,7 @@ void TransactionContext::BeginTransaction() {
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
 	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, global_transaction_id);
+	current_transaction = make_uniq<MetaTransaction>(*context.db, start_timestamp, global_transaction_id);
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
@@ -67,7 +67,7 @@ void TransactionContext::Commit() {
 	autocheckpoint_error = ErrorData();
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	auto error = transaction->Commit();
+	auto error = transaction->Commit(context);
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
 		for (auto const &s : context.GetContext().GetRegisteredState().States()) {
@@ -82,7 +82,7 @@ void TransactionContext::Commit() {
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->TransactionCommit(*transaction, context);
 	}
-	transaction->Finalize();
+	transaction->Finalize(context);
 	if (autocheckpoint_error.HasError()) {
 		auto err = std::move(autocheckpoint_error);
 		autocheckpoint_error = ErrorData();
@@ -127,7 +127,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (rollback_error.HasError()) {
 		rollback_error.Throw();
 	}
-	transaction->Finalize();
+	transaction->Finalize(context);
 }
 
 void TransactionContext::ClearTransaction() {
