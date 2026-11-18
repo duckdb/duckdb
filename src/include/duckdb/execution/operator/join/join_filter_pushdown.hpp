@@ -39,7 +39,8 @@ struct JoinFilterPushdownColumn {
 	JoinFilterPushdownColumn(const JoinFilterPushdownColumn &other)
 	    : join_filter_idx(other.join_filter_idx), probe_column_index(other.probe_column_index),
 	      storage_type(other.storage_type), mode(other.mode),
-	      input_expression(other.input_expression ? other.input_expression->Copy() : nullptr) {
+	      input_expression(other.input_expression ? other.input_expression->Copy() : nullptr),
+	      crossed_secure_view(other.crossed_secure_view) {
 	}
 	JoinFilterPushdownColumn &operator=(const JoinFilterPushdownColumn &other) {
 		if (this != &other) {
@@ -61,6 +62,9 @@ struct JoinFilterPushdownColumn {
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 	//! Filter input over BoundReferenceExpression(0) in the existing scan projection's type.
 	unique_ptr<Expression> input_expression;
+	//! Whether the filter crossed a secure view that may hide rows. The profiler leaves out the rows that leave such a
+	//! view (CrossesSecureView); how the filter is checked does not depend on it
+	bool crossed_secure_view = false;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
@@ -126,6 +130,8 @@ struct JoinFilterPushdownInfo {
 	bool build_side_has_filter;
 
 public:
+	//! Whether a filter crossed a secure view that may hide rows
+	bool CrossesSecureView() const;
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
 

@@ -281,6 +281,17 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
+bool JoinFilterPushdownInfo::CrossesSecureView() const {
+	for (auto &info : probe_info) {
+		for (auto &column : info.columns) {
+			if (column.crossed_secure_view) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context,
                                                                          const PhysicalOperator &op) const {
 	// clear any previously set filters
