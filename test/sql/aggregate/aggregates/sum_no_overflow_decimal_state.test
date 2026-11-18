@@ -14,7 +14,7 @@ CREATE TABLE n AS SELECT i AS nk, (i % 3) AS rk FROM range(5) t(i);
 loop serializer 0 2
 
 statement ok
-SET debug_verify_serializer = ${serializer};
+SET debug_verify_serializer = {serializer};
 
 # the filter in the HAVING specializes the sums before double-eager pushdown exports their states
 query IIII
