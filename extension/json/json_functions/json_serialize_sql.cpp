@@ -368,8 +368,8 @@ struct ExecuteSqlTableFunction {
 				error += "]";
 				if (result->GetNames() != data.names) {
 					error +=
-					    "\nAn unaliased expression can be named differently when the statement is bound and when it "
-					    "runs; an alias keeps its name stable.";
+					    "\nIf no table or view the statement reads changed since it was bound, an unaliased expression "
+					    "may have been named differently at bind and at run; an alias keeps its name stable.";
 				}
 				ErrorData(error).Throw();
 			}
