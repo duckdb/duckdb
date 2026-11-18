@@ -726,7 +726,17 @@ TEST_CASE("V2: instance_open_shared while the last handle closes the database", 
 				    Query(conn, "INSERT INTO t VALUES (1)", &r, nullptr) != DUCKDB_V2_ERROR_NONE) {
 					failures[t]++;
 				} else {
-					(void)DrainRowCount(r);
+					while (true) {
+						duckdb_v2_data_chunk_handle chunk = nullptr;
+						if (duckdb_v2_result_fetch_chunk(r, &chunk, nullptr) != DUCKDB_V2_ERROR_NONE) {
+							failures[t]++;
+							break;
+						}
+						if (!chunk) {
+							break;
+						}
+						duckdb_v2_data_chunk_destroy(&chunk);
+					}
 				}
 				duckdb_v2_result_destroy(&r);
 				duckdb_v2_connection_destroy(&conn);
