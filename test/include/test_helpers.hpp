@@ -31,6 +31,8 @@
 
 namespace duckdb {
 
+class TableRef;
+
 void RegisterSqllogictests();
 void RegisterSqllogictests(const vector<string> &test_paths);
 void RegisterSqllogictestStdin();
@@ -177,6 +179,7 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &con, const string &query);
 //! Drain a stream into a retained result, so it can be checked with CHECK_COLUMN
 duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream);
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())

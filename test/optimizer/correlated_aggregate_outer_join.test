@@ -1,0 +1,453 @@
+# name: test/optimizer/correlated_aggregate_outer_join.test
+# description: A correlated aggregate without groups joins its outer side directly instead of the duplicate-eliminated keys
+# group: [optimizer]
+
+statement ok
+CREATE TABLE o AS
+SELECT i AS id, CASE WHEN i % 17 = 0 THEN NULL ELSE i % 500 END AS k, i % 7 AS x FROM range(2000) t(i);
+
+statement ok
+CREATE TABLE s AS
+SELECT i AS id, CASE WHEN i % 11 = 0 THEN NULL ELSE i % 800 END AS k, i % 13 AS q FROM range(3000) t(i);
+
+# count over a correlation key without rows is 0, a NULL key never matches
+query III
+SELECT o.id, o.k, (SELECT count(*) FROM s WHERE s.k = o.k) AS c
+FROM o WHERE o.id IN (0, 1, 17, 34, 499, 1300) ORDER BY o.id;
+----
+0	NULL	0
+1	1	4
+17	NULL	0
+34	NULL	0
+499	499	4
+1300	300	3
+
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o);
+----
+4739	2000	2000	0	4
+
+# the outer side is not materialized: it joins the aggregate grouped by the correlation column
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(LEFT|RIGHT)"[\s\S]*
+
+# IS NOT DISTINCT FROM: the NULL key matches the NULL group
+query III
+SELECT o.id, o.k, (SELECT count(*) FROM s WHERE s.k IS NOT DISTINCT FROM o.k) AS c
+FROM o WHERE o.id IN (0, 1, 17, 34, 499, 1300) ORDER BY o.id;
+----
+0	NULL	273
+1	1	4
+17	NULL	273
+34	NULL	273
+499	499	4
+1300	300	3
+
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k IS NOT DISTINCT FROM o.k) AS c FROM o);
+----
+39058	2000	2000	3	273
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k IS NOT DISTINCT FROM o.k) AS c FROM o;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+# an expression over the count, evaluated for the keys without rows as well
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(s.q) + 1 FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o);
+----
+6739	2000	2000	1	5
+
+# count next to aggregates that are NULL over no rows, DISTINCT and coalesced aggregates
+query IIIII
+SELECT sum(c), count(c), sum(m), count(m), sum(d)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k) AS c, (SELECT sum(q) FROM s WHERE s.k = o.k) AS m,
+             (SELECT count(DISTINCT q) FROM s WHERE s.k = o.k AND s.q < 5) AS d FROM o);
+----
+6844	2000	41099	1882	2630
+
+query III
+SELECT sum(c), count(c), sum(l)
+FROM (SELECT (SELECT coalesce(sum(q), -1) FROM s WHERE s.k = o.k) AS c,
+             (SELECT len(list(q)) FROM s WHERE s.k = o.k) AS l FROM o);
+----
+40981	2000	6844
+
+# lateral forms
+query IIII
+SELECT sum(x.c), count(*), sum(x.m), count(x.m)
+FROM o, LATERAL (SELECT count(*) AS c, max(q) AS m FROM s WHERE s.k = o.k) x;
+----
+6844	2000	18701	1882
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, x.c FROM o, LATERAL (SELECT count(*) AS c, max(q) AS m FROM s WHERE s.k = o.k) x;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+# the count in a predicate
+query I
+SELECT count(*) FROM o WHERE (SELECT count(*) FROM s WHERE s.k = o.k) = 0;
+----
+118
+
+query II
+SELECT count(*), sum(id) FROM o WHERE (SELECT count(*) FROM s WHERE s.k = o.k) > 3 AND o.x < 3;
+----
+514	511883
+
+# several subqueries over one outer side: none of them materializes it
+query IIII
+SELECT sum(c1), sum(c2), sum(c3), count(*)
+FROM (SELECT (SELECT count(*) FROM s WHERE s.k = o.k AND q > 2) AS c1, (SELECT count(*) FROM s WHERE s.k = o.x) AS c2,
+             (SELECT count(q) FROM s WHERE s.id = o.id) AS c3 FROM o WHERE o.x <> 4);
+----
+4504	5999	1714	1714
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM s WHERE s.k = o.k AND q > 2) AS c1, (SELECT count(*) FROM s WHERE s.k = o.k AND q < 9) AS c2,
+       (SELECT count(q) FROM s WHERE s.k = o.k) AS c3 FROM o WHERE o.x <> 4;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+# must keep the keys: a selective outer side restricts the aggregate to the keys it reads
+query II
+SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k) AS c FROM o WHERE o.id = 1234;
+----
+1234	3
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k) AS c FROM o WHERE o.id = 1234;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+# must keep the keys: a correlation that is not an equality groups the aggregate by the outer keys
+query II
+SELECT sum(c), count(c) FROM (SELECT (SELECT count(*) FROM s WHERE s.k > o.k AND s.q = 1) AS c FROM o);
+----
+261272	2000
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k > o.k AND s.q = 1) AS c FROM o;
+----
+physical_plan	<REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+query IIII
+SELECT sum(x.c), count(*), sum(x.m), count(x.m)
+FROM o LEFT JOIN LATERAL (SELECT count(*) AS c, max(q) AS m FROM s WHERE s.k = o.k AND s.q < o.x) x ON TRUE;
+----
+1564	2000	1943	1046
+
+# the correlation key is an expression of the outer side
+query II
+SELECT sum(c), count(c) FROM (SELECT (SELECT count(*) FROM s WHERE s.k = o.k + 1) AS c FROM o);
+----
+6847	2000
+
+# nested correlated counts
+query II
+SELECT sum(c), count(c)
+FROM (SELECT (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > (SELECT count(*) FROM s s2 WHERE s2.k = s.k)) AS c FROM o);
+----
+4375	2000
+
+# repeated empty grouping sets emit one row per set
+query II
+SELECT sum(c), count(*)
+FROM (SELECT o.id, c FROM o, LATERAL (SELECT count(*) AS c FROM s WHERE s.k = o.k GROUP BY GROUPING SETS ((), ())) x);
+----
+13688	4000
+
+query II
+SELECT count(*), sum(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k) AS c FROM o
+      UNION ALL SELECT s.id, (SELECT count(*) FROM o WHERE s.k = o.k) AS c FROM s);
+----
+5000	13688
+
+# a scalar subquery without an aggregate still fails on a second row
+statement error
+SELECT (SELECT s.q FROM s WHERE s.k = o.k) FROM o;
+----
+<REGEX>:.*More than one row returned by a subquery.*
+
+# a correlation on two keys joins the aggregate grouped by both, without a generated CTE
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q = o.x) AS c FROM o);
+----
+531	2000	2000	0	1
+
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k IS NOT DISTINCT FROM o.k AND s.q = o.x) AS c FROM o);
+----
+3009	2000	2000	0	21
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q = o.x) AS c FROM o;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+# hand-written joins of this shape: the rewrite needs exactly one domain column per group of the duplicate
+# elimination, otherwise the domain has several rows per key and multiplies the outer rows
+statement ok
+CREATE TABLE ht AS SELECT * FROM (VALUES (1, 10), (1, 20), (2, 10), (NULL, 10), (NULL, 20)) v(k, e);
+
+statement ok
+CREATE TABLE hr AS SELECT * FROM (VALUES (1, 10), (1, 10), (2, NULL), (NULL, 10), (3, 30)) v(k, k2);
+
+statement ok
+CREATE TABLE ht2(k INTEGER, e INTEGER);
+
+statement ok
+INSERT INTO ht2 VALUES (1, 10), (1, 20);
+
+statement ok
+CREATE TABLE hr2(k INTEGER);
+
+statement ok
+INSERT INTO hr2 VALUES (1);
+
+# one group projected twice, the other not at all
+query I
+WITH s AS MATERIALIZED (SELECT * FROM ht2)
+SELECT count(*) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c
+    FROM (SELECT k AS k1, k AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, k AS k_, count(*) AS c FROM hr2 GROUP BY k) a ON d.k1 = a.k AND d.k2 = a.k_
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.k IS NOT DISTINCT FROM p.k2;
+----
+4
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c
+    FROM (SELECT k AS k1, k AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, k AS k_, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k AND d.k2 = a.k_
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.k IS NOT DISTINCT FROM p.k2;
+----
+9	9
+
+# a group that is not a domain column
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+9	9
+
+# a domain column that the outer join does not compare
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c FROM (SELECT k AS k1, e AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+9	9
+
+# a key through an expression
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k + 0 AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+# the aggregate grouped by more than the join key
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k, k2) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+# the aggregate key compared twice, and the outer key compared twice
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, k AS k_, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k AND d.k1 = a.k_
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+# NULL keys: = on the outer join, a mix of = and IS NOT DISTINCT FROM on the inner one
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s LEFT JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k = p.k1;
+----
+5	5
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c FROM (SELECT k AS k1, e AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, k2, count(*) AS c FROM hr GROUP BY k, k2) a ON d.k1 IS NOT DISTINCT FROM a.k AND d.k2 = a.k2
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.e IS NOT DISTINCT FROM p.k2;
+----
+5	3
+
+# DISTINCT instead of GROUP BY, grouping sets on either side, a filtered domain, swapped keys
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT DISTINCT k AS k1 FROM s) d
+    LEFT JOIN (SELECT DISTINCT k, 1 AS c FROM hr) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	3
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY GROUPING SETS ((k), ())) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+7	5
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY GROUPING SETS ((k), ())) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s WHERE e > 10 GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+4	4
+
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c FROM (SELECT e AS k1, k AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, k2, count(*) AS c FROM hr GROUP BY k, k2) a ON d.k2 = a.k AND d.k1 = a.k2
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.e IS NOT DISTINCT FROM p.k2;
+----
+0	NULL
+
+# the well-formed hand-written shape
+query II
+WITH s AS MATERIALIZED (SELECT * FROM ht)
+SELECT count(*), sum(p.c) FROM s JOIN (
+    SELECT d.k1, a.c FROM (SELECT k AS k1 FROM s GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) AS c FROM hr GROUP BY k) a ON d.k1 = a.k
+) p ON s.k IS NOT DISTINCT FROM p.k1;
+----
+5	5
+
+# with the pass disabled the count keeps the join against the duplicate-eliminated keys
+statement ok
+SET disabled_optimizers = 'duplicate_eliminated_domain';
+
+query II
+EXPLAIN (FORMAT JSON) SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "SINGLE"[\s\S]*__duckdb_delim[\s\S]*
+
+query IIIII
+SELECT sum(c), count(*), count(c), min(c), max(c)
+FROM (SELECT o.id, (SELECT count(*) FROM s WHERE s.k = o.k AND s.q > 3) AS c FROM o);
+----
+4739	2000	2000	0	4
+
+query I
+WITH s AS MATERIALIZED (SELECT * FROM ht2)
+SELECT count(*) FROM s JOIN (
+    SELECT d.k1, d.k2, a.c
+    FROM (SELECT k AS k1, k AS k2 FROM s GROUP BY k, e) d
+    LEFT JOIN (SELECT k, k AS k_, count(*) AS c FROM hr2 GROUP BY k) a ON d.k1 = a.k AND d.k2 = a.k_
+) p ON s.k IS NOT DISTINCT FROM p.k1 AND s.k IS NOT DISTINCT FROM p.k2;
+----
+4
+
+statement ok
+RESET disabled_optimizers;
+
+# a chain of CTEs that each read the previous one twice: the readers of the outer side are counted with one walk per
+# CTE definition (the walk per reference took 2^40 steps here)
+query II
+WITH c0 AS MATERIALIZED (SELECT k FROM s),
+     c1 AS MATERIALIZED (SELECT k FROM c0 WHERE k < 400 UNION ALL SELECT k FROM c0 WHERE k >= 400),
+     c2 AS MATERIALIZED (SELECT k FROM c1 WHERE k < 400 UNION ALL SELECT k FROM c1 WHERE k >= 400),
+     c3 AS MATERIALIZED (SELECT k FROM c2 WHERE k < 400 UNION ALL SELECT k FROM c2 WHERE k >= 400),
+     c4 AS MATERIALIZED (SELECT k FROM c3 WHERE k < 400 UNION ALL SELECT k FROM c3 WHERE k >= 400),
+     c5 AS MATERIALIZED (SELECT k FROM c4 WHERE k < 400 UNION ALL SELECT k FROM c4 WHERE k >= 400),
+     c6 AS MATERIALIZED (SELECT k FROM c5 WHERE k < 400 UNION ALL SELECT k FROM c5 WHERE k >= 400),
+     c7 AS MATERIALIZED (SELECT k FROM c6 WHERE k < 400 UNION ALL SELECT k FROM c6 WHERE k >= 400),
+     c8 AS MATERIALIZED (SELECT k FROM c7 WHERE k < 400 UNION ALL SELECT k FROM c7 WHERE k >= 400),
+     c9 AS MATERIALIZED (SELECT k FROM c8 WHERE k < 400 UNION ALL SELECT k FROM c8 WHERE k >= 400),
+     c10 AS MATERIALIZED (SELECT k FROM c9 WHERE k < 400 UNION ALL SELECT k FROM c9 WHERE k >= 400),
+     c11 AS MATERIALIZED (SELECT k FROM c10 WHERE k < 400 UNION ALL SELECT k FROM c10 WHERE k >= 400),
+     c12 AS MATERIALIZED (SELECT k FROM c11 WHERE k < 400 UNION ALL SELECT k FROM c11 WHERE k >= 400),
+     c13 AS MATERIALIZED (SELECT k FROM c12 WHERE k < 400 UNION ALL SELECT k FROM c12 WHERE k >= 400),
+     c14 AS MATERIALIZED (SELECT k FROM c13 WHERE k < 400 UNION ALL SELECT k FROM c13 WHERE k >= 400),
+     c15 AS MATERIALIZED (SELECT k FROM c14 WHERE k < 400 UNION ALL SELECT k FROM c14 WHERE k >= 400),
+     c16 AS MATERIALIZED (SELECT k FROM c15 WHERE k < 400 UNION ALL SELECT k FROM c15 WHERE k >= 400),
+     c17 AS MATERIALIZED (SELECT k FROM c16 WHERE k < 400 UNION ALL SELECT k FROM c16 WHERE k >= 400),
+     c18 AS MATERIALIZED (SELECT k FROM c17 WHERE k < 400 UNION ALL SELECT k FROM c17 WHERE k >= 400),
+     c19 AS MATERIALIZED (SELECT k FROM c18 WHERE k < 400 UNION ALL SELECT k FROM c18 WHERE k >= 400),
+     c20 AS MATERIALIZED (SELECT k FROM c19 WHERE k < 400 UNION ALL SELECT k FROM c19 WHERE k >= 400),
+     c21 AS MATERIALIZED (SELECT k FROM c20 WHERE k < 400 UNION ALL SELECT k FROM c20 WHERE k >= 400),
+     c22 AS MATERIALIZED (SELECT k FROM c21 WHERE k < 400 UNION ALL SELECT k FROM c21 WHERE k >= 400),
+     c23 AS MATERIALIZED (SELECT k FROM c22 WHERE k < 400 UNION ALL SELECT k FROM c22 WHERE k >= 400),
+     c24 AS MATERIALIZED (SELECT k FROM c23 WHERE k < 400 UNION ALL SELECT k FROM c23 WHERE k >= 400),
+     c25 AS MATERIALIZED (SELECT k FROM c24 WHERE k < 400 UNION ALL SELECT k FROM c24 WHERE k >= 400),
+     c26 AS MATERIALIZED (SELECT k FROM c25 WHERE k < 400 UNION ALL SELECT k FROM c25 WHERE k >= 400),
+     c27 AS MATERIALIZED (SELECT k FROM c26 WHERE k < 400 UNION ALL SELECT k FROM c26 WHERE k >= 400),
+     c28 AS MATERIALIZED (SELECT k FROM c27 WHERE k < 400 UNION ALL SELECT k FROM c27 WHERE k >= 400),
+     c29 AS MATERIALIZED (SELECT k FROM c28 WHERE k < 400 UNION ALL SELECT k FROM c28 WHERE k >= 400),
+     c30 AS MATERIALIZED (SELECT k FROM c29 WHERE k < 400 UNION ALL SELECT k FROM c29 WHERE k >= 400),
+     c31 AS MATERIALIZED (SELECT k FROM c30 WHERE k < 400 UNION ALL SELECT k FROM c30 WHERE k >= 400),
+     c32 AS MATERIALIZED (SELECT k FROM c31 WHERE k < 400 UNION ALL SELECT k FROM c31 WHERE k >= 400),
+     c33 AS MATERIALIZED (SELECT k FROM c32 WHERE k < 400 UNION ALL SELECT k FROM c32 WHERE k >= 400),
+     c34 AS MATERIALIZED (SELECT k FROM c33 WHERE k < 400 UNION ALL SELECT k FROM c33 WHERE k >= 400),
+     c35 AS MATERIALIZED (SELECT k FROM c34 WHERE k < 400 UNION ALL SELECT k FROM c34 WHERE k >= 400),
+     c36 AS MATERIALIZED (SELECT k FROM c35 WHERE k < 400 UNION ALL SELECT k FROM c35 WHERE k >= 400),
+     c37 AS MATERIALIZED (SELECT k FROM c36 WHERE k < 400 UNION ALL SELECT k FROM c36 WHERE k >= 400),
+     c38 AS MATERIALIZED (SELECT k FROM c37 WHERE k < 400 UNION ALL SELECT k FROM c37 WHERE k >= 400),
+     c39 AS MATERIALIZED (SELECT k FROM c38 WHERE k < 400 UNION ALL SELECT k FROM c38 WHERE k >= 400),
+     c40 AS MATERIALIZED (SELECT k FROM c39 WHERE k < 400 UNION ALL SELECT k FROM c39 WHERE k >= 400)
+SELECT sum(c), count(*) FROM (SELECT o.id, (SELECT count(*) FROM c40 WHERE c40.k = o.k) AS c FROM o);
+----
+6844	2000
