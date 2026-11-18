@@ -48,6 +48,7 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 			                          output.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(written), capacity);
 		                          }
 	                          });
+	decode_all.GetSignature().GetParameter(0).SetName(Identifier("data"));
 	decode_all.SetFallible();
 	decode_all.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY,
 	                                       Value::BIGINT(NumericCast<int64_t>(minimum_input_window)));
@@ -76,6 +77,8 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 			    });
 		    }
 	    });
+	decode_stream.GetSignature().GetParameter(0).SetName(Identifier("data"));
+	decode_stream.GetSignature().GetParameter(1).SetName(Identifier("is_last"));
 	decode_stream.SetFallible();
 	decode_stream.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY,
 	                                          Value::BIGINT(NumericCast<int64_t>(minimum_input_window)));
