@@ -355,7 +355,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::CASE_TO_FILTER_AGGREGATE, [&]() {
 		AggregateFunctionRewriter aggregate_function_rewriter(*this);
 		// DML CTEs can invalidate the table statistics captured during planning.
-		aggregate_function_rewriter.RewriteCaseToFilter(plan, !CTEContainsDML(*plan));
+		aggregate_function_rewriter.RewriteCaseToFilter(plan, !plan->CTEContainsDML());
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
