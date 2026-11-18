@@ -227,15 +227,25 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 	return 1000;
 }
 
-idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
-	auto &expr = *expr_filter.expr;
+static idx_t TableFilterExpressionCost(const Expression &expr) {
 	if (ExpressionBarrier::Contains(expr)) {
 		// a barrier filter is always evaluated last, so that it never runs on rows another filter removes
 		return NumericLimits<idx_t>::Maximum();
 	}
 	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME)) {
 		return 0;
+	}
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		constexpr idx_t conjunction_cost = 5;
+		idx_t cost = conjunction_cost;
+		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
+			auto child_cost = TableFilterExpressionCost(*child);
+			if (child_cost >= NumericLimits<idx_t>::Maximum() - cost) {
+				return NumericLimits<idx_t>::Maximum();
+			}
+			cost += child_cost;
+		}
+		return cost == conjunction_cost ? 0 : cost;
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
@@ -244,13 +254,15 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 		}
 		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
 			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
-			return optional_child ? Cost(*optional_child) : 0;
+			return optional_child ? TableFilterExpressionCost(*optional_child) : 0;
 		}
 	}
-	if (ExpressionFilter::IsOptionalExpression(expr)) {
-		return 0;
-	}
-	return Cost(expr);
+	return ExpressionHeuristics::Cost(expr);
+}
+
+idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
+	return TableFilterExpressionCost(*expr_filter.expr);
 }
 
 vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_filters) {

@@ -11,18 +11,65 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 using namespace duckdb;
+
+TEST_CASE("Pruning conjuncts preserve the cost of active scan filters", "[dynamic_filter_groups]") {
+	auto comparison = [](const Value &value) {
+		return ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, value)->expr->Copy();
+	};
+	auto optional = [&](const Value &value) {
+		return CreateOptionalFilterExpression(comparison(value), value.type());
+	};
+	auto row_filter = [&](const Value &value) {
+		return CreateSelectivityOptionalFilterExpression(comparison(value), value.type(), 0.5f, 6);
+	};
+	TableFilterSet filters;
+	filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(row_filter(Value("a"))));
+	filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(row_filter(Value::INTEGER(1))));
+	REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 1);
+
+	SECTION("Nested optional conjunctions keep their active filter cost") {
+		auto nested = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("b")),
+		                                                    optional(Value("c")));
+		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("a")),
+		                                                         std::move(nested));
+		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(conjunction)));
+		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 1);
+	}
+	SECTION("Pruning-only conjunctions remain free") {
+		filters.ClearFilters();
+		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("a")),
+		                                                         optional(Value("b")));
+		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(conjunction)));
+		filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(row_filter(Value::INTEGER(1))));
+		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
+	}
+	SECTION("A barrier inside an optional filter remains last") {
+		auto barrier = ExpressionBarrier::Wrap(comparison(Value::INTEGER(1)));
+		auto wrapped = CreateSelectivityOptionalFilterExpression(std::move(barrier), LogicalType::INTEGER, 0.5f, 6);
+		filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(std::move(wrapped)));
+		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
+	}
+	SECTION("Dynamic filters retain their priority") {
+		auto dynamic_filter = CreateDynamicFilterExpression(nullptr, LogicalType::VARCHAR);
+		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(dynamic_filter)));
+		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
+	}
+}
 
 TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dynamic_filter_groups]") {
 	DuckDB db(nullptr);
