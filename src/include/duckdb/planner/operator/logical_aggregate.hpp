@@ -59,6 +59,11 @@ public:
 	string GetName() const override;
 
 	const Expression &GetExpression(ColumnBinding binding) const;
+
+	//! Whether the rows of `op` are unique in the columns `keys`: the keys are traced through projections and filters
+	//! to an aggregate with one full grouping set whose groups are all among the keys (or to an aggregate without
+	//! groups, which emits one row).
+	static bool KeysAreUnique(LogicalOperator &op, vector<ColumnBinding> keys);
 	const Expression &GetGroupExpression(ProjectionIndex group_index) const;
 
 protected:

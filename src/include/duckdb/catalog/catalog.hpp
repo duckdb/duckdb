@@ -243,7 +243,10 @@ public:
 	virtual bool SupportsNestedSchemas() const {
 		return false;
 	}
-	//! Reject unsupported nested paths before invoking extension catalog methods.
+	//! Whether the schema path of name is not nested, or nested and supported by this catalog. Lookups of an
+	//! unsupported path find nothing, without passing the path to the catalog's LookupSchema.
+	DUCKDB_API bool SupportsSchemaPath(const QualifiedName &name, CatalogType type) const;
+	//! Reject unsupported nested paths when creating a schema.
 	DUCKDB_API void CheckNestedSchemaSupport(const QualifiedName &name, CatalogType type) const;
 	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
 	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
