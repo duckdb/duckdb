@@ -235,7 +235,7 @@ TEST_CASE("Read-ahead job teardown does not spin while I/O is running", "[scan_r
 	release_callback.Set();
 	auto callback = make_shared_ptr<CompletionTestCallback>(callback_entered, release_callback);
 	InterruptState interrupt {weak_ptr<Task>(callback)};
-	ScanReadAhead read_ahead(*con.context, 1, nullptr);
+	ScanReadAhead read_ahead(*con.context, ScanReadAheadPolicy::ORDERED, 1, nullptr);
 	struct JobState {};
 	bool produced = false;
 	auto produce = [&](vector<unique_ptr<AsyncTask>> &io_tasks) -> unique_ptr<ScanReadAheadJob> {
