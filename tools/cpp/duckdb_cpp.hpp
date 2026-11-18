@@ -1251,6 +1251,22 @@ public:
 	/// @param options The options that can only be chosen at startup.
 	Instance(Environment &env, const std::string &path, const StartupOptions &options = {});
 
+	/// Opens the database file `path` in an instance shared through the default environment: a new handle to the
+	/// instance that already has the file open, or else to a new instance with the file attached as its default
+	/// database. Every handle for the same file sees the same database; it is closed once the last handle and the last
+	/// connection on it are destroyed, and opening it meanwhile waits for that rather than opening it twice. See
+	/// `duckdb_v2_instance_open_shared` for the details.
+	/// @param path The database file, or ":memory:" / the empty string for a new in-memory database, which is never
+	/// shared.
+	/// @param options The options that can only be chosen at startup. An instance that is already open is shared only
+	/// when it was created with the same options, written the same way.
+	/// @throws Exception When the file is open in an instance created with other options, or attached to an instance
+	/// that is not shared.
+	static auto OpenShared(const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options = {}) -> Instance;
+
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
 	Instance &operator=(Instance &&) noexcept = default;

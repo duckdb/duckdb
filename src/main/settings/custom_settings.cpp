@@ -1842,6 +1842,19 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
 
+//! Undo the dialect_compatibility_mode that selecting the current dialect has set
+static void ClearDialectCompatibilityMode(ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (!client_config.current_dialect) {
+		return;
+	}
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+	auto dialect_extension = config.GetCallbackManager().GetDialectExtension(*client_config.current_dialect);
+	if (dialect_extension && dialect_extension->GetCompatibilityMode()) {
+		client_config.user_settings.ClearSetting(DialectCompatibilityModeSetting::SettingIndex);
+	}
+}
+
 void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input) {
 	if (!OnLocalSet(context, input)) {
 		return;
@@ -1850,6 +1863,7 @@ void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input)
 	auto &config = DatabaseInstance::GetDatabase(context).config;
 
 	if (input.IsNull()) {
+		ClearDialectCompatibilityMode(context);
 		client_config.current_dialect = std::nullopt;
 		return;
 	}
@@ -1862,6 +1876,7 @@ void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input)
 	auto &dialect_extension = *dialect_extension_p;
 	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
 	(void)dialect_extension.GetCompiledGrammar(context);
+	ClearDialectCompatibilityMode(context);
 	client_config.current_dialect = dialect_name;
 	auto &compatibility_mode = dialect_extension.GetCompatibilityMode();
 	if (compatibility_mode) {
@@ -1874,6 +1889,7 @@ void CurrentDialectSetting::ResetLocal(ClientContext &context) {
 	if (!OnLocalReset(context)) {
 		return;
 	}
+	ClearDialectCompatibilityMode(context);
 	ClientConfig::GetConfig(context).current_dialect = std::nullopt;
 }
 

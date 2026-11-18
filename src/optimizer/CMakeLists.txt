@@ -66,6 +66,7 @@ add_library_unity(
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp
+  window_fusion.cpp
   window_join_pushdown.cpp
   window_self_join.cpp
   row_number_rewriter.cpp
@@ -74,6 +75,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   self_join_aggregate.cpp
+  set_operation_aggregate.cpp
   projection_pullup.cpp
   projection_placement.cpp
   remote_pushdown_optimizer.cpp

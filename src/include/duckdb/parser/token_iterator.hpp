@@ -66,12 +66,42 @@ public:
 		return tokens[position].GetLiteralInfo(table);
 	}
 	DUCKDB_API const MatcherToken &Previous() const;
-	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
+	const MatcherToken &GetToken(idx_t index) const {
+		if (index >= tokens.size()) {
+			ThrowIndexError(index);
+		}
+		return tokens[index];
+	}
 
-	DUCKDB_API void Advance(idx_t count = 1);
-	DUCKDB_API void SetPosition(idx_t position);
-	DUCKDB_API void SetPosition(const TokenIterator &other);
-	DUCKDB_API void SetPreviousTokenType(TokenType type);
+	void Advance(idx_t count = 1) {
+		if (count > tokens.size() - position) {
+			ThrowAdvanceError(count);
+		}
+		position += count;
+	}
+	void SetPosition(idx_t position_p) {
+		if (position_p > tokens.size()) {
+			ThrowPositionError(position_p);
+		}
+		position = position_p;
+	}
+	void SetPosition(const TokenIterator &other) {
+		if (&tokens != &other.tokens) {
+			ThrowCollectionError();
+		}
+		SetPosition(other.position);
+	}
+	void SetPreviousTokenType(TokenType type) {
+		if (position == 0) {
+			ThrowNoPreviousError();
+		}
+		tokens[position - 1].type = type;
+	}
+	DUCKDB_API void ThrowIndexError(idx_t index) const;
+	DUCKDB_API void ThrowAdvanceError(idx_t count) const;
+	DUCKDB_API void ThrowPositionError(idx_t position_p) const;
+	DUCKDB_API void ThrowCollectionError() const;
+	DUCKDB_API void ThrowNoPreviousError() const;
 
 	DUCKDB_API vector<SimpleToken> RemainingTokens() const;
 	DUCKDB_API string ToString() const;

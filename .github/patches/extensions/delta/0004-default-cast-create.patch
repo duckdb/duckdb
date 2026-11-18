@@ -1,0 +1,11 @@
+--- a/src/functions/delta_scan/delta_multi_file_reader.cpp
++++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -217,7 +217,7 @@
+ 			get_input.query_location = child->GetQueryLocation();
+ 			auto bound_cast = default_casts.GetCastFunction(child->GetReturnType(), target, get_input);
+ 			auto try_cast = BoundCastExpression::IsTryCast(cast);
+-			expr = BoundCastExpression::CreateDefault(std::move(child), target, std::move(bound_cast), try_cast);
++			expr = BoundCastExpression::Create(std::move(child), target, std::move(bound_cast), try_cast);
+ 		}
+ 	}
+ 	ExpressionIterator::EnumerateChildren(*expr,

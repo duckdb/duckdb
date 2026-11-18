@@ -1,0 +1,267 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index b8565fd..9a8767c 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -11,6 +11,14 @@
+ #include <stdint.h>
+ #include "duckdb/parser/parser.hpp"
+ #include "duckdb/parser/expression/cast_expression.hpp"
++#include "duckdb/parser/expression/constant_expression.hpp"
++#include "duckdb/parser/expression/function_expression.hpp"
++#include "duckdb/parser/expression/star_expression.hpp"
++#include "duckdb/parser/parsed_data/create_view_info.hpp"
++#include "duckdb/parser/query_node/select_node.hpp"
++#include "duckdb/parser/statement/create_statement.hpp"
++#include "duckdb/parser/statement/select_statement.hpp"
++#include "duckdb/parser/tableref/table_function_ref.hpp"
+ #include "duckdb/common/types/date.hpp"
+ #include "duckdb/common/types/timestamp.hpp"
+ #include "duckdb/storage/table/column_segment.hpp"
+@@ -592,6 +600,32 @@ static unique_ptr<FunctionData> AttachBind(ClientContext &context, TableFunction
+ 	return std::move(result);
+ }
+ 
++static void CreateTableView(Connection &con, const string &file_name, const string &table_name, bool overwrite) {
++	// construct the `sqlite_scan(<file>, <table>)` function expression
++	vector<unique_ptr<ParsedExpression>> arguments;
++	arguments.push_back(ConstantExpression::FromValue(Value(file_name)));
++	arguments.push_back(ConstantExpression::FromValue(Value(table_name)));
++	auto scan = make_uniq<TableFunctionRef>();
++	scan->function = make_uniq<FunctionExpression>("sqlite_scan", std::move(arguments));
++	// construct the `SELECT * FROM sqlite_scan(<file>, <table>)` statement
++	auto node = make_uniq<SelectNode>();
++	node->select_list.push_back(make_uniq<StarExpression>());
++	node->from_table = std::move(scan);
++	auto select = make_uniq<SelectStatement>();
++	select->node = std::move(node);
++
++	// construct the `CREATE [OR REPLACE] VIEW AS` statement using the select statement
++	auto info = make_uniq<CreateViewInfo>();
++	info->query = std::move(select);
++	info->temporary = false;
++	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(table_name)));
++	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
++	auto statement = make_uniq<CreateStatement>();
++	statement->info = std::move(info);
++	// Execute the CREATE VIEW
++	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + table_name + "': ");
++}
++
+ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+ 	auto &data = data_p.bind_data->CastNoConst<AttachFunctionData>();
+ 	if (data.finished) {
+@@ -605,8 +639,7 @@ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, D
+ 	{
+ 		auto tables = db.GetTables();
+ 		for (auto &table_name : tables) {
+-			dconn.TableFunction("sqlite_scan", {Value(data.file_name), Value(table_name)})
+-			    ->CreateView(Identifier(table_name), data.overwrite, false);
++			CreateTableView(dconn, data.file_name, table_name, data.overwrite);
+ 		}
+ 	}
+ 	{
+diff --git a/test/sql/scanner/attach_bind_error.test b/test/sql/scanner/attach_bind_error.test
+new file mode 100644
+index 0000000..59957f4
+--- /dev/null
++++ b/test/sql/scanner/attach_bind_error.test
+@@ -0,0 +1,25 @@
++# name: test/sql/scanner/attach_bind_error.test
++# description: Test that sqlite_attach names the view when the scan of a table fails to bind
++# group: [scanner]
++
++require sqlite_scanner
++
++statement ok
++ATTACH '{TEST_DIR}/attach_bind_error.db' AS s (TYPE SQLITE);
++
++# SQLite accepts this default, but the parser of DuckDB rejects it when the scan reads the columns of the table
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE b_bad(i INTEGER DEFAULT (1 MATCH 2))');
++
++statement ok
++DETACH s;
++
++statement error
++CALL sqlite_attach('{TEST_DIR}/attach_bind_error.db');
++----
++<REGEX>:Parser Error: Failed to create view 'b_bad': .*
++
++query I
++SELECT count(*) FROM duckdb_views() WHERE view_name = 'b_bad';
++----
++0
+diff --git a/test/sql/scanner/attach_overwrite.test b/test/sql/scanner/attach_overwrite.test
+new file mode 100644
+index 0000000..8b83e53
+--- /dev/null
++++ b/test/sql/scanner/attach_overwrite.test
+@@ -0,0 +1,84 @@
++# name: test/sql/scanner/attach_overwrite.test
++# description: Test sqlite_attach on a file whose views exist already, with and without overwrite
++# group: [scanner]
++
++require sqlite_scanner
++
++statement ok
++CALL sqlite_attach('data/db/count.db');
++
++query TTT
++SELECT view_name, schema_name, temporary FROM duckdb_views() WHERE view_name IN ('empty_tbl', 'mysql_databases') ORDER BY view_name;
++----
++empty_tbl	main	false
++mysql_databases	main	false
++
++statement ok
++COMMENT ON VIEW empty_tbl IS 'old';
++
++statement ok
++COMMENT ON VIEW mysql_databases IS 'old';
++
++statement error
++CALL sqlite_attach('data/db/count.db');
++----
++<REGEX>:Catalog Error: Failed to create view '(empty_tbl|mysql_databases)': View with name "(empty_tbl|mysql_databases)" already exists!.*
++
++statement error
++CALL sqlite_attach('data/db/count.db', overwrite := false);
++----
++<REGEX>:Catalog Error: Failed to create view '(empty_tbl|mysql_databases)': View with name "(empty_tbl|mysql_databases)" already exists!.*
++
++# a failed attach keeps the views that were there
++query TT
++SELECT view_name, comment FROM duckdb_views() WHERE view_name IN ('empty_tbl', 'mysql_databases') ORDER BY view_name;
++----
++empty_tbl	old
++mysql_databases	old
++
++statement ok
++CALL sqlite_attach('data/db/count.db', overwrite := true);
++
++# the comments are gone, so the views were replaced and not kept
++query TTTT
++SELECT view_name, schema_name, temporary, comment FROM duckdb_views() WHERE view_name IN ('empty_tbl', 'mysql_databases') ORDER BY view_name;
++----
++empty_tbl	main	false	NULL
++mysql_databases	main	false	NULL
++
++query I
++SELECT count(*) FROM empty_tbl;
++----
++0
++
++query I
++SELECT count(*) FROM mysql_databases;
++----
++10
++
++# sqlite_attach creates the views on a connection of its own, so the database the caller uses does not matter
++statement ok
++COMMENT ON VIEW empty_tbl IS 'before use';
++
++statement ok
++COMMENT ON VIEW mysql_databases IS 'before use';
++
++statement ok
++ATTACH ':memory:' AS other;
++
++statement ok
++USE other;
++
++statement ok
++CALL sqlite_attach('data/db/count.db', overwrite := true);
++
++query I
++SELECT count(*) FROM duckdb_views() WHERE database_name = 'other';
++----
++0
++
++query TTTT
++SELECT view_name, schema_name, temporary, comment FROM duckdb_views() WHERE view_name IN ('empty_tbl', 'mysql_databases') ORDER BY view_name;
++----
++empty_tbl	main	false	NULL
++mysql_databases	main	false	NULL
+diff --git a/test/sql/scanner/attach_quoted_names.test b/test/sql/scanner/attach_quoted_names.test
+new file mode 100644
+index 0000000..dd6d921
+--- /dev/null
++++ b/test/sql/scanner/attach_quoted_names.test
+@@ -0,0 +1,78 @@
++# name: test/sql/scanner/attach_quoted_names.test
++# description: Test sqlite_attach on tables and a file whose names need quoting
++# group: [scanner]
++
++require sqlite_scanner
++
++statement ok
++ATTACH '{TEST_DIR}/it''s quoted.db' AS s (TYPE SQLITE);
++
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE "we""ird"(i INTEGER)');
++
++statement ok
++CALL sqlite_query('s', 'INSERT INTO "we""ird" VALUES (1)');
++
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE "it''s"(i INTEGER)');
++
++statement ok
++CALL sqlite_query('s', 'INSERT INTO "it''s" VALUES (2)');
++
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE "Mixed Case"(i INTEGER)');
++
++statement ok
++CALL sqlite_query('s', 'INSERT INTO "Mixed Case" VALUES (3)');
++
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE "select"(i INTEGER)');
++
++statement ok
++CALL sqlite_query('s', 'INSERT INTO "select" VALUES (4)');
++
++statement ok
++CALL sqlite_query('s', 'CREATE TABLE "a.b"(i INTEGER)');
++
++statement ok
++CALL sqlite_query('s', 'INSERT INTO "a.b" VALUES (5)');
++
++statement ok
++DETACH s;
++
++statement ok
++CALL sqlite_attach('{TEST_DIR}/it''s quoted.db');
++
++query TTT
++SELECT view_name, schema_name, temporary FROM duckdb_views() WHERE NOT internal ORDER BY view_name;
++----
++Mixed Case	main	false
++a.b	main	false
++it's	main	false
++select	main	false
++we"ird	main	false
++
++query I
++SELECT i FROM "we""ird";
++----
++1
++
++query I
++SELECT i FROM "it's";
++----
++2
++
++query I
++SELECT i FROM "Mixed Case";
++----
++3
++
++query I
++SELECT i FROM "select";
++----
++4
++
++query I
++SELECT i FROM "a.b";
++----
++5
