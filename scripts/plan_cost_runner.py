@@ -2,12 +2,15 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 
 if __package__:
+    from .regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
     from .regression.local_extensions import extension_loading_args
 else:
+    from regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
     from regression.local_extensions import extension_loading_args
 
 
@@ -91,6 +94,14 @@ class PlanCost:
         self.probe_side += other.probe_side
         return self
 
+    def more_output_and_build_work(self, other):
+        return self.total > other.total and self.build_side > other.build_side and self.probe_side >= other.probe_side
+
+    def needs_timing(self, other):
+        return (
+            self != other and not self.more_output_and_build_work(other) and not other.more_output_and_build_work(self)
+        )
+
     def __gt__(self, other):
         if self == other:
             return False
@@ -99,7 +110,7 @@ class PlanCost:
         probe_card_increased = self.probe_side > other.probe_side
         if not (total_card_increased or build_card_increased or probe_card_increased):
             return False
-        if total_card_increased and build_card_increased and self.probe_side >= other.probe_side:
+        if self.more_output_and_build_work(other):
             return True
         # Use timings to evaluate tradeoffs between output rows and build/probe work.
         return self.time > other.time * 1.03
@@ -222,6 +233,38 @@ def query_plan_cost(cli, dbname, query):
         return cost
 
 
+def query_timings(cli, dbname, query, runs):
+    # Warm up in the same process before enabling the timer.
+    command = [cli, '--readonly', dbname, '-c', query, '-c', '.timer on 6']
+    for _ in range(runs):
+        command.extend(['-c', query])
+    completed = run_command(command, capture_output=True, text=True, timeout=600)
+    if completed.returncode:
+        raise RuntimeError(f"Query timing failed for {cli}:\n{completed.stderr}")
+    timings = re.findall(r'^Run Time \(s\): real ([0-9.]+)', completed.stdout, re.MULTILINE)
+    if len(timings) != runs:
+        raise RuntimeError(f"Expected {runs} query timings from {cli}, got {len(timings)}:\n{completed.stderr}")
+    return [float(timing) for timing in timings]
+
+
+def measure_query_timings(old, new, query):
+    def measure(runs):
+        old_timings = []
+        new_timings = []
+        for index, batch_size in enumerate(sampling_batch_sizes(runs)):
+            variants = [(old, OLD_DB_NAME, old_timings), (new, NEW_DB_NAME, new_timings)]
+            if index % 2:
+                variants.reverse()
+            for cli, dbname, timings in variants:
+                timings.extend(query_timings(cli, dbname, query, batch_size))
+        return benchmark_measurement(old_timings, new_timings)
+
+    measurement = measure(10)
+    if measurement.ratio < 0.97 or measurement.ratio > 1.03:
+        measurement = measure(confirmation_run_count(measurement))
+    return measurement
+
+
 def print_banner(text):
     text_len = len(text)
     rest = BANNER_SIZE - text_len - 10
@@ -280,6 +323,15 @@ def main():
 
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
+
+        if old_cost.needs_timing(new_cost):
+            measurement = measure_query_timings(old, new, query)
+            old_cost.time = measurement.old_timing
+            new_cost.time = measurement.new_timing
+            print(
+                f"{query_name}: {measurement.runs} hot samples per binary, "
+                f"median {old_cost.time:.6f}s -> {new_cost.time:.6f}s"
+            )
 
         if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))

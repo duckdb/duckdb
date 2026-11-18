@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from scripts import plan_cost_runner
 from scripts.plan_cost_runner import is_measured_join, op_inspect
+from scripts.regression.comparison import benchmark_measurement
 
 
 def scan(rows):
@@ -79,14 +80,70 @@ class TestPlanCost(unittest.TestCase):
         new.time = 1.02
         self.assertFalse(old > new or new > old or old < new or new < old)
 
+    def test_timing_is_required_independently_of_cold_latency(self):
+        old = op_inspect(join('MARK', 20, scan(20), scan(10)))
+        for rows, probe, build, expected in ((20, 20, 10, False), (30, 30, 20, False), (5, 100, 40, True)):
+            new = op_inspect(join('SEMI', rows, scan(probe), scan(build)))
+            for old_time, new_time in ((1.0, 2.0), (2.0, 1.0)):
+                old.time, new.time = old_time, new_time
+                self.assertEqual(old.needs_timing(new), expected)
+                self.assertEqual(new.needs_timing(old), expected)
+
+    def test_query_timing_batch_warms_up_before_measuring(self):
+        completed = subprocess.CompletedProcess(
+            [],
+            0,
+            stdout='Run Time (s): real 1.000000 user 0 sys 0\nRun Time (s): real 2.000000 user 0 sys 0\n',
+            stderr='',
+        )
+        with patch.object(plan_cost_runner, 'run_command', return_value=completed) as run:
+            self.assertEqual(plan_cost_runner.query_timings('cli', 'db', 'SELECT 42', 2), [1.0, 2.0])
+        command = run.call_args.args[0]
+        self.assertEqual(command[3:], ['-c', 'SELECT 42', '-c', '.timer on 6', '-c', 'SELECT 42', '-c', 'SELECT 42'])
+
+    def test_query_timing_rejects_failure_or_missing_samples(self):
+        for completed in (
+            subprocess.CompletedProcess([], 1, stdout='', stderr='query failed'),
+            subprocess.CompletedProcess([], 0, stdout='', stderr=''),
+            subprocess.CompletedProcess([], 0, stdout='Run Time (s): real 1.0\n', stderr=''),
+        ):
+            with patch.object(plan_cost_runner, 'run_command', return_value=completed):
+                with self.assertRaises(RuntimeError):
+                    plan_cost_runner.query_timings('cli', 'db', 'SELECT 42', 2)
+
+    def test_timing_batches_alternate_and_confirm_independently(self):
+        for initial_ratio, confirmed_ratio in ((1.1, 1.0), (1.1, 1.1), (0.9, 1.0)):
+            calls = []
+
+            def timings(cli, dbname, query, runs):
+                ratio = initial_ratio if len(calls) < 4 else confirmed_ratio
+                calls.append(cli)
+                return [1.0 if cli == 'old' else ratio] * runs
+
+            with patch.object(plan_cost_runner, 'query_timings', side_effect=timings):
+                measured = plan_cost_runner.measure_query_timings('old', 'new', 'SELECT 42')
+            self.assertEqual(measured.ratio, confirmed_ratio)
+            self.assertEqual(measured.runs, 30)
+            self.assertEqual(calls, ['old', 'new', 'new', 'old'] * 4)
+
+    def test_timings_within_noise_do_not_need_confirmation(self):
+        with patch.object(plan_cost_runner, 'query_timings', return_value=[1.0] * 5) as timings:
+            measured = plan_cost_runner.measure_query_timings('old', 'new', 'SELECT 42')
+        self.assertEqual(measured.runs, 10)
+        self.assertEqual(timings.call_count, 4)
+
     def test_profiled_join_work_regression_reaches_runner(self):
         for time_format in ('query', 'latency', 'timing'):
-            for old_build, new_build in ((10, 40), (40, 10)):
-                with self.subTest(time_format=time_format, old_build=old_build):
+            for old_build, new_build, cold_time, hot_time, regressed in (
+                (10, 40, 1.1, 1.0, False),
+                (10, 40, 0.9, 1.1, True),
+                (40, 10, 1.1, 1.1, True),
+            ):
+                with self.subTest(time_format=time_format, old_build=old_build, hot_time=hot_time):
                     profiles = []
                     for tree, elapsed in (
                         (join('MARK', 20, scan(20), scan(old_build)), 1.0),
-                        (join('SEMI', 5, scan(100), scan(new_build)), 1.1),
+                        (join('SEMI', 5, scan(100), scan(new_build)), cold_time),
                     ):
                         if time_format == 'query':
                             profiles.append({'operator': [tree], 'query': {'total_time': elapsed}})
@@ -110,6 +167,13 @@ class TestPlanCost(unittest.TestCase):
                         with contextlib.ExitStack() as stack:
                             stack.enter_context(patch.object(plan_cost_runner, 'run_command', side_effect=run_command))
                             stack.enter_context(patch.object(plan_cost_runner, 'init_db', side_effect=init_db))
+                            stack.enter_context(
+                                patch.object(
+                                    plan_cost_runner,
+                                    'measure_query_timings',
+                                    return_value=benchmark_measurement([1.0] * 10, [hot_time] * 10),
+                                )
+                            )
                             for name, value in (
                                 ('OLD_DB_NAME', root / 'old.duckdb'),
                                 ('NEW_DB_NAME', root / 'new.duckdb'),
@@ -122,8 +186,8 @@ class TestPlanCost(unittest.TestCase):
                             stack.enter_context(contextlib.redirect_stdout(output))
                             with self.assertRaises(SystemExit) as result:
                                 plan_cost_runner.main()
-                        self.assertEqual(result.exception.code, 1)
-                        self.assertIn('REGRESSIONS DETECTED', output.getvalue())
+                        self.assertEqual(result.exception.code, int(regressed))
+                        self.assertEqual('REGRESSIONS DETECTED' in output.getvalue(), regressed)
                         self.assertNotIn('IMPROVEMENTS DETECTED', output.getvalue())
 
 
