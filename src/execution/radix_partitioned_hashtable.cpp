@@ -968,8 +968,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 		// If true there is no need to combine, it was all done by a single thread in a single HT.
 		// This is the case when only one thread contributed data and the HT never overflowed its
-		// capacity (which would have caused Abandon() to be called, creating duplicates).
-		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned;
+		// capacity (which would have caused Abandon() to be called, creating duplicates) or exported states.
+		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned &&
+		                       gstate.uncombined_exported_data.empty();
 
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
 		const auto n_partitions = uncombined_partition_data.size();
