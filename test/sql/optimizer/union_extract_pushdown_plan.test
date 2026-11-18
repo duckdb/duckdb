@@ -20,19 +20,19 @@ EXPLAIN SELECT v.k FROM (
 ----
 logical_opt	<!REGEX>:.*variant_extract.*
 
-# Existing direct native and Parquet scans retain typed extraction pushdown.
+# As on the upstream base, throwing VARIANT casts stay above direct native and Parquet scans.
 statement ok
 CREATE TABLE native_extract_plan AS SELECT * FROM '{TEST_DIR}/union_extract_pushdown_plan.parquet';
 
 query II
 EXPLAIN SELECT v.k::BIGINT FROM native_extract_plan;
 ----
-logical_opt	<!REGEX>:.*CAST.*
+logical_opt	<REGEX>:.*CAST.*
 
 query II
 EXPLAIN SELECT v.k::BIGINT FROM '{TEST_DIR}/union_extract_pushdown_plan.parquet';
 ----
-logical_opt	<!REGEX>:.*CAST.*
+logical_opt	<REGEX>:.*CAST.*
 
 # Throwing casts remain above a new UNION boundary; the field itself still pushes down.
 query II

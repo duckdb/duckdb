@@ -16,6 +16,7 @@
 namespace duckdb {
 class BufferManager;
 class ClientContext;
+class DatabaseInstance;
 class CommitDropState;
 class DuckTransaction;
 class StorageCommitState;
@@ -46,7 +47,7 @@ public:
 	};
 
 public:
-	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
+	explicit UndoBuffer(DuckTransaction &transaction, DatabaseInstance &db);
 
 	//! Write a specified entry to the undo buffer
 	UndoBufferReference CreateEntry(UndoFlags type, idx_t len);

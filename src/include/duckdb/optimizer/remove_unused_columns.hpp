@@ -62,8 +62,8 @@ public:
 	void AddPath(const ColumnIndex &path);
 
 public:
-	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
-	vector<reference<BoundColumnRefExpression>> bindings;
+	//! The slots holding the BoundColumnRefExpressions in the operator that reference the same ColumnBinding
+	vector<reference<unique_ptr<Expression>>> bindings;
 	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
@@ -96,12 +96,12 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 protected:
-	//! Add a reference to the column in its entirety
-	void AddBinding(BoundColumnRefExpression &col);
+	//! Add a reference to the column in its entirety - col holds a BoundColumnRefExpression
+	void AddBinding(unique_ptr<Expression> &col);
 	//! Add a reference to a sub-section of the column
-	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
+	void AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
-	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+	void AddBinding(unique_ptr<Expression> &col, ColumnIndex child_column,
 	                const vector<ReferencedExtractComponent> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
@@ -111,16 +111,14 @@ protected:
 	bool HandleExtractExpression(unique_ptr<Expression> *expression,
 	                             optional_ptr<unique_ptr<Expression>> cast_expression = nullptr);
 
-	bool HandleStructExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleStructExtract(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                         reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
-	bool HandleVariantExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleVariantExtract(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                          reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
-	bool HandleExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &colref,
 	                            reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
 	BaseColumnPrunerMode GetMode() const;
-	//! Keep throwing casts at their original evaluation site while retaining safe field extraction.
-	void PreserveThrowingCasts(const vector<ColumnBinding> &bindings);
 
 private:
 	void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column);
@@ -132,8 +130,6 @@ protected:
 private:
 	//! The current mode of the pruner, enables/disables certain behaviors
 	BaseColumnPrunerMode mode = BaseColumnPrunerMode::DEFAULT;
-	//! Casts must remain inside expressions that guard their evaluation or catch their errors.
-	bool inside_conditional = false;
 };
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required

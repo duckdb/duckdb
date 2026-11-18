@@ -190,8 +190,8 @@ static auto CV2ScalarBind(BindScalarFunctionInput &input) -> unique_ptr<Function
 	return result;
 }
 
-static auto CV2ScalarInit(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data)
-    -> unique_ptr<FunctionLocalState> {
+static auto CV2ScalarInit(ExpressionState &state, const BoundFunctionExpression &expr,
+                          optional_ptr<const FunctionData> bind_data) -> unique_ptr<FunctionLocalState> {
 	const auto &info = expr.Function().GetExtraFunctionInfo().Cast<CV2ScalarFunctionInfo>();
 
 	auto user_bind_data = bind_data ? bind_data->Cast<CV2FunctionData>().handle : nullptr;
@@ -202,7 +202,7 @@ static auto CV2ScalarInit(ExpressionState &state, const BoundFunctionExpression 
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	CV2CallbackContext callback_context(state.GetContext());
+	CV2CallbackContext callback_context(state.GetClientContext());
 	info.init_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	unique_ptr<FunctionLocalState> result = nullptr;
@@ -246,7 +246,7 @@ static auto CV2ScalarExec(DataChunk &input, ExpressionState &state, Vector &resu
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
 
-	CV2CallbackContext callback_context(state.GetContext());
+	CV2CallbackContext callback_context(state.GetClientContext());
 	info.exec_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {

@@ -105,60 +105,27 @@ struct DBConfigOptions {
 #endif
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
-	//! The maximum amount of CPU threads used by the database system. Default: all available.
-	idx_t maximum_threads = DConstants::INVALID_INDEX;
-	//! The maximum amount of async threads used by the database system. Default: all available.
-	idx_t async_threads = DConstants::INVALID_INDEX;
 	//! HTTP client limit derived from thread counts unless configured
 	idx_t http_client_pool_capacity = DConstants::INVALID_INDEX;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
-	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
-	//! space for sparse files, on platforms that support it.
-	bool trim_free_blocks = false;
-	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
-	bool buffer_manager_track_eviction_timestamps = false;
-	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
-	bool force_checkpoint = false;
-	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
-	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
-	//! Enable mbedtls explicitly (overrides OpenSSL if available)
-	bool force_mbedtls = false;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
-	//! Force a specific schema for VARIANT shredding
-	LogicalType force_variant_shredding = LogicalType::INVALID;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
-	//! Additional directories to store extension binaries in
-	vector<string> extension_directories;
-	//! Debug setting - how to initialize  blocks in the storage layer when allocating
-	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
-	//! Debug setting - how to verify ORDER BY results (e.g. by rewriting ORDER BY into create_sort_key)
-	DebugOrderVerification debug_order_verification = DebugOrderVerification::NONE;
 	//! The set of user-provided options
 	identifier_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	identifier_map_t<Value> unrecognized_options;
-	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
-	//! Delta Only! - Fall back to recognizing Variant columns structurally
-	bool variant_legacy_encoding = false;
-	//! Metadata from DuckDB callers
-	string custom_user_agent;
-	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
-	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
-	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
 	//! Environment variables the embedder configures itself from, readable with OSUtil::GetEnvUnrestricted
@@ -360,6 +327,11 @@ public:
 	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
+	idx_t GetDefaultMaxMemory() const;
+	//! The number of threads used when the threads setting is not set
+	idx_t GetDefaultThreads() const;
+	//! The number of async threads used when the async_threads setting is not set
+	idx_t GetDefaultAsyncThreads() const;
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
@@ -372,7 +344,9 @@ public:
 	//! Returns the value of a setting set by the user currently
 	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
-	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
+	SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) const;
+	SettingLookupResult TryGetDefaultValue(const Identifier &key, optional_ptr<const ConfigurationOption> option,
+	                                       Value &result) const;
 
 	//! The opener (if any) is used to expand "~" using the connection-specific home_directory
 	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
@@ -417,6 +391,10 @@ private:
 	mutable mutex disabled_optimizers_lock;
 	//! Whether disabled_optimizers is non-empty
 	atomic<bool> has_disabled_optimizers {false};
+	//! Cache of GetDefaultThreads, which reads the cgroup CPU limit
+	mutable atomic<idx_t> default_threads {0};
+	//! Cache of GetDefaultMaxMemory, which reads the cgroup memory limit through the file system
+	mutable atomic<idx_t> default_max_memory {0};
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;

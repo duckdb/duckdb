@@ -88,17 +88,23 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || filter_state.can_throw) {
-		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
-		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
-		// filter already removed - pushing the filter down there must not raise errors that would not occur otherwise
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || !filter_state.can_cache) {
+		// Cached evaluation requires safe predicates and complete value validity.
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		return;
+	}
+	bool needs_row_validity = false;
+	if (!filter_includes_validity) {
+		lock_guard<mutex> guard(stats_lock);
+		needs_row_validity = state.current->GetNode().GetStats().CanHaveNull();
+	}
+	if (needs_row_validity) {
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
 	if (!filter_includes_validity) {
-		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+		validity->ScanVector(state.child_states[0], result, target_count, scan_type);
 	} else {
 		validity->Skip(state.child_states[0], target_count);
 	}
@@ -231,9 +237,9 @@ ValidityColumnData &StandardColumnData::GetValidityData() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data, Context &context,
 	                              PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	    : ColumnCheckpointState(row_group, column_data, context, partial_block_manager) {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -268,8 +274,9 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState>
-StandardColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
+StandardColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
+                                          PartialBlockManager &partial_block_manager) {
+	return make_uniq<StandardColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup &row_group,
@@ -281,9 +288,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup 
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto base_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto base_state = CreateCheckpointState(row_group, context, partial_block_manager);
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_state_p = validity->CreateCheckpointState(row_group, partial_block_manager);
+	auto validity_state_p = validity->CreateCheckpointState(row_group, context, partial_block_manager);
 	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity->type).ToUnique();
 
 	auto &validity_state = *validity_state_p;
