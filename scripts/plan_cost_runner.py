@@ -99,15 +99,13 @@ class PlanCost:
         probe_card_increased = self.probe_side > other.probe_side
         if not (total_card_increased or build_card_increased or probe_card_increased):
             return False
-        if total_card_increased and build_card_increased:
+        if total_card_increased and build_card_increased and self.probe_side >= other.probe_side:
             return True
         # Use timings to evaluate tradeoffs between output rows and build/probe work.
         return self.time > other.time * 1.03
 
     def __lt__(self, other):
-        if self == other:
-            return False
-        return not (self > other)
+        return other > self
 
     def __eq__(self, other):
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
@@ -142,6 +140,14 @@ def get_root_operator(data) -> dict:
     if 'operator_info' in data:
         return data['operator_info'][0]
     return data['children'][0]
+
+
+def get_query_time(data) -> float:
+    if isinstance(data.get('query'), dict):
+        return data['query']['total_time']
+    if 'latency' in data:
+        return data['latency']
+    return data['timing']
 
 
 def is_measured_join(op) -> bool:
@@ -211,7 +217,9 @@ def query_plan_cost(cli, dbname, query):
         raise e
     with open(PROFILE_FILENAME, 'r') as file:
         data = json.load(file)
-        return op_inspect(get_root_operator(data))
+        cost = op_inspect(get_root_operator(data))
+        cost.time = get_query_time(data)
+        return cost
 
 
 def print_banner(text):

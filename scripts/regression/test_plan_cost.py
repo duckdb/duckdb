@@ -1,5 +1,13 @@
+import contextlib
+import io
+import json
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
+from scripts import plan_cost_runner
 from scripts.plan_cost_runner import is_measured_join, op_inspect
 
 
@@ -58,6 +66,65 @@ class TestPlanCost(unittest.TestCase):
         old.time = 1.0
         new.time = 2.0
         self.assertFalse(new > old)
+
+    def test_mixed_costs_have_consistent_comparisons(self):
+        old = op_inspect(join('MARK', 20, scan(20), scan(40)))
+        new = op_inspect(join('SEMI', 5, scan(100), scan(10)))
+        old.time = 1.0
+        new.time = 1.1
+        self.assertGreater(new, old)
+        self.assertFalse(old > new)
+        self.assertLess(old, new)
+        self.assertFalse(new < old)
+        new.time = 1.02
+        self.assertFalse(old > new or new > old or old < new or new < old)
+
+    def test_profiled_join_work_regression_reaches_runner(self):
+        for time_format in ('query', 'latency', 'timing'):
+            for old_build, new_build in ((10, 40), (40, 10)):
+                with self.subTest(time_format=time_format, old_build=old_build):
+                    profiles = []
+                    for tree, elapsed in (
+                        (join('MARK', 20, scan(20), scan(old_build)), 1.0),
+                        (join('SEMI', 5, scan(100), scan(new_build)), 1.1),
+                    ):
+                        if time_format == 'query':
+                            profiles.append({'operator': [tree], 'query': {'total_time': elapsed}})
+                        else:
+                            profiles.append({'children': [tree], time_format: elapsed})
+                    with tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        (root / 'queries').mkdir()
+                        (root / 'queries/q.sql').write_text('SELECT 1;')
+                        profile_path = root / 'profile.json'
+                        pending = iter(profiles)
+
+                        def run_command(command, **kwargs):
+                            profile_path.write_text(json.dumps(next(pending)))
+                            return subprocess.CompletedProcess(command, 0)
+
+                        def init_db(cli, dbname, benchmark_dir, extensions):
+                            Path(dbname).touch()
+
+                        output = io.StringIO()
+                        with contextlib.ExitStack() as stack:
+                            stack.enter_context(patch.object(plan_cost_runner, 'run_command', side_effect=run_command))
+                            stack.enter_context(patch.object(plan_cost_runner, 'init_db', side_effect=init_db))
+                            for name, value in (
+                                ('OLD_DB_NAME', root / 'old.duckdb'),
+                                ('NEW_DB_NAME', root / 'new.duckdb'),
+                                ('PROFILE_FILENAME', profile_path),
+                            ):
+                                stack.enter_context(patch.object(plan_cost_runner, name, str(value)))
+                            stack.enter_context(
+                                patch('sys.argv', ['runner', '--old', 'old', '--new', 'new', '--dir', directory])
+                            )
+                            stack.enter_context(contextlib.redirect_stdout(output))
+                            with self.assertRaises(SystemExit) as result:
+                                plan_cost_runner.main()
+                        self.assertEqual(result.exception.code, 1)
+                        self.assertIn('REGRESSIONS DETECTED', output.getvalue())
+                        self.assertNotIn('IMPROVEMENTS DETECTED', output.getvalue())
 
 
 if __name__ == '__main__':
