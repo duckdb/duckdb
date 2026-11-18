@@ -30,7 +30,7 @@ File is not latin-1 encoded
 statement error
 SELECT system.encodings."utf-16"('a'::BLOB)
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 # streaming overload: an incomplete trailing character is not consumed
 query I
@@ -46,13 +46,24 @@ SELECT system.encodings."utf-16"('a\x00\x3d\xd8'::BLOB, false)
 statement error
 SELECT system.encodings."utf-16"('a\x00\xe9'::BLOB, true)
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 # the CSV reader finds encodings through the catalog
 statement error
 SELECT * FROM read_csv('data/csv/test/date.csv', encoding='no-such-encoding')
 ----
 The CSV Reader does not support the encoding
+
+# an unknown encoding named like a function of another extension (inet) does not autoload that extension
+statement error
+SELECT * FROM read_csv('data/csv/test/date.csv', encoding='broadcast')
+----
+The CSV Reader does not support the encoding
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'inet' AND loaded
+----
+0
 
 # encodings live in their own schema, not in the search path
 statement error

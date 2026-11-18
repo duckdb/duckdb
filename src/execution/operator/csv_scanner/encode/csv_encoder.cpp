@@ -43,12 +43,15 @@ void CSVEncoderBuffer::Reset() {
 }
 
 static optional_ptr<ScalarFunctionCatalogEntry> FindEncoding(ClientContext &context, const string &encoding_name) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	return catalog.GetEntry<ScalarFunctionCatalogEntry>(
-	    context,
-	    QualifiedName(catalog.GetName(), Identifier(EncodingFunction::SCHEMA),
-	                  Identifier(EncodingFunction::FunctionName(encoding_name))),
-	    OnEntryNotFound::RETURN_NULL);
+	// look in the encodings schema directly: the generic lookup would autoload extensions by function name
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+	auto &schema = Catalog::GetSystemCatalog(context).GetSchema(transaction, Identifier(EncodingFunction::SCHEMA));
+	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY,
+	                             Identifier(EncodingFunction::FunctionName(encoding_name)));
+	if (!entry) {
+		return nullptr;
+	}
+	return &entry->Cast<ScalarFunctionCatalogEntry>();
 }
 
 //! The names of all encodings: the scalar functions in the encodings schema

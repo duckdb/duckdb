@@ -40,7 +40,7 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 	while (pos < input_size) {
 		if (pos + 1 >= input_size) {
 			if (is_last) {
-				throw InvalidInputException("File is not utf-16 encoded");
+				throw InvalidInputException("Input is not valid UTF-16");
 			}
 			break;
 		}
@@ -48,18 +48,18 @@ void DecodeUTF16ToUTF8(const char *input, idx_t input_size, bool is_last, char *
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
 			if (ch >= 0xDC00) {
 				// low surrogate without a preceding high surrogate
-				throw InvalidInputException("File is not utf-16 encoded");
+				throw InvalidInputException("Input is not valid UTF-16");
 			}
 			if (pos + 3 >= input_size) {
 				if (is_last) {
-					throw InvalidInputException("File is not utf-16 encoded");
+					throw InvalidInputException("Input is not valid UTF-16");
 				}
 				// the low surrogate follows in the next buffer
 				break;
 			}
 			const uint16_t low = LoadUTF16(input, pos + 2);
 			if (low < 0xDC00 || low > 0xDFFF) {
-				throw InvalidInputException("File is not utf-16 encoded");
+				throw InvalidInputException("Input is not valid UTF-16");
 			}
 			const uint32_t code_point = 0x10000 + ((static_cast<uint32_t>(ch - 0xD800)) << 10) + (low - 0xDC00);
 			output[out++] = static_cast<char>(0xF0 | (code_point >> 18));
