@@ -6,6 +6,7 @@ require vector_size 2048
 
 # t0 (id INTEGER, s STRUCT(e mood, i INTEGER), l mood[], ar mood[2], m MAP(VARCHAR, mood)) holds the ids 0 to 15
 # mood is ENUM('a', 'b', 'c'). The stored value is out of range in s.e (id = 5), l (id = 9), ar (id = 14), m (id = 2).
+# t2 (id INTEGER PRIMARY KEY, m mood) holds the ids 0 to 15 without 12, the stored value of m is out of range for id = 5.
 # t1 (id INTEGER, s STRUCT(e mood, i INTEGER)): s is NULL in the row id = 12, only the entry of s.e under that NULL
 # is out of range, which must be ignored.
 unzip data/storage/corrupt/enum_corrupt_nested_value.db.gz {TEST_DIR}/enum_corrupt_nested_value.db
@@ -42,6 +43,17 @@ statement error
 SELECT * FROM t0 WHERE id = 9
 ----
 is out of range for an ENUM type with 3 values
+
+# a row that is fetched through the index
+statement error
+SELECT m FROM t2 WHERE id = 5
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 3 values
+
+statement error
+SELECT id, m FROM t2
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 3 values
 
 # other columns are unaffected
 query II

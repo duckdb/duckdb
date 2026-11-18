@@ -64,3 +64,15 @@ query I
 SELECT 42
 ----
 42
+
+require parquet
+
+statement error
+COPY (SELECT m FROM t0) TO '{TEST_DIR}/enum_corrupt_value.parquet'
+----
+Data Corruption Error: ENUM value 86 is out of range for an ENUM type with 2 values
+
+query I
+SELECT 42
+----
+42
