@@ -151,6 +151,18 @@
       "paths": [
         "test/sql/index/art/storage/test_art_decimal_key_width.test"
       ]
+    },
+    {
+      "reason": "The SQL export of a chain of projections that each read their input column twice takes time exponential in the depth of the chain; the fixture pins that the native estimate of the distinct rows reads the plan once per column",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_estimates.test"
+      ]
+    },
+    {
+      "reason": "The generated SQL groups the correlated column of a subquery with a plain GROUP BY, which rebinds under the default or struct-nested collation and merges the outer rows the native plan keeps apart",
+      "paths": [
+        "test/optimizer/setop_all_aggregate_correlated_collation.test"
+      ]
     }
   ]
 }

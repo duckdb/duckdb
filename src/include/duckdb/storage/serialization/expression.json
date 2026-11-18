@@ -76,6 +76,7 @@
         "type": "bool"
       }
     ],
+    "constructor": ["$ClientContext", "input", "lower", "upper", "lower_inclusive", "upper_inclusive"],
     "constructor_method": "LegacyBoundBetweenExpression::DeserializeLegacyExpression"
   },
   {

@@ -3940,6 +3940,60 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Opens the database file at `path` in an instance shared through the environment: a new handle to the instance that
+ * already has the file open, or else to a new instance, created with the startup options, with the file attached as its
+ * default database.
+ *
+ * Every call for the same file returns a new handle to the same instance, so connections created from any of them see
+ * the same database. The file is identified by its absolute path, as DuckDB resolves it. Destroy each handle via
+ * `duckdb_v2_instance_destroy()`; the instance is destroyed once the last handle and the last connection on it are, and
+ * a call for the same file meanwhile waits for it to be, rather than opening the file again while it is being closed.
+ *
+ * An existing instance is shared only when it was created with the same startup options, compared as written: an option
+ * given under an alias, or a value written differently, counts as a different configuration, as for
+ * `duckdb_get_or_create_from_cache` in the V1 API. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
+ * view opens a new in-memory instance on every call, which is never shared; a named in-memory database such as
+ * `:memory:name` is shared like a file. The startup options are those of `duckdb_v2_instance_create_with_options()`,
+ * with the same restrictions.
+ *
+ * A file that an instance of the environment attached with `duckdb_v2_instance_attach()` is not shared, and opening it
+ * returns an error like a second `duckdb_v2_instance_attach()` would; nor can a file opened here be attached to another
+ * instance. `duckdb_v2_instance_attach()`, `duckdb_v2_instance_detach()` and `duckdb_v2_instance_set_default()` on a
+ * shared handle change the instance for every handle to it.
+ *
+ * A client cannot compose this from the other functions: telling that two paths name the same file as DuckDB resolves
+ * it, and waiting for an instance whose last handle and connection were just destroyed to finish closing its files,
+ * both need the engine.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param env The environment the instance is shared through.
+ * @param path Path to the database file, or `:memory:` / an empty view for a new in-memory database.
+ * @param path_length The length of `path` in bytes. `path` need not be null-terminated and may be NULL only when this
+ * is 0.
+ * @param option_names Optional. An array of option_count option names (canonical or alias). Pass NULL when option_count
+ * is 0.
+ * @param option_names_lengths Byte lengths of the entries in `option_names`; element i is the length of
+ * `option_names[i]`. May be NULL only when `option_names` is NULL.
+ * @param option_values Optional. An array of option_count values, parallel to option_names, in the textual form SQL
+ * `SET` accepts. Pass NULL when option_count is 0.
+ * @param option_values_lengths Byte lengths of the entries in `option_values`; element i is the length of
+ * `option_values[i]`. May be NULL only when `option_values` is NULL.
+ * @param option_count The number of startup options.
+ * @param out_instance Receives a new handle to the shared instance.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
+    duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char **option_names,
+    const idx_t *option_names_lengths, const char **option_values, const idx_t *option_values_lengths,
+    idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Destroys the instance handle.
  *
  * Always succeeds. Every attached database is closed with the instance. The instance itself stays alive for as long as

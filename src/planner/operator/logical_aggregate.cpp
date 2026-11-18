@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -145,6 +146,35 @@ vector<TableIndex> LogicalAggregate::GetTableIndex() const {
 		result.push_back(groupings_index);
 	}
 	return result;
+}
+
+bool LogicalAggregate::IgnoresDuplicates() const {
+	for (auto &group : groups) {
+		if (group->IsVolatile()) {
+			return false;
+		}
+	}
+	for (auto &expr : expressions) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE || expr->IsVolatile()) {
+			return false;
+		}
+		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			// an exported state may hold more than the finalized value: an ordered aggregate buffers every input row
+			return false;
+		}
+		if (aggregate.IsDistinct()) {
+			continue;
+		}
+		// a function that is not distinct-dependent returns the same value over repeated rows; one that depends on
+		// the order of its input (first, last) may still pick its value from a different row
+		auto &function = aggregate.Function();
+		if (function.GetDistinctDependent() != AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT ||
+		    function.GetOrderDependent() != AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+			return false;
+		}
+	}
+	return true;
 }
 
 string LogicalAggregate::GetName() const {

@@ -65,15 +65,15 @@ struct MatcherToken {
 	//! MatcherTokenClass bits - fixed at tokenization, unaffected by later re-typing of the token
 	uint8_t token_class = 0;
 
+	bool HasLiteralInfo(const GrammarLiteralTable &table) const {
+		return literal_table_id == table.CacheId();
+	}
 	//! The tokenizer looks every token up once; later lookups against the same table hit this cache
 	void SetLiteralInfo(const GrammarLiteralTable &table, LiteralInfo info) {
 		literal_info = info;
 		literal_table_id = table.CacheId();
 	}
 	//! Whether the literal info of this table is cached on the token
-	bool HasLiteralInfo(const GrammarLiteralTable &table) const {
-		return literal_table_id == table.CacheId();
-	}
 	LiteralInfo GetLiteralInfo(const GrammarLiteralTable &table) {
 		if (literal_table_id != table.CacheId()) {
 			RefreshLiteralInfo(table);

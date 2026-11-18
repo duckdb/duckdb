@@ -41,7 +41,8 @@ static_assert(MAX_NUM_SECTORS <= (1ULL << SECTOR_HASH_SHIFT) && N_BITS * 8 <= SE
 //! A filter is sized from a cardinality estimate, so never let it claim more than this share of the memory budget
 static constexpr idx_t MAX_MEMORY_FRACTION = 64;
 
-void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows, idx_t max_bitmap_bytes) {
+void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows, idx_t max_bitmap_bytes,
+                             Initialization initialization_p) {
 	// a published filter is shared with probe-side consumers and must stay immutable
 	D_ASSERT(!published);
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
@@ -55,16 +56,33 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows, idx
 	bitmask = num_sectors - 1;
 
 	if (allocated_sectors < num_sectors) {
-		buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
+		buf_ = buffer_manager.GetBufferAllocator().AllocateHuge(64 + num_sectors * sizeof(uint64_t));
 		// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
 		bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 		allocated_sectors = num_sectors;
 	}
-	std::fill_n(bf, num_sectors, 0);
+	initialization = initialization_p;
+	if (initialization == Initialization::IMMEDIATE) {
+		std::fill_n(bf, num_sectors, 0);
+	}
 
 	initialized = true;
 	sealed = false;
 	useful = false;
+}
+
+void BloomFilter::InitializeRange(idx_t begin, idx_t end, idx_t total) {
+	if (initialization != Initialization::DEFERRED || sealed) {
+		return;
+	}
+	D_ASSERT(initialized);
+	D_ASSERT(IsPowerOfTwo(total) && total >= num_sectors);
+	D_ASSERT(begin <= end && end <= total);
+	// Both extents are powers of two; division maps adjacent work ranges to disjoint sectors.
+	const auto entries_per_sector = total / num_sectors;
+	const auto sector_begin = begin / entries_per_sector;
+	const auto sector_end = end / entries_per_sector;
+	std::fill_n(bf + sector_begin, sector_end - sector_begin, 0);
 }
 
 void BloomFilter::Fold(idx_t new_num_sectors) {
@@ -120,16 +138,18 @@ void BloomFilter::Seal(ClientContext &context) {
 		}
 		if (target_sectors < num_sectors) {
 			Fold(target_sectors);
-			// the filter was sized from an estimate, so hand the memory folding freed up back to the allocator
-			auto &allocator = BufferManager::GetBufferManager(context).GetBufferAllocator();
-			auto compacted_buf = allocator.Allocate(64 + num_sectors * sizeof(uint64_t));
-			auto compacted_bf =
-			    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(compacted_buf.get())) & ~63ULL);
-			std::copy_n(bf, num_sectors, compacted_bf);
-			buf_ = std::move(compacted_buf);
-			bf = compacted_bf;
-			allocated_sectors = num_sectors;
 		}
+	}
+	// Keep modest spare capacity; reuse can shrink the active size even without folding.
+	if (num_sectors <= allocated_sectors / 4) {
+		auto &allocator = BufferManager::GetBufferManager(context).GetBufferAllocator();
+		auto compacted_buf = allocator.AllocateHuge(64 + num_sectors * sizeof(uint64_t));
+		auto compacted_bf =
+		    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(compacted_buf.get())) & ~63ULL);
+		std::copy_n(bf, num_sectors, compacted_bf);
+		buf_ = std::move(compacted_buf);
+		bf = compacted_bf;
+		allocated_sectors = num_sectors;
 	}
 	sealed = true;
 	// a filter that accepts more than the scan-time policy tolerates gets paused on its first vectors anyway,
