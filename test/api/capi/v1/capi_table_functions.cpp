@@ -164,6 +164,24 @@ TEST_CASE("Test Table Function register errors in C API", "[capi]") {
 	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBSuccess);
 }
 
+TEST_CASE("Empty hash join builds do not scan their probe source", "[capi][pipeline]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
+	capi_register_table_function(tester.connection, "my_error_function", my_bind, my_init, my_error_function);
+	REQUIRE_NO_FAIL(*tester.Query("SET disabled_optimizers='join_order,build_side_probe_side'"));
+
+	auto empty =
+	    tester.Query("SELECT count(*) FROM my_error_function(1) p INNER JOIN my_function(0) b USING (forty_two)");
+	REQUIRE_NO_FAIL(*empty);
+	REQUIRE(empty->Fetch<int64_t>(0, 0) == 0);
+
+	auto nonempty =
+	    tester.Query("SELECT count(*) FROM my_error_function(1) p INNER JOIN my_function(1) b USING (forty_two)");
+	REQUIRE(nonempty->HasError());
+	REQUIRE(StringUtil::Contains(nonempty->ErrorMessage(), "My error message"));
+}
+
 struct my_named_bind_data_struct {
 	int64_t size;
 	int64_t multiplier;

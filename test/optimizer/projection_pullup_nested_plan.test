@@ -44,6 +44,12 @@ FROM (SELECT i x, 42 c FROM t) p CROSS JOIN (SELECT i y, 43 d FROM t) q;
 20	1	42	43
 20	20	42	43
 
+# Scalar projections retain the bindings produced by their dummy scans.
+query II
+EXPLAIN SELECT * FROM (SELECT 42 a), (SELECT 43 b);
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
 # A computed projection must still execute before Cartesian multiplication.
 query II
 EXPLAIN SELECT sum(p.n) FROM (SELECT length(i::VARCHAR) n FROM t) p CROSS JOIN t q;

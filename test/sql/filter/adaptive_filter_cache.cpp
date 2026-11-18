@@ -25,9 +25,8 @@ TEST_CASE("Cheap required filters expose redundant optional filters", "[filter][
 	const auto cached = GENERATE(false, true);
 	DuckDB db(nullptr);
 	Connection con(db);
-	float threshold;
-	idx_t vectors;
-	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::IN_FILTER, threshold, vectors);
+	constexpr float threshold = 0.75f;
+	constexpr idx_t vectors = 6;
 	auto in_filter =
 	    ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0),
 	                                         vector<Value> {Value::BIGINT(1), Value::BIGINT(3), Value::BIGINT(5)});
@@ -38,21 +37,20 @@ TEST_CASE("Cheap required filters expose redundant optional filters", "[filter][
 	    CreateSelectivityOptionalFilterExpression(std::move(in_filter), LogicalType::BIGINT, threshold, vectors),
 	    std::move(required->expr)));
 	auto state = TableFilterState::Initialize(*con.context, filter);
-	Vector dictionary(LogicalType::BIGINT, 4);
+	Vector dictionary(LogicalType::BIGINT, 3);
 	{
-		auto writer = FlatVector::Writer<int64_t>(dictionary, 4);
-		for (int64_t value : {-2, -1, 1, 2}) {
+		auto writer = FlatVector::Writer<int64_t>(dictionary, 3);
+		for (int64_t value : {-1, 1, 2}) {
 			writer.WriteValue(value);
 		}
 	}
-	auto cache = cached ? state->CreateCache(dictionary, 4) : nullptr;
+	auto cache = cached ? state->CreateCache(dictionary, 3) : nullptr;
 	for (idx_t batch = 0; batch <= vectors; batch++) {
 		const auto probe = batch == vectors;
-		idx_t count = probe ? 2 : 3;
+		idx_t count = 2;
 		SelectionVector codes(count), selected;
-		for (idx_t i = 0; i < count; i++) {
-			codes.set_index(i, probe ? 2 * i + 1 : i);
-		}
+		codes.set_index(0, 0);
+		codes.set_index(1, probe ? 2 : 1);
 		if (cached) {
 			cache->Filter(codes, selected, count);
 		} else {
@@ -60,7 +58,7 @@ TEST_CASE("Cheap required filters expose redundant optional filters", "[filter][
 			ColumnSegment::FilterSelection(selected, input, *state, count, count);
 		}
 		REQUIRE(count == 1);
-		REQUIRE(selected.get_index(0) == (probe ? 1 : 2));
+		REQUIRE(selected.get_index(0) == 1);
 	}
 }
 

@@ -27,7 +27,7 @@ AND (
     FALSE
 );
 ----
-logical_opt	<!REGEX>:.*(CROSS_PRODUCT|JOIN|single_col_table).*
+logical_opt	<!REGEX>:.*(JOIN|single_col_table).*
 
 query II
 SELECT count(*), count(hd.col1)

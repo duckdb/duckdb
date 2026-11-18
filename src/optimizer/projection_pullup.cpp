@@ -214,8 +214,9 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 		can_pull_through = true;
 
 		if (parent_op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			// Aggregate output projections do not hide join relations.
-			if (proj.children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			// Aggregate and scalar output projections do not hide join relations.
+			if (proj.children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+			    proj.children[0]->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 				can_pull_through = false;
 				break;
 			}

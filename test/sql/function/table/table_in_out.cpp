@@ -259,6 +259,35 @@ struct FilterPushdownEcho {
 	}
 };
 
+TEST_CASE("Empty join builds still finalize downstream table functions", "[tablefunction][pipeline]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_optimizer"));
+	con.BeginTransaction();
+	TableFunction function("final_marker", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind);
+	function.in_out_function = [](ExecutionContext &, TableFunctionInput &, DataChunk &, DataChunk &) {
+		return OperatorResultType::NEED_MORE_INPUT;
+	};
+	function.in_out_function_final = [](ExecutionContext &, TableFunctionInput &, DataChunk &output) {
+		{
+			auto writer = FlatVector::Writer<int32_t>(output.data[0], 1);
+			writer.WriteValue(42);
+		}
+		output.SetChildCardinality(1);
+		return OperatorFinalizeResultType::FINISHED;
+	};
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(*con.context).CreateTableFunction(*con.context, info);
+	con.Commit();
+
+	auto result = con.Query("SELECT * FROM final_marker((SELECT p.i FROM range(0) p(i) "
+	                        "INNER JOIN range(0) b(i) ON p.i < b.i))");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
 TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
