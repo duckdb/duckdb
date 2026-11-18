@@ -254,7 +254,7 @@ TEST_CASE("Out-of-memory pin during append does not leave counted rows", "[tuple
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), types);
 	chunk.data[0].Sequence(0, 1, STANDARD_VECTOR_SIZE);
-	chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+	chunk.CheckCardinality(STANDARD_VECTOR_SIZE);
 	// Leaves room in the row block, which is unpinned afterwards
 	collection.Append(chunk);
 
