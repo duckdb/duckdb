@@ -86,6 +86,18 @@ explain select * from b where nextval('seq') > 0 and b.x in (select a.x from a, 
 ----
 physical_plan	<REGEX>:.*Join Type: SEMI.*Join Type: SEMI.*
 
+# a materialized CTE whose definition is volatile: as the relation the predicates read
+query II
+explain with d as materialized (select lo, nextval('seq') as n from p) select distinct a.x from a, d where a.y > d.n;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# and as the relation they filter
+query II
+explain with d as materialized (select x, y, nextval('seq') as n from a) select distinct d.x from d, p where d.n > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
 # the results, with the optimizer on and off
 # ('extension' disables nothing that is used here: that is the run with the optimizer on)
 foreach disabled extension join_to_semi_join
@@ -289,6 +301,48 @@ query I
 select nextval('seq');
 ----
 7
+
+# a materialized CTE whose definition is volatile: as the relation the predicates read
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+with d as materialized (select lo, nextval('seq') as n from p) select distinct a.x from a, d where a.y > d.n;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the sequence was advanced once per row of the CTE
+query I
+select nextval('seq');
+----
+8
+
+# and as the relation they filter
+statement ok
+create or replace sequence seq;
+
+query I rowsort
+with d as materialized (select x, y, nextval('seq') as n from a) select distinct d.x from d, p where d.n > p.lo;
+----
+0
+1
+2
+3
+4
+6
+7
+NULL
+
+# the sequence was advanced once per row of the CTE
+query I
+select nextval('seq');
+----
+11
 
 endloop
 
