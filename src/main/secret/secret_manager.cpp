@@ -352,6 +352,12 @@ void SecretManager::BindCreateSecretOptions(Context &context, CatalogTransaction
 			                      type, default_string, provider);
 		}
 
+		auto option_name = Identifier(matched_param->first.GetIdentifierName()).GetIdentifierName();
+		if (matched_param->second.id() == LogicalTypeId::ANY) {
+			// a parameter of type ANY takes the value as provided
+			bound_info.options[option_name] = param.second;
+			continue;
+		}
 		// Cast the provided value to the expected type
 		string error_msg;
 		auto cast_value = param.second.TryCastAs(context, matched_param->second, &error_msg);
@@ -360,7 +366,7 @@ void SecretManager::BindCreateSecretOptions(Context &context, CatalogTransaction
 			                      matched_param->second.ToString(), error_msg);
 		}
 
-		bound_info.options[Identifier(matched_param->first.GetIdentifierName()).GetIdentifierName()] = {*cast_value};
+		bound_info.options[option_name] = {*cast_value};
 	}
 	info.options = std::move(bound_info.options);
 }

@@ -260,6 +260,7 @@ void RegisterProviders(EnvFixture &fx, idx_t &demo_calls, ProbeLog &log) {
 	AddParameter(fx.factory, demo, "token", DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	AddParameter(fx.factory, demo, "port", DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	AddParameter(fx.factory, demo, "fail", DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	AddParameter(fx.factory, demo, "anything", DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, demo, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_secret_function_destroy(&demo);
 
@@ -560,6 +561,41 @@ TEST_CASE("V2 secret: a connection creates secrets as CREATE SECRET would", "[ca
 	duckdb_v2_secret_destroy(&created);
 	duckdb_v2_secret_destroy(&in_memory);
 	REQUIRE(RunSql(fx.conn, "ROLLBACK") == DUCKDB_V2_ERROR_NONE);
+}
+
+TEST_CASE("V2 secret: a parameter of type ANY takes the value as provided", "[capi_v2][secret]") {
+	EnvFixture fx;
+	idx_t demo_calls = 0;
+	ProbeLog log;
+	RegisterProviders(fx, demo_calls, log);
+
+	// From SQL
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET from_sql (TYPE demo, anything 42)") == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_handle secret = nullptr;
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "from_sql", 8, &secret, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret != nullptr);
+	RecordSecret(log, secret);
+	REQUIRE(log.values["anything"] == "42");
+	duckdb_v2_secret_destroy(&secret);
+
+	// From the API
+	duckdb_v2_secret_handle request = nullptr;
+	REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo", 4, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_NAME, "from_api", 8, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	auto value = MakeVarcharValue(fx.factory, "free text");
+	REQUIRE(duckdb_v2_secret_set_value(request, "anything", 8, value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	duckdb_v2_secret_handle created = nullptr;
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, &created,
+	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(created != nullptr);
+	RecordSecret(log, created);
+	REQUIRE(log.values["anything"] == "free text");
+	duckdb_v2_secret_destroy(&created);
+	duckdb_v2_secret_destroy(&request);
 }
 
 } // namespace test_capi_v2
