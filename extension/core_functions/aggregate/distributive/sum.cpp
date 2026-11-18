@@ -315,7 +315,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(FunctionBi
 	return binder.ResolveAggregateFunction(selection.GetBinding(), arguments, keyword_args);
 }
 
-void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                             const BoundAggregateFunction &function) {
 	// record whether the implementation was installed without a statistics proof (bound by name)
 	serializer.WritePropertyWithDefault<bool>(100, "fallible",
