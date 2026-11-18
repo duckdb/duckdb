@@ -1,0 +1,88 @@
+diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
+index f99cc1a2..ab7d75bd 100644
+--- a/src/functions/ducklake_compaction_functions.cpp
++++ b/src/functions/ducklake_compaction_functions.cpp
+@@ -85,9 +85,6 @@ PhysicalOperator &DuckLakeLogicalCompaction::CreatePlan(ClientContext &context,
+ 		}
+ 		transaction.ReleaseMetadataTransaction();
+ 	}
+-	if (ordered_input) {
+-		DuckLakeInsert::PreserveSortedOrder(child.Cast<PhysicalCopyToFile>());
+-	}
+ 	return planner.Make<DuckLakeCompaction>(types, table, std::move(source_files), std::move(encryption_key),
+ 	                                        partition_id, std::move(partition_values), row_id_start, child, type);
+ }
+@@ -731,7 +728,9 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
+ 	bool merge_in_order = type == CompactionType::MERGE_ADJACENT_TABLES && files_are_adjacent;
+ 	copy->table_index = binder.GenerateTableIndex();
+ 	if (!merge_in_order) {
+-		copy->preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
++		// a sorted rewrite keeps its order across the files it rotates
++		copy->preserve_order =
++		    sort_applied ? PreserveOrderType::PRESERVE_ORDER : PreserveOrderType::DONT_PRESERVE_ORDER;
+ 	} else {
+ 		auto &fs = FileSystem::GetFileSystem(context);
+ 		copy->file_path = copy->filename_pattern.CreateFilename(fs, copy->file_path, "parquet", 0);
+@@ -752,7 +751,6 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
+ 	auto compaction = make_uniq<DuckLakeLogicalCompaction>(
+ 	    binder.GenerateTableIndex(), table, std::move(actionable_source_files), std::move(copy_input.encryption_key),
+ 	    partition_id, std::move(partition_values), target_row_id_start, type);
+-	compaction->ordered_input = sort_applied && !merge_in_order;
+ 	compaction->children.push_back(std::move(copy));
+ 	return std::move(compaction);
+ }
+diff --git a/src/include/functions/ducklake_compaction_functions.hpp b/src/include/functions/ducklake_compaction_functions.hpp
+index 895101df..2aa51f45 100644
+--- a/src/include/functions/ducklake_compaction_functions.hpp
++++ b/src/include/functions/ducklake_compaction_functions.hpp
+@@ -49,8 +49,6 @@ public:
+ 	vector<Value> partition_values;
+ 	optional_idx row_id_start;
+ 	CompactionType type;
+-	//! Whether the rows reach the rotating copy in the order they must be written in
+-	bool ordered_input = false;
+ 
+ public:
+ 	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override;
+diff --git a/src/include/storage/ducklake_insert.hpp b/src/include/storage/ducklake_insert.hpp
+index fd8b6349..ab949ef5 100644
+--- a/src/include/storage/ducklake_insert.hpp
++++ b/src/include/storage/ducklake_insert.hpp
+@@ -133,8 +133,6 @@ public:
+ 	                                                 idx_t data_inlining_row_limit);
+ 	static PhysicalOperator &PlanCopyForInsert(ClientContext &context, PhysicalPlanGenerator &planner,
+ 	                                           DuckLakeCopyInput &copy_input, optional_ptr<PhysicalOperator> plan);
+-	//! Makes the copy write sorted input in order, even when it rotates files
+-	static void PreserveSortedOrder(PhysicalCopyToFile &physical_copy);
+ 	static PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner,
+ 	                                    DuckLakeTableEntry &table, string encryption_key);
+ 	static void RemoveEmptyFiles(ClientContext &context, DuckLakeInsertGlobalState &gstate);
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+index c02a20d4..aa6e9b16 100644
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -648,20 +648,11 @@ PhysicalOperator &DuckLakeInsert::PlanCopyForInsert(ClientContext &context, Phys
+ 	}
+ 	copy.SetEstimatedCardinality(1);
+ 	copy.ResolveOperatorTypes();
+-	auto &physical_copy = planner.CreatePlan(copy, *plan).Cast<PhysicalCopyToFile>();
+-	if (copy_input.ordered_input) {
+-		PreserveSortedOrder(physical_copy);
++	if (copy_input.ordered_input && !copy.partition_output && !copy.per_thread_output) {
++		// the rows are sorted: the copy keeps their order across the files it rotates
++		copy.preserve_order = PreserveOrderType::PRESERVE_ORDER;
+ 	}
+-	return physical_copy;
+-}
+-
+-void DuckLakeInsert::PreserveSortedOrder(PhysicalCopyToFile &physical_copy) {
+-	if (!physical_copy.function.execution_mode) {
+-		return;
+-	}
+-	// the rows are sorted and the batch copy operator does not rotate files by size
+-	auto execution_mode = physical_copy.function.execution_mode(true, false);
+-	physical_copy.parallel = execution_mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
++	return planner.CreatePlan(copy, *plan);
+ }
+ 
+ PhysicalOperator &DuckLakeInsert::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner,

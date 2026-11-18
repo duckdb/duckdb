@@ -112,6 +112,16 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vec
 	root_pointer = data.block_pointer;
 }
 
+idx_t RowGroupSegmentTree::GetRowGroupCountWithoutLoading() const {
+	auto l = Lock();
+	const auto loaded = GetLoadedSegmentCount(l);
+	if (finished_loading) {
+		return loaded;
+	}
+	// the row groups that are still to be read from the table data
+	return loaded + (max_row_group - current_row_group);
+}
+
 optional<LoadedSegment<RowGroup>> RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
@@ -166,6 +176,11 @@ idx_t RowGroupCollection::GetNextRowId() const {
 idx_t RowGroupCollection::GetRowGroupCount() const {
 	auto row_groups = GetRowGroups();
 	return row_groups->GetSegmentCount();
+}
+
+idx_t RowGroupCollection::GetRowGroupCountWithoutLoading() const {
+	auto row_groups = GetRowGroups();
+	return row_groups->GetRowGroupCountWithoutLoading();
 }
 
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
@@ -1032,6 +1047,7 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	auto row_groups = GetRowGroups();
+	vector<reference<RowGroup>> updated_row_groups;
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(*row_groups, ids, pos, updates.size());
@@ -1039,17 +1055,21 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 		auto &current_row_group = row_group->GetNode();
 		current_row_group.Update(transaction, table_entry, updates, ids, start, pos - start, column_ids,
 		                         row_group->GetRowStart());
+		if (updated_row_groups.empty() || &updated_row_groups.back().get() != &current_row_group) {
+			updated_row_groups.push_back(current_row_group);
+		}
+	} while (pos < updates.size());
 
-		auto l = stats.GetLock();
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto column_id = column_ids[i];
+	auto l = stats.GetLock();
+	for (auto &row_group : updated_row_groups) {
+		for (auto &column_id : column_ids) {
 			// Use EXPAND_BOUNDS here: the row group stats include original data already counted in collection stats,
 			// so additive stats (like total_string_length) cannot be maintained correctly here. EXPAND_BOUNDS
 			// correctly expands min/max bounds while invalidating total_string_length until the next checkpoint.
-			stats.MergeStats(*l, column_id.index, *current_row_group.GetStatistics(column_id.index),
+			stats.MergeStats(*l, column_id.index, *row_group.get().GetStatistics(column_id.index),
 			                 StatsMergeType::EXPAND_BOUNDS);
 		}
-	} while (pos < updates.size());
+	}
 }
 
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
