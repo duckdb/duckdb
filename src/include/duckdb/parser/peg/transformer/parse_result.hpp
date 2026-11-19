@@ -496,6 +496,9 @@ public:
 	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p, optional_idx offset,
 	                                  optional_idx length = optional_idx())
 	    : ParseResult(TYPE, offset, length), result(std::move(string_p)), string_type(string_type_p) {
+		if (string_type == SpecialStringCharacter::ESCAPE_STRING) {
+			result = DecodeEscapeString();
+		}
 	}
 
 	string GetRawString() const {
@@ -591,6 +594,7 @@ public:
 	virtual unique_ptr<ParsedExpression> ToExpression() {
 		switch (string_type) {
 		case SpecialStringCharacter::STANDARD:
+		case SpecialStringCharacter::ESCAPE_STRING:
 			return ConstantExpression::String(result);
 		case SpecialStringCharacter::NATIONAL_STRING:
 			return make_uniq<CastExpression>(LogicalType::VARCHAR, ConstantExpression::String(result));
@@ -599,8 +603,6 @@ public:
 			return ConstantExpression::Hex(result);
 		case SpecialStringCharacter::BIT_STRING:
 			return ConstantExpression::Bit(result);
-		case SpecialStringCharacter::ESCAPE_STRING:
-			return ConstantExpression::String(DecodeEscapeString());
 		}
 		return ConstantExpression::String(result);
 	}
