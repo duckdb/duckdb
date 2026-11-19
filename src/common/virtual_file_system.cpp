@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -110,11 +111,12 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::ExtractSubSystem(const string
 	return nullptr;
 }
 
-VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(make_uniq<LocalFileSystem>()) {
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
-    : file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
+    : owned_local_file_system(inner->IsLocalFileSystem() ? nullptr : make_uniq<LocalFileSystem>()),
+      file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
 	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
 }
 
@@ -165,6 +167,14 @@ static FileCompressionType CompressionFromExtension(const string &lower_path) {
 		}
 	}
 	return FileCompressionType::UNCOMPRESSED;
+}
+
+FileSystem &VirtualFileSystem::GetLocalFileSystem() {
+	auto &fs = *file_system_registry->default_fs->file_system;
+	if (fs.IsLocalFileSystem()) {
+		return fs;
+	}
+	return *owned_local_file_system;
 }
 
 optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,

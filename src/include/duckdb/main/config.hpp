@@ -198,7 +198,7 @@ public:
 	ReplacementScanList replacement_scans;
 
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
-	//! RamFS or something similar)
+	//! RamFS or something similar). Never null: defaults to a VirtualFileSystem.
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
