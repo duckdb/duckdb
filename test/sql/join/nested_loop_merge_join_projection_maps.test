@@ -1,0 +1,318 @@
+# name: test/sql/join/nested_loop_merge_join_projection_maps.test
+# description: Nested loop, piecewise merge and blockwise nested loop joins above an outer join with a subquery in its ON clause
+# group: [join]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output = 'PHYSICAL_ONLY';
+
+# the subquery adds a column to the outer join that the join above it has to prune again
+
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+statement ok
+INSERT INTO t0 VALUES (1), (2);
+
+query II
+EXPLAIN SELECT t0.c0, t2.c0 FROM t0 LEFT JOIN t0 t1 ON (1 IN (SELECT 1)) JOIN t0 t2 ON (t0.c0 <> t2.c0) ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+query II
+SELECT t0.c0, t2.c0 FROM t0 LEFT JOIN t0 t1 ON (1 IN (SELECT 1)) JOIN t0 t2 ON (t0.c0 <> t2.c0) ORDER BY ALL;
+----
+1	2
+1	2
+2	1
+2	1
+
+statement ok
+CREATE OR REPLACE TABLE t0(c0 INTEGER);
+
+statement ok
+INSERT INTO t0 VALUES (1);
+
+query I
+SELECT 1 FROM t0 AS x1 FULL JOIN t0 AS x2 ON ((SELECT 0) <> (SELECT count(*) FROM t0)) JOIN (VALUES (7),(8),(9)) AS x3(c0) ON (x2.c0 <> x3.c0);
+----
+1
+1
+1
+
+statement ok
+CREATE OR REPLACE TABLE t0(c0 INTEGER);
+
+statement ok
+INSERT INTO t0 SELECT range FROM range(5);
+
+query II
+EXPLAIN SELECT count(*) FROM t0 AS x1 LEFT JOIN t0 AS x2 ON (1 IN (SELECT 1)) JOIN t0 AS x3 ON (x1.c0 < x3.c0);
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+query I
+SELECT count(*) FROM t0 AS x1 LEFT JOIN t0 AS x2 ON (1 IN (SELECT 1)) JOIN t0 AS x3 ON (x1.c0 < x3.c0);
+----
+50
+
+query II
+EXPLAIN SELECT x1.c0, x2.c0, x3.c0 FROM t0 AS x1 RIGHT JOIN t0 AS x2 ON ((SELECT 3) = x1.c0) JOIN t0 AS x3 ON (x2.c0 < x3.c0) ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+query III
+SELECT x1.c0, x2.c0, x3.c0 FROM t0 AS x1 RIGHT JOIN t0 AS x2 ON ((SELECT 3) = x1.c0) JOIN t0 AS x3 ON (x2.c0 < x3.c0) ORDER BY ALL;
+----
+3	0	1
+3	0	2
+3	0	3
+3	0	4
+3	1	2
+3	1	3
+3	1	4
+3	2	3
+3	2	4
+3	3	4
+
+# a blockwise nested loop join where the pruned column has the type of its neighbours
+
+query II
+SELECT x1.c0, x2.c0 FROM t0 AS x1 RIGHT JOIN t0 AS x2 ON ((SELECT 3) = x1.c0) SEMI JOIN t0 AS x3 ON (x2.c0 + 1 = x3.c0 OR x1.c0 > x3.c0 + 10) ORDER BY ALL;
+----
+3	0
+3	1
+3	2
+3	3
+
+query II
+SELECT x1.c0, x2.c0 FROM t0 AS x1 RIGHT JOIN t0 AS x2 ON ((SELECT 3) = x1.c0) ANTI JOIN t0 AS x3 ON (x2.c0 + 1 = x3.c0 OR x1.c0 > x3.c0 + 10) ORDER BY ALL;
+----
+3	4
+
+# the pruned column sits between columns of other types
+
+statement ok
+CREATE TABLE tbl(i INTEGER, s VARCHAR, d DOUBLE);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a', 0.5), (2, 'b', 1.5), (3, 'c', 2.5), (4, 'd', 3.5), (NULL, NULL, NULL);
+
+statement ok
+SET nested_loop_join_threshold = 0;
+
+query II
+EXPLAIN SELECT x1.s, x2.d, x3.i FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) JOIN tbl AS x3 ON (x1.i < x3.i) ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+statement ok
+SET nested_loop_join_threshold = 100;
+
+query II
+EXPLAIN SELECT x1.s, x2.d, x3.i FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) JOIN tbl AS x3 ON (x1.i < x3.i) ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+# a merge join at threshold 0, a nested loop join at threshold 100
+foreach threshold 0 100
+
+statement ok
+SET nested_loop_join_threshold = {threshold};
+
+query TRI
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) JOIN tbl AS x3 ON (x1.i < x3.i) ORDER BY ALL;
+----
+a	NULL	2
+a	NULL	3
+a	NULL	4
+b	NULL	3
+b	NULL	4
+c	2.5	4
+c	3.5	4
+
+query TRI
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 RIGHT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) LEFT JOIN tbl AS x3 ON (x2.d > x3.d) ORDER BY ALL;
+----
+c	2.5	1
+c	2.5	2
+c	3.5	1
+c	3.5	2
+c	3.5	3
+NULL	0.5	NULL
+NULL	1.5	1
+NULL	NULL	NULL
+
+query TRI
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 FULL JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) FULL JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+a	NULL	NULL
+b	NULL	NULL
+c	2.5	4
+c	3.5	NULL
+d	NULL	NULL
+NULL	0.5	2
+NULL	0.5	3
+NULL	0.5	4
+NULL	1.5	3
+NULL	1.5	4
+NULL	NULL	1
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) SEMI JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+c	2.5
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) ANTI JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+a	NULL
+b	NULL
+c	3.5
+d	NULL
+NULL	NULL
+
+endloop
+
+# a join condition that is not a comparison between both sides gets a blockwise nested loop join
+
+query II
+EXPLAIN SELECT x1.s, x2.d FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) SEMI JOIN tbl AS x3 ON (x1.i + x3.i <> x2.i * 2) ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*SEMI.*
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) SEMI JOIN tbl AS x3 ON (x1.i + x3.i <> x2.i * 2) ORDER BY ALL;
+----
+c	2.5
+c	3.5
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 LEFT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) ANTI JOIN tbl AS x3 ON (x1.i + x3.i <> x2.i * 2) ORDER BY ALL;
+----
+a	NULL
+b	NULL
+d	NULL
+NULL	NULL
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 RIGHT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) SEMI JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+c	2.5
+c	3.5
+NULL	1.5
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 RIGHT JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) ANTI JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+NULL	0.5
+NULL	NULL
+
+query TR
+SELECT x1.s, x2.d FROM tbl AS x1 FULL JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) SEMI JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+a	NULL
+b	NULL
+c	2.5
+c	3.5
+NULL	1.5
+
+# every outer join below every join type above gives the same rows with and without the subquery,
+# also with the optimizer disabled, where the blockwise nested loop join has to prune for every join type
+
+foreach optimizer enable_optimizer disable_optimizer
+
+statement ok
+PRAGMA {optimizer};
+
+foreach threshold 0 100
+
+statement ok
+SET nested_loop_join_threshold = {threshold};
+
+foreach lower LEFT RIGHT FULL
+
+foreach upper INNER LEFT RIGHT FULL
+
+query TRI nosort range_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+
+query TRI nosort range_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+
+query TRI nosort unequal_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s <> x3.s) ORDER BY ALL;
+----
+
+query TRI nosort unequal_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s <> x3.s) ORDER BY ALL;
+----
+
+query TRI nosort blockwise_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+
+query TRI nosort blockwise_rows
+SELECT x1.s, x2.d, x3.i FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+
+reset label range_rows
+
+reset label unequal_rows
+
+reset label blockwise_rows
+
+endloop
+
+foreach upper SEMI ANTI
+
+query TR nosort range_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+
+query TR nosort range_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x2.i < x3.i) ORDER BY ALL;
+----
+
+query TR nosort unequal_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s <> x3.s) ORDER BY ALL;
+----
+
+query TR nosort unequal_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s <> x3.s) ORDER BY ALL;
+----
+
+query TR nosort blockwise_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON (3 = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+
+query TR nosort blockwise_rows
+SELECT x1.s, x2.d FROM tbl AS x1 {lower} JOIN tbl AS x2 ON ((SELECT 3) = x1.i AND x2.i > 2) {upper} JOIN tbl AS x3 ON (x1.s < x3.s OR x2.d > x3.d) ORDER BY ALL;
+----
+
+reset label range_rows
+
+reset label unequal_rows
+
+reset label blockwise_rows
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+RESET nested_loop_join_threshold;
