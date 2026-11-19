@@ -73,14 +73,14 @@ CREATE EXTERNAL RESOURCE nobody . provides.this AS r;
 ----
 <REGEX>:Parser Error.*
 
-# a colon, as in aws:cloudformation:quack-on-ec2
+# a colon, as in aws:cloudformation:stack
 statement error
-CREATE EXTERNAL RESOURCE 'aws:cloudformation:quack-on-ec2' AS r;
+CREATE EXTERNAL RESOURCE 'aws:cloudformation:stack' AS r;
 ----
-<REGEX>:.*provided by the aws extension.*
+<REGEX>:.*unknown resource type "aws:cloudformation:stack".*
 
 statement error
-CREATE EXTERNAL RESOURCE aws:cloudformation:quack-on-ec2 AS r;
+CREATE EXTERNAL RESOURCE aws:cloudformation:stack AS r;
 ----
 <REGEX>:Parser Error.*
 
