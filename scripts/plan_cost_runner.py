@@ -2,17 +2,20 @@ import argparse
 import glob
 import json
 import os
+import re
+import statistics
 import subprocess
 import sys
 
 if __package__:
+    from .regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
     from .regression.local_extensions import extension_loading_args
 else:
+    from regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
     from regression.local_extensions import extension_loading_args
 
 
-OLD_DB_NAME = "old.duckdb"
-NEW_DB_NAME = "new.duckdb"
+DB_NAME = "plan_cost.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"
 
 ENABLE_PROFILING = "PRAGMA enable_profiling=json"
@@ -91,25 +94,29 @@ class PlanCost:
         self.probe_side += other.probe_side
         return self
 
+    def more_output_and_build_work(self, other):
+        return self.total > other.total and self.build_side > other.build_side and self.probe_side >= other.probe_side
+
+    def needs_timing(self, other):
+        return (
+            self != other and not self.more_output_and_build_work(other) and not other.more_output_and_build_work(self)
+        )
+
     def __gt__(self, other):
-        if self == other or self.total < other.total:
+        if self == other:
             return False
-        # if the total intermediate cardinalities is greater, also inspect time.
-        # it's possible a plan reordering increased cardinalities, but overall execution time
-        # was not greatly affected
         total_card_increased = self.total > other.total
         build_card_increased = self.build_side > other.build_side
-        if total_card_increased and build_card_increased:
+        probe_card_increased = self.probe_side > other.probe_side
+        if not (total_card_increased or build_card_increased or probe_card_increased):
+            return False
+        if self.more_output_and_build_work(other):
             return True
-        # we know the total cardinality is either the same or higher and the build side has not increased
-        # in this case fall back to the timing. It's possible that even if the probe side is higher
-        # since the tuples are in flight, the plan executes faster
+        # Use timings to evaluate tradeoffs between output rows and build/probe work.
         return self.time > other.time * 1.03
 
     def __lt__(self, other):
-        if self == other:
-            return False
-        return not (self > other)
+        return other > self
 
     def __eq__(self, other):
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
@@ -146,13 +153,19 @@ def get_root_operator(data) -> dict:
     return data['children'][0]
 
 
+def get_query_time(data) -> float:
+    if isinstance(data.get('query'), dict):
+        return data['query']['total_time']
+    if 'latency' in data:
+        return data['latency']
+    return data['timing']
+
+
 def is_measured_join(op) -> bool:
     if get_physical_operator_type(op) != 'HASH_JOIN':
         return False
     extra_info = op.get('extra_info', {})
     if 'Join Type' not in extra_info:
-        return False
-    if extra_info['Join Type'].startswith('MARK'):
         return False
     return True
 
@@ -215,7 +228,46 @@ def query_plan_cost(cli, dbname, query):
         raise e
     with open(PROFILE_FILENAME, 'r') as file:
         data = json.load(file)
-        return op_inspect(get_root_operator(data))
+        cost = op_inspect(get_root_operator(data))
+        cost.time = get_query_time(data)
+        return cost
+
+
+def query_timings(cli, dbname, query, runs):
+    # Warm up in the same process before enabling the timer.
+    command = [cli, '--readonly', dbname, '-c', query, '-c', '.timer on 6']
+    for _ in range(runs):
+        command.extend(['-c', query])
+    completed = run_command(command, capture_output=True, text=True, timeout=600)
+    if completed.returncode:
+        raise RuntimeError(f"Query timing failed for {cli}:\n{completed.stderr}")
+    timings = re.findall(r'^Run Time \(s\): real ([0-9.]+)', completed.stdout, re.MULTILINE)
+    if len(timings) != runs:
+        raise RuntimeError(f"Expected {runs} query timings from {cli}, got {len(timings)}:\n{completed.stderr}")
+    return [float(timing) for timing in timings]
+
+
+def measure_query_timings(old, new, query):
+    def measure(runs):
+        old_timings = []
+        new_timings = []
+        for index, batch_size in enumerate(sampling_batch_sizes(runs)):
+            variants = [(old, old_timings), (new, new_timings)]
+            if index % 2:
+                variants.reverse()
+            for cli, timings in variants:
+                timings.extend(query_timings(cli, DB_NAME, query, batch_size))
+            print(
+                f"  batch {index + 1} ({'new/old' if index % 2 else 'old/new'}): "
+                f"median old={statistics.median(old_timings[-batch_size:]):.6f}s, "
+                f"new={statistics.median(new_timings[-batch_size:]):.6f}s"
+            )
+        return benchmark_measurement(old_timings, new_timings)
+
+    measurement = measure(10)
+    if measurement.ratio < 0.97 or measurement.ratio > 1.03:
+        measurement = measure(confirmation_run_count(measurement))
+    return measurement
 
 
 def print_banner(text):
@@ -257,8 +309,8 @@ def main():
     new = args.new
     benchmark_dir = args.dir
 
-    init_db(old, OLD_DB_NAME, benchmark_dir, args.extension)
-    init_db(new, NEW_DB_NAME, benchmark_dir, args.extension)
+    # Compare both readers on the same persisted data and statistics.
+    init_db(old, DB_NAME, benchmark_dir, args.extension)
 
     improvements = []
     regressions = []
@@ -274,8 +326,18 @@ def main():
         with open(f, "r") as file:
             query = file.read()
 
-        old_cost = query_plan_cost(old, OLD_DB_NAME, query)
-        new_cost = query_plan_cost(new, NEW_DB_NAME, query)
+        old_cost = query_plan_cost(old, DB_NAME, query)
+        new_cost = query_plan_cost(new, DB_NAME, query)
+
+        if old_cost.needs_timing(new_cost):
+            print(f"{query_name}: comparing hot query timings")
+            measurement = measure_query_timings(old, new, query)
+            old_cost.time = measurement.old_timing
+            new_cost.time = measurement.new_timing
+            print(
+                f"{query_name}: {measurement.runs} hot samples per binary, "
+                f"median {old_cost.time:.6f}s -> {new_cost.time:.6f}s"
+            )
 
         if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
@@ -293,8 +355,7 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
+    os.remove(DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
