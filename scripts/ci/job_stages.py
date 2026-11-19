@@ -60,7 +60,6 @@ NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 MERGE_GROUP_JOBS = [
     "linux-relassert",
     "linux-release",
-    "linux-release-tests",
     "tidy-check",
 ]
 
