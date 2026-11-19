@@ -208,6 +208,7 @@ void TransactionContext::ImportSnapshot(const string &snapshot_id) {
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
 	SetCurrentTransaction(nullptr);
+	active_query_id = MAXIMUM_QUERY_ID;
 }
 
 idx_t TransactionContext::GetActiveQuery() {
@@ -228,7 +229,6 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}
 	active_query_id = query_number;
-	current_transaction->SetActiveQuery(query_number);
 }
 
 } // namespace duckdb

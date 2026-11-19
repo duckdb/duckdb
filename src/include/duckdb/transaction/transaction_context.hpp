@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
@@ -86,8 +87,8 @@ private:
 	//! Guards replacing current_transaction against reads from other connections (GetExportedTransaction)
 	mutex current_transaction_lock;
 	shared_ptr<MetaTransaction> current_transaction;
-	//! The query id of the current query of this connection
-	transaction_t active_query_id = MAXIMUM_QUERY_ID;
+	//! The query number of the query currently running on this connection (MAXIMUM_QUERY_ID if none)
+	atomic<transaction_t> active_query_id = MAXIMUM_QUERY_ID;
 	ErrorData autocheckpoint_error;
 
 	//! Leaves the transaction. Returns true if the caller is the last participant and has to end it
