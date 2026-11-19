@@ -57,8 +57,6 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	encoding_functions = make_uniq<EncodingFunctionSet>();
-	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
 	type_manager = make_uniq<TypeManager>(*this);
