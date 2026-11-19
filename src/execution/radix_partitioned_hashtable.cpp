@@ -17,6 +17,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -132,9 +133,10 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
       block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
       any_abandoned(false), radix_ht(radix_ht_p),
-      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())), config(*this),
-      stored_allocators_size(0), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0), size_before_combining(0), max_partition_size(0) {
+      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())),
+      force_external(Settings::Get<DebugForceExternalSetting>(context)), config(*this), stored_allocators_size(0),
+      finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
+      size_before_combining(0), max_partition_size(0) {
 	spill_phase = SpillPhase::NATIVE_ALLOWED;
 
 	SetReservationFloor(context, MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
@@ -622,7 +624,7 @@ bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &l
 		// every current state is inline, and exporting would only cost
 		return false;
 	}
-	if (gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
+	if (gstate.force_external || gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
 		return true;
 	}
 	if (!gstate.external) {
