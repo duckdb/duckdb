@@ -18,10 +18,11 @@ struct CSVStateMachineOptions {
 	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
 	                       NewLineIdentifier new_line_p, bool strict_mode_p,
 	                       CSVEscapeMode escape_mode_p = CSVEscapeMode::ALL,
-	                       CSVQuoteMode quote_mode_p = CSVQuoteMode::STANDARD, bool doubled_quotes_p = false)
+	                       CSVQuoteMode quote_mode_p = CSVQuoteMode::STANDARD, bool doubled_quotes_p = false,
+	                       CSVEmbeddedQuote embedded_quote_p = CSVEmbeddedQuote::DATA)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
 	      strict_mode(strict_mode_p), escape_mode(escape_mode_p), quote_mode(quote_mode_p),
-	      doubled_quotes(doubled_quotes_p) {};
+	      doubled_quotes(doubled_quotes_p), embedded_quote(embedded_quote_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
@@ -42,12 +43,14 @@ struct CSVStateMachineOptions {
 	//! A doubled quote is one quote also when the escape character differs from the quote, in a quoted field or not,
 	//! as opencsv reads it
 	CSVOption<bool> doubled_quotes = false;
+	//! What a quote character in the middle of a field means
+	CSVOption<CSVEmbeddedQuote> embedded_quote = CSVEmbeddedQuote::DATA;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
 		       new_line == other.new_line && comment == other.comment && strict_mode == other.strict_mode &&
 		       escape_mode == other.escape_mode && quote_mode == other.quote_mode &&
-		       doubled_quotes == other.doubled_quotes;
+		       doubled_quotes == other.doubled_quotes && embedded_quote == other.embedded_quote;
 	}
 };
 } // namespace duckdb

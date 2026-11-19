@@ -1263,6 +1263,14 @@
         "property": "options.dialect_options.state_machine_options.doubled_quotes",
         "type": "CSVOption<bool>",
         "default": "CSVOption<bool>(false)"
+      },
+      {
+        "id": 149,
+        "version": "v2.1.0",
+        "name": "embedded_quote",
+        "property": "options.dialect_options.state_machine_options.embedded_quote",
+        "type": "CSVOption<CSVEmbeddedQuote>",
+        "default": "CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA)"
       }
     ],
     "constructor": [

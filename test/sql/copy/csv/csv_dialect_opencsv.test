@@ -78,13 +78,14 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': '
 2
 
 # dialect 'opencsv': the line break ends the record, the open quote reads its field as NULL, and the next line is
-# its own record - in parallel, since every line break is a record boundary
+# its own record - in parallel, since every line break is a record boundary; the lone quote in 'b"' toggles into a
+# quoted section too, so that line's first field is also unterminated
 query TTT
 SELECT * FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': 'VARCHAR', 'val': 'VARCHAR', 'n': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', null_padding=true, header=false, auto_detect=false) ORDER BY id NULLS FIRST;
 ----
+NULL	NULL	NULL
 1	NULL	NULL
 2	ok	8
-b"	7	NULL
 
 # an unclosed quote in the record's last field needs no null padding
 statement ok
@@ -177,7 +178,8 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER
 6	a"b"c	12
 7	a"	13
 
-# a doubled quote in an unquoted field is one quote too; a lone quote in a field stays data
+# a doubled quote in an unquoted field is one quote too; a lone quote in a field toggles into a quoted section, so
+# an unclosed one reads the field as NULL
 statement ok
 COPY (SELECT * FROM (VALUES ('8,a""b,14'), ('9,a"b,15'), ('10,a""b""c,16'), ('11,a"",17')) t(line)) TO '{TEST_DIR}/dialect_field_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -185,7 +187,7 @@ query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_field_doubled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
 ----
 8	a"b	14
-9	a"b	15
+9	NULL	NULL
 10	a"b"c	16
 11	a"	17
 
@@ -216,3 +218,43 @@ query I
 SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', header=false, auto_detect=false);
 ----
 2
+
+# a quoted section that reopens and closes inside a field keeps the field's raw bytes; OpenCSVSerde drops the
+# quotes its position rule treats as openers or closers, a known divergence refined in a follow-up
+statement ok
+COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+12	a"b"c	18
+13	"a"b	19
+14	a"b" x	20
+
+# the same file read over tiny buffers, so the toggled fields cross buffer boundaries
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, buffer_size=61) ORDER BY id;
+----
+12	a"b"c	18
+13	"a"b	19
+14	a"b" x	20
+
+# an unclosed quoted section in the middle of the record reads its field as NULL and pads the rest
+statement ok
+COPY (SELECT * FROM (VALUES ('15,q"r,21'), ('16,ok,22'), ('17,z"')) t(line)) TO '{TEST_DIR}/dialect_toggled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+15	NULL	NULL
+16	ok	22
+17	NULL	NULL
+
+# an escape inside a toggled-open section still escapes the quote
+statement ok
+COPY (SELECT '18,a"b\"c"d,24' AS line) TO '{TEST_DIR}/dialect_toggled_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled_escape.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
+----
+18	a"b"c"d	24

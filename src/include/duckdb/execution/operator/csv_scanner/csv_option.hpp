@@ -38,6 +38,15 @@ enum class CSVQuoteMode : uint8_t {
 	LINES = 1
 };
 
+//! What a quote character in the middle of a field means
+enum class CSVEmbeddedQuote : uint8_t {
+	//! A plain data byte
+	DATA = 0,
+	//! The quote toggles the quote state, as opencsv's embedded quote rule does, so a lone quote in a field opens a
+	//! quoted section and an unclosed one reads the field as NULL
+	OPENCSV = 1
+};
+
 //! A named CSV dialect: a preset over the internal parsing options
 enum class CSVDialect : uint8_t {
 	//! DuckDB's own CSV reading, governed by the individual options

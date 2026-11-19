@@ -583,8 +583,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
 		// a space is field content, as in opencsv, so a quote after it is a quote in a field
 		const vector<uint8_t> space_states {
-		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
-		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN), static_cast<uint8_t>(CSVState::NOT_SET),
+		    static_cast<uint8_t>(CSVState::DELIMITER),        static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN),  static_cast<uint8_t>(CSVState::NOT_SET),
 		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE), static_cast<uint8_t>(CSVState::FIELD_START)};
 		for (const auto state : space_states) {
 			transition_array[' '][state] = CSVState::STANDARD;
@@ -600,6 +600,27 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (comment != '\0') {
 			transition_array[comment][field_quote] = CSVState::COMMENT;
 		}
+	}
+
+	// 12.4) Embedded quotes (embedded_quote 'opencsv'): a lone quote in a field toggles the quote state, as
+	// opencsv's embedded quote rule does, so the section it opens runs to the record end unless a quote closes it,
+	// and after a closing quote the field continues as plain text
+	if (state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV && quote != '\0' &&
+	    quote != escape) {
+		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::QUOTED);
+		transition_array[quote][field_quote] = CSVState::STANDARD;
+		if (enable_unquoted_escape) {
+			transition_array[escape][field_quote] = CSVState::ESCAPE;
+		}
+		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		InitializeTransitionArray(transition_array, CSVState::UNQUOTED, CSVState::STANDARD);
+		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
+		if (enable_unquoted_escape) {
+			transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::FIELD_START;
+		}
+		split_on_delimiter(CSVState::UNQUOTED);
+		end_record_on_line_break(CSVState::UNQUOTED);
 	}
 
 	// 13) Escaped Return State

@@ -1093,6 +1093,24 @@ CSVDialect EnumUtil::FromString<CSVDialect>(const char *value) {
 	return static_cast<CSVDialect>(StringUtil::StringToEnum(GetCSVDialectValues(), 2, "CSVDialect", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCSVEmbeddedQuoteValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CSVEmbeddedQuote::DATA), "DATA" },
+		{ static_cast<uint32_t>(CSVEmbeddedQuote::OPENCSV), "OPENCSV" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CSVEmbeddedQuote>(CSVEmbeddedQuote value) {
+	return StringUtil::EnumToString(GetCSVEmbeddedQuoteValues(), 2, "CSVEmbeddedQuote", static_cast<uint32_t>(value));
+}
+
+template<>
+CSVEmbeddedQuote EnumUtil::FromString<CSVEmbeddedQuote>(const char *value) {
+	return static_cast<CSVEmbeddedQuote>(StringUtil::StringToEnum(GetCSVEmbeddedQuoteValues(), 2, "CSVEmbeddedQuote", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCSVEscapeModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CSVEscapeMode::ALL), "ALL" },

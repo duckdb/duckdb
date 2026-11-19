@@ -742,6 +742,9 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
 		serializer.WritePropertyWithDefault<CSVOption<bool>>(148, "doubled_quotes", options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));
+	}
 }
 
 SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -832,6 +835,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", result.options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVDialect>>(147, "dialect", result.options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", result.options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));
 	return result;
 }
 

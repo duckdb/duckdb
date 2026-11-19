@@ -299,14 +299,39 @@ public:
 		if (state_machine.state_machine_options.quote_mode.GetValue() != CSVQuoteMode::LINES) {
 			return false;
 		}
-		const auto current_inside = states.states[1] == CSVState::QUOTED || states.states[1] == CSVState::ESCAPE;
-		const auto previous_inside = states.states[0] == CSVState::QUOTED || states.states[0] == CSVState::ESCAPE;
+		const auto current_inside = states.states[1] == CSVState::QUOTED || states.states[1] == CSVState::ESCAPE ||
+		                            states.states[1] == CSVState::FIELD_QUOTE;
+		const auto previous_inside = states.states[0] == CSVState::QUOTED || states.states[0] == CSVState::ESCAPE ||
+		                             states.states[0] == CSVState::FIELD_QUOTE;
 		const auto record_end =
 		    states.states[1] == CSVState::RECORD_SEPARATOR || states.states[1] == CSVState::CARRIAGE_RETURN;
 		return current_inside || (previous_inside && record_end);
 	}
 	//! quote_mode 'lines': the record ended inside an open quote, so the field in progress is NULL
 	void AddUnterminatedQuoteNull();
+	//! embedded_quote 'opencsv': a quoted section that does not enclose the whole field reads from its raw bytes
+	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
+		if (!quoted || size == 0 ||
+		    state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::OPENCSV) {
+			return;
+		}
+		// inert escapes before the opening quote are not part of the value
+		idx_t start = 0;
+		if (state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::OPENCSV) {
+			const auto escape_character = state_machine.state_machine_options.escape.GetValue();
+			while (start < size && value_ptr[start] == escape_character) {
+				start++;
+			}
+		}
+		const auto quote_character = state_machine.state_machine_options.quote.GetValue();
+		if (size - start >= 2 && value_ptr[start] == quote_character && value_ptr[size - 1] == quote_character) {
+			// the quoted section encloses the whole field, so the regular quoted path reads it
+			return;
+		}
+		quoted = false;
+		// the raw bytes may hold doubled quotes or escapes, which the escaped path resolves
+		escaped = true;
+	}
 	//! Moves last_position past the newline that ends the row at buffer_pos
 	inline void SetLastPositionAfterNewline(idx_t buffer_pos);
 	//! Keeps the position of the current row for the error messages of Flush

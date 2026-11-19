@@ -692,6 +692,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		// pinned, so parallel boundary detection searches with the dialect's own rules rather than a strict table
 		state_machine_options.strict_mode.ChangeSetByUserTrue();
 		state_machine_options.doubled_quotes.Set(true, false);
+		state_machine_options.embedded_quote.Set(CSVEmbeddedQuote::OPENCSV, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
 	if (buffer_size_option.IsSetByUser() && maximum_line_size.IsSetByUser()) {

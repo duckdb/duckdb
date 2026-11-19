@@ -702,6 +702,8 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
+	result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+	                                   result.HandleMultiDelimiter(buffer_pos));
 	if (result.quoted) {
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
@@ -1021,7 +1023,14 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			// quote_mode 'lines': the line break ended the record inside an open quote
 			result.AddUnterminatedQuoteNull();
 		} else if (result.quoted) {
-			AddQuotedValue(result, buffer_pos);
+			result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+			                                   buffer_pos - result.last_position.buffer_pos);
+			if (result.quoted) {
+				AddQuotedValue(result, buffer_pos);
+			} else {
+				AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
+				                        buffer_pos - result.last_position.buffer_pos, false);
+			}
 		} else {
 			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
@@ -1644,6 +1653,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;
 		bool removed_extra_delimiter_bytes = false;
+		if (!result.comment && over_buffer_string.size() >= extra_delimiter_bytes) {
+			result.DemoteUnenclosedQuotedValue(over_buffer_string.c_str(),
+			                                   over_buffer_string.size() - extra_delimiter_bytes);
+		}
 		if (result.quoted && !result.comment) {
 			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
 			while (length > 0 && result.ignore_empty_values &&
