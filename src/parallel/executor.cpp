@@ -214,7 +214,7 @@ bool Executor::NextExecutor() {
 		return false;
 	}
 	root_pipelines[root_pipeline_idx]->Reset();
-	root_executor = CreatePipelineExecutor(*root_pipelines[root_pipeline_idx]);
+	root_executor = make_uniq<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
 	root_pipeline_idx++;
 	return true;
 }
@@ -266,6 +266,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		physical_plan = &plan;
 
 		this->profiler = context.GetContext().GetQueryProfilerPtr();
+		track_pipeline_executors = profiler && profiler->IsEnabled();
 		this->producer = scheduler.CreateProducer();
 
 		auto verify_progress = Settings::Get<DebugVerifyProgressSetting>(context);
@@ -370,6 +371,9 @@ void Executor::CancelTasks() {
 
 shared_ptr<PipelineExecutor> Executor::CreatePipelineExecutor(Pipeline &pipeline, optional_idx reserved_batch_index) {
 	auto pipeline_executor = make_shared_ptr<PipelineExecutor>(context, pipeline, reserved_batch_index);
+	if (!track_pipeline_executors) {
+		return pipeline_executor;
+	}
 	lock_guard<mutex> guard(pipeline_executors_lock);
 	if (pipeline_executors.size() >= pipeline_executors_prune_size) {
 		pipeline_executors.erase(
@@ -407,6 +411,7 @@ void Executor::FlushUnfinishedPipelineExecutors() {
 		try {
 			pipeline_executor->FlushUnfinishedProfile();
 		} catch (...) { // NOLINT
+			// the metrics are best effort: an error while collecting them must not replace the query's own error
 		}
 	}
 	// destroyed here, while the pipelines and global states they refer to are still alive
@@ -627,6 +632,13 @@ void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
 	cancelled = false;
+	{
+		// the unfinished executors refer to the pipelines, so they are released first
+		lock_guard<mutex> guard(pipeline_executors_lock);
+		pipeline_executors.clear();
+		pipeline_executors_prune_size = 0;
+		unfinished_pipeline_executors.clear();
+	}
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;
@@ -638,10 +650,6 @@ void Executor::Reset() {
 	events.clear();
 	to_be_rescheduled_tasks.clear();
 	execution_result = QueryResultState::NOT_READY;
-	lock_guard<mutex> guard(pipeline_executors_lock);
-	pipeline_executors.clear();
-	pipeline_executors_prune_size = 0;
-	unfinished_pipeline_executors.clear();
 }
 
 shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline &current, PhysicalOperator &op) {

@@ -1,11 +1,11 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 
 #include "duckdb/common/bit_utils.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 
 namespace duckdb {

@@ -78,8 +78,13 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 }
 
 void PipelineExecutor::FlushProfile() {
+	if (profile_flushed) {
+		return;
+	}
+	profile_flushed = true;
 	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
 	if (!source_profiling_finalized && local_source_state && global_source_state) {
+		source_profiling_finalized = true;
 		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
 	}
 	// flush all query profiler info
@@ -110,6 +115,7 @@ void PipelineExecutor::Reset() {
 	external_batch_initialized = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
+	profile_flushed = false;
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
 	should_flush_current_idx = true;
 	unsampled_progress_rows = 0;

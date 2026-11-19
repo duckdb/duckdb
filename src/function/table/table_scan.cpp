@@ -104,6 +104,16 @@ enum class TableScanScheduling { UNINITIALIZED, DIRECT, ORDERED, AFFINITY };
 struct TableScanMetricsLocalState : public LocalTableFunctionState {
 	idx_t reported_rows_scanned = 0;
 	idx_t reported_row_groups_scanned = 0;
+
+	//! The part of a running count that has not been reported yet. The metrics of a scan can be collected more than
+	//! once, when its pipeline ends unfinished and when the query is cleaned up, so each call reports only the growth.
+	//! A count below the reported one means the counter started over, for example in a local state that was reused,
+	//! so all of it is new.
+	static idx_t TakeUnreported(idx_t count, idx_t &reported) {
+		auto result = count >= reported ? count - reported : count;
+		reported = count;
+		return result;
+	}
 };
 
 struct TableScanLocalState : public TableScanMetricsLocalState {
@@ -1233,21 +1243,14 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
-//! The part of a running count that has not been reported yet
-static idx_t TakeUnreported(idx_t count, idx_t &reported) {
-	auto result = count >= reported ? count - reported : count;
-	reported = count;
-	return result;
-}
-
 void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	auto &gstate = input.global_state->Cast<TableScanGlobalState>();
 	auto &local_state = *input.local_state;
 	auto &reported = local_state.Cast<TableScanMetricsLocalState>();
-	input.operator_metrics.rows_scanned +=
-	    TakeUnreported(gstate.TableScanRowsScanned(local_state), reported.reported_rows_scanned);
-	input.operator_metrics.row_groups_scanned +=
-	    TakeUnreported(gstate.TableScanRowGroupsScanned(local_state), reported.reported_row_groups_scanned);
+	input.operator_metrics.rows_scanned += TableScanMetricsLocalState::TakeUnreported(
+	    gstate.TableScanRowsScanned(local_state), reported.reported_rows_scanned);
+	input.operator_metrics.row_groups_scanned += TableScanMetricsLocalState::TakeUnreported(
+	    gstate.TableScanRowGroupsScanned(local_state), reported.reported_row_groups_scanned);
 	input.operator_metrics.total_row_groups_to_scan = gstate.total_row_groups_to_scan;
 }
 

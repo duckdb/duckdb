@@ -107,10 +107,9 @@ public:
 	bool IsFinishedProcessing() const;
 
 private:
-	//! Finalize the operator and source metrics and merge them into the query profile
+	//! Finalize the operator and source metrics and merge them into the query profile, at most once
 	void FlushProfile();
 
-private:
 	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
 	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
 	enum class PendingBatchAdvanceState : uint8_t { NONE, NEXT_BATCH, MINIMUM_UPDATE };
@@ -148,6 +147,8 @@ private:
 	stack<idx_t> in_process_operators;
 	//! Whether or not the pipeline has been finalized
 	bool finalized = false;
+	//! Whether the metrics of this executor were merged into the query profile, so that they are not merged twice
+	bool profile_flushed = false;
 	//! Whether or not the pipeline has finished processing
 	int32_t finished_processing_idx = -1;
 	//! Partition info that is used by this executor

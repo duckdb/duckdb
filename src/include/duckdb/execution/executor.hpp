@@ -99,6 +99,10 @@ public:
 	                                                    optional_idx reserved_batch_index = optional_idx());
 	//! Keep the executor of a task that ends without finishing until its metrics are flushed
 	void AddUnfinishedPipelineExecutor(shared_ptr<PipelineExecutor> pipeline_executor);
+	//! Whether pipeline executors are tracked so their metrics survive a failure; only when profiling is enabled
+	bool TracksPipelineExecutors() const {
+		return track_pipeline_executors;
+	}
 
 	//! Reschedules a task that was blocked
 	void RescheduleTask(shared_ptr<Task> &task);
@@ -203,7 +207,7 @@ private:
 	//! The recursive CTE's in this query plan
 	vector<reference<PhysicalOperator>> recursive_ctes;
 	//! The pipeline executor for the root pipeline
-	shared_ptr<PipelineExecutor> root_executor;
+	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index
 	idx_t root_pipeline_idx;
 	//! The producer of this query
@@ -245,6 +249,8 @@ private:
 	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;
 
+	//! Whether pipeline executors are tracked, set when the query starts: only when profiling is enabled
+	bool track_pipeline_executors = false;
 	mutex pipeline_executors_lock;
 	//! The pipeline executors created for this query; expired entries are pruned as executors are added
 	vector<weak_ptr<PipelineExecutor>> pipeline_executors;

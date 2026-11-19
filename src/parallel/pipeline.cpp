@@ -50,7 +50,7 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 }
 
 PipelineTask::~PipelineTask() {
-	if (!pipeline_executor || pipeline_executor->IsFinalized()) {
+	if (!pipeline_executor || pipeline_executor->IsFinalized() || !pipeline.executor.TracksPipelineExecutors()) {
 		return;
 	}
 	// the task did not finish its pipeline: flush its metrics once no task can still use the source state
