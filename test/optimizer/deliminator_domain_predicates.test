@@ -3,13 +3,41 @@
 # group: [optimizer]
 
 statement ok
-SET delim_join_as_cte=true;
-
-statement ok
 SET explain_output='optimized_only';
 
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Plain correlation also preserves the outer key's representation.
+statement ok
+CREATE TABLE zero_outer(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO zero_outer VALUES ('-0.0'::DOUBLE, 1);
+
+statement ok
+CREATE TABLE zero_inner(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO zero_inner VALUES ('0.0'::DOUBLE, 1);
+
+query I
+SELECT (SELECT signbit(o.k) FROM zero_inner i WHERE i.k=o.k AND i.j=o.j) FROM zero_outer o;
+----
+true
+
+# Selected aggregate correlation also preserves the outer key's representation.
+query I
+SELECT (SELECT bool_or(signbit(o.k) AND i.j=1) FROM zero_inner i WHERE i.k=o.k AND i.j=o.j)
+FROM zero_outer o WHERE o.j=1;
+----
+true
+
+statement ok
+DROP TABLE zero_outer;
+
+statement ok
+DROP TABLE zero_inner;
 
 statement ok
 CREATE TABLE domain_outer(id INTEGER, k INTEGER);
@@ -292,6 +320,106 @@ EXPLAIN SELECT k FROM cast_outer o
 WHERE EXISTS (SELECT 1 FROM cast_inner i WHERE i.k=o.k AND o.k>0 AND i.k>random());
 ----
 logical_opt	<REGEX>:.*CTE.*
+
+# Representation-sensitive domain keys use the conservative fallback.
+statement ok
+CREATE TABLE use_outer(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO use_outer VALUES ('-0.0', 1), (1, 2), (NULL, 3);
+
+statement ok
+CREATE TABLE use_inner(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO use_inner VALUES (0, 1), (0, 2), (1, 2), (2, 1), (NULL, 3);
+
+# Sensitive keys retain their domains even when consumers only check equality.
+query II
+EXPLAIN SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
+----
+logical_opt	<REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
+----
+2
+
+query II
+EXPLAIN SELECT count(*) FROM use_outer o
+WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+logical_opt	<REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM use_outer o
+WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+1
+
+# The same fallback applies to nested floating-point keys.
+query II
+EXPLAIN SELECT count(*) FROM nested_outer o
+WHERE EXISTS (SELECT 1 FROM nested_inner i WHERE i.k=o.k);
+----
+logical_opt	<REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM nested_outer o
+WHERE EXISTS (SELECT 1 FROM nested_inner i WHERE i.k=o.k);
+----
+1
+
+# Multiple cleanup candidates preserve observable keys.
+query II
+SELECT (SELECT count(*) FROM use_inner i WHERE i.k=o.k),
+       signbit((SELECT o.k FROM use_inner i WHERE i.k=o.k AND i.j=o.j))
+FROM use_outer o WHERE o.j=1;
+----
+2	true
+
+# A projected alias must retain the original key's representation.
+query I
+SELECT signbit((SELECT q.k FROM (SELECT o.k AS k FROM use_inner i WHERE i.k=o.k AND i.j=o.j) q))
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+# Equal intervals need not have the same month/day representation.
+statement ok
+CREATE TABLE interval_outer AS SELECT INTERVAL '1 month' AS k;
+
+statement ok
+CREATE TABLE interval_inner AS SELECT INTERVAL '30 days' AS k;
+
+# Normalized interval comparisons stay outside direct-column substitution.
+query II
+EXPLAIN SELECT count(*) FROM interval_outer o
+WHERE EXISTS (SELECT 1 FROM interval_inner i WHERE i.k=o.k);
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query I
+SELECT count(*) FROM interval_outer o WHERE EXISTS (SELECT 1 FROM interval_inner i WHERE i.k=o.k);
+----
+1
+
+query I
+SELECT (SELECT date_part('month', o.k) FROM interval_inner i WHERE i.k=o.k) FROM interval_outer o;
+----
+1
+
+statement ok
+DROP TABLE interval_outer;
+
+statement ok
+DROP TABLE interval_inner;
+
+statement ok
+DROP TABLE use_outer;
+
+statement ok
+DROP TABLE use_inner;
 
 # Named optimizer disablement keeps the original domain plan.
 statement ok

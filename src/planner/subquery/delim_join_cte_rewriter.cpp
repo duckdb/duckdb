@@ -9,7 +9,6 @@
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
@@ -950,18 +949,6 @@ static bool ReferencesDomain(Expression &expression, const GeneratedDomainRef &d
 	       ExpressionReferencesBinding(expression, domain.source_bindings);
 }
 
-static bool CanSubstituteDomainKeys(const GeneratedDomainRef &domain) {
-	// Parent expressions are rebound too; equal keys must have indistinguishable representations.
-	for (auto &expression : domain.output_expressions) {
-		if (TypeVisitor::Contains(expression->GetReturnType(), [](const LogicalType &type) {
-			    return type.IsFloating() || type.id() == LogicalTypeId::INTERVAL;
-		    })) {
-			return false;
-		}
-	}
-	return true;
-}
-
 static bool CanEvaluateUnmatchedRows(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -1028,7 +1015,8 @@ struct GeneratedDomainReplacement {
 			auto &domain_expression = *domain.output_expressions[domain_index];
 			auto &base_expression = left_index.IsValid() ? condition.GetRHS() : condition.GetLHS();
 			ColumnBinding base_binding;
-			if (!GetBoundColumnRefBinding(base_expression, base_binding) ||
+			if (!BoundComparisonExpression::EqualityPreservesValueRepresentation(domain_expression.GetReturnType()) ||
+			    !GetBoundColumnRefBinding(base_expression, base_binding) ||
 			    !bindings.TryAdd(ReplacementBinding(domain.output_bindings[domain_index], base_binding,
 			                                        domain_expression.GetReturnType()))) {
 				return false;
@@ -1497,9 +1485,8 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 			column_binding_set_t bindings;
 			if (GetExpressionColumnBindings(expression, bindings) && !bindings.empty() &&
 			    ChildContainsBindings(*join_op->children[domain_side], bindings)) {
-				// Removing the domain can expose unrelated rows to every operator above it.
-				if (domain_filter_indices.empty() &&
-				    (!CanSubstituteDomainKeys(*domain) || !CanEvaluateUnmatchedRows(*delim_join.children[1]))) {
+				// Predicate motion and domain removal can expose expressions to additional rows.
+				if (domain_filter_indices.empty() && !CanEvaluateUnmatchedRows(*delim_join.children[1])) {
 					return false;
 				}
 				domain->filters.push_back(expression.Copy());
@@ -1551,8 +1538,10 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		join->conditions = std::move(conditions);
 		join->children = std::move(join_op->children);
-		for (auto index : domain_filter_indices) {
-			AddFilterToOperator(join->children[domain_side], std::move(filter->expressions[index]));
+		if (action == GeneratedDomainAction::PRESERVE) {
+			for (auto index : domain_filter_indices) {
+				AddFilterToOperator(join->children[domain_side], std::move(filter->expressions[index]));
+			}
 		}
 		vector<unique_ptr<Expression>> remaining;
 		for (idx_t index = 0; index < consumed.size(); index++) {
