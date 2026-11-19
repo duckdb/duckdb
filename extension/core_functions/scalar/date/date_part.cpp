@@ -1,4 +1,3 @@
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "core_functions/scalar/date_functions.hpp"
