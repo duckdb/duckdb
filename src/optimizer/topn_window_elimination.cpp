@@ -1051,31 +1051,23 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			if (lidxs.size() != 1 || ridxs.size() != 1) {
 				return false;
 			}
-			auto left_idx = lidxs[0];
-			auto right_idx = ridxs[0];
+			const column_binding_set_t left_bindings(left_column_bindings.begin(), left_column_bindings.end());
+			const column_binding_set_t right_bindings(right_column_bindings.begin(), right_column_bindings.end());
 
 			bool all_left_replaceable = true;
 			bool all_right_replaceable = true;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto &projection = projections[i];
-				if (projection.table_index != left_idx && projection.table_index != right_idx) {
+			for (const auto &projection : projections) {
+				const bool is_left = left_bindings.find(projection) != left_bindings.end();
+				if (!is_left && right_bindings.find(projection) == right_bindings.end()) {
 					return false;
 				}
-				if (projection.table_index == left_idx && projection.column_index >= left_column_bindings.size()) {
-					return false;
+				if (replaceable_bindings.find(projection) != replaceable_bindings.end()) {
+					continue;
 				}
-				if (projection.table_index == right_idx && projection.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection.table_index == left_idx
-				                           ? left_column_bindings[projection.column_index]
-				                           : right_column_bindings[projection.column_index];
-				if (replaceable_bindings.find(column_binding) == replaceable_bindings.end()) {
-					if (column_binding.table_index == left_idx) {
-						all_left_replaceable = false;
-					} else {
-						all_right_replaceable = false;
-					}
+				if (is_left) {
+					all_left_replaceable = false;
+				} else {
+					all_right_replaceable = false;
 				}
 			}
 
@@ -1084,25 +1076,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				return false;
 			}
 
-			TableIndex replace_table_idx = all_right_replaceable ? right_idx : left_idx;
-			for (idx_t i = 0; i < projections.size(); i++) {
-				const auto projection_idx = projections[i];
-				if (projection_idx.table_index != left_idx && projection_idx.table_index != right_idx) {
-					return false;
-				}
-				if (projection_idx.table_index == left_idx &&
-				    projection_idx.column_index >= left_column_bindings.size()) {
-					return false;
-				}
-				if (projection_idx.table_index == right_idx &&
-				    projection_idx.column_index >= right_column_bindings.size()) {
-					return false;
-				}
-				auto &column_binding = projection_idx.table_index == left_idx
-				                           ? left_column_bindings[projection_idx.column_index]
-				                           : right_column_bindings[projection_idx.column_index];
-				if (column_binding.table_index == replace_table_idx) {
-					projections[i] = replaceable_bindings[column_binding];
+			const auto &replace_bindings = all_right_replaceable ? right_bindings : left_bindings;
+			for (auto &projection : projections) {
+				if (replace_bindings.find(projection) != replace_bindings.end()) {
+					projection = replaceable_bindings[projection];
 				}
 			}
 
