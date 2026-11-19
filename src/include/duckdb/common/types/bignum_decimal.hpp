@@ -39,11 +39,15 @@ struct DecimalHelper<bignum_t> {
 		BignumArithmeticState state;
 	};
 
-	//! Scratch reused across rescaled values; returned blobs own their bytes.
+	//! Scratch reused across rescaled values.
 	struct RescaleState {
 		explicit RescaleState(optional_ptr<ClientContext> context = nullptr) : arithmetic(context) {
 		}
 
+		//! Invalidates scratch values; call before constructing the next input in heap.
+		void Reset() {
+			heap.GetAllocator().Reset();
+		}
 		const string &GetPowerOfTen(idx_t exponent);
 
 		StringHeap heap;
@@ -101,15 +105,17 @@ struct DecimalHelper<bignum_t> {
 	//! rescaled value
 	DUCKDB_API static string Rescale(const bignum_t &value, uint32_t source_scale, uint32_t target_scale,
 	                                 optional_ptr<ClientContext> context = nullptr);
-	DUCKDB_API static string Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
-	                                 uint32_t target_scale);
+	//! The result borrows from value or state; consume it before resetting state or releasing value.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
+	                                   uint32_t target_scale);
+	//! Fixed-width inputs use integer arithmetic before encoding the result as a BIGNUM.
+	DUCKDB_API static bignum_t Rescale(RescaleState &state, hugeint_t value, uint32_t source_scale,
+	                                   uint32_t target_scale);
 	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width, the
 	//! result is the BIGNUM blob of the rescaled value
 	DUCKDB_API static bool TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
 	                                  uint32_t target_scale, string &result,
 	                                  optional_ptr<ClientContext> context = nullptr);
-	DUCKDB_API static bool TryRescale(RescaleState &state, const bignum_t &value, uint32_t source_scale,
-	                                  uint32_t target_width, uint32_t target_scale, string &result);
 
 	//! Converts an unscaled value with the given scale to a FLOAT or DOUBLE, rounding once (through the decimal
 	//! string), returns false if the value is out of range
