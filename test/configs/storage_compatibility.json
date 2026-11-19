@@ -116,7 +116,9 @@
         "test/sql/copy/parquet/int96_as.test",
         "test/sql/copy/parquet/byte_stream_split_flba.test",
         "test/sql/function/timestamp/test_icu_time_bucket_timestamptz_ns.test",
-        "test/sql/types/timestamp/timestamptz_ns_timestamptz_comparison.test"
+        "test/sql/types/timestamp/timestamptz_ns_timestamptz_comparison.test",
+        "test/sql/optimizer/temporal_cast_zonemap_icu.test",
+        "test/optimizer/date_trunc_simplification_icu.test"
       ]
     },
     {
