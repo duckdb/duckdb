@@ -197,6 +197,75 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		Connection check(reopened);
 		RequireValue(check, "SELECT COUNT(*) FROM big", 600000);
 	}
+	SECTION("concurrent writes of different kinds are serialized") {
+		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT, b VARCHAR)"));
+		REQUIRE_NO_FAIL(con1.Query("INSERT INTO s SELECT i, 'x' || i FROM range(20000) t(i)"));
+		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+		auto run = [&](Connection &con, const vector<string> &queries) {
+			for (idx_t i = 0; i < 50; i++) {
+				for (auto &query : queries) {
+					auto result = con.Query(query);
+					if (result->HasError()) {
+						FAIL(result->GetError());
+					}
+				}
+			}
+		};
+		SECTION("inserts") {
+			vector<string> insert {"INSERT INTO s SELECT i, 'y' || i FROM range(5000) t(i)"};
+			thread t1([&]() { run(con1, insert); });
+			thread t2([&]() { run(con2, insert); });
+			t1.join();
+			t2.join();
+			RequireValue(con1, "SELECT COUNT(*) FROM s", 20000 + 2 * 50 * 5000);
+		}
+		SECTION("updates and deletes") {
+			thread t1([&]() { run(con1, {"UPDATE s SET a = a + 1 WHERE a % 7 = 0"}); });
+			thread t2([&]() { run(con2, {"DELETE FROM s WHERE a % 11 = 3"}); });
+			t1.join();
+			t2.join();
+		}
+		SECTION("mixed statements") {
+			vector<string> mixed {"INSERT INTO s SELECT i, 'y' || i FROM range(1000) t(i)",
+			                      "UPDATE s SET a = a + 1 WHERE a % 7 = 0",
+			                      "DELETE FROM s WHERE a % 11 = 3",
+			                      "INSERT INTO s SELECT a, b FROM s WHERE a < 100 LIMIT 10",
+			                      "CREATE OR REPLACE TEMPORARY TABLE tmp AS SELECT * FROM s LIMIT 10",
+			                      "SELECT COUNT(*), MAX(b) FROM s"};
+			thread t1([&]() { run(con1, mixed); });
+			thread t2([&]() { run(con2, mixed); });
+			t1.join();
+			t2.join();
+		}
+		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
+	}
+	SECTION("a statement of one connection is not visible half-way to the other") {
+		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT)"));
+		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+		atomic<bool> done {false};
+		thread writer([&]() {
+			for (idx_t i = 0; i < 100; i++) {
+				REQUIRE_NO_FAIL(*con1.Query("INSERT INTO s SELECT * FROM range(20000)"));
+			}
+			done = true;
+		});
+		thread reader([&]() {
+			while (!done) {
+				auto result = con2.Query("SELECT COUNT(*) FROM s");
+				REQUIRE_NO_FAIL(*result);
+				REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() % 20000 == 0);
+			}
+		});
+		writer.join();
+		reader.join();
+		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
+	}
 	SECTION("errors") {
 		// sharing requires a transaction
 		REQUIRE_FAIL(con1.Query("SELECT share_transaction()"));

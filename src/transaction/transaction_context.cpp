@@ -78,6 +78,9 @@ void TransactionContext::Commit() {
 	bool commit_result = true;
 	if (!LeaveTransaction(*transaction, true, commit_result)) {
 		// other connections still participate in the transaction, the last one to leave ends it
+		for (auto &state : context.GetContext().GetRegisteredState().States()) {
+			state->TransactionCommit(*transaction, context);
+		}
 		return;
 	}
 	if (!commit_result) {
@@ -127,6 +130,9 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	ClearTransaction();
 	bool commit_result = false;
 	if (!LeaveTransaction(*transaction, false, commit_result)) {
+		for (auto &state : context.GetContext().GetRegisteredState().States()) {
+			state->TransactionRollback(*transaction, context, error);
+		}
 		return;
 	}
 	RollbackTransaction(std::move(transaction), error);
@@ -193,15 +199,17 @@ void TransactionContext::JoinTransaction(const string &share_id) {
 		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
 	}
 	// discard the transaction that was started for this statement and continue in the shared one
+	EndStatement();
 	auto previous = TakeCurrentTransaction();
 	SetCurrentTransaction(source);
 	auto_commit = false;
 	previous->MarkFinished();
-	previous->Rollback(context);
-	for (auto const &s : context.GetContext().GetRegisteredState().States()) {
-		s->TransactionRollback(*previous, context, nullptr);
+	try {
+		RollbackTransaction(std::move(previous), nullptr);
+	} catch (std::exception &) {
+		// the discarded transaction is empty, a failure to end it must not undo the join
 	}
-	previous->Finalize(context);
+	BeginStatement();
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}
@@ -211,6 +219,23 @@ void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
 	SetCurrentTransaction(nullptr);
 	active_query_id = MAXIMUM_QUERY_ID;
+}
+
+bool TransactionContext::BeginStatement() {
+	if (statement_transaction || !current_transaction) {
+		return false;
+	}
+	current_transaction->BeginStatement();
+	statement_transaction = current_transaction;
+	return true;
+}
+
+void TransactionContext::EndStatement() {
+	if (!statement_transaction) {
+		return;
+	}
+	auto transaction = std::move(statement_transaction);
+	transaction->EndStatement();
 }
 
 idx_t TransactionContext::GetActiveQuery() {

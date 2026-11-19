@@ -1357,6 +1357,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		transaction.BeginTransaction();
 		interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 	}
+	StatementEndGuard statement_end(transaction, transaction.BeginStatement());
 	try {
 		fun();
 	} catch (std::exception &ex) {

@@ -50,6 +50,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
 		transaction.BeginTransaction();
 	}
+	// connections that share the transaction execute their statements one at a time
+	transaction.BeginStatement();
 	BeginStatementInternal(lock, query);
 
 	query_progress.Initialize();
@@ -100,6 +102,7 @@ void ClientContext::ResetLoggerInternal(const LoggingContext &logging_context) {
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
 	D_ASSERT(active_query.get());
+	StatementEndGuard statement_end(transaction, true);
 	// whether the statement that finished, or an earlier statement of a query that expands, modifies a database
 	const bool statement_wrote =
 	    active_query->Wrote() || (active_query->prepared && !active_query->prepared->properties.IsReadOnly());

@@ -1,7 +1,8 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/string_util.hpp"
+#include <random>
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -196,9 +197,26 @@ void MetaTransaction::Rollback(ClientContext &context) {
 string MetaTransaction::ShareTransaction() {
 	lock_guard<mutex> guard(shared_lock);
 	if (share_id.empty()) {
-		share_id = UUID::ToString(UUID::GenerateRandomUUID());
+		// the identifier grants access to the transaction, so it must not be predictable
+		std::random_device random_device;
+		share_id = StringUtil::Format("%08x-%08x-%08x-%08x", random_device(), random_device(), random_device(),
+		                              random_device());
 	}
 	return share_id;
+}
+
+void MetaTransaction::BeginStatement() {
+	unique_lock<mutex> guard(statement_lock);
+	statement_cv.wait(guard, [&]() { return !statement_active; });
+	statement_active = true;
+}
+
+void MetaTransaction::EndStatement() {
+	{
+		lock_guard<mutex> guard(statement_lock);
+		statement_active = false;
+	}
+	statement_cv.notify_one();
 }
 
 string MetaTransaction::GetShareId() {
