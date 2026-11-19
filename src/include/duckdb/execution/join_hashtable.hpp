@@ -289,8 +289,16 @@ public:
 		ProbeState();
 
 		Vector hashes;
-		Vector ht_offsets_and_salts_v;
+		//! For rows sent to the key compare: entries probed past the initial one, zeroed for every chunk
+		Vector probe_steps_v;
 		Vector hashes_dense_v;
+		//! Rows that probe another entry, and rows that found their entry in the current round
+		SelectionVector rows_to_probe_sel;
+		SelectionVector rows_found_sel;
+		//! Loaded ht entry and probe flags per dense row
+		unsafe_unique_array<ht_entry_t> dense_entries;
+		Vector is_match_v;
+		Vector needs_next_v;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
@@ -693,6 +701,8 @@ public:
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
 	//! Minimum capacity of the pointer table
 	static constexpr idx_t MINIMUM_CAPACITY = 16384;
+	//! Pointer tables above this capacity prefetch the entries the probe reads
+	static constexpr idx_t PREFETCH_MIN_CAPACITY = idx_t(1) << 20;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 

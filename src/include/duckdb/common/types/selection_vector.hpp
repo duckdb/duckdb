@@ -128,6 +128,11 @@ public:
 		D_ASSERT(idx < capacity);
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
+	//! Writes loc at position count and advances count only if keep is set, without a branch
+	inline void AppendIf(idx_t &count, idx_t loc, bool keep) {
+		set_index(count, loc);
+		count += keep;
+	}
 	//! Shift entries left by `offset`, i.e. sel[i] = sel[i + offset] for i in [0, count). No-op if offset == 0.
 	void ShiftLeft(const idx_t offset, const idx_t count);
 	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
