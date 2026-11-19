@@ -271,7 +271,7 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "publish_static": not optimized_release,
         "publish_source": is_amd64,
         "test_static": not optimized_release,
-        "run_smoke": is_amd64,
+        "ci_fast_tests": is_amd64,
         "run_arm_tests": not is_amd64 and not optimized_release,
     }
 
@@ -301,7 +301,7 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "publish_static": True,
         "publish_source": False,
         "test_static": True,
-        "run_smoke": True,
+        "ci_fast_tests": True,
         "run_arm_tests": not is_amd64,
     }
 
