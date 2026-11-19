@@ -38,9 +38,15 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, Context &context_p)
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(Serializer &metadata_serializer, const vector<shared_ptr<IndexEntry>> &indexes) {
+void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	// start scanning the table and append the data to the uncompressed segments
-	table.GetStorage().Checkpoint(*this, metadata_serializer, indexes);
+	table.GetStorage().Checkpoint(*this, metadata_serializer);
+}
+
+vector<shared_ptr<IndexEntry>> TableDataWriter::GetIndexes() {
+	// The indexes of the constraints come first, in constraint order: the reader assigns them by position.
+	CatalogTransaction transaction(GetDatabase(), MAX_TRANSACTION_ID, GetCheckpointOptions().visibility_bound);
+	return table.GetIndexes(transaction);
 }
 
 void TableDataWriter::AddPendingPublication(unique_ptr<PendingPublication> publication) {

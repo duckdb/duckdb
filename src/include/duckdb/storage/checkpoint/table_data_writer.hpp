@@ -36,8 +36,9 @@ public:
 	virtual ~TableDataWriter();
 
 public:
-	//! Writes the table data and the given indexes of the table
-	void WriteTableData(Serializer &metadata_serializer, const vector<shared_ptr<IndexEntry>> &indexes);
+	void WriteTableData(Serializer &metadata_serializer);
+	//! Returns the indexes of the table in the catalog of the checkpoint, in the order in which they are written
+	vector<shared_ptr<IndexEntry>> GetIndexes();
 
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                                 idx_t total_rows, idx_t next_row_id) = 0;

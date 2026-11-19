@@ -741,10 +741,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table data
 	auto writer = GetTableDataWriter(table);
 	if (writer) {
-		// The table writes the indexes of the checkpoint's catalog with its data. The indexes of the constraints
-		// come first, in constraint order: the reader assigns them by position.
-		CatalogTransaction transaction(db.GetDatabase(), MAX_TRANSACTION_ID, options.visibility_bound);
-		writer->WriteTableData(serializer, table.Cast<DuckTableEntry>().GetIndexes(transaction));
+		writer->WriteTableData(serializer);
 	}
 }
 

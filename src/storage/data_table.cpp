@@ -1661,8 +1661,7 @@ void DataTable::PublishCheckpoint(CollectionCheckpointResult result, TableStatis
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 }
 
-void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer,
-                           const vector<shared_ptr<IndexEntry>> &indexes) {
+void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	CollectionCheckpointSnapshot snapshot;
 	{
@@ -1699,6 +1698,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer,
 	vector<shared_ptr<const IndexStorageInfo>> index_infos;
 	if (index_writer) {
 		// Only checkpoint indexes when we write to disk
+		auto indexes = writer.GetIndexes();
 		auto index_sleep_ms = Settings::Get<DebugCheckpointIndexSleepMsSetting>(db.GetDatabase());
 		index_infos.reserve(indexes.size());
 		for (const auto &index : indexes) {

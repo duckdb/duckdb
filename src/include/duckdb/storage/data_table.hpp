@@ -238,8 +238,8 @@ public:
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	//! Checkpoint the table and the given indexes of the table to the specified table data writer
-	void Checkpoint(TableDataWriter &writer, Serializer &serializer, const vector<shared_ptr<IndexEntry>> &indexes);
+	//! Checkpoint the table to the specified table data writer
+	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	//! Install checkpointed row groups.
 	void PublishCheckpoint(CollectionCheckpointResult result, TableStatistics &checkpoint_stats);
 	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
