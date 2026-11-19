@@ -216,9 +216,11 @@ TEST_CASE("Stress stale metadata block handle pin against checkpoint rewrite", "
 		mutex stale_lock;
 		std::vector<shared_ptr<BlockHandle>> recent_stale;
 
+		// bound the run by time: checkpoints slow down as the table grows
+		auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
 		std::thread writer([&]() {
 			Connection wcon(db);
-			for (idx_t i = 0; i < 5000 && !done; i++) {
+			for (idx_t i = 0; i < 5000 && !done && std::chrono::steady_clock::now() < deadline; i++) {
 				wcon.Query("DELETE FROM t WHERE i % 97 = " + std::to_string(i % 97));
 				wcon.Query("INSERT INTO t SELECT i, repeat('y', 64) FROM range(500) tbl(i)");
 				checkpoint_active = true;

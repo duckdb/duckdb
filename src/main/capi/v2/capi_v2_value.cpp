@@ -820,7 +820,7 @@ duckdb::Value BuildArray(CV2Factory &factory, duckdb_v2_logical_type_handle chil
 	return duckdb::Value::ARRAY(type, std::move(values));
 }
 
-duckdb::Value BuildStruct(const char **names, const idx_t *names_lengths, const duckdb_v2_value_handle *children,
+duckdb::Value BuildStruct(const char *const *names, const idx_t *names_lengths, const duckdb_v2_value_handle *children,
                           idx_t field_count) {
 	if (field_count > 0 && !names) {
 		throw duckdb::InvalidInputException("'names' cannot be null when field_count > 0");
@@ -879,7 +879,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_array(duckdb_v2_factory_handle factory, d
 	    err, [&]() { *out_value = Emit(BuildArray(*Convert(factory), child_type, children, child_count)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char **names,
+DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char *const *names,
                                               const idx_t *names_lengths, const duckdb_v2_value_handle *children,
                                               idx_t field_count, duckdb_v2_value_handle *out_value,
                                               duckdb_v2_error_info_handle *err) {

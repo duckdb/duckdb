@@ -469,7 +469,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 	const auto interrupt_while_blocked = GENERATE(false, true);
 	if (interrupt_while_blocked) {
 		connection.Interrupt();
-		REQUIRE_THROWS_AS(copy.Sink(first_context, first_chunk, first_input), InterruptException);
+		REQUIRE_THROWS_WITH(copy.Sink(first_context, first_chunk, first_input), Catch::Contains("Interrupted!"));
 		context.ClearInterrupt();
 	}
 
@@ -488,7 +488,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 	REQUIRE(second_task->wakeups == 0);
 	if (interrupt_while_blocked) {
 		connection.Interrupt();
-		REQUIRE_THROWS_AS(copy.Combine(second_context, second_combine), InterruptException);
+		REQUIRE_THROWS_WITH(copy.Combine(second_context, second_combine), Catch::Contains("Interrupted!"));
 		context.ClearInterrupt();
 	}
 	REQUIRE(copy.Sink(first_context, first_chunk, first_input) == SinkResultType::NEED_MORE_INPUT);

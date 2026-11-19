@@ -1177,5 +1177,5 @@ TEST_CASE("Test create table with empty name", "[relation_api]") {
 	REQUIRE_FAIL(result);
 
 	auto values = con.Values("(42)");
-	REQUIRE_THROWS_AS(values->Create(""), ParserException);
+	REQUIRE_THROWS_WITH(values->Create(""), Catch::Contains("Empty table name not supported"));
 }
