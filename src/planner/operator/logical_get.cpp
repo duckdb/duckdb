@@ -343,10 +343,6 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	if (bind_info) {
 		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
 	}
-	if (!function.HasSerializationCallbacks() && !extra_info.file_filters.empty()) {
-		// the function is bound again on deserialize, which brings back the files the filters removed
-		throw NotImplementedException("Cannot serialize a table function whose file list was pruned by a filter");
-	}
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
