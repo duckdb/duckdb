@@ -1,0 +1,111 @@
+diff --git a/src/lance_scan.cpp b/src/lance_scan.cpp
+index 16e406e..26b983a 100644
+--- a/src/lance_scan.cpp
++++ b/src/lance_scan.cpp
+@@ -683,12 +683,12 @@ static bool TryExtractTakeRowIdsFromFilters(const TableFilterSet &filters,
+ 
+ static void
+ LancePushdownComplexFilter(ClientContext &context, LogicalGet &get,
+-                           FunctionData *bind_data,
++                           optional_ptr<const FunctionData> bind_data,
+                            vector<unique_ptr<Expression>> &filters) {
+   if (!bind_data || filters.empty()) {
+     return;
+   }
+-  auto &scan_bind = bind_data->Cast<LanceScanBindData>();
++  auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+ 
+   auto quote_identifier = [](const string &name) {
+     string escaped;
+@@ -2372,7 +2372,7 @@ LanceRowIdInRewrite(unique_ptr<LogicalOperator> op) {
+     if (!IsLanceScanTableFunction(get.function) || !get.bind_data) {
+       return op;
+     }
+-    auto &scan_bind = get.bind_data->Cast<LanceScanBindData>();
++    auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+     if (scan_bind.UsesNamespaceQuery()) {
+       return op;
+     }
+@@ -2446,7 +2446,7 @@ LanceRowIdInRewrite(unique_ptr<LogicalOperator> op) {
+   if (!IsLanceScanTableFunction(get.function) || !get.bind_data) {
+     return op;
+   }
+-  auto &scan_bind = get.bind_data->Cast<LanceScanBindData>();
++  auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+   if (scan_bind.UsesNamespaceQuery()) {
+     return op;
+   }
+@@ -2536,7 +2536,7 @@ LanceLimitOffsetPushdown(unique_ptr<LogicalOperator> op) {
+       return op;
+     }
+ 
+-    auto &scan_bind = get.bind_data->Cast<LanceScanBindData>();
++    auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+     scan_bind.sampling_pushed_down = false;
+     scan_bind.sample_percentage = 0.0;
+     scan_bind.sample_seed = -1;
+@@ -2617,7 +2617,7 @@ LanceLimitOffsetPushdown(unique_ptr<LogicalOperator> op) {
+     }
+   }
+ 
+-  auto &scan_bind = get.bind_data->Cast<LanceScanBindData>();
++  auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+   if (scan_bind.UsesNamespaceQuery()) {
+     auto max_query_value =
+         static_cast<idx_t>(std::numeric_limits<int32_t>::max());
+@@ -3056,7 +3056,7 @@ LanceLikePushdown(unique_ptr<LogicalOperator> op) {
+   if (!IsLanceScanTableFunction(get.function) || !get.bind_data) {
+     return op;
+   }
+-  auto &scan_bind = get.bind_data->Cast<LanceScanBindData>();
++  auto &scan_bind = get.bind_data.write().Cast<LanceScanBindData>();
+ 
+   for (auto &expr : filter_op.expressions) {
+     if (!expr || expr->HasParameter() || expr->IsVolatile() ||
+diff --git a/src/lance_search.cpp b/src/lance_search.cpp
+index 9fe64b1..5447e6d 100644
+--- a/src/lance_search.cpp
++++ b/src/lance_search.cpp
+@@ -396,12 +396,12 @@ CollectLancePushedFilterIRParts(LogicalGet &get, const vector<string> &names,
+ 
+ static void
+ LancePushdownComplexFilter(ClientContext &, LogicalGet &get,
+-                           FunctionData *bind_data,
++                           optional_ptr<const FunctionData> bind_data,
+                            vector<unique_ptr<Expression>> &filters) {
+   if (!bind_data || filters.empty()) {
+     return;
+   }
+-  auto &scan_bind = bind_data->Cast<LanceKnnBindData>();
++  auto &scan_bind = get.bind_data.write().Cast<LanceKnnBindData>();
+   string unencodable;
+   if (!CollectLancePushedFilterIRParts(
+           get, scan_bind.names, scan_bind.types, filters,
+@@ -1363,12 +1363,12 @@ LanceHybridBind(ClientContext &context, TableFunctionBindInput &input,
+ 
+ static void
+ LanceSearchPushdownComplexFilter(ClientContext &, LogicalGet &get,
+-                                 FunctionData *bind_data,
++                                 optional_ptr<const FunctionData> bind_data,
+                                  vector<unique_ptr<Expression>> &filters) {
+   if (!bind_data || filters.empty()) {
+     return;
+   }
+-  auto &search_bind = bind_data->Cast<LanceSearchBindData>();
++  auto &search_bind = get.bind_data.write().Cast<LanceSearchBindData>();
+   string unencodable;
+   if (!CollectLancePushedFilterIRParts(
+           get, search_bind.names, search_bind.types, filters,
+diff --git a/src/lance_update.cpp b/src/lance_update.cpp
+index c6af28f..69620d1 100644
+--- a/src/lance_update.cpp
++++ b/src/lance_update.cpp
+@@ -240,7 +240,7 @@ PhysicalOperator &PlanLanceUpdateOverwrite(ClientContext &context,
+   auto parts = ExtractUpdatePlanParts(op);
+   auto *scan_bind =
+       parts.get && parts.get->bind_data
+-          ? dynamic_cast<LanceScanBindData *>(parts.get->bind_data.get())
++          ? dynamic_cast<const LanceScanBindData *>(parts.get->bind_data.get())
+           : nullptr;
+   if (!scan_bind) {
+     throw InternalException("Lance UPDATE is missing Lance scan bind data");

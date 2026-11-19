@@ -1187,7 +1187,13 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 }
 
 idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) const {
-	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+	const auto block_index = NumericCast<idx_t>(block_id);
+	const auto block_alloc_size = GetBlockAllocSize();
+	// block ids are read from the file: the location of a block (and its end) must not wrap around
+	if (block_index >= (NumericLimits<idx_t>::Maximum() - BLOCK_START) / block_alloc_size) {
+		throw DataCorruptionException("Corrupt database file: block id %lld is out of range", block_id);
+	}
+	return BLOCK_START + block_index * block_alloc_size;
 }
 
 void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header) const {

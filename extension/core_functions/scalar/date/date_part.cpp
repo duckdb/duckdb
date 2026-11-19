@@ -117,20 +117,6 @@ unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatisti
 	return result.ToUnique();
 }
 
-template <class OP>
-struct DateCacheLocalState : public FunctionLocalState {
-	explicit DateCacheLocalState() {
-	}
-
-	DateLookupCache<OP> cache;
-};
-
-template <class OP>
-unique_ptr<FunctionLocalState> InitDateCacheLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                       FunctionData *bind_data) {
-	return make_uniq<DateCacheLocalState<OP>>();
-}
-
 struct DatePart {
 	struct AsTime {
 		template <typename SRC, typename DST>
@@ -944,9 +930,8 @@ struct DatePart {
 
 template <class OP, class T>
 void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
-	UnaryExecutor::Execute<T, int64_t>(args.data[0], result,
-	                                   [&](T input) { return lstate.cache.ExtractElement(input); });
+	auto &cache = DateLookupCache<OP>::Get();
+	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, [&](T input) { return cache.ExtractElement(input); });
 }
 
 template <>
@@ -2361,15 +2346,14 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	return nullptr;
 }
 
-template <init_local_state_t DATE_CACHE = nullptr>
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
                                              function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
-	ScalarFunction date_fun({}, LogicalType::BIGINT, std::move(date_func), nullptr, date_stats, DATE_CACHE);
+	ScalarFunction date_fun({}, LogicalType::BIGINT, std::move(date_func), nullptr, date_stats);
 	date_fun.GetSignature().AddParameter("ts", LogicalType::DATE);
 	operator_set.AddFunction(date_fun);
-	ScalarFunction ts_fun({}, LogicalType::BIGINT, std::move(ts_func), nullptr, ts_stats, DATE_CACHE);
+	ScalarFunction ts_fun({}, LogicalType::BIGINT, std::move(ts_func), nullptr, ts_stats);
 	ts_fun.GetSignature().AddParameter("ts", LogicalType::TIMESTAMP);
 	operator_set.AddFunction(ts_fun);
 	ScalarFunction interval_fun({}, LogicalType::BIGINT, std::move(interval_func));
@@ -2606,7 +2590,7 @@ struct StructDatePart {
 		result.Verify();
 	}
 
-	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
 	                              const BoundScalarFunction &function) {
 		D_ASSERT(bind_data_p);
 		auto &info = bind_data_p->Cast<BindData>();
@@ -2634,10 +2618,10 @@ struct StructDatePart {
 };
 template <class OP>
 ScalarFunctionSet GetCachedDatepartFunction() {
-	return GetGenericDatePartFunction<InitDateCacheLocalState<OP>>(
-	    DatePartCachedFunction<OP, date_t>, DatePartCachedFunction<OP, timestamp_t>,
-	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>);
+	return GetGenericDatePartFunction(DatePartCachedFunction<OP, date_t>, DatePartCachedFunction<OP, timestamp_t>,
+	                                  ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
+	                                  OP::template PropagateStatistics<date_t>,
+	                                  OP::template PropagateStatistics<timestamp_t>);
 }
 
 void SetNonDecreasingExceptInterval(ScalarFunctionSet &functions) {

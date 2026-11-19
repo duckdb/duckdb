@@ -43,6 +43,27 @@ WHERE b.keep;
 ----
 analyzed_plan	<REGEX>:(?s).*"Filename\(s\)": "[^"]*adaptive_minmax_probe.parquet"[^}]*},\s*"intermediate_rows": [0-9]{1,5},.*
 
+# A larger build disables Bloom/PRF so only min/max bounds can reduce scan rows.
+statement ok
+CREATE TABLE minmax_only_build AS SELECT b.* FROM minmax_build b,range(6);
+
+query II
+SELECT count(*),sum(p.n)
+FROM read_parquet('{TEST_DIR}/adaptive_minmax_probe.parquet') p
+JOIN minmax_only_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k
+WHERE b.keep;
+----
+108360	595980
+
+query II
+EXPLAIN (ANALYZE, FORMAT JSON)
+SELECT count(*),sum(p.n)
+FROM read_parquet('{TEST_DIR}/adaptive_minmax_probe.parquet') p
+JOIN minmax_only_build b ON p.w=b.w AND p.d=b.d AND p.k=b.k
+WHERE b.keep;
+----
+analyzed_plan	<REGEX>:(?s).*"Dynamic Filters": \[\s*"\(optional: \(w >= 1\) AND optional: \(w <= 3\)\)",\s*"\(optional: \(d >= 1\) AND optional: \(d <= 2\)\)",\s*"\(optional: \(k >= 2700\) AND optional: \(k <= 3000\)\)"\s*\].*"Filename\(s\)": "[^"]*adaptive_minmax_probe.parquet"[^}]*},\s*"intermediate_rows": [0-9]{1,5},.*
+
 # Native scans retain their adaptive evaluation path.
 statement ok
 CREATE TABLE minmax_native_probe AS FROM read_parquet('{TEST_DIR}/adaptive_minmax_probe.parquet');

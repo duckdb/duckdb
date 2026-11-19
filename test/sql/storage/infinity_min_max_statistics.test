@@ -1,0 +1,86 @@
+# name: test/sql/storage/infinity_min_max_statistics.test
+# description: Test min/max statistics when a temporal column contains only infinite values
+# group: [storage]
+
+require exact_vector_size 2048
+
+load {TEST_DIR}/test_infinity_min_max_stats.db
+
+foreach type DATE TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS TIMESTAMPTZ TIMESTAMPTZ_NS
+
+statement ok
+CREATE OR REPLACE TABLE t(x {type});
+
+statement ok
+INSERT INTO t VALUES ('infinity'::{type});
+
+query II
+SELECT ((stats(x)).min)::{type} = 'infinity', ((stats(x)).max)::{type} = 'infinity' FROM t LIMIT 1;
+----
+1	1
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT MIN(x) = 'infinity', MAX(x) = 'infinity' FROM t;
+----
+1	1
+
+statement ok
+CREATE OR REPLACE TABLE t(x {type});
+
+statement ok
+INSERT INTO t VALUES ('-infinity'::{type});
+
+query II
+SELECT ((stats(x)).min)::{type} = '-infinity', ((stats(x)).max)::{type} = '-infinity' FROM t LIMIT 1;
+----
+1	1
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT MIN(x) = '-infinity', MAX(x) = '-infinity' FROM t;
+----
+1	1
+
+endloop
+
+# This database was written by DuckDB v1.5.5 and contains only NULL temporal values
+unzip data/storage/infinity_min_max_statistics_v1_5_5.db.gz {TEST_DIR}/infinity_min_max_statistics_v1_5_5.db
+
+statement ok
+ATTACH '{TEST_DIR}/infinity_min_max_statistics_v1_5_5.db' AS legacy_infinity_stats;
+
+statement ok
+INSERT INTO legacy_infinity_stats.legacy_infinity_stats VALUES ('infinity'::DATE, '-infinity'::TIMESTAMP);
+
+query IIII
+SELECT ((stats(d)).min)::DATE = 'infinity', ((stats(d)).max)::DATE = 'infinity',
+       ((stats(ts)).min)::TIMESTAMP = '-infinity', ((stats(ts)).max)::TIMESTAMP = '-infinity'
+FROM legacy_infinity_stats.legacy_infinity_stats LIMIT 1;
+----
+1	1	1	1
+
+statement ok
+CHECKPOINT legacy_infinity_stats;
+
+statement ok
+DETACH legacy_infinity_stats;
+
+statement ok
+ATTACH '{TEST_DIR}/infinity_min_max_statistics_v1_5_5.db' AS legacy_infinity_stats (READ_ONLY);
+
+query IIII
+SELECT ((stats(d)).min)::DATE = 'infinity', ((stats(d)).max)::DATE = 'infinity',
+       ((stats(ts)).min)::TIMESTAMP = '-infinity', ((stats(ts)).max)::TIMESTAMP = '-infinity'
+FROM legacy_infinity_stats.legacy_infinity_stats LIMIT 1;
+----
+1	1	1	1
+
+query IIII
+SELECT MIN(d), MAX(d), MIN(ts), MAX(ts) FROM legacy_infinity_stats.legacy_infinity_stats;
+----
+infinity	infinity	-infinity	-infinity

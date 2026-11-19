@@ -326,9 +326,23 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 
 optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
                                          TableScanState &scan_state, bool initialize_columns) {
+	return NextParallelScanInternal(context, state, scan_state, initialize_columns, nullptr);
+}
+
+bool DataTable::NextParallelScanAssignment(ClientContext &context, ParallelTableScanState &state,
+                                           TableScanState &scan_state, TableScanAssignment &assignment) {
+	return NextParallelScanInternal(context, state, scan_state, false, assignment).IsValid();
+}
+
+optional_idx DataTable::NextParallelScanInternal(ClientContext &context, ParallelTableScanState &state,
+                                                 TableScanState &scan_state, bool initialize_columns,
+                                                 optional_ptr<TableScanAssignment> assignment) {
 	const auto rows =
 	    row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state, initialize_columns);
 	if (rows.IsValid()) {
+		if (assignment) {
+			*assignment = TableScanAssignment(scan_state.table_state, TableScanSource::PERSISTENT);
+		}
 		return rows;
 	}
 	if (state.scan_state.row_number_base.IsValid()) {
@@ -336,8 +350,12 @@ optional_idx DataTable::NextParallelScan(ClientContext &context, ParallelTableSc
 		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state,
-	                                      initialize_columns);
+	const auto local_rows =
+	    local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state, initialize_columns);
+	if (local_rows.IsValid() && assignment) {
+		*assignment = TableScanAssignment(scan_state.local_state, TableScanSource::TRANSACTION_LOCAL);
+	}
+	return local_rows;
 }
 
 void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state) {
@@ -1510,15 +1528,20 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
 
 	// now perform the actual update
-	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
 	updates_slice.InitializeEmpty(updates.GetTypes());
 
 	SelectionVector sel_local_update(count), sel_global_update(count);
-	auto n_local_update = VectorOperations::GreaterThanEquals(row_ids, max_row_id_vec, nullptr, count,
-	                                                          &sel_local_update, &sel_global_update);
-	auto n_global_update = count - n_local_update;
+	idx_t n_local_update = 0;
+	idx_t n_global_update = 0;
+	for (auto row_id : row_ids.Values<row_t>()) {
+		if (row_id.GetValue() >= MAX_ROW_ID) {
+			sel_local_update.set_index(n_local_update++, row_id.GetIndex());
+		} else {
+			sel_global_update.set_index(n_global_update++, row_id.GetIndex());
+		}
+	}
 
 	// row id > MAX_ROW_ID? transaction-local storage
 	if (n_local_update > 0) {
@@ -1690,6 +1713,20 @@ void DataTable::CommitDropTable(CommitDropState &drop_state) {
 
 idx_t DataTable::GetRowGroupCount() const {
 	return row_groups->GetRowGroupCount();
+}
+
+idx_t DataTable::GetRowGroupCountWithoutLoading() const {
+	return row_groups->GetRowGroupCountWithoutLoading();
+}
+
+idx_t DataTable::GetRowGroupCountWithoutLoading(ClientContext &context) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto storage = local_storage.GetStorage(*this);
+	if (!storage) {
+		return GetRowGroupCountWithoutLoading();
+	}
+	// transaction-local row groups are in memory: counting them loads nothing
+	return GetRowGroupCountWithoutLoading() + storage->GetCollection().GetRowGroupCount();
 }
 
 idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {

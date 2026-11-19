@@ -223,9 +223,33 @@ void RadixHTConfig::ResetForNewIteration(const idx_t scheduled_workers) {
 	sink_radix_bits = InitialSinkRadixBits(MaxValue<idx_t>(scheduled_workers, 1));
 }
 
+// Budget row blocks and optional heap or exported-state blocks across workers, with headroom for repartitioning.
+static idx_t PartitioningBytesPerPartition(const RadixHTGlobalSinkState &sink) {
+	const idx_t blocks_per_partition = sink.radix_ht.GetLayout().AllConstant() && !sink.spill_plan ? 2 : 4;
+	return sink.number_of_threads * sink.block_alloc_size * blocks_per_partition;
+}
+
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
-	const auto max_bits = MinValue(maximum_sink_radix_bits, ExternalRadixBits(true));
-	SetRadixBitsInternal(MinValue(radix_bits_p, max_bits), false);
+	const auto requested_bits = MinValue(maximum_sink_radix_bits, radix_bits_p);
+	// Reserve extra partitions only for workers that have started sinking.
+	const auto workers = MaxValue<idx_t>(MinValue(sink.number_of_threads, sink.active_threads.load()), 1);
+	const auto reserve_bits = MinValue(requested_bits, RadixPartitioning::RadixBits(workers) - 1);
+	const auto required = RadixPartitioning::NumberOfPartitions(reserve_bits) * PartitioningBytesPerPartition(sink);
+	auto &memory = *sink.temporary_memory_state;
+	const auto should_reserve = [&](const idx_t bits) {
+		return reserve_bits > bits && !sink.any_combined && !sink.external && required > memory.GetRemainingSize();
+	};
+	auto available_bits = ExternalRadixBits(true);
+	if (should_reserve(available_bits)) {
+		const annotated_lock_guard<annotated_mutex> guard {sink.lock};
+		available_bits = ExternalRadixBits(true);
+		if (should_reserve(available_bits)) {
+			// Request more space when the current reservation limits parallelism.
+			memory.SetRemainingSizeAndUpdateReservation(sink.context.GetContext(), required);
+			available_bits = ExternalRadixBits(true);
+		}
+	}
+	SetRadixBitsInternal(MinValue(requested_bits, available_bits), false);
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
@@ -285,13 +309,11 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 	// However, we can't go to, e.g., 256 partitions when we have 8 threads and 200 MiB of memory
 	// Because we'll have too many pages in memory to do the partitioning in the first place
 
-	// Budget row blocks and optional heap or exported-state blocks, with headroom for repartitioning.
 	const auto reservation = sink.temporary_memory_state->GetReservation();
 	// An unspillable arena cannot fund a larger partitioning working set.
 	const auto use_reservation = dynamic && (sink.spill_plan || reservation <= sink.memory_limit);
 	const auto memory_limit = use_reservation ? reservation : sink.memory_limit / 2;
-	const idx_t pages_per_partition = sink.radix_ht.GetLayout().AllConstant() && !sink.spill_plan ? 2 : 4;
-	const auto max_partitions = memory_limit / sink.number_of_threads / sink.block_alloc_size / pages_per_partition;
+	const auto max_partitions = memory_limit / PartitioningBytesPerPartition(sink);
 
 	// Compute number of bits, rounded down, at least as much as initial bits
 	const auto bits =
@@ -369,6 +391,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	registered = false;
 	spilling = false;
 	size_after_abandon = 0;
+	adaptivity.Reset();
 	abandoned_data.reset();
 	abandoned_exported_data.clear();
 	if (!ht) {
@@ -758,24 +781,11 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 
-	if (!memory_pressure) {
-		if (RadixHTAdaptivity::TryGrow(gstate, lstate)) {
-			return;
-		}
-		RadixHTAdaptivity::MaybeSkipLookups(gstate, lstate);
+	const auto adaptivity_result = lstate.adaptivity.HandleSinkBoundary(gstate, lstate, memory_pressure);
+	if (adaptivity_result == RadixHTAdaptivity::SinkResult::GROWN) {
+		return;
 	}
-
-	bool abandoned = false;
-	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
-		// Keep the materialized rows and clear only the local pointer table
-		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
-		gstate.any_abandoned = true;
-		ht.Abandon();
-		abandoned = true;
-		if (!memory_pressure) {
-			RadixHTAdaptivity::MaybeResumeLookups(gstate, lstate);
-		}
-	}
+	bool abandoned = adaptivity_result == RadixHTAdaptivity::SinkResult::ABANDONED;
 
 	// Check if we need to repartition
 	const auto radix_bits_before = ht.GetRadixBits();
@@ -1222,6 +1232,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	} else {
 		ht->Abandon();
 	}
+	const auto allocator_size = ht->GetAggregateAllocator()->AllocationSize();
 
 	// Now combine the uncombined data using this thread's HT
 	partition.combine_chunk_count = partition.data->ChunkCount();
@@ -1251,6 +1262,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		partition.allocator = ht->GetAggregateAllocator();
 	} else {
 		sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
+		sink.stored_allocators_size += sink.stored_allocators.back()->AllocationSize() - allocator_size;
 	}
 	if (task_idx == sink.partitions.size()) {
 		ht.reset();

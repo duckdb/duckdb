@@ -21,7 +21,6 @@ struct WindowRangeCast {
 	LogicalType source_type;
 	LogicalType target_type;
 	bool try_cast;
-	bool default_cast;
 
 	void Serialize(Serializer &serializer) const;
 	static WindowRangeCast Deserialize(Deserializer &deserializer);

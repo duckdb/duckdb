@@ -48,6 +48,19 @@ struct ArrowSchema;
 struct ArrowArray;
 struct ArrowArrayStream;
 
+// <windows.h> defines DELETE and IGNORE, which StatementType and FunctionCollationHandling name: keep the macros out of
+// this header, whatever the include order.
+#ifdef DELETE
+#pragma push_macro("DELETE")
+#undef DELETE
+#define DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef IGNORE
+#pragma push_macro("IGNORE")
+#undef IGNORE
+#define DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif
+
 namespace duckdb {
 namespace cxx {
 
@@ -1190,12 +1203,24 @@ public:
 		return *this;
 	}
 
+	/// Sets any option by name, for options without a dedicated setter above, e.g. `duckdb_api` or `access_mode`.
+	/// Options are applied in the order they are set, after the dedicated setters, so a later value wins. An option
+	/// that needs a running instance (such as `allowed_directories`) makes `Instance` construction throw: write it
+	/// through `Instance::GetConfig` instead.
+	/// @param name The option's canonical name or one of its aliases.
+	/// @param value The value, in the textual form SQL `SET` accepts.
+	auto Set(std::string_view name, std::string_view value) -> StartupOptions & {
+		options.emplace_back(std::string(name), std::string(value));
+		return *this;
+	}
+
 private:
 	std::optional<bool> allow_community_extensions;
 	std::optional<bool> allow_unsigned_extensions;
 	std::optional<bool> allow_unredacted_secrets;
 	std::optional<bool> disable_database_invalidation;
 	std::optional<std::string> custom_user_agent;
+	std::vector<std::pair<std::string, std::string>> options;
 };
 
 class Instance final : public detail::Handle<Instance> {
@@ -1225,6 +1250,22 @@ public:
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param options The options that can only be chosen at startup.
 	Instance(Environment &env, const std::string &path, const StartupOptions &options = {});
+
+	/// Opens the database file `path` in an instance shared through the default environment: a new handle to the
+	/// instance that already has the file open, or else to a new instance with the file attached as its default
+	/// database. Every handle for the same file sees the same database; it is closed once the last handle and the last
+	/// connection on it are destroyed, and opening it meanwhile waits for that rather than opening it twice. See
+	/// `duckdb_v2_instance_open_shared` for the details.
+	/// @param path The database file, or ":memory:" / the empty string for a new in-memory database, which is never
+	/// shared.
+	/// @param options The options that can only be chosen at startup. An instance that is already open is shared only
+	/// when it was created with the same options, written the same way.
+	/// @throws Exception When the file is open in an instance created with other options, or attached to an instance
+	/// that is not shared.
+	static auto OpenShared(const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options = {}) -> Instance;
 
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
@@ -2024,6 +2065,19 @@ public:
 		}
 	}
 
+	/// A DECIMAL of a width and scale that are only known at runtime, by its backing integer.
+	struct RuntimeDecimal {
+		/// The unscaled value: the DECIMAL is `value / 10^scale`, e.g. 12345 for 123.45 at scale 2.
+		int128_t value;
+		uint8_t width;
+		uint8_t scale;
+	};
+
+	/// Reads a DECIMAL of any width and scale, for when they are not known at compile time; `Get<WIDTH, SCALE>` is the
+	/// typed alternative.
+	/// @throws Exception When the value is NULL or not a DECIMAL.
+	auto GetDecimal() const -> RuntimeDecimal;
+
 	/// A NULL of the given type.
 	/// @param factory The factory to create the value with.
 	/// @param type The type the NULL carries.
@@ -2068,6 +2122,15 @@ public:
 	static auto Create(Factory &factory, decimal_t<WIDTH, SCALE> value) -> Value {
 		return CreateDecimal(factory, WidenDecimal(value.value), WIDTH, SCALE);
 	}
+
+	/// Creates a DECIMAL of a width and scale chosen at runtime; `Create(factory, decimal_t<WIDTH, SCALE>)` is the
+	/// typed alternative.
+	/// @param factory The factory to create the value with.
+	/// @param value The unscaled value, e.g. 12345 for 123.45 at scale 2.
+	/// @param width The number of digits, in [1, 255]; widths above 38 are stored as BIGNUM.
+	/// @param scale The number of digits after the decimal point, at most `width`.
+	/// @throws Exception When the width or scale is out of range, or the value does not fit in `width` digits.
+	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	static auto Create(Factory &factory, bit_t value) -> Value;
 	static auto Create(Factory &factory, bignum_t value) -> Value;
@@ -2144,10 +2207,6 @@ public:
 private:
 	/// @internal Reads the backing integer, throwing unless the value's own width and scale are the ones asked for.
 	void GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const;
-
-	/// @internal The runtime forwarder behind the templated DECIMAL constructors, so those can be defined in the header
-	/// without naming a C type.
-	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
 	/// every tier.
@@ -2408,7 +2467,7 @@ public:
 	/// Place it in the vector owning this heap with `Vector::SetString`.
 	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		ValidateUTF8(data);
@@ -2423,7 +2482,7 @@ public:
 
 	/// `AddString` for arbitrary bytes rather than text.
 	auto AddBlob(std::string_view data) -> blob_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		if (data.size() > (std::numeric_limits<uint32_t>::max)()) {
 			ThrowStringTooLong(data.size());
 		}
 		const auto size = static_cast<uint32_t>(data.size());
@@ -7572,3 +7631,12 @@ inline auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters
 
 } // namespace cxx
 } // namespace duckdb
+
+#ifdef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#pragma pop_macro("DELETE")
+#undef DUCKDB_CPP_RESTORE_DELETE_MACRO
+#endif
+#ifdef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#pragma pop_macro("IGNORE")
+#undef DUCKDB_CPP_RESTORE_IGNORE_MACRO
+#endif

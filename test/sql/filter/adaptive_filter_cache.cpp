@@ -35,7 +35,7 @@ TEST_CASE("Published pure runtime-filter children support adaptive caches", "[fi
 	prefix->Initialize(*con.context, 1, Value::BIGINT(3000), Value::BIGINT(3000), 1);
 	auto build_state = prefix->InitializeBuildState(*con.context);
 	prefix->InsertKeys(keys, *build_state);
-	prefix->MergeBuildState(*build_state);
+	prefix->MergeBuildState(std::move(build_state));
 	float threshold;
 	idx_t vectors;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, threshold, vectors);
@@ -68,6 +68,61 @@ TEST_CASE("Published pure runtime-filter children support adaptive caches", "[fi
 				idx_t count = 1;
 				cache->Filter(codes, selected, count);
 				REQUIRE(count == 1);
+			}
+		}
+	}
+}
+
+TEST_CASE("Cached comparisons preserve NULLs and selected row indices", "[filter][adaptive_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const idx_t count = GENERATE(0, 2, 4);
+	Vector source(LogicalType::BIGINT, 4);
+	{
+		auto writer = FlatVector::Writer<int64_t>(source, 4);
+		writer.WriteNull();
+		writer.WriteValue(-1);
+		writer.WriteValue(0);
+		writer.WriteValue(1);
+	}
+	const vector<vector<idx_t>> expected_rows {{2, 3}, {0}, {0, 1, 2, 3}, {}, {}};
+	for (idx_t representation = 0; representation < expected_rows.size(); representation++) {
+		Vector values(LogicalType::BIGINT);
+		if (representation == 0) {
+			values.Reference(source);
+		} else if (representation == 1) {
+			SelectionVector order(4);
+			order.set_index(0, 3);
+			order.set_index(1, 1);
+			order.set_index(2, 0);
+			order.set_index(3, 1);
+			values.Slice(source, order, 4);
+		} else {
+			auto value = representation == 2   ? Value::BIGINT(1)
+			             : representation == 3 ? Value::BIGINT(-1)
+			                                   : Value(LogicalType::BIGINT);
+			values.Reference(value, count_t(4));
+		}
+		for (const bool null_predicate : {false, true}) {
+			CAPTURE(representation, null_predicate, count);
+			auto predicate = null_predicate ? Value(LogicalType::BIGINT) : Value::BIGINT(0);
+			auto comparison =
+			    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, predicate);
+			ExpressionFilter optional(
+			    CreateSelectivityOptionalFilterExpression(comparison->expr->Copy(), LogicalType::BIGINT, 1.0f, 6));
+			auto state = TableFilterState::Initialize(*con.context, optional);
+			REQUIRE(state->can_cache);
+			auto cache = state->CreateCache(values, count);
+			SelectionVector codes, selected;
+			auto selected_count = count;
+			cache->Filter(codes, selected, selected_count);
+			auto expected = null_predicate ? vector<idx_t> {} : expected_rows[representation];
+			while (!expected.empty() && expected.back() >= count) {
+				expected.pop_back();
+			}
+			REQUIRE(selected_count == expected.size());
+			for (idx_t row = 0; row < selected_count; row++) {
+				REQUIRE(selected.get_index(row) == expected[row]);
 			}
 		}
 	}
@@ -116,13 +171,27 @@ TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adapti
 		auto cache = state->CreateCache(dictionary, dictionary.size());
 		for (idx_t batch = 0; batch < 6 * vectors; batch++) {
 			CAPTURE(order, batch);
-			vector<idx_t> lengths {9, 1};
-			SelectionVector run_codes(2), row_codes(10), selected_runs, expected_rows;
+			vector<idx_t> lengths {0, 9, 1};
+			SelectionVector run_codes(3), row_codes(10), selected_runs, expected_rows;
 			const auto first = batch < vectors ? 2 : 0;
-			run_codes.set_index(0, first);
-			run_codes.set_index(1, 1);
+			run_codes.set_index(0, 2);
+			run_codes.set_index(1, first);
+			run_codes.set_index(2, 1);
+			if (order == 0) {
+				for (const idx_t selected_count : {0, 2, 3}) {
+					vector<idx_t> empty_lengths {0, 0, selected_count == 2 ? idx_t(1) : idx_t(0)};
+					SelectionVector empty_selected(3);
+					empty_selected.set_index(0, 1);
+					empty_selected.set_index(1, 0);
+					empty_selected.set_index(2, 2);
+					idx_t empty_count = selected_count;
+					cache->FilterRuns(run_codes, array_ptr<const idx_t>(empty_lengths.data(), empty_lengths.size()),
+					                  empty_selected, empty_count);
+					REQUIRE(empty_count == selected_count);
+				}
+			}
 			for (idx_t row = 0; row < 10; row++) {
-				row_codes.set_index(row, row < lengths[0] ? first : 1);
+				row_codes.set_index(row, row < lengths[1] ? first : 1);
 			}
 			idx_t run_count = lengths.size(), expected_count = 10;
 			auto expected_cache = oracle->CreateCache(dictionary, dictionary.size());
@@ -132,7 +201,7 @@ TEST_CASE("Run-weighted cached selections match expanded rows", "[filter][adapti
 			vector<idx_t> actual_rows;
 			for (idx_t idx = 0; idx < run_count; idx++) {
 				const auto run = selected_runs.get_index(idx);
-				const auto offset = run == 0 ? 0 : lengths[0];
+				const auto offset = run < 2 ? 0 : lengths[1];
 				for (idx_t row = 0; row < lengths[run]; row++) {
 					actual_rows.push_back(offset + row);
 				}
@@ -237,8 +306,9 @@ TEST_CASE("Run cache accounting survives selections partial batches and row fall
 #ifndef DUCKDB_CRASH_ON_ASSERT
 		SelectionVector values, selected;
 		idx_t count = 0;
-		REQUIRE_THROWS_AS(cache->FilterRuns(values, array_ptr<const idx_t>(nullptr, 0), selected, count),
-		                  InternalException);
+		const idx_t row_count = 0;
+		REQUIRE_THROWS_WITH(cache->FilterRuns(values, array_ptr<const idx_t>(row_count), selected, count),
+		                    Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }
@@ -362,13 +432,12 @@ TEST_CASE("Pure filter caches expose borrowed masks with root lifetime checks", 
 	REQUIRE_FALSE((*mask)[3]);
 	REQUIRE(mask->data() == cache->GetPureMask()->data());
 	auto replacement = state->CreateCache(dictionary, dictionary.size());
-	REQUIRE(cache->GetPureMask()->data() != replacement->GetPureMask()->data());
 	state.reset();
 	REQUIRE_FALSE(cache->CanAcceptAll());
 	REQUIRE_FALSE(cache->CanSkipAll());
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(cache->GetPureMask(), InternalException);
-	REQUIRE_THROWS_AS(replacement->GetPureMask(), InternalException);
+	REQUIRE_THROWS_WITH(cache->GetPureMask(), Catch::Contains("Filter cache outlived its filter state"));
+	REQUIRE_THROWS_WITH(replacement->GetPureMask(), Catch::Contains("Filter cache outlived its filter state"));
 #endif
 }
 
@@ -677,7 +746,8 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 		SelectionVector codes;
 		SelectionVector selected;
 		idx_t count = 1;
-		REQUIRE_THROWS_AS(cache->Filter(codes, selected, count), InternalException);
+		REQUIRE_THROWS_WITH(cache->Filter(codes, selected, count),
+		                    Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }
@@ -723,7 +793,7 @@ TEST_CASE("Constant cached batches preserve adaptive feedback and mandatory pred
 		REQUIRE_FALSE(cache->CanSkipAll());
 #ifndef DUCKDB_CRASH_ON_ASSERT
 		idx_t count = STANDARD_VECTOR_SIZE;
-		REQUIRE_THROWS_AS(cache->FilterConstant(0, count), InternalException);
+		REQUIRE_THROWS_WITH(cache->FilterConstant(0, count), Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }

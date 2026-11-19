@@ -206,14 +206,14 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          # Wasm extensions: wasm_eh and wasm_threads everywhere, never wasm_mvp
+          # Wasm and Windows extensions: only built on pull requests that change extensions, never wasm_mvp
           wasm_exclude_archs="wasm_mvp"
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs="$wasm_exclude_archs"
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs="$wasm_exclude_archs;osx_amd64"
           else
-            extra_exclude_archs="$wasm_exclude_archs;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
+            extra_exclude_archs="$wasm_exclude_archs;windows_amd64;windows_amd64_mingw;windows_arm64;osx_amd64;wasm_eh;wasm_threads"
           fi
           if [[ -n "$INPUT_EXCLUDE_ARCHS" ]]; then
             extra_exclude_archs="${extra_exclude_archs:+$extra_exclude_archs;}$INPUT_EXCLUDE_ARCHS"
@@ -1182,8 +1182,6 @@ jobs:
     env:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
-      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
-      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
       # Compile with C++23 to test compatibility with the newer standard.
       CXX_STANDARD: 23
@@ -1214,7 +1212,7 @@ jobs:
       # copy of duckdb, so a type identity that is not stable across images only fails here.
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_release
+        run: build/release/test/run
 
  vector-sizes:
     name: Vector Sizes

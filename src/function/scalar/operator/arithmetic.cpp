@@ -354,8 +354,7 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
-			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
-			bind_data.check_overflow = false;
+			input.bind_data.write().Cast<DecimalArithmeticBindData>().check_overflow = false;
 		}
 		if constexpr (HasBignumOperation<BASEOP>::value) {
 			expr.FunctionMutable().SetFunctionCallback(
@@ -520,7 +519,7 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	}
 }
 
-void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
                                 const BoundScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);

@@ -14,7 +14,14 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/avg_rewrite_profitability.test",
+        "test/optimizer/case_to_filter_aggregate.test",
+        "test/optimizer/case_to_filter_aggregate_distinct_filter.test",
+        "test/optimizer/case_to_filter_aggregate_exactness.test",
+        "test/optimizer/case_to_filter_aggregate_guards.test",
+        "test/optimizer/case_to_filter_aggregate_statistics.test",
         "test/optimizer/generated_domain_plan.test",
+        "test/optimizer/join_to_semi_join.test",
+        "test/optimizer/join_to_semi_join_adversarial.test",
         "test/optimizer/deliminator.test",
         "test/optimizer/pushdown/filter_cannot_pushdown.test",
         "test/optimizer/eager_aggregate_execution.test",
@@ -22,6 +29,7 @@
         "test/optimizer/fixed_key_domain_plan.test",
         "test/optimizer/fixed_key_domain_removal_plan.test",
         "test/optimizer/fixed_key_domain_replacement_plan.test",
+        "test/optimizer/join_elimination_duplicate_insensitive.test",
         "test/optimizer/joins/aggregate_key_join_ce.test",
         "test/optimizer/partial_aggregate_precomputation.test",
         "test/optimizer/partial_aggregate_pushdown.test",
@@ -32,6 +40,7 @@
         "test/optimizer/partial_aggregate_pushdown_throwing_argument.test",
         "test/optimizer/partial_aggregate_pushdown_wide_decimal.test",
         "test/optimizer/partition_stats_exactness.test",
+        "test/optimizer/redundant_distinct.test",
         "test/optimizer/remove_redundant_order.test",
         "test/optimizer/runtime_key_domain_plan.test",
         "test/optimizer/shared_key_domain_plan.test",
@@ -47,6 +56,7 @@
         "test/sql/copy/parquet/parquet_stats.test",
         "test/sql/copy/parquet/read_single_parquet_file.test",
         "test/sql/optimizer/aggregate_stats_propagation.test",
+        "test/sql/optimizer/statistics/distinct_on_stats_propagation.test",
         "test/sql/optimizer/scalar_aggregate_merge_files_plan.test",
         "test/sql/optimizer/scalar_aggregate_merge_plan.test",
         "test/sql/optimizer/scalar_aggregate_merge_tpcds_plan.test",
@@ -54,6 +64,7 @@
         "test/sql/optimizer/test_common_subplan_matching_plan.test",
         "test/sql/optimizer/expression/test_common_aggregate.test",
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/optimizer/correlated_aggregate_outer_join.test",
         "test/sql/subquery/scalar/test_correlated_aggregate_correlation_key_plan.test",
         "test/sql/sql_export/scope_reuse_plan.test",
         "test/sql/sql_export/composition_q1_plan.test",
@@ -123,7 +134,9 @@
         "test/sql/variant/variant_comparator.test",
         "test/sql/window/test_window_agg_stats_propagation.test",
         "test/sql/sql_export/call_values.test",
-        "test/sql/sql_export/quantile_constant_arguments.test"
+        "test/sql/sql_export/quantile_constant_arguments.test",
+        "test/sql/aggregate/aggregates/approx_top_k_state_spilling.test_slow",
+        "test/sql/aggregate/aggregates/arena_states_memory_limit.test"
       ]
     },
     {

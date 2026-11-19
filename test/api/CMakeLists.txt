@@ -7,7 +7,9 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_json_execute_serialized_sql.cpp
     test_multi_file_column_mapper.cpp
+    test_multi_file_lazy_initialization.cpp
     test_process_util.cpp
     test_random_after_clone.cpp
     test_remove_directory_extended.cpp
@@ -15,6 +17,7 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
@@ -62,15 +65,18 @@ set(TEST_API_OBJECTS
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
+    test_persisted_view_over_rows.cpp
     test_stream_result_buffer.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_extension_metrics.cpp
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
+    test_native_scan.cpp
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
+    test_detach_held_reference.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp

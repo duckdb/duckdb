@@ -1,0 +1,147 @@
+diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
+index 3a220e2..0ba2d87 100644
+--- a/database-connector/src/optimizer/optimizer_util.cpp
++++ b/database-connector/src/optimizer/optimizer_util.cpp
+@@ -25,7 +25,7 @@ bool OptimizerUtil::FindExtensionGet(const std::string &table_scan_name, Logical
+ 		return false;
+ 	}
+ 	get_out = &get;
+-	bind_out = &get.bind_data->Cast<dbconnector::BindData>();
++	bind_out = &get.bind_data.write().Cast<dbconnector::BindData>();
+ 	return true;
+ }
+ 
+diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+index 1a8f16d..4d2f19d 100644
+--- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
++++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+@@ -329,7 +329,7 @@ void OrderByAndLimitOptimizer::Optimize(const OrderByAndLimitOptimizer::Config &
+ 		default:
+ 			return;
+ 		}
+-		auto &bind_data = get.bind_data->Cast<dbconnector::BindData>();
++		auto &bind_data = get.bind_data.write().Cast<dbconnector::BindData>();
+ 		auto &order_by_and_limit_bind_data = bind_data.GetOrderByAndLimitBindData();
+ 		if (!order_by_and_limit_bind_data.limit_clause.empty()) {
+ 			return;
+diff --git a/src/include/postgres_binary_copy.hpp b/src/include/postgres_binary_copy.hpp
+index 2e8fb9d..abf5114 100644
+--- a/src/include/postgres_binary_copy.hpp
++++ b/src/include/postgres_binary_copy.hpp
+@@ -24,14 +24,14 @@ public:
+ 	                                                        const vector<LogicalType> &sql_types);
+ 
+ 	static unique_ptr<GlobalFunctionData>
+-	PostgresBinaryWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data, const string &file_path);
++	PostgresBinaryWriteInitializeGlobal(ClientContext &context, const FunctionData &bind_data, const string &file_path);
+ 	static unique_ptr<LocalFunctionData> PostgresBinaryWriteInitializeLocal(ExecutionContext &context,
+-	                                                                        FunctionData &bind_data_p);
+-	static void PostgresBinaryWriteSink(ExecutionContext &context, FunctionData &bind_data_p,
++	                                                                        const FunctionData &bind_data_p);
++	static void PostgresBinaryWriteSink(ExecutionContext &context, const FunctionData &bind_data_p,
+ 	                                    GlobalFunctionData &gstate, LocalFunctionData &lstate, DataChunk &input);
+-	static void PostgresBinaryWriteCombine(ExecutionContext &context, FunctionData &bind_data,
++	static void PostgresBinaryWriteCombine(ExecutionContext &context, const FunctionData &bind_data,
+ 	                                       GlobalFunctionData &gstate, LocalFunctionData &lstate);
+-	static void PostgresBinaryWriteFinalize(ClientContext &context, FunctionData &bind_data,
++	static void PostgresBinaryWriteFinalize(ClientContext &context, const FunctionData &bind_data,
+ 	                                        GlobalFunctionData &gstate);
+ 
+ 	static unique_ptr<FunctionData> PostgresBinaryReadBind(ClientContext &context, CopyFromFunctionBindInput &info,
+diff --git a/src/postgres_binary_copy.cpp b/src/postgres_binary_copy.cpp
+index 9387cb9..a94fa94 100644
+--- a/src/postgres_binary_copy.cpp
++++ b/src/postgres_binary_copy.cpp
+@@ -63,7 +63,7 @@ unique_ptr<FunctionData> PostgresBinaryCopyFunction::PostgresBinaryWriteBind(Cli
+ }
+ 
+ unique_ptr<GlobalFunctionData>
+-PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
++PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeGlobal(ClientContext &context, const FunctionData &bind_data,
+                                                                 const string &file_path) {
+ 	auto result = make_uniq<PostgresBinaryCopyGlobalState>(context);
+ 	auto &fs = FileSystem::GetFileSystem(context);
+@@ -74,22 +74,22 @@ PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeGlobal(ClientContext &c
+ }
+ 
+ unique_ptr<LocalFunctionData>
+-PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
++PostgresBinaryCopyFunction::PostgresBinaryWriteInitializeLocal(ExecutionContext &context, const FunctionData &bind_data_p) {
+ 	return make_uniq<LocalFunctionData>();
+ }
+ 
+-void PostgresBinaryCopyFunction::PostgresBinaryWriteSink(ExecutionContext &context, FunctionData &bind_data_p,
++void PostgresBinaryCopyFunction::PostgresBinaryWriteSink(ExecutionContext &context, const FunctionData &bind_data_p,
+                                                          GlobalFunctionData &gstate_p, LocalFunctionData &lstate,
+                                                          DataChunk &input) {
+ 	auto &gstate = gstate_p.Cast<PostgresBinaryCopyGlobalState>();
+ 	gstate.WriteChunk(input);
+ }
+ 
+-void PostgresBinaryCopyFunction::PostgresBinaryWriteCombine(ExecutionContext &context, FunctionData &bind_data,
++void PostgresBinaryCopyFunction::PostgresBinaryWriteCombine(ExecutionContext &context, const FunctionData &bind_data,
+                                                             GlobalFunctionData &gstate, LocalFunctionData &lstate) {
+ }
+ 
+-void PostgresBinaryCopyFunction::PostgresBinaryWriteFinalize(ClientContext &context, FunctionData &bind_data,
++void PostgresBinaryCopyFunction::PostgresBinaryWriteFinalize(ClientContext &context, const FunctionData &bind_data,
+                                                              GlobalFunctionData &gstate_p) {
+ 	auto &gstate = gstate_p.Cast<PostgresBinaryCopyGlobalState>();
+ 	// write the footer and close the file
+@@ -189,7 +189,7 @@ static unique_ptr<FunctionData> ReadPostgresBinaryBind(ClientContext &context, T
+ 	return std::move(result);
+ }
+ 
+-static void PostgresBinaryReadSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
++static void PostgresBinaryReadSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
+                                         const BoundTableFunction &function) {
+ 	auto &bind_data = bind_data_p->Cast<PostgresBinaryReadBindData>();
+ 	serializer.WriteProperty(100, "file_path", bind_data.file_path);
+diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
+index 03ded22..9035e9c 100644
+--- a/src/postgres_scanner.cpp
++++ b/src/postgres_scanner.cpp
+@@ -680,7 +680,7 @@ double PostgresScanProgress(ClientContext &context, const FunctionData *bind_dat
+ 	return MinValue<double>(100, progress);
+ }
+ 
+-static void PostgresScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
++static void PostgresScanSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data_p,
+                                   const BoundTableFunction &function) {
+ 	throw NotImplementedException("PostgresScanSerialize");
+ }
+diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
+index 4142df9..1ba04db 100644
+--- a/src/storage/postgres_insert.cpp
++++ b/src/storage/postgres_insert.cpp
+@@ -531,7 +531,7 @@ void PostgresCatalog::MaterializePostgresScans(PhysicalOperator &op) {
+ 	if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = op.Cast<PhysicalTableScan>();
+ 		if (PostgresCatalog::IsPostgresScan(table_scan.function.GetName().GetIdentifierName())) {
+-			auto &bind_data = table_scan.bind_data->Cast<PostgresBindData>();
++			auto &bind_data = table_scan.bind_data.write().Cast<PostgresBindData>();
+ 			bind_data.requires_materialization = true;
+ 			bind_data.max_threads = 1;
+ 			bind_data.can_use_main_thread = true;
+diff --git a/src/storage/postgres_optimizer.cpp b/src/storage/postgres_optimizer.cpp
+index afbb219..e064f05 100644
+--- a/src/storage/postgres_optimizer.cpp
++++ b/src/storage/postgres_optimizer.cpp
+@@ -77,7 +77,7 @@ static void OptimizePostgresScanLimitPushdown(unique_ptr<LogicalOperator> &op) {
+ 			return;
+ 		}
+ 
+-		auto &bind_data = get.bind_data->Cast<PostgresBindData>();
++		auto &bind_data = get.bind_data.write().Cast<PostgresBindData>();
+ 
+ 		string generated_limit_clause = "";
+ 		if (limit.limit_val.Type() != LimitNodeType::UNSET) {
+@@ -120,7 +120,7 @@ void PostgresOptimizer::Optimize(OptimizerExtensionInput &input, unique_ptr<Logi
+ 	for (auto &entry : operators.scans) {
+ 		auto multiple_scans = entry.second.size() > 1;
+ 		for (auto &scan : entry.second) {
+-			auto &bind_data = scan.get().bind_data->Cast<PostgresBindData>();
++			auto &bind_data = scan.get().bind_data.write().Cast<PostgresBindData>();
+ 			// if there is a single scan in the plan we can always stream using the main thread
+ 			// if there is more than one scan we either (1) need to materialize, or (2) cannot use the main thread
+ 			if (multiple_scans) {

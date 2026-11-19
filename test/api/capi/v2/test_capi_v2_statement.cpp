@@ -482,11 +482,11 @@ TEST_CASE("V2: statement_execute binds named parameters", "[capi_v2][sql_stateme
 	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 20);
 
 	// Bind by name: order of the arrays is irrelevant, only the name matches.
-	StrArray names = {std::string_view("a"), std::string_view("b")};
+	const char *const names[] = {"a", "b"};
+	const idx_t lengths[] = {1, 1};
 	duckdb_v2_value_handle values[2] = {va, vb};
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names.ptrs(), names.lengths(), values, 2, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, lengths, values, 2, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(StmtScalarI64(r) == 30);
 	duckdb_v2_result_destroy(&r);
 

@@ -49,7 +49,7 @@ TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dy
 	range->Initialize(context, 3, Value::BIGINT(11), Value::BIGINT(77), 1024);
 	auto build_state = range->InitializeBuildState(context);
 	range->InsertKeys(build_keys, *build_state);
-	range->MergeBuildState(*build_state);
+	range->MergeBuildState(std::move(build_state));
 	vector<unique_ptr<Expression>> children;
 	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0ULL));
 	unique_ptr<FunctionData> bind_data;
@@ -464,7 +464,7 @@ TEST_CASE("IN and other runtime filters from separate producers retain fast exec
 		prf->Initialize(*test.con.context, keys.size(), Value::INTEGER(5), Value::INTEGER(8), 64);
 		auto state = prf->InitializeBuildState(*test.con.context);
 		prf->InsertKeys(keys, *state);
-		prf->MergeBuildState(*state);
+		prf->MergeBuildState(std::move(state));
 		other = make_uniq<BoundFunctionExpression>(BoundScalarFunction(PrefixRangeScalarFun::GetFunction(type)),
 		                                           std::move(arguments),
 		                                           make_uniq<PrefixRangeFunctionData>(prf, true, "a", type, 0.5f, 6));
