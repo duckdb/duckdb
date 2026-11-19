@@ -306,8 +306,8 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 
 	ColumnMapResult result;
 	result.local_column = local_column;
-	if (!column_mapping.empty()) {
-		// we have column mappings at this level - construct the struct
+	if (!column_mapping.empty() || !is_root) {
+		// A nested source still supplies the list entries when the element comes from a default.
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
@@ -435,8 +435,8 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 	ColumnMapResult result;
 	result.local_column = local_column;
-	if (!column_mapping.empty()) {
-		// we have column mappings at this level - construct the struct
+	if (!column_mapping.empty() || !is_root) {
+		// A nested source still supplies the map entries when the key and value come from defaults.
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
