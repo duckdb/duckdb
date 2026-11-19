@@ -48,10 +48,11 @@ add_library_unity(
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp
-  outer_join_simplification.cpp
+  join_simplification.cpp
   partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
+  join_to_semi_join.cpp
   join_build_properties.cpp
   recursive_join_planning.cpp
   regex_range_filter.cpp
@@ -75,6 +76,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   self_join_aggregate.cpp
+  set_operation_aggregate.cpp
   projection_pullup.cpp
   projection_placement.cpp
   remote_pushdown_optimizer.cpp

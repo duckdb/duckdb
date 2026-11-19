@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/once_flag.hpp"
@@ -266,7 +267,7 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
                                vector<column_t> partitions)
     : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality),
@@ -286,11 +287,36 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 			max_orders = bound_window.OrderBy().size();
 		}
 	}
+
+	// the comparisons of the sorted partition and order keys
+	auto &sort_expr = select_list[order_idx]->Cast<BoundWindowExpression>();
+	vector<LogicalType> key_types;
+	if (!partition_info.RequiresPartitionColumns()) {
+		for (auto &partition : sort_expr.Partitions()) {
+			key_types.push_back(partition->GetReturnType());
+		}
+	}
+	const auto order_begin = key_types.size();
+	for (auto &order : sort_expr.OrderBy()) {
+		key_types.push_back(order.expression->GetReturnType());
+	}
+	auto create_distinct_from = [&](idx_t end, idx_t begin) {
+		auto type = WindowCollectionChunkScanner::PrefixStructType(key_types, end, begin);
+		return BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM, type, 0, type,
+		                                                  1);
+	};
+	partition_distinct_from = create_distinct_from(order_begin, 0);
+	for (auto &expr : select_list) {
+		const auto end = order_begin + expr->Cast<BoundWindowExpression>().OrderBy().size();
+		if (end > order_begin && !order_distinct_from.count(end)) {
+			order_distinct_from[end] = create_distinct_from(end, order_begin);
+		}
+	}
 }
 
-PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
-    : PhysicalWindow(physical_plan, std::move(types), std::move(select_list), estimated_cardinality,
+    : PhysicalWindow(physical_plan, context, std::move(types), std::move(select_list), estimated_cardinality,
                      vector<column_t>()) {
 }
 
@@ -635,6 +661,7 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	auto &scan_cols = gsink.sort_strategy->sort_ids;
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
 	unordered_map<idx_t, DataChunk> prefixes;
+	unordered_map<idx_t, unique_ptr<ExpressionExecutor>> distinct_from;
 	for (auto &order_mask : order_masks) {
 		D_ASSERT(order_mask.first >= order_begin);
 		auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
@@ -642,9 +669,15 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 		auto &keys = prefixes[order_mask.first];
 		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
 		keys.Initialize(collection.GetAllocator(), types);
+		if (order_mask.first == order_begin) {
+			continue;
+		}
+		distinct_from[order_mask.first] = make_uniq<ExpressionExecutor>(
+		    gsink.client.GetContext(), *gsink.op.order_distinct_from.at(order_mask.first));
 	}
 
-	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, order_begin,
+	WindowDeltaScanner(gsink.client.GetContext(), *gsink.op.partition_distinct_from, collection, block_begin, block_end,
+	                   scan_cols, order_begin,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Process the partition boundaries
@@ -678,10 +711,14 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   if (ndistinct) {
 				                   prefix.Slice(matching, nmatch);
 			                   } else {
-				                   prefix.SetChildCardinality(nmatch);
+				                   // Slice instead of resizing: the vectors share their buffers with prev and curr
+				                   for (auto &vec : prefix.data) {
+					                   vec.Slice(Vector::Ref(vec), 0, nmatch);
+				                   }
+				                   prefix.CheckCardinality(nmatch);
 			                   }
-			                   const auto m = VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, nmatch,
-			                                                                 &distinct, nullptr);
+			                   const auto m = distinct_from[order_mask.first]->SelectExpression(
+			                       prefix, &distinct, nullptr, nullptr, nmatch);
 			                   for (idx_t i = 0; i < m; ++i) {
 				                   const idx_t curr_index = row_idx + matching.get_index(distinct.get_index(i));
 				                   order_mask.second.SetValidUnsafe(curr_index);

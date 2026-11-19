@@ -1,0 +1,135 @@
+# name: test/sql/attach/external_resource_type_dotted.test
+# description: An external resource type can be spelled without quotes as a dotted name: aws.s3tables.bucket
+# group: [attach]
+
+require no_extension_autoloading "EXPECTED: the test checks the error given without autoloading"
+
+statement ok
+SET autoload_known_extensions = false;
+
+statement ok
+SET autoinstall_known_extensions = false;
+
+# --- the unquoted form is the same string as the quoted one ------------------------------------------------
+
+statement error
+CREATE EXTERNAL RESOURCE nobody.provides.this AS r;
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+statement error
+CREATE EXTERNAL RESOURCE 'nobody.provides.this' AS r;
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+statement error
+REGISTER EXTERNAL RESOURCE nobody.provides.this AS r FROM MAP {'id': 'x'};
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE nobody.provides.this AS db;
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+statement error
+SELECT * FROM (SHOW ALL EXTERNAL RESOURCES WITH TYPE nobody.provides.this);
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+# Unquoted, the name is case-folded like an identifier; quoted, it is taken as written
+statement error
+CREATE EXTERNAL RESOURCE Nobody.Provides.THIS AS r;
+----
+<REGEX>:.*unknown resource type "nobody.provides.this".*
+
+statement error
+CREATE EXTERNAL RESOURCE 'Nobody.Provides.THIS' AS r;
+----
+<REGEX>:.*unknown resource type "Nobody.Provides.THIS".*
+
+# Words may be keywords or start with a digit, and a label may have single dashes inside
+statement error
+CREATE EXTERNAL RESOURCE nobody.table.2nd AS r;
+----
+<REGEX>:.*unknown resource type "nobody.table.2nd".*
+
+statement error
+CREATE EXTERNAL RESOURCE nobody.provides-this.now AS r;
+----
+<REGEX>:.*unknown resource type "nobody.provides-this.now".*
+
+# A plain word is a type name too, folded the same way
+statement error
+CREATE EXTERNAL RESOURCE Nobody AS r;
+----
+<REGEX>:.*unknown resource type "nobody".*
+
+# --- what is neither goes in quotes --------------------------------------------------------------------------
+
+# spaces (or a comment) around a dot
+statement error
+CREATE EXTERNAL RESOURCE nobody . provides.this AS r;
+----
+<REGEX>:Parser Error.*
+
+# a colon, as in aws:cloudformation:quack-on-ec2
+statement error
+CREATE EXTERNAL RESOURCE 'aws:cloudformation:quack-on-ec2' AS r;
+----
+<REGEX>:.*provided by the aws extension.*
+
+statement error
+CREATE EXTERNAL RESOURCE aws:cloudformation:quack-on-ec2 AS r;
+----
+<REGEX>:Parser Error.*
+
+# a trailing or doubled dot
+statement error
+CREATE EXTERNAL RESOURCE nobody.provides. AS r;
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE EXTERNAL RESOURCE nobody..provides AS r;
+----
+<REGEX>:Parser Error.*
+
+# --- a registered dotted type, through every statement -------------------------------------------------------
+
+statement ok
+CREATE MACRO dt_create(p) AS TABLE SELECT MAP {'id': 'd1'} AS handle;
+
+statement ok
+CREATE MACRO dt_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri': 'memory:', 'attached_db_type': 'duckdb'} AS result;
+
+statement ok
+CREATE MACRO dt_destroy(h) AS TABLE SELECT 'gone' AS status;
+
+statement ok
+CALL register_external_resource_type('test.dotted.type', kind := 'catalog', create_function := 'dt_create',
+    status_function := 'dt_status', destroy_function := 'dt_destroy');
+
+statement ok
+CREATE EXTERNAL RESOURCE test.dotted.type AS created;
+
+statement ok
+REGISTER EXTERNAL RESOURCE TEST.Dotted.Type AS registered FROM MAP {'id': 'd2'};
+
+query TT rowsort
+SELECT name, type FROM (SHOW EXTERNAL RESOURCES WITH TYPE test.dotted.type);
+----
+created	test.dotted.type
+registered	test.dotted.type
+
+query TT rowsort
+SELECT name, type FROM (SHOW EXTERNAL RESOURCES WITH TYPE 'test.dotted.type');
+----
+created	test.dotted.type
+registered	test.dotted.type
+
+statement ok
+DESTROY EXTERNAL RESOURCE created;
+
+statement ok
+DESTROY EXTERNAL RESOURCE registered;

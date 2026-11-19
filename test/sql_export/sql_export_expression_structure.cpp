@@ -332,8 +332,9 @@ TEST_CASE("Bound expression SQL export rejects repeated volatile exclusive BETWE
 		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "random";
 	});
 	REQUIRE(random_expression);
-	auto volatile_between = BoundBetweenExpression::Create(random_expression->Copy(), Constant(Value::DOUBLE(0)),
-	                                                       Constant(Value::DOUBLE(1)), false, false);
+	auto volatile_between =
+	    BoundBetweenExpression::Create(*connection.context, random_expression->Copy(), Constant(Value::DOUBLE(0)),
+	                                   Constant(Value::DOUBLE(1)), false, false);
 	BoundExpressionSQLExportContext empty_context;
 	auto volatile_result = BoundExpressionSQLExporter::Export(*volatile_between, empty_context);
 	REQUIRE(volatile_result.HasError());
@@ -399,7 +400,8 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 	throwing_context.resolve_binding = [](const ColumnBinding &) -> optional<ResolvedSQLColumnReference> {
 		throw InvalidInputException("synthetic resolver failure");
 	};
-	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(expression, throwing_context), InvalidInputException);
+	REQUIRE_THROWS_WITH(BoundExpressionSQLExporter::Export(expression, throwing_context),
+	                    Catch::Contains("synthetic resolver failure"));
 }
 
 } // namespace bound_expression_sql_export_test

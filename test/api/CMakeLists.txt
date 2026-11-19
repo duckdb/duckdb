@@ -17,6 +17,7 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
@@ -74,6 +75,7 @@ set(TEST_API_OBJECTS
     test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
+    test_detach_held_reference.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp

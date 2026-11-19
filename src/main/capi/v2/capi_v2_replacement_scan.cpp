@@ -257,8 +257,9 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacem
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(duckdb_v2_replacement_scan_info_handle info,
                                                           duckdb_v2_column_data_collection_handle collection,
-                                                          const char **column_names, const idx_t *column_names_lengths,
-                                                          idx_t column_count, duckdb_v2_error_info_handle *err) {
+                                                          const char *const *column_names,
+                                                          const idx_t *column_names_lengths, idx_t column_count,
+                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(collection);
 	return WithErrorHandler(err, [&]() {
