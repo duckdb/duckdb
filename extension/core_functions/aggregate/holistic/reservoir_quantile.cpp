@@ -287,11 +287,13 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		D_ASSERT(state.v);
-		auto v_t = ReservoirQuantileFinalizeState::CopySample(state, finalize_data);
-
 		auto &entry = target;
 		entry.offset = ridx;
 		entry.length = bind_data.quantiles.size();
+		if (entry.length == 0) {
+			return;
+		}
+		auto v_t = ReservoirQuantileFinalizeState::CopySample(state, finalize_data);
 		for (size_t q = 0; q < entry.length; ++q) {
 			const auto &quantile = bind_data.quantiles[q];
 			auto offset = (idx_t)((double)(state.pos - 1) * quantile);
