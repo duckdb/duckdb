@@ -139,6 +139,18 @@ class ExtensionTestConfigTest(unittest.TestCase):
 
 
 class ExtensionTestInvocationTest(unittest.TestCase):
+    def test_empty_configs_check_extension_load_without_test_discovery(self):
+        result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with mock.patch.object(runner, "read_extension_configs", return_value=[]), contextlib.redirect_stdout(
+            io.StringIO()
+        ) as stdout:
+            with mock.patch.object(runner.subprocess, "run", return_value=result) as run:
+                self.assertEqual(runner.main(["--extension-configs", "empty.cmake", "--duckdb", "/build/duckdb"]), 0)
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("-bail", run.call_args.args[0])
+        self.assertIn("LOAD ", run.call_args.args[0][-1])
+        self.assertIn("No extension SQL tests configured", stdout.getvalue())
+
     def test_empty_test_listing_fails(self):
         result = subprocess.CompletedProcess([], 0, stdout="name\tgroup\n", stderr="")
         with mock.patch.object(runner.subprocess, "run", return_value=result) as run:
@@ -150,11 +162,12 @@ class ExtensionTestInvocationTest(unittest.TestCase):
         failure = subprocess.CalledProcessError(
             1, ["duckdb", "-c", "LOAD test"], stderr="Invalid access to memory location"
         )
-        with mock.patch.object(runner.subprocess, "run", side_effect=failure) as run:
-            with self.assertRaises(subprocess.CalledProcessError):
-                runner.run_extension_tests(Path("/build/duckdb"), [Path("/extension/tests")], Path("/source"))
-        self.assertEqual(run.call_count, 1)
-        self.assertIn("-bail", run.call_args.args[0])
+        for roots in ([], [Path("/extension/tests")]):
+            with self.subTest(roots=roots), mock.patch.object(runner.subprocess, "run", side_effect=failure) as run:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    runner.run_extension_tests(Path("/build/duckdb"), roots, Path("/source"))
+            self.assertEqual(run.call_count, 1)
+            self.assertIn("-bail", run.call_args.args[0])
 
     def test_failed_discovery_preserves_cause(self):
         failure = subprocess.CalledProcessError(1, ["duckdb"], output="output", stderr="extension load failed")
