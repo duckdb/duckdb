@@ -260,6 +260,14 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 	return make_uniq<SortGlobalSinkState>(context);
 }
 
+void Sort::SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t expected_size) const {
+	if (expected_size == 0) {
+		return;
+	}
+	auto &sink = gstate.Cast<SortGlobalSinkState>();
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.GetContext(), expected_size);
+}
+
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 idx_t Sort::GetLocalSizeInBytes(LocalSinkState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<SortLocalSinkState>();

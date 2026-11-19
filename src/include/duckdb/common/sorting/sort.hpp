@@ -78,6 +78,8 @@ public:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
+	//! Report the input size up front, so the memory reservation follows it instead of the default minimum
+	void SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t expected_size) const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	SinkFinalizeType Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const;
