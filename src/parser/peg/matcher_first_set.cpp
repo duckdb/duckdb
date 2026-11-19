@@ -105,10 +105,18 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 		}
 		return false;
 	}
+	return MightMatchSequence(state);
+}
+
+bool MatcherFirstSet::MightMatchSequence(MatchState &state) const {
 	if (!sequence_check_index || !state.context.sequence_checks) {
 		return true;
 	}
-	auto &check = *(*state.context.sequence_checks)[sequence_check_index - 1];
+	return MightMatchSequence(*(*state.context.sequence_checks)[sequence_check_index - 1], state);
+}
+
+bool MatcherFirstSet::MightMatchSequence(const MatcherSequenceCheck &check, MatchState &state) const {
+	auto &iterator = state.token_iterator;
 	for (idx_t i = 0; i < check.later_tokens.size(); i++) {
 		auto ahead = i + 2;
 		auto later = iterator.Peek(ahead);
@@ -140,12 +148,18 @@ bool MatcherFirstSet::MightMatchLeadingChoice(const MatcherSequenceCheck &check,
 	auto next_literal = [&]() {
 		return iterator.PeekLiteralInfo(*table, 1);
 	};
-	for (auto &alternative : check.leading_choice->matchers) {
-		auto &first = alternative.get().first_set;
+	auto &alternatives = check.leading_choice->matchers;
+	for (idx_t i = 0; i < alternatives.size(); i++) {
+		auto &first = alternatives[i].get().first_set;
 		if (!first.computed || first.any || first.nullable) {
 			return true;
 		}
 		if (!first.Contains(*token, current_literal)) {
+			continue;
+		}
+		// an alternative that is a checked sequence itself cannot match when its own check rejects it
+		auto alternative_check = check.alternative_checks[i];
+		if (alternative_check && !MightMatchSequence(*(*state.context.sequence_checks)[alternative_check - 1], state)) {
 			continue;
 		}
 		if (first.second.Contains(*next, next_literal)) {

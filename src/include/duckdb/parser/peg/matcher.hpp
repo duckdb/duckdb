@@ -332,6 +332,8 @@ struct MatcherSequenceCheck {
 	//! tokens the sequence needs at positions 2, 3, ... when its leading elements each consume exactly one token
 	vector<MatcherTokenSet> later_tokens;
 	optional_ptr<const ChoiceMatcher> leading_choice;
+	//! one-based sequence check of each alternative of the leading choice, zero for an alternative without one
+	vector<uint16_t> alternative_checks;
 	//! FIRST set of the sequence after the leading choice
 	MatcherTokenSet rest_first;
 	bool rest_nullable = false;
@@ -404,6 +406,9 @@ struct MatcherFirstSet : public MatcherTokenSet {
 	}
 	//! The lookahead check for a token in FIRST: a one-token match or a valid second token, then the tail check
 	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
+	//! The sequence check of a matcher whose first two tokens passed
+	DUCKDB_API bool MightMatchSequence(MatchState &state) const;
+	DUCKDB_API bool MightMatchSequence(const MatcherSequenceCheck &check, MatchState &state) const;
 	//! The per-alternative second-token check of a sequence that starts with a choice
 	DUCKDB_API bool MightMatchLeadingChoice(const MatcherSequenceCheck &check, MatchState &state) const;
 	//! Scans past the tokens the prefix can consume and checks that the element after it can start there

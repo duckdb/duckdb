@@ -533,6 +533,21 @@ void MatcherAllocator::InitializeSequenceChecks(const GrammarLiteralTable &table
 		// every token passing the FIRST check goes through MightMatchSecond, which runs the checks
 		first.first_suffices = false;
 	}
+	// the alternatives of a leading choice that are checked sequences themselves, behind their rule wrappers
+	for (auto &check : sequence_checks) {
+		if (!check->leading_choice) {
+			continue;
+		}
+		for (auto &alternative : check->leading_choice->matchers) {
+			reference<const Matcher> sequence(alternative.get());
+			while (!sequence.get().first_set.sequence_check_index && sequence.get().IsStructural() &&
+			       sequence.get().Type() == MatcherType::LIST &&
+			       sequence.get().Cast<ListMatcher>().matchers.size() == 1) {
+				sequence = sequence.get().Cast<ListMatcher>().matchers[0].get();
+			}
+			check->alternative_checks.push_back(sequence.get().first_set.sequence_check_index);
+		}
+	}
 	// a repetition of a checked sequence starts like the sequence
 	for (auto &matcher : matchers) {
 		if (!matcher->IsStructural() || matcher->Type() != MatcherType::REPEAT) {
