@@ -172,6 +172,7 @@ TEST_CASE("BlockAllocator initializes only for eligible allocations and falls ba
 	auto home = allocator.GetAllocationShard(block);
 	CHECK(home.IsValid() == available);
 	if (available) {
+		CHECK_FALSE(allocator.GetFallbackAllocationShard(block, BLOCK_SIZE).IsValid());
 		CHECK(home.GetIndex() < allocator.GetPoolShardCount());
 		CHECK(allocator.GetAllocationShard(block + BLOCK_SIZE - 1) == home);
 	}
@@ -230,6 +231,11 @@ private:
 	bool valid;
 };
 #endif
+
+// Large backing includes the home-shard trailer outside the requested payload.
+static idx_t LargeAllocationSize(idx_t size) {
+	return size + sizeof(idx_t);
+}
 
 struct AllocationCacheTestData : PrivateAllocatorData {
 	explicit AllocationCacheTestData(atomic<idx_t> &live_bytes) : live_bytes(live_bytes) {
@@ -314,7 +320,7 @@ TEST_CASE("BlockAllocator reclaims cached backing before retrying native allocat
 		live.get()[SIZE - 1] = 84;
 		auto cached = allocator.AllocateData(2 * SIZE);
 		allocator.FreeData(cached, 2 * SIZE);
-		REQUIRE(allocator.GetCachedMemory() == 2 * SIZE);
+		REQUIRE(allocator.GetCachedMemory() == LargeAllocationSize(2 * SIZE));
 		control.memory_limit = live_bytes.load();
 		const auto request_size = operation == Operation::REALLOCATE       ? 2 * SIZE
 		                          : operation == Operation::EXHAUSTED_POOL ? BLOCK_SIZE
@@ -504,18 +510,42 @@ TEST_CASE("Allocation cache reuses compatible allocations and releases retained 
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
 		BlockAllocator allocator(fallback, 256 * 1024, 0);
+		CHECK_FALSE(allocator.GetFallbackAllocationShard(nullptr, SIZE).IsValid());
 		auto uncached = allocator.AllocateData(SIZE + 4096);
-		allocator.FreeData(uncached, SIZE + 4096);
+		REQUIRE(allocator.GetFallbackAllocationShard(uncached, SIZE + 4096).IsValid());
+		uncached[0] = 42;
+		uncached[SIZE] = 84;
+		auto old_pointer = uncached;
+		const auto old_home = allocator.GetFallbackAllocationShard(uncached, SIZE + 4096);
+		uncached = allocator.ReallocateData(uncached, SIZE + 4096, SIZE + 1);
+		CHECK(uncached[0] == 42);
+		CHECK(uncached[SIZE] == 84);
+		auto home = allocator.GetFallbackAllocationShard(uncached, SIZE + 1);
+		REQUIRE(home.IsValid());
+		if (uncached == old_pointer) {
+			CHECK(home == old_home);
+		}
+		uncached = allocator.ReallocateData(uncached, SIZE + 1, 1024);
+		CHECK_FALSE(allocator.GetFallbackAllocationShard(uncached, 1024).IsValid());
+		uncached = allocator.ReallocateData(uncached, 1024, SIZE + 17);
+		REQUIRE(allocator.GetFallbackAllocationShard(uncached, SIZE + 17).IsValid());
+		CHECK(uncached[0] == 42);
+		CHECK(live_bytes.load() == LargeAllocationSize(SIZE + 17));
+		allocator.FreeData(uncached, SIZE + 17);
 		REQUIRE(live_bytes.load() == 0);
 		auto first = allocator.AllocateData(SIZE);
+		const auto first_home = allocator.GetFallbackAllocationShard(first, SIZE);
+		REQUIRE(first_home.IsValid());
+		CHECK(first_home.GetIndex() < allocator.GetFallbackShardCount());
 		first[0] = 42;
 		first[SIZE - 1] = 84;
 		allocator.FreeData(first, SIZE);
-		REQUIRE(live_bytes.load() == SIZE);
+		REQUIRE(live_bytes.load() == LargeAllocationSize(SIZE));
 
 		auto reused = allocator.AllocateData(SIZE);
 		if (pinned) {
 			REQUIRE(reused == first);
+			CHECK(allocator.GetFallbackAllocationShard(reused, SIZE) == first_home);
 			REQUIRE(reused[0] == 42);
 			REQUIRE(reused[SIZE - 1] == 84);
 		}
@@ -569,15 +599,18 @@ TEST_CASE("Huge allocation retention shares cache ownership and pressure reclama
 	{
 		BlockAllocator allocator(fallback, 256 * 1024, 0);
 		auto first = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		const auto home = allocator.GetFallbackAllocationShard(first, size);
+		REQUIRE(home.IsValid());
 		first[0] = 42;
 		first[size - 1] = 84;
 		BlockAllocatorTestHelper::FreeHuge(allocator, first, size);
-		REQUIRE(allocator.GetCachedMemory() == size);
-		REQUIRE(live_bytes.load() == size);
+		REQUIRE(allocator.GetCachedMemory() == LargeAllocationSize(size));
+		REQUIRE(live_bytes.load() == LargeAllocationSize(size));
 
 		auto live = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
 		if (pinned) {
 			REQUIRE(live == first);
+			CHECK(allocator.GetFallbackAllocationShard(live, size) == home);
 			REQUIRE(live[0] == 42);
 			REQUIRE(live[size - 1] == 84);
 		}
@@ -588,11 +621,11 @@ TEST_CASE("Huge allocation retention shares cache ownership and pressure reclama
 		REQUIRE(allocator.GetCachedMemory() >= size);
 		allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
 		CHECK(allocator.GetCachedMemory() == 0);
-		CHECK(live_bytes.load() == size);
+		CHECK(live_bytes.load() == LargeAllocationSize(size));
 		CHECK(live[0] == 99);
 		CHECK(live[size - 1] == 77);
 		BlockAllocatorTestHelper::FreeHuge(allocator, live, size);
-		CHECK(allocator.GetCachedMemory() == size);
+		CHECK(allocator.GetCachedMemory() == LargeAllocationSize(size));
 	}
 	CHECK(live_bytes.load() == 0);
 }
@@ -655,7 +688,8 @@ TEST_CASE("Allocation cache bounds retained bytes and shares surplus across CPU 
 			for (auto pointer : pointers) {
 				allocator.FreeData(pointer, SIZE);
 			}
-			CHECK(live_bytes.load() == 16 * SIZE);
+			const auto capacity = (1024ULL * 1024 * 1024) / LargeAllocationSize(SIZE);
+			CHECK(live_bytes.load() == capacity * LargeAllocationSize(SIZE));
 		}
 		SECTION("Another CPU group borrows surplus but leaves local spares") {
 			AllocationCacheTestAffinity affinity;
@@ -675,6 +709,16 @@ TEST_CASE("Allocation cache bounds retained bytes and shares surplus across CPU 
 			}
 			constexpr idx_t SIZE = 512 * 1024;
 			constexpr idx_t COUNT = 64;
+			auto cross_thread = allocator.AllocateData(SIZE);
+			const auto home = allocator.GetFallbackAllocationShard(cross_thread, SIZE);
+			REQUIRE(home.IsValid());
+			REQUIRE(affinity.Pin(other_cpu));
+			allocator.FreeData(cross_thread, SIZE);
+			REQUIRE(affinity.Pin(cpus[0]));
+			auto reused_home = allocator.AllocateData(SIZE);
+			CHECK(reused_home == cross_thread);
+			CHECK(allocator.GetFallbackAllocationShard(reused_home, SIZE) == home);
+			allocator.FreeData(reused_home, SIZE);
 			std::unordered_set<data_ptr_t> original;
 			for (idx_t i = 0; i < COUNT; i++) {
 				original.insert(allocator.AllocateData(SIZE));
@@ -687,6 +731,9 @@ TEST_CASE("Allocation cache bounds retained bytes and shares surplus across CPU 
 			idx_t reused = 0;
 			for (idx_t i = 0; i <= COUNT; i++) {
 				auto pointer = allocator.AllocateData(SIZE);
+				if (original.count(pointer)) {
+					CHECK(allocator.GetFallbackAllocationShard(pointer, SIZE) == home);
+				}
 				reused += original.count(pointer);
 				borrowed.push_back(pointer);
 			}
@@ -824,18 +871,19 @@ TEST_CASE("Allocation cache pressure accounts for fixed backing and preserves li
 	allocator.FreeData(pooled, BLOCK_SIZE);
 	allocator.FreeData(small, SIZE);
 	allocator.FreeData(large, 2 * SIZE);
-	REQUIRE(allocator.GetCachedMemory() == BLOCK_SIZE + 3 * SIZE);
+	REQUIRE(allocator.GetCachedMemory() == BLOCK_SIZE + LargeAllocationSize(SIZE) + LargeAllocationSize(2 * SIZE));
 	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
 
-	CHECK_FALSE(allocator.TryFlushDeallocated(1, BLOCK_SIZE + 3 * SIZE));
-	CHECK(allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE + SIZE));
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + SIZE);
-	CHECK(live_bytes.load() == 5 * SIZE);
+	CHECK_FALSE(
+	    allocator.TryFlushDeallocated(1, BLOCK_SIZE + LargeAllocationSize(SIZE) + LargeAllocationSize(2 * SIZE)));
+	CHECK(allocator.TryFlushDeallocated(NumericLimits<idx_t>::Maximum(), BLOCK_SIZE + LargeAllocationSize(SIZE)));
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + LargeAllocationSize(SIZE));
+	CHECK(live_bytes.load() == LargeAllocationSize(SIZE) + LargeAllocationSize(4 * SIZE));
 	CHECK(live[0] == 42);
 	CHECK(live[4 * SIZE - 1] == 84);
 	allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
 	CHECK(allocator.GetCachedMemory() == 0);
-	CHECK(live_bytes.load() == 4 * SIZE);
+	CHECK(live_bytes.load() == LargeAllocationSize(4 * SIZE));
 	CHECK(live[0] == 42);
 	CHECK(live[4 * SIZE - 1] == 84);
 	allocator.FreeData(live, 4 * SIZE);
@@ -858,15 +906,15 @@ TEST_CASE("BufferPool reclaims retained backing on small reservations and memory
 	TestBufferPool pool(allocator, MEMORY_LIMIT, false, MEMORY_LIMIT);
 	auto pointer = allocator.AllocateData(freed_size);
 	allocator.FreeData(pointer, freed_size);
-	CHECK(allocator.GetCachedMemory() == (cached ? freed_size : 0));
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (cached ? 0 : freed_size));
+	CHECK(allocator.GetCachedMemory() == (cached ? LargeAllocationSize(freed_size) : 0));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (cached ? 0 : LargeAllocationSize(freed_size)));
 	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - freed_size);
 	SECTION("A small reservation consumes retained backing's headroom") {
 		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, 65536, MEMORY_LIMIT);
 		CHECK(result.success);
 		CHECK(allocator.GetCachedMemory() == 0);
 		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) ==
-		      (cached || Allocator::SupportsFlush() ? 0 : freed_size));
+		      (cached || Allocator::SupportsFlush() ? 0 : LargeAllocationSize(freed_size)));
 	}
 	SECTION("Lowering the limit releases retained backing") {
 		pool.SetLimit(MEMORY_LIMIT - freed_size, "");
@@ -1087,7 +1135,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 			owned.reset(pointer);
 			current_size = new_size;
 			CHECK(manager.GetUsedMemory() == initial_memory + current_size);
-			CHECK(live_bytes.load() == current_size);
+			CHECK(live_bytes.load() == LargeAllocationSize(current_size));
 			CHECK(owned.get()[0] == 42);
 			CHECK(owned.get()[SIZE / 2 - 1] == 84);
 		}
@@ -1111,7 +1159,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 			REQUIRE_THROWS_WITH(owned = allocator.AllocateHuge(new_size),
 			                    Catch::Matchers::Contains("Failed to allocate block"));
 			REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
-			REQUIRE(live_bytes.load() == SIZE);
+			REQUIRE(live_bytes.load() == LargeAllocationSize(SIZE));
 			REQUIRE(owned.GetSize() == SIZE);
 			REQUIRE(owned.get() == pointer);
 			REQUIRE(pointer[0] == 42);
@@ -1122,14 +1170,14 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 		REQUIRE_THROWS_WITH(owned = allocator.AllocateHuge(2 * SIZE),
 		                    Catch::Matchers::Contains("failed to allocate data"));
 		REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
-		REQUIRE(live_bytes.load() == SIZE);
+		REQUIRE(live_bytes.load() == LargeAllocationSize(SIZE));
 		REQUIRE(owned.get() == pointer);
 		REQUIRE(pointer[0] == 42);
 		REQUIRE_NO_FAIL(connection.Query("RESET memory_limit"));
 		owned = allocator.AllocateHuge(2 * SIZE);
 		REQUIRE(owned.GetSize() == 2 * SIZE);
 		REQUIRE(manager.GetUsedMemory() == initial_memory + 2 * SIZE);
-		REQUIRE(live_bytes.load() == 2 * SIZE);
+		REQUIRE(live_bytes.load() == LargeAllocationSize(2 * SIZE));
 		owned.Reset();
 		REQUIRE(manager.GetUsedMemory() == initial_memory);
 		REQUIRE(live_bytes.load() == 0);
@@ -1186,17 +1234,17 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	auto cached = buffer_allocator.AllocateData(CACHE_SIZE);
 	cached[0] = 42;
 	buffer_allocator.FreeData(cached, CACHE_SIZE);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + CACHE_SIZE);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + LargeAllocationSize(CACHE_SIZE));
 	auto huge = buffer_allocator.AllocateHuge(CACHE_SIZE);
 	if (pinned) {
 		CHECK(huge.get() == cached);
 		CHECK(huge.get()[0] == 42);
 	}
-	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + CACHE_SIZE;
+	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + LargeAllocationSize(CACHE_SIZE);
 	CHECK(allocator.GetCachedMemory() == retained);
 	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
 	huge.Reset();
-	CHECK(allocator.GetCachedMemory() == retained + CACHE_SIZE);
+	CHECK(allocator.GetCachedMemory() == retained + LargeAllocationSize(CACHE_SIZE));
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
 	auto ordinary = buffer_allocator.AllocateData(CACHE_SIZE);
 	if (pinned) {
@@ -1828,7 +1876,7 @@ TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active s
 		for (auto block : blocks) {
 			allocator.FreeData(block, SIZE);
 		}
-		REQUIRE(allocator.GetCachedMemory() == COUNT * SIZE);
+		REQUIRE(allocator.GetCachedMemory() == COUNT * LargeAllocationSize(SIZE));
 		allocator.ThreadIdle();
 		CHECK(scheduler.GetNumberOfTasks() == 0);
 		std::this_thread::sleep_for(std::chrono::milliseconds(1100));
@@ -1838,7 +1886,7 @@ TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active s
 		REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
 		const auto remaining = allocator.GetCachedMemory();
 		CHECK(remaining > 0);
-		CHECK(remaining < COUNT * SIZE);
+		CHECK(remaining < COUNT * LargeAllocationSize(SIZE));
 		REQUIRE(scheduler.GetNumberOfTasks() == 1);
 		SECTION("Continuations drain expired backing") {
 			CHECK(scheduler.ExecuteTasks(&execute, COUNT) > 0);
@@ -2251,14 +2299,14 @@ TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh 
 	for (auto block : blocks) {
 		allocator.FreeData(block, OLD_SIZE);
 	}
-	REQUIRE(live_bytes.load() == 4 * OLD_SIZE);
+	REQUIRE(live_bytes.load() == 4 * LargeAllocationSize(OLD_SIZE));
 	std::this_thread::sleep_for(std::chrono::milliseconds(1100));
 	auto fresh = allocator.AllocateData(FRESH_SIZE);
 	allocator.FreeData(fresh, FRESH_SIZE);
-	REQUIRE(live_bytes.load() == 4 * OLD_SIZE + FRESH_SIZE);
+	REQUIRE(live_bytes.load() == 4 * LargeAllocationSize(OLD_SIZE) + LargeAllocationSize(FRESH_SIZE));
 	auto reused = allocator.AllocateData(BLOCK_SIZE);
 	CHECK(reused[0] == 42);
-	CHECK(live_bytes.load() == FRESH_SIZE);
+	CHECK(live_bytes.load() == LargeAllocationSize(FRESH_SIZE));
 	allocator.FreeData(reused, BLOCK_SIZE);
 	allocator.FlushAll();
 	CHECK(live_bytes.load() == 0);
@@ -2360,7 +2408,7 @@ TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][blo
 	allocator.ThreadExit();
 	auto old = allocator.AllocateData(OLD_SIZE);
 	allocator.FreeData(old, OLD_SIZE);
-	REQUIRE(live_bytes.load() == OLD_SIZE);
+	REQUIRE(live_bytes.load() == LargeAllocationSize(OLD_SIZE));
 	std::this_thread::sleep_for(std::chrono::milliseconds(1100));
 	auto reused = allocator.AllocateData(BLOCK_SIZE);
 	CHECK(reused == peer);
