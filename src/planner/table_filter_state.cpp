@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -220,12 +221,59 @@ static void InitializeExecutor(Context &context, const Expression &expression, E
 	state.executor->AddExpression(expression);
 }
 
+//! Preserve per-row adaptive feedback while evaluating immutable dictionary entries only once.
+class DictionaryCachingFilterExecutor final : public ExpressionFilterExecutor {
+public:
+	explicit DictionaryCachingFilterExecutor(unique_ptr<ExpressionFilterExecutor> child_p) : child(std::move(child_p)) {
+	}
+
+	bool CanCache() const override {
+		return child->CanCache();
+	}
+	unique_ptr<TableFilterCache> CreateCache(Vector &values, idx_t count) override {
+		return child->CreateCache(values, count);
+	}
+
+	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
+	                      idx_t &approved_tuple_count) override {
+		if (approved_tuple_count == 0) {
+			return 0;
+		}
+		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			return child->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		}
+		const auto &id = DictionaryVector::DictionaryId(vector);
+		auto &values = DictionaryVector::Child(vector);
+		const auto size = values.size();
+		if (id.empty() || size == 0 || size >= 20000 || values.GetVectorType() != VectorType::FLAT_VECTOR) {
+			return child->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		}
+		if (!dictionary_cache || dictionary_id != id || dictionary_size != size) {
+			dictionary_cache = child->CreateCache(values, size);
+			dictionary_id = id;
+			dictionary_size = size;
+		}
+		dictionary_cache->Filter(DictionaryVector::SelVector(vector), sel, approved_tuple_count);
+		return approved_tuple_count;
+	}
+
+private:
+	unique_ptr<ExpressionFilterExecutor> child;
+	string dictionary_id;
+	idx_t dictionary_size = 0;
+	//! Destroy caches before the child, since adaptive caches reference its feedback state.
+	unique_ptr<TableFilterCache> dictionary_cache;
+};
+
 ExpressionFilterState::ExpressionFilterState(Context &context, const Expression &expression) {
 	fast_executor = ExpressionFilterExecutor::TryCreate(expression);
 	InitializeExecutor(context, expression, *this);
 	const auto properties = GetCacheProperties(expression);
 	can_cache_result = properties.safe && !properties.adaptive;
 	can_cache = properties.safe && (can_cache_result || (fast_executor && fast_executor->CanCache()));
+	if (can_cache && fast_executor && fast_executor->CanCache()) {
+		fast_executor = make_uniq<DictionaryCachingFilterExecutor>(std::move(fast_executor));
+	}
 }
 
 ExpressionFilterState::~ExpressionFilterState() {
