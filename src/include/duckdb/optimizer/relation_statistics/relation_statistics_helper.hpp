@@ -60,7 +60,7 @@ public:
 	static optional<RelationStats> ExtractOperatorStats(LogicalOperator &op, ClientContext &context,
 	                                                    const vector<reference<const RelationStats>> &child_stats);
 	static optional<RelationStats> ExtractProjectionStats(LogicalProjection &projection,
-	                                                      const RelationStats &child_stats);
+	                                                      const RelationStats &child_stats, ClientContext &context);
 	static optional<RelationStats> ExtractAggregationStats(LogicalAggregate &aggregate,
 	                                                       const RelationStats &child_stats, ClientContext &context);
 	//! Reuse the caller snapshot for aggregate input refinements.
@@ -82,6 +82,9 @@ public:
 	static idx_t EstimateGroupCardinality(LogicalOperator &input, const RelationStats &input_stats,
 	                                      vector<idx_t> groups, RelationStatsExtractor &extractor,
 	                                      bool use_operator_cardinality = false);
+	//! Rescale carried list statistics' element count when the rows holding the lists are duplicated.
+	static shared_ptr<BaseStatistics> ScaleListStats(const shared_ptr<BaseStatistics> &list_stats,
+	                                                 idx_t source_cardinality, idx_t result_cardinality);
 	static DistinctCount EstimateCurrentDomain(const DistinctCount &current_domain, idx_t input_cardinality,
 	                                           idx_t output_cardinality);
 	static void ApplyCardinality(RelationStats &stats, idx_t output_cardinality);
