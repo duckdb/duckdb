@@ -530,6 +530,16 @@ bignum_t DecimalHelper<bignum_t>::Rescale(RescaleState &scratch, const bignum_t 
 	                              scratch.arithmetic));
 }
 
+bignum_t DecimalHelper<bignum_t>::Rescale(RescaleState &scratch, hugeint_t value, uint32_t source_scale,
+                                          uint32_t target_scale) {
+	if (target_scale > source_scale && target_scale - source_scale <= Decimal::MAX_WIDTH_INT128) {
+		return bignum_t(
+		    BignumIntermediate::Multiply(scratch.heap, value, Hugeint::POWERS_OF_TEN[target_scale - source_scale]));
+	}
+	auto unscaled = HugeintCastToBignum::Operation(value, scratch.heap);
+	return Rescale(scratch, unscaled, source_scale, target_scale);
+}
+
 bool DecimalHelper<bignum_t>::TryRescale(const bignum_t &value, uint32_t source_scale, uint32_t target_width,
                                          uint32_t target_scale, string &result, optional_ptr<ClientContext> context) {
 	auto rescaled = Rescale(value, source_scale, target_scale, context);

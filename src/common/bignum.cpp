@@ -923,26 +923,69 @@ void BignumIntermediate::MultiplyMagnitudes(BignumArithmeticState &state, const 
 	TrimMagnitude(result);
 }
 
+//! The full product of two 128-bit magnitudes fits four limbs.
+static string_t MultiplySmall(StringHeap &heap, uhugeint_t lhs, uhugeint_t rhs, bool is_negative) {
+	uint64_t product[4];
+	product[0] = BignumLimb::MultiplyAdd(lhs.lower, rhs.lower, 0, product[1]);
+	product[2] = 0;
+	product[3] = 0;
+	if (lhs.upper) {
+		product[1] = BignumLimb::MultiplyAdd(lhs.upper, rhs.lower, product[1], product[2]);
+	}
+	if (rhs.upper) {
+		uint64_t carry;
+		product[1] = BignumLimb::MultiplyAdd(lhs.lower, rhs.upper, product[1], carry);
+		product[2] = BignumLimb::MultiplyAdd(lhs.upper, rhs.upper, product[2], product[3]);
+		product[2] += carry;
+		product[3] += product[2] < carry;
+	}
+	idx_t count = 4;
+	while (count > 1 && product[count - 1] == 0) {
+		count--;
+	}
+	if (count == 1 && product[0] == 0) {
+		return WriteZero(heap);
+	}
+	const auto top_bytes = BignumLimb::ByteCount(product[count - 1]);
+	const auto byte_count = (count - 1) * BignumLimb::BYTES + top_bytes;
+	auto target = heap.EmptyString(byte_count + Bignum::BIGNUM_HEADER_SIZE);
+	auto ptr = target.GetDataWriteable();
+	Bignum::SetHeader(ptr, byte_count, is_negative);
+	auto out = reinterpret_cast<data_ptr_t>(ptr + Bignum::BIGNUM_HEADER_SIZE);
+	BignumLimb::StoreMagnitudePartial(out, top_bytes, product[--count], is_negative);
+	out += top_bytes;
+	while (count > 0) {
+		BignumLimb::StoreMagnitude(out, product[--count], is_negative);
+		out += BignumLimb::BYTES;
+	}
+	target.Finalize();
+	return target;
+}
+
+string_t BignumIntermediate::Multiply(StringHeap &heap, hugeint_t lhs, hugeint_t rhs) {
+	const bool lhs_negative = lhs.upper < 0;
+	const bool rhs_negative = rhs.upper < 0;
+	uhugeint_t lhs_magnitude(static_cast<uint64_t>(lhs.upper), lhs.lower);
+	uhugeint_t rhs_magnitude(static_cast<uint64_t>(rhs.upper), rhs.lower);
+	if (lhs_negative) {
+		lhs_magnitude = ~lhs_magnitude + uhugeint_t(1);
+	}
+	if (rhs_negative) {
+		rhs_magnitude = ~rhs_magnitude + uhugeint_t(1);
+	}
+	return MultiplySmall(heap, lhs_magnitude, rhs_magnitude, lhs_negative != rhs_negative);
+}
+
 string_t BignumIntermediate::Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
                                       const BignumIntermediate &rhs) {
 	const bool is_result_negative = lhs.is_negative != rhs.is_negative;
-	if (lhs.size <= BignumLimb::BYTES && rhs.size <= BignumLimb::BYTES) {
-		// The complete product of two single-limb magnitudes fits two limbs.
-		state.AccountWork(1);
-		uint64_t hi;
-		const auto lo =
-		    BignumLimb::MultiplyAdd(LoadAbsoluteLimb(lhs, lhs.size), LoadAbsoluteLimb(rhs, rhs.size), 0, hi);
-		if (hi == 0 && lo == 0) {
-			return WriteZero(heap);
-		}
-		const auto byte_count = BignumLimb::ByteCount(hi, lo);
-		auto target = heap.EmptyString(byte_count + Bignum::BIGNUM_HEADER_SIZE);
-		auto ptr = target.GetDataWriteable();
-		Bignum::SetHeader(ptr, byte_count, is_result_negative);
-		BignumLimb::StoreMagnitude(reinterpret_cast<data_ptr_t>(ptr + Bignum::BIGNUM_HEADER_SIZE), byte_count, hi, lo,
-		                           is_result_negative);
-		target.Finalize();
-		return target;
+	if (lhs.size <= 2 * BignumLimb::BYTES && rhs.size <= 2 * BignumLimb::BYTES) {
+		state.AccountWork(4);
+		const uhugeint_t lhs_magnitude(LoadAbsoluteLimb(lhs, int64_t(lhs.size) - int64_t(BignumLimb::BYTES)),
+		                               LoadAbsoluteLimb(lhs, lhs.size));
+		const uhugeint_t rhs_magnitude(LoadAbsoluteLimb(rhs, int64_t(rhs.size) - int64_t(BignumLimb::BYTES)),
+		                               LoadAbsoluteLimb(rhs, rhs.size));
+		return MultiplySmall(heap, lhs_magnitude, rhs_magnitude, is_result_negative);
 	}
 	auto &lhs_digits = state.lhs_digits;
 	auto &rhs_digits = state.rhs_digits;

@@ -10,8 +10,20 @@
 
 namespace duckdb {
 
+struct BignumDecimalCastState : public WideDecimalCastState {
+	explicit BignumDecimalCastState(optional_ptr<ClientContext> context)
+	    : WideDecimalCastState(context), rescale(context) {
+	}
+
+	DecimalHelper<bignum_t>::RescaleState rescale;
+};
+
 static unique_ptr<FunctionLocalState> InitWideDecimalCastState(CastLocalStateParameters &parameters) {
 	return make_uniq<WideDecimalCastState>(parameters.context);
+}
+
+static unique_ptr<FunctionLocalState> InitBignumDecimalCastState(CastLocalStateParameters &parameters) {
+	return make_uniq<BignumDecimalCastState>(parameters.context);
 }
 
 static bool IsWideDecimal(const LogicalType &type) {
@@ -20,7 +32,11 @@ static bool IsWideDecimal(const LogicalType &type) {
 
 BoundCastInfo DefaultCasts::WideDecimalCast(BoundCastInfo info, const LogicalType &source, const LogicalType &target) {
 	if (!info.HasInitLocalState() && (IsWideDecimal(source) || IsWideDecimal(target))) {
-		info.SetInitLocalState(InitWideDecimalCastState);
+		if (source.id() == LogicalTypeId::DECIMAL && target.id() == LogicalTypeId::DECIMAL) {
+			info.SetInitLocalState(InitBignumDecimalCastState);
+		} else {
+			info.SetInitLocalState(InitWideDecimalCastState);
+		}
 	}
 	return info;
 }
@@ -202,7 +218,7 @@ struct BignumDecimalScaleInput {
 	                        uint32_t source_scale_p, uint32_t target_width_p, uint32_t target_scale_p)
 	    : result(result_p), vector_cast_data(result, parameters), source_width(source_width_p),
 	      source_scale(source_scale_p), target_width(target_width_p), target_scale(target_scale_p),
-	      rescale_state(DefaultCasts::WideDecimalCastContext(parameters)) {
+	      rescale_state(parameters.local_state->Cast<BignumDecimalCastState>().rescale) {
 		const auto source_integer_digits = source_width - source_scale;
 		const auto target_integer_digits = target_width - target_scale;
 		// Scaling down can round into an extra integer digit.
@@ -217,26 +233,15 @@ struct BignumDecimalScaleInput {
 	uint32_t target_width;
 	uint32_t target_scale;
 	bool check_width;
-	DecimalHelper<bignum_t>::RescaleState rescale_state;
+	DecimalHelper<bignum_t>::RescaleState &rescale_state;
 };
-
-//! The unscaled value of a decimal as a BIGNUM, using scratch storage for fixed-size inputs.
-static bignum_t UnscaledBignum(bignum_t input, StringHeap &heap) {
-	return input;
-}
-
-template <class INPUT_TYPE>
-static bignum_t UnscaledBignum(INPUT_TYPE input, StringHeap &heap) {
-	return HugeintCastToBignum::Operation(hugeint_t(input), heap);
-}
 
 struct BignumDecimalScaleOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, BignumDecimalScaleInput &data) {
 		data.rescale_state.Reset();
-		auto unscaled = UnscaledBignum(input, data.rescale_state.heap);
 		auto rescaled =
-		    DecimalHelper<bignum_t>::Rescale(data.rescale_state, unscaled, data.source_scale, data.target_scale);
+		    DecimalHelper<bignum_t>::Rescale(data.rescale_state, input, data.source_scale, data.target_scale);
 		if (data.check_width && !DecimalHelper<bignum_t>::FitsWidth(rescaled, data.target_width)) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data.source_width, data.source_scale),
