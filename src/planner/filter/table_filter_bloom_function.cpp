@@ -167,7 +167,7 @@ HugeAllocation BloomFilter::CopyBuffer(ClientContext &context) const {
 	D_ASSERT(initialized && sealed && !published);
 	const auto size = GetBitmapSize();
 	auto result = BufferAllocator::Get(context).AllocateHuge(size);
-	constexpr idx_t COPY_CHUNK_SIZE = 4 * 1024 * 1024;
+	constexpr idx_t COPY_CHUNK_SIZE = idx_t(4) * 1024 * 1024;
 	for (idx_t offset = 0; offset < size; offset += COPY_CHUNK_SIZE) {
 		context.InterruptCheck();
 		memcpy(result.get() + offset, data_ptr_cast(bf) + offset, MinValue(COPY_CHUNK_SIZE, size - offset));
