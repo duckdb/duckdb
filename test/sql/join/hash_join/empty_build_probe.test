@@ -32,4 +32,3 @@ query T
 SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/empty_build_output.csv');
 ----
 i
-
