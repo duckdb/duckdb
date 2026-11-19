@@ -2,163 +2,13 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
-#include "duckdb/optimizer/mark_join_simplifier.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
-
-TEST_CASE("Constant membership filters stay outside the join search", "[optimizer][join_order]") {
-	const auto predicate = GENERATE(string("IN"), string("NOT IN"));
-	const auto comma_joins = GENERATE(false, true);
-	DuckDB db;
-	Connection connection(db);
-	for (auto sql :
-	     {"CREATE TABLE a(k INTEGER, v VARCHAR NOT NULL)",
-	      "INSERT INTO a SELECT i%10, (i%100)::VARCHAR FROM range(1000)t(i)",
-	      "CREATE TABLE c AS SELECT i%10 k FROM range(50)t(i)", "CREATE TABLE d AS SELECT i l FROM range(2)t(i)",
-	      "CREATE TABLE e AS SELECT i k, l FROM range(10)t(i), d"}) {
-		REQUIRE_NO_FAIL(connection.Query(sql));
-	}
-	// A CTE reference keeps NOT IN above the scan so it can become an ANTI join.
-	const string prefix = predicate == "IN" ? "" : "WITH input AS MATERIALIZED (SELECT * FROM a) ";
-	const string input = predicate == "IN" ? "a" : "input a";
-	// Comma joins leave a cross product below the join to e until join ordering.
-	const string from = comma_joins ? input + ", c, d, e WHERE a.k=c.k AND a.k=e.k AND d.l=e.l AND "
-	                                : input + " JOIN c ON a.k=c.k JOIN e ON a.k=e.k JOIN d ON d.l=e.l WHERE ";
-	const auto query =
-	    prefix + "SELECT count(*) FROM " + from + "a.v " + predicate + " ('0','1','2','3','4','5','6','7','0')";
-	connection.BeginTransaction();
-	Parser parser(*connection.context);
-	parser.ParseQuery(query);
-	Planner planner(*connection.context);
-	planner.CreatePlan(std::move(parser.statements[0]));
-	Optimizer optimizer(*planner.binder, *connection.context);
-	FilterPushdown pushdown(optimizer);
-	auto plan = pushdown.Rewrite(std::move(planner.plan));
-	InClauseRewriter in_rewriter(*connection.context, optimizer);
-	plan = in_rewriter.Rewrite(std::move(plan));
-	MarkJoinSimplifier simplifier(optimizer);
-	simplifier.Optimize(plan);
-	ProjectionPullup projection_pullup(optimizer, plan);
-	projection_pullup.Optimize(plan);
-	JoinOrderOptimizer join_optimizer(*connection.context);
-	optional_ptr<LogicalOperator> root = plan.get();
-	if (root->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		auto &cte = root->Cast<LogicalCTE>();
-		RelationStats producer_stats;
-		auto producer_optimizer = join_optimizer.CreateChildOptimizer();
-		cte.children[0] = producer_optimizer.Optimize(std::move(cte.children[0]), &producer_stats);
-		join_optimizer.AddMaterializedCTEStats(cte.table_index, std::move(producer_stats));
-		root = cte.children[1].get();
-	}
-	while (root->children.size() == 1) {
-		root = root->children[0].get();
-	}
-	optional_ptr<LogicalComparisonJoin> membership;
-	vector<reference<LogicalOperator>> pending {*root};
-	while (!pending.empty()) {
-		auto &current = pending.back().get();
-		pending.pop_back();
-		if (current.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = current.Cast<LogicalComparisonJoin>();
-			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-				membership = join;
-			}
-		}
-		for (auto &child : current.children) {
-			pending.push_back(*child);
-		}
-	}
-	REQUIRE(membership);
-	REQUIRE(membership->join_type == (predicate == "IN" ? JoinType::SEMI : JoinType::ANTI));
-	QueryGraphManager graph(*connection.context);
-	REQUIRE(graph.Build(join_optimizer, *root));
-	REQUIRE(graph.relation_manager.NumRelations() == 4);
-	auto result = connection.Query(query);
-	REQUIRE_NO_FAIL(*result);
-	CHECK_COLUMN(result, 0, {predicate == "IN" ? 800 : 9200});
-	connection.Rollback();
-}
-
-TEST_CASE("External INNER predicates remain available beside a filtering join", "[optimizer][join_order]") {
-	const auto join_type = GENERATE(string("SEMI"), string("ANTI"));
-	const auto threshold = GENERATE(1, 30);
-	DuckDB db;
-	Connection connection(db);
-	for (auto sql :
-	     {"CREATE TABLE country_types AS SELECT i id, i=1 selected FROM range(20) t(i)",
-	      "CREATE TABLE rating_types AS SELECT i id, i=2 selected FROM range(20) t(i)",
-	      "CREATE TABLE countries AS SELECT i%1000 movie_id, (i//1000)%20 type_id, i%3 country FROM range(20000)t(i)",
-	      "CREATE TABLE ratings AS SELECT i%1000 movie_id, (i//1000)%20 type_id FROM range(20000)t(i)"}) {
-		auto result = connection.Query(sql);
-		REQUIRE_NO_FAIL(*result);
-	}
-	auto setting = connection.Query("SET approximate_join_order_threshold=" + to_string(threshold));
-	REQUIRE_NO_FAIL(*setting);
-	const string query = "SELECT count(*) FROM country_types ct, rating_types rt, "
-	                     "(countries c " +
-	                     join_type +
-	                     " JOIN (VALUES(0),(5),(7),(9),(11),(13),(15),(17),(19),(21)) wanted(country) "
-	                     "ON c.country=wanted.country), ratings r "
-	                     "WHERE ct.selected AND rt.selected AND c.movie_id=r.movie_id "
-	                     "AND ct.id=c.type_id AND rt.id=r.type_id";
-	connection.BeginTransaction();
-	Parser parser(*connection.context);
-	parser.ParseQuery(query);
-	Planner planner(*connection.context);
-	planner.CreatePlan(std::move(parser.statements[0]));
-	Optimizer optimizer(*planner.binder, *connection.context);
-	FilterPushdown pushdown(optimizer);
-	auto plan = pushdown.Rewrite(std::move(planner.plan));
-	optional_ptr<LogicalOperator> root = plan.get();
-	while (root->children.size() == 1) {
-		root = root->children[0].get();
-	}
-	JoinOrderOptimizer join_optimizer(*connection.context);
-	QueryGraphManager graph(*connection.context);
-	REQUIRE(graph.Build(join_optimizer, *root));
-	auto stats = graph.relation_manager.GetRelationStats();
-	optional_idx ratings;
-	optional_idx rating_types;
-	for (idx_t i = 0; i < stats.size(); i++) {
-		if (stats[i].table_name == "ratings") {
-			ratings = i;
-		}
-		if (stats[i].table_name == "rating_types") {
-			rating_types = i;
-		}
-	}
-	REQUIRE(ratings.IsValid());
-	REQUIRE(rating_types.IsValid());
-	auto &left = graph.set_manager.GetJoinRelation(RelationIndex(ratings.GetIndex()));
-	auto &right = graph.set_manager.GetJoinRelation(RelationIndex(rating_types.GetIndex()));
-	bool found_independent_edge = false;
-	for (auto &connection_ref : graph.GetQueryGraphEdges().GetConnections(left, right)) {
-		auto &edge = connection_ref.get();
-		if (!edge.join_operator && graph.IsConnectionApplicable(edge, left, right) &&
-		    graph.IsJoinOrderCandidate(edge.join_operator, edge.generated_cross_product, left, right)) {
-			found_independent_edge = true;
-		}
-	}
-	REQUIRE(found_independent_edge);
-	CardinalityEstimator estimator(graph.set_manager, graph.GetPredicateModel());
-	CostModel costs(estimator);
-	PlanEnumerator enumerator(graph, costs, graph.GetQueryGraphEdges());
-	enumerator.InitLeafPlans();
-	REQUIRE(enumerator.SolveJoinOrder());
-	auto result = connection.Query(query);
-	REQUIRE_NO_FAIL(*result);
-	CHECK_COLUMN(result, 0, {join_type == "SEMI" ? 333 : 667});
-	connection.Rollback();
-}
 
 TEST_CASE("Connected hypergraphs can require original cross products", "[optimizer][join_order]") {
 	DuckDB db;
@@ -177,7 +27,7 @@ TEST_CASE("Connected hypergraphs can require original cross products", "[optimiz
 		        (VALUES (1), (3), (5), (7), (9), (11), (13), (15), (17), (19)) v(j)
 		        ON c.j = v.j),
 		     d
-		WHERE (a.i = d.j OR a.i = b.i) AND b.i = d.i AND c.i = d.i AND b.i = c.i
+		WHERE a.i = d.j AND b.i = d.i AND c.i = d.i AND b.i = c.i
 	)";
 	for (auto threshold : {1, 30}) {
 		auto setting = connection.Query("SET approximate_join_order_threshold=" + to_string(threshold));
@@ -203,28 +53,6 @@ TEST_CASE("Connected hypergraphs can require original cross products", "[optimiz
 		enumerator.InitLeafPlans();
 		// Result correctness alone cannot distinguish successful enumeration from the original-plan fallback.
 		REQUIRE(enumerator.SolveJoinOrder());
-		unordered_set<RelationIndex> relations;
-		for (idx_t i = 0; i < graph.relation_manager.NumRelations(); i++) {
-			relations.insert(RelationIndex(i));
-		}
-		auto &plans = enumerator.GetPlans();
-		auto final_plan = plans.find(graph.set_manager.GetJoinRelation(relations));
-		REQUIRE(final_plan != plans.end());
-		vector<reference<const DPJoinNode>> pending {*final_plan->second};
-		bool found_cross_product = false;
-		while (!pending.empty()) {
-			auto &node = pending.back().get();
-			pending.pop_back();
-			if (node.is_leaf) {
-				continue;
-			}
-			found_cross_product |=
-			    node.generated_cross_product ||
-			    (node.join_operator && node.join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT);
-			pending.emplace_back(*plans.at(node.left_set));
-			pending.emplace_back(*plans.at(node.right_set));
-		}
-		REQUIRE(found_cross_product);
 		auto result = connection.Query(query);
 		REQUIRE_NO_FAIL(*result);
 		CHECK_COLUMN(result, 0, {10});

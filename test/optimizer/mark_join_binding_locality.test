@@ -48,6 +48,19 @@ EXPLAIN SELECT label,id,amount,first_marker,second_marker FROM binding_selected;
 ----
 logical_opt	<REGEX>:.*SEMI.*SEMI.*
 
+# Duplicate selections keep their positions when both markers become constants.
+query IIIITT
+SELECT id,id,second_marker::INTEGER,first_marker::INTEGER,label,label
+FROM binding_selected ORDER BY amount;
+----
+2	2	1	1	two	two
+2	2	1	1	two again	two again
+
+query II
+EXPLAIN SELECT id,id,second_marker,first_marker,label,label FROM binding_selected;
+----
+logical_opt	<REGEX>:.*SEMI.*SEMI.*
+
 # Preserve correlated consumers through decorrelation.
 query TIII
 SELECT q.label,q.amount,q.first_marker::INTEGER,v.n

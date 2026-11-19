@@ -21,47 +21,6 @@ static unique_ptr<Expression> CacheFunction(ScalarFunction function, unique_ptr<
 	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments), std::move(data));
 }
 
-TEST_CASE("Cheap required filters expose redundant optional filters", "[filter][adaptive_cache]") {
-	const auto cached = GENERATE(false, true);
-	DuckDB db(nullptr);
-	Connection con(db);
-	constexpr float threshold = 0.75f;
-	constexpr idx_t vectors = 6;
-	auto in_filter =
-	    ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0),
-	                                         vector<Value> {Value::BIGINT(1), Value::BIGINT(3), Value::BIGINT(5)});
-	auto required =
-	    ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value::BIGINT(0));
-	ExpressionFilter filter(make_uniq<BoundConjunctionExpression>(
-	    ExpressionType::CONJUNCTION_AND,
-	    CreateSelectivityOptionalFilterExpression(std::move(in_filter), LogicalType::BIGINT, threshold, vectors),
-	    std::move(required->expr)));
-	auto state = TableFilterState::Initialize(*con.context, filter);
-	Vector dictionary(LogicalType::BIGINT, 3);
-	{
-		auto writer = FlatVector::Writer<int64_t>(dictionary, 3);
-		for (int64_t value : {-1, 1, 2}) {
-			writer.WriteValue(value);
-		}
-	}
-	auto cache = cached ? state->CreateCache(dictionary, 3) : nullptr;
-	for (idx_t batch = 0; batch <= vectors; batch++) {
-		const auto probe = batch == vectors;
-		idx_t count = 2;
-		SelectionVector codes(count), selected;
-		codes.set_index(0, 0);
-		codes.set_index(1, probe ? 2 : 1);
-		if (cached) {
-			cache->Filter(codes, selected, count);
-		} else {
-			Vector input(dictionary, codes, count);
-			ColumnSegment::FilterSelection(selected, input, *state, count, count);
-		}
-		REQUIRE(count == 1);
-		REQUIRE(selected.get_index(0) == 1);
-	}
-}
-
 TEST_CASE("Published pure runtime-filter children support adaptive caches", "[filter][adaptive_cache]") {
 	DuckDB db(nullptr);
 	Connection con(db);

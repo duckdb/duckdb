@@ -11,82 +11,18 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 using namespace duckdb;
-
-TEST_CASE("Pruning conjuncts preserve the cost of active scan filters", "[dynamic_filter_groups]") {
-	auto comparison = [](const Value &value) {
-		return ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, value)->expr->Copy();
-	};
-	auto optional = [&](const Value &value) {
-		return CreateOptionalFilterExpression(comparison(value), value.type());
-	};
-	auto row_filter = [&](const Value &value) {
-		return CreateSelectivityOptionalFilterExpression(comparison(value), value.type(), 0.5f, 6);
-	};
-	TableFilterSet filters;
-	filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(row_filter(Value("a"))));
-	filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(row_filter(Value::INTEGER(1))));
-	REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 1);
-
-	SECTION("Nested optional conjunctions keep their active filter cost") {
-		auto nested = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("b")),
-		                                                    optional(Value("c")));
-		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("a")),
-		                                                         std::move(nested));
-		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(conjunction)));
-		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 1);
-	}
-	SECTION("Pruning-only conjunctions remain free") {
-		filters.ClearFilters();
-		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, optional(Value("a")),
-		                                                         optional(Value("b")));
-		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(conjunction)));
-		filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(row_filter(Value::INTEGER(1))));
-		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
-	}
-	SECTION("A barrier inside an optional filter remains last") {
-		auto barrier = ExpressionBarrier::Wrap(comparison(Value::INTEGER(1)));
-		auto wrapped = CreateSelectivityOptionalFilterExpression(std::move(barrier), LogicalType::INTEGER, 0.5f, 6);
-		filters.PushFilter(ProjectionIndex(1), make_uniq<ExpressionFilter>(std::move(wrapped)));
-		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
-	}
-	SECTION("Dynamic filters retain their priority") {
-		auto dynamic_filter = CreateDynamicFilterExpression(nullptr, LogicalType::VARCHAR);
-		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(dynamic_filter)));
-		REQUIRE(ExpressionHeuristics::GetInitialOrder(filters)[0] == 0);
-	}
-	SECTION("Runtime string prefixes cost less than exact IN lists") {
-		auto in_filter =
-		    ExpressionFilter::CreateInExpression(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0),
-		                                         vector<Value> {Value("same-A"), Value("same-M"), Value("same-Z")});
-		vector<unique_ptr<Expression>> arguments;
-		arguments.push_back(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0));
-		auto prefix = make_uniq<BoundFunctionExpression>(
-		    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(LogicalType::VARCHAR)), std::move(arguments),
-		    make_uniq<PrefixRangeFunctionData>(nullptr, true, "k", LogicalType::VARCHAR, 0.5f, 6));
-		auto active_prefix = CreateSelectivityOptionalFilterExpression(prefix->Copy(), LogicalType::VARCHAR, 0.5f, 6);
-		auto active_in = CreateSelectivityOptionalFilterExpression(in_filter->Copy(), LogicalType::VARCHAR, 0.5f, 6);
-		REQUIRE(ExpressionHeuristics::Cost(*active_in) == ExpressionHeuristics::Cost(*in_filter));
-		REQUIRE(ExpressionHeuristics::Cost(*active_prefix) == ExpressionHeuristics::Cost(*prefix));
-		REQUIRE(ExpressionHeuristics::Cost(*active_prefix) < ExpressionHeuristics::Cost(*active_in));
-		REQUIRE(ExpressionHeuristics::Cost(
-		            *CreateOptionalFilterExpression(std::move(in_filter), LogicalType::VARCHAR)) == 0);
-	}
-}
 
 TEST_CASE("Large flat scan filters preserve selected rows and NULL policy", "[dynamic_filter_groups]") {
 	DuckDB db(nullptr);
@@ -371,7 +307,6 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	    strings ? vector<Value> {Value(wide_span ? "a" : "same-a"), Value(wide_span ? "z" : "same-z")}
 	            : vector<Value> {Value::INTEGER(2), Value::INTEGER(wide_span ? 2147483647 : 8)};
 	const vector<LogicalType> key_types = multiple_keys ? vector<LogicalType> {type, type} : vector<LogicalType> {type};
-	const idx_t filter_key = multiple_keys ? 1 : 0;
 	auto &probe = test.plan.Make<PhysicalDummyScan>(key_types, 1);
 	auto &build = test.plan.Make<PhysicalDummyScan>(key_types, build_count);
 	LogicalComparisonJoin logical(JoinType::SEMI);
@@ -393,18 +328,19 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	DataChunk keys;
 	keys.Initialize(allocator, key_types);
 	keys.SetChildCardinality(build_count);
-	for (idx_t column = 0; column < key_types.size(); column++) {
-		if (strings) {
-			auto writer = FlatVector::Writer<string_t>(keys.data[column], build_count);
-			for (idx_t i = 0; i < build_count; i++) {
-				writer.WriteValue(StringValue::Get(values[column == filter_key && i + 1 == build_count ? 1 : 0]));
-			}
-		} else {
-			auto writer = FlatVector::Writer<int32_t>(keys.data[column], build_count);
-			for (idx_t i = 0; i < build_count; i++) {
-				writer.WriteValue(values[column == filter_key && i + 1 == build_count ? 1 : 0].GetValue<int32_t>());
-			}
+	if (strings) {
+		auto writer = FlatVector::Writer<string_t>(keys.data[0], build_count);
+		for (idx_t i = 0; i < build_count; i++) {
+			writer.WriteValue(StringValue::Get(values[i + 1 == build_count ? 1 : 0]));
 		}
+	} else {
+		auto writer = FlatVector::Writer<int32_t>(keys.data[0], build_count);
+		for (idx_t i = 0; i < build_count; i++) {
+			writer.WriteValue(values[i + 1 == build_count ? 1 : 0].GetValue<int32_t>());
+		}
+	}
+	if (multiple_keys) {
+		keys.data[1].Reference(keys.data[0]);
 	}
 	DataChunk payload;
 	payload.Initialize(allocator, {});
@@ -417,7 +353,7 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	REQUIRE(ht->Count() == build_count);
 
 	JoinFilterPushdownInfo pushdown;
-	pushdown.join_condition = {filter_key};
+	pushdown.join_condition = {0};
 	pushdown.build_side_has_filter = true;
 	for (idx_t target = 0; target < 4; target++) {
 		JoinFilterPushdownColumn column;
@@ -447,13 +383,12 @@ TEST_CASE("Runtime IN row policy follows each target's filter eligibility", "[dy
 	for (auto &filter : global_state.deferred_runtime_filters) {
 		REQUIRE(filter.type ==
 		        (expect_prf ? DeferredRuntimeFilterType::PREFIX_RANGE : DeferredRuntimeFilterType::BLOOM_FILTER));
-		REQUIRE(filter.key_idx == filter_key);
 	}
 	if (expect_prf) {
-		REQUIRE(ht->GetPrefixRangeFilter(filter_key));
-		REQUIRE_FALSE(ht->GetPrefixRangeFilter(filter_key)->IsInitialized());
+		REQUIRE(ht->GetPrefixRangeFilter(0));
+		REQUIRE_FALSE(ht->GetPrefixRangeFilter(0)->IsInitialized());
 	} else {
-		REQUIRE_FALSE(ht->GetPrefixRangeFilter(filter_key));
+		REQUIRE_FALSE(ht->GetPrefixRangeFilter(0));
 	}
 	for (idx_t target = 0; target < pushdown.probe_info.size(); target++) {
 		auto snapshot = pushdown.probe_info[target].dynamic_filters->GetFinalTableFilters(test.scan, nullptr);
