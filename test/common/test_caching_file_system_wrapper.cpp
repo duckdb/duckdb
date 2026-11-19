@@ -187,26 +187,27 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 	memcpy(const_cast<char *>(write_buffer.data()), write_data.c_str(), write_data.size());
 
 	// Try to write at a location, which should throw NotImplementedException
-	REQUIRE_THROWS_AS(caching_wrapper->Write(*handle, &write_buffer[0], write_data.size(), /*location=*/0),
-	                  NotImplementedException);
+	REQUIRE_THROWS_WITH(caching_wrapper->Write(*handle, &write_buffer[0], write_data.size(), /*location=*/0),
+	                    Catch::Contains("Write operations are not supported"));
 
 	// Try truncate, which should also throw NotImplementedException
-	REQUIRE_THROWS_AS(caching_wrapper->Truncate(*handle, 0), NotImplementedException);
+	REQUIRE_THROWS_WITH(caching_wrapper->Truncate(*handle, 0),
+	                    Catch::Contains("Truncate operations are not supported"));
 
 	// Try FileSync, which should also throw NotImplementedException
-	REQUIRE_THROWS_AS(caching_wrapper->FileSync(*handle), NotImplementedException);
+	REQUIRE_THROWS_WITH(caching_wrapper->FileSync(*handle), Catch::Contains("FileSync operations are not supported"));
 
 	// Try Trim, which should also throw NotImplementedException
-	REQUIRE_THROWS_AS(caching_wrapper->Trim(*handle, 0, 10), NotImplementedException);
+	REQUIRE_THROWS_WITH(caching_wrapper->Trim(*handle, 0, 10), Catch::Contains("Trim operations are not supported"));
 
 	handle.reset();
 
 	// Test that opening file with write flags is rejected
-	REQUIRE_THROWS_AS(caching_wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_WRITE),
-	                  NotImplementedException);
-	REQUIRE_THROWS_AS(
+	REQUIRE_THROWS_WITH(caching_wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_WRITE),
+	                    Catch::Contains("Cannot open file for writing"));
+	REQUIRE_THROWS_WITH(
 	    caching_wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE),
-	    NotImplementedException);
+	    Catch::Contains("Cannot open file for writing"));
 }
 
 TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {

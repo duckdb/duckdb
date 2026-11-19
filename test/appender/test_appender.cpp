@@ -1003,7 +1003,6 @@ TEST_CASE("Test appender on a view keeps the open transaction", "[appender]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (1)"));
-	REQUIRE_THROWS_AS(Appender(con, "vw"), CatalogException);
 	REQUIRE_THROWS_WITH(Appender(con, "vw"), Catch::Matchers::Contains("vw' could not be found"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO u VALUES (2)"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));

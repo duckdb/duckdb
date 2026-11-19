@@ -178,22 +178,23 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	REQUIRE(SelectionVector::SelectFromBoolean(nullptr, nullptr, 0, {}) == 0);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	bool matches[8] {};
-	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, nullptr, 8, {}), InternalException);
+	REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(matches, nullptr, 8, {}),
+	                    Catch::Contains("requires at least one output selection"));
 	// Even an empty selection needs scratch space for every input row.
 	sel_t output[8], false_output[8];
 	std::fill(output, output + 8, SENTINEL);
 	std::fill(false_output, false_output + 8, SENTINEL);
 	for (idx_t capacity : {0, 7}) {
-		REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, nullptr, 8, array_ptr<sel_t>(output, capacity)),
-		                  InternalException);
-		REQUIRE_THROWS_AS(
+		REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(matches, nullptr, 8, array_ptr<sel_t>(output, capacity)),
+		                    Catch::Contains("Attempted to construct a sub-array"));
+		REQUIRE_THROWS_WITH(
 		    SelectionVector::SelectFromBoolean(matches, nullptr, 8, {}, array_ptr<sel_t>(false_output, capacity)),
-		    InternalException);
+		    Catch::Contains("Attempted to construct a sub-array"));
 		for (bool short_true : {false, true}) {
-			REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(
-			                      matches, nullptr, 8, array_ptr<sel_t>(output, short_true ? capacity : 8),
-			                      array_ptr<sel_t>(false_output, short_true ? 8 : capacity)),
-			                  InternalException);
+			REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(
+			                        matches, nullptr, 8, array_ptr<sel_t>(output, short_true ? capacity : 8),
+			                        array_ptr<sel_t>(false_output, short_true ? 8 : capacity)),
+			                    Catch::Contains("Attempted to construct a sub-array"));
 		}
 		for (idx_t i = 0; i < 8; i++) {
 			REQUIRE(output[i] == SENTINEL);
@@ -269,20 +270,21 @@ TEST_CASE("Boolean selection reads mapped matches and emits logical positions", 
 	SelectionVector short_selection(7);
 	std::fill(output, output + 257, canary);
 	std::fill(false_output, false_output + 257, canary);
-	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, &short_selection, 8, array_ptr<sel_t>(output, 257)),
-	                  InternalException);
-	REQUIRE_THROWS_AS(
+	REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(matches, &short_selection, 8, array_ptr<sel_t>(output, 257)),
+	                    Catch::Contains("Attempted to construct a sub-array"));
+	REQUIRE_THROWS_WITH(
 	    SelectionVector::SelectFromBoolean(matches, &short_selection, 8, {}, array_ptr<sel_t>(false_output, 257)),
-	    InternalException);
-	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, &short_selection, 8, array_ptr<sel_t>(output, 257),
-	                                                     array_ptr<sel_t>(false_output, 257)),
-	                  InternalException);
+	    Catch::Contains("Attempted to construct a sub-array"));
+	REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(matches, &short_selection, 8, array_ptr<sel_t>(output, 257),
+	                                                       array_ptr<sel_t>(false_output, 257)),
+	                    Catch::Contains("Attempted to construct a sub-array"));
 	SelectionVector valid_selection = SelectionVector::Incremental(8);
-	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, &valid_selection, 8, array_ptr<sel_t>(output, 7), {}),
-	                  InternalException);
-	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, &valid_selection, 8, array_ptr<sel_t>(output, 257),
-	                                                     array_ptr<sel_t>(false_output, 7)),
-	                  InternalException);
+	REQUIRE_THROWS_WITH(
+	    SelectionVector::SelectFromBoolean(matches, &valid_selection, 8, array_ptr<sel_t>(output, 7), {}),
+	    Catch::Contains("Attempted to construct a sub-array"));
+	REQUIRE_THROWS_WITH(SelectionVector::SelectFromBoolean(matches, &valid_selection, 8, array_ptr<sel_t>(output, 257),
+	                                                       array_ptr<sel_t>(false_output, 7)),
+	                    Catch::Contains("Attempted to construct a sub-array"));
 	for (idx_t i = 0; i < 257; i++) {
 		REQUIRE(output[i] == canary);
 		REQUIRE(false_output[i] == canary);

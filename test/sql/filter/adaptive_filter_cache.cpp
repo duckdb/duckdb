@@ -306,8 +306,9 @@ TEST_CASE("Run cache accounting survives selections partial batches and row fall
 #ifndef DUCKDB_CRASH_ON_ASSERT
 		SelectionVector values, selected;
 		idx_t count = 0;
-		REQUIRE_THROWS_AS(cache->FilterRuns(values, array_ptr<const idx_t>(nullptr, 0), selected, count),
-		                  InternalException);
+		const idx_t row_count = 0;
+		REQUIRE_THROWS_WITH(cache->FilterRuns(values, array_ptr<const idx_t>(row_count), selected, count),
+		                    Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }
@@ -435,8 +436,8 @@ TEST_CASE("Pure filter caches expose borrowed masks with root lifetime checks", 
 	REQUIRE_FALSE(cache->CanAcceptAll());
 	REQUIRE_FALSE(cache->CanSkipAll());
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(cache->GetPureMask(), InternalException);
-	REQUIRE_THROWS_AS(replacement->GetPureMask(), InternalException);
+	REQUIRE_THROWS_WITH(cache->GetPureMask(), Catch::Contains("Filter cache outlived its filter state"));
+	REQUIRE_THROWS_WITH(replacement->GetPureMask(), Catch::Contains("Filter cache outlived its filter state"));
 #endif
 }
 
@@ -745,7 +746,8 @@ TEST_CASE("Adaptive predicate caches share row feedback with fallback and preser
 		SelectionVector codes;
 		SelectionVector selected;
 		idx_t count = 1;
-		REQUIRE_THROWS_AS(cache->Filter(codes, selected, count), InternalException);
+		REQUIRE_THROWS_WITH(cache->Filter(codes, selected, count),
+		                    Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }
@@ -791,7 +793,7 @@ TEST_CASE("Constant cached batches preserve adaptive feedback and mandatory pred
 		REQUIRE_FALSE(cache->CanSkipAll());
 #ifndef DUCKDB_CRASH_ON_ASSERT
 		idx_t count = STANDARD_VECTOR_SIZE;
-		REQUIRE_THROWS_AS(cache->FilterConstant(0, count), InternalException);
+		REQUIRE_THROWS_WITH(cache->FilterConstant(0, count), Catch::Contains("Filter cache outlived its filter state"));
 #endif
 	}
 }

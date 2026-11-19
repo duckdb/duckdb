@@ -38,7 +38,7 @@ TEST_CASE("A task error that fails to be created for another reason is not repor
 	auto fail_to_parse = []() -> ErrorData {
 		throw SerializationException("Failed to parse JSON string");
 	};
-	REQUIRE_THROWS_AS(errors.PushTaskError(fail_to_parse), SerializationException);
+	REQUIRE_THROWS_WITH(errors.PushTaskError(fail_to_parse), Catch::Contains("Failed to parse JSON string"));
 	REQUIRE(!errors.HasError());
 }
 
