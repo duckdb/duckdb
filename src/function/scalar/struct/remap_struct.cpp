@@ -23,10 +23,14 @@ static bool IsRemappable(const LogicalType &type) {
 struct RemapColumnInfo {
 	optional_idx index;
 	optional_idx default_index;
+	//! Whether the field is built from child_remap_info instead of being referenced as a whole.
+	//! A struct without fields is built from no children, so an empty child_remap_info does not tell the two apart.
+	bool is_nested = false;
 	vector<RemapColumnInfo> child_remap_info;
 
 	inline bool operator==(const RemapColumnInfo &rhs) const {
-		return index == rhs.index && default_index == rhs.default_index && child_remap_info == rhs.child_remap_info;
+		return index == rhs.index && default_index == rhs.default_index && is_nested == rhs.is_nested &&
+		       child_remap_info == rhs.child_remap_info;
 	};
 };
 
@@ -73,7 +77,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 	// set up the correct vector references
 	for (idx_t i = 0; i < remap_info.size(); i++) {
 		auto &remap = remap_info[i];
-		if (remap.index.IsValid() && !remap.child_remap_info.empty()) {
+		if (remap.index.IsValid() && remap.is_nested) {
 			// nested remap - recurse
 			auto &input_vector = input_vectors[remap.index.GetIndex()];
 			reference<Vector> child_default = default_vector;
@@ -86,6 +90,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 		}
 		if (!remap.index.IsValid() && remap.default_index.IsValid() && !remap.child_remap_info.empty()) {
 			// nested default without a source - remap the fields of the default to the target type
+			// (a default without fields has none to remap and is referenced below, so is_nested is not used here)
 			auto &defaults = StructVector::GetEntries(default_vector);
 			auto &nested_default = defaults[remap.default_index.GetIndex()];
 			if (nested_default.GetType().id() == LogicalTypeId::STRUCT &&
@@ -464,6 +469,7 @@ struct RemapEntry {
 			info.default_index = entry->second.default_index;
 			if (IsRemappable(child_type) && entry->second.child_remaps) {
 				// type is nested and a mapping for it is given - recurse
+				info.is_nested = true;
 				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
 			}
 			result.push_back(std::move(info));

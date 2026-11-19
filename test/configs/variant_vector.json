@@ -14,6 +14,7 @@
 		{
 			"reason": "Roundtrip is not possible (MAP type)",
 			"paths": [
+				"test/sql/types/struct/remap_struct_empty_map_keys.test",
 				"test/parquet/test_parquet_schema.test",
 				"test/parquet/schema_nested_extract.test",
 				"test/parquet/test_parquet_schema_null_nested.test",
