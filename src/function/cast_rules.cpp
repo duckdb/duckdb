@@ -2,6 +2,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -41,6 +42,9 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::ARRAY:
 		return 160;
+	case LogicalTypeId::VARIANT:
+		// anything can be cast to VARIANT, so prefer casting to any other type
+		return 170;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
 	case LogicalTypeId::TEMPLATE:
@@ -323,6 +327,14 @@ static int64_t ImplicitCastVariant(const LogicalType &to) {
 	return TargetTypeCost(to);
 }
 
+static int64_t ImplicitCastToVariant(const LogicalType &from, const LogicalType &to) {
+	if (TypeVisitor::Contains(from, LogicalTypeId::TYPE)) {
+		// TYPE has no VARIANT representation
+		return -1;
+	}
+	return TargetTypeCost(to);
+}
+
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
@@ -602,6 +614,9 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	// Special case: Anything can be cast to a union if the source type is a member of the union
 	if (to.id() == LogicalTypeId::UNION) {
 		return ImplicitCastToUnionMember(from, to);
+	}
+	if (to.id() == LogicalTypeId::VARIANT) {
+		return ImplicitCastToVariant(from, to);
 	}
 
 	switch (from.id()) {

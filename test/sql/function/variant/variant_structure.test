@@ -5,22 +5,22 @@
 require json
 
 query I
-SELECT variant_structure(42::VARIANT)::JSON;
+SELECT variant_structure(42)::JSON;
 ----
 "INT32"
 
 query I
-SELECT variant_structure({'a': 42, 'b': ['duck', 'goose']}::VARIANT)::JSON;
+SELECT variant_structure({'a': 42, 'b': ['duck', 'goose']})::JSON;
 ----
 {"a":"INT32","b":["VARCHAR"]}
 
 query I
-SELECT variant_structure([true, NULL, false]::VARIANT)::JSON;
+SELECT variant_structure([true, NULL, false])::JSON;
 ----
 ["BOOLEAN"]
 
 query I
-SELECT variant_structure([1::VARIANT, 'duck'::VARIANT]::VARIANT)::JSON;
+SELECT variant_structure([1::VARIANT, 'duck'::VARIANT])::JSON;
 ----
 ["VARIANT"]
 
