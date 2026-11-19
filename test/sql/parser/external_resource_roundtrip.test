@@ -90,18 +90,23 @@ CREATE EXTERNAL RESOURCE aws.ec2.quack AS x (SPOT, REGION 'eu-west-1')
 # --- REGISTER: name plus an arbitrary handle expression ------------------------------------------------
 
 # REGISTER records the handle without looking the type up, so an unknown type succeeds; the record is
-# dropped again so the next mode of the loop can register the same name.
+# dropped again so the next mode of the loop can register the same name. Registrations live in memory, so
+# under a forced restart there may be nothing to drop.
 statement ok
 REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x FROM {'id': 'i-123'}
 
-statement ok
+statement maybe
 CALL deregister_external_resource('x')
+----
+is not registered
 
 statement ok
 REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS "weird name" FROM {'id': 'i-123', 'tags': ['a','b']}
 
-statement ok
+statement maybe
 CALL deregister_external_resource('weird name')
+----
+is not registered
 
 # a scalar handle fails the cast to the registry's MAP shape - still a full ToString round-trip
 statement error
@@ -125,11 +130,15 @@ REGISTER EXTERNAL RESOURCES FROM "weird source"
 ----
 registered	select	aws:ec2:quack	{id=i-2}
 
-statement ok
+statement maybe
 CALL deregister_external_resource('rt one')
+----
+is not registered
 
-statement ok
+statement maybe
 CALL deregister_external_resource('select')
+----
+is not registered
 
 # --- SHOW: no identifiers, but both forms must still copy and reparse ----------------------------------
 
