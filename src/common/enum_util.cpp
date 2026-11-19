@@ -1169,19 +1169,23 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" },
 		{ static_cast<uint32_t>(CSVState::MAYBE_QUOTED), "MAYBE_QUOTED" },
 		{ static_cast<uint32_t>(CSVState::FIELD_START), "FIELD_START" },
-		{ static_cast<uint32_t>(CSVState::FIELD_QUOTE), "FIELD_QUOTE" }
+		{ static_cast<uint32_t>(CSVState::FIELD_QUOTE), "FIELD_QUOTE" },
+		{ static_cast<uint32_t>(CSVState::STANDARD_NO_FIELD), "STANDARD_NO_FIELD" },
+		{ static_cast<uint32_t>(CSVState::QUOTED_NO_FIELD), "QUOTED_NO_FIELD" },
+		{ static_cast<uint32_t>(CSVState::ESCAPE_NO_FIELD), "ESCAPE_NO_FIELD" },
+		{ static_cast<uint32_t>(CSVState::UNQUOTED_IN_FIELD), "UNQUOTED_IN_FIELD" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 21, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 25, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 21, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 25, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEExecutionModeValues() {

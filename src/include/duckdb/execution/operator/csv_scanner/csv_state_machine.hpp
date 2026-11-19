@@ -80,10 +80,10 @@ struct CSVStates {
 	}
 
 	inline bool IsQuoted() const {
-		return states[0] == CSVState::QUOTED;
+		return states[0] == CSVState::QUOTED || states[0] == CSVState::QUOTED_NO_FIELD;
 	}
 	inline bool IsUnquoted() const {
-		return states[0] == CSVState::UNQUOTED;
+		return states[0] == CSVState::UNQUOTED || states[0] == CSVState::UNQUOTED_IN_FIELD;
 	}
 	inline bool IsEscaped() const {
 		switch (states[1]) {
@@ -92,9 +92,13 @@ struct CSVStates {
 		case CSVState::ESCAPED_RETURN:
 		case CSVState::FIELD_START:
 		case CSVState::FIELD_QUOTE:
+		case CSVState::ESCAPE_NO_FIELD:
 			return true;
 		case CSVState::QUOTED:
-			return states[0] == CSVState::UNQUOTED || states[0] == CSVState::MAYBE_QUOTED;
+			return states[0] == CSVState::UNQUOTED || states[0] == CSVState::UNQUOTED_IN_FIELD ||
+			       states[0] == CSVState::MAYBE_QUOTED;
+		case CSVState::QUOTED_NO_FIELD:
+			return states[0] == CSVState::UNQUOTED;
 		case CSVState::UNQUOTED:
 			return states[0] == CSVState::MAYBE_QUOTED;
 		default:
@@ -102,7 +106,8 @@ struct CSVStates {
 		}
 	}
 	inline bool IsQuotedCurrent() const {
-		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NEW_LINE;
+		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NO_FIELD ||
+		       states[1] == CSVState::QUOTED_NEW_LINE;
 	}
 	inline bool IsState(const CSVState state) const {
 		return states[1] == state;

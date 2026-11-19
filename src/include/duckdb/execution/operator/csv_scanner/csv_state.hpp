@@ -36,6 +36,11 @@ enum class CSVState : uint8_t {
 	ESCAPED_RETURN = 17, //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
 	MAYBE_QUOTED = 18,   //! We are potentially in a quoted value or the end of an unquoted value
 	FIELD_START = 19,    //! At the start of a field after an inert escape (escape_mode 'opencsv')
-	FIELD_QUOTE = 20     //! A quote inside an unquoted field (doubled_quotes: a doubled quote is one quote)
+	FIELD_QUOTE = 20,    //! A quote inside an unquoted field (doubled_quotes: a doubled quote is one quote)
+	//! ------- embedded_quote 'opencsv': opencsv's field flag, flipped by every quote event -------------------!//
+	STANDARD_NO_FIELD = 21, //! Outside quotes with the field flag off: escapes are inert and a quote opens quotes
+	QUOTED_NO_FIELD = 22,   //! Inside quotes with the field flag off, so the next close leaves the flag on
+	ESCAPE_NO_FIELD = 23,   //! An escape inside quotes while the field flag is off
+	UNQUOTED_IN_FIELD = 24  //! Left a quoted section with the field flag on: escapes escape, a quote is a pair
 };
 } // namespace duckdb

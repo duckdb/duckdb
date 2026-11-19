@@ -602,25 +602,66 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	// 12.4) Embedded quotes (embedded_quote 'opencsv'): a lone quote in a field toggles the quote state, as
-	// opencsv's embedded quote rule does, so the section it opens runs to the record end unless a quote closes it,
-	// and after a closing quote the field continues as plain text
+	// 12.4) Embedded quotes (embedded_quote 'opencsv'): every quote event toggles a state, as opencsv does - a lone
+	// quote toggles the quote state and a doubled pair is one literal quote - and every quote event also flips
+	// opencsv's field flag, which plain bytes set: while the flag is off outside quotes an escape is inert and a
+	// quote opens a quoted section, and the flag's state when a section closes decides both again
 	if (state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV && quote != '\0' &&
 	    quote != escape) {
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		const auto unquoted = static_cast<uint8_t>(CSVState::UNQUOTED);
+		const auto unquoted_in_field = static_cast<uint8_t>(CSVState::UNQUOTED_IN_FIELD);
+		const auto standard_no_field = static_cast<uint8_t>(CSVState::STANDARD_NO_FIELD);
+		const auto quoted_no_field = static_cast<uint8_t>(CSVState::QUOTED_NO_FIELD);
+		// a quote after field content: a data byte resolves it to a toggle into quotes, a quote to a literal pair
 		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::QUOTED);
-		transition_array[quote][field_quote] = CSVState::STANDARD;
+		transition_array[quote][field_quote] = CSVState::STANDARD_NO_FIELD;
 		if (enable_unquoted_escape) {
-			transition_array[escape][field_quote] = CSVState::ESCAPE;
+			transition_array[escape][field_quote] = CSVState::ESCAPE_NO_FIELD;
 		}
 		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		// a close that left the field flag off: an escape is inert and a quote is a pair staying inside quotes
 		InitializeTransitionArray(transition_array, CSVState::UNQUOTED, CSVState::STANDARD);
-		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
+		transition_array[quote][unquoted] = CSVState::QUOTED_NO_FIELD;
 		if (enable_unquoted_escape) {
-			transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::FIELD_START;
+			transition_array[escape][unquoted] = CSVState::FIELD_START;
 		}
 		split_on_delimiter(CSVState::UNQUOTED);
 		end_record_on_line_break(CSVState::UNQUOTED);
+		// a close that left the field flag on: an escape escapes and a quote is a pair staying inside quotes
+		InitializeTransitionArray(transition_array, CSVState::UNQUOTED_IN_FIELD, CSVState::STANDARD);
+		transition_array[quote][unquoted_in_field] = CSVState::QUOTED;
+		if (enable_unquoted_escape) {
+			transition_array[escape][unquoted_in_field] = CSVState::UNQUOTED_ESCAPE;
+		}
+		split_on_delimiter(CSVState::UNQUOTED_IN_FIELD);
+		end_record_on_line_break(CSVState::UNQUOTED_IN_FIELD);
+		// outside quotes with the field flag off, after a literal pair in a plain field
+		InitializeTransitionArray(transition_array, CSVState::STANDARD_NO_FIELD, CSVState::STANDARD);
+		transition_array[quote][standard_no_field] = CSVState::QUOTED;
+		if (enable_unquoted_escape) {
+			transition_array[escape][standard_no_field] = CSVState::FIELD_START;
+		}
+		split_on_delimiter(CSVState::STANDARD_NO_FIELD);
+		end_record_on_line_break(CSVState::STANDARD_NO_FIELD);
+		// inside quotes with the field flag off, so its close lands with the flag on
+		InitializeTransitionArray(transition_array, CSVState::QUOTED_NO_FIELD, CSVState::QUOTED);
+		transition_array[quote][quoted_no_field] = CSVState::UNQUOTED_IN_FIELD;
+		if (escape != '\0') {
+			transition_array[escape][quoted_no_field] = CSVState::ESCAPE_NO_FIELD;
+		}
+		// only the quote and escape characters are escaped; before any other byte the escape is inert and the
+		// byte itself is plain content that sets the field flag
+		InitializeTransitionArray(transition_array, CSVState::ESCAPE_NO_FIELD, CSVState::QUOTED);
+		const auto escape_no_field = static_cast<uint8_t>(CSVState::ESCAPE_NO_FIELD);
+		transition_array[quote][escape_no_field] = CSVState::QUOTED_NO_FIELD;
+		if (escape != '\0') {
+			transition_array[escape][escape_no_field] = CSVState::QUOTED_NO_FIELD;
+		}
+		if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
+			end_record_on_line_break(CSVState::QUOTED_NO_FIELD);
+			end_record_on_line_break(CSVState::ESCAPE_NO_FIELD);
+		}
 	}
 
 	// 13) Escaped Return State

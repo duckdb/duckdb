@@ -36,7 +36,8 @@ COPY (SELECT * FROM (VALUES
 # - an escaped escape or quote is kept (3, 4)
 # - a trailing escape is dropped and missing fields are NULL (5)
 # - leading escapes are inert, so '\\x' is 'x' (6)
-# - a quote after an inert escape opens a quoted field, so the separator inside is data (7)
+# - a quote after an inert escape opens a quoted field, and since its neighbor is the escape rather than
+#   the separator, opencsv's embedded quote rule keeps it as a literal (7)
 query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', null_padding=true, header=false, auto_detect=false) ORDER BY id;
 ----
@@ -46,7 +47,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER'
 4	a"b	10
 5	c	NULL
 6	x	12
-7	a,b	13
+7	"a,b	13
 
 # a quoted value after an inert escape holds no escapes: it converts into a typed column
 statement ok
@@ -219,8 +220,8 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id'
 ----
 2
 
-# a quoted section that reopens and closes inside a field keeps the field's raw bytes; OpenCSVSerde drops the
-# quotes its position rule treats as openers or closers, a known divergence refined in a follow-up
+# a quote in the middle of a field follows opencsv's embedded quote rule: away from the line start and the
+# separators it is a kept literal, next to them it is dropped; either way it toggles the quote state
 statement ok
 COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -228,7 +229,7 @@ query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
 ----
 12	a"b"c	18
-13	"a"b	19
+13	a"b	19
 14	a"b" x	20
 
 # the same file read over tiny buffers, so the toggled fields cross buffer boundaries
@@ -236,7 +237,7 @@ query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, buffer_size=61) ORDER BY id;
 ----
 12	a"b"c	18
-13	"a"b	19
+13	a"b	19
 14	a"b" x	20
 
 # an unclosed quoted section in the middle of the record reads its field as NULL and pads the rest
@@ -258,3 +259,55 @@ query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled_escape.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
 ----
 18	a"b"c"d	24
+
+# the embedded quote rule counts the quote's position from the line start: within the first three characters it is
+# dropped, so the same content reads differently in the first field and in a later one
+statement ok
+COPY (SELECT * FROM (VALUES ('a"b"c,30,1'), ('x,a"b"c,2'), (',x"y"z,28')) t(line)) TO '{TEST_DIR}/dialect_gate.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_gate.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY c;
+----
+ab"c	30	1
+x	a"b"c	2
+(empty)	xy"z	28
+
+# a field of only whitespace before a kept-literal quote is discarded; a quote next to the separator or the line
+# end is dropped
+statement ok
+COPY (SELECT * FROM (VALUES ('20,  "ws",26'), ('21,a"b",27')) t(line)) TO '{TEST_DIR}/dialect_ws.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_ws.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+20	ws	26
+21	a"b	27
+
+# every quote event also flips opencsv's field flag: after the doubled quote in a plain field the flag is off, so
+# the following escape is inert and its quote opens a section that never closes, reading the field as NULL
+statement ok
+COPY (SELECT * FROM (VALUES ('22,b ""\"x,29'), ('23,ok,31')) t(line)) TO '{TEST_DIR}/dialect_field_flag.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
+----
+22	NULL	NULL
+23	ok	31
+
+# a doubled quote directly inside a quoted section leaves the flag on at the close, so there the escape escapes
+statement ok
+COPY (SELECT '24,"a"""\"x,32' AS line) TO '{TEST_DIR}/dialect_field_flag_on.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_field_flag_on.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
+----
+24	a"""x	32
+
+# the position rule counts UTF-16 units, so a four-byte character counts as two and its quote is still dropped
+statement ok
+COPY (SELECT chr(65536) || '"x"y,5,1' AS line) TO '{TEST_DIR}/dialect_units.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT a = chr(65536) || 'x"y', b, c FROM read_csv('{TEST_DIR}/dialect_units.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
+----
+true	5	1
