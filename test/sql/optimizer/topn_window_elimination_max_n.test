@@ -60,7 +60,7 @@ SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) < 1000000
 query II
 EXPLAIN SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2
 ----
-logical_opt	<REGEX>:.*Window.*Limit.*
+logical_opt	<!REGEX>:.*Window.*
 
 query II
 SELECT c_pk, c_int FROM t2 QUALIFY (ROW_NUMBER() OVER (ORDER BY c_pk)) <= 2

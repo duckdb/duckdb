@@ -112,7 +112,7 @@ EXPLAIN SELECT id, p
 FROM topn_unique_rowids
 QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
 ----
-logical_opt	<REGEX>:.*Window.*Limit.*
+logical_opt	<REGEX>:.*Join Type: SEMI.*
 
 query II
 SELECT id, p

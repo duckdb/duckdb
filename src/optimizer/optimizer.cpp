@@ -532,18 +532,18 @@ void Optimizer::RunBuiltInOptimizers() {
 		});
 	}
 
-	// rewrite unique ranking window function + filter on row_number to fused operator
-	RunOptimizer(OptimizerType::WINDOW_FUSION, [&]() {
-		WindowFusion window_fusion(context, &statistics_map);
-		plan = window_fusion.Optimize(std::move(plan));
-	});
-
 	// rewrite row_number window function + filter on row_number to aggregate
 	bool topn_used_late_materialization = false;
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
 		TopNWindowElimination topn_window_elimination(context, *this, &statistics_map);
 		plan = topn_window_elimination.Optimize(std::move(plan));
 		topn_used_late_materialization = topn_window_elimination.UsedLateMaterialization();
+	});
+
+	// rewrite unique ranking window function + filters to a fused operator
+	RunOptimizer(OptimizerType::WINDOW_FUSION, [&]() {
+		WindowFusion window_fusion(context, &statistics_map);
+		plan = window_fusion.Optimize(std::move(plan));
 	});
 
 	// remove duplicate aggregates

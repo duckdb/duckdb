@@ -68,6 +68,9 @@ QUALIFY row_number() OVER () <= 1;
 physical_plan	<REGEX>:.*FILTER.*STREAMING_WINDOW.*Limit.*
 
 # Single Partitions should use fusion
+statement ok
+SET disabled_optimizers='top_n_window_elimination';
+
 query II
 explain
 SELECT id
@@ -107,3 +110,5 @@ FROM q
 ----
 94001	99999	5999
 
+statement ok
+RESET disabled_optimizers;

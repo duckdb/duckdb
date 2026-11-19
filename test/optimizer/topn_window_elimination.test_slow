@@ -78,7 +78,7 @@ FROM (
 ) AS src
 QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
 ----
-logical_opt	<REGEX>:.*WINDOW.*Limit.*
+logical_opt	<REGEX>:.*(COMPARISON_JOIN.*Join Type: INNER.*rowid = rowid.*AGGREGATE|arg_max\(struct_pack\().*
 
 # An unpartitioned top-1 window must not turn empty input into a NULL row
 statement ok
@@ -423,7 +423,7 @@ SELECT rand
 FROM ints
 QUALIFY 1 = row_number() OVER(ORDER BY rand);
 ----
-logical_opt	<REGEX>:.*FILTER.*WINDOW.*Limit.*
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # Less than conditions should be optimized
 query I
@@ -439,7 +439,7 @@ SELECT rand
 FROM ints
 QUALIFY 2 > row_number() OVER(ORDER BY rand);
 ----
-logical_opt	<REGEX>:.*FILTER.*WINDOW.*Limit.*
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # NOP comparisons should be optimised
 query II
