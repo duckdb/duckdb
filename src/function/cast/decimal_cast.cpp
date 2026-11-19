@@ -242,6 +242,16 @@ static bignum_t UnscaledBignum(INPUT_TYPE input, string &blob) {
 struct BignumDecimalScaleOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, BignumDecimalScaleInput &data) {
+		if constexpr (!std::is_same<INPUT_TYPE, bignum_t>::value && std::is_same<RESULT_TYPE, bignum_t>::value) {
+			if (data.target_scale >= data.source_scale && data.target_scale - data.source_scale <= 38) {
+				hugeint_t scaled;
+				if (Hugeint::TryMultiply(hugeint_t(input),
+				                         Hugeint::POWERS_OF_TEN[data.target_scale - data.source_scale], scaled)) {
+					// A fixed-width result always fits the wide decimal's precision.
+					return DecimalHelper<bignum_t>::Store(data.result, DecimalHelper<bignum_t>::FromInteger(scaled));
+				}
+			}
+		}
 		string unscaled_blob;
 		auto unscaled = UnscaledBignum(input, unscaled_blob);
 		string rescaled;
