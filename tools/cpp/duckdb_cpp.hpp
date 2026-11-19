@@ -4613,6 +4613,7 @@ public:
 	class GetBindInfoInput;
 	class StatsInput;
 	class MetricsInput;
+	class ToStringInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4662,6 +4663,13 @@ public:
 	/// Called when the engine collects the metrics of the scan, possibly while the scan is still running, to report
 	/// what the scan did. Optional; unstable API.
 	using MetricsCallback = void (*)(MetricsInput &input);
+	/// Called with the bind data of a bound call when the engine renders a query plan that scans the function, e.g.
+	/// for `EXPLAIN`, possibly more than once; reports the key-value pairs the plan shows for the scan. They replace
+	/// the `Function` entry the physical plan shows by default. With profiling enabled (including `EXPLAIN ANALYZE`)
+	/// it is also called while the query executes, once per worker thread and possibly concurrently, so it must not
+	/// modify shared state without synchronization, and an error it throws there fails the query. Optional; unstable
+	/// API.
+	using ToStringCallback = void (*)(ToStringInput &input);
 
 	/// A column a function can produce next to the columns it declares in bind: a query asks for it by name.
 	enum class VirtualColumn : uint8_t {
@@ -4759,6 +4767,9 @@ public:
 	/// Lets the function report what the scan did: see `MetricsCallback`. Unstable API.
 	auto SetMetricsCallback(MetricsCallback callback) & -> TableFunction &;
 
+	/// Lets the function describe a bound call in query plans: see `ToStringCallback`. Unstable API.
+	auto SetToStringCallback(ToStringCallback callback) & -> TableFunction &;
+
 private:
 	explicit TableFunction(void *impl);
 	//! Moves what the callbacks need into the C handle, right before it is registered.
@@ -4778,6 +4789,7 @@ private:
 	GetBindInfoCallback get_bind_info_callback = nullptr;
 	StatsCallback stats_callback = nullptr;
 	MetricsCallback metrics_callback = nullptr;
+	ToStringCallback to_string_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -5447,6 +5459,40 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the to string callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class ToStringInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData` for the bound call being described.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports a key-value pair the plan shows for the scan. The pairs are shown in the order they were first
+		/// reported; setting a key again replaces its value.
+		/// @throws InvalidInputException When the key is empty.
+		auto Set(std::string_view key, std::string_view value) -> void;
+
+	private:
+		explicit ToStringInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
 };

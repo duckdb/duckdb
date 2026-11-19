@@ -14,6 +14,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "json_common.hpp"
 
 namespace duckdb {
 
@@ -364,7 +365,9 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 					        JSONCommon::FormatParseError(input.GetDataWriteable(), input.GetSize(), error), parameters);
 				    } else if (!unsafe_yyjson_is_arr(doc->root)) {
 					    auto truncated_input =
-					        input.GetSize() > 50 ? string(input.GetData(), 47) + "..." : input.GetString();
+					        input.GetSize() > 50
+					            ? StringUtil::TruncateUTF8TOByteLength(input.GetData(), input.GetSize(), 47)
+					            : input.GetString();
 					    HandleCastError::AssignError(
 					        StringUtil::Format("Cannot cast to list of JSON. Input \"%s\"", truncated_input),
 					        parameters);

@@ -59,8 +59,9 @@ public:
 		return "DOTTED_NAME";
 	}
 
+	//! Never skipped: a name can start with a number token that has no token class, such as 127.0.0.1
 	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
-		first_set.class_mask = MatcherTokenClass::WORD | MatcherTokenClass::NUMBER;
+		first_set.SetAny();
 	}
 
 	//! A dotted name: two or more labels separated by single dots, each label one or more words joined by single
