@@ -2532,6 +2532,40 @@ static unique_ptr<BoundAggregateExpression> BindDomainAggregate(ClientContext &c
 	return FunctionBinder(context).BindAggregateFunction(function, std::move(children));
 }
 
+TEST_CASE("Singleton groups preserve the input current domain for first",
+          "[optimizer][relation_statistics][selected_value_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE t(id INTEGER PRIMARY KEY, x INTEGER)"));
+	connection.BeginTransaction();
+	auto input = PlanStatisticsQuery(connection, "SELECT id, x FROM t");
+	auto bindings = input->GetColumnBindings();
+	auto stats = CreateStats(bindings, {64, 8}, 64);
+
+	// Both aggregates select x from the same singleton groups. FILTER makes only
+	// the second aggregate take the weaker selection rule.
+	auto first = BindDomainAggregate(*connection.context, "first",
+	                                 make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[1]));
+	auto filtered = first->Copy();
+	filtered->Cast<BoundAggregateExpression>().GetFilterMutable() =
+	    make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(std::move(first));
+	expressions.push_back(std::move(filtered));
+	LogicalAggregate aggregate(TableIndex(20), TableIndex(30), std::move(expressions));
+	aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[0]));
+	aggregate.children.push_back(std::move(input));
+
+	auto result = RelationStatisticsHelper::ExtractAggregationStats(aggregate, stats, *connection.context);
+	REQUIRE(result);
+	REQUIRE(result->columns.size() == 3);
+	REQUIRE(result->columns[1].current_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(result->columns[1].current_domain.distinct_count == 8);
+	REQUIRE(result->columns[2].total_domain.source == DistinctCountSource::EXACT);
+	REQUIRE(result->columns[2].current_domain.source == DistinctCountSource::CARDINALITY);
+	connection.Rollback();
+}
+
 TEST_CASE("Selected aggregates preserve source domains without structural evidence",
           "[optimizer][relation_statistics][selected_value_statistics]") {
 	DuckDB db;
