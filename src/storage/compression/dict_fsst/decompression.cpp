@@ -178,26 +178,17 @@ void CompressedStringScanState::LoadStringLengths() {
 	}
 	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 	string_lengths.resize(AlignValue<idx_t, group_size>(layout.dict_count));
+	BitpackingPrimitives::UnPackBufferWithFrame<uint32_t>(data_ptr_cast(string_lengths.data()),
+	                                                      layout.string_lengths.data(), string_lengths.size(),
+	                                                      layout.string_lengths_width, 0);
 
 	// Both the entry count and each length fit in uint32_t, so their sum fits in uint64_t.
 	uint64_t total_bytes = 0;
-	for (idx_t i = 0; i < layout.dict_count; i += group_size) {
-		BitpackingPrimitives::UnPackBlock<uint32_t>(
-		    data_ptr_cast(string_lengths.data() + i),
-		    layout.string_lengths.data() + (i * layout.string_lengths_width) / 8, layout.string_lengths_width);
-
-		// Validate only real entries, not the final group's padding.
-		const auto end = MinValue<idx_t>(i + group_size, layout.dict_count);
-		uint64_t group_bytes = 0;
-		for (idx_t j = i; j < end; j++) {
-			group_bytes += string_lengths[j];
-		}
-
-		// Each string offset sums earlier lengths, so bounding the total keeps all offsets in range.
-		total_bytes += group_bytes;
-		if (total_bytes > layout.dictionary.Size()) {
-			ThrowStringLengthsOutOfBounds();
-		}
+	for (idx_t i = 0; i < layout.dict_count; i++) {
+		total_bytes += string_lengths[i];
+	}
+	if (total_bytes > layout.dictionary.Size()) {
+		ThrowStringLengthsOutOfBounds();
 	}
 
 	// Index 0 represents NULL, so its length must be 0
@@ -327,8 +318,8 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 		}
 
 		sel_t *sel_vec_ptr = sel_vec->data();
-		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), indices.data(), decompress_count,
-		                                          layout.dictionary_indices_width);
+		BitpackingPrimitives::UnPackBufferWithFrame<sel_t>(data_ptr_cast(sel_vec_ptr), indices.data(), decompress_count,
+		                                                   layout.dictionary_indices_width, 0);
 
 		sel_vec->ShiftLeft(start_offset, scan_count);
 
@@ -422,6 +413,37 @@ bool CompressedStringScanState::AllowDictionaryScan(idx_t scan_count) {
 		return false;
 	}
 	return EnsureDictionary();
+}
+
+void CompressedStringScanState::SelectToDictionaryVector(Vector &result, idx_t start, idx_t vector_count,
+                                                         const SelectionVector &sel, idx_t sel_count) {
+	D_ASSERT(layout.mode != DictFSSTMode::FSST_ONLY);
+	D_ASSERT(sel_count <= vector_count / 64);
+	EnsureDictionary();
+	SelectionVector selected_indices(MaxValue<idx_t>(sel_count, 1));
+	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	uint32_t group[group_size];
+	idx_t loaded_group = NumericLimits<idx_t>::Maximum();
+	bool invalid_index = false;
+	for (idx_t i = 0; i < sel_count; i++) {
+		const auto row = start + sel.get_index(i);
+		const auto group_start = row - row % group_size;
+		if (group_start != loaded_group) {
+			const auto byte_offset = (group_start / group_size) * (group_size * layout.dictionary_indices_width / 8);
+			const auto byte_count = group_size * layout.dictionary_indices_width / 8;
+			auto bytes = layout.dictionary_indices.SubArray(byte_offset, byte_count);
+			BitpackingPrimitives::UnPackBlock<uint32_t>(data_ptr_cast(group), bytes.data(),
+			                                            layout.dictionary_indices_width);
+			loaded_group = group_start;
+		}
+		const auto index = group[row - group_start];
+		invalid_index |= index >= layout.dict_count;
+		selected_indices.set_index(i, index);
+	}
+	if (invalid_index) {
+		ThrowDictionaryIndexOutOfBounds();
+	}
+	result.Dictionary(dictionary, selected_indices, sel_count);
 }
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,

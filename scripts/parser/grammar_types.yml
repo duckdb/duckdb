@@ -1086,6 +1086,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1824,8 +1827,9 @@ IdentifierType:
     - ColId
     - ColIdOrString
     - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
     - FromSourceName
-    - ShowExternalResourcesType
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
