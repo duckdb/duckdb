@@ -1,0 +1,23 @@
+diff --git a/test/sql/s3tables/s3tables_resource.test b/test/sql/s3tables/s3tables_resource.test
+index 6cf0cd6..5ff8879 100644
+--- a/test/sql/s3tables/s3tables_resource.test
++++ b/test/sql/s3tables/s3tables_resource.test
+@@ -54,9 +54,16 @@ CREATE EXTERNAL RESOURCE 'aws:s3tables:table-bucket' AS bucket_x (REGION 'eu-cen
+ ----
+ <REGEX>:.*__aws__s3tables__table_bucket__create.*
+ 
+-# Adoption of an existing bucket goes through status, not create.
+-statement error
++# Adoption of an existing bucket records the handle without a call; the first use goes through status,
++# not create, and that is where the AWS call fails.
++statement ok
+ REGISTER EXTERNAL RESOURCE 'aws:s3tables:table-bucket' AS bucket_y
+ FROM MAP {'arn': 'arn:aws:s3tables:eu-central-1:123456789012:bucket/nope'};
++
++statement error
++ATTACH TO EXTERNAL RESOURCE bucket_y AS bucket_y_db;
+ ----
+ <REGEX>:.*__aws__s3tables__table_bucket__status.*
++
++statement ok
++CALL deregister_external_resource('bucket_y');
