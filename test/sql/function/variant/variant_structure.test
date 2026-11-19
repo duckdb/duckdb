@@ -101,7 +101,7 @@ SELECT id, variant_structure(v)::JSON FROM (VALUES
 12	"UINT128"
 13	"FLOAT"
 14	"DOUBLE"
-15	"DECIMAL"
+15	"DECIMAL(2,1)"
 16	"VARCHAR"
 17	"BLOB"
 18	"UUID"
@@ -162,7 +162,7 @@ SELECT
 ----
 ["VARIANT"]	["VARIANT"]	["VARIANT"]
 
-# numeric types are widened
+# numeric types are widened to a type that holds all of their values exactly
 query IIIIII
 SELECT
 	variant_structure('[1, -1]'::JSON::VARIANT)::JSON,
@@ -172,7 +172,76 @@ SELECT
 	variant_structure([1::VARIANT, 2.5::VARIANT]::VARIANT)::JSON,
 	variant_structure([2.5::VARIANT, 1.25::VARIANT]::VARIANT)::JSON;
 ----
-["INT128"]	["DOUBLE"]	["INT16"]	["INT16"]	["DECIMAL"]	["DECIMAL"]
+["INT128"]	["VARIANT"]	["INT16"]	["INT16"]	["DECIMAL(11,1)"]	["DECIMAL(3,2)"]
+
+query II
+SELECT id, variant_structure(v::VARIANT)::JSON FROM (VALUES
+	(1, [1::UTINYINT::VARIANT, 1::UINTEGER::VARIANT]),
+	(2, [1::TINYINT::VARIANT, 1::UINTEGER::VARIANT]),
+	(3, [1::BIGINT::VARIANT, 1::UBIGINT::VARIANT]),
+	(4, [1::HUGEINT::VARIANT, 1::UHUGEINT::VARIANT]),
+	(5, [1::TINYINT::VARIANT, 1::UHUGEINT::VARIANT]),
+	(6, [1::SMALLINT::VARIANT, 1::FLOAT::VARIANT]),
+	(7, [1::USMALLINT::VARIANT, 1::FLOAT::VARIANT]),
+	(8, [1::INTEGER::VARIANT, 1::FLOAT::VARIANT]),
+	(9, [1::UINTEGER::VARIANT, 1::DOUBLE::VARIANT]),
+	(10, [1::BIGINT::VARIANT, 1::DOUBLE::VARIANT]),
+	(11, [1::FLOAT::VARIANT, 1::DOUBLE::VARIANT]),
+	(12, [1::INTEGER::VARIANT, 1::DECIMAL(8,2)::VARIANT]),
+	(13, [1::DECIMAL(8,2)::VARIANT, 1::DECIMAL(5,4)::VARIANT]),
+	(14, [1::HUGEINT::VARIANT, 1::DECIMAL(5,2)::VARIANT]),
+	(15, [1::DECIMAL(38,0)::VARIANT, 1::DECIMAL(2,1)::VARIANT]),
+	(16, [1::DECIMAL(7,0)::VARIANT, 1::FLOAT::VARIANT]),
+	(17, [1::DECIMAL(8,0)::VARIANT, 1::FLOAT::VARIANT]),
+	(18, [1::DECIMAL(16,0)::VARIANT, 1::DOUBLE::VARIANT]),
+	(19, [1::DECIMAL(5,2)::VARIANT, 1::DOUBLE::VARIANT]),
+	(20, [1::UBIGINT::VARIANT, 1::DECIMAL(5,2)::VARIANT]),
+	(21, [1::DECIMAL(5,2)::VARIANT, 1::DECIMAL(5,2)::VARIANT]),
+	(22, [1::INTEGER::VARIANT, true::VARIANT]),
+	(23, [1::INTEGER::VARIANT, '1'::VARIANT]),
+	(24, [1::DOUBLE::VARIANT, '2020-01-01'::DATE::VARIANT])
+) t(id, v) ORDER BY id;
+----
+1	["UINT32"]
+2	["INT64"]
+3	["INT128"]
+4	["DECIMAL(39,0)"]
+5	["DECIMAL(39,0)"]
+6	["FLOAT"]
+7	["FLOAT"]
+8	["DOUBLE"]
+9	["DOUBLE"]
+10	["VARIANT"]
+11	["DOUBLE"]
+12	["DECIMAL(12,2)"]
+13	["DECIMAL(10,4)"]
+14	["DECIMAL(41,2)"]
+15	["DECIMAL(39,1)"]
+16	["FLOAT"]
+17	["DOUBLE"]
+18	["VARIANT"]
+19	["VARIANT"]
+20	["DECIMAL(22,2)"]
+21	["DECIMAL(5,2)"]
+22	["VARIANT"]
+23	["VARIANT"]
+24	["VARIANT"]
+
+# the widened type does not depend on the order of the elements
+query III
+SELECT
+	variant_structure([1::UBIGINT::VARIANT, 1::BIGINT::VARIANT, 1::DECIMAL(5,2)::VARIANT])::JSON,
+	variant_structure([1::BIGINT::VARIANT, 1::DECIMAL(5,2)::VARIANT, 1::UBIGINT::VARIANT])::JSON,
+	variant_structure([1::DECIMAL(5,2)::VARIANT, 1::UBIGINT::VARIANT, 1::BIGINT::VARIANT])::JSON;
+----
+["DECIMAL(22,2)"]	["DECIMAL(22,2)"]	["DECIMAL(22,2)"]
+
+query II
+SELECT
+	variant_structure([[1::INTEGER::VARIANT], [1::FLOAT::VARIANT], [1::BIGINT::VARIANT]])::JSON,
+	variant_structure([[1::BIGINT::VARIANT], [1::INTEGER::VARIANT], [1::FLOAT::VARIANT]])::JSON;
+----
+[["VARIANT"]]	[["VARIANT"]]
 
 # multiple chunks with NULL rows
 query II

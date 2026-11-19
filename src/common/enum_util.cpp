@@ -155,6 +155,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/variant/variant_structure.hpp"
 #include "duckdb/function/window/match_recognize_matcher.hpp"
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
 #include "duckdb/logging/log_sink.hpp"
@@ -7552,6 +7553,28 @@ const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingS
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value) {
 	return static_cast<VariantStatsShreddingState>(StringUtil::StringToEnum(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVariantStructureKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantStructureKind::NULL_VALUE), "NULL_VALUE" },
+		{ static_cast<uint32_t>(VariantStructureKind::PRIMITIVE), "PRIMITIVE" },
+		{ static_cast<uint32_t>(VariantStructureKind::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(VariantStructureKind::OBJECT), "OBJECT" },
+		{ static_cast<uint32_t>(VariantStructureKind::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(VariantStructureKind::INCOMPATIBLE), "INCOMPATIBLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VariantStructureKind>(VariantStructureKind value) {
+	return StringUtil::EnumToString(GetVariantStructureKindValues(), 6, "VariantStructureKind", static_cast<uint32_t>(value));
+}
+
+template<>
+VariantStructureKind EnumUtil::FromString<VariantStructureKind>(const char *value) {
+	return static_cast<VariantStructureKind>(StringUtil::StringToEnum(GetVariantStructureKindValues(), 6, "VariantStructureKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorBufferTypeValues() {

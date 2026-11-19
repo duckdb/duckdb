@@ -682,6 +682,8 @@ enum class VariantLogicalType : uint8_t;
 
 enum class VariantStatsShreddingState : uint8_t;
 
+enum class VariantStructureKind : uint8_t;
+
 enum class VectorBufferType : uint8_t;
 
 enum class VectorPrepareState : uint8_t;
@@ -1681,6 +1683,9 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
 const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
+
+template<>
+const char* EnumUtil::ToChars<VariantStructureKind>(VariantStructureKind value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -2693,6 +2698,9 @@ VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
 
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
+
+template<>
+VariantStructureKind EnumUtil::FromString<VariantStructureKind>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

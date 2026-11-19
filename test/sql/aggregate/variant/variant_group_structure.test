@@ -1,0 +1,275 @@
+# name: test/sql/aggregate/variant/variant_group_structure.test
+# description: Test variant_group_structure
+# group: [variant]
+
+require json
+
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES
+	({'a': 42}::VARIANT),
+	({'a': 84::BIGINT, 'b': ['duck', 'goose']}::VARIANT)
+) t(v);
+----
+{"a":"INT64","b":["VARCHAR"]}
+
+query I
+SELECT typeof(variant_group_structure(42::VARIANT));
+----
+VARIANT
+
+# non-VARIANT inputs are cast to VARIANT
+query II
+SELECT variant_group_structure(i)::JSON, variant_group_structure({'a': i, 'b': [i::VARCHAR]})::JSON FROM range(10) t(i);
+----
+"INT64"	{"a":"INT64","b":["VARCHAR"]}
+
+statement error
+SELECT variant_group_structure(1, 2);
+----
+<REGEX>:Binder Error.*No function matches.*
+
+# missing properties do not influence the properties of other rows
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES ({'a': 12}::VARIANT), ('{}'::JSON::VARIANT)) t(v);
+----
+{"a":"INT32"}
+
+# structures are merged recursively
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES ({'x': {'a': 1}}::VARIANT), ({'x': {'b': true}}::VARIANT)) t(v);
+----
+{"x":{"a":"INT32","b":"BOOLEAN"}}
+
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES
+	('[{"a": 1}]'::JSON::VARIANT),
+	('[{"b": [true]}, {"a": 2}]'::JSON::VARIANT),
+	('[]'::JSON::VARIANT)
+) t(v);
+----
+[{"a":"UINT64","b":["BOOLEAN"]}]
+
+# incompatible structures are VARIANT at the position of the conflict
+query IIII
+SELECT
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES (1::VARIANT), ('duck'::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ({'a': 1}::VARIANT), ([1]::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ({'a': 1}::VARIANT), ({'a': 'x', 'b': 2}::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ([1]::VARIANT), (['x']::VARIANT)) t(v));
+----
+"VARIANT"	"VARIANT"	{"a":"VARIANT","b":"INT32"}	["VARIANT"]
+
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES
+	({'a': {'b': 1}}::VARIANT),
+	({'a': 'x'}::VARIANT),
+	({'a': {'b': 2, 'c': 3}}::VARIANT)
+) t(v);
+----
+{"a":"VARIANT"}
+
+query II
+SELECT variant_group_structure(v)::JSON, variant_group_structure(DISTINCT v)::JSON FROM (VALUES
+	(true::VARIANT),
+	(false::VARIANT),
+	(true::VARIANT)
+) t(v);
+----
+"BOOLEAN"	"BOOLEAN"
+
+# NULLs mixed with other values do not influence the structure
+query II
+SELECT
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES (NULL::VARIANT), (42::VARIANT), (NULL::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ({'a': NULL}::VARIANT), ({'a': 1}::VARIANT)) t(v));
+----
+"INT32"	{"a":"INT32"}
+
+# only NULLs is the VARIANT string "NULL", not a SQL NULL
+query III
+SELECT variant_group_structure(v)::JSON, variant_group_structure(v) IS NULL, variant_typeof(variant_group_structure(v))
+FROM (VALUES (NULL::VARIANT), ('null'::JSON::VARIANT), (NULL)) t(v);
+----
+"NULL"	false	VARCHAR
+
+query I
+SELECT variant_group_structure(v)::JSON FROM (VALUES ({'a': NULL, 'b': [NULL]}::VARIANT), (NULL)) t(v);
+----
+{"a":"NULL","b":["NULL"]}
+
+# no rows is a SQL NULL
+query I
+SELECT variant_group_structure(v) FROM (VALUES (1::VARIANT)) t(v) WHERE false;
+----
+NULL
+
+query II
+SELECT variant_group_structure(v) FILTER (WHERE false), variant_group_structure(v) FILTER (WHERE v IS NULL)::JSON
+FROM (VALUES (1::VARIANT), (NULL)) t(v);
+----
+NULL	"NULL"
+
+# empty containers
+query III
+SELECT
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ([]::VARIANT), ([]::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ('{}'::JSON::VARIANT), ('{}'::JSON::VARIANT)) t(v)),
+	(SELECT variant_group_structure(v)::JSON FROM (VALUES ([]::VARIANT), ([1]::VARIANT), ([]::VARIANT)) t(v));
+----
+["NULL"]	"VARIANT"	["INT32"]
+
+# numeric types are widened to a type that holds all of their values exactly
+query II
+SELECT g, variant_group_structure(v)::JSON FROM (VALUES
+	(1, 1::TINYINT::VARIANT), (1, 1::UTINYINT::VARIANT),
+	(2, 1::BIGINT::VARIANT), (2, 1::UBIGINT::VARIANT),
+	(3, 1::HUGEINT::VARIANT), (3, 1::UHUGEINT::VARIANT),
+	(4, 1::INTEGER::VARIANT), (4, 1::DECIMAL(8,2)::VARIANT),
+	(5, 1::SMALLINT::VARIANT), (5, 1::FLOAT::VARIANT),
+	(6, 1::INTEGER::VARIANT), (6, 1::FLOAT::VARIANT),
+	(7, 1::BIGINT::VARIANT), (7, 1::DOUBLE::VARIANT),
+	(8, 1::DECIMAL(5,2)::VARIANT), (8, 1::DOUBLE::VARIANT),
+	(9, 1::HUGEINT::VARIANT), (9, 1::DECIMAL(5,2)::VARIANT),
+	(10, 1::INTEGER::VARIANT), (10, true::VARIANT),
+	(11, 1.5::VARIANT), (11, 2.25::VARIANT)
+) t(g, v) GROUP BY g ORDER BY g;
+----
+1	"INT16"
+2	"INT128"
+3	"DECIMAL(39,0)"
+4	"DECIMAL(12,2)"
+5	"FLOAT"
+6	"DOUBLE"
+7	"VARIANT"
+8	"VARIANT"
+9	"DECIMAL(41,2)"
+10	"VARIANT"
+11	"DECIMAL(3,2)"
+
+# the result does not depend on the order of the rows
+query II
+SELECT p, variant_group_structure(v)::JSON FROM (VALUES
+	(1, {'a': 1::UBIGINT, 'b': 1}::VARIANT), (1, {'a': 1::BIGINT}::VARIANT), (1, {'a': 1::DECIMAL(5,2), 'c': true}::VARIANT),
+	(2, {'a': 1::BIGINT}::VARIANT), (2, {'a': 1::DECIMAL(5,2), 'c': true}::VARIANT), (2, {'a': 1::UBIGINT, 'b': 1}::VARIANT),
+	(3, {'a': 1::DECIMAL(5,2), 'c': true}::VARIANT), (3, {'a': 1::UBIGINT, 'b': 1}::VARIANT), (3, {'a': 1::BIGINT}::VARIANT)
+) t(p, v) GROUP BY p ORDER BY p;
+----
+1	{"a":"DECIMAL(22,2)","b":"INT32","c":"BOOLEAN"}
+2	{"a":"DECIMAL(22,2)","b":"INT32","c":"BOOLEAN"}
+3	{"a":"DECIMAL(22,2)","b":"INT32","c":"BOOLEAN"}
+
+# groups are aggregated independently
+query II
+SELECT g, variant_group_structure(v)::JSON FROM (VALUES
+	(1, NULL::VARIANT), (1, NULL),
+	(2, 1::VARIANT), (2, NULL),
+	(3, {'a': [1]}::VARIANT), (3, {'b': 'x'}::VARIANT),
+	(4, 'x'::VARIANT)
+) t(g, v) GROUP BY g ORDER BY g;
+----
+1	"NULL"
+2	"INT32"
+3	{"a":["INT32"],"b":"VARCHAR"}
+4	"VARCHAR"
+
+# window frames are aggregated independently
+query II
+SELECT id, (variant_group_structure(v) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW))::JSON
+FROM (VALUES (1, {'a': 1}::VARIANT), (2, {'b': 'x'}::VARIANT), (3, {'b': 2}::VARIANT), (4, 1.5::VARIANT)) t(id, v)
+ORDER BY id;
+----
+1	{"a":"INT32"}
+2	{"a":"INT32","b":"VARCHAR"}
+3	{"b":"VARIANT"}
+4	"VARIANT"
+
+query II
+SELECT id, (variant_group_structure(v) OVER (ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING))::JSON
+FROM (VALUES (1, 1::VARIANT), (2, 'x'::VARIANT), (3, 2::VARIANT)) t(id, v)
+ORDER BY id;
+----
+1	NULL
+2	"INT32"
+3	"VARIANT"
+
+query II
+SELECT s, count(*) FROM (
+	SELECT (variant_group_structure(CASE WHEN i % 100 = 0 THEN 'x'::VARIANT ELSE i::VARIANT END)
+		OVER (ORDER BY i ROWS BETWEEN 20 PRECEDING AND 20 FOLLOWING))::JSON::VARCHAR s
+	FROM range(1000) t(i)
+) GROUP BY s ORDER BY s;
+----
+"INT64"	610
+"VARIANT"	390
+
+# many rows, groups and long keys
+statement ok
+CREATE TABLE wide AS SELECT i, ('{"key_number_' || (i % 50) || '_with_a_long_name": '
+	|| CASE WHEN i % 50 < 10 THEN '"x"' ELSE i::VARCHAR END
+	|| ', "nested": {"k' || (i % 3) || '": [' || i || ']}}')::JSON::VARIANT AS v
+FROM range(200000) t(i);
+
+query I
+SELECT variant_group_structure(v)::JSON FROM wide WHERE i % 50 IN (1, 10);
+----
+{"key_number_10_with_a_long_name":"UINT64","key_number_1_with_a_long_name":"VARCHAR","nested":{"k0":["UINT64"],"k1":["UINT64"],"k2":["UINT64"]}}
+
+# the structure of the rows equals the structure of the elements of a list of the rows
+query I
+SELECT '[' || variant_group_structure(v)::JSON::VARCHAR || ']' = variant_structure(list(v)::VARIANT)::JSON::VARCHAR
+FROM wide;
+----
+true
+
+query II
+SELECT count(*), count(*) FILTER (WHERE same) FROM (
+	SELECT '[' || variant_group_structure(v)::JSON::VARCHAR || ']' = variant_structure(list(v)::VARIANT)::JSON::VARCHAR same
+	FROM wide GROUP BY i % 1000
+);
+----
+1000	1000
+
+query II
+SELECT count(*), count(DISTINCT s) FROM (
+	SELECT (variant_group_structure(v) OVER (PARTITION BY i % 7 ORDER BY i ROWS BETWEEN 100 PRECEDING AND 100 FOLLOWING))::JSON::VARCHAR s
+	FROM wide
+);
+----
+200000	1
+
+# deep nesting is not bounded by the thread stack
+statement ok
+CREATE TABLE deep AS
+	SELECT (repeat('[', 50000) || '1' || repeat(']', 50000))::JSON::VARIANT v
+	UNION ALL
+	SELECT (repeat('[', 50000) || '"x"' || repeat(']', 50000))::JSON::VARIANT v
+	UNION ALL
+	SELECT (repeat('{"k":', 50000) || '1' || repeat('}', 50000))::JSON::VARIANT v;
+
+query II
+SELECT variant_typeof(s), s IS NOT NULL FROM (SELECT variant_group_structure(v) s FROM deep);
+----
+VARCHAR	true
+
+query II
+SELECT variant_typeof(s), s IS NOT NULL FROM (SELECT variant_group_structure(v) s FROM deep WHERE variant_typeof(v) = 'ARRAY(1)');
+----
+ARRAY(1)	true
+
+query II
+SELECT variant_typeof(s), s IS NOT NULL FROM (SELECT variant_group_structure(v) s FROM deep WHERE variant_typeof(v) = 'OBJECT(k)');
+----
+OBJECT(k)	true
+
+query II
+SELECT
+	(SELECT variant_group_structure(v)::JSON::VARCHAR FROM (VALUES
+		((repeat('[', 100) || '1' || repeat(']', 100))::JSON::VARIANT),
+		((repeat('[', 100) || '"x"' || repeat(']', 100))::JSON::VARIANT)
+	) t(v)) = repeat('[', 100) || '"VARIANT"' || repeat(']', 100),
+	(SELECT variant_group_structure(v)::JSON::VARCHAR FROM (VALUES
+		((repeat('{"k":', 100) || '1' || repeat('}', 100))::JSON::VARIANT),
+		((repeat('{"k":', 100) || '-1' || repeat('}', 100))::JSON::VARIANT)
+	) t(v)) = repeat('{"k":', 100) || '"INT128"' || repeat('}', 100);
+----
+true	true

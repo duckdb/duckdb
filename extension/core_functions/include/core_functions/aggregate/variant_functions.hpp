@@ -25,4 +25,14 @@ struct VariantGroupObjectFun {
 	static AggregateFunction GetFunction();
 };
 
+struct VariantGroupStructureFun {
+	static constexpr const char *Name = "variant_group_structure";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the combined structure of all `value`s in the aggregation. Defaults to `VARIANT` where the structures are incompatible.";
+	static constexpr const char *Example = "variant_group_structure(v)";
+	static constexpr const char *Categories = "variant";
+
+	static AggregateFunction GetFunction();
+};
+
 } // namespace duckdb
