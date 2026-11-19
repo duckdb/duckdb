@@ -141,6 +141,44 @@ select count(*) from test4_ns where date_trunc('minute', d) >= '1972-01-07 00:44
 330
 
 #
+# truncation that follows the local time is not monotone, so statistics must not prune the comparison either
+#
+
+# Magadan fell back two hours: 01:30+12 truncates to 01:00+10, after the truncation of the later 00:30+10
+statement ok
+set TimeZone='Asia/Magadan';
+
+statement ok
+create table test5 as select unnest([TIMESTAMPTZ '2014-10-25 13:30:00+00', TIMESTAMPTZ '2014-10-25 14:30:00+00', TIMESTAMPTZ '2014-10-25 16:00:00+00']) AS d;
+
+query I
+select count(*) from test5 where date_trunc('hour', d) = '2014-10-25 14:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+query I
+select count(*) from test5 where date_trunc('hour', d) <= '2014-10-25 14:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+# Casey fell back from 02:00 to 23:00 of the day before, so the local date moves backwards
+statement ok
+set TimeZone='Antarctica/Casey';
+
+statement ok
+create table test6 as select unnest([TIMESTAMPTZ '2010-03-04 14:30:00+00', TIMESTAMPTZ '2010-03-04 15:30:00+00']) AS d;
+
+query I
+select count(*) from test6 where date_trunc('day', d) >= '2010-03-04 00:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+query I
+select count(*) from test6 where date_trunc('hour', d) >= '2010-03-04 16:00:00+00'::TIMESTAMPTZ;
+----
+1
+
+#
 # check comparisons with infinity
 #
 
