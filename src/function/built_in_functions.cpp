@@ -136,20 +136,33 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 #endif
 	ScalarFunctionSet current_set;
 	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
-		vector<LogicalType> arguments;
-		auto splits = StringUtil::Split(entry.signature, ">");
-		auto return_type = DBConfig::ParseLogicalType(splits[1]);
-		auto parameters = Value(splits[0]).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
-		for (auto &param : ListValue::GetChildren(parameters)) {
-			arguments.push_back(DBConfig::ParseLogicalType(param.GetValue<string>()));
-		}
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			throw InternalException(
 			    "Extension function overloads only supported for scalar functions currently - %s has a different type",
 			    entry.name);
 		}
 
-		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr);
+		auto splits = StringUtil::Split(entry.signature, ">");
+		auto return_type = DBConfig::ParseLogicalType(splits[1]);
+		auto parameter_types =
+		    ListValue::GetChildren(Value(splits[0]).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR)));
+		auto parameter_names =
+		    ListValue::GetChildren(Value(entry.parameters).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR)));
+
+		FunctionSignature signature;
+		if (parameter_types.size() == parameter_names.size()) {
+			for (idx_t i = 0; i < parameter_types.size(); i++) {
+				signature.AddParameter(Identifier(parameter_names[i].GetValue<string>()),
+				                       DBConfig::ParseLogicalType(parameter_types[i].GetValue<string>()));
+			}
+		} else {
+			for (auto &param : parameter_types) {
+				signature.AddParameter(DBConfig::ParseLogicalType(param.GetValue<string>()));
+			}
+		}
+		signature.SetReturnType(std::move(return_type));
+
+		ScalarFunction function(entry.name, std::move(signature), nullptr);
 		function.SetBindExpressionCallback(BindExtensionFunction);
 
 		function.SetExtraFunctionInfo<ExtensionFunctionInfo>(entry.extension);

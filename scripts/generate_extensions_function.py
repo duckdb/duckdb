@@ -160,7 +160,8 @@ class Function(NamedTuple):
 class FunctionOverload(NamedTuple):
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
 
@@ -168,11 +169,12 @@ class ExtensionFunctionOverload(NamedTuple):
     extension: str
     name: str
     type: CatalogType
-    parameters: Tuple
+    parameter_types: Tuple
+    parameter_names: Tuple
     return_type: LogicalType
 
     @staticmethod
-    def create_map(input: List[Tuple[str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
+    def create_map(input: List[Tuple[str, str, str, str, str]]) -> Dict[Function, List["ExtensionFunctionOverload"]]:
         output: Dict[Function, List["ExtensionFunctionOverload"]] = {}
         for x in input:
             function = Function(x[0], catalog_type_from_type(x[2]))
@@ -180,8 +182,11 @@ class ExtensionFunctionOverload(NamedTuple):
             signature = x[3]
             splits = signature.split('>')
             return_type = LogicalType(splits[1])
-            parameters = [LogicalType(param) for param in splits[0][1:-1].split(',')]
-            extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
+            parameter_types = tuple(LogicalType(param) for param in splits[0][1:-1].split(','))
+            parameter_names = tuple(x[4][1:-1].split(",")) if x[4][1:-1] else ()
+            extension_function = ExtensionFunctionOverload(
+                x[1], function.name, function.type, parameter_types, parameter_names, return_type
+            )
             if function not in output:
                 output[function] = []
             output[function].append(extension_function)
@@ -285,7 +290,7 @@ class ParsedEntries:
         # Get the extension function overloads
         ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
         res = parse_records(ext_function_overloads_file_blob)
-        res = [(x[0], x[1], x[2], x[3]) for x in res]
+        res = [(x[0], x[1], x[2], x[3], x[4] if len(x) > 4 else "[]") for x in res]
         self.function_overloads = ExtensionFunctionOverload.create_map(res)
 
         # Get the extension settings
@@ -409,6 +414,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             function_name,
             function_type,
             parameter_types,
+            parameters,
             return_type
         from duckdb_functions()
         where function_type <> 'window' and schema_name <> 'collations'
@@ -423,12 +429,18 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         function_name = func["function_name"].lower()
         function_type = func["function_type"]
         parameter_types = func["parameter_types"]
+        parameter_names = func["parameters"]
         return_type = func["return_type"]
-        function_parameters = transform_parameters(parameter_types)
+        function_parameter_types = transform_parameters(parameter_types)
+        function_parameter_names = tuple(x for x in parameter_names.lstrip('[').rstrip(']').split(', ') if len(x) > 0)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
         function_overload = FunctionOverload(
-            function_name, catalog_type_from_string(function_type), function_parameters, function_return
+            function_name,
+            catalog_type_from_string(function_type),
+            function_parameter_types,
+            function_parameter_names,
+            function_return,
         )
         if function not in functions:
             functions.add(function)
@@ -661,7 +673,12 @@ Please double check if '{args.extension_repository}' is the right location to lo
             for overload in function_overloads:
                 extension_overloads.append(
                     ExtensionFunctionOverload(
-                        extension_name, overload.name, overload.type, overload.parameters, overload.return_type
+                        extension_name,
+                        overload.name,
+                        overload.type,
+                        overload.parameter_types,
+                        overload.parameter_names,
+                        overload.return_type,
                     )
                 )
             result[function] = extension_overloads
@@ -761,9 +778,14 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
                 signature = "["
-                signature += ",".join([parameter.type for parameter in overload.parameters])
-                signature += "]>" + overload.return_type.type
+                signature += ",".join([parameter.type for parameter in overload.parameter_types])
+                signature += f']>{overload.return_type.type}", "'
                 result += signature
+                # add parameter names
+                param_names = "["
+                param_names += ",".join(overload.parameter_names)
+                param_names += "]"
+                result += param_names
                 result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
         return result
@@ -878,6 +900,7 @@ struct ExtensionFunctionOverloadEntry {
     char extension[48];
     CatalogType type;
     char signature[96];
+    char parameters[96];
 };
 """
 
