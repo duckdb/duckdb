@@ -1,0 +1,23 @@
+# name: test/sql/copy/copy_order_by_parse_errors.test
+# description: The ORDER_BY option of COPY accepts a string only when it holds nothing but ORDER BY terms
+# group: [copy]
+
+statement ok
+COPY (SELECT * FROM range(3) t(i)) TO '{TEST_DIR}/copy_order_by_parse_errors.csv' (FORMAT csv, ORDER_BY 'i DESC')
+
+query I
+SELECT i FROM read_csv('{TEST_DIR}/copy_order_by_parse_errors.csv')
+----
+2
+1
+0
+
+statement error
+COPY (SELECT 1 AS i) TO '{TEST_DIR}/copy_order_by_parse_errors.csv' (FORMAT csv, ORDER_BY 'i; SELECT 42')
+----
+Parser Error: Expected a single SELECT statement
+
+statement error
+COPY (SELECT 1 AS i) TO '{TEST_DIR}/copy_order_by_parse_errors.csv' (FORMAT csv, ORDER_BY 'i LIMIT 1')
+----
+Parser Error: Expected a single ORDER clause

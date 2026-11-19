@@ -57,7 +57,6 @@ public:
 		}
 	}
 
-	// this is due to a hacky implementation in the read csv relation
 	void ChangeSetByUserTrue() {
 		set_by_user = true;
 	}

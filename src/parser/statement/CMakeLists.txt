@@ -24,7 +24,6 @@ add_library_unity(
   multi_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp
-  relation_statement.cpp
   select_statement.cpp
   set_statement.cpp
   transaction_statement.cpp
