@@ -1056,6 +1056,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1775,7 +1778,7 @@ IdentifierType:
     - ExtensionRepositoryName
     - ExtensionRepositoryHostName
     - FromSourceName
-    - ShowExternalResourcesType
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
@@ -1884,6 +1887,8 @@ matcher_rule_overrides:
   NumberLiteral:
     allow_type_overlap: true
     matcher: number_literal
+  DottedName:
+    matcher: dotted_name
   StringLiteral:
     allow_type_overlap: true
     matcher: string_literal
