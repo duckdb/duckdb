@@ -239,35 +239,42 @@ TEST_CASE("Test multiple log sinks", "[logging]") {
 	REQUIRE(log_manager.GetRegisteredLogSink("sink_a").get() == sink_a.get());
 	REQUIRE(!log_manager.GetRegisteredLogSink("sink_c"));
 
-	// adding a sink enables logging
-	log_manager.AddLogSink(*db.instance, "sink_a");
+	// enabling a sink enables logging
+	log_manager.EnableLogSink(*db.instance, "sink_a");
 	REQUIRE(log_manager.GetConfig().enabled);
 	REQUIRE(log_manager.IsLogSinkEnabled("sink_a"));
-	// add_log_sink uses the sink that is registered under this name
-	REQUIRE_NO_FAIL(con.Query("call add_log_sink('sink_b');"));
+	// enable_log_sink uses the sink that is registered under this name
+	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('sink_b');"));
 
-	REQUIRE_NO_FAIL(con.Query("select write_log('BEFORE REMOVE');"));
-	REQUIRE(sink_a->log_store.count("BEFORE REMOVE") == 1);
-	REQUIRE(sink_b->log_store.count("BEFORE REMOVE") == 1);
+	REQUIRE_NO_FAIL(con.Query("select write_log('BEFORE DISABLE');"));
+	REQUIRE(sink_a->log_store.count("BEFORE DISABLE") == 1);
+	REQUIRE(sink_b->log_store.count("BEFORE DISABLE") == 1);
 
-	log_manager.RemoveLogSink(*db.instance, "sink_a");
+	log_manager.DisableLogSink(*db.instance, "sink_a");
 	REQUIRE(!log_manager.IsLogSinkEnabled("sink_a"));
-	REQUIRE_NO_FAIL(con.Query("select write_log('AFTER REMOVE');"));
-	REQUIRE(sink_a->log_store.count("AFTER REMOVE") == 0);
-	REQUIRE(sink_b->log_store.count("AFTER REMOVE") == 1);
+	REQUIRE_NO_FAIL(con.Query("select write_log('AFTER DISABLE');"));
+	REQUIRE(sink_a->log_store.count("AFTER DISABLE") == 0);
+	REQUIRE(sink_b->log_store.count("AFTER DISABLE") == 1);
 
-	REQUIRE_NO_FAIL(con.Query("call remove_log_sink('sink_b');"));
-	REQUIRE_NO_FAIL(con.Query("select write_log('BOTH REMOVED');"));
-	REQUIRE(sink_b->log_store.count("BOTH REMOVED") == 0);
+	REQUIRE_NO_FAIL(con.Query("call disable_log_sink('sink_b');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('BOTH DISABLED');"));
+	REQUIRE(sink_b->log_store.count("BOTH DISABLED") == 0);
 
-	// a removed sink stays registered, and can be added again
+	// a disabled sink stays registered, and can be enabled again
 	REQUIRE(log_manager.GetRegisteredLogSink("sink_a").get() == sink_a.get());
-	REQUIRE_THROWS_WITH(log_manager.RemoveLogSink(*db.instance, "sink_a"), Catch::Matchers::Contains("is not enabled"));
-	REQUIRE_THROWS_WITH(log_manager.AddLogSink(*db.instance, "sink_c"),
+	REQUIRE_THROWS_WITH(log_manager.DisableLogSink(*db.instance, "sink_a"),
+	                    Catch::Matchers::Contains("is not enabled"));
+	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "sink_c"),
 	                    Catch::Matchers::Contains("is not yet registered"));
+	// the name of a registered sink is reserved for it
+	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "sink_a", "memory"),
+	                    Catch::Matchers::Contains("The log sink name 'sink_a' is reserved"));
+	// 'default' cannot be registered
+	duckdb::shared_ptr<LogSink> default_ptr = make_shared_ptr<MyLogSink>();
+	REQUIRE(!log_manager.RegisterLogSink("Default", default_ptr));
 }
 
-TEST_CASE("Test a log sink is never both the main and an added log sink", "[logging]") {
+TEST_CASE("Test a registered log sink is enabled under one name", "[logging]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &log_manager = db.instance->GetLogManager();
@@ -276,20 +283,38 @@ TEST_CASE("Test a log sink is never both the main and an added log sink", "[logg
 	duckdb::shared_ptr<LogSink> counting_ptr = counting_sink;
 	REQUIRE(log_manager.RegisterLogSink("counting_sink", counting_ptr));
 
-	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='counting_sink';"));
-	// adding the main log sink changes nothing
-	REQUIRE_NO_FAIL(con.Query("call add_log_sink('counting_sink');"));
+	// a registered sink can be enabled under a name of your own
+	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('collector', type='counting_sink');"));
+	auto result =
+	    con.Query("select name, type, cardinality(config)::INTEGER from duckdb_log_sinks() where name = 'collector'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"collector"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"counting_sink"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0}));
 	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE');"));
 	REQUIRE(counting_sink->message_counts["ONCE"] == 1);
 
-	// an added sink that becomes the main log sink is no longer an added sink
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='memory';"));
-	REQUIRE_NO_FAIL(con.Query("call add_log_sink('counting_sink');"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='counting_sink';"));
+	// it exists once, so it cannot be enabled under a second name, nor its own
+	REQUIRE_FAIL(con.Query("call enable_log_sink('collector2', type='counting_sink');"));
+	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "counting_sink"),
+	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already enabled as 'collector'"));
 	REQUIRE_NO_FAIL(con.Query("select write_log('STILL ONCE');"));
 	REQUIRE(counting_sink->message_counts["STILL ONCE"] == 1);
-	REQUIRE_FAIL(con.Query("call remove_log_sink('counting_sink');"));
+
+	// as the default log sink it is no longer enabled under its name
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("set logging_sink='counting_sink';"));
+	REQUIRE(!log_manager.IsLogSinkEnabled("collector"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE AS DEFAULT');"));
+	REQUIRE(counting_sink->message_counts["ONCE AS DEFAULT"] == 1);
+	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "counting_sink"),
+	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already enabled as 'default'"));
+	REQUIRE_FAIL(con.Query("call disable_log_sink('counting_sink');"));
+
+	// once the default log sink changes, it can be enabled by name again
+	REQUIRE_NO_FAIL(con.Query("set logging_sink='memory';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('counting_sink');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE BY NAME');"));
+	REQUIRE(counting_sink->message_counts["ONCE BY NAME"] == 1);
 }
 
 static bool ContainsMessage(const unordered_set<string> &messages, const string &needle) {

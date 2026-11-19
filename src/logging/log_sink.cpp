@@ -503,39 +503,41 @@ unique_ptr<TableRef> FileLogSink::BindReplace(ClientContext &context, TableFunct
                                               LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 
+	// denormalized logs are in a single file, the log entries and the log contexts are read from it as well
+	auto source_table = normalize_contexts ? table : LoggingTargetTable::ALL_LOGS;
+
 	// We only allow scanning enabled tables
-	if (!IsEnabledInternal(table)) {
+	if (!IsEnabledInternal(source_table)) {
 		return nullptr;
 	}
 
 	// We start by flushing the table to ensure we scan the latest version
-	FlushInternal(table);
-
-	if (normalize_contexts && table == LoggingTargetTable::ALL_LOGS) {
-		throw InvalidConfigurationException("Can not scan ALL_LOGS table when logs are normalized");
-	}
-	if (!normalize_contexts && table != LoggingTargetTable::ALL_LOGS) {
-		throw InvalidConfigurationException("Can only scan ALL_LOGS table when logs are normalized");
-	}
+	FlushInternal(source_table);
 
 	string select = "SELECT *";
-	string path = tables[table].path;
+	string path = tables[source_table].path;
 
 	string columns;
-	if (table == LoggingTargetTable::LOG_ENTRIES) {
+	if (source_table == LoggingTargetTable::ALL_LOGS) {
+		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
+		          "'type': "
+		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
+		if (table == LoggingTargetTable::LOG_ENTRIES) {
+			select = "SELECT context_id, timestamp, type, log_level, message";
+		} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
+			select = "SELECT DISTINCT context_id, scope, connection_id, transaction_id, query_id, thread_id";
+		} else {
+			select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
+			         "log_level, message ";
+		}
+	} else if (table == LoggingTargetTable::LOG_ENTRIES) {
 		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', 'type': 'VARCHAR', 'log_level': "
 		          "'VARCHAR' , "
 		          "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
 		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
-	} else if (table == LoggingTargetTable::ALL_LOGS) {
-		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
-		         "log_level, message ";
-		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
-		          "'type': "
-		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	} else {
 		throw InternalException("Invalid logging target table");
 	}

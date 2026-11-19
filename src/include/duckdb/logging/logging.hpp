@@ -38,6 +38,8 @@ struct LogConfig {
 
 	constexpr static LogLevel DEFAULT_LOG_LEVEL = LogLevel::LOG_INFO;
 	constexpr static const char *DEFAULT_LOG_STORAGE = IN_MEMORY_STORAGE_NAME;
+	//! The name of the log sink that enable_logging configures
+	constexpr static const char *DEFAULT_LOG_SINK_NAME = "default";
 
 	LogConfig();
 

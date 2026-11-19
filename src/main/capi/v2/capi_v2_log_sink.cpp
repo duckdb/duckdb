@@ -99,7 +99,7 @@ public:
 		}
 		// the log manager looks registered sinks up by their lowercased name
 		auto sink_name = StringUtil::Lower(name);
-		if (LogConfig::IsBuiltInLogSink(sink_name)) {
+		if (LogConfig::IsBuiltInLogSink(sink_name) || sink_name == LogConfig::DEFAULT_LOG_SINK_NAME) {
 			throw InvalidInputException("\"%s\" is the name of a log sink DuckDB provides.", name);
 		}
 		shared_ptr<LogSink> sink = make_shared_ptr<CV2CallbackLogSink>(sink_name, write_cb, flush_cb, user_data);

@@ -69,10 +69,10 @@ SELECT
    bar(count, 0, max(count) over ()) AS bar
 FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
-	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
+	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {{"sink", "NULL"}, {nullptr, nullptr}}, R"(
 SELECT * EXCLUDE (message),
        UNNEST(CASE WHEN type ILIKE log_type THEN parse_duckdb_log_message(log_type, message) END)
-FROM duckdb_logs(denormalized_table=1)
+FROM duckdb_logs(sink := sink, denormalized_table=1)
 WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(

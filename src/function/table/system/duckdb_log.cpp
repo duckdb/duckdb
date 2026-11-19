@@ -28,19 +28,20 @@ struct DuckDBLogBindData : public TableFunctionData {
 	explicit DuckDBLogBindData(string sink_name_p) : sink_name(std::move(sink_name_p)) {
 	}
 
-	//! The sink to scan, or empty for the log sink
+	//! The sink to scan, or empty for the default log sink
 	string sink_name;
 };
 
 string DuckDBLogFun::GetSinkName(TableFunctionBindInput &input) {
-	auto sink_setting = input.named_parameters.find("sink");
-	if (sink_setting == input.named_parameters.end()) {
+	// the sink is placed by position however it was passed, NULL when it was left out
+	if (input.inputs.empty() || input.inputs[0].IsNull()) {
 		return string();
 	}
-	if (sink_setting->second.IsNull()) {
-		throw InvalidInputException("sink cannot be NULL");
-	}
-	return sink_setting->second.GetValue<string>();
+	return input.inputs[0].GetValue<string>();
+}
+
+void DuckDBLogFun::AddSinkParameter(TableFunction &function) {
+	function.GetSignature().AddParameter("sink", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
 }
 
 void DuckDBLogFun::VerifyNormalizedLogs(ClientContext &context, TableFunctionBindInput &input, LogSink &log_sink,
@@ -49,10 +50,12 @@ void DuckDBLogFun::VerifyNormalizedLogs(ClientContext &context, TableFunctionBin
 	    !log_sink.BindReplace(context, input, LoggingTargetTable::ALL_LOGS)) {
 		return;
 	}
-	auto name = sink_name.empty() ? LogManager::Get(context).GetConfig().storage : sink_name;
-	throw InvalidConfigurationException(
-	    "Log sink '%s' stores the logs denormalized, read them with duckdb_logs(sink=%s, denormalized_table=true)",
-	    name, SQLString(name));
+	if (sink_name.empty()) {
+		throw InvalidConfigurationException(
+		    "The default log sink stores the logs denormalized, read them with duckdb_logs()");
+	}
+	throw InvalidConfigurationException("Log sink '%s' stores the logs denormalized, read them with duckdb_logs(%s)",
+	                                    sink_name, SQLString(sink_name));
 }
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -108,7 +111,8 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	auto sink_name = DuckDBLogFun::GetSinkName(input);
 	auto log_sink = LogManager::Get(context).GetLogSink(sink_name);
 
-	bool denormalized_table = false;
+	// the log entries together with their context, like the duckdb_logs view, unless denormalized_table=false
+	bool denormalized_table = true;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
 	if (denormalized_table_setting != input.named_parameters.end()) {
 		if (denormalized_table_setting->second.IsNull()) {
@@ -135,10 +139,12 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	// We cannot scan ALL_LOGS but denormalized_table was requested: we need to inject the join between LOG_ENTRIES and
 	// LOG_CONTEXTS
 	string sink_parameter = sink_name.empty() ? string() : StringUtil::Format("sink=%s", SQLString(sink_name));
+	string entries_parameters =
+	    sink_name.empty() ? "denormalized_table=false" : sink_parameter + ", denormalized_table=false";
 	string sub_query_string = "SELECT l.context_id, scope, connection_id, transaction_id, query_id, thread_id, "
 	                          "timestamp, type, log_level, message"
 	                          " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs(" +
-	                          sink_parameter + ")) as l JOIN duckdb_log_contexts(" + sink_parameter +
+	                          entries_parameters + ")) as l JOIN duckdb_log_contexts(" + sink_parameter +
 	                          ") as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
 	Parser parser(context);
 	parser.ParseQuery(sub_query_string);
@@ -153,9 +159,9 @@ void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	// the log storage grows while a query executes
 	logs_fun.stability = FunctionStability::VOLATILE;
 	logs_fun.table_scan_progress = DuckDBLogProgress;
-	logs_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
-		options.Add("denormalized_table", LogicalType::BOOLEAN).Add("sink", LogicalType::VARCHAR);
-	});
+	DuckDBLogFun::AddSinkParameter(logs_fun);
+	logs_fun.GetSignature().WithTypedKwargs(
+	    "options", [](TypedKwargs &options) { options.Add("denormalized_table", LogicalType::BOOLEAN); });
 	set.AddFunction(logs_fun);
 }
 

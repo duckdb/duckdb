@@ -7,9 +7,11 @@ import os
 from typing import List
 from conftest import ShellTest
 
+# the shell's sink prints the log entries as well, so the tests of the stdout sink turn it off first
 def test_logging(shell):
     test = (
         ShellTest(shell)
+        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout')")
         .statement('SELECT 1 as a')
     )
@@ -22,6 +24,7 @@ def test_logging(shell):
 def test_logging_custom_delim(shell):
     test = (
         ShellTest(shell)
+        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout', sink_config={'delim':','})")
         .statement('SELECT 1 as a')
     )
@@ -90,11 +93,46 @@ def test_logging_error_no_dedup(shell):
 def test_logging_buffering(shell):
     test = (
         ShellTest(shell)
+        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout', sink_buffer_size=1000, sink_config={'only_flush_on_full_buffer': true})")
         .statement('SELECT 1 as a')
         .statement('SELECT 2 as b')
     )
     result = test.run()
     result.check_not_exist("QueryLog")
+
+
+def test_logs_are_queryable_in_the_cli(shell):
+    # the CLI prints the warnings and keeps them in the default memory sink
+    test = (
+        ShellTest(shell)
+        .statement("SELECT write_log('cli warning', level := 'WARNING')")
+        .statement("SELECT 'stored-' || count(*) AS stored FROM duckdb_logs WHERE message = 'cli warning'")
+    )
+    result = test.run()
+    result.check_stdout("stored-1")
+
+
+def test_stdout_sink_in_the_cli_warns_about_printing_twice(shell):
+    test = ShellTest(shell).statement("CALL enable_logging(sink='stdout')")
+    result = test.run()
+    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+
+    test = ShellTest(shell).statement("CALL enable_log_sink('stdout')")
+    result = test.run()
+    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+
+    test = ShellTest(shell).statement("SET logging_sink = 'stdout'")
+    result = test.run()
+    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+
+    # without the shell's sink, stdout is the only sink that prints
+    test = (
+        ShellTest(shell)
+        .statement("CALL disable_log_sink('shell_log_sink')")
+        .statement("CALL enable_logging(sink='stdout')")
+    )
+    result = test.run()
+    result.check_not_exist("CALL disable_log_sink('shell_log_sink')")
 
 # fmt: on

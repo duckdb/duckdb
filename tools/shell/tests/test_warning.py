@@ -79,16 +79,20 @@ def test_multiple_warnings(shell):
     result.check_stdout("│ [3]     │ [3]     │ [3]     │")
 
 
-def test_changing_logging_settings(shell, tmp_path):
+def test_changing_the_default_sink_keeps_printing_warnings(shell, tmp_path):
+    # the shell's sink is enabled by name in the CLI, so changing the default log sink does not drop it
     log_dir = tmp_path / 'log_dir'
-    test = ShellTest(shell).statement(
-        f"CALL enable_logging(sink = 'file', sink_config = {{'path': '{log_dir.as_posix()}'}});"
+    test = (
+        ShellTest(shell)
+        .statement(
+            f"CALL enable_logging(level = 'warning', sink = 'file', sink_config = {{'path': '{log_dir.as_posix()}'}});"
+        )
+        .statement("SELECT write_log('still printed', level := 'WARNING') AS x;")
     )
 
     result = test.run()
-    print(result.stderr)
-    result.check_stdout("WARNING:")
-    result.check_stdout("The logging settings have been changed")
+    result.check_not_exist("The logging settings have been changed")
+    result.check_stdout("still printed")
 
 
 def test_deprecated_shell_log_storage(shell):
@@ -121,13 +125,14 @@ def test_dropping_warnings_from_shell_log_sink_warns(shell, statement):
 
     result = test.run()
     result.check_stdout("The logging settings have been changed")
+    result.check_stdout("The log level and the log types apply to every log sink")
 
 
-def test_dropping_warnings_from_added_shell_log_sink_warns(shell):
+def test_dropping_warnings_from_named_shell_log_sink_warns(shell):
     test = (
         ShellTest(shell)
         .statement("SET logging_sink = 'memory';")
-        .statement("CALL add_log_sink('shell_log_sink');")
+        .statement("CALL enable_log_sink('shell_log_sink');")
         .statement("CALL enable_logging(level = 'error');")
     )
 
@@ -135,12 +140,12 @@ def test_dropping_warnings_from_added_shell_log_sink_warns(shell):
     result.check_stdout("The logging settings have been changed")
 
 
-def test_switching_main_sink_with_added_shell_log_sink_does_not_warn(shell):
-    # the added shell sink keeps printing warnings when the main log sink changes
+def test_switching_default_sink_with_named_shell_log_sink_does_not_warn(shell):
+    # a shell sink enabled by name keeps printing warnings when the default log sink changes
     test = (
         ShellTest(shell)
         .statement("SET logging_sink = 'memory';")
-        .statement("CALL add_log_sink('shell_log_sink');")
+        .statement("CALL enable_log_sink('shell_log_sink');")
         .statement("CALL enable_logging(sink = 'stdout');")
     )
 
@@ -149,22 +154,42 @@ def test_switching_main_sink_with_added_shell_log_sink_does_not_warn(shell):
 
 
 def test_enable_shell_log_sink(shell):
-    # with logs going to memory, CLI warnings are no longer printed
+    # by default the CLI prints the warnings, and keeps them in the default memory sink
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
+        .statement("SET logging_storage = 'memory';")
+        .statement(
+            "SELECT 'stored-' || count(*) AS stored FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';"
+        )
+    )
+    result = test.run()
+    result.check_stdout("the logging_storage setting is deprecated")
+    result.check_stdout("stored-1")
+
+    # without the shell's sink, the warnings are no longer printed
+    test = (
+        ShellTest(shell)
+        .statement("CALL disable_log_sink('shell_log_sink');")
         .statement("SET logging_storage = 'memory';")
     )
     result = test.run()
     assert "the logging_storage setting is deprecated" not in result.stdout
 
-    # adding the shell sink prints them again, while they still go to memory
+    # enabling the shell's sink prints them again
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
-        .statement("CALL add_log_sink('shell_log_sink');")
+        .statement("CALL disable_log_sink('shell_log_sink');")
+        .statement("CALL enable_log_sink('shell_log_sink');")
         .statement("SET logging_storage = 'memory';")
-        .statement("SELECT count(*) FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';")
     )
     result = test.run()
     result.check_stdout("the logging_storage setting is deprecated")
+
+    # the warning about leaving the shell's sink as the default log sink says how to keep it
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging(level = 'warning', sink = 'shell_log_sink');")
+        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
+    )
+    result = test.run()
+    result.check_stdout("To keep printing warnings to the console, also run CALL enable_log_sink('shell_log_sink').")
