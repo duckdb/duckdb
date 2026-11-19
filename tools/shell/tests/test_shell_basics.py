@@ -14,6 +14,28 @@ def test_basic(shell):
     result.check_stdout("asdf")
 
 
+def test_no_builtin_extensions_startup(shell, json_extension):
+    test = (
+        ShellTest(shell, arguments=["-no-builtin-extensions", "-csv", "-noheader"])
+        .statement("SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name <> 'shell'")
+    )
+    result = test.run()
+    assert result.status_code == 0, result.stderr
+    result.check_stdout(None)
+
+
+def test_no_builtin_extensions_allows_explicit_load_and_preserves_reopen(shell, json_extension):
+    test = (
+        ShellTest(shell, arguments=["-no-builtin-extensions", "-csv", "-noheader"])
+        .statement("SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'json'")
+        .statement("LOAD json")
+        .statement("SELECT json('{}')")
+        .statement(".open :memory:")
+        .statement("SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'json'")
+    )
+    test.run().check_stdout("false\n{}\nfalse")
+
+
 def test_range(shell):
     test = (
         ShellTest(shell)

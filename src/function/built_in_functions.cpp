@@ -134,6 +134,9 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 	// do not insert auto loading placeholders when generating extension entries
 	return;
 #endif
+	if (!DBConfig::GetConfig(catalog.GetDatabase()).options.register_extension_overloads) {
+		return;
+	}
 	ScalarFunctionSet current_set;
 	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {

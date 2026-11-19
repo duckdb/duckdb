@@ -4,6 +4,42 @@ Typical entrypoints:
 - POSIX builds: `build/release/test/run`, `build/reldebug/test/run`, `build/debug/test/run`
 - Windows native layout: `build/release/test/run.py` or `build/release/test/run.bat`
 
+## Tests with an installed CLI
+
+For versions and platforms where the test extension is published, an installed DuckDB CLI can run SQL logic test
+files without compiling DuckDB:
+
+```sql
+INSTALL test;
+LOAD test;
+SELECT * FROM scan_tests(['*'], test_roots = ['path/to/extension/test/sql']);
+SELECT * FROM run_tests(
+    ['sql:path/to/extension/test/sql/example.test'],
+    test_roots = ['path/to/extension/test/sql']);
+```
+
+`run_tests` writes individual results to a state database and returns its path. For parallel execution, summaries,
+and retries, use `scripts/ci/run_tests.py` from a matching DuckDB checkout. Find the installed binary with:
+
+```sql
+SELECT install_path FROM duckdb_extensions() WHERE extension_name = 'test';
+```
+
+Then run from the directory containing the test data:
+
+```bash
+python3 /path/to/duckdb/scripts/ci/run_tests.py /path/to/duckdb-cli \
+    --test-extension /path/to/installed/test.duckdb_extension \
+    --test-root path/to/extension/test/sql \
+    --test-flags="--autoloading available --skip-compiled"
+```
+
+SQL tests require their test files and data. C++ tests also require their compiled test bundles.
+
+Extension CI downloads `duckdb-test-<platform-suffix>.tar.gz`, which contains the matching CLI and test extension.
+The runner script comes from the DuckDB checkout. Standalone CI builds from source when a matching bundle or
+the required linking libraries are unavailable.
+
 ## Test Contract
 
 Within SQL tests, the test runner (unittest) guarantees that these environment variables will be set. Many can be overridden when needed.
@@ -102,4 +138,4 @@ and buffer sizes.
 
 ### ADBC
 
-The ADBC tests are in `test/api/adbc/test_adbc.cpp`. To run them the DuckDB library path must be provided in the `DUCKDB_INSTALL_LIB` variable.
+The ADBC behavior tests are in `test/api/adbc/test_adbc.cpp` and initialize directly against the existing host core.

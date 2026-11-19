@@ -357,13 +357,9 @@ jobs:
       run: |
         rm -rf build/relassert
         tar -xzf build/relassert-artifact.tar.gz -C build
-        ls -lh build/relassert/test/unittest
-
-    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      run: echo "DUCKDB_INSTALL_LIB=$(find "$PWD" -name 'libduck*.so' | head -n 1)" >> "$GITHUB_ENV"
-
-    - name: Test DUCKDB_INSTALL_LIB variable
-      run: echo "$DUCKDB_INSTALL_LIB"
+        ls -lh build/relassert/duckdb
+        ls -lh build/relassert/repository/*/*/test.duckdb_extension
+        ls -lh build/relassert/test/extensions/duckdb_tests.duckdb_extension
 
     - name: Test
       run: make unittest_relassert
@@ -436,7 +432,7 @@ jobs:
       needs.linux-release-musl.result == 'success' &&
       needs.windows.result == 'success' &&
       (needs.osx.result == 'success' || needs.osx.result == 'skipped')
-    uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main
+    uses: smvv/extension-ci-tools/.github/workflows/build.yml@test-extension-runner
     needs:
       - prepare
       - linux-relassert
@@ -451,12 +447,13 @@ jobs:
       groups: ${{ needs.prepare.outputs.extension_groups }}
       extension_repository: duckdb/extension-template
       extension_ref: main
-      ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_version: test-extension-runner
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
       windows_vcpkg_toolchain: cl
+      windows_compiler: clang-cl
       reduced_ci_mode: ${{ needs.prepare.outputs.reduced_ci_mode }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -487,8 +484,6 @@ jobs:
           fetch_depth: 0
           ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
-      - uses: ./.github/actions/ccache-action
-
       - uses: actions/download-artifact@v8
         name: Download all extensions
         with:
@@ -509,6 +504,20 @@ jobs:
           tree "$RUNNER_TEMP/repository_generation"
 
           ls "$RUNNER_TEMP"/repository_generation/*/*/*.duckdb_extension*
+
+      - name: Verify native test extensions
+        shell: bash
+        run: |
+          for platform_dir in "$RUNNER_TEMP"/repository_generation/*/*; do
+            case "$(basename "$platform_dir")" in
+              linux_amd64|linux_arm64|linux_amd64_musl|linux_arm64_musl|osx_amd64|osx_arm64|windows_amd64|windows_arm64|windows_amd64_mingw)
+                test -f "$platform_dir/test.duckdb_extension" || {
+                  echo "Missing native test extension in $platform_dir" >&2
+                  exit 1
+                }
+                ;;
+            esac
+          done
 
       - name: Validate extension signing
         if: ${{ github.event_name == 'pull_request' }}
@@ -547,61 +556,40 @@ jobs:
         run: |
           make upload-extensions EXTENSION_REPOSITORY_PATH="$RUNNER_TEMP/repository_generation"
 
-      - name: Build DuckDB
+      - name: Download DuckDB test binaries
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        uses: duckdb/duckdb-ci/build-duckdb@main
-        env:
-          GEN: ninja
-          EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
-          EXTENSION_TESTS_ONLY: 1
-          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
-          DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
-          DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
+        uses: actions/download-artifact@v8
         with:
-          build-type: release
-          build: python3 scripts/ci/retry.py -- make release
+          name: duckdb-test-linux-amd64.tar.gz
+          path: ${{ runner.temp }}/duckdb-cli
 
-      - name: Run Tests
+      - name: Extract DuckDB test binaries
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        env:
-          LOCAL_EXTENSION_REPO: ${{ runner.temp }}/repository_generation
-          DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
-        run: make unittest_release SKIP_BUILD=1 T="--test-flags='--autoloading available --skip-compiled'"
-
-      - name: Build other repository
-        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        env:
-          GENERATE_EXTENSION_ENTRIES: 1
-          LOCAL_EXTENSION_REPO: build/release/repository_other
-          DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
-          DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
         run: |
-          python3 scripts/ci/retry.py -- make release
+          mkdir -p build/release
+          tar -xzf "$RUNNER_TEMP/duckdb-cli/duckdb-test-linux-amd64.tar.gz" -C build/release
 
       - name: Copy over local extension repository
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: |
-          cp -r "$RUNNER_TEMP/repository_generation" build/release/repository
-          tree build/release/repository
-          find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
+          mkdir -p build/release/repository
+          for version_dir in "$RUNNER_TEMP"/repository_generation/*; do
+            if [ -d "$version_dir/linux_amd64" ]; then
+              destination="build/release/repository/$(basename "$version_dir")"
+              mkdir -p "$destination"
+              cp -a "$version_dir/linux_amd64" "$destination/"
+            fi
+          done
           tree build/release/repository
 
-      # Disable downloading release because extension_entries.hpp check fails
-      # in CI because some extensions are not available.
-      - name: Download linux release artifact
-        if: ${{ false && !fromJson(needs.prepare.outputs.skip_tests) }}
-        id: linux_release_artifact
-        continue-on-error: true
-        uses: actions/download-artifact@v8
-        with:
-          name: linux-release-build.tar.gz
-          path: build
-
-      - name: Extract linux release artifact
-        if: ${{ steps.linux_release_artifact.outcome == 'success' }}
+      - name: Run extension SQL tests with autoloading
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+        env:
+          EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
+          LOCAL_EXTENSION_REPO: ${{ github.workspace }}/build/release/repository
+          DUCKDB_TEST_DESCRIPTION: 'Running extension SQL tests with available extension autoloading. Add require no_extension_autoloading to skip the test'
         run: |
-          rm -rf build/release
-          tar -xzf build/linux-release-build.tar.gz -C build
+          python3 scripts/ci/run_extension_autoload_tests.py
 
       - name: Install parser tools
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -783,8 +771,9 @@ jobs:
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
           make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+          make test-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb TEST_EXTENSION_BINARY=build/release/extension/test/test.duckdb_extension
           make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
+          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         ./scripts/upload-assets-to-staging.sh github_release "${assets[@]}"
 
@@ -792,6 +781,12 @@ jobs:
       if: ${{ matrix.config.is_canonical_build }}
       with:
         path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.is_canonical_build }}
+      with:
+        path: duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7
@@ -1003,16 +998,23 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+        make test-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb TEST_EXTENSION_BINARY=build/release/extension/test/test.duckdb_extension
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
         make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
+          duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
         path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-test-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
     - uses: actions/upload-artifact@v7
@@ -1264,6 +1266,7 @@ jobs:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
+      EXTENSION_STATIC_BUILD: 0
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:

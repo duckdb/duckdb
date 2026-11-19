@@ -1,10 +1,12 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
+#include "duckdb/common/adbc/adbc-init.hpp"
 #include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "driver_manager.h"
 #include <iostream>
 #include <cstdio>
 #include <fstream>
@@ -27,7 +29,9 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
+void SetADBCDriver(AdbcDatabase &database, AdbcError &error) {
+	REQUIRE(SUCCESS(AdbcDriverManagerDatabaseSetInitFunc(&database, duckdb_adbc_init, &error)));
+}
 
 class ADBCTestDatabase {
 public:
@@ -38,10 +42,8 @@ public:
 		} else {
 			path = path_parameter;
 		}
-		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", path.c_str(), &adbc_error)));
 
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -173,27 +175,18 @@ public:
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
 TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	REQUIRE(db.QueryAndCheck("--"));
 }
 
 TEST_CASE("ADBC - Cancel connection while consuming stream", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement adbc_statement;
@@ -266,9 +259,6 @@ TEST_CASE("ADBC - Cancel connection while consuming stream", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement adbc_statement;
@@ -344,10 +334,6 @@ TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Cancel unhappy paths", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	SECTION("Cancel on uninitialized connection") {
 		AdbcError adbc_error = {};
 		AdbcConnection adbc_connection = {};
@@ -412,9 +398,6 @@ TEST_CASE("ADBC - Cancel unhappy paths", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
@@ -427,9 +410,6 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
@@ -462,9 +442,6 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
@@ -490,9 +467,6 @@ TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Temporary and persistent tables with the same name should be distinct.
@@ -517,9 +491,6 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// create a temp table with data1 on adbc_connection
@@ -559,9 +530,6 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog"
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	// Create Arrow Result using ingest connection to avoid streaming conflicts.
@@ -584,9 +552,6 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Target Catalog", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Attach a separate database to act as the target catalog.
@@ -604,9 +569,6 @@ TEST_CASE("ADBC - Test ingestion - Target Catalog", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Target Catalog and Schema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	auto attached_path = TestCreatePath("adbc_ingest_target_catalog_schema.db");
@@ -623,9 +585,6 @@ TEST_CASE("ADBC - Test ingestion - Target Catalog and Schema", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create Arrow Result using ingest connection to avoid streaming conflicts.
@@ -684,9 +643,6 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	AdbcError adbc_error = {};
@@ -747,9 +703,6 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 }
 
 TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA \"my_schema\";");
 	// Create Arrow Result
@@ -770,9 +723,6 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	std::vector<std::string> column_names = {"column.with.dots", "column\"with\"quotes", "column with whitespace"};
 	std::string table_name = "my.table\"is 😵";
@@ -842,9 +792,6 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
@@ -857,9 +804,6 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Pivot", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
@@ -870,9 +814,6 @@ TEST_CASE("ADBC - Pivot", "[adbc]") {
 }
 
 TEST_CASE("Test Null Error/Database", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
@@ -893,16 +834,12 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 }
 
 TEST_CASE("Test Invalid Path", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", "/this/path/is/imaginary/hopefully/", &adbc_error)));
 
 	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -919,9 +856,6 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement reuse", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
@@ -934,8 +868,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -985,9 +918,6 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 }
 
 TEST_CASE("Error Release", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
@@ -1001,8 +931,7 @@ TEST_CASE("Error Release", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -1087,9 +1016,6 @@ TEST_CASE("Error Release", "[adbc]") {
 }
 
 TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -1098,8 +1024,7 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -1132,9 +1057,6 @@ static string GetArrowString(ArrowArray *array, idx_t idx) {
 }
 
 TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -1143,8 +1065,7 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -1419,9 +1340,6 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC ConnectionGetStatisticNames", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db("test_statistic_names");
 
 	ArrowArrayStream stream;
@@ -1466,9 +1384,6 @@ TEST_CASE("Test ADBC ConnectionGetStatisticNames", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db("test_get_statistics");
 
 	auto res = db.Query("CREATE TABLE stats_table_one (i INTEGER)");
@@ -1615,9 +1530,6 @@ TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -1628,8 +1540,7 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -1697,10 +1608,6 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	ADBCTestDatabase db;
 
 	// Create prepared parameter array
@@ -1715,8 +1622,7 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -1768,10 +1674,6 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 	AdbcError adbc_error = {};
@@ -1779,8 +1681,7 @@ TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
 
 	// Create connection
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
@@ -1846,10 +1747,6 @@ TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
@@ -1869,8 +1766,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2086,9 +1982,6 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -2096,8 +1989,7 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2135,9 +2027,6 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -2146,8 +2035,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 
 	ArrowSchema arrow_schema;
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2205,9 +2093,6 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -2217,8 +2102,7 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 	AdbcStatement adbc_statement;
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2240,10 +2124,6 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 }
 
 TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
@@ -2263,9 +2143,6 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -2282,8 +2159,7 @@ TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2306,10 +2182,6 @@ TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
 }
 
 TEST_CASE("Test Segfault Option Set", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -2317,8 +2189,7 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -2341,9 +2212,6 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	// Let's first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_CATALOGS
 	{
@@ -3653,10 +3521,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects - snapshot at call time", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	// Catalog changes on another connection between the call and reading the stream must not leak in
 	ADBCTestDatabase db("test_metadata_snapshot");
 	// One thread keeps the query from running before the stream is read, so a lazy snapshot would see the later DDL
@@ -3737,10 +3601,6 @@ private:
 };
 
 TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	// A reader must see every row exactly once while statements drain the connection's streams
 	ADBCTestDatabase db;
 	AdbcError adbc_error = {};
@@ -3776,9 +3636,6 @@ TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 }
 
 TEST_CASE("ADBC - setting the current catalog drains open streams", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto &stream = db.QueryArrow("SELECT i FROM range(100000) t(i)");
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, "memory",
@@ -3793,9 +3650,6 @@ TEST_CASE("ADBC - setting the current catalog drains open streams", "[adbc]") {
 }
 
 TEST_CASE("ADBC - rollback while another thread reads a stream", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
@@ -3815,10 +3669,6 @@ TEST_CASE("ADBC - rollback while another thread reads a stream", "[adbc]") {
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	// ADBC spec: list-typed fields must be empty lists (not NULL) when the depth
 	// includes that level but filters exclude all entries.
 
@@ -3858,9 +3708,6 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
@@ -3981,9 +3828,6 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
@@ -4074,9 +3918,6 @@ TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC URI option", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	auto file_exists = [](const char *path) {
@@ -4089,8 +3930,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		AdbcDatabase adbc_database;
 		AdbcConnection adbc_connection;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
@@ -4114,8 +3954,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		AdbcDatabase adbc_database;
 		AdbcConnection adbc_connection;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "test_uri_plain.db", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
@@ -4141,8 +3980,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file://test_uri_file.db", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -4158,8 +3996,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "duckdb://test_duckdb_uri_file.db", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -4173,8 +4010,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		AdbcDatabase adbc_database;
 		AdbcConnection adbc_connection;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", "/invalid/path/db.duckdb", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -4203,8 +4039,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_query.db?mode=ro", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -4224,8 +4059,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(
 		    SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_fragment.db#fragment", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -4249,8 +4083,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -4270,8 +4103,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		SetADBCDriver(adbc_database, adbc_error);
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
 		REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(adbc_error.message);
@@ -4286,18 +4118,13 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Database GetOption", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Set up a database with a path and a config option
 	AdbcDatabase adbc_database;
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "threads", "4", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
@@ -4393,9 +4220,6 @@ TEST_CASE("ADBC - Database GetOption", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Connection GetOption autocommit", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Default: autocommit is enabled
@@ -4450,9 +4274,6 @@ TEST_CASE("ADBC - Connection GetOption autocommit", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Connection GetOption current_catalog and current_db_schema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// current_catalog should return "memory" (DuckDB's default in-memory catalog name)
@@ -4475,9 +4296,6 @@ TEST_CASE("ADBC - Connection GetOption current_catalog and current_db_schema", "
 }
 
 TEST_CASE("ADBC - Connection SetOption current_catalog and current_db_schema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create a new schema to switch to
@@ -4519,9 +4337,6 @@ TEST_CASE("ADBC - Connection SetOption current_catalog and current_db_schema", "
 }
 
 TEST_CASE("ADBC - Database username/password not supported", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// SetOption for username should return NOT_IMPLEMENTED
@@ -4570,9 +4385,6 @@ TEST_CASE("ADBC - Database username/password not supported", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement GetOption ingestion options", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement adbc_statement;
@@ -4697,9 +4509,6 @@ TEST_CASE("ADBC - Statement GetOption ingestion options", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Connection SetOptionBytes/Double not implemented", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// SetOptionBytes: NOT_IMPLEMENTED
@@ -4748,9 +4557,6 @@ TEST_CASE("ADBC - Connection SetOptionBytes/Double not implemented", "[adbc]") {
 }
 
 TEST_CASE("ADBC - ConnectionSetOption NULL value should not crash", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// ConnectionSetOption with NULL value for CURRENT_CATALOG should not crash
@@ -4814,9 +4620,6 @@ TEST_CASE("ADBC - ConnectionSetOption NULL value should not crash", "[adbc]") {
 }
 
 TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Setting a non-existent catalog should fail gracefully
@@ -4859,9 +4662,6 @@ TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]"
 }
 
 TEST_CASE("ADBC - Ending a transaction while a stream is open on the connection", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(db.adbc_connection.private_data);
 	Connection observer(*reinterpret_cast<Connection *>(conn_wrapper->connection)->context->db);
@@ -4907,9 +4707,6 @@ TEST_CASE("ADBC - Ending a transaction while a stream is open on the connection"
 }
 
 TEST_CASE("ADBC - Commit reports a transaction that an earlier error rolled back", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(db.adbc_connection.private_data);
 	auto &conn = *reinterpret_cast<Connection *>(conn_wrapper->connection);
@@ -4965,9 +4762,6 @@ TEST_CASE("ADBC - Commit reports a transaction that an earlier error rolled back
 }
 
 TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create two statements on the same connection
@@ -5021,9 +4815,6 @@ TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Concurrent statements with large result", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create a table with enough data to produce multiple batches
@@ -5081,9 +4872,6 @@ TEST_CASE("ADBC - Concurrent statements with large result", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Concurrent statements: release before second query", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement stmt1, stmt2;
@@ -5115,9 +4903,6 @@ TEST_CASE("ADBC - Concurrent statements: release before second query", "[adbc]")
 }
 
 TEST_CASE("ADBC - Three concurrent statements", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement stmt1, stmt2, stmt3;
@@ -5174,9 +4959,6 @@ TEST_CASE("ADBC - Three concurrent statements", "[adbc]") {
 }
 
 TEST_CASE("Test ADBC ConnectionGetInfo with an open result stream", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	// Create enough rows that the query result spans multiple Arrow batches, so that
@@ -5254,18 +5036,13 @@ TEST_CASE("Test ADBC ConnectionGetInfo with an open result stream", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Connection release while stream is active", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	// Set up database manually (not using ADBCTestDatabase since we need to control release order)
 	AdbcDatabase adbc_database;
 	AdbcError adbc_error;
 	std::memset(&adbc_error, 0, sizeof(adbc_error));
 	std::memset(&adbc_database, 0, sizeof(adbc_database));
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 
@@ -5300,9 +5077,6 @@ TEST_CASE("ADBC - Connection release while stream is active", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	AdbcStatement stmt;
@@ -5338,9 +5112,6 @@ TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]
 }
 
 TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	const auto query = "CREATE MACRO my_macro(x) AS x + 1";
@@ -5368,9 +5139,6 @@ TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	auto &input_data = db.QueryArrow("SELECT 44 as value");
@@ -5407,9 +5175,6 @@ TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	auto r1 = db.Query("CREATE TABLE test_table(x INTEGER UNIQUE)");
@@ -5440,10 +5205,6 @@ TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)",
 }
 
 TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	ADBCTestDatabase db;
 
 	// Create a table large enough that streaming requires multiple fetch calls.
@@ -5486,10 +5247,6 @@ TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
 }
 
 TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-
 	ADBCTestDatabase db;
 	AdbcStatement stmt;
 
@@ -5532,9 +5289,6 @@ TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Rich Error Metadata API", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 
 	SECTION("Function pointers are wired for 1.1.0") {
@@ -5729,9 +5483,6 @@ static void RequireSameSchema(const ArrowSchema &left, const ArrowSchema &right)
 }
 
 TEST_CASE("ADBC - Stream keeps the result order across arrays", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("SET threads=4")->HasError());
 	REQUIRE(!db.Query("CREATE TABLE ordered AS SELECT i FROM range(300000) t(i)")->HasError());
@@ -5759,9 +5510,6 @@ TEST_CASE("ADBC - Stream keeps the result order across arrays", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Execution error part-way through a stream", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	// One thread and a small buffer keep the producer from reaching the failing row before the first array is read
 	REQUIRE(!db.Query("SET threads=1")->HasError());
@@ -5807,9 +5555,6 @@ TEST_CASE("ADBC - Execution error part-way through a stream", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Cancelled stream reports CANCELLED", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	SECTION("plain error messages") {
 	}
@@ -5845,9 +5590,6 @@ TEST_CASE("ADBC - Cancelled stream reports CANCELLED", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Stream of a data-modifying statement", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE modified (i BIGINT)")->HasError());
 
@@ -5901,9 +5643,6 @@ TEST_CASE("ADBC - Stream of a data-modifying statement", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Stream schema declares the extension types its arrays use", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("SET arrow_lossless_conversion=true")->HasError());
 	const auto query = "SELECT true AS b, '7a1d4a2e-3f0b-4c1e-9d3a-0e5f6b7c8d9e'::UUID AS u, {'a': true} AS s, "
@@ -5949,16 +5688,12 @@ TEST_CASE("ADBC - Stream schema declares the extension types its arrays use", "[
 }
 
 TEST_CASE("ADBC - Stream outlives its connection with several arrays left", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	AdbcDatabase adbc_database;
 	AdbcError adbc_error;
 	std::memset(&adbc_error, 0, sizeof(adbc_error));
 	std::memset(&adbc_database, 0, sizeof(adbc_database));
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	SetADBCDriver(adbc_database, adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 	AdbcConnection adbc_connection;
@@ -5997,9 +5732,6 @@ TEST_CASE("ADBC - Stream outlives its connection with several arrays left", "[ad
 }
 
 TEST_CASE("ADBC - Bound parameter stream without rows is refused", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto &input = db.QueryArrowForIngest("SELECT 1::BIGINT AS p WHERE false");
 	AdbcStatement statement;
@@ -6076,9 +5808,6 @@ static void MakeParameterRows(ADBCTestDatabase &db, const vector<int64_t> &value
 }
 
 TEST_CASE("ADBC - Each bound parameter row runs the statement once", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE bound (i BIGINT)")->HasError());
 	ArrowArrayStream input;
@@ -6121,9 +5850,6 @@ TEST_CASE("ADBC - Each bound parameter row runs the statement once", "[adbc]") {
 }
 
 TEST_CASE("ADBC - A write executed without an output stream keeps its rows", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	for (auto sql : {"INSERT INTO t SELECT range FROM range(1000) RETURNING i",
 	                 "WITH ins AS (INSERT INTO t SELECT range FROM range(1000) RETURNING i) SELECT * FROM ins"}) {
 		for (bool autocommit : {true, false}) {
@@ -6150,9 +5876,6 @@ TEST_CASE("ADBC - A write executed without an output stream keeps its rows", "[a
 }
 
 TEST_CASE("ADBC - A read-only query executed without an output stream is not run to its end", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	// With a buffer this small, a statement run to its end reaches the failing row and a streamed one does not
 	REQUIRE(!db.Query("SET max_streaming_buffer_size='16KB'")->HasError());
@@ -6168,9 +5891,6 @@ TEST_CASE("ADBC - A read-only query executed without an output stream is not run
 }
 
 TEST_CASE("ADBC - A query over one bound parameter row streams its result", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	// With a buffer this small, a statement run to its end reaches the failing row and a streamed one does not
 	REQUIRE(!db.Query("SET max_streaming_buffer_size='16KB'")->HasError());
@@ -6197,9 +5917,6 @@ TEST_CASE("ADBC - A query over one bound parameter row streams its result", "[ad
 }
 
 TEST_CASE("ADBC - A write over several bound parameter rows keeps every row", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	for (auto sql : {"INSERT INTO bound VALUES (?) RETURNING i",
 	                 "WITH ins AS (INSERT INTO bound VALUES (?) RETURNING i) SELECT i FROM ins"}) {
 		for (bool autocommit : {true, false}) {
@@ -6236,9 +5953,6 @@ TEST_CASE("ADBC - A write over several bound parameter rows keeps every row", "[
 }
 
 TEST_CASE("ADBC - A write whose parameter type is unresolved at prepare keeps its rows", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	// Binding stops at the unresolved parameter, before the CTE registers its write, so the prepared statement's own
 	// properties report no modification and only the running statement's do
 	for (auto sql : {"WITH ins AS (INSERT INTO t VALUES (42) RETURNING i) SELECT ? AS tag",
@@ -6274,9 +5988,6 @@ TEST_CASE("ADBC - A write whose parameter type is unresolved at prepare keeps it
 }
 
 TEST_CASE("ADBC - A timeout is reported as an error, not a cancellation", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("SET max_execution_time=50")->HasError());
 	AdbcStatement statement;
@@ -6317,9 +6028,6 @@ TEST_CASE("ADBC - A timeout is reported as an error, not a cancellation", "[adbc
 }
 
 TEST_CASE("ADBC - Cancelled ingestion reports CANCELLED", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	SECTION("plain error messages") {
 	}
@@ -6368,9 +6076,6 @@ TEST_CASE("ADBC - Cancelled ingestion reports CANCELLED", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Ingestion fails when its last appended rows fail", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE keyed (i BIGINT PRIMARY KEY)")->HasError());
 	// Fewer rows than one appender flush, so every row is written when the appender closes
@@ -6396,9 +6101,6 @@ TEST_CASE("ADBC - Ingestion fails when its last appended rows fail", "[adbc]") {
 }
 
 TEST_CASE("ADBC - metadata call execution errors keep their duckdb:error_type", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
@@ -6443,9 +6145,6 @@ TEST_CASE("ADBC - metadata call execution errors keep their duckdb:error_type", 
 }
 
 TEST_CASE("ADBC - rollback keeps the error a stream already reported", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
@@ -6498,9 +6197,6 @@ static AdbcStatusCode ExecuteSchemaOf(ADBCTestDatabase &db, const char *query, s
 }
 
 TEST_CASE("ADBC - Executing a dynamic PIVOT returns its rows", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	CreateExpandingTables(db);
 
@@ -6529,9 +6225,6 @@ TEST_CASE("ADBC - Executing a dynamic PIVOT returns its rows", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Executing an ALTER that expands applies it", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	CreateExpandingTables(db);
 
@@ -6548,9 +6241,6 @@ TEST_CASE("ADBC - Executing an ALTER that expands applies it", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Setting a statement that expands runs nothing until it is executed", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	CreateExpandingTables(db);
 
@@ -6566,9 +6256,6 @@ TEST_CASE("ADBC - Setting a statement that expands runs nothing until it is exec
 }
 
 TEST_CASE("ADBC - StatementExecuteSchema of a parameter whose type is not known", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	string message;
 	REQUIRE(ExecuteSchemaOf(db, "SELECT ?", message) == ADBC_STATUS_NOT_IMPLEMENTED);
@@ -6576,9 +6263,6 @@ TEST_CASE("ADBC - StatementExecuteSchema of a parameter whose type is not known"
 }
 
 TEST_CASE("ADBC - StatementExecuteSchema of a dynamic PIVOT", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	CreateExpandingTables(db);
 	string message;
@@ -6612,10 +6296,23 @@ static idx_t ReadBatches(ArrowArrayStream &stream, idx_t limit) {
 	return count;
 }
 
-TEST_CASE("ADBC - Statement progress while a stream is consumed", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
+//! Read batches from `stream` until at least `minimum_count` rows have been read.
+static idx_t ReadRows(ArrowArrayStream &stream, idx_t minimum_count) {
+	idx_t count = 0;
+	while (count < minimum_count) {
+		ArrowArray array;
+		std::memset(&array, 0, sizeof(array));
+		REQUIRE(stream.get_next(&stream, &array) == 0);
+		if (!array.release) {
+			break;
+		}
+		count += NumericCast<idx_t>(array.length);
+		array.release(&array);
 	}
+	return count;
+}
+
+TEST_CASE("ADBC - Statement progress while a stream is consumed", "[adbc]") {
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 
@@ -6648,9 +6345,6 @@ TEST_CASE("ADBC - Statement progress while a stream is consumed", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress follows the query running on the connection", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 
@@ -6697,9 +6391,6 @@ TEST_CASE("ADBC - Statement progress follows the query running on the connection
 }
 
 TEST_CASE("ADBC - Statement progress when a stream is released early", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcStatement statement;
 	ArrowArrayStream stream;
@@ -6721,9 +6412,6 @@ TEST_CASE("ADBC - Statement progress when a stream is released early", "[adbc]")
 }
 
 TEST_CASE("ADBC - Statement progress rises as a query runs", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 	// A small result buffer keeps the engine from running far ahead of the reader, so the reading still has somewhere
@@ -6739,14 +6427,15 @@ TEST_CASE("ADBC - Statement progress rises as a query runs", "[adbc]") {
 
 	// The query advances as the stream is consumed, so reading more of it has to move the reading: a progress option
 	// that answered with a constant would pass every other check in this file.
-	REQUIRE(ReadBatches(stream, 20) == 20);
+	const idx_t progress_rows = 20 * DEFAULT_STANDARD_VECTOR_SIZE;
+	REQUIRE(ReadRows(stream, progress_rows) >= progress_rows);
 	auto early = StatementProgress(statement, ADBC_STATEMENT_OPTION_PROGRESS, db.adbc_error);
 	REQUIRE(early > 0);
 	// Read on until the reading moves. Batches already buffered are served without running the query further, so how
 	// much has to be read before it moves depends on the buffer, but read enough of the table and it must.
 	double later = early;
 	for (idx_t attempt = 0; attempt < 20 && later == early; attempt++) {
-		REQUIRE(ReadBatches(stream, 20) == 20);
+		REQUIRE(ReadRows(stream, progress_rows) >= progress_rows);
 		later = StatementProgress(statement, ADBC_STATEMENT_OPTION_PROGRESS, db.adbc_error);
 	}
 	REQUIRE(later > early);
@@ -6757,9 +6446,6 @@ TEST_CASE("ADBC - Statement progress rises as a query runs", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress after a failed execution", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcStatement statement;
 	ArrowArrayStream stream;
@@ -6793,9 +6479,6 @@ TEST_CASE("ADBC - Statement progress after a failed execution", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress after a cancelled execution", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcStatement statement;
 	ArrowArrayStream stream;
@@ -6829,9 +6512,6 @@ TEST_CASE("ADBC - Statement progress after a cancelled execution", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress for an ingestion", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	auto &input_data = db.QueryArrow("SELECT i FROM range(100000) t(i)");
 
@@ -6851,9 +6531,6 @@ TEST_CASE("ADBC - Statement progress for an ingestion", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress after transaction completion", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
@@ -6881,9 +6558,6 @@ TEST_CASE("ADBC - Statement progress after transaction completion", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress after releasing its connection", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcConnection connection = {};
 	AdbcStatement statement = {};
@@ -6909,9 +6583,6 @@ TEST_CASE("ADBC - Statement progress after releasing its connection", "[adbc]") 
 }
 
 TEST_CASE("ADBC - Statement progress is per connection", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 
@@ -6941,9 +6612,6 @@ TEST_CASE("ADBC - Statement progress is per connection", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress options reject other keys", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	AdbcStatement statement;
 	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
@@ -6960,9 +6628,6 @@ TEST_CASE("ADBC - Statement progress options reject other keys", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Statement progress read from another thread during execution", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
 	ADBCTestDatabase db;
 	REQUIRE(!db.Query("CREATE TABLE progress_t AS SELECT i FROM range(2000000) t(i)")->HasError());
 
