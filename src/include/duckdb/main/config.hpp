@@ -165,7 +165,7 @@ public:
 	}
 
 	template <class... ARGS>
-	void emplace_back(ARGS &&...args) { // NOLINT
+	void emplace_back(ARGS &&... args) { // NOLINT
 		auto scan = make_shared_ptr<ReplacementScan>(std::forward<ARGS>(args)...);
 		lock_guard<mutex> guard(lock);
 		scans.push_back(std::move(scan));
@@ -198,8 +198,8 @@ public:
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	ReplacementScanList replacement_scans;
 
-	//! The BaseFileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
-	//! RamFS or something similar). Never null: defaults to a VirtualFileSystem.
+	//! The BaseFileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes
+	//! (e.g. RamFS or something similar). Never null: defaults to a VirtualFileSystem.
 	unique_ptr<BaseFileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
@@ -323,9 +323,9 @@ public:
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
-	static idx_t GetSystemMaxThreads(FileSystem &fs);
-	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
-	static idx_t GetSystemAvailableMemory(FileSystem &fs);
+	static idx_t GetSystemMaxThreads(BaseFileSystem &fs);
+	static idx_t GetSystemMaxAsyncThreads(BaseFileSystem &fs);
+	static idx_t GetSystemAvailableMemory(BaseFileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	//! A file system for probing the host (cgroups, memory, paths) without an opener, so no access checks apply: the
 	//! file system if the database has started, otherwise the bootstrap file system

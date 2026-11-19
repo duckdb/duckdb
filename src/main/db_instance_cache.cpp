@@ -13,7 +13,7 @@ DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DatabaseInstance> &insta
 DatabaseCacheEntry::~DatabaseCacheEntry() {
 }
 
-static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
+static string GetDBAbsolutePath(const string &database_p, BaseFileSystem &fs) {
 	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;

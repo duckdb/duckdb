@@ -16,8 +16,8 @@ namespace duckdb {
 
 class CGroups {
 public:
-	static optional_idx GetMemoryLimit(FileSystem &fs);
-	static idx_t GetCPULimit(FileSystem &fs, idx_t physical_cores);
+	static optional_idx GetMemoryLimit(BaseFileSystem &fs);
+	static idx_t GetCPULimit(BaseFileSystem &fs, idx_t physical_cores);
 };
 
 } // namespace duckdb

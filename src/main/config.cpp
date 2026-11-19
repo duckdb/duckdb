@@ -749,7 +749,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads(BaseFileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
@@ -776,7 +776,7 @@ static idx_t AsyncThreadsForThreads(idx_t threads) {
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxAsyncThreads(BaseFileSystem &fs) {
 	return AsyncThreadsForThreads(GetSystemMaxThreads(fs));
 }
 
@@ -797,7 +797,7 @@ idx_t DBConfig::GetDefaultAsyncThreads() const {
 	return AsyncThreadsForThreads(GetDefaultThreads());
 }
 
-idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+idx_t DBConfig::GetSystemAvailableMemory(BaseFileSystem &fs) {
 	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
 	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
