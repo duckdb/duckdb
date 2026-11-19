@@ -669,7 +669,6 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		{

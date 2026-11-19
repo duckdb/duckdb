@@ -2,6 +2,7 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -510,6 +511,14 @@ static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate 
 		        ? 1
 		        : RelationStatisticsHelper::EstimateDistinctCardinality(cardinality_counts, child_stats.cardinality);
 	}
+	bool has_unique_groups = false;
+	if (preserves_group_evidence && !aggregate.groups.empty() && aggregate.children.size() == 1) {
+		Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS, extractor.GetContext());
+		has_unique_groups = distinctness.IsDistinctOn(*aggregate.children[0], aggregate.groups);
+		if (has_unique_groups) {
+			result.cardinality = child_stats.cardinality;
+		}
+	}
 	for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
 		auto &group = *aggregate.groups[group_idx];
 		DistinctCount distinct_count(result.cardinality, DistinctCountSource::CARDINALITY);
@@ -536,9 +545,24 @@ static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate 
 		result.columns.emplace_back(bindings[result.columns.size()], distinct_count, current_domain, Identifier(),
 		                            semi_anti_join_domain_evidence);
 	}
-	for (idx_t aggregate_idx = 0; aggregate_idx < aggregate.expressions.size(); aggregate_idx++) {
-		result.columns.emplace_back(bindings[result.columns.size()],
-		                            DistinctCount(result.cardinality, DistinctCountSource::CARDINALITY), Identifier());
+	for (auto &expression : aggregate.expressions) {
+		DistinctCount total_domain(result.cardinality, DistinctCountSource::CARDINALITY);
+		DistinctCount current_domain = total_domain;
+		if (has_unique_groups && expression->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+			auto &bound_aggregate = expression->Cast<BoundAggregateExpression>();
+			auto &agg_children = bound_aggregate.GetChildren();
+			if (bound_aggregate.CanForwardSingletonInputDomain() && !bound_aggregate.GetFilter() &&
+			    !agg_children.empty() && expression->GetReturnType() == agg_children[0]->GetReturnType() &&
+			    agg_children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				auto binding = agg_children[0]->Cast<BoundColumnRefExpression>().Binding();
+				auto child_column = child_columns.Find(binding);
+				if (child_column) {
+					total_domain = child_column->total_domain;
+					current_domain = child_column->current_domain;
+				}
+			}
+		}
+		result.columns.emplace_back(bindings[result.columns.size()], total_domain, current_domain, Identifier());
 	}
 	for (idx_t grouping_idx = 0; grouping_idx < aggregate.grouping_functions.size(); grouping_idx++) {
 		auto grouping_count = MinValue<idx_t>(result.cardinality, MaxValue<idx_t>(aggregate.grouping_sets.size(), 1));
