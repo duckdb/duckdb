@@ -179,6 +179,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/join_simplification.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
@@ -3587,6 +3588,24 @@ JoinRefType EnumUtil::FromString<JoinRefType>(const char *value) {
 	return static_cast<JoinRefType>(StringUtil::StringToEnum(GetJoinRefTypeValues(), 7, "JoinRefType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetJoinSimplificationPhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(JoinSimplificationPhase::BEFORE_FILTER_PUSHDOWN), "BEFORE_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(JoinSimplificationPhase::AFTER_FILTER_PUSHDOWN), "AFTER_FILTER_PUSHDOWN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<JoinSimplificationPhase>(JoinSimplificationPhase value) {
+	return StringUtil::EnumToString(GetJoinSimplificationPhaseValues(), 2, "JoinSimplificationPhase", static_cast<uint32_t>(value));
+}
+
+template<>
+JoinSimplificationPhase EnumUtil::FromString<JoinSimplificationPhase>(const char *value) {
+	return static_cast<JoinSimplificationPhase>(StringUtil::StringToEnum(GetJoinSimplificationPhaseValues(), 2, "JoinSimplificationPhase", value));
+}
+
 const StringUtil::EnumStringLiteral *GetJoinTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(JoinType::INVALID), "INVALID" },
@@ -4754,19 +4773,21 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::DUPLICATE_ELIMINATED_DOMAIN), "DUPLICATE_ELIMINATED_DOMAIN" },
 		{ static_cast<uint32_t>(OptimizerType::REDUNDANT_DISTINCT), "REDUNDANT_DISTINCT" },
 		{ static_cast<uint32_t>(OptimizerType::CASE_TO_FILTER_AGGREGATE), "CASE_TO_FILTER_AGGREGATE" },
-		{ static_cast<uint32_t>(OptimizerType::WINDOW_FUSION), "WINDOW_FUSION" }
+		{ static_cast<uint32_t>(OptimizerType::WINDOW_FUSION), "WINDOW_FUSION" },
+		{ static_cast<uint32_t>(OptimizerType::SET_OPERATION_AGGREGATE), "SET_OPERATION_AGGREGATE" },
+		{ static_cast<uint32_t>(OptimizerType::JOIN_TO_SEMI_JOIN), "JOIN_TO_SEMI_JOIN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 56, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 58, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 56, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 58, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {

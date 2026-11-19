@@ -318,8 +318,7 @@ auto ToStr(const blob_t &bytes) -> std::string_view {
 	return std::string_view(bytes.data(), bytes.size());
 }
 
-// Borrows strings as the C API's parallel pointer and length arrays; both are NULL when empty. Held in plain arrays
-// because the C API takes `const char **`, which a const std::vector cannot hand out.
+// Borrows strings as the C API's parallel pointer and length arrays; both are NULL when empty.
 class StringArrays {
 public:
 	explicit StringArrays(size_t capacity)
@@ -332,7 +331,7 @@ public:
 		string_lengths[count] = str.size();
 		count++;
 	}
-	auto ptrs() const -> const char ** {
+	auto ptrs() const -> const char *const * {
 		return string_ptrs.get();
 	}
 	auto lengths() const -> const idx_t * {
@@ -380,7 +379,7 @@ public:
 		}
 	}
 
-	auto names() const -> const char ** {
+	auto names() const -> const char *const * {
 		return name_arrays.ptrs();
 	}
 	auto names_lengths() const -> const idx_t * {
@@ -422,7 +421,7 @@ public:
 		}
 	}
 
-	auto names() const -> const char ** {
+	auto names() const -> const char *const * {
 		return name_arrays.ptrs();
 	}
 	auto names_lengths() const -> const idx_t * {
@@ -603,6 +602,25 @@ Instance::Instance(Environment &env, const StartupOptions &options)
 
 Instance::Instance(Environment &env, const std::string &path, const StartupOptions &options) : Instance(env, options) {
 	Attach(path, true);
+}
+
+auto Instance::OpenShared(const std::string &path, const StartupOptions &options) -> Instance {
+	return OpenShared(Environment::Default(), path, options);
+}
+
+auto Instance::OpenShared(Environment &env, const std::string &path, const StartupOptions &options) -> Instance {
+	auto pairs = StartupOptionPairs(options);
+	StringArrays names(pairs.size());
+	StringArrays values(pairs.size());
+	for (auto &[name, value] : pairs) {
+		names.Push(name);
+		values.Push(value);
+	}
+	auto path_str = ToStr(path);
+	duckdb_v2_instance_handle instance = nullptr;
+	CheckedAPICall(duckdb_v2_instance_open_shared, env.handle(), path_str.data(), path_str.size(), names.ptrs(),
+	               names.lengths(), values.ptrs(), values.lengths(), static_cast<idx_t>(pairs.size()), &instance);
+	return Instance(instance);
 }
 
 //---------------------------------------------------------------------------

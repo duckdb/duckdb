@@ -71,6 +71,25 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 	}
 }
 
+void ParquetColumnSchema::ValidateNullCount(const ColumnChunk &column, const char *file_name) const {
+	if (max_define != 0 || !column.__isset.meta_data || !column.meta_data.__isset.statistics) {
+		return;
+	}
+	auto &statistics = column.meta_data.statistics;
+	if (!statistics.__isset.null_count || statistics.null_count <= 0) {
+		return;
+	}
+	// the column has no definition levels, so its values cannot be NULL
+	if (file_name) {
+		throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Column \"%s\" cannot hold "
+		                              "NULL values but its statistics count %lld NULL values",
+		                              file_name, name, statistics.null_count);
+	}
+	throw DataCorruptionException("Parquet metadata is corrupt. Column \"%s\" cannot hold NULL values but its "
+	                              "statistics count %lld NULL values",
+	                              name, statistics.null_count);
+}
+
 //! Writer constructors
 
 ParquetColumnSchema ParquetColumnSchema::FromLogicalType(const Identifier &name, const LogicalType &type,

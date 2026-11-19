@@ -655,6 +655,17 @@
         "name": "allow_out_of_order",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "comparison_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 205,
+        "name": "correlated_column_count",
+        "type": "idx_t",
+        "default": "0"
       }
     ],
     "constructor": [

@@ -1479,7 +1479,16 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 	}
 #endif
 	result.bindings = CreateContiguousState(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)));
+	if (setop.comparison_types.size() == setop.column_count) {
+		for (auto &correlated_column : correlated_columns) {
+			setop.comparison_types.push_back(correlated_column.type);
+		}
+	}
 	setop.column_count += correlated_columns.size();
+	if (setop.type != LogicalOperatorType::LOGICAL_UNION) {
+		// EXCEPT / INTERSECT now run per value of the correlated columns, which they compare as they are
+		setop.correlated_column_count += correlated_columns.size();
+	}
 	return result;
 }
 

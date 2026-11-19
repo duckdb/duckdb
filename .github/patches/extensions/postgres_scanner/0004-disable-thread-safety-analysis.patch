@@ -1,0 +1,31 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 101e164..5bf6bfd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -12,6 +12,26 @@ if(NOT MSVC)
+   add_compile_options(-Wno-pedantic -Wno-sign-compare -Wno-unused-variable)
+ endif()
+ 
++# libc++ before 22 (macOS SDK < 27) does not annotate std::lock as acquiring
++if(CMAKE_CXX_COMPILER_ID MATCHES "Clang$")
++  include(CheckCXXSourceCompiles)
++  set(CMAKE_REQUIRED_FLAGS "-Wthread-safety -Werror=thread-safety")
++  check_cxx_source_compiles(
++    "#include <mutex>
++    int main() {
++      std::mutex a, b;
++      std::lock(a, b);
++      std::lock_guard<std::mutex> guard_a(a, std::adopt_lock);
++      std::lock_guard<std::mutex> guard_b(b, std::adopt_lock);
++      return 0;
++    }"
++    POSTGRES_STD_LOCK_THREAD_SAFETY_ANNOTATED)
++  unset(CMAKE_REQUIRED_FLAGS)
++  if(NOT POSTGRES_STD_LOCK_THREAD_SAFETY_ANNOTATED)
++    add_compile_options(-Wno-thread-safety)
++  endif()
++endif()
++
+ include_directories(include database-connector/src/include
+                     ${OPENSSL_INCLUDE_DIR} ${PostgreSQL_INCLUDE_DIRS})
+ 

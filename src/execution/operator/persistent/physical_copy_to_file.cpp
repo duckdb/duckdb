@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
 #include "duckdb/common/file_opener.hpp"
@@ -2159,7 +2160,8 @@ public:
 
 class SortStrategyInput : public PartitionedCopyInput {
 public:
-	SortStrategyInput(const PartitionedCopy &partitioned_copy, unique_ptr<const SortStrategy> strategy);
+	SortStrategyInput(ClientContext &context, const PartitionedCopy &partitioned_copy,
+	                  unique_ptr<const SortStrategy> strategy);
 
 public:
 	unique_ptr<PartitionedCopyInputGlobalState> GetGlobalState(ClientContext &context) const override;
@@ -2182,6 +2184,8 @@ public:
 public:
 	const PartitionedCopy &partitioned_copy;
 	const unique_ptr<const SortStrategy> strategy;
+	//! DISTINCT FROM comparison of the partition columns
+	unique_ptr<Expression> partition_distinct_from;
 };
 
 //! A hash bin of a SortStrategyInput (or all bins of an overflow sort): sorted, materialized and masked for partition
@@ -2259,7 +2263,7 @@ public:
 
 private:
 	void TakeMaterializedBins(ExecutionContext &context, OperatorSourceInput &source_input);
-	void Mask(idx_t begin_block, idx_t end_block);
+	void Mask(Context &context, idx_t begin_block, idx_t end_block);
 	void PartitionBoundaries(idx_t row_begin, idx_t chunk_rows, vector<idx_t> &boundaries) const;
 	//! The chunk holding a row
 	idx_t ChunkOf(idx_t row) const;
@@ -2281,9 +2285,17 @@ private:
 	ValidityMask partition_mask;
 };
 
-SortStrategyInput::SortStrategyInput(const PartitionedCopy &partitioned_copy_p,
+SortStrategyInput::SortStrategyInput(ClientContext &context, const PartitionedCopy &partitioned_copy_p,
                                      unique_ptr<const SortStrategy> strategy_p)
     : partitioned_copy(partitioned_copy_p), strategy(std::move(strategy_p)) {
+	auto &op = partitioned_copy.op;
+	vector<LogicalType> key_types;
+	for (auto partition_column : op.partition_columns) {
+		key_types.push_back(op.expected_types[partition_column]);
+	}
+	auto key_type = WindowCollectionChunkScanner::PrefixStructType(key_types, key_types.size());
+	partition_distinct_from = BoundComparisonExpression::CreateOnColumns(context, ExpressionType::COMPARE_DISTINCT_FROM,
+	                                                                     key_type, 0, key_type, 1);
 }
 
 unique_ptr<PartitionedCopyInputGlobalState> SortStrategyInput::GetGlobalState(ClientContext &context) const {
@@ -2412,7 +2424,7 @@ void SortedBinGroup::ExecutePreparation(ExecutionContext &context, InterruptStat
 		break;
 	}
 	case MASK:
-		Mask(begin_block, end_block);
+		Mask(context.client.GetContext(), begin_block, end_block);
 		break;
 	default:
 		throw InternalException("Invalid SortedBinGroup preparation step");
@@ -2464,7 +2476,7 @@ idx_t SortedBinGroup::ChunkOf(idx_t row) const {
 	return NumericCast<idx_t>(entry - chunk_row_offsets.begin()) - 1;
 }
 
-void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
+void SortedBinGroup::Mask(Context &context, idx_t begin_block, idx_t end_block) {
 	D_ASSERT(collection);
 	D_ASSERT(partition_mask.IsMaskSet());
 
@@ -2493,7 +2505,8 @@ void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
 	auto &scan_cols = input.strategy->sort_ids;
 	const auto chunk_begin = ChunkOf(owned_begin);
 	const auto chunk_end = ChunkOf(owned_end - 1) + 1;
-	WindowDeltaScanner(*collection, chunk_begin, chunk_end, scan_cols, key_count,
+	WindowDeltaScanner(context, *input.partition_distinct_from, *collection, chunk_begin, chunk_end, scan_cols,
+	                   key_count,
 	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
 	                       const SelectionVector &distinct, const SelectionVector &) {
 		                   for (idx_t i = 0; i < ndistinct; i++) {
@@ -2799,7 +2812,7 @@ unique_ptr<SortStrategyInput> IntegerPartitionInput::CreateOverflowInput(ClientC
 	OperatorPartitionInfo unpartitioned_info;
 	auto strategy = SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, no_stats,
 	                                      unpartitioned_info, count);
-	return make_uniq<SortStrategyInput>(partitioned_copy, std::move(strategy));
+	return make_uniq<SortStrategyInput>(context, partitioned_copy, std::move(strategy));
 }
 
 unique_ptr<PartitionedCopyInputGlobalState> IntegerPartitionInput::GetGlobalState(ClientContext &context) const {
@@ -3737,7 +3750,7 @@ unique_ptr<const PartitionedCopyInput> PartitionedCopy::ConstructInput() const {
 	auto strategy =
 	    SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, op.partition_stats,
 	                          unpartitioned_info, op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
-	return make_uniq<SortStrategyInput>(*this, std::move(strategy));
+	return make_uniq<SortStrategyInput>(context, *this, std::move(strategy));
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {

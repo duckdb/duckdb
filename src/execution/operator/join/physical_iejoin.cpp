@@ -21,9 +21,10 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+                               PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                               JoinType join_type, idx_t estimated_cardinality,
+                               unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
                         estimated_cardinality, std::move(pushdown_info)) {
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
@@ -63,12 +64,14 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
 		join_key_types.push_back(cond.GetLHS().GetReturnType());
 	}
+	tail_predicate = CreateTailPredicate(context, conditions, 2);
 }
 
-PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality)
-    : PhysicalIEJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+                               PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                               JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalIEJoin(physical_plan, context, op, left, right, std::move(cond), join_type, estimated_cardinality,
+                     nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -418,7 +421,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), true_sel(STANDARD_VECTOR_SIZE), left_executor(client), right_executor(client),
-	      simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr), right_matches(nullptr)
+	      tail_executor(client), simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr),
+	      right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -463,6 +467,8 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
+		tail_executor.AddExpression(*op.tail_predicate);
+		tail_keys.InitializeEmpty(PhysicalRangeJoin::GetTailTypes(op.conditions, 2));
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -588,6 +594,9 @@ public:
 
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
+
+	ExpressionExecutor tail_executor;
+	DataChunk tail_keys;
 
 	DataChunk unprojected;
 
@@ -842,9 +851,8 @@ void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChu
 const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	auto &op = gsource.op;
 	const auto &conditions = op.conditions;
-	auto sel = FlatVector::IncrementalSelectionVector();
 	if (conditions.size() <= 2) {
-		return sel;
+		return FlatVector::IncrementalSelectionVector();
 	}
 
 	// If there are more expressions to compute,
@@ -856,32 +864,26 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	right_executor.SetChunk(rpayload);
 
 	auto result_count = lpayload.size();
-	auto tail_count = result_count;
-	auto match_sel = &true_sel;
 	left_keys.Reset();
 	right_keys.Reset();
-	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
+	for (idx_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 		auto &left = left_keys.data[cmp_idx];
 		left_executor.ExecuteExpression(cmp_idx, left);
+		tail_keys.data[cmp_idx].Reference(left);
 
 		auto &right = right_keys.data[cmp_idx];
 		right_executor.ExecuteExpression(cmp_idx, right);
-
-		if (tail_count < result_count) {
-			left.Slice(*sel, tail_count);
-			right.Slice(*sel, tail_count);
-		}
-		tail_count =
-		    op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel, tail_count, match_sel);
-		sel = match_sel;
+		tail_keys.data[tail_cols + cmp_idx].Reference(right);
 	}
+	tail_keys.CheckCardinality(result_count);
+	const auto tail_count = tail_executor.SelectExpression(tail_keys, true_sel);
 
 	if (tail_count < result_count) {
-		lpayload.Slice(*sel, tail_count);
-		rpayload.Slice(*sel, tail_count);
+		lpayload.Slice(true_sel, tail_count);
+		rpayload.Slice(true_sel, tail_count);
 	}
 
-	return sel;
+	return &true_sel;
 }
 
 void IEJoinLocalSourceState::MergePayloads(DataChunk &chunk) {
