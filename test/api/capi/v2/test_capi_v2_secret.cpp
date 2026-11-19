@@ -608,8 +608,7 @@ TEST_CASE("V2 secret: a type an extension defines is loaded, not defined by a pr
 	idx_t calls = 0;
 	// mysql belongs to mysql_scanner, which is not loaded
 	auto function = MakeFunction(fx.factory, "mysql", "vault", CreateDemo, &calls, false);
-	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_function_destroy(&function);
 	REQUIRE(RunSql(fx.conn, "SELECT CASE WHEN count(*) > 0 THEN error('mysql was defined') END "
 	                        "FROM duckdb_secret_types() WHERE type = 'mysql'") == DUCKDB_V2_ERROR_NONE);
@@ -637,8 +636,8 @@ TEST_CASE("V2 secret: a looked-up transaction secret can be created again", "[ca
 	set(vended, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo");
 	set(vended, DUCKDB_V2_SECRET_PROPERTY_NAME, "vended");
 	set(vended, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "transaction");
-	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, vended, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
-	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, vended, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_secret_destroy(&vended);
 
 	// The refresh recipe: copy the properties of the old secret, set the refresh options as keys.
@@ -651,9 +650,9 @@ TEST_CASE("V2 secret: a looked-up transaction secret can be created again", "[ca
 	auto copy = [&](bool with_persist_type) {
 		duckdb_v2_secret_handle request = nullptr;
 		REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
-		for (auto property : {DUCKDB_V2_SECRET_PROPERTY_TYPE, DUCKDB_V2_SECRET_PROPERTY_PROVIDER,
-		                      DUCKDB_V2_SECRET_PROPERTY_NAME, DUCKDB_V2_SECRET_PROPERTY_STORAGE,
-		                      DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE}) {
+		for (auto property :
+		     {DUCKDB_V2_SECRET_PROPERTY_TYPE, DUCKDB_V2_SECRET_PROPERTY_PROVIDER, DUCKDB_V2_SECRET_PROPERTY_NAME,
+		      DUCKDB_V2_SECRET_PROPERTY_STORAGE, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE}) {
 			if (property == DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE && !with_persist_type) {
 				continue;
 			}
