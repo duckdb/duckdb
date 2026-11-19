@@ -1,0 +1,82 @@
+# name: test/sql/join/iejoin/iejoin_materialized_cte.test
+# description: A materialized CTE does not stop the range joins of a query from using an IE join
+# group: [iejoin]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output = 'PHYSICAL_ONLY';
+
+statement ok
+SET merge_join_threshold = 0;
+
+statement ok
+CREATE TABLE intervals AS SELECT i AS low, i + 10 AS high FROM range(2000) t(i);
+
+statement ok
+CREATE TABLE points AS SELECT i * 3 AS p FROM range(2000) t(i);
+
+query II
+EXPLAIN SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# the subquery correlates with both sides of the range join, which is planned inside a materialized delim CTE
+query II
+EXPLAIN SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
+WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= points.p) > 1
+----
+physical_plan	<REGEX>:.*__duckdb_delim.*
+
+query II
+EXPLAIN SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
+WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= points.p) > 1
+----
+physical_plan	<!REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+# both the range join and the range join of the subquery
+query II
+EXPLAIN SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
+WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= points.p) > 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*IE_JOIN.*
+
+query I
+SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
+WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= points.p) > 1
+----
+5333
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT 1 AS one)
+SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high, c
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query I
+WITH c AS MATERIALIZED (SELECT 1 AS one)
+SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high, c
+----
+6666
+
+# the recursive part of a recursive CTE runs repeatedly, which the IE join does not support
+query II
+EXPLAIN WITH RECURSIVE r(n) AS (
+	SELECT 0
+	UNION ALL
+	SELECT n + 1 FROM r JOIN intervals ON n >= low AND n < high WHERE n < 3
+)
+SELECT count(*) FROM r
+----
+physical_plan	<!REGEX>:.*IE_JOIN.*
+
+query I
+WITH RECURSIVE r(n) AS (
+	SELECT 0
+	UNION ALL
+	SELECT n + 1 FROM r JOIN intervals ON n >= low AND n < high WHERE n < 3
+)
+SELECT count(*) FROM r
+----
+10
