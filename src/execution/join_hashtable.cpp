@@ -309,7 +309,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	// the initial entry of every row
 	PrefetchAndLoadEntries(ht, entries.get(), hashes_dense, count, dense_entries);
 
-	// pointers and ht offsets go to their row index, so rows outside the selection keep theirs
+	// pointers and probe steps go to their row index, so rows outside the selection keep theirs
 	const auto pointers_result = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
 	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
 	const auto is_match = FlatVector::GetDataMutable<bool>(state.is_match_v);
@@ -321,7 +321,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 		CheckEntry<USE_SALTS>(entry, hashes_dense[i], is_match[i], needs_next[i]);
 	}
 
-	// rows to probe further, 8 rows per step
+	// the rows whose initial entry holds another salt
 	idx_t need_additional_probe_n = SelectionVector::SelectFromBoolean(
 	    needs_next, nullptr, count, array_ptr<sel_t>(state.rows_to_probe_sel.data(), STANDARD_VECTOR_SIZE));
 
@@ -346,7 +346,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 			state.rows_found_sel.AppendIf(found_count, dense_index, row_is_match);
 			state.rows_to_probe_sel.AppendIf(next_probe_count, dense_index, row_needs_next);
 		}
-		// only the rows that found their entry in this round need its pointer and ht offset
+		// only the rows that found their entry in this round need its pointer and probe steps
 		for (idx_t i = 0; i < found_count; i++) {
 			const auto dense_index = state.rows_found_sel.get_index(i);
 			const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, dense_index);
@@ -406,7 +406,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    Vector &hashes_v, optional_ptr<const SelectionVector> row_sel, idx_t &count,
                                    JoinHashTable &ht, unsafe_optional_ptr<ht_entry_t> entries,
                                    Vector &pointers_result_v, SelectionVector &match_sel, bool has_row_sel) {
-	// Densify original hashes, mapping resident buckets once. Retries below already contain offsets and salt.
+	// Densify the original hashes into salt and initial ht offset. Retries rebuild them from the probe steps.
 	const auto input_count = count;
 	const auto bucket_shift = ht.GetBucketShift();
 	const auto bitmask = ht.bitmask;
