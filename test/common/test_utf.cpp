@@ -32,6 +32,8 @@ TEST_CASE("UTF8 error checking", "[utf8]") {
 	REQUIRE_THROWS(a.SetValue(0, Value("\xfc\xa1\xa1\xa1\xa1\xa1")));
 }
 
+// InternalException aborts instead of throwing when DUCKDB_CRASH_ON_ASSERT is set.
+#ifndef DUCKDB_CRASH_ON_ASSERT
 TEST_CASE("UTF8 verification errors escape invalid bytes", "[utf8]") {
 	const string invalid = "prefix\xff\xfe";
 	try {
@@ -44,3 +46,4 @@ TEST_CASE("UTF8 verification errors escape invalid bytes", "[utf8]") {
 		REQUIRE_NOTHROW(string_t(error.Message()).ForceVerify());
 	}
 }
+#endif
