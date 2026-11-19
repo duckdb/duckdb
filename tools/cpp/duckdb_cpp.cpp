@@ -1221,6 +1221,44 @@ auto Connection::GetQueryProgress() const -> Connection::QueryProgress {
 	return progress;
 }
 
+namespace {
+// Collects the text a text sink delivers
+void CollectText(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *err) {
+	WithExceptionGuard(err, [&] {
+		if (text && text_length) {
+			static_cast<std::string *>(user_data)->append(text, text_length);
+		}
+	});
+}
+} // namespace
+
+auto Connection::GetCurrentCatalog() const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_current_catalog, handle(), CollectText, &out);
+	return out;
+}
+
+auto Connection::GetCurrentSchema() const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_current_schema, handle(), CollectText, &out);
+	return out;
+}
+
+auto Connection::SetCurrentCatalog(std::string_view catalog) -> void {
+	CheckedAPICall(duckdb_v2_connection_set_current_catalog, handle(), catalog.data(), catalog.size());
+}
+
+auto Connection::SetCurrentSchema(std::string_view schema) -> void {
+	CheckedAPICall(duckdb_v2_connection_set_current_schema, handle(), schema.data(), schema.size());
+}
+
+auto Connection::GetProfilingInformation(std::string_view format) const -> std::string {
+	std::string out;
+	CheckedAPICall(duckdb_v2_connection_get_profiling_information, handle(), format.data(), format.size(), CollectText,
+	               &out);
+	return out;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Context
 //----------------------------------------------------------------------------------------------------------------------

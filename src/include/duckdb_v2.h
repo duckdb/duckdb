@@ -2031,6 +2031,128 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connect
                                                                duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reads the name of the connection's current default catalog.
+ *
+ * This is the catalog unqualified DDL goes to and the one `USE` selects; for a connection that never chose one it is
+ * the instance's default database. The name is delivered through `sink` rather than returned, so nothing allocates a
+ * buffer the caller has to free.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param sink Receives the catalog name in a single call. Borrowed for the duration of that call; see text_sink for the
+ * full contract.
+ * @param user_data Opaque pointer passed through to sink untouched. May be NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_current_catalog(duckdb_v2_connection_handle conn,
+                                                                      duckdb_v2_text_sink_fn sink, void *user_data,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reads the name of the connection's current default schema.
+ *
+ * This is the schema unqualified names resolve to first, `main` unless the connection chose another. The name is
+ * delivered through `sink` rather than returned, so nothing allocates a buffer the caller has to free.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param sink Receives the schema name in a single call. Borrowed for the duration of that call; see text_sink for the
+ * full contract.
+ * @param user_data Opaque pointer passed through to sink untouched. May be NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_current_schema(duckdb_v2_connection_handle conn,
+                                                                     duckdb_v2_text_sink_fn sink, void *user_data,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Makes a catalog the connection's current default catalog.
+ *
+ * Like SQL `USE catalog`: the current schema becomes that catalog's default schema. Affects this connection only. Fails
+ * when no such catalog is attached.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param catalog The name of an attached catalog, as a single identifier.
+ * @param catalog_length The length of `catalog` in bytes. `catalog` need not be null-terminated and may be NULL only
+ * when this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_current_catalog(duckdb_v2_connection_handle conn,
+                                                                      const char *catalog, idx_t catalog_length,
+                                                                      duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Makes a schema the connection's current default schema.
+ *
+ * Like SQL `SET schema = name`: the catalog stays as it was. Affects this connection only.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param schema The schema name, as a single identifier.
+ * @param schema_length The length of `schema` in bytes. `schema` need not be null-terminated and may be NULL only when
+ * this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_current_schema(duckdb_v2_connection_handle conn,
+                                                                     const char *schema, idx_t schema_length,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Renders the profiling output of the connection's last query.
+ *
+ * The output is only populated while profiling is enabled, via the `enable_profiling` setting. The format is one of the
+ * profiler's format names, such as `json`, `text`, `html`, `graphviz` or `mermaid`; an empty format selects the
+ * default.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param format The profiler format name, such as `json`, `text`, `html`, `graphviz` or `mermaid`; empty selects the
+ * default.
+ * @param format_length The length of `format` in bytes. `format` need not be null-terminated and may be NULL only when
+ * this is 0.
+ * @param sink Receives the profiling output in a single call. Borrowed for the duration of that call; see text_sink for
+ * the full contract.
+ * @param user_data Opaque pointer passed through to sink untouched. May be NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_profiling_information(duckdb_v2_connection_handle conn,
+                                                                            const char *format, idx_t format_length,
+                                                                            duckdb_v2_text_sink_fn sink,
+                                                                            void *user_data,
+                                                                            duckdb_v2_error_info_handle *err);
+#endif
+
 /* --- Struct definitions for connection --- */
 
 /* ============================================================================

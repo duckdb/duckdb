@@ -115,3 +115,156 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
+  connection_get_current_catalog:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Reads the name of the connection's current default catalog.
+
+      This is the catalog unqualified DDL goes to and the one `USE` selects; for a
+      connection that never chose one it is the instance's default database. The
+      name is delivered through `sink` rather than returned, so nothing allocates a
+      buffer the caller has to free.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      sink:
+        type: text_sink
+        description: Receives the catalog name in a single call. Borrowed for the duration of that call; see text_sink for the full contract.
+      user_data:
+        type: void
+        indirection: 1
+        description: Opaque pointer passed through to sink untouched. May be NULL.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_get_current_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Reads the name of the connection's current default schema.
+
+      This is the schema unqualified names resolve to first, `main` unless the
+      connection chose another. The name is delivered through `sink` rather than
+      returned, so nothing allocates a buffer the caller has to free.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      sink:
+        type: text_sink
+        description: Receives the schema name in a single call. Borrowed for the duration of that call; see text_sink for the full contract.
+      user_data:
+        type: void
+        indirection: 1
+        description: Opaque pointer passed through to sink untouched. May be NULL.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_set_current_catalog:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Makes a catalog the connection's current default catalog.
+
+      Like SQL `USE catalog`: the current schema becomes that catalog's default
+      schema. Affects this connection only. Fails when no such catalog is attached.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      catalog:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name of an attached catalog, as a single identifier.
+      catalog_length:
+        type: idx
+        description: The length of `catalog` in bytes. `catalog` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_set_current_schema:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Makes a schema the connection's current default schema.
+
+      Like SQL `SET schema = name`: the catalog stays as it was. Affects this
+      connection only.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      schema:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The schema name, as a single identifier.
+      schema_length:
+        type: idx
+        description: The length of `schema` in bytes. `schema` need not be null-terminated and may be NULL only when this is 0.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  connection_get_profiling_information:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-19" ]
+    description: |
+      Renders the profiling output of the connection's last query.
+
+      The output is only populated while profiling is enabled, via the
+      `enable_profiling` setting. The format is one of the profiler's format names,
+      such as `json`, `text`, `html`, `graphviz` or `mermaid`; an empty format
+      selects the default.
+    role: method
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection."
+      format:
+        type: char
+        indirection: 1
+        const: true
+        kind: IN
+        description: The profiler format name, such as `json`, `text`, `html`, `graphviz` or `mermaid`; empty selects the default.
+      format_length:
+        type: idx
+        description: The length of `format` in bytes. `format` need not be null-terminated and may be NULL only when this is 0.
+      sink:
+        type: text_sink
+        description: Receives the profiling output in a single call. Borrowed for the duration of that call; see text_sink for the full contract.
+      user_data:
+        type: void
+        indirection: 1
+        description: Opaque pointer passed through to sink untouched. May be NULL.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR

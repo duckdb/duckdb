@@ -1116,6 +1116,28 @@ public:
 	/// Reads how far the running query has come. Callable from any thread.
 	auto GetQueryProgress() const -> QueryProgress;
 
+	/// The connection's current default catalog: where unqualified DDL goes, and what `USE` selects. For a connection
+	/// that never chose one, the instance's default database.
+	auto GetCurrentCatalog() const -> std::string;
+
+	/// The connection's current default schema, `main` unless the connection chose another.
+	auto GetCurrentSchema() const -> std::string;
+
+	/// Makes `catalog` the current default catalog and its default schema the current schema, like SQL `USE catalog`.
+	/// Affects this connection only.
+	/// @throws Exception When no such catalog is attached.
+	auto SetCurrentCatalog(std::string_view catalog) -> void;
+
+	/// Makes `schema` the current default schema, keeping the catalog, like SQL `SET schema = name`. Affects this
+	/// connection only.
+	auto SetCurrentSchema(std::string_view schema) -> void;
+
+	/// Renders the profiling output of the last query. Only populated while profiling is enabled with the
+	/// `enable_profiling` setting.
+	/// @param format The profiler format name, such as "json", "text", "html", "graphviz" or "mermaid"; empty for the
+	/// default.
+	auto GetProfilingInformation(std::string_view format = {}) const -> std::string;
+
 	/// Wraps a connection handle owned by someone else.
 	/// @param opaque The borrowed handle; must be a connection handle of the DuckDB C API.
 	/// @return A non-owning `Connection`: it must not outlive the handle, and it will not disconnect on destruction.
