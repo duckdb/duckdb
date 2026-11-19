@@ -155,17 +155,34 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #endif
 }
 
-ClientContext::~ClientContext() {
-	if (Exception::UncaughtException()) {
+void ClientContext::RollbackActiveTransaction() {
+	if (!transaction.HasActiveTransaction()) {
 		return;
 	}
-	// destroy the client context and rollback if there is an active transaction
-	// but only if we are not destroying this client context as part of an exception stack unwind
+	// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
 	try {
-		Destroy();
-	} catch (...) {
-		// a destructor cannot throw, and ending the active query allocates
+		transaction.Rollback(nullptr);
+	} catch (std::exception &ex) {
+		// building the error message allocates
+		try {
+			ErrorData data(ex);
+			DUCKDB_LOG_ERROR(*this, "ClientContext::RollbackActiveTransaction()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
+	} catch (...) { // NOLINT
 	}
+}
+
+ClientContext::~ClientContext() {
+	// no clean-up while unwinding an exception stack, but the transaction must not outlive the connection
+	if (!Exception::UncaughtException()) {
+		try {
+			Destroy();
+		} catch (...) {
+			// a destructor cannot throw, and ending the active query allocates
+		}
+	}
+	RollbackActiveTransaction();
 }
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
@@ -219,16 +236,7 @@ void ClientContext::Destroy() {
 	// the destructor runs this when the heap may be exhausted: lock on the stack, so the tasks of an active query are
 	// still drained before their executor goes away
 	ClientContextLock lock(context_lock);
-	if (transaction.HasActiveTransaction()) {
-		transaction.ResetActiveQuery();
-		if (!transaction.IsAutoCommit()) {
-			// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
-			try {
-				transaction.Rollback(nullptr);
-			} catch (...) { // NOLINT
-			}
-		}
-	}
+	transaction.ResetActiveQuery();
 	CleanupInternal(lock);
 }
 

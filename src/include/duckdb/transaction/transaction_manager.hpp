@@ -19,6 +19,8 @@ namespace duckdb {
 
 class AttachedDatabase;
 class ClientContext;
+class Context;
+class MetaTransaction;
 class Catalog;
 struct ClientLockWrapper;
 class DatabaseInstance;
@@ -31,12 +33,12 @@ public:
 	explicit TransactionManager(AttachedDatabase &db);
 	virtual ~TransactionManager();
 
-	//! Start a new transaction
-	virtual Transaction &StartTransaction(ClientContext &context) = 0;
+	//! Start a new transaction as part of the given meta transaction
+	virtual Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) = 0;
 	//! Commit the given transaction. Returns a non-empty error message on failure.
 	virtual ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) = 0;
 	//! Rollback the given transaction
-	virtual void RollbackTransaction(Transaction &transaction) = 0;
+	virtual void RollbackTransaction(ClientContext &context, Transaction &transaction) = 0;
 
 	virtual void Checkpoint(ClientContext &context, bool force = false) = 0;
 
