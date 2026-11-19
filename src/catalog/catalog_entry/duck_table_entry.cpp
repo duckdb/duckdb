@@ -101,27 +101,28 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 
 	// The constraints keep their backing index OIDs.
-	constraint_indexes.resize(constraints.size());
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto &constraint = *constraints[i];
+	for (auto &constraint_ptr : constraints) {
+		auto &constraint = *constraint_ptr;
 		if (!constraint.NeedsBackingIndex()) {
 			continue;
 		}
 		auto index_oid = constraint.GetBackingIndexOid();
+		shared_ptr<IndexEntry> index_entry;
 		for (auto &index : parent.constraint_indexes) {
-			if (index && index->GetIndexOid() == index_oid) {
-				constraint_indexes[i] = index;
+			if (index->GetIndexOid() == index_oid) {
+				index_entry = index;
 				break;
 			}
 		}
-		if (!constraint_indexes[i]) {
+		if (!index_entry) {
 			// ALTER TABLE added this constraint: its index is still being built
 			auto check_mode = ConstraintCheckMode::DEFAULT;
 			if (constraint.type == ConstraintType::UNIQUE) {
 				check_mode = constraint.Cast<UniqueConstraint>().check_mode;
 			}
-			constraint_indexes[i] = make_shared_ptr<IndexEntry>(index_oid, check_mode);
+			index_entry = make_shared_ptr<IndexEntry>(index_oid, check_mode);
 		}
+		constraint_indexes.push_back(std::move(index_entry));
 	}
 }
 
@@ -157,7 +158,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	                                     schema.GetSchemaPath(), name, std::move(column_defs), std::move(info.data));
 
 	// Create the unique indexes for the UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints.
-	constraint_indexes.resize(constraints.size());
 	idx_t indexes_idx = 0;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &constraint = constraints[i];
@@ -174,8 +174,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				constraint_indexes[i] = storage->AddIndex(columns, column_indexes, constraint_type,
-				                                          std::move(index_info), index_oid, unique.check_mode);
+				constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, constraint_type,
+				                                               std::move(index_info), index_oid, unique.check_mode));
 				continue;
 			}
 
@@ -186,8 +186,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			constraint_indexes[i] = storage->AddIndex(columns, column_indexes, constraint_type,
-			                                          std::move(index_storage_info), index_oid, unique.check_mode);
+			constraint_indexes.push_back(storage->AddIndex(
+			    columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid, unique.check_mode));
 			continue;
 		}
 
@@ -207,9 +207,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					constraint_indexes[i] =
-					    storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
-					                      ConstraintCheckMode::DEFAULT);
+					constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, constraint_type,
+					                                               std::move(index_info), index_oid,
+					                                               ConstraintCheckMode::DEFAULT));
 					continue;
 				}
 
@@ -220,9 +220,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					index_storage_info.name = name_info.name;
 				}
 
-				constraint_indexes[i] =
-				    storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN,
-				                      std::move(index_storage_info), index_oid, ConstraintCheckMode::DEFAULT);
+				constraint_indexes.push_back(storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN,
+				                                               std::move(index_storage_info), index_oid,
+				                                               ConstraintCheckMode::DEFAULT));
 			}
 		}
 	}
@@ -1395,9 +1395,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 vector<shared_ptr<IndexEntry>> DuckTableEntry::GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const {
 	vector<shared_ptr<IndexEntry>> result;
 	for (auto &index : constraint_indexes) {
-		if (!index) {
-			continue;
-		}
 		auto &prev_indexes = prev_table.constraint_indexes;
 		if (std::find(prev_indexes.begin(), prev_indexes.end(), index) == prev_indexes.end()) {
 			result.push_back(index);
@@ -1415,21 +1412,8 @@ shared_ptr<IndexEntry> DuckTableEntry::GetAddedConstraintIndex(const DuckTableEn
 	return added_indexes[0];
 }
 
-shared_ptr<IndexEntry> DuckTableEntry::GetConstraintIndex(idx_t constraint_idx) const {
-	D_ASSERT(constraint_idx < constraint_indexes.size());
-	return constraint_indexes[constraint_idx];
-}
-
-vector<shared_ptr<IndexEntry>> DuckTableEntry::GetConstraintIndexes() const {
-	vector<shared_ptr<IndexEntry>> result;
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		if (!constraints[i]->NeedsBackingIndex()) {
-			continue;
-		}
-		D_ASSERT(constraint_indexes[i]);
-		result.push_back(constraint_indexes[i]);
-	}
-	return result;
+const vector<shared_ptr<IndexEntry>> &DuckTableEntry::GetConstraintIndexes() const {
+	return constraint_indexes;
 }
 
 vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(CatalogTransaction transaction) const {

@@ -59,10 +59,8 @@ public:
 	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
 	//! Returns the index of the one constraint that ALTER TABLE added to prev_table.
 	shared_ptr<IndexEntry> GetAddedConstraintIndex(const DuckTableEntry &prev_table) const;
-	//! Returns the index that backs the constraint at the given position, or nullptr if it has no index.
-	shared_ptr<IndexEntry> GetConstraintIndex(idx_t constraint_idx) const;
 	//! Returns the indexes that back the constraints of this table, in constraint order.
-	vector<shared_ptr<IndexEntry>> GetConstraintIndexes() const;
+	const vector<shared_ptr<IndexEntry>> &GetConstraintIndexes() const;
 	//! Returns the indexes of this table as the transaction sees them: the indexes of the constraints, in constraint
 	//! order, followed by the indexes of the index catalog entries on this table that the transaction sees.
 	//! The table can maintain more indexes than these, e.g. of uncommitted transactions.
@@ -129,7 +127,7 @@ protected:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
-	//! The indexes that back the constraints, by constraint position (nullptr for a constraint without index)
+	//! The indexes that back the constraints, in constraint order
 	vector<shared_ptr<IndexEntry>> constraint_indexes;
 	//! The catalog set holding triggers for this table
 	shared_ptr<CatalogSet> triggers;
