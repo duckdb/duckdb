@@ -183,21 +183,18 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 }
 
 void TableIndexList::RemoveIndex(IndexEntry &index_entry) {
-	{
-		annotated_lock_guard lock(index_entries_lock);
-		for (idx_t i = 0; i < index_entries.size(); i++) {
-			auto &entry = index_entries[i];
-			if (entry.get() != &index_entry) {
-				continue;
-			}
-			if (entry->GetBindState() != IndexBindState::BOUND) {
-				unbound_count--;
-			}
-			index_entries.erase_at(i);
-			break;
+	annotated_lock_guard lock(index_entries_lock);
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		auto &entry = index_entries[i];
+		if (entry.get() != &index_entry) {
+			continue;
 		}
+		if (entry->GetBindState() != IndexBindState::BOUND) {
+			unbound_count--;
+		}
+		index_entries.erase_at(i);
+		break;
 	}
-	index_entry.Retire();
 }
 
 bool TableIndexList::HasUniqueIndexes() const {

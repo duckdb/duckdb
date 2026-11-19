@@ -144,8 +144,8 @@ public:
 	string GetIndexType() const;
 	//! Returns whether an unbound index has buffered WAL operations.
 	bool HasBufferedReplays() const;
-	//! Destroys the physical index, if any. The catalog entry of a dropped index holds the retired entry until it is
-	//! cleaned up.
+	//! Destroys the physical index, if any. The physical index of a dropped index is destroyed when its catalog entry
+	//! is cleaned up: until then, the transactions that still see the catalog entry can use it.
 	void Retire();
 	//! Binds the unbound physical index without replacing it (nullptr for skipped mismatched keys).
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types,

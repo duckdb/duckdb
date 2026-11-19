@@ -1388,6 +1388,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	auto &prev_indexes = prev_table.GetStorage().GetDataTableInfo()->GetIndexes();
 	for (auto &index : GetAddedConstraintIndexes(prev_table)) {
 		prev_indexes.RemoveIndex(*index);
+		index->Retire();
 	}
 }
 

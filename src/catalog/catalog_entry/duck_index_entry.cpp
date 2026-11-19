@@ -12,6 +12,10 @@ IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, shared_
     : info(std::move(info_p)), index(std::move(index_p)) {
 }
 
+IndexDataTableInfo::~IndexDataTableInfo() {
+	index->Retire();
+}
+
 void DuckIndexEntry::Rollback(CatalogEntry &prev_entry) {
 	if (prev_entry.oid == oid) {
 		// an altered copy, e.g. by COMMENT ON INDEX, keeps the index of the entry it replaces

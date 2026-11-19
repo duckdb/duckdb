@@ -234,10 +234,6 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 	const auto index_entry = path.constraint_type == IndexConstraintType::NONE
 	                             ? FindUserIndex(context, table_entry, path.index_name, qualified_table)
 	                             : FindConstraintIndex(*duck_table, path, qualified_table);
-	if (index_entry->GetBindState() == IndexBindState::RETIRED) {
-		// a later transaction dropped the index
-		throw CatalogException("index_key: no index found in storage on table %s", qualified_table);
-	}
 	const auto index = index_entry->GetReadHandle<BoundIndex>();
 
 	const auto &index_type = index->GetIndexType();

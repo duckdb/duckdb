@@ -66,6 +66,9 @@ public:
 	//! Returns the indexes of this table as the transaction sees them: the indexes of the constraints, in constraint
 	//! order, followed by the indexes of the index catalog entries on this table that the transaction sees.
 	//! The table can maintain more indexes than these, e.g. of uncommitted transactions.
+	//! An index that a later transaction dropped stays usable for this transaction, but is no longer maintained.
+	//! An index of a not yet loaded extension is unbound, and an index that this transaction is still building is
+	//! pending (see IndexEntry::GetBindState).
 	vector<shared_ptr<IndexEntry>> GetIndexes(CatalogTransaction transaction) const;
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;

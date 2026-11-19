@@ -43,9 +43,9 @@ public:
 public:
 	//! Register an on-disk block to mark as modified during FinalizeCommit.
 	void DropBlock(block_id_t block_id);
-	//! Register an index to be removed from a table's index list during FinalizeCommit. Index removal will drop in
-	//! memory index data and also marks all blocks on disk as free blocks allowing for reclamation. Block marking for
-	//! indexes is handled implicitly along destruction paths for index memory.
+	//! Register an index to be removed from a table's index list during FinalizeCommit: the table no longer
+	//! maintains it. The index memory is dropped and its blocks on disk are marked as free when the catalog entry of
+	//! the index is cleaned up.
 	void RemoveIndex(shared_ptr<IndexDataTableInfo> index_info);
 	//! Finalize accumulated block marks and index removals.
 	void FinalizeCommit();
