@@ -31,6 +31,8 @@ CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemW
       caching_handle(std::move(handle)) {
 	D_ASSERT(!flags.OpenForWriting());
 	D_ASSERT(!flags.OpenForAppending());
+	// only the reads from storage count, and the cache makes those on its own handle on a miss
+	track_io = false;
 }
 
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {

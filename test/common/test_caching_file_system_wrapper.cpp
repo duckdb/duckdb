@@ -4,7 +4,12 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_file_opener.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
@@ -208,6 +213,42 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 	REQUIRE_THROWS_WITH(
 	    caching_wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE),
 	    Catch::Contains("Cannot open file for writing"));
+}
+
+TEST_CASE("CachingFileSystemWrapper counts only the reads from storage as bytes read", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content(10000, 'x');
+	TestFileGuard test_file("test_caching_bytes_read.txt", test_content);
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	// opened with a client opener, the cache reads from storage for the client, which counts the bytes it reads
+	ClientContextFileOpener opener(con.context->GetContext());
+	auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ, &opener);
+	const QueryContext context(*con.context);
+	auto &metrics = con.context->GetContext().GetQueryProfiler().GetQueryMetrics();
+	string buffer(test_content.size(), '\0');
+
+	// a miss reads the file from storage once, and counts it once
+	const idx_t before_miss = metrics.bytes_read;
+	handle->Read(context, &buffer[0], test_content.size(), /*location=*/0);
+	REQUIRE(buffer == test_content);
+	REQUIRE(tracking_fs->GetReadCount(test_file.GetPath(), 0, test_content.size()) == 1);
+	REQUIRE(metrics.bytes_read - before_miss == test_content.size());
+
+	// a hit reads nothing from storage
+	const idx_t before_hit = metrics.bytes_read;
+	handle->Read(context, &buffer[0], test_content.size(), /*location=*/0);
+	REQUIRE(buffer == test_content);
+	REQUIRE(tracking_fs->GetReadCount(test_file.GetPath(), 0, test_content.size()) == 1);
+	REQUIRE(metrics.bytes_read == before_hit);
 }
 
 TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
