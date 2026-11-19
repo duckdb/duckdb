@@ -23,6 +23,7 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
 unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 	ScalarFunctionSet set {GetFunctionName()};
 	set.functions = functions.functions;
+	set.MergeLanguageDeclaration(functions);
 	auto result = make_uniq<CreateScalarFunctionInfo>(std::move(set));
 	CopyFunctionProperties(*result);
 	return std::move(result);
