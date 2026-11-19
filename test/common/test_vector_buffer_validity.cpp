@@ -90,7 +90,7 @@ TEST_CASE("Buffer slices retain their payload after the source is destroyed", "[
 			INFO(value.type().ToString());
 			INFO(mode);
 			Vector result(value.type());
-			shared_ptr<bool> destroyed;
+			duckdb::shared_ptr<bool> destroyed;
 			{
 				Vector source(value.type(), 3);
 				source.Append(Value(value.type()));

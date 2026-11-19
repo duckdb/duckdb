@@ -186,7 +186,7 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		column.Dictionary(entry, original, 3);
 	}
 	output.Slice(input, select, 2);
-	shared_ptr<bool> destroyed;
+	duckdb::shared_ptr<bool> destroyed;
 	for (idx_t iteration = 0; iteration < 3; iteration++) {
 		destroyed = ObserveVectorBufferDestruction(output.data[0]);
 		output.Reset();
