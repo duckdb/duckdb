@@ -258,7 +258,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"greatest_common_divisor", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"group_concat", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"hamming", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"hash", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"hex", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"histogram", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"histogram_exact", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},

@@ -21,6 +21,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/perfect_hash_join_table.hpp"
 #include "duckdb/parallel/sharded_counter.hpp"
@@ -291,6 +292,8 @@ public:
 		Vector hashes;
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
+		//! Executes the hash table's hash expression over the probe keys
+		unique_ptr<ExpressionExecutor> hash_executor;
 		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
 		unique_ptr<ProbeDictionaryState> dict_state;
 	};
@@ -422,6 +425,13 @@ public:
 	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
+	//! "hash(#0, #1, ...)" over the equality keys
+	unique_ptr<Expression> hash_expression;
+	//! "hash(#i)" for every equality key i, for the per-key-column filters
+	vector<unique_ptr<Expression>> key_hash_expressions;
+	//! Executors of the build side, which is thread-local
+	unique_ptr<ExpressionExecutor> build_hash_executor;
+	unique_ptr<ExpressionExecutor> build_key_hash_executor;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
@@ -530,7 +540,8 @@ private:
 
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	//! Hash all rows of the equality keys, creating the executor if it does not exist yet
+	void Hash(DataChunk &keys, unique_ptr<ExpressionExecutor> &executor, Vector &hashes) const;
 
 	bool TryProbePerfectHashTable(ScanStructure &scan_structure, DataChunk &keys);
 	bool CanUsePerfectDictionaryLookup() const;
@@ -816,6 +827,7 @@ private:
 		explicit KeyFilterBuildScratch(JoinHashTable &ht);
 		DataChunk keys;
 		Vector hashes;
+		ExpressionExecutor key_hash_executor;
 	};
 	//! Gathers one key column of a chunk of materialized rows
 	void GatherKeyColumn(TupleDataChunkState &chunk_state, idx_t count, idx_t key_idx, Vector &result);

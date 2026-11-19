@@ -1,4 +1,5 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/planner/expression/bound_hash_expression.hpp"
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -76,6 +77,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	layout_ptr = std::move(layout);
 
 	hash_offset = layout_ptr->GetOffsets()[layout_ptr->ColumnCount() - 1];
+	auto group_types = layout_ptr->GetTypes();
+	group_types.pop_back();
+	if (!group_types.empty()) {
+		hash_expression = BoundHashExpression::CreateOnColumns(context, group_types);
+	}
 
 	// Partitioned data and pointer table
 	InitializePartitionedData();
@@ -93,6 +99,15 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 
 	state.partitioned_append_state.compute_reverse_partition_sel = true;
 	state.unpartitioned_append_state.compute_reverse_partition_sel = true;
+}
+
+void GroupedAggregateHashTable::HashGroups(DataChunk &groups, AggregateHTProbeState &probe_state,
+                                           Vector &hashes) const {
+	D_ASSERT(hash_expression);
+	if (!probe_state.hash_executor) {
+		probe_state.hash_executor = make_uniq<ExpressionExecutor>(context, *hash_expression);
+	}
+	BoundHashExpression::Execute(*probe_state.hash_executor, groups, hashes);
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
@@ -449,7 +464,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	}
 
 	adaptivity.AddInput(groups.size());
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
 	before_update(state.addresses, state.new_groups, new_group_count);
 	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
@@ -471,7 +486,7 @@ idx_t GroupedAggregateHashTable::AddChunkAndGetNewGroups(DataChunk &groups, Data
 	}
 
 	adaptivity.AddInput(groups.size());
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
 	auto source_addresses = FlatVector::GetData<data_ptr_t>(state.addresses);
 	auto target_addresses = FlatVector::GetDataMutable<data_ptr_t>(new_group_addresses);
@@ -568,7 +583,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		unique_values.CheckCardinality(unique_count);
 		// now we know which entries we are going to add - hash them
 		auto &hashes = dict_state.hashes;
-		unique_values.Hash(hashes);
+		HashGroups(unique_values, state, hashes);
 
 		// add the dictionary groups to the hash table
 		new_group_count = FindOrCreateGroups(unique_values, hashes, new_dictionary_pointers, state.new_groups);
@@ -640,7 +655,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	groups.SetChildCardinality(row_count);
 
 	auto &hashes = dict_state.hashes;
-	unique_values.Hash(hashes);
+	HashGroups(unique_values, state, hashes);
 
 	// add the single constant group to the hash table
 	auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
@@ -694,7 +709,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		return result.GetIndex();
 	}
 	// otherwise append the raw values
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 
 	return AddChunk(groups, state.hashes, payload, filter);
 }
@@ -1061,7 +1076,7 @@ void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &ad
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses_out,
                                                     SelectionVector &new_groups_out) {
-	groups.Hash(state.hashes);
+	HashGroups(groups, state, state.hashes);
 	return FindOrCreateGroups(groups, state.hashes, addresses_out, new_groups_out);
 }
 
@@ -1092,7 +1107,7 @@ idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLook
 	}
 	InitializeLookupState(lookup_state);
 
-	groups.Hash(lookup_state.hashes);
+	HashGroups(groups, lookup_state, lookup_state.hashes);
 	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		lookup_state.group_chunk.data[group_idx].Reference(groups.data[group_idx]);
 	}

@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
@@ -2586,6 +2587,7 @@ public:
 	unique_ptr<IntegerPartitionedTupleData> partitions;
 	PartitionedTupleDataAppendState append_state;
 	//! The key hashes feeding the partition count estimate
+	unique_ptr<ChunkHasher> key_hasher;
 	DataChunk hashes;
 	optional_ptr<ParallelHyperLogLogLocalState> hll;
 };
@@ -2827,6 +2829,8 @@ IntegerPartitionInput::GetLocalState(ExecutionContext &context, PartitionedCopyI
 	auto result = make_uniq<IntegerPartitionInputLocalState>();
 	result->partitions = CreatePartitions(context.client);
 	result->partitions->InitializeAppendState(result->append_state);
+	result->key_hasher =
+	    make_uniq<ChunkHasher>(context.client, partitioned_copy.op.expected_types, vector<idx_t> {key_col});
 	result->hashes.Initialize(Allocator::Get(context.client), {LogicalType::HASH});
 	result->hll = hll;
 	return std::move(result);
@@ -2840,7 +2844,7 @@ void IntegerPartitionInput::Sink(ExecutionContext &context, DataChunk &chunk, Pa
 	// the flush heuristic estimates the number of partitions from key hashes
 	auto &hashes = lstate.hashes;
 	hashes.Reset();
-	VectorOperations::Hash(chunk.data[key_col], hashes.data[0], chunk.size());
+	lstate.key_hasher->Hash(chunk, hashes.data[0]);
 	hashes.CheckCardinality(chunk.size());
 	lstate.hll->Update(hashes.data[0]);
 }

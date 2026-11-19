@@ -57,5 +57,13 @@
         "description": "Invokes a lambda function with the given arguments",
         "example": "invoke(x -> x + 1, 5)",
         "type": "scalar_function"
+    },
+    {
+        "name": "hash",
+        "parameters": "value",
+        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.",
+        "example": "hash('\uD83E\uDD86')",
+        "categories": ["string"],
+        "type": "scalar_function"
     }
 ]

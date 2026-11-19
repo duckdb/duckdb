@@ -1,6 +1,7 @@
 #include <new>
 
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/planner/expression/bound_hash_expression.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -126,6 +127,10 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
+	hash_expression = BoundHashExpression::CreateOnColumns(context, equality_types);
+	for (idx_t key_idx = 0; key_idx < equality_types.size(); key_idx++) {
+		key_hash_expressions.push_back(BoundHashExpression::CreateOnColumns(context, equality_types, {key_idx}));
+	}
 
 	if (join_type == JoinType::SINGLE) {
 		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
@@ -442,7 +447,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	}
 	auto &hashes = precomputed_hashes ? *precomputed_hashes : state.hashes;
 	if (!precomputed_hashes) {
-		Hash(keys, sel ? *sel : *FlatVector::IncrementalSelectionVector(), count, hashes);
+		Hash(keys, state.hash_executor, hashes);
 	}
 	auto entries = GetEntries();
 	if (UseSalt()) {
@@ -454,20 +459,12 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	}
 }
 
-void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes) {
-	if (count == keys.size()) {
-		// no null values are filtered: use regular hash functions
-		VectorOperations::Hash(keys.data[0], hashes, count);
-		for (idx_t i = 1; i < equality_types.size(); i++) {
-			VectorOperations::CombineHash(hashes, keys.data[i], count);
-		}
-	} else {
-		// null values were filtered: use selection vector
-		VectorOperations::Hash(keys.data[0], hashes, sel, count);
-		for (idx_t i = 1; i < equality_types.size(); i++) {
-			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
-		}
+void JoinHashTable::Hash(DataChunk &keys, unique_ptr<ExpressionExecutor> &executor, Vector &hashes) const {
+	// rows that are filtered out (e.g., NULL keys) are hashed too, their hashes are not read
+	if (!executor) {
+		executor = make_uniq<ExpressionExecutor>(context, *hash_expression);
 	}
+	BoundHashExpression::Execute(*executor, keys, hashes);
 }
 
 static idx_t FilterNullValues(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
@@ -789,7 +786,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Hash(keys, *current_sel, added_count, hash_values);
+	Hash(keys, build_hash_executor, hash_values);
 	if (!bloom_filters.empty() && HasSingleEqualityKey()) {
 		// The hash-table hashes already describe this one key.
 		auto &filter = bloom_filters[0];
@@ -799,17 +796,16 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	} else if (!bloom_filters.empty()) {
 		// the per-key-column filters of an external join with several equality keys
 		Vector key_hashes(LogicalType::HASH);
+		if (!build_key_hash_executor) {
+			build_key_hash_executor = make_uniq<ExpressionExecutor>(context, key_hash_expressions);
+		}
 		for (idx_t key_idx = 0; key_idx < bloom_filters.size(); key_idx++) {
 			auto &filter = bloom_filters[key_idx];
 			if (!filter) {
 				continue;
 			}
 			D_ASSERT(!filter->IsSealed());
-			if (added_count == keys.size()) {
-				VectorOperations::Hash(keys.data[key_idx], key_hashes, added_count);
-			} else {
-				VectorOperations::Hash(keys.data[key_idx], key_hashes, *current_sel, added_count);
-			}
+			BoundHashExpression::Execute(*build_key_hash_executor, keys, key_hashes, key_idx);
 			filter->InsertHashes(key_hashes, *current_sel, added_count);
 		}
 	}
@@ -1237,7 +1233,8 @@ void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeBuildStates &states) {
 	}
 }
 
-JoinHashTable::KeyFilterBuildScratch::KeyFilterBuildScratch(JoinHashTable &ht) : hashes(LogicalType::HASH) {
+JoinHashTable::KeyFilterBuildScratch::KeyFilterBuildScratch(JoinHashTable &ht)
+    : hashes(LogicalType::HASH), key_hash_executor(ht.context, ht.key_hash_expressions) {
 	vector<LogicalType> types;
 	for (idx_t key_idx = 0; key_idx < ht.equality_predicate_columns.size(); key_idx++) {
 		types.push_back(ht.layout_ptr->GetTypes()[key_idx]);
@@ -1255,7 +1252,9 @@ void JoinHashTable::InsertKeyBloomFilterChunk(TupleDataChunkState &chunk_state, 
 		}
 		auto &build_keys = scratch.keys.data[key_idx];
 		GatherKeyColumn(chunk_state, count, key_idx, build_keys);
-		VectorOperations::Hash(build_keys, scratch.hashes, count);
+		// only the gathered key column is read
+		scratch.keys.SetCardinalityUnsafe(count);
+		BoundHashExpression::Execute(scratch.key_hash_executor, scratch.keys, scratch.hashes, key_idx);
 		filter->InsertHashes(scratch.hashes, *FlatVector::IncrementalSelectionVector(), count);
 	}
 }
@@ -3090,7 +3089,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &prob
                                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
-	Hash(probe_keys, *FlatVector::IncrementalSelectionVector(), probe_keys.size(), hashes);
+	Hash(probe_keys, probe_state.hash_executor, hashes);
 
 	// find out which keys we can match with the current pinned partitions
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
