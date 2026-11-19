@@ -926,6 +926,24 @@ void BignumIntermediate::MultiplyMagnitudes(BignumArithmeticState &state, const 
 string_t BignumIntermediate::Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
                                       const BignumIntermediate &rhs) {
 	const bool is_result_negative = lhs.is_negative != rhs.is_negative;
+	if (lhs.size <= BignumLimb::BYTES && rhs.size <= BignumLimb::BYTES) {
+		// The complete product of two single-limb magnitudes fits two limbs.
+		state.AccountWork(1);
+		uint64_t hi;
+		const auto lo =
+		    BignumLimb::MultiplyAdd(LoadAbsoluteLimb(lhs, lhs.size), LoadAbsoluteLimb(rhs, rhs.size), 0, hi);
+		if (hi == 0 && lo == 0) {
+			return WriteZero(heap);
+		}
+		const auto byte_count = BignumLimb::ByteCount(hi, lo);
+		auto target = heap.EmptyString(byte_count + Bignum::BIGNUM_HEADER_SIZE);
+		auto ptr = target.GetDataWriteable();
+		Bignum::SetHeader(ptr, byte_count, is_result_negative);
+		BignumLimb::StoreMagnitude(reinterpret_cast<data_ptr_t>(ptr + Bignum::BIGNUM_HEADER_SIZE), byte_count, hi, lo,
+		                           is_result_negative);
+		target.Finalize();
+		return target;
+	}
 	auto &lhs_digits = state.lhs_digits;
 	auto &rhs_digits = state.rhs_digits;
 	auto &product = state.result_digits;
