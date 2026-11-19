@@ -291,6 +291,20 @@ static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Ex
 	return make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(child_expr), col_type));
 }
 
+static unique_ptr<ExpressionFilter> CreateAdaptiveInFilter(unique_ptr<Expression> in_expr, const LogicalType &type) {
+	// Keep large lists pruning-only; evaluating them per row is expensive.
+	if (in_expr->Cast<BoundOperatorExpression>().GetChildren().size() >=
+	        InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD ||
+	    !ExpressionFilterExecutor::TryCreate(*in_expr)) {
+		return CreateOptionalExpressionFilter(std::move(in_expr), type);
+	}
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::IN_FILTER, selectivity_threshold, n_vectors_to_check);
+	return make_uniq<ExpressionFilter>(
+	    CreateSelectivityOptionalFilterExpression(std::move(in_expr), type, selectivity_threshold, n_vectors_to_check));
+}
+
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
 	for (idx_t i = 0; i < in_list.size(); i++) {
 		if (in_list[i].IsNull()) {
@@ -745,10 +759,10 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
-	// if this is not a dense range we can push an optional filter for zone-map pruning
+	// Keep the residual filter so scans can skip row filtering when it is not selective.
 	auto in_expr =
 	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.GetChildren()[0]), std::move(in_list));
-	table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(in_expr), type));
+	table_filters.PushFilter(proj_index, CreateAdaptiveInFilter(std::move(in_expr), type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -838,7 +852,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		// Push the same filter as for `col IN (...)`, which index scans can use.
 		auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*equality_column),
 		                                                    std::move(equality_values));
-		table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(in_expr), col_type));
+		table_filters.PushFilter(proj_id, CreateAdaptiveInFilter(std::move(in_expr), col_type));
 		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));

@@ -444,7 +444,7 @@ struct RLEScanState : public SegmentScanState {
 
 	SelectionVector &GetSelectionBuffer(idx_t count) {
 		// A previous result may still reference the selected rows.
-		if (selected_rows.Capacity() < count || selected_rows.sel_data().use_count() > 1) {
+		if (selected_rows.Capacity() < count || selected_rows.sel_data().GetReferenceCount() > 1) {
 			selected_rows.Initialize(count);
 		}
 		return selected_rows;

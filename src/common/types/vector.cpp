@@ -107,12 +107,16 @@ void Vector::Reference(const Value &value, count_t count) {
 	ConstantVector::Reference(*this, value, count);
 }
 
-void Vector::Reference(const Vector &other) {
-	if (other.GetType().id() != GetType().id()) {
-		throw InternalException("Vector::Reference used on vector of different type (source %s referenced %s)",
-		                        GetType(), other.GetType());
+static void CheckReferenceType(const LogicalType &type, const LogicalType &other_type) {
+	if (other_type.id() != type.id()) {
+		throw InternalException("Vector::Reference used on vector of different type (source %s referenced %s)", type,
+		                        other_type);
 	}
-	D_ASSERT(other.GetType() == GetType());
+	D_ASSERT(other_type == type);
+}
+
+void Vector::Reference(const Vector &other) {
+	CheckReferenceType(GetType(), other.GetType());
 	ConstReference(other);
 }
 
@@ -214,23 +218,22 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 }
 
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
-	Reference(other);
-	Slice(sel, count);
+	CheckReferenceType(GetType(), other.GetType());
+	if (!other.buffer || (!sel.IsSet() && count == other.size())) {
+		ConstReference(other);
+		return;
+	}
+	auto new_buffer = other.buffer->Slice(GetType(), sel, count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	} else {
+		ConstReference(other);
+	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() && count == size()) {
-		// no-op: no selection vector, and the requested count matches the current size
-		return;
-	}
-	if (!buffer) {
-		return;
-	}
-	auto new_buffer = buffer->Slice(GetType(), sel, count);
-	if (new_buffer) {
-		buffer = std::move(new_buffer);
-	}
-	FlatVector::SetSize(*this, count_t(count));
+	Slice(*this, sel, count);
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -258,8 +261,7 @@ void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const Selecti
 	if (dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
-	Reference(dict);
-	Dictionary(dictionary_size, sel, count);
+	Slice(dict, sel, count);
 }
 
 void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel, idx_t sel_count) {

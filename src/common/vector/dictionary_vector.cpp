@@ -12,8 +12,7 @@ DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel), entry(std::move(entry_p)) {
 }
-DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
-                                   buffer_ptr<DictionaryEntry> entry_p)
+DictionaryBuffer::DictionaryBuffer(SelectionData data, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(std::move(data)), entry(std::move(entry_p)) {
 }
@@ -21,7 +20,7 @@ DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel) {
 }
-DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
+DictionaryBuffer::DictionaryBuffer(SelectionData data, idx_t sel_count_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(std::move(data)) {
 }

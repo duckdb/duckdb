@@ -15,21 +15,11 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_data.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class VectorBuffer;
-
-struct SelectionData {
-	DUCKDB_API explicit SelectionData(idx_t count);
-	// Out-of-line destructor: prevents GCC IPA-ICF from folding
-	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
-	// corresponding instantiation for TemplatedValidityData, which produces
-	// a spurious -Warray-bounds with g++ >= 14.
-	DUCKDB_API ~SelectionData();
-
-	AllocatedData owned_data;
-};
 
 struct SelectionVector {
 	SelectionVector() : sel_vector(nullptr), capacity(0) {
@@ -53,7 +43,7 @@ struct SelectionVector {
 	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)), capacity(other.capacity) {
 		other.sel_vector = nullptr;
 	}
-	explicit SelectionVector(buffer_ptr<SelectionData> &&data) {
+	explicit SelectionVector(SelectionData &&data) {
 		Initialize(std::move(data));
 	}
 	SelectionVector &operator=(SelectionVector &&other) noexcept {
@@ -99,20 +89,20 @@ public:
 			(void)sel[capacity_p - 1];
 		}
 #endif
-		selection_data.reset();
+		selection_data.Reset();
 		sel_vector = sel;
 		capacity = capacity_p;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = make_shared_ptr<SelectionData>(count);
-		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
+		selection_data = SelectionData::Allocate(count);
+		sel_vector = reinterpret_cast<sel_t *>(selection_data.GetData());
 		capacity = count;
 	}
-	void Initialize(buffer_ptr<SelectionData> data) {
+	void Initialize(SelectionData data) {
 		selection_data = std::move(data);
 		if (selection_data) {
-			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
-			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
+			sel_vector = reinterpret_cast<sel_t *>(selection_data.GetData());
+			capacity = selection_data.GetSize() / sizeof(sel_t);
 		} else {
 			sel_vector = nullptr;
 			capacity = 0ULL;
@@ -149,13 +139,13 @@ public:
 	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	const buffer_ptr<SelectionData> &sel_data() { // NOLINT: allow casing for legacy reasons
+	const SelectionData &sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
 	idx_t Capacity() const {
 		return capacity;
 	}
-	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
+	SelectionData Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0) const;
@@ -184,7 +174,7 @@ public:
 
 private:
 	sel_t *sel_vector;
-	buffer_ptr<SelectionData> selection_data;
+	SelectionData selection_data;
 	idx_t capacity;
 };
 

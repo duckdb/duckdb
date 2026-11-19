@@ -7,17 +7,21 @@
 
 namespace duckdb {
 
-SelectionData::SelectionData(idx_t count) {
-	owned_data = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
+SelectionData::Buffer::Buffer(idx_t count) {
+	allocation = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
 #ifdef DEBUG
-	auto data_ptr = reinterpret_cast<sel_t *>(owned_data.get());
+	auto data_ptr = reinterpret_cast<sel_t *>(allocation.get());
 	for (idx_t i = 0; i < count; i++) {
 		data_ptr[i] = std::numeric_limits<sel_t>::max();
 	}
 #endif
 }
 
-SelectionData::~SelectionData() = default;
+SelectionData SelectionData::Allocate(idx_t count) {
+	SelectionData result;
+	result.buffer = make_uniq<Buffer>(count).release();
+	return result;
+}
 
 namespace {
 struct BooleanSelectionTable {
@@ -185,9 +189,9 @@ void SelectionVector::Print(idx_t count) const {
 }
 // LCOV_EXCL_STOP
 
-buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx_t count) const {
-	auto data = make_buffer<SelectionData>(count);
-	auto result_ptr = reinterpret_cast<sel_t *>(data->owned_data.get());
+SelectionData SelectionVector::Slice(const SelectionVector &sel, idx_t count) const {
+	auto data = SelectionData::Allocate(count);
+	auto result_ptr = reinterpret_cast<sel_t *>(data.GetData());
 	// for every element, we perform result[i] = target[new[i]]
 	for (idx_t i = 0; i < count; i++) {
 		auto new_idx = sel.get_index(i);
@@ -224,7 +228,7 @@ idx_t SelectionVector::GetAllocationSize() const {
 	if (!selection_data) {
 		return 0;
 	}
-	return selection_data->owned_data.GetSize();
+	return selection_data.GetSize();
 }
 
 } // namespace duckdb
