@@ -280,42 +280,101 @@ enum class MatcherType {
 	CUSTOM
 };
 
-//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar. Lets the
-//! matcher skip sub-matchers that certainly cannot match at the current token.
-struct MatcherFirstSet {
-	bool computed = false;
-	//! the matcher can succeed without consuming a token
-	bool nullable = false;
-	//! no information: never skip
+//! A set of tokens: token classes plus grammar literal ids (keywords and symbols), or every token
+struct MatcherTokenSet {
+	//! no information: contains every token
 	bool any = false;
 	//! MatcherTokenClass bits
 	uint8_t class_mask = 0;
-	//! bitset over grammar literal ids (keywords and symbols)
+	//! bitset over grammar literal ids
 	vector<uint64_t> literals;
-	optional_ptr<const GrammarLiteralTable> table;
 
 	bool HasLiteral(idx_t literal_id) const {
 		auto word = literal_id / 64;
 		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
 	}
 	DUCKDB_API void AddLiteral(idx_t literal_id);
+	//! Merge the tokens of other into this set, returns whether anything changed
+	DUCKDB_API bool MergeTokens(const MatcherTokenSet &other);
+	DUCKDB_API bool IsEmpty() const;
+	DUCKDB_API bool Equals(const MatcherTokenSet &other) const;
+	void SetAny() {
+		any = true;
+	}
+	//! Whether the token can be in the set; GET_LITERAL supplies its literal info only when needed
+	template <class GET_LITERAL>
+	bool Contains(const MatcherToken &token, GET_LITERAL &&get_literal) const {
+		if (any) {
+			return true;
+		}
+		if (token.token_class & class_mask) {
+			return true;
+		}
+		auto literal_id = get_literal().LiteralId();
+		return literal_id && HasLiteral(literal_id);
+	}
+};
+
+//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar, together with
+//! the tokens for which it can match exactly one token (ONE) and the tokens it can see second (SECOND). Lets the
+//! matcher skip sub-matchers that certainly cannot match at the current token.
+struct MatcherFirstSet : public MatcherTokenSet {
+	bool computed = false;
+	//! the matcher can succeed without consuming a token
+	bool nullable = false;
+	//! every token in FIRST passes the lookahead check, so only FIRST has to be tested
+	bool first_suffices = true;
+	optional_ptr<const GrammarLiteralTable> table;
+	//! first tokens for which a match consuming exactly one token is possible
+	MatcherTokenSet one;
+	//! second tokens of matches consuming at least two tokens
+	MatcherTokenSet second;
+
 	//! Merge other into this set, returns whether anything changed
 	DUCKDB_API bool Merge(const MatcherFirstSet &other);
+	//! Derive first_suffices once the sets are final
+	DUCKDB_API void Finalize();
+	//! No information about any token
+	void SetAny() {
+		any = true;
+		one.any = true;
+		second.any = true;
+	}
+	//! The matcher consumes exactly one token, drawn from its FIRST set
+	void SetSingleToken() {
+		one.any = any;
+		one.class_mask = class_mask;
+		one.literals = literals;
+		second = MatcherTokenSet();
+	}
 	//! False only if the matcher certainly cannot match at the current token
 	bool MightMatch(MatchState &state) const {
 		if (!computed || any || nullable) {
 			return true;
 		}
-		auto token = state.token_iterator.Current();
+		auto &iterator = state.token_iterator;
+		auto token = iterator.Current();
 		if (!token) {
 			return false;
 		}
-		if (token->token_class & class_mask) {
+		auto token_class = token->token_class;
+		if (!(token_class & class_mask)) {
+			auto literal_id = iterator.CurrentLiteralInfo(*table).LiteralId();
+			if (!literal_id || !HasLiteral(literal_id)) {
+				return false;
+			}
+			if (first_suffices || one.HasLiteral(literal_id)) {
+				return true;
+			}
+			return MightMatchSecond(state);
+		}
+		if (first_suffices || (token_class & one.class_mask)) {
 			return true;
 		}
-		auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
-		return literal_id && HasLiteral(literal_id);
+		return MightMatchSecond(state);
 	}
+	//! The lookahead check for a token in FIRST: a one-token match or a valid second token
+	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
 };
 
 class Matcher {
@@ -409,20 +468,20 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
-public:
-	MatcherFirstSet first_set;
-
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
-	string name;
-	string label;
-	optional_idx packrat_id;
 	bool atomic = false;
 	bool packrat_memoized = false;
 	bool collapsible = false;
 	bool structural = false;
+	optional_idx packrat_id;
 	optional_ptr<const CompiledGrammarRule> rule;
+	string name;
+	string label;
+
+public:
+	MatcherFirstSet first_set;
 };
 
 //! Compute the FIRST sets of all matchers reachable from root
@@ -438,7 +497,7 @@ public:
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
 	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
 	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
-		first_set.any = true;
+		first_set.SetAny();
 	}
 };
 

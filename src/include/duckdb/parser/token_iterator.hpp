@@ -60,10 +60,22 @@ public:
 		return tokens[position];
 	}
 	LiteralInfo CurrentLiteralInfo(const GrammarLiteralTable &table) {
-		if (position >= tokens.size()) {
+		return PeekLiteralInfo(table, 0);
+	}
+	//! The token "ahead" positions after the current one, or nullptr past the end
+	optional_ptr<const MatcherToken> Peek(idx_t ahead) const {
+		auto index = position + ahead;
+		if (index >= tokens.size()) {
+			return nullptr;
+		}
+		return tokens[index];
+	}
+	LiteralInfo PeekLiteralInfo(const GrammarLiteralTable &table, idx_t ahead) {
+		auto index = position + ahead;
+		if (index >= tokens.size()) {
 			return LiteralInfo();
 		}
-		return tokens[position].GetLiteralInfo(table);
+		return tokens[index].GetLiteralInfo(table);
 	}
 	DUCKDB_API const MatcherToken &Previous() const;
 	const MatcherToken &GetToken(idx_t index) const {
