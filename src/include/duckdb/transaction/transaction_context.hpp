@@ -55,13 +55,13 @@ public:
 
 	void SetReadOnly();
 
-	//! Exports the current transaction so that other connections can join it, returns its snapshot identifier
-	string ExportSnapshot();
-	//! Replaces the (still unused) current transaction by the exported transaction with the given identifier
-	void ImportSnapshot(const string &snapshot_id);
-	//! The current transaction if it was exported under the given snapshot identifier, otherwise null.
+	//! Makes the current transaction joinable by other connections, returns its identifier
+	string ShareTransaction();
+	//! Joins the shared transaction with the given identifier (only outside of a transaction)
+	void JoinTransaction(const string &share_id);
+	//! The current transaction if it was shared under the given identifier, otherwise null.
 	//! Safe to call from other connections.
-	shared_ptr<MetaTransaction> GetExportedTransaction(const string &snapshot_id);
+	shared_ptr<MetaTransaction> GetSharedTransaction(const string &share_id);
 
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();
@@ -84,7 +84,7 @@ private:
 	TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
 	bool auto_rollback = false;
 
-	//! Guards replacing current_transaction against reads from other connections (GetExportedTransaction)
+	//! Guards replacing current_transaction against reads from other connections (GetSharedTransaction)
 	mutex current_transaction_lock;
 	shared_ptr<MetaTransaction> current_transaction;
 	//! The query number of the query currently running on this connection (MAXIMUM_QUERY_ID if none)

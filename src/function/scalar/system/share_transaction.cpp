@@ -8,19 +8,19 @@ namespace duckdb {
 
 namespace {
 
-void PgExportSnapshotFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ShareTransactionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto context = state.GetContext().TryGetClientContext();
 	if (!context) {
-		throw InvalidInputException("pg_export_snapshot requires a client connection");
+		throw InvalidInputException("share_transaction requires a client connection");
 	}
-	auto snapshot_id = context->transaction.ExportSnapshot();
-	result.Reference(Value(snapshot_id), count_t(args.size()));
+	auto share_id = context->transaction.ShareTransaction();
+	result.Reference(Value(share_id), count_t(args.size()));
 }
 
 } // namespace
 
-ScalarFunction PgExportSnapshot::GetFunction() {
-	return ScalarFunction({}, LogicalType::VARCHAR, PgExportSnapshotFunction, nullptr, nullptr, nullptr,
+ScalarFunction ShareTransaction::GetFunction() {
+	return ScalarFunction({}, LogicalType::VARCHAR, ShareTransactionFunction, nullptr, nullptr, nullptr,
 	                      LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 }
 

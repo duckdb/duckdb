@@ -106,7 +106,7 @@ SQLStatement:
     - VariableAssignment
     - TransactionStatement
     - BeginTransaction
-    - SetTransactionSnapshot
+    - JoinTransaction
     - CommitTransaction
     - RollbackTransaction
     - TriggerBody

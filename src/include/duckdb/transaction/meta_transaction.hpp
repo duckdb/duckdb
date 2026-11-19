@@ -63,10 +63,10 @@ public:
 		return temporary_objects;
 	}
 
-	//! Exports the transaction so that other connections can join it, returns its snapshot identifier
-	string ExportSnapshot();
-	//! The identifier under which the transaction was exported (empty if not exported)
-	string GetSnapshotId();
+	//! Makes the transaction joinable by other connections, returns its identifier
+	string ShareTransaction();
+	//! The identifier under which the transaction was shared (empty if not shared)
+	string GetShareId();
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
 	bool Join();
 	struct LeaveResult {
@@ -142,7 +142,7 @@ private:
 	//! Whether a participant voted to roll back
 	bool rollback_vote = false;
 	//! The identifier the transaction was exported under
-	string snapshot_id;
+	string share_id;
 	//! Secrets that only live for the duration of this transaction.
 	unique_ptr<SecretStorage> transaction_secret_storage;
 };

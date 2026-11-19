@@ -1200,7 +1200,7 @@ enum class PEGRuleId : uint32_t {
 	BeginTransaction,
 	RollbackTransaction,
 	CommitTransaction,
-	SetTransactionSnapshot,
+	JoinTransaction,
 	StartOrBegin,
 	Transaction,
 	ReadOrWrite,

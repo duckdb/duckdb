@@ -5,8 +5,8 @@
 
 using namespace duckdb;
 
-static string ExportSnapshot(Connection &con) {
-	auto result = con.Query("SELECT pg_export_snapshot()");
+static string ShareTransaction(Connection &con) {
+	auto result = con.Query("SELECT share_transaction()");
 	REQUIRE_NO_FAIL(*result);
 	return result->Collection().GetValue(0, 0).ToString();
 }
@@ -29,14 +29,13 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (2)"));
 		REQUIRE_NO_FAIL(con1.Query("CREATE TEMPORARY TABLE tmp(i INTEGER)"));
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tmp VALUES (10)"));
-		auto snapshot = ExportSnapshot(con1);
+		auto share_id = ShareTransaction(con1);
 
 		// not visible outside of the transaction
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 1);
 		REQUIRE_FAIL(con3.Query("SELECT * FROM tmp"));
 
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		RequireValue(con2, "SELECT SUM(i) FROM tbl", 3);
 		RequireValue(con2, "SELECT SUM(i) FROM tmp", 10);
 
@@ -58,22 +57,19 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		// the last connection to commit commits the transaction
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 6);
-		// the snapshot is no longer valid
-		REQUIRE_NO_FAIL(con3.Query("BEGIN TRANSACTION"));
-		REQUIRE_FAIL(con3.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		// the share_id is no longer valid
+		REQUIRE_FAIL(con3.Query("JOIN TRANSACTION '" + share_id + "'"));
 	}
 	SECTION("the owner can commit before the joined connection") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (2)"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 1);
 		REQUIRE_NO_FAIL(con2.Query("INSERT INTO tbl VALUES (3)"));
-		// the snapshot can still be joined while a participant remains
-		REQUIRE_NO_FAIL(con3.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con3.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		// the share_id can still be joined while a participant remains
+		REQUIRE_NO_FAIL(con3.Query("JOIN TRANSACTION '" + share_id + "'"));
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 6);
 		REQUIRE_NO_FAIL(con3.Query("COMMIT"));
 		RequireValue(con2, "SELECT SUM(i) FROM tbl", 6);
@@ -83,9 +79,8 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 	SECTION("a rollback by any participant rolls the whole transaction back") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (2)"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		REQUIRE_NO_FAIL(con2.Query("INSERT INTO tbl VALUES (3)"));
 		REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 		// the transaction is still running for the first connection
@@ -98,17 +93,16 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 	SECTION("a rollback by the last participant after a commit rolls back") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (2)"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
 		REQUIRE_NO_FAIL(con1.Query("ROLLBACK"));
 		RequireValue(con3, "SELECT SUM(i) FROM tbl", 1);
 	}
-	SECTION("exporting the same transaction twice returns the same snapshot") {
+	SECTION("exporting the same transaction twice returns the same share_id") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE(snapshot == ExportSnapshot(con1));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE(share_id == ShareTransaction(con1));
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 	}
 	SECTION("the owner closing the connection counts as a rollback, the others keep working") {
@@ -116,9 +110,8 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(owner->Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(owner->Query("INSERT INTO tbl VALUES (2)"));
 		REQUIRE_NO_FAIL(owner->Query("CREATE TEMPORARY TABLE tmp AS SELECT 7 AS i"));
-		auto snapshot = ExportSnapshot(*owner);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(*owner);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		owner.reset();
 		RequireValue(con2, "SELECT SUM(i) FROM tbl", 3);
 		RequireValue(con2, "SELECT SUM(i) FROM tmp", 7);
@@ -129,10 +122,9 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 	SECTION("a joined connection closing counts as a rollback") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con1.Query("INSERT INTO tbl VALUES (2)"));
-		auto snapshot = ExportSnapshot(con1);
+		auto share_id = ShareTransaction(con1);
 		auto joined = make_uniq<Connection>(db);
-		REQUIRE_NO_FAIL(joined->Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(joined->Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		REQUIRE_NO_FAIL(joined->Query("JOIN TRANSACTION '" + share_id + "'"));
 		REQUIRE_NO_FAIL(joined->Query("INSERT INTO tbl VALUES (3)"));
 		joined.reset();
 		RequireValue(con1, "SELECT SUM(i) FROM tbl", 6);
@@ -141,9 +133,8 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 	}
 	SECTION("concurrent inserts into a shared transaction") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		static constexpr idx_t ROWS_PER_THREAD = 100;
 		auto insert = [&](Connection &con, int64_t base) {
 			for (idx_t i = 0; i < ROWS_PER_THREAD; i++) {
@@ -163,9 +154,8 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 	SECTION("concurrent reads and writes on a shared transaction") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con1.Query("CREATE TEMPORARY TABLE tmp(i INTEGER)"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		auto work = [&](Connection &con, int64_t base) {
 			for (int64_t i = 0; i < 50; i++) {
 				REQUIRE_NO_FAIL(*con.Query("INSERT INTO tmp VALUES (" + to_string(base + i) + ")"));
@@ -192,9 +182,8 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 			REQUIRE_NO_FAIL(owner->Query("CREATE TABLE big(i BIGINT)"));
 			REQUIRE_NO_FAIL(owner->Query("BEGIN TRANSACTION"));
 			REQUIRE_NO_FAIL(owner->Query("INSERT INTO big SELECT range FROM range(300000)"));
-			auto snapshot = ExportSnapshot(*owner);
-			REQUIRE_NO_FAIL(joined.Query("BEGIN TRANSACTION"));
-			REQUIRE_NO_FAIL(joined.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
+			auto share_id = ShareTransaction(*owner);
+			REQUIRE_NO_FAIL(joined.Query("JOIN TRANSACTION '" + share_id + "'"));
 			// the owner commits and goes away, the joined connection keeps using the transaction
 			REQUIRE_NO_FAIL(owner->Query("COMMIT"));
 			owner.reset();
@@ -209,22 +198,39 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		RequireValue(check, "SELECT COUNT(*) FROM big", 600000);
 	}
 	SECTION("errors") {
-		// exporting requires a transaction
-		REQUIRE_FAIL(con1.Query("SELECT pg_export_snapshot()"));
-		// importing requires a transaction
-		REQUIRE_FAIL(con2.Query("SET TRANSACTION SNAPSHOT 'unknown'"));
+		// sharing requires a transaction
+		REQUIRE_FAIL(con1.Query("SELECT share_transaction()"));
+		// unknown identifier
+		REQUIRE_FAIL(con2.Query("JOIN TRANSACTION 'unknown'"));
+		REQUIRE_NO_FAIL(con2.Query("SELECT 42"));
+
+		// cannot join from within a transaction
+		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
+		auto share_id = ShareTransaction(con1);
 		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		// unknown snapshot
-		REQUIRE_FAIL(con2.Query("SET TRANSACTION SNAPSHOT 'unknown'"));
+		REQUIRE_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 
-		// the transaction must not have been used yet
+		// cannot join a connection's own transaction
+		REQUIRE_FAIL(con1.Query("JOIN TRANSACTION '" + share_id + "'"));
+
+		// cannot join an aborted transaction
+		REQUIRE_FAIL(con1.Query("SELECT * FROM nonexistent"));
+		REQUIRE_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+		REQUIRE_NO_FAIL(con2.Query("SELECT 42"));
+		REQUIRE_NO_FAIL(con1.Query("ROLLBACK"));
+	}
+	SECTION("a joined connection is in a transaction until it commits") {
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
-		auto snapshot = ExportSnapshot(con1);
-		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con2.Query("SELECT * FROM tbl"));
-		REQUIRE_FAIL(con2.Query("SET TRANSACTION SNAPSHOT '" + snapshot + "'"));
-		REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+		auto share_id = ShareTransaction(con1);
+		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
+		REQUIRE_NO_FAIL(con2.Query("INSERT INTO tbl VALUES (2)"));
+		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+		// back in auto-commit mode
+		REQUIRE_FAIL(con2.Query("COMMIT"));
+		REQUIRE_NO_FAIL(con2.Query("INSERT INTO tbl VALUES (3)"));
+		RequireValue(con3, "SELECT SUM(i) FROM tbl", 4);
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
+		RequireValue(con3, "SELECT SUM(i) FROM tbl", 6);
 	}
 }

@@ -193,17 +193,17 @@ void MetaTransaction::Rollback(ClientContext &context) {
 	}
 }
 
-string MetaTransaction::ExportSnapshot() {
+string MetaTransaction::ShareTransaction() {
 	lock_guard<mutex> guard(shared_lock);
-	if (snapshot_id.empty()) {
-		snapshot_id = UUID::ToString(UUID::GenerateRandomUUID());
+	if (share_id.empty()) {
+		share_id = UUID::ToString(UUID::GenerateRandomUUID());
 	}
-	return snapshot_id;
+	return share_id;
 }
 
-string MetaTransaction::GetSnapshotId() {
+string MetaTransaction::GetShareId() {
 	lock_guard<mutex> guard(shared_lock);
-	return snapshot_id;
+	return share_id;
 }
 
 bool MetaTransaction::Join() {

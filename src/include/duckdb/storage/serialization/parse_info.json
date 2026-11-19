@@ -1021,7 +1021,7 @@
       },
       {
         "id": 204,
-        "name": "snapshot_id",
+        "name": "share_id",
         "type": "string",
         "default": "string()"
       }

@@ -9358,8 +9358,8 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
      &PEGTransformerFactory::FinalizeRollbackTransactionTrampoline, &FRAME_PLAN_12},
     {"CommitTransaction", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeCommitTransactionTrampoline, &FRAME_PLAN_12},
-    {"SetTransactionSnapshot", &PEGTransformerFactory::InitializePlannedTrampoline,
-     &PEGTransformerFactory::FinalizeSetTransactionSnapshotTrampoline, &FRAME_PLAN_12},
+    {"JoinTransaction", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizeJoinTransactionTrampoline, &FRAME_PLAN_12},
     {"ReadOrWrite", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeReadOrWriteTrampoline, &FRAME_PLAN_519},
     {"ReadOnlyOrReadWrite", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
@@ -19686,11 +19686,11 @@ PEGTransformerFactory::FinalizeCommitTransactionTrampoline(PEGTransformer &trans
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeSetTransactionSnapshotTrampoline(PEGTransformer &transformer,
-                                                                GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeJoinTransactionTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
-	auto result = TransformSetTransactionSnapshot(transformer, string_literal);
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = TransformJoinTransaction(transformer, string_literal);
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 

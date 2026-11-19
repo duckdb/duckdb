@@ -1288,8 +1288,8 @@ void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info)
 		}
 		break;
 	}
-	case TransactionType::SET_SNAPSHOT:
-		transaction.ImportSnapshot(info.snapshot_id);
+	case TransactionType::JOIN_TRANSACTION:
+		transaction.JoinTransaction(info.share_id);
 		break;
 	case TransactionType::COMMIT:
 		if (transaction.IsAutoCommit()) {

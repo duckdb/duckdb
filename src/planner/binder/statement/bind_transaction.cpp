@@ -8,8 +8,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	auto &properties = GetStatementProperties();
 
 	// Transaction statements do not require a valid transaction.
-	properties.requires_valid_transaction =
-	    stmt.info->type == TransactionType::BEGIN_TRANSACTION || stmt.info->type == TransactionType::SET_SNAPSHOT;
+	properties.requires_valid_transaction = stmt.info->type == TransactionType::BEGIN_TRANSACTION;
 
 	BoundStatement result;
 	result.names = {"Success"};

@@ -11,6 +11,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
@@ -29,9 +30,9 @@ shared_ptr<MetaTransaction> TransactionContext::TakeCurrentTransaction() {
 	return std::move(current_transaction);
 }
 
-shared_ptr<MetaTransaction> TransactionContext::GetExportedTransaction(const string &snapshot_id) {
+shared_ptr<MetaTransaction> TransactionContext::GetSharedTransaction(const string &share_id) {
 	lock_guard<mutex> guard(current_transaction_lock);
-	if (current_transaction && current_transaction->GetSnapshotId() == snapshot_id) {
+	if (current_transaction && current_transaction->GetShareId() == share_id) {
 		return current_transaction;
 	}
 	return nullptr;
@@ -160,40 +161,41 @@ bool TransactionContext::LeaveTransaction(MetaTransaction &transaction, bool com
 	return result.last;
 }
 
-string TransactionContext::ExportSnapshot() {
+string TransactionContext::ShareTransaction() {
 	if (!HasActiveTransaction() || auto_commit) {
-		throw TransactionException("a snapshot can only be exported from within a transaction");
+		throw TransactionException("a transaction can only be shared from within a BEGIN TRANSACTION block");
 	}
-	return current_transaction->ExportSnapshot();
+	return current_transaction->ShareTransaction();
 }
 
-void TransactionContext::ImportSnapshot(const string &snapshot_id) {
-	if (!HasActiveTransaction() || auto_commit) {
-		throw TransactionException("SET TRANSACTION SNAPSHOT must be called within a transaction");
+void TransactionContext::JoinTransaction(const string &share_id) {
+	if (!auto_commit) {
+		throw TransactionException("cannot join a transaction within a transaction");
 	}
-	if (!current_transaction->GetSnapshotId().empty() || !current_transaction->OpenedTransactions().empty()) {
-		throw TransactionException("SET TRANSACTION SNAPSHOT must be called before any query in the transaction");
-	}
-	// find a connection that participates in the exported transaction
+	// find a connection that participates in the shared transaction
 	shared_ptr<MetaTransaction> source;
 	for (auto &connection : ConnectionManager::Get(*context.db).GetConnectionList()) {
 		if (connection.get() == &context) {
 			continue;
 		}
-		source = connection->transaction.GetExportedTransaction(snapshot_id);
+		source = connection->transaction.GetSharedTransaction(share_id);
 		if (source) {
 			break;
 		}
 	}
 	if (!source || source->IsFinished()) {
-		throw TransactionException("invalid snapshot identifier: \"%s\"", snapshot_id);
+		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
+	}
+	if (ValidChecker::IsInvalidated(*source)) {
+		throw TransactionException("cannot join transaction \"%s\": it was aborted", share_id);
 	}
 	if (!source->Join()) {
-		throw TransactionException("invalid snapshot identifier: \"%s\"", snapshot_id);
+		throw TransactionException("invalid transaction identifier: \"%s\"", share_id);
 	}
-	// discard our own (empty) transaction and continue in the shared one
+	// discard the transaction that was started for this statement and continue in the shared one
 	auto previous = TakeCurrentTransaction();
 	SetCurrentTransaction(source);
+	auto_commit = false;
 	previous->MarkFinished();
 	previous->Rollback(context);
 	for (auto const &s : context.GetContext().GetRegisteredState().States()) {
