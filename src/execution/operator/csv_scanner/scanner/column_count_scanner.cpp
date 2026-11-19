@@ -171,8 +171,10 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
-				if (states.IsQuotedCurrent() && !states.IsUnquoted()) {
+				if (states.IsQuotedCurrent() && !states.IsUnquoted() &&
+				    state_machine->state_machine_options.quote_mode.GetValue() != CSVQuoteMode::LINES) {
 					// We are finishing our file on a quoted value that is never unquoted, straight to jail.
+					// With line records the field in progress is simply NULL, so the row still counts.
 					result.error = true;
 					return;
 				}

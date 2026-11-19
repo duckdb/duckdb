@@ -612,8 +612,11 @@ void StringValueResult::AddUnterminatedQuoteNull() {
 	if (cur_col_id < state_machine.options.force_not_null.size()) {
 		empty = state_machine.options.force_not_null[cur_col_id];
 	}
-	if (empty) {
+	if (empty && parse_types[chunk_col_id].type_id == LogicalTypeId::VARCHAR) {
 		static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+	} else if (empty) {
+		// a forced empty string does not convert into another type
+		current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
 	} else {
 		validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
 	}
@@ -1014,7 +1017,7 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.quoted && result.RecordEndsInsideQuotes()) {
+		if (result.RecordEndsInsideQuotes()) {
 			// quote_mode 'lines': the line break ended the record inside an open quote
 			result.AddUnterminatedQuoteNull();
 		} else if (result.quoted) {
@@ -1523,11 +1526,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else if (!result.comment) {
 			over_buffer_string += previous_buffer[i];
 		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
+		}
 		if (states.IsQuoted()) {
-			if (states.states[0] == CSVState::FIELD_START) {
-				// the inert escapes before the opening quote are not part of the quoted value
-				result.escaped = false;
-			}
 			result.SetQuoted(result, j);
 		}
 		if (states.IsUnquoted()) {
@@ -1603,11 +1606,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else if (!result.comment && !states.IsComment()) {
 			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
+		}
 		if (states.IsQuoted()) {
-			if (states.states[0] == CSVState::FIELD_START) {
-				// the inert escapes before the opening quote are not part of the quoted value
-				result.escaped = false;
-			}
 			result.SetQuoted(result, j);
 		}
 		if (states.IsComment()) {
@@ -1633,7 +1636,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			skip_value = true;
 		}
 	}
-	if (!skip_value && result.quoted && !result.comment && result.RecordEndsInsideQuotes()) {
+	if (!skip_value && !result.comment && result.RecordEndsInsideQuotes()) {
 		// quote_mode 'lines': the line break ended the record inside an open quote
 		result.AddUnterminatedQuoteNull();
 	} else if (!skip_value) {

@@ -652,8 +652,18 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			throw BinderException("DIALECT 'opencsv' is not supported when STRICT_MODE is manually set to true: "
 			                      "OpenCSVSerde reading is not strict");
 		}
-		// OpenCSVSerde reads with a '\' escape when none is given
-		state_machine_options.escape.Set('\\', false);
+		// the SerDe defines its quote, escape and comment characters, so the sniffer only detects the delimiter and
+		// the line ending: OpenCSVSerde reads with a '"' quote, a '\' escape and no comments when none are given
+		if (!state_machine_options.quote.IsSetByUser()) {
+			state_machine_options.quote.ChangeSetByUserTrue();
+		}
+		if (!state_machine_options.escape.IsSetByUser()) {
+			state_machine_options.escape.Set('\\', false);
+			state_machine_options.escape.ChangeSetByUserTrue();
+		}
+		if (!state_machine_options.comment.IsSetByUser()) {
+			state_machine_options.comment.ChangeSetByUserTrue();
+		}
 		const auto &delimiter = state_machine_options.delimiter.GetValue();
 		const auto quote = state_machine_options.quote.GetValue();
 		const auto escape = state_machine_options.escape.GetValue();
@@ -679,6 +689,8 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV, false);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
 		state_machine_options.strict_mode.Set(false, false);
+		// pinned, so parallel boundary detection searches with the dialect's own rules rather than a strict table
+		state_machine_options.strict_mode.ChangeSetByUserTrue();
 		state_machine_options.doubled_quotes.Set(true, false);
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.

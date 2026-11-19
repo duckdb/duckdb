@@ -47,6 +47,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		named_arguments.insert(option.first, option.second);
 	}
 	csv_options.FromNamedParameters(named_arguments, *context, file_options);
+	csv_options.Verify(file_options);
 
 	// Run the auto-detect, populating the options with the detected settings
 	SimpleMultiFileList multi_file_list(files);

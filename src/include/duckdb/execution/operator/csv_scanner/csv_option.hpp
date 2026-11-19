@@ -24,12 +24,9 @@ enum class NewLineIdentifier : uint8_t {
 enum class CSVEscapeMode : uint8_t {
 	//! The escape character escapes any character that follows it, including the delimiter and a newline
 	ALL = 0,
-	//! The escape character only escapes the quote and escape characters: before any other character it is dropped,
-	//! so a delimiter still separates values and a newline still ends the record
-	QUOTE = 1,
-	//! As QUOTE, and the escape is inert before the first content of a field, as in opencsv: it is dropped and the
-	//! character after it keeps its meaning, so '\\x' is 'x' and a quote after it opens a quoted field
-	OPENCSV = 2
+	//! The escape character only escapes the quote and escape characters, and is inert before the first content of a
+	//! field, as in opencsv: a delimiter still separates values, a newline still ends the record, and '\\x' is 'x'
+	OPENCSV = 1
 };
 
 //! What quotes mean at record boundaries
@@ -185,8 +182,6 @@ private:
 		switch (val) {
 		case CSVEscapeMode::ALL:
 			return "all";
-		case CSVEscapeMode::QUOTE:
-			return "quote";
 		case CSVEscapeMode::OPENCSV:
 			return "opencsv";
 		default:

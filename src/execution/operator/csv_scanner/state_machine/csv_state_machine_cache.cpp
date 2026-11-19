@@ -581,6 +581,14 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// state, so a lone quote in a field stays data
 	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		// a space is field content, as in opencsv, so a quote after it is a quote in a field
+		const vector<uint8_t> space_states {
+		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN), static_cast<uint8_t>(CSVState::NOT_SET),
+		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE), static_cast<uint8_t>(CSVState::FIELD_START)};
+		for (const auto state : space_states) {
+			transition_array[' '][state] = CSVState::STANDARD;
+		}
 		transition_array[quote][static_cast<uint8_t>(CSVState::STANDARD)] = CSVState::FIELD_QUOTE;
 		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::STANDARD);
 		transition_array[quote][field_quote] = CSVState::STANDARD;

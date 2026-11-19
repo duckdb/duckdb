@@ -1234,6 +1234,7 @@
       },
       {
         "id": 145,
+        "version": "v2.1.0",
         "name": "escape_mode",
         "property": "options.dialect_options.state_machine_options.escape_mode",
         "type": "CSVOption<CSVEscapeMode>",
@@ -1241,6 +1242,7 @@
       },
       {
         "id": 146,
+        "version": "v2.1.0",
         "name": "quote_mode",
         "property": "options.dialect_options.state_machine_options.quote_mode",
         "type": "CSVOption<CSVQuoteMode>",
@@ -1248,6 +1250,7 @@
       },
       {
         "id": 147,
+        "version": "v2.1.0",
         "name": "dialect",
         "property": "options.dialect",
         "type": "CSVOption<CSVDialect>",
@@ -1255,6 +1258,7 @@
       },
       {
         "id": 148,
+        "version": "v2.1.0",
         "name": "doubled_quotes",
         "property": "options.dialect_options.state_machine_options.doubled_quotes",
         "type": "CSVOption<bool>",
