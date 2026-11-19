@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -89,7 +90,7 @@ bool TryInferConstantBounds(const BaseStatistics &stats, Value &constant) {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateConstantInputs(ClientContext &context,
                                                                          const BoundFunctionExpression &func,
                                                                          const vector<BaseStatistics> &child_stats) {
-	if (func.Function().GetStability() != FunctionStability::CONSISTENT || func.GetChildren().empty()) {
+	if (func.Function().GetStability() == FunctionStability::VOLATILE || func.GetChildren().empty()) {
 		return nullptr;
 	}
 	// Lambda arguments are placeholders, not SQL values that can be evaluated independently.
@@ -126,10 +127,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 	if (!func.Function().HasArgProperties() || func.GetChildren().empty()) {
 		return nullptr;
 	}
-	if (func.Function().GetStability() != FunctionStability::CONSISTENT) {
+	if (func.Function().GetStability() == FunctionStability::VOLATILE) {
 		return nullptr;
 	}
-	if (BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
+	const auto result_stats_type = BaseStatistics::GetStatsType(func.GetReturnType());
+	if ((result_stats_type != StatisticsType::NUMERIC_STATS && result_stats_type != StatisticsType::BIGNUM_STATS) ||
 	    func.GetReturnType().InternalType() == PhysicalType::BOOL) {
 		return nullptr;
 	}
@@ -158,11 +160,12 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 		if (cs.CanHaveNull()) {
 			output_can_have_null = true;
 		}
-		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
+		if ((cs.GetStatsType() != StatisticsType::NUMERIC_STATS && cs.GetStatsType() != StatisticsType::BIGNUM_STATS) ||
+		    !HasNumericMinMax(cs)) {
 			return nullptr;
 		}
-		Value lo = NumericStats::Min(cs);
-		Value hi = NumericStats::Max(cs);
+		Value lo = NumericMin(cs);
+		Value hi = NumericMax(cs);
 
 		if (!IsKnownMonotonic(m)) {
 			return nullptr;
@@ -212,9 +215,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 		                        func.Function().GetName());
 	}
 
-	auto result = NumericStats::CreateEmpty(func.GetReturnType());
-	NumericStats::SetMin(result, out_lo);
-	NumericStats::SetMax(result, out_hi);
+	auto result = BaseStatistics::CreateEmpty(func.GetReturnType());
+	SetNumericMin(result, out_lo);
+	SetNumericMax(result, out_hi);
 
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
 	if (output_can_have_null) {
@@ -244,13 +247,19 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		return PropagateComparison(func, expr_ptr);
 	}
 	vector<BaseStatistics> stats;
-	stats.reserve(func.GetChildrenMutable().size());
+	stats.reserve(func.GetChildren().size());
 	bool has_invalidated_parameter = false;
+	bool has_all_null_argument = false;
 	for (auto &child : func.GetChildrenMutable()) {
 		auto stat = PropagateExpression(child);
+		has_all_null_argument = has_all_null_argument || HasNoValidValue(stat.get());
 		// an invalidated parameter has no statistics until it is rebound at execution
 		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
 		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			has_invalidated_parameter = true;
+		}
+		// neither does an input whose type depends on an unresolved parameter
+		if (!child->GetReturnType().IsComplete()) {
 			has_invalidated_parameter = true;
 		}
 		if (!stat) {
@@ -262,12 +271,22 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	if (has_invalidated_parameter) {
 		return nullptr;
 	}
+	if (has_all_null_argument && func.GetReturnType().id() == LogicalTypeId::BOOLEAN &&
+	    !BoundCastExpression::IsCast(func) &&
+	    func.Function().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING &&
+	    !func.Function().HasBindLambdaCallback() && IsRemovable(func)) {
+		// a predicate with default NULL handling (LIKE, contains, ...) is NULL for every row when an argument holds
+		// only NULLs
+		expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		removed_expressions = true;
+		return PropagateExpression(expr_ptr);
+	}
 	auto constant_stats = PropagateConstantInputs(context, func, stats);
 	if (constant_stats) {
 		return constant_stats;
 	}
 	if (func.Function().HasStatisticsCallback()) {
-		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
+		FunctionStatisticsInput input(func, func.BindInfoMutable(), stats, &expr_ptr);
 		return func.Function().GetStatisticsCallback()(context, input);
 	}
 	return PropagateMonotoneBounds(context, func, stats);

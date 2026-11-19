@@ -1,0 +1,46 @@
+# name: test/sql/copy/parquet/parquet_schema_pushdown_extract_cast_chain.test
+# description: Extracted fields apply schema conversions before an outer cast
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(1, {'x': 1.6::DOUBLE, 'l': [1.6::DOUBLE, NULL, 2.4::DOUBLE], 'm': MAP {'k': 1.6::DOUBLE}}),
+		(2, NULL),
+		(3, {'x': 2.4::DOUBLE, 'l': [], 'm': MAP {}})
+	) t(id, s)
+) TO '{TEST_DIR}/extract_cast_chain.parquet' (FIELD_IDS {id: 1, s: {__duckdb_field_id: 2, x: 3, l: 4, m: 5}})
+
+# The same conversion order applies to elements of an extracted LIST or MAP.
+statement ok
+CREATE VIEW implicit_children AS
+FROM read_parquet('{TEST_DIR}/extract_cast_chain.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL},
+	2: {name: 's', type: 'STRUCT(x DOUBLE, l INTEGER[], m MAP(VARCHAR, INTEGER))', default_value: NULL}
+})
+
+query III
+SELECT id, s.l::VARCHAR, s.m::VARCHAR FROM implicit_children ORDER BY id
+----
+1	[2, NULL, 2]	{k=2}
+2	NULL	NULL
+3	[]	{}
+
+query I
+SELECT id FROM implicit_children WHERE s.l::VARCHAR = '[2, NULL, 2]' AND s.m::VARCHAR = '{k=2}'
+----
+1
+
+# An outer cast cannot bypass an error in the schema conversion.
+statement ok
+COPY (SELECT {'x': 1e20::DOUBLE} AS s)
+TO '{TEST_DIR}/extract_cast_overflow.parquet'
+
+statement error
+SELECT s.x::VARCHAR FROM read_parquet('{TEST_DIR}/extract_cast_overflow.parquet', schema = MAP {
+	's': {name: 's', type: 'STRUCT(x INTEGER)', default_value: NULL}
+})
+----
+out of range

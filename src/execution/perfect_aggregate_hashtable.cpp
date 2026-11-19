@@ -146,6 +146,8 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift);
 	}
 
+	// evaluate every aggregate filter once for this chunk
+	filter_set.ApplyFilters(payload);
 	if (AddChunkClustered(address_data, payload)) {
 		return;
 	}
@@ -165,7 +167,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		auto &aggregate = aggregates[aggr_idx];
 		if (aggregate.filter) {
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
-			                                    payload, payload_idx);
+			                                    payload_idx);
 		} else {
 			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx);
 		}
@@ -351,8 +353,10 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 	}
 	// then construct the payloads
-	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::FinalizeStates(row_state, *layout_ptr, addresses, result, grouping_columns);
+	if (!scan_row_state) {
+		scan_row_state = make_uniq<RowOperationsState>(*aggregate_allocator);
+	}
+	RowOperations::FinalizeStates(*scan_row_state, *layout_ptr, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {

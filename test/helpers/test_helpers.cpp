@@ -2,6 +2,7 @@
 #include "test_reporter.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -10,6 +11,12 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -92,6 +99,25 @@ duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> 
 	}
 	return duckdb::make_uniq<duckdb::QueryResult>(statement_type, properties, names, std::move(collection),
 	                                              client_properties);
+}
+
+void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const string &name, bool replace, bool temporary) {
+	// construct the `SELECT * FROM <table_ref>` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(table_ref);
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	// construct the `CREATE [OR REPLACE] [TEMP] VIEW <name> AS` statement using the select statement
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
+	info->temporary = temporary;
+	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
+	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto statement = make_uniq<CreateStatement>();
+	statement->info = std::move(info);
+	// Execute the CREATE VIEW
+	con.Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
@@ -661,25 +687,25 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
 	result->options.checkpoint_wal_size = test_config.GetCheckpointWALSize();
-	result->options.checkpoint_on_shutdown = test_config.GetCheckpointOnShutdown();
+	result->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(test_config.GetCheckpointOnShutdown()));
 #else
-	result->options.checkpoint_on_shutdown = false;
+	result->SetOption(CheckpointOnShutdownSetting::SettingIndex, Value::BOOLEAN(false));
 #endif
-	result->options.abort_on_wal_failure = true;
+	result->SetOption(DebugAbortOnWalFailureSetting::SettingIndex, Value::BOOLEAN(true));
 #ifdef DUCKDB_RUN_SLOW_VERIFIERS
 	// This mode isn't slow, but we want test coverage both when it's enabled
 	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
-	result->options.trim_free_blocks = true;
+	result->SetOption(TrimFreeBlocksSetting::SettingIndex, Value::BOOLEAN(true));
 #endif
 	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
-		result->options.storage_compatibility = StorageCompatibility::FromString(storage_version);
+		result->SetOptionByName("storage_compatibility_version", storage_version);
 	}
 
 	auto max_threads = test_config.GetMaxThreads();
 	if (max_threads.IsValid()) {
-		result->options.maximum_threads = max_threads.GetIndex();
+		Settings::Set<ThreadsSetting>(*result, SetScope::GLOBAL, Value::BIGINT(max_threads.GetIndex()));
 	}
 
 	auto block_alloc_size = test_config.GetBlockAllocSize();
@@ -688,7 +714,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 		result->SetOptionByName("default_block_size", Value::UBIGINT(block_alloc_size.GetIndex()));
 	}
 
-	result->options.debug_initialize = test_config.GetDebugInitialize();
+	result->SetOptionByName("debug_initialize", EnumUtil::ToString(test_config.GetDebugInitialize()));
 	result->options.main_database_options = test_config.GetMainDatabaseOptions();
 	result->SetOptionByName("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;

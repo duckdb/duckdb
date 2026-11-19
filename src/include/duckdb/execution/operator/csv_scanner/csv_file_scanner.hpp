@@ -73,6 +73,10 @@ public:
 	shared_ptr<CSVStateMachine> state_machine;
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read {0};
+	//! The bytes of the stored file scanned but not yet reported to the profiler
+	atomic<idx_t> bytes_scanned_unreported {0};
+	//! Counts the stored bytes the file was read for since the last call as scanned
+	void CountBytesScanned(CSVBufferManager &manager);
 	//! The progress of a compressed file is estimated - keeps it monotonic
 	MonotonicProgress compressed_progress;
 	//! Size of this file
@@ -86,6 +90,8 @@ public:
 
 	//! Variables to handle projection pushdown
 	set<idx_t> projected_columns;
+	//! No column of the file is projected: the scan reads the first column only to count rows
+	bool reads_first_column_to_count_rows = false;
 	std::vector<std::pair<idx_t, idx_t>> projection_ids;
 
 	//! Options for this CSV Reader

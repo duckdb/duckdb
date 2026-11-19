@@ -220,25 +220,25 @@ struct AlpRDDecompression {
 	                       const AlpRDConstants::EXCEPTION_POSITION_TYPE *exceptions_positions,
 	                       AlpRDConstants::BIT_WIDTH_TYPE left_bit_width,
 	                       AlpRDConstants::BIT_WIDTH_TYPE right_bit_width) {
-		AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
-		EXACT_TYPE right_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
+		AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_decoded[AlpRDConstants::ALP_VECTOR_SIZE];
 
 		// Bitunpacking left and right parts
 		BitpackingPrimitives::UnPackBuffer<AlpRDConstants::DICTIONARY_ELEMENT_TYPE>(
 		    data_ptr_cast(left_decoded), left_encoded, values_count, left_bit_width);
-		BitpackingPrimitives::UnPackBuffer<EXACT_TYPE>(data_ptr_cast(right_decoded), right_encoded, values_count,
-		                                               right_bit_width);
+		BitpackingPrimitives::UnPackBufferWithFrame<EXACT_TYPE>(
+		    data_ptr_cast(output), right_encoded, BitpackingPrimitives::RoundUpToAlgorithmGroupSize(values_count),
+		    right_bit_width, 0);
 
 		// Decoding
 		for (idx_t i = 0; i < values_count; i++) {
 			AlpRDConstants::DICTIONARY_ELEMENT_TYPE left = left_parts_dict[left_decoded[i]];
-			EXACT_TYPE right = right_decoded[i];
+			EXACT_TYPE right = output[i];
 			output[i] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}
 
 		// Exceptions Patching (exceptions only occur in left parts)
 		for (idx_t i = 0; i < exceptions_count; i++) {
-			EXACT_TYPE right = right_decoded[exceptions_positions[i]];
+			EXACT_TYPE right = output[exceptions_positions[i]] & ((EXACT_TYPE(1) << right_bit_width) - 1);
 			AlpRDConstants::EXCEPTION_TYPE left = exceptions[i];
 			output[exceptions_positions[i]] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}

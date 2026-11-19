@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
-                                                       PhysicalOperator &left, PhysicalOperator &right,
-                                                       vector<JoinCondition> cond, JoinType join_type,
-                                                       idx_t estimated_cardinality,
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, ClientContext &context,
+                                                       LogicalComparisonJoin &op, PhysicalOperator &left,
+                                                       PhysicalOperator &right, vector<JoinCondition> cond,
+                                                       JoinType join_type, idx_t estimated_cardinality,
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
@@ -52,6 +52,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
 			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	}
+	tail_predicate = CreateTailPredicate(context, conditions, 1);
 }
 
 //===--------------------------------------------------------------------===//
@@ -231,7 +232,7 @@ public:
 	PiecewiseMergeJoinState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op)
 	    : client(client), allocator(Allocator::Get(client)), op(op), left_outer(IsLeftOuterJoin(op.join_type)),
 	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(client), pred_executor(client) {
+	      rhs_executor(client), tail_executor(client), pred_executor(client) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 
@@ -247,6 +248,10 @@ public:
 			condition_types.push_back(order.expression->GetReturnType());
 		}
 		rhs_keys.Initialize(client, condition_types);
+		if (op.tail_predicate) {
+			tail_executor.AddExpression(*op.tail_predicate);
+			tail_keys.InitializeEmpty(PhysicalRangeJoin::GetTailTypes(op.conditions, 1));
+		}
 		rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
@@ -291,6 +296,8 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
+	ExpressionExecutor tail_executor;
+	DataChunk tail_keys;
 
 	//! Arbitrary expressions
 	ExpressionExecutor pred_executor;
@@ -692,22 +699,18 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				state.rhs_executor.SetChunk(state.rhs_input);
 				state.rhs_keys.Reset();
 
-				auto tail_count = result_count;
-				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					Vector left(Vector::Ref(state.lhs_local_table->keys.data[cmp_idx]));
-					left.Slice(left_info.lhs, result_count);
+				auto &tail_keys = state.tail_keys;
+				for (idx_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
+					tail_keys.data[cmp_idx - 1].Slice(state.lhs_local_table->keys.data[cmp_idx], left_info.lhs,
+					                                  result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
 					state.rhs_executor.ExecuteExpression(cmp_idx, right);
-
-					if (tail_count < result_count) {
-						left.Slice(*sel, tail_count);
-						right.Slice(*sel, tail_count);
-					}
-					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
-					                            &state.sel);
-					sel = &state.sel;
+					tail_keys.data[tail_cols + cmp_idx - 1].Reference(right);
 				}
+				tail_keys.CheckCardinality(result_count);
+				const auto tail_count = state.tail_executor.SelectExpression(tail_keys, state.sel);
+				sel = &state.sel;
 
 				if (tail_count < result_count) {
 					result_count = tail_count;

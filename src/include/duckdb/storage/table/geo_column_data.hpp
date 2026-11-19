@@ -30,7 +30,8 @@ public:
 
 	void InitializeChildScanStates(ColumnScanState &state);
 
-	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t start_row,
+	                        idx_t end_row) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
@@ -45,7 +46,6 @@ public:
 	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;
 	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
-	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
 	               const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
 	               idx_t result_offset) override;
@@ -56,7 +56,7 @@ public:
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group, Context &context,
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
 	                                             const BaseStatistics &old_stats) override;

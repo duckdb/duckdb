@@ -1,3 +1,4 @@
+#include "duckdb/main/context.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
@@ -28,6 +29,13 @@ idx_t HTTPParams::GetTransportReuseDomain() const {
 
 void HTTPParams::SetTransportReuseDomain(idx_t transport_reuse_domain_p) {
 	transport_reuse_domain = transport_reuse_domain_p;
+}
+
+void HTTPParams::RequireServerCertificateVerification() {
+	override_verify_ssl = true;
+	verify_ssl = true;
+	// the domain captured at initialization described the unforced parameters; a provider recaptures a cleared one
+	transport_reuse_domain = 0;
 }
 
 HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
@@ -404,6 +412,15 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
+// A request error can be a serialized exception that callers parse back with ErrorData, so it has to stay valid JSON.
+static string AppendToRequestError(const string &request_error, const string &note) {
+	if (request_error.empty() || request_error[0] != '{') {
+		return request_error + note;
+	}
+	ErrorData error(request_error);
+	return Exception::ToJSON(error.ExtraInfo(), error.Type(), error.RawMessage() + note);
+}
+
 // Handlers turn error statuses into exceptions; rebuild the response they saw so it can be judged like a received one.
 static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
 	auto &extra_info = error.ExtraInfo();
@@ -464,15 +481,16 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			    if (response) {
 				    response->url = request.url;
 			    }
-		    } catch (IOException &e) {
+		    } catch (const std::exception &e) {
+			    caught_error = ErrorData(e);
+			    if (caught_error.Type() != ExceptionType::IO && caught_error.Type() != ExceptionType::HTTP) {
+				    throw;
+			    }
 			    exception_error = e.what();
 			    caught_e = std::current_exception();
-			    caught_error = ErrorData(e);
-		    } catch (HTTPException &e) {
-			    exception_error = e.what();
-			    caught_e = std::current_exception();
-			    caught_error = ErrorData(e);
-			    caught_response = ResponseFromError(caught_error);
+			    if (caught_error.Type() == ExceptionType::HTTP) {
+				    caught_response = ResponseFromError(caught_error);
+			    }
 		    }
 
 		    if (response) {
@@ -528,12 +546,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	if (request.try_request) {
 		if (!response) {
 			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-			response->request_error =
-			    (exception_error.empty() ? "Unknown error" : std::move(exception_error)) + quota_note;
-		} else if (!quota_note.empty()) {
+			response->request_error = exception_error.empty() ? "Unknown error" : std::move(exception_error);
+		}
+		if (!quota_note.empty()) {
 			// A received error keeps its status; the note goes to the field GetError() reports.
 			if (response->HasRequestError()) {
-				response->request_error += quota_note;
+				response->request_error = AppendToRequestError(response->request_error, quota_note);
 			} else {
 				response->reason += quota_note;
 			}
@@ -563,7 +581,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto &http_proxy_setting = db->config.options.http_proxy;
+		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(db->config);
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;
@@ -573,25 +591,30 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 		}
 		http_proxy_username = Settings::Get<HTTPProxyUsernameSetting>(*db);
 		http_proxy_password = Settings::Get<HTTPProxyPasswordSetting>(*db);
+		retry_quota_throttled = Settings::Get<HTTPRetryQuotaThrottledSetting>(*db);
+		retry_throttled_wait_ms = Settings::Get<HTTPRetryThrottledWaitMsSetting>(*db);
 	}
 
-	auto client_context = FileOpener::TryGetClientContext(opener);
-	if (client_context) {
-		logger = client_context->logger;
+	auto context = FileOpener::TryGetContext(opener);
+	if (context && context->IsClient()) {
+		logger = context->GetLoggerPtr();
+	}
+	if (context) {
+		// A session's own value wins over the database's
+		retry_quota_throttled = Settings::Get<HTTPRetryQuotaThrottledSetting>(*context);
+		retry_throttled_wait_ms = Settings::Get<HTTPRetryThrottledWaitMsSetting>(*context);
 	}
 }
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(DatabaseInstance &db, const string &url) {
 	DatabaseFileOpener opener(db);
-	FileOpenerInfo info;
-	info.file_path = url;
+	FileOpenerInfo info(url);
 	return InitializeParameters(&opener, &info);
 }
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context, const string &url) {
-	ClientContextFileOpener opener(context);
-	FileOpenerInfo info;
-	info.file_path = url;
+	ClientContextFileOpener opener(context.GetContext());
+	FileOpenerInfo info(url);
 	return InitializeParameters(&opener, &info);
 }
 

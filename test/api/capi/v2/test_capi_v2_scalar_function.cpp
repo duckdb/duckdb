@@ -19,16 +19,11 @@ namespace test_capi_v2 {
 
 namespace {
 
-duckdb_v2_identifier_t Ident(const char *s) {
-	return duckdb_v2_identifier_t {s, std::strlen(s)};
-}
-
 // Create a scalar function on the connection with the given name.
-duckdb_v2_scalar_function_handle MakeScalar(duckdb_v2_connection_handle conn, const char *name) {
+duckdb_v2_scalar_function_handle MakeScalar(duckdb_v2_connection_handle conn, std::string_view name) {
 	duckdb_v2_scalar_function_handle function = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto str = Convert(name);
-	REQUIRE(duckdb_v2_scalar_function_set_name(function, &str, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, name.data(), name.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
 	return function;
 }
 
@@ -40,16 +35,15 @@ duckdb_v2_function_signature_handle SigOf(duckdb_v2_scalar_function_handle funct
 	return sig;
 }
 
-void SigParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type,
+void SigParam(duckdb_v2_function_signature_handle sig, std::string_view name, duckdb_v2_logical_type_handle type,
               duckdb_v2_value_handle default_value = nullptr) {
-	auto name_str = Ident(name);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, type, default_value,
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, name.data(), name.size(), type, default_value,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 }
 
 // Run a query producing a single INTEGER cell.
-int32_t QueryI32(duckdb_v2_connection_handle conn, const char *sql) {
+int32_t QueryI32(duckdb_v2_connection_handle conn, std::string_view sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
 	auto chunk = StepChunk(result);
@@ -187,8 +181,8 @@ void VarargSumExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_co
 	if (duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) !=
 	    DUCKDB_V2_ERROR_INPUT_INVALID) {
 		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_API);
-		auto text_str = Convert("past-the-end argument vector index was not refused");
-		duckdb_v2_error_info_set_text(*err, &text_str);
+		std::string_view text_str = "past-the-end argument vector index was not refused";
+		duckdb_v2_error_info_set_text(*err, text_str.data(), text_str.size());
 	}
 }
 
@@ -199,8 +193,8 @@ void NoopExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_hand
 void FailingExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_handle,
                  duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	auto text_str = Convert("scalar exec failed on purpose");
-	duckdb_v2_error_info_set_text(*err, &text_str);
+	std::string_view text_str = "scalar exec failed on purpose";
+	duckdb_v2_error_info_set_text(*err, text_str.data(), text_str.size());
 }
 
 // ---------------------------------------------------------------------------
@@ -234,8 +228,8 @@ void IntegerResolveTypes(duckdb_v2_function_bind_info_handle,
 	duckdb_v2_factory_handle factory = nullptr;
 	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
-	                                          err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, nullptr, 0,
+	                                          &integer, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_scalar_function_resolve_types_set_return_type(result, integer, err);
@@ -492,8 +486,8 @@ TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 	// vsum(INTEGER...) -> INTEGER
 	auto function = MakeScalar(fx.conn, "vsum");
 	auto sig = SigOf(function);
-	auto args_ident = Ident("args");
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &args_ident, integer, nullptr,
+	std::string_view args_ident = "args";
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, args_ident.data(), args_ident.size(), integer, nullptr,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_VARIADIC,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -517,12 +511,12 @@ TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2
 	auto sig = SigOf(function);
 
 	// "*args" is added before the standard parameter: the signature orders parameters by kind
-	auto args_str = Ident("args");
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &args_str, integer, nullptr,
+	std::string_view args_str = "args";
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, args_str.data(), args_str.size(), integer, nullptr,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_VARIADIC,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto name_str = Ident("\x80");
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, integer, nullptr,
+	std::string_view name_str = "\x80";
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, name_str.data(), name_str.size(), integer, nullptr,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
 	                                                   nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	SigParam(sig, "first", integer);
@@ -802,9 +796,10 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	auto invalid_name = Convert("\x80");
-	REQUIRE(duckdb_v2_scalar_function_set_name(function, &invalid_name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, 1, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	std::string_view invalid_name = "\x80";
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, invalid_name.data(), invalid_name.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -865,6 +860,24 @@ TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
 	// With default null handling this would be NULL without invoking the callback.
 	REQUIRE(QueryI32(fx.conn, "SELECT COALESCE(always42(NULL::INTEGER), -1)") == 42);
 
+	// The catalog reports CONSISTENT_WITHIN_QUERY, and index keys cannot contain the function.
+	function = MakeScalar(fx.conn, "prop_query");
+	sig = SigOf(function);
+	SigParam(sig, "a", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, Const42Exec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
+	                                               DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_CONSISTENT_WITHIN_QUERY,
+	                                               nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+
+	REQUIRE(QueryI32(fx.conn, "SELECT prop_query(1)") == 42);
+	REQUIRE(QueryI32(fx.conn, "SELECT count(*)::INTEGER FROM duckdb_functions() WHERE function_name = 'prop_query' "
+	                          "AND stability = 'CONSISTENT_WITHIN_QUERY'") == 1);
+	REQUIRE(RunSql(fx.conn, "CREATE TABLE prop_keys (a INTEGER)") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "CREATE INDEX prop_index ON prop_keys ((prop_query(a)))") == DUCKDB_V2_ERROR_QUERY_BINDER);
+
 	// Invalid combinations are rejected.
 	function = MakeScalar(fx.conn, "prop_errors");
 	// A value that does not belong to the key.
@@ -885,6 +898,183 @@ TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
 	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
+}
+
+namespace {
+
+// Returns its VARCHAR argument unchanged.
+void VarcharIdentityExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle,
+                         duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle input = nullptr;
+	duckdb_v2_vector_handle output = nullptr;
+	if (duckdb_v2_scalar_function_exec_get_arg(info, 0, &input, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_scalar_function_exec_get_result(info, &output, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_vector_reference(output, input, err);
+}
+
+duckdb_v2_scalar_function_handle MakeVarcharIdentity(duckdb_v2_connection_handle conn, std::string_view name,
+                                                     duckdb_v2_logical_type_handle varchar) {
+	auto function = MakeScalar(conn, name);
+	auto sig = SigOf(function);
+	SigParam(sig, "s", varchar);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, varchar, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarcharIdentityExec, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	return function;
+}
+
+// Creates a VARCHAR -> VARCHAR identity function in the collations schema, i.e. the collation of the same name.
+duckdb_v2_scalar_function_handle MakeCollation(duckdb_v2_connection_handle conn, std::string_view name,
+                                               duckdb_v2_logical_type_handle varchar) {
+	auto function = MakeVarcharIdentity(conn, name, varchar);
+	constexpr std::string_view schema = "collations";
+	REQUIRE(duckdb_v2_scalar_function_set_schema(function, schema.data(), schema.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	return function;
+}
+
+// Reads a BOOLEAN generic property, -1 if it is not set.
+int GetGenericBoolProperty(duckdb_v2_scalar_function_handle function, std::string_view name) {
+	duckdb_v2_value_handle value = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_get_generic_property(function, name.data(), name.size(), &value, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	if (!value) {
+		return -1;
+	}
+	bool result = false;
+	REQUIRE(duckdb_v2_value_get_bool(value, &result, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	return result ? 1 : 0;
+}
+
+constexpr std::string_view COMBINABLE_PROPERTY_NAME = "duckdb.collation.combinable";
+
+} // namespace
+
+TEST_CASE("V2 scalar: generic function properties", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	auto function = MakeScalar(fx.conn, "generic_props");
+
+	// An absent property reads as NULL.
+	REQUIRE(GetGenericBoolProperty(function, COMBINABLE_PROPERTY_NAME) == -1);
+
+	duckdb_v2_value_handle value = nullptr;
+	REQUIRE(duckdb_v2_value_create_bool(fx.factory, true, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), value,
+	                                                       nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(GetGenericBoolProperty(function, COMBINABLE_PROPERTY_NAME) == 1);
+	// Names are matched exactly.
+	REQUIRE(GetGenericBoolProperty(function, "duckdb.collation") == -1);
+
+	// Setting a property again replaces its value.
+	REQUIRE(duckdb_v2_value_create_bool(fx.factory, false, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), value,
+	                                                       nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(GetGenericBoolProperty(function, COMBINABLE_PROPERTY_NAME) == 0);
+
+	// Any value type can be stored.
+	std::string_view other = "my_extension.tag";
+	duckdb_v2_value_handle text = nullptr;
+	REQUIRE(duckdb_v2_value_create_varchar(fx.factory, "hello", 5, &text, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, other.data(), other.size(), text, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&text);
+	REQUIRE(duckdb_v2_scalar_function_get_generic_property(function, other.data(), other.size(), &text, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(text != nullptr);
+	const char *str = nullptr;
+	idx_t str_length = 0;
+	REQUIRE(duckdb_v2_value_get_varchar(text, &str, &str_length, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(std::string(str, str_length) == "hello");
+	duckdb_v2_value_destroy(&text);
+
+	// Invalid arguments.
+	duckdb_v2_value_handle out = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, "", 0, value, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, nullptr, 3, value, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), nullptr,
+	                                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(nullptr, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), value,
+	                                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_get_generic_property(function, "", 0, &out, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_get_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), nullptr,
+	                                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_get_generic_property(nullptr, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), &out,
+	                                                       nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_value_destroy(&value);
+	duckdb_v2_scalar_function_destroy(&function);
+}
+
+TEST_CASE("V2 scalar: collations are combinable through a generic property", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+
+	// capi_combinable is marked as combinable, capi_plain is not.
+	auto function = MakeCollation(fx.conn, "capi_combinable", varchar);
+	duckdb_v2_value_handle value = nullptr;
+	REQUIRE(duckdb_v2_value_create_bool(fx.factory, true, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), value,
+	                                                       nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+
+	function = MakeCollation(fx.conn, "capi_plain", varchar);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+
+	// a property value that is not a BOOLEAN does not make a collation combinable, and does not break it
+	function = MakeCollation(fx.conn, "capi_text", varchar);
+	REQUIRE(duckdb_v2_value_create_varchar(fx.factory, "hello", 5, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_generic_property(function, COMBINABLE_PROPERTY_NAME.data(),
+	                                                       COMBINABLE_PROPERTY_NAME.size(), value,
+	                                                       nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&varchar);
+	REQUIRE(QueryI32(fx.conn, "SELECT ('A' COLLATE capi_text = 'A')::INTEGER") == 1);
+	REQUIRE(RunSql(fx.conn, "SELECT 'A' COLLATE nfc.capi_text = 'A'") == DUCKDB_V2_ERROR_QUERY_BINDER);
+
+	// a function in the default schema is not a collation
+	varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	function = MakeVarcharIdentity(fx.conn, "capi_main", varchar);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&varchar);
+	REQUIRE(QueryI32(fx.conn, "SELECT (capi_main('A') = 'A')::INTEGER") == 1);
+	REQUIRE(RunSql(fx.conn, "SELECT 'A' COLLATE capi_main = 'A'") != DUCKDB_V2_ERROR_NONE);
+
+	// the schema must exist, and cannot be empty
+	varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	function = MakeVarcharIdentity(fx.conn, "capi_nowhere", varchar);
+	constexpr std::string_view missing = "no_such_schema";
+	REQUIRE(duckdb_v2_scalar_function_set_schema(function, missing.data(), missing.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_schema(function, "", 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&varchar);
+
+	REQUIRE(QueryI32(fx.conn, "SELECT ('A' COLLATE capi_plain = 'A')::INTEGER") == 1);
+	REQUIRE(QueryI32(fx.conn, "SELECT ('A' COLLATE nocase.capi_plain = 'a')::INTEGER") == 1);
+	// nfc is not combinable: it combines with capi_combinable, but not with capi_plain.
+	REQUIRE(QueryI32(fx.conn, "SELECT ('A' COLLATE nfc.capi_combinable = 'A')::INTEGER") == 1);
+	REQUIRE(RunSql(fx.conn, "SELECT 'A' COLLATE nfc.capi_plain = 'A'") == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(RunSql(fx.conn, "SELECT 'A' COLLATE capi_plain.capi_combinable.nfc = 'A'") == DUCKDB_V2_ERROR_QUERY_BINDER);
 }
 
 namespace {
@@ -941,17 +1131,18 @@ void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_funct
 	    duckdb_v2_function_bind_get_arg_count(info, nullptr, nullptr, nullptr, nullptr, nullptr);
 
 	for (idx_t i = 0; i < arg_count; i++) {
-		duckdb_v2_identifier_t name {};
-		if (duckdb_v2_function_bind_get_arg_name(info, i, &name, err) != DUCKDB_V2_ERROR_NONE) {
+		const char *name = nullptr;
+		idx_t name_length = 0;
+		if (duckdb_v2_function_bind_get_arg_name(info, i, &name, &name_length, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
-		kind_probe.names.push_back(Convert(name));
+		kind_probe.names.push_back(std::string(name, name_length));
 	}
 
 	bool found = false;
-	auto scale_ident = Ident("SCALE");
-	if (duckdb_v2_function_bind_get_arg_index(info, &scale_ident, &kind_probe.scale_index, &found, err) !=
-	    DUCKDB_V2_ERROR_NONE) {
+	std::string_view scale_ident = "SCALE";
+	if (duckdb_v2_function_bind_get_arg_index(info, scale_ident.data(), scale_ident.size(), &kind_probe.scale_index,
+	                                          &found, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	if (!found) {
@@ -959,12 +1150,12 @@ void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_funct
 		return;
 	}
 	idx_t missing_index = 0;
-	auto missing_ident = Ident("missing");
-	auto x_ident = Ident("x");
-	if (duckdb_v2_function_bind_get_arg_index(info, &missing_ident, &missing_index, &kind_probe.missing_found, err) !=
-	        DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_function_bind_get_arg_index(info, &x_ident, &kind_probe.x_index, &kind_probe.x_found, err) !=
-	        DUCKDB_V2_ERROR_NONE) {
+	std::string_view missing_ident = "missing";
+	std::string_view x_ident = "x";
+	if (duckdb_v2_function_bind_get_arg_index(info, missing_ident.data(), missing_ident.size(), &missing_index,
+	                                          &kind_probe.missing_found, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_function_bind_get_arg_index(info, x_ident.data(), x_ident.size(), &kind_probe.x_index,
+	                                          &kind_probe.x_found, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 
@@ -989,10 +1180,12 @@ void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_funct
 	}
 
 	// An index past the last argument is an input error.
-	duckdb_v2_identifier_t oob_name {};
+	const char *oob_name = nullptr;
+	idx_t oob_name_length = 0;
 	duckdb_v2_logical_type_handle oob_type = nullptr;
 	duckdb_v2_value_handle oob_value = nullptr;
-	kind_probe.oob_name_rc = duckdb_v2_function_bind_get_arg_name(info, arg_count, &oob_name, nullptr);
+	kind_probe.oob_name_rc =
+	    duckdb_v2_function_bind_get_arg_name(info, arg_count, &oob_name, &oob_name_length, nullptr);
 	kind_probe.oob_type_rc = duckdb_v2_function_bind_get_arg_type(info, arg_count, &oob_type, nullptr);
 	kind_probe.oob_value_rc = duckdb_v2_function_bind_get_arg_value(info, arg_count, &oob_value, nullptr);
 
@@ -1056,11 +1249,10 @@ void KindExecCb(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_conte
 	                              DUCKDB_V2_ERROR_INPUT_INVALID;
 }
 
-void AddKindParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type,
+void AddKindParam(duckdb_v2_function_signature_handle sig, std::string_view name, duckdb_v2_logical_type_handle type,
                   DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_value_handle default_value = nullptr) {
-	auto name_ident = Ident(name);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_ident, type, default_value, kind, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, name.data(), name.size(), type, default_value, kind,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 }
 
 using Counts = std::vector<idx_t>;
@@ -1161,9 +1353,9 @@ TEST_CASE("V2 scalar: parameter kind refusals", "[capi_v2][scalar_function]") {
 
 	SECTION("a kind outside the enum") {
 		auto function = MakeScalar(fx.conn, "bad_kind");
-		auto a_ident = Ident("a");
-		REQUIRE(duckdb_v2_function_signature_add_parameter(SigOf(function), &a_ident, integer, nullptr,
-		                                                   static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(42),
+		std::string_view a_ident = "a";
+		REQUIRE(duckdb_v2_function_signature_add_parameter(SigOf(function), a_ident.data(), a_ident.size(), integer,
+		                                                   nullptr, static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(42),
 		                                                   nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
@@ -1194,7 +1386,8 @@ TEST_CASE("V2 function bind: null arguments", "[capi_v2][scalar_function]") {
 	idx_t count = 0;
 	duckdb_v2_logical_type_handle type = nullptr;
 	duckdb_v2_value_handle value = nullptr;
-	duckdb_v2_identifier_t name {};
+	const char *name = nullptr;
+	idx_t name_length = 0;
 	bool found = false;
 	void *data = nullptr;
 	REQUIRE(duckdb_v2_function_bind_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -1204,9 +1397,10 @@ TEST_CASE("V2 function bind: null arguments", "[capi_v2][scalar_function]") {
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_function_bind_get_arg_type(nullptr, 0, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_function_bind_get_arg_value(nullptr, 0, &value, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_bind_get_arg_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	auto a_ident = Ident("a");
-	REQUIRE(duckdb_v2_function_bind_get_arg_index(nullptr, &a_ident, &count, &found, nullptr) ==
+	REQUIRE(duckdb_v2_function_bind_get_arg_name(nullptr, 0, &name, &name_length, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	std::string_view a_ident = "a";
+	REQUIRE(duckdb_v2_function_bind_get_arg_index(nullptr, a_ident.data(), a_ident.size(), &count, &found, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
@@ -1227,26 +1421,33 @@ TEST_CASE("V2 function docs: borrowed from the function, and argument validation
 	REQUIRE(duckdb_v2_scalar_function_get_docs(function, &again, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(again == docs);
 
-	auto text = Convert("Adds one.");
-	auto title = Convert("Add one");
-	auto example = Convert("f(1)");
-	REQUIRE(duckdb_v2_function_docs_set_description(docs, &text, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_docs_add_example(docs, &title, &example, nullptr) == DUCKDB_V2_ERROR_NONE);
+	std::string_view text = "Adds one.";
+	std::string_view title = "Add one";
+	std::string_view example = "f(1)";
+	REQUIRE(duckdb_v2_function_docs_set_description(docs, text.data(), text.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, title.data(), title.size(), example.data(), example.size(),
+	                                            nullptr) == DUCKDB_V2_ERROR_NONE);
 	// The title is optional.
-	REQUIRE(duckdb_v2_function_docs_add_example(docs, nullptr, &example, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto category = Convert("numeric");
-	REQUIRE(duckdb_v2_function_docs_add_category(docs, &category, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_docs_add_category(docs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_add_category(nullptr, &category, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, nullptr, 0, example.data(), example.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	std::string_view category = "numeric";
+	REQUIRE(duckdb_v2_function_docs_add_category(docs, category.data(), category.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_docs_add_category(docs, nullptr, 1, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_category(nullptr, category.data(), category.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	auto malformed = duckdb_v2_str {nullptr, 3};
 	REQUIRE(duckdb_v2_scalar_function_get_docs(nullptr, &again, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_scalar_function_get_docs(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_set_description(nullptr, &text, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_set_description(docs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_add_example(docs, &title, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_add_example(docs, &malformed, &example, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_docs_add_example(nullptr, &title, &example, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_set_description(nullptr, text.data(), text.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_set_description(docs, nullptr, 1, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, title.data(), title.size(), nullptr, 1, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, nullptr, 3, example.data(), example.size(), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(nullptr, title.data(), title.size(), example.data(), example.size(),
+	                                            nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_scalar_function_destroy(&function);
 }
 

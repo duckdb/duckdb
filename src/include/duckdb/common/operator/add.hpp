@@ -15,11 +15,17 @@
 
 namespace duckdb {
 
+struct bignum_t;
+class StringHeap;
+struct BignumArithmeticState;
+
 struct AddOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
 		return left + right;
 	}
+	//! BIGNUM-backed values allocate their result in the heap
+	DUCKDB_API static bignum_t Operation(bignum_t left, bignum_t right, StringHeap &heap, BignumArithmeticState &state);
 };
 
 template <>
@@ -45,11 +51,29 @@ timestamp_t AddOperator::Operation(date_t left, interval_t right);
 template <>
 timestamp_t AddOperator::Operation(interval_t left, date_t right);
 template <>
-timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
+timestamp_t AddOperator::Operation(timestamp_sec_t left, interval_t right);
 template <>
-timestamp_t AddOperator::Operation(timestamp_t left, double right);
+timestamp_t AddOperator::Operation(timestamp_sec_t left, double right);
 template <>
-timestamp_t AddOperator::Operation(interval_t left, timestamp_t right);
+timestamp_t AddOperator::Operation(interval_t left, timestamp_sec_t right);
+template <>
+timestamp_t AddOperator::Operation(timestamp_ms_t left, interval_t right);
+template <>
+timestamp_t AddOperator::Operation(timestamp_ms_t left, double right);
+template <>
+timestamp_t AddOperator::Operation(interval_t left, timestamp_ms_t right);
+template <>
+timestamp_t AddOperator::Operation(timestamp_us_t left, interval_t right);
+template <>
+timestamp_t AddOperator::Operation(timestamp_us_t left, double right);
+template <>
+timestamp_t AddOperator::Operation(interval_t left, timestamp_us_t right);
+template <>
+timestamp_ns_t AddOperator::Operation(timestamp_ns_t left, interval_t right);
+template <>
+timestamp_ns_t AddOperator::Operation(timestamp_ns_t left, double right);
+template <>
+timestamp_ns_t AddOperator::Operation(interval_t left, timestamp_ns_t right);
 
 struct TryAddOperator {
 	template <class TA, class TB, class TR>
@@ -70,6 +94,8 @@ template <>
 bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result);
 template <>
 bool TryAddOperator::Operation(timestamp_t left, interval_t right, timestamp_t &result);
+template <>
+bool TryAddOperator::Operation(timestamp_ns_t left, interval_t right, timestamp_ns_t &result);
 
 template <>
 bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result);
@@ -96,6 +122,8 @@ struct AddOperatorOverflowCheck {
 	}
 };
 
+//! The fixed-size integer tiers of decimals check their results against the width of the tier; the bignum_t tier above
+//! 38 digits binds exact result widths and needs no check
 struct TryDecimalAdd {
 	template <class TA, class TB, class TR>
 	static inline bool Operation(TA left, TB right, TR &result) {

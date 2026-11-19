@@ -18,6 +18,7 @@
 #include <chrono>
 #include <fstream>
 #include <thread>
+#include "duckdb/main/settings.hpp"
 
 using namespace duckdb;
 
@@ -187,6 +188,21 @@ TEST_CASE("Test temp_directory defaults", "[api][.]") {
 
 		REQUIRE(db->instance->config.options.temporary_directory == ".tmp");
 	}
+}
+
+TEST_CASE("Test max_temp_directory_size set at startup is enforced", "[api]") {
+	auto config = GetTestConfig();
+	config->SetOptionByName("temp_directory", TestCreatePath("max_temp_directory_size_startup"));
+	config->SetOptionByName("max_temp_directory_size", "0KiB");
+	DuckDB db(nullptr, config.get());
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='4MB'"));
+
+	// the table does not fit in memory, so it has to be offloaded, which the limit does not allow
+	auto result = con.Query("CREATE TABLE t AS SELECT random() FROM range(1000000)");
+	REQUIRE(result->HasError());
+	REQUIRE(result->GetErrorType() == ExceptionType::OUT_OF_MEMORY);
+	REQUIRE(StringUtil::Contains(result->GetError(), "failed to offload data block"));
 }
 
 TEST_CASE("Test parallel usage of single client", "[api][.]") {
@@ -813,7 +829,7 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 	DBConfig config;
-	config.options.maximum_threads = 8;
+	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(8));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -906,12 +922,11 @@ TEST_CASE("Test insert returning in CPP API", "[api]") {
 	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
 }
 
-TEST_CASE("Test a logical execute still has types after an optimization pass", "[api]") {
+TEST_CASE("Test an extracted EXECUTE plan still has types after an optimization pass", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.Query("PREPARE test AS SELECT 42::INTEGER;");
 	const auto query_plan = con.ExtractPlan("EXECUTE test");
-	REQUIRE((query_plan->type == LogicalOperatorType::LOGICAL_EXECUTE));
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }

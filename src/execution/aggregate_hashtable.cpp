@@ -55,7 +55,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits,
-                                                     TupleDataValidityType group_validity)
+                                                     TupleDataValidityType group_validity, idx_t trailing_region_width)
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)),
       state(*aggregate_allocator) {
@@ -71,7 +71,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	group_types_p.emplace_back(LogicalType::HASH);
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
-	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), group_validity);
+	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), group_validity,
+	                   TupleDataNestednessType::TOP_LEVEL_LAYOUT, trailing_region_width);
 	layout_ptr = std::move(layout);
 
 	hash_offset = layout_ptr->GetOffsets()[layout_ptr->ColumnCount() - 1];
@@ -301,6 +302,23 @@ void GroupedAggregateHashTable::Verify() {
 #endif
 }
 
+void GroupedAggregateHashTable::VerifyEntries(const Vector &group_hashes_v, const Vector &addresses_v, idx_t count) {
+#ifdef DEBUG
+	// every row's entry points to its row, which carries the hash the entry's salt was taken from
+	const auto hashes = group_hashes_v.Values<hash_t>();
+	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &entry = entries[ht_offsets[i]];
+		const auto hash = hashes[i].GetValue();
+		D_ASSERT(entry.IsOccupied());
+		D_ASSERT(entry.GetPointer() == addresses[i]);
+		D_ASSERT(entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
+		D_ASSERT(Load<hash_t>(addresses[i] + hash_offset) == hash);
+	}
+#endif
+}
+
 void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, ht_entry_t());
 }
@@ -319,6 +337,10 @@ idx_t GroupedAggregateHashTable::GetMaterializedCount() const {
 		result += unpartitioned_data->Count();
 	}
 	return result;
+}
+
+idx_t GroupedAggregateHashTable::GetMaterializedSize() const {
+	return partitioned_data->GetDataSize() + (unpartitioned_data ? unpartitioned_data->GetDataSize() : 0);
 }
 
 void GroupedAggregateHashTable::SkipLookups() {
@@ -592,6 +614,10 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 
 optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, DataChunk &payload,
                                                              const unsafe_vector<idx_t> &filter) {
+	if (groups.size() == 0) {
+		// no rows, no group: the constant group below would be added without a row that has it
+		return optional_idx();
+	}
 #ifndef DEBUG
 	if (groups.size() <= 1) {
 		// this only has a point if we have multiple groups
@@ -719,8 +745,9 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 
 void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, idx_t count,
                                                  bool ht_offsets_valid) {
+	// evaluate every aggregate filter once for this chunk
+	filter_set.ApplyFilters(payload, filter);
 	if (UpdateAggregatesClustered(payload, filter, count, ht_offsets_valid)) {
-		Verify();
 		return;
 	}
 
@@ -739,7 +766,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
-			                                    payload, payload_idx);
+			                                    payload_idx);
 		} else {
 			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx);
 		}
@@ -749,8 +776,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}
-
-	Verify();
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
@@ -891,6 +916,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			                                *FlatVector::IncrementalSelectionVector(), chunk_size);
 			RowOperations::InitializeStates(*layout_ptr, state.partitioned_append_state.chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), chunk_size);
+			ZeroTrailingRegion(state.partitioned_append_state.chunk_state.row_locations, chunk_size);
 		}
 
 		const auto row_locations =
@@ -961,6 +987,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				data->AppendUnified(*append_state, state.group_chunk, empty_vector, new_entry_count);
 				RowOperations::InitializeStates(*layout_ptr, append_state->chunk_state.row_locations,
 				                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
+				ZeroTrailingRegion(append_state->chunk_state.row_locations, new_entry_count);
 			}
 
 			// Set the entry pointers in the 1st part of the HT now that the data has been appended
@@ -1016,6 +1043,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	FlatVector::SetSize(addresses_v, chunk_size);
 	count += new_group_count;
+	VerifyEntries(group_hashes_v, addresses_v, chunk_size);
 	return new_group_count;
 }
 
@@ -1196,6 +1224,18 @@ struct FlushMoveState {
 	SelectionVector new_groups_sel;
 };
 
+void GroupedAggregateHashTable::ZeroTrailingRegion(Vector &row_locations, idx_t count) const {
+	const auto region_width = layout_ptr->GetTrailingRegionWidth();
+	if (region_width == 0) {
+		return;
+	}
+	const auto region_offset = layout_ptr->GetTrailingRegionOffset();
+	const auto locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		memset(locations[row_idx] + region_offset, 0, region_width);
+	}
+}
+
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	auto other_partitioned_data = other.AcquirePartitionedData();
 	auto other_data = other_partitioned_data->GetUnpartitioned();
@@ -1212,6 +1252,9 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout_ptr->GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout_ptr->GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout_ptr->GetRowWidth());
+	// New groups copy whole source rows, so a trailing region arrives as the source left it: owners must only
+	// scatter region values into the table that survives the combine, never into the sources consumed here.
+	D_ASSERT(other_data.GetLayout().GetTrailingRegionWidth() == layout_ptr->GetTrailingRegionWidth());
 
 	if (other_data.Count() == 0) {
 		return;

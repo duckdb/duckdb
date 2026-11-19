@@ -454,6 +454,9 @@ public:
 		if (!SuppressSuggestions(matcher.get())) {
 			return;
 		}
+		if (list_state.context.suggestions.size() <= saved_suggestion_size) {
+			return;
+		}
 		list_state.context.suggestions.erase(list_state.context.suggestions.begin() +
 		                                         NumericCast<int64_t>(saved_suggestion_size),
 		                                     list_state.context.suggestions.end());
@@ -783,7 +786,8 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			break;
 		}
 		}
-		if (has_child) {
+		D_ASSERT(!has_child || next);
+		if (has_child && next) {
 			if (SINGLE_STEP) {
 				return MatchStep::Child(*next);
 			}

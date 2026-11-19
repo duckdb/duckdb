@@ -5,6 +5,8 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -20,7 +22,8 @@ BufferedData::BufferedData(Type type, ClientContext &context_p, ResultLifetime l
     : type(type), context(context_p.shared_from_this()),
       // The setting has no lower bound. A buffer that can never admit a chunk blocks
       // every sink while empty, and the stream silently ends with zero rows
-      total_buffer_size(MaxValue<idx_t>(ClientConfig::GetConfig(context_p).max_streaming_buffer_size, 1)),
+      total_buffer_size(MaxValue<idx_t>(
+          DBConfig::ParseMemoryLimitOrMaximum(Settings::Get<MaxStreamingBufferSizeSetting>(context_p)), 1)),
       lifetime(lifetime), format_context(std::move(format_context_p)), format(FormatOrChunk(std::move(format_p))),
       format_state(format->InitGlobal(format_context)) {
 }

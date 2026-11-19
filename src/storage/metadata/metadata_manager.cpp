@@ -236,8 +236,8 @@ MetadataPointer MetadataManager::FromDiskPointerInternal(unique_lock<mutex> &blo
 
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) { // LCOV_EXCL_START
-		throw InternalException("Failed to load metadata pointer (id %llu, idx %llu, ptr %llu)\n", block_id, index,
-		                        pointer.block_pointer);
+		throw DataCorruptionException("Failed to load metadata pointer (id %llu, idx %llu, ptr %llu)\n", block_id,
+		                              index, pointer.block_pointer);
 	} // LCOV_EXCL_STOP
 	MetadataPointer result;
 	result.block_index = UnsafeNumericCast<idx_t>(block_id);
@@ -338,6 +338,9 @@ void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Read(source);
+		if (block.block_id < 0 || block.block_id >= MAXIMUM_BLOCK) {
+			throw DataCorruptionException("Corrupt database file: invalid metadata block id %lld", block.block_id);
+		}
 
 		unique_lock<mutex> guard(block_lock);
 		auto entry = blocks.find(block.block_id);

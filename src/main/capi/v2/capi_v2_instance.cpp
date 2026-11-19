@@ -19,6 +19,11 @@ CV2Instance::CV2Instance(CV2Environment &env, DBConfig &startup_config)
       file_system(FileSystem::GetFileSystem(*database->instance), QueryContext()) {
 }
 
+CV2Instance::CV2Instance(CV2Environment &env, shared_ptr<DuckDB> shared_database)
+    : database(std::move(shared_database)), env(env), factory(*this), config_handle(*this),
+      file_system(FileSystem::GetFileSystem(*database->instance), QueryContext()) {
+}
+
 DatabaseInstance &CV2InstanceFactory::GetDatabase() {
 	return *instance.GetDatabase().instance;
 }
@@ -56,7 +61,8 @@ void CV2Instance::Attach(const string &path, const Identifier &name,
 		if (attach_options) {
 			info.options = attach_options->options;
 		}
-		AttachOptions options(info.options, instance.config.options.access_mode);
+		auto &services = instance.GetContext();
+		AttachOptions options(services, info.options, instance.config.options.access_mode);
 		options.original_path = path;
 		if (options.db_type.empty()) {
 			DBPathAndType::ExtractExtensionPrefix(info.path, options.db_type);
@@ -104,16 +110,28 @@ void CV2Instance::SetDefault(const Identifier &name) {
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_handle env, duckdb_v2_instance_handle *out_instance,
-                                          duckdb_v2_error_info_handle *err) {
-	return duckdb_v2_instance_create_with_options(env, nullptr, nullptr, 0, out_instance, err);
+//! Applies the startup options of instance_create_with_options and instance_open_shared.
+static void SetStartupOptions(duckdb::DBConfig &startup_config, const char *const *option_names,
+                              const idx_t *option_names_lengths, const char *const *option_values,
+                              const idx_t *option_values_lengths, idx_t option_count) {
+	string_view_array names(option_names, option_names_lengths, option_count);
+	string_view_array values(option_values, option_values_lengths, option_count);
+	for (idx_t i = 0; i < option_count; i++) {
+		startup_config.SetOptionByName(duckdb::Identifier(duckdb::string(names[i])),
+		                               duckdb::Value(duckdb::string(values[i])));
+	}
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(duckdb_v2_environment_handle env,
-                                                       const duckdb_v2_str *option_names,
-                                                       const duckdb_v2_str *option_values, idx_t option_count,
-                                                       duckdb_v2_instance_handle *out_instance,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_handle env, duckdb_v2_instance_handle *out_instance,
+                                          duckdb_v2_error_info_handle *err) {
+	return duckdb_v2_instance_create_with_options(env, nullptr, nullptr, nullptr, nullptr, 0, out_instance, err);
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_instance_create_with_options(duckdb_v2_environment_handle env, const char *const *option_names,
+                                       const idx_t *option_names_lengths, const char *const *option_values,
+                                       const idx_t *option_values_lengths, idx_t option_count,
+                                       duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(env);
 	DUCKDB_CHECK_ARG(out_instance);
 	*out_instance = nullptr;
@@ -125,15 +143,45 @@ DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(duckdb_v2_environment_han
 	}
 	return WithErrorHandler(err, [&]() {
 		duckdb::DBConfig startup_config;
-		for (idx_t i = 0; i < option_count; i++) {
-			if (IsNullArgument(&option_names[i]) || IsNullArgument(&option_values[i])) {
-				throw duckdb::InvalidInputException("malformed startup option at index %llu", i);
-			}
-			startup_config.SetOptionByName(duckdb::Identifier(duckdb::string(Convert(&option_names[i]))),
-			                               duckdb::Value(duckdb::string(Convert(&option_values[i]))));
-		}
+		SetStartupOptions(startup_config, option_names, option_names_lengths, option_values, option_values_lengths,
+		                  option_count);
 		auto *env_wrapper = Convert(env);
 		auto wrapper = duckdb::make_uniq<CV2Instance>(*env_wrapper, startup_config);
+		env_wrapper->instance_count.fetch_add(1, std::memory_order_release);
+		*out_instance = Convert(wrapper.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(duckdb_v2_environment_handle env, const char *path, idx_t path_length,
+                                               const char *const *option_names, const idx_t *option_names_lengths,
+                                               const char *const *option_values, const idx_t *option_values_lengths,
+                                               idx_t option_count, duckdb_v2_instance_handle *out_instance,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(env);
+	DUCKDB_CHECK_ARG(out_instance);
+	*out_instance = nullptr;
+	DUCKDB_CHECK_STR_ARG(path, path_length);
+	if (option_count > 0 && !option_names) {
+		return NullArgumentError(err, __func__, "option_names");
+	}
+	if (option_count > 0 && !option_values) {
+		return NullArgumentError(err, __func__, "option_values");
+	}
+	return WithErrorHandler(err, [&]() {
+		duckdb::DBConfig startup_config;
+		SetStartupOptions(startup_config, option_names, option_names_lengths, option_values, option_values_lengths,
+		                  option_count);
+		auto *env_wrapper = Convert(env);
+		duckdb::shared_ptr<duckdb::DuckDB> database;
+		try {
+			// an unnamed in-memory database is never cached: every call opens a new one
+			database = env_wrapper->cache->GetOrCreateInstance(
+			    path ? duckdb::string(path, path_length) : duckdb::string(), startup_config);
+		} catch (duckdb::ConnectionException &ex) {
+			// the file is open in an instance with a different configuration
+			throw duckdb::ResourceInUseException(duckdb::ErrorData(ex).RawMessage());
+		}
+		auto wrapper = duckdb::make_uniq<CV2Instance>(*env_wrapper, std::move(database));
 		env_wrapper->instance_count.fetch_add(1, std::memory_order_release);
 		*out_instance = Convert(wrapper.release());
 	});
@@ -154,18 +202,16 @@ DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handle *instance) 
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
-                                          const duckdb_v2_str *path, duckdb_v2_attach_options_handle options,
+DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const char *name, idx_t name_length,
+                                          const char *path, idx_t path_length, duckdb_v2_attach_options_handle options,
                                           bool make_default, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(path);
-	if (name) {
-		DUCKDB_CHECK_ARG(name);
-	}
+	DUCKDB_CHECK_STR_ARG(path, path_length);
+	DUCKDB_CHECK_STR_ARG(name, name_length);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
-		duckdb::Identifier attach_name = name ? duckdb::Identifier(ConvertIdentifierName(name)) : duckdb::Identifier();
-		wrapper.Attach(duckdb::string(Convert(path)), attach_name, Convert(options), make_default);
+		duckdb::Identifier attach_name(ConvertIdentifierName(name, name_length));
+		wrapper.Attach(duckdb::string(Convert(path, path_length)), attach_name, Convert(options), make_default);
 	});
 }
 
@@ -181,15 +227,16 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_instance_handle instan
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options, const duckdb_v2_identifier_t *key,
-                                             const duckdb_v2_str *setting, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options, const char *key, idx_t key_length,
+                                             const char *setting, idx_t setting_length,
+                                             duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(options);
-	DUCKDB_CHECK_ARG(key);
-	DUCKDB_CHECK_ARG(setting);
+	DUCKDB_CHECK_STR_ARG(key, key_length);
+	DUCKDB_CHECK_STR_ARG(setting, setting_length);
 	return WithErrorHandler(err, [&]() {
 		// Keys are unquoted SQL identifiers, which the parser lowercases.
-		auto lowered = duckdb::StringUtil::Lower(duckdb::string(ConvertIdentifierName(key)));
-		Convert(options)->options[lowered] = duckdb::Value(duckdb::string(Convert(setting)));
+		auto lowered = duckdb::StringUtil::Lower(duckdb::string(ConvertIdentifierName(key, key_length)));
+		Convert(options)->options[lowered] = duckdb::Value(duckdb::string(Convert(setting, setting_length)));
 	});
 }
 
@@ -205,30 +252,32 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
+DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const char *name, idx_t name_length,
                                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_STR_ARG(name, name_length);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
-		wrapper.Detach(duckdb::Identifier(ConvertIdentifierName(name)));
+		wrapper.Detach(duckdb::Identifier(ConvertIdentifierName(name, name_length)));
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
+DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, const char *name, idx_t name_length,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_STR_ARG(name, name_length);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
-		wrapper.SetDefault(duckdb::Identifier(ConvertIdentifierName(name)));
+		wrapper.SetDefault(duckdb::Identifier(ConvertIdentifierName(name, name_length)));
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_library_version(duckdb_v2_str *out_version, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_library_version(const char **out_version, idx_t *out_version_length,
+                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out_version);
+	DUCKDB_CHECK_ARG(out_version_length);
 	return WithErrorHandler(err, [&]() {
 		const auto version = duckdb::DuckDB::LibraryVersion();
-		*out_version = duckdb_v2_str {version, std::strlen(version)};
+		SetStringOut(out_version, out_version_length, std::string_view(version));
 	});
 }

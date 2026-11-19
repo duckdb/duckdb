@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class Context;
 class TaskExecutor;
 class TaskExecutorTask;
 
@@ -43,9 +44,8 @@ public:
 		ExecuteTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
-	//! Called instead of ExecuteTask when the task is retired without running its work, because another task errored,
-	//! because the executor was cancelled, or because the task could not be queued at all. Exactly one of ExecuteTask
-	//! or Cancel runs for every task passed to TaskExecutor::ScheduleTask or ScheduleTasks.
+	//! Called when a task is retired without entering its next step, including task-start notification failure,
+	//! executor cancellation or error, or submission failure. Also settles work left by earlier incremental steps.
 	//! Anything a waiter watches must change on every exit path, or that waiter never wakes up. Either settle it here
 	//! as well as in ExecuteTask, or settle it in the destructor, which also covers a task that was constructed but
 	//! never scheduled. A destructor settle runs after the executor has already counted the task as finished, so it
@@ -64,6 +64,7 @@ protected:
 class TaskExecutor {
 public:
 	explicit TaskExecutor(ClientContext &context, TaskSchedulerType type = TaskSchedulerType::REGULAR);
+	explicit TaskExecutor(Context &context, TaskSchedulerType type = TaskSchedulerType::REGULAR);
 	explicit TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type = TaskSchedulerType::REGULAR);
 	~TaskExecutor();
 
@@ -123,7 +124,7 @@ private:
 	idx_t completed_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	atomic<bool> cancelled {false};
-	optional_ptr<ClientContext> context;
+	optional_ptr<Context> context;
 };
 
 } // namespace duckdb

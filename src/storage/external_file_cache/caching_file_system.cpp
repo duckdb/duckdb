@@ -158,6 +158,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "FetchBlockTask";
+	}
+
 private:
 	CachingFileHandle &caching_file_handle;
 	QueryContext context;
@@ -180,6 +184,10 @@ public:
 
 	void ExecuteTask() override {
 		caching_file_handle.ReadAndRecord(context, buffer, nr_bytes, location);
+	}
+
+	string TaskType() const override {
+		return "ReadRangeTask";
 	}
 
 private:
@@ -209,12 +217,16 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                           optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener);
+	return OpenFile(QueryContext(), path, flags, opener);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
                                                           const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
+	auto handle = unique_ptr<CachingFileHandle>(new CachingFileHandle(context, *this, path, flags, opener));
+	if (!handle->Initialize()) {
+		return nullptr;
+	}
+	return handle;
 }
 
 //===----------------------------------------------------------------------===//
@@ -309,14 +321,15 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                      optional_ptr<FileOpener> opener_p)
     : context(context), file_system(caching_file_system_p.file_system), db(caching_file_system_p.db),
       external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
-      opener(opener_p), validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(),
-                                                                               caching_file_system_p.db)),
-      cached_file(nullptr), position(0) {
-	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
+      opener(opener_p),
+      validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetContext(), caching_file_system_p.db)),
+      cached_file(external_file_cache.GetOrCreateCachedFile(path_p.path)), position(0) {
+}
+
+bool CachingFileHandle::Initialize() {
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
-		GetFileHandle();
-		return;
+		return TryGetFileHandle() != nullptr;
 	}
 	// If we don't have any cached blocks, we must also open the file.
 	bool needs_open = false;
@@ -324,19 +337,28 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
 		needs_open = cached_file->blocks.empty();
 	}
-	if (needs_open) {
-		GetFileHandle();
+	if (needs_open && !TryGetFileHandle()) {
+		return false;
 	}
 	auto needs_full_download = StripForceFullDownloadIfPresent();
 	if (needs_full_download) {
 		Read(GetFileSize(), 0);
 	}
+	return true;
 }
 
 CachingFileHandle::~CachingFileHandle() {
 }
 
 shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
+	auto handle = TryGetFileHandle();
+	if (!handle) {
+		throw IOException("Cannot open file \"%s\": file does not exist", path.path);
+	}
+	return handle;
+}
+
+shared_ptr<FileHandle> CachingFileHandle::TryGetFileHandle() {
 	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
 	if (file_handle) {
 		return file_handle;
@@ -347,6 +369,9 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	file_handle = file_system.OpenFile(path, internal_flags, opener);
+	if (!file_handle) {
+		return nullptr;
+	}
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
 	validation_info = GetValidationInfo(file_system, *file_handle);
 
@@ -384,6 +409,12 @@ bool CachingFileHandle::ReadsAreCached() {
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
+	static const vector<pair<idx_t, idx_t>> no_absorb_ranges;
+	return Read(nr_bytes, location, no_absorb_ranges);
+}
+
+FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location,
+                                              const vector<pair<idx_t, idx_t>> &absorb_ranges) {
 	if (nr_bytes == 0) {
 		return FileBufferHandleGroup();
 	}
@@ -432,7 +463,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 	fetch_end = MinValue(fetch_end, file_size);
 	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,
-	                                                max_block_size);
+	                                                max_block_size, absorb_ranges.empty() ? nullptr : &absorb_ranges);
 	const idx_t num_blocks = blocks.size();
 
 	// Schedule block fetch tasks for all blocks.
@@ -640,6 +671,31 @@ bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &resul
 		return true;
 	}
 	return throughput_estimator.TryEstimate(result);
+}
+
+idx_t CachingFileHandle::CountCachedBlocks(idx_t location, idx_t nr_bytes) {
+	if (nr_bytes == 0 || !external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) ||
+	    !CanUseCache()) {
+		return 0;
+	}
+	auto current_cached_file = EnsureCachedFileCurrent();
+	return ExternalFileCache::CountSmallAvailableBlocks(*current_cached_file, location, nr_bytes,
+	                                                    external_file_cache.GetCacheMaxBlockSize(path.path));
+}
+
+bool CachingFileHandle::IsCached(idx_t location, idx_t nr_bytes) {
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
+		return false;
+	}
+	if (nr_bytes == 0) {
+		return true;
+	}
+	auto current_cached_file = EnsureCachedFileCurrent();
+	return ExternalFileCache::IsRangeAvailable(*current_cached_file, location, nr_bytes);
+}
+
+idx_t CachingFileHandle::GetMaxMemory() const {
+	return external_file_cache.GetBufferManager().GetMaxMemory();
 }
 
 void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {

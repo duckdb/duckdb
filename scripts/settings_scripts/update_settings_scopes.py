@@ -28,7 +28,11 @@ def generate_scope_code(file):
     new_aliases = []
     for setting in SettingsList:
         if setting.is_generic_setting:
-            if setting.on_set:
+            if setting.default_function:
+                if not setting.on_set:
+                    raise ValueError(f"Setting {setting.name} - default_function requires an OnSet callback")
+                new_entries.append([setting.name, f"DUCKDB_SETTING_DEFAULT_FUNCTION({setting.struct_name})"])
+            elif setting.on_set:
                 new_entries.append([setting.name, f"DUCKDB_SETTING_CALLBACK({setting.struct_name})"])
             else:
                 new_entries.append([setting.name, f"DUCKDB_SETTING({setting.struct_name})"])

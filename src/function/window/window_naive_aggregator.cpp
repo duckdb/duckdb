@@ -1,4 +1,6 @@
 #include "duckdb/function/window/window_naive_aggregator.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
@@ -6,16 +8,28 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // WindowNaiveAggregator
 //===--------------------------------------------------------------------===//
-WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
+WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared,
+                                             ClientContext &client)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
 	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
+	}
+	if (!arg_types.empty()) {
+		vector<unique_ptr<Expression>> arg_equals;
+		for (idx_t arg_idx = 0; arg_idx < arg_types.size(); arg_idx++) {
+			auto &arg_type = arg_types[arg_idx];
+			arg_equals.push_back(
+			    BoundComparisonExpression::CreateOnColumns(client, ExpressionType::COMPARE_NOT_DISTINCT_FROM, arg_type,
+			                                               arg_idx, arg_type, arg_types.size() + arg_idx));
+		}
+		args_equal = BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_AND, std::move(arg_equals));
 	}
 }
 
@@ -49,6 +63,7 @@ public:
 	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
 
 	WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator);
+	~WindowNaiveLocalState() override;
 
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 
@@ -78,12 +93,17 @@ protected:
 	SelectionVector update_sel;
 	//! Count of buffered values
 	idx_t flush_count;
+	//! The number of initialised result states
+	idx_t live_count;
 	//! The frame boundaries, used for EXCLUDE
 	SubFrames frames;
 	//! The optional hash table used for DISTINCT
 	Vector hashes;
 	//! The state used for comparing the collection across chunk boundaries
 	unique_ptr<WindowCursor> comparer;
+	//! Whether two rows have the same arguments, over [left arguments..., right arguments...]
+	unique_ptr<ExpressionExecutor> args_equal;
+	DataChunk args_compare;
 
 	//! The state used for scanning ORDER BY values from the collection
 	unique_ptr<Sort> sort;
@@ -99,7 +119,8 @@ protected:
 
 WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator)
     : WindowAggregatorLocalState(context), aggregator(aggregator), state(aggregator.state_size * STANDARD_VECTOR_SIZE),
-      statef(LogicalType::POINTER), statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
+      statef(LogicalType::POINTER), statep((LogicalType::POINTER)), flush_count(0), live_count(0),
+      hashes(LogicalType::HASH) {
 	InitSubFrames(frames, aggregator.exclude_mode);
 
 	update_sel.Initialize();
@@ -116,6 +137,15 @@ WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const Wi
 	}
 }
 
+WindowNaiveLocalState::~WindowNaiveLocalState() {
+	// destroy any states left live by an exception during evaluation
+	const auto &aggr = aggregator.aggr;
+	if (live_count && aggr.function.HasStateDestructorCallback()) {
+		AggregateFinalizeInputData aggr_input_data(aggr, allocator);
+		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, live_count);
+	}
+}
+
 void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate,
                                      CollectionPtr collection) {
 	WindowAggregatorLocalState::Finalize(context, gastate, collection);
@@ -123,6 +153,12 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 	//	Set up the comparison scanner just in case
 	if (!comparer) {
 		comparer = make_uniq<WindowCursor>(*collection, aggregator.child_idx);
+		if (aggregator.args_equal) {
+			args_equal = make_uniq<ExpressionExecutor>(context.client.GetContext(), *aggregator.args_equal);
+			auto compare_types = aggregator.arg_types;
+			compare_types.insert(compare_types.end(), aggregator.arg_types.begin(), aggregator.arg_types.end());
+			args_compare.InitializeEmpty(compare_types);
+		}
 	}
 
 	//	Set up the argument ORDER BY scanner if needed
@@ -184,6 +220,9 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 }
 
 bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
+	if (!args_equal) {
+		return true;
+	}
 	//	One of the indices will be scanned, so make it the left one
 	auto lhs = lidx;
 	auto rhs = ridx;
@@ -206,18 +245,16 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 	auto r = rreader->RowOffset(rhs);
 	SelectionVector rsel(&r, 1);
 
-	sel_t f = 0;
-	SelectionVector fsel(&f, 1);
+	sel_t t = 0;
+	SelectionVector tsel(&t, 1);
 
-	for (column_t c = 0; c < scanned.ColumnCount(); ++c) {
-		Vector left(scanned.data[c], lsel, 1);
-		Vector right(rscanned->data[c], rsel, 1);
-		if (!VectorOperations::NotDistinctFrom(left, right, nullptr, 1, nullptr, &fsel)) {
-			return false;
-		}
+	const auto column_count = scanned.ColumnCount();
+	for (column_t c = 0; c < column_count; ++c) {
+		args_compare.data[c].Slice(scanned.data[c], lsel, 1);
+		args_compare.data[column_count + c].Slice(rscanned->data[c], rsel, 1);
 	}
-
-	return true;
+	args_compare.CheckCardinality(1);
+	return args_equal->SelectExpression(args_compare, tsel) == 1;
 }
 
 void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggregatorGlobalState &gsink,
@@ -230,6 +267,10 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	auto pdata = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
+	//	Reclaim the result states of the previous batch, whose results have been consumed
+	D_ASSERT(live_count == 0);
+	allocator.Reset();
+
 	HashRow hash_row(*this);
 	EqualRow equal_row(*this);
 	RowSet row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row);
@@ -238,6 +279,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	WindowAggregator::EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		data_ptr_t agg_state = fdata[rid];
 		aggr.function.GetStateInitCallback()(state_input, &agg_state, 1);
+		live_count = rid + 1;
 
 		//	Reset the DISTINCT hash table
 		row_set.clear();
@@ -361,6 +403,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
 		allocator.FreeAll();
 	}
+	live_count = 0;
 }
 
 unique_ptr<LocalSinkState> WindowNaiveAggregator::GetLocalState(ExecutionContext &context,

@@ -15,6 +15,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <stdexcept>
 #include <thread>
 
 using namespace duckdb;
@@ -898,7 +899,7 @@ TEST_CASE("AsyncWriteQueue writes synchronously without async threads", "[async_
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithNoAsyncThreads(db);
 	TrackingAsyncWriteTarget target;
-	AsyncWriteQueue queue(*con->context, target);
+	AsyncWriteQueue queue(con->context->GetContext(), target);
 
 	mutex completion_lock;
 	vector<idx_t> completion_offsets;
@@ -924,11 +925,43 @@ TEST_CASE("AsyncWriteQueue writes synchronously without async threads", "[async_
 	REQUIRE(!saw_error);
 }
 
+TEST_CASE("AsyncWriteQueue classifies serialized write errors without exception RTTI", "[async_write_queue]") {
+	class SerializedErrorWriteTarget : public AsyncWriteTarget {
+	public:
+		void Write(data_ptr_t, idx_t, idx_t) override {
+			throw std::runtime_error(message);
+		}
+
+		string message;
+	};
+
+	const auto error_type = GENERATE(ExceptionType::IO, ExceptionType::HTTP, ExceptionType::PERMISSION);
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	SerializedErrorWriteTarget target;
+	target.message = Exception(error_type, "Injected serialized write failure").what();
+	AsyncWriteQueue queue(con->context->GetContext(), target);
+	ErrorData completion_error;
+	auto completion = [&](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+		REQUIRE(offset == 7);
+		REQUIRE(size == 3);
+		REQUIRE(error);
+		completion_error = *error;
+	};
+
+	REQUIRE_THROWS_WITH(queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("abc"), 7, completion)),
+	                    Catch::Contains("Injected serialized write failure"));
+	REQUIRE(completion_error.HasError());
+	CHECK(completion_error.Type() == error_type);
+	CHECK(StringUtil::Contains(completion_error.RawMessage(), "Async write failed for range [offset=7, size=3]") ==
+	      (error_type == ExceptionType::IO || error_type == ExceptionType::HTTP));
+}
+
 TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads", "[async_write_queue]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
 	BlockingAsyncWriteTarget target;
-	AsyncWriteQueue queue(*con->context, target);
+	AsyncWriteQueue queue(con->context->GetContext(), target);
 
 	mutex completion_lock;
 	vector<idx_t> completion_offsets;
@@ -974,7 +1007,7 @@ TEST_CASE("AsyncWriteQueue schedules a small prefix before a large pending reque
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 3);
 	BlockingAsyncWriteTarget target;
-	AsyncWriteQueue queue(*con->context, target);
+	AsyncWriteQueue queue(con->context->GetContext(), target);
 
 	auto write_size = AsyncWriteConfig::TASK_BYTE_BUDGET + 1;
 	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>(string(write_size, 'a')), 0));
@@ -994,7 +1027,7 @@ TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[a
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
 	TrackingAsyncWriteTarget target;
-	ManagedAsyncWriteQueue queue(*con->context, target);
+	ManagedAsyncWriteQueue queue(con->context->GetContext(), target);
 
 	queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("abc"), 32);
 	queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("de"), 0);
@@ -1021,7 +1054,7 @@ TEST_CASE("ManagedAsyncWriteStreamQueue abort permits an in-flight completion re
 	BlockingAsyncWriteTarget target;
 	target.ReleaseWrites();
 	SequentialAsyncWriteStreamTarget stream_target(target, true);
-	ManagedAsyncWriteStreamQueue queue(*con->context, stream_target);
+	ManagedAsyncWriteStreamQueue queue(con->context->GetContext(), stream_target);
 	auto &underlying_queue = ManagedAsyncWriteQueueTest::UnderlyingQueue(queue);
 	REQUIRE(underlying_queue.IsAsync());
 	mutex completion_lock;
@@ -1090,7 +1123,7 @@ TEST_CASE("ManagedAsyncWriteQueue reports accounted request adoption ownership",
 	auto con = CreateConnectionWithAsyncThreads(db);
 	{
 		TrackingAsyncWriteTarget target;
-		ManagedAsyncWriteQueue queue(*con->context, target);
+		ManagedAsyncWriteQueue queue(con->context->GetContext(), target);
 		idx_t completion_count = 0;
 		bool completion_error = false;
 		auto completion = [&](idx_t, idx_t, optional_ptr<const ErrorData> error) {
@@ -1118,7 +1151,7 @@ TEST_CASE("ManagedAsyncWriteQueue reports accounted request adoption ownership",
 
 	{
 		FailingAsyncWriteTarget target;
-		ManagedAsyncWriteQueue queue(*con->context, target);
+		ManagedAsyncWriteQueue queue(con->context->GetContext(), target);
 		queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("failed"), 0);
 		auto wait_error = CaptureException([&]() { queue.WaitAll(); });
 		REQUIRE(wait_error.find("Injected managed queue failure") != string::npos);
@@ -1158,7 +1191,7 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 	string large(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
 	string tail = "tail";
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
 	auto blocked_before_release = fs.BlockedWrites();
@@ -1192,17 +1225,6 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 
 } // namespace
 
-TEST_CASE("AsyncFileWriter requires a client context", "[async_file_writer]") {
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_no_context.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	REQUIRE_THROWS_AS(AsyncFileWriter(QueryContext(), fs, path), InvalidInputException);
-	REQUIRE(!fs.FileExists(path));
-}
-
 TEST_CASE("CSVWriter applies backpressure on automatic async flushes", "[async_file_writer][csv_writer]") {
 	DuckDB db(nullptr);
 	auto con = make_uniq<Connection>(db);
@@ -1216,7 +1238,7 @@ TEST_CASE("CSVWriter applies backpressure on automatic async flushes", "[async_f
 	auto path = TestCreatePath("csv_writer_async_backpressure.tmp");
 	fs.TryRemoveFile(path);
 
-	AsyncFileWriter file_writer(*con->context, fs, path);
+	AsyncFileWriter file_writer(con->context->GetContext(), fs, path);
 	CSVReaderOptions options;
 	options.force_quote.push_back(false);
 	CSVWriter writer(options, file_writer);
@@ -1269,7 +1291,7 @@ TEST_CASE("AsyncFileWriter batches write registration before scheduling", "[asyn
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
@@ -1296,7 +1318,7 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast("ab"), 2);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
 
@@ -1319,7 +1341,7 @@ TEST_CASE("AsyncFileWriter preserves order around large copied writes", "[async_
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		string large(8192, 'x');
@@ -1345,7 +1367,7 @@ TEST_CASE("AsyncFileWriter copies transient WriteData input", "[async_file_write
 	}
 
 	string payload = "abcdef";
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast(payload.data()), payload.size());
 	payload = "XXXXXX";
 	writer.Close();
@@ -1363,7 +1385,7 @@ TEST_CASE("AsyncFileWriter writes at truncated offset", "[async_file_writer]") {
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
 	writer.Truncate(3);
 	writer.WriteData(const_data_ptr_cast("XYZ"), 3);
@@ -1382,7 +1404,7 @@ TEST_CASE("AsyncFileWriter non-positional writes at truncated offset", "[async_f
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
 	writer.Truncate(3);
 	writer.WriteData(const_data_ptr_cast("XYZ"), 3);
@@ -1405,7 +1427,7 @@ TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]"
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("ab"));
@@ -1438,7 +1460,7 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -1483,7 +1505,7 @@ TEST_CASE("AsyncFileWriter drains non-positional writes on one async thread", "[
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -1522,7 +1544,7 @@ TEST_CASE("AsyncFileWriter admits concurrent-sequential writes in order before o
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -1563,7 +1585,7 @@ TEST_CASE("AsyncFileWriter concurrent-sequential writes use the configured async
 	}
 
 	auto write_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		for (idx_t write_idx = 0; write_idx < 4; write_idx++) {
@@ -1596,7 +1618,7 @@ TEST_CASE("AsyncFileWriter uses concurrent-sequential offsets without async thre
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
 	writer.Close();
 
@@ -1619,7 +1641,7 @@ TEST_CASE("AsyncFileWriter stops concurrent-sequential publication after refill 
 	auto first_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
 	auto second_size = AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 1;
 	auto materialization = make_shared_ptr<BlockingMaterializationState>();
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(first_size), 'a')));
 	auto first_entered = fs.WaitForBackendWrites(1);
 	writer.WriteData(make_uniq<BlockingMaterializationAsyncWriteBuffer>(
@@ -1672,7 +1694,7 @@ TEST_CASE("AsyncFileWriter drains accepted concurrent-sequential writes before d
 	}
 
 	auto write_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'a')));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'b')));
 	auto accepted_writes_entered = fs.WaitForBackendWrites(2);
@@ -1704,7 +1726,7 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'a');
 	string second(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	REQUIRE(fs.BlockedWrites() == 0);
@@ -1733,7 +1755,7 @@ TEST_CASE("AsyncFileWriter schedules a large remote write behind a small prefix"
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 	string tail = "footer";
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(prefix));
@@ -1768,7 +1790,7 @@ TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file
 	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'a');
 	string second(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	REQUIRE(fs.BlockedWrites() == 0);
@@ -1797,7 +1819,7 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 	string large(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
 	string tail = "tail";
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
@@ -1828,7 +1850,7 @@ TEST_CASE("AsyncFileWriter close force-drains remote non-positional tail after s
 	string large(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
 	string tail(1024, 't');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
 	REQUIRE(fs.WaitForBlockedWrites(1));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
@@ -1875,7 +1897,7 @@ TEST_CASE("AsyncFileWriter close force-drains remote sequential tail after submi
 	string large(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
 	string tail(1024, 't');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
 	REQUIRE(fs.WaitForBlockedWrites(1));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
@@ -1921,7 +1943,7 @@ TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as p
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -1953,7 +1975,7 @@ TEST_CASE("AsyncFileWriter rethrows non-positional async write errors on close",
 
 	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 	REQUIRE(fs.WaitForBlockedWrites(1));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
@@ -1962,8 +1984,9 @@ TEST_CASE("AsyncFileWriter rethrows non-positional async write errors on close",
 	try {
 		writer.Close();
 		FAIL("Expected async write failure");
-	} catch (const Exception &ex) {
+	} catch (const std::exception &ex) {
 		string error = ex.what();
+		CAPTURE(error);
 		REQUIRE(error.find("Async write failed for range [offset=0, size=") != string::npos);
 		REQUIRE(error.find("Injected async write failure") != string::npos);
 	}
@@ -1982,7 +2005,7 @@ TEST_CASE("AsyncFileWriter close drains an open batch", "[async_file_writer]") {
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	auto batch_guard = writer.StartBatch();
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 	writer.Close();
@@ -2002,14 +2025,15 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 	}
 	fs.fail_writes = true;
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	try {
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 		writer.Close();
 		FAIL("Expected async write failure");
-	} catch (const Exception &ex) {
+	} catch (const std::exception &ex) {
 		string error = ex.what();
+		CAPTURE(error);
 		REQUIRE(error.find("Async write failed for range [offset=0, size=4]") != string::npos);
 		REQUIRE(error.find("Injected async write failure") != string::npos);
 	}
@@ -2031,7 +2055,7 @@ TEST_CASE("AsyncFileWriter close drains scheduled tasks after async write error"
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -2084,7 +2108,7 @@ TEST_CASE("AsyncFileWriter close discards unscheduled writes after async write e
 
 	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 	REQUIRE(fs.WaitForEnteredWrites(1));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
@@ -2093,8 +2117,9 @@ TEST_CASE("AsyncFileWriter close discards unscheduled writes after async write e
 	try {
 		writer.Close();
 		FAIL("Expected async write failure");
-	} catch (const Exception &ex) {
+	} catch (const std::exception &ex) {
 		string error = ex.what();
+		CAPTURE(error);
 		REQUIRE(error.find("Async write failed for range [offset=0, size=") != string::npos);
 		REQUIRE(error.find("Injected async write failure") != string::npos);
 	}
@@ -2113,7 +2138,7 @@ TEST_CASE("AsyncFileWriter publishes only on successful explicit close", "[async
 
 	{
 		auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-		AsyncFileWriter writer(*con->context, fs, path, flags);
+		AsyncFileWriter writer(con->context->GetContext(), fs, path, flags);
 		writer.WriteData(const_data_ptr_cast("published"), 9);
 		writer.Close();
 	}
@@ -2138,7 +2163,7 @@ TEST_CASE("AsyncFileWriter rejects incorrect final file sizes", "[async_file_wri
 				if (exclusive_create) {
 					flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 				}
-				AsyncFileWriter writer(*con->context, fs, path, flags);
+				AsyncFileWriter writer(con->context->GetContext(), fs, path, flags);
 				writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(65536, 'x')));
 				auto error = CaptureException([&]() { writer.Close(); });
 				REQUIRE(error.find("File size mismatch") != string::npos);
@@ -2167,7 +2192,7 @@ TEST_CASE("AsyncFileWriter exclusive creation preserves existing files", "[async
 	}
 
 	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-	REQUIRE_THROWS(AsyncFileWriter(*con->context, fs, path, flags));
+	REQUIRE_THROWS(AsyncFileWriter(con->context->GetContext(), fs, path, flags));
 	REQUIRE(ReadFile(path) == "existing");
 	fs.RemoveFile(path);
 }
@@ -2187,14 +2212,14 @@ TEST_CASE("AsyncFileWriter destruction preserves non-exclusive paths and removes
 	}
 
 	{
-		AsyncFileWriter writer(*con->context, fs, existing_path);
+		AsyncFileWriter writer(con->context->GetContext(), fs, existing_path);
 		writer.WriteData(const_data_ptr_cast("pending"), 7);
 	}
 	REQUIRE(fs.FileExists(existing_path));
 
 	{
 		auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-		AsyncFileWriter writer(*con->context, fs, exclusive_path, flags);
+		AsyncFileWriter writer(con->context->GetContext(), fs, exclusive_path, flags);
 		writer.WriteData(const_data_ptr_cast("pending"), 7);
 	}
 	REQUIRE(!fs.FileExists(exclusive_path));
@@ -2209,7 +2234,7 @@ TEST_CASE("AsyncFileWriter preserves ambiguous publications", "[async_file_write
 	fs.fail_close_after_publish = true;
 
 	{
-		AsyncFileWriter writer(*con->context, fs, "ambiguous-publication");
+		AsyncFileWriter writer(con->context->GetContext(), fs, "ambiguous-publication");
 		writer.WriteData(const_data_ptr_cast("published"), 9);
 		auto error = CaptureException([&]() { writer.Close(); });
 		REQUIRE(error.find("Injected ambiguous publish failure") != string::npos);
@@ -2229,7 +2254,7 @@ TEST_CASE("AsyncFileWriter preserves the first write error over abort cleanup", 
 	auto path = TestCreatePath("async_file_writer_primary_error.tmp");
 	fs.TryRemoveFile(path);
 	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-	AsyncFileWriter writer(*con->context, fs, path, flags);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path, flags);
 	auto payload = string(2 * AsyncWriteConfig::COPIED_BUFFER_CAPACITY, 'x');
 
 	auto write_error =
@@ -2252,7 +2277,7 @@ TEST_CASE("AsyncFileWriter construction aborts an acquired handle", "[async_file
 	fs.TryRemoveFile(path);
 	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 
-	auto error = CaptureException([&]() { AsyncFileWriter writer(*con->context, fs, path, flags); });
+	auto error = CaptureException([&]() { AsyncFileWriter writer(con->context->GetContext(), fs, path, flags); });
 	REQUIRE(error.find("Injected write mode failure") != string::npos);
 	REQUIRE(error.find("Injected abort failure") == string::npos);
 	REQUIRE(fs.AbortCount() == 1);
@@ -2267,7 +2292,7 @@ TEST_CASE("AsyncFileWriter completes and accounts partial sequential writes", "[
 	fs.TryRemoveFile(path);
 	auto initial_bytes_written = QueryProfiler::Get(*con->context).GetBytesWritten();
 
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
 	writer.Close();
 
@@ -2287,7 +2312,7 @@ TEST_CASE("AsyncFileWriter rejects negative sequential writes without accounting
 	auto initial_bytes_written = QueryProfiler::Get(*con->context).GetBytesWritten();
 
 	{
-		AsyncFileWriter writer(*con->context, fs, path);
+		AsyncFileWriter writer(con->context->GetContext(), fs, path);
 		writer.WriteData(const_data_ptr_cast("abcdef"), 6);
 		auto error = CaptureException([&]() { writer.Close(); });
 		REQUIRE(error.find("Failed to write to file") != string::npos);
@@ -2323,7 +2348,7 @@ TEST_CASE("Compressed AsyncFileWriter abort removes an exclusively created outpu
 	{
 		auto flags =
 		    AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE | FileCompressionType::GZIP;
-		AsyncFileWriter writer(*con->context, fs, path, flags);
+		AsyncFileWriter writer(con->context->GetContext(), fs, path, flags);
 		writer.WriteData(const_data_ptr_cast("pending"), 7);
 	}
 
@@ -2336,7 +2361,7 @@ TEST_CASE("AsyncFileWriter abort drains an accepted active write", "[async_file_
 	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
 	auto path = TestCreatePath("async_file_writer_running_abort.tmp");
 	fs.TryRemoveFile(path);
-	AsyncFileWriter writer(*con->context, fs, path);
+	AsyncFileWriter writer(con->context->GetContext(), fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET, 'a')));
 	REQUIRE(fs.WaitForBlockedWrites(1));
 

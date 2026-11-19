@@ -16,6 +16,8 @@
 #include "test_helpers.hpp"
 #if (!defined(_WIN32) && !defined(WIN32))
 #define TEST_HAVE_SYMLINK
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #else
 #include "duckdb/common/windows.hpp"
@@ -367,7 +369,7 @@ TEST_CASE("Extended directory operations report target ownership", "[file_system
 TEST_CASE("Extended directory operations forward the file opener", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ClientContextFileOpener opener(*con.context);
+	ClientContextFileOpener opener(con.context->GetContext());
 	auto fs = FileSystem::CreateLocal();
 	auto home_directory = TestCreatePath("extended_directory_opener");
 	if (fs->DirectoryExists(home_directory)) {
@@ -389,7 +391,7 @@ TEST_CASE("Extended directory operations forward the file opener", "[file_system
 TEST_CASE("Recursive directory creation checks access for every ancestor", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ClientContextFileOpener opener(*con.context);
+	ClientContextFileOpener opener(con.context->GetContext());
 	auto fs = FileSystem::CreateLocal();
 	TestOpenerFileSystem opener_fs(*fs, opener);
 	auto base = TestCreatePath("extended_directory_permissions");
@@ -476,6 +478,47 @@ TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
 
 	fs->RemoveFile(fname);
 }
+
+#ifndef _WIN32
+TEST_CASE("Local modification times keep the fraction of a second", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	const auto fname = TestCreatePath("subsecond_modification_time");
+	fs->TryRemoveFile(fname);
+	CreateDummyFile(fname);
+
+	// two modification times within the same second
+	static constexpr int64_t MODIFICATION_SECONDS = 1700000000;
+	struct timespec times[2];
+	times[0].tv_sec = MODIFICATION_SECONDS;
+	times[0].tv_nsec = 0;
+	times[1].tv_sec = MODIFICATION_SECONDS;
+	times[1].tv_nsec = 250000000;
+	REQUIRE(utimensat(AT_FDCWD, fname.c_str(), times, 0) == 0);
+	const auto first = fs->GetStatsIfExists(fname);
+	REQUIRE(first.has_value());
+	REQUIRE(first->last_modification_time.value == MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 250000);
+
+	times[1].tv_nsec = 750000000;
+	REQUIRE(utimensat(AT_FDCWD, fname.c_str(), times, 0) == 0);
+	const auto second = fs->GetStatsIfExists(fname);
+	REQUIRE(second.has_value());
+	REQUIRE(second->last_modification_time.value == MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 750000);
+	REQUIRE(second->file_size == first->file_size);
+	REQUIRE(second->file_id == first->file_id);
+	REQUIRE(second->version_tag != first->version_tag);
+	{
+		auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->Stats().version_tag == second->version_tag);
+	}
+
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto result = con.Query("SELECT epoch_us(last_modified) FROM read_blob('" + fname + "')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(MODIFICATION_SECONDS * Interval::MICROS_PER_SEC + 750000)}));
+
+	fs->RemoveFile(fname);
+}
+#endif
 
 TEST_CASE("absolute paths", "[file_system]") {
 	duckdb::LocalFileSystem fs;
@@ -834,7 +877,7 @@ TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
 			if (null_if_exists) {
 				REQUIRE(fs->OpenFile(fname, flags) == nullptr);
 			} else {
-				REQUIRE_THROWS_AS(fs->OpenFile(fname, flags), IOException);
+				REQUIRE_THROWS_WITH(fs->OpenFile(fname, flags), Catch::Contains("Cannot open file"));
 			}
 
 			// A collision must not truncate or alter the existing file.
@@ -846,7 +889,7 @@ TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
 			read_handle.reset();
 
 			// A regular file cannot be a parent directory; NULL_IF_EXISTS must not hide this error.
-			REQUIRE_THROWS_AS(fs->OpenFile(fs->JoinPath(fname, "child"), flags), IOException);
+			REQUIRE_THROWS_WITH(fs->OpenFile(fs->JoinPath(fname, "child"), flags), Catch::Contains("Cannot open file"));
 
 			auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 			REQUIRE(reopen != nullptr);
