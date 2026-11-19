@@ -62,17 +62,13 @@ FROM range(5003) r(i);
 
 foreach target DECIMAL(39,0) DECIMAL(40,2) DECIMAL(76,38) DECIMAL(80,40)
 
-statement ok
-CREATE TABLE rescaled AS
-SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t;
-
 query I
+WITH rescaled AS MATERIALIZED (
+    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t
+)
 SELECT count(*) FROM rescaled WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y);
 ----
 0
-
-statement ok
-DROP TABLE rescaled;
 
 endloop
 
@@ -80,17 +76,19 @@ statement ok
 DROP TABLE t;
 
 # Reducing the scale can carry into the first integer digit that does not fit.
+# Store text so this also runs with storage versions that cannot persist wide decimals.
 statement ok
 CREATE TABLE t AS
-SELECT (CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
-        repeat('9', 36) || CASE i % 4 WHEN 0 THEN '.9995' WHEN 1 THEN '.9994' ELSE '.0000' END)::DECIMAL(40,4) d
+SELECT CASE WHEN i % 2 = 0 THEN '-' ELSE '' END ||
+       repeat('9', 36) || CASE i % 4 WHEN 0 THEN '.9995' WHEN 1 THEN '.9994' ELSE '.0000' END v
 FROM range(4103) r(i);
 
 foreach target DECIMAL(39,3) DECIMAL(39,4) DECIMAL(39,0) DECIMAL(38,2)
 
 query I
+WITH input AS MATERIALIZED (SELECT v::DECIMAL(40,4) d FROM t)
 SELECT count(*) FROM (
-    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t WHERE d <> 0
+    SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM input WHERE d <> 0
 ) s WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y);
 ----
 0
@@ -98,7 +96,8 @@ SELECT count(*) FROM (
 endloop
 
 query I
-SELECT count(*) FROM t WHERE TRY_CAST(d AS DECIMAL(39,3)) IS NULL;
+WITH input AS MATERIALIZED (SELECT v::DECIMAL(40,4) d FROM t)
+SELECT count(*) FROM input WHERE TRY_CAST(d AS DECIMAL(39,3)) IS NULL;
 ----
 1026
 
