@@ -98,6 +98,8 @@ int NumericHelper::UnsignedLength(hugeint_t value);
 
 template <>
 char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr);
+template <>
+char *NumericHelper::FormatUnsigned(uhugeint_t value, char *ptr);
 
 template <>
 std::string NumericHelper::ToString(hugeint_t value);
@@ -182,14 +184,14 @@ template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint32_t width, uint32_t scale, char *dst, idx_t len);
 
 struct UhugeintToStringCast {
-	static string_t Format(uhugeint_t value, StringHeap &heap) {
-		std::string str = value.ToString();
-		string_t result = heap.EmptyString(str.length());
-		auto data = result.GetDataWriteable();
+	//! The maximum uhugeint (2^128 - 1) has 39 digits
+	static constexpr idx_t MAX_LENGTH = 39;
 
-		memcpy(data, str.data(), str.length()); // NOLINT: null-termination not required
-		result.Finalize();
-		return result;
+	static string_t Format(uhugeint_t value, StringHeap &heap) {
+		char buffer[MAX_LENGTH];
+		auto end = buffer + sizeof(buffer);
+		auto start = NumericHelper::FormatUnsigned(value, end);
+		return heap.AddString(start, NumericCast<idx_t>(end - start));
 	}
 };
 

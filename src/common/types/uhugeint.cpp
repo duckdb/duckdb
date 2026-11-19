@@ -1,6 +1,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
@@ -59,20 +60,10 @@ const uhugeint_t Uhugeint::POWERS_OF_TEN[] {
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(100)};
 
 string Uhugeint::ToString(uhugeint_t input) {
-	uhugeint_t remainder;
-	string result;
-	while (true) {
-		if (!input.lower && !input.upper) {
-			break;
-		}
-		input = Uhugeint::DivMod(input, 10, remainder);
-		result = string(1, UnsafeNumericCast<char>('0' + remainder.lower)) + result; // NOLINT
-	}
-	if (result.empty()) {
-		// value is zero
-		return "0";
-	}
-	return result;
+	char buffer[UhugeintToStringCast::MAX_LENGTH];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(input, end);
+	return string(start, end);
 }
 
 //===--------------------------------------------------------------------===//

@@ -275,6 +275,25 @@ char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr) {
 }
 
 template <>
+char *NumericHelper::FormatUnsigned(uhugeint_t value, char *ptr) {
+	// uhugeint division is slow: divide by the largest power of ten that fits in a uint64_t to do as few as possible
+	static constexpr uint64_t DIVISOR = 10000000000000000000ULL;
+	static constexpr idx_t DIVISOR_DIGITS = 19;
+	while (value.upper > 0) {
+		uhugeint_t remainder;
+		value = Uhugeint::DivMod(value, uhugeint_t(DIVISOR), remainder);
+
+		auto startptr = ptr;
+		ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder.lower, ptr);
+		// pad with zeros in case the remainder has fewer digits than the divisor
+		for (auto format_length = NumericCast<idx_t>(startptr - ptr); format_length < DIVISOR_DIGITS; format_length++) {
+			*--ptr = '0';
+		}
+	}
+	return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
+}
+
+template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint32_t width, uint32_t scale, char *dst, idx_t len) {
 	auto endptr = dst + len;
 
