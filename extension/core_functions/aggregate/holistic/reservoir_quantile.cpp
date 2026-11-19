@@ -115,6 +115,7 @@ struct ReservoirQuantileFinalizeState : FunctionLocalState {
 		auto &scratch = finalize_data.input.local_state->Cast<ReservoirQuantileFinalizeState>();
 		const auto size = state.pos * sizeof(T);
 		if (scratch.buffer.GetSize() < size) {
+			scratch.buffer.Reset();
 			scratch.buffer = finalize_data.input.allocator.GetUnderlyingAllocator().Allocate(NextPowerOfTwo(size));
 		}
 		auto result = reinterpret_cast<T *>(scratch.buffer.get());
