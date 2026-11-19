@@ -2,6 +2,7 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -453,19 +454,16 @@ idx_t RelationStatisticsHelper::EstimateGroupCardinality(LogicalOperator &input,
 
 static optional_ptr<const RelationColumnStats> GetSelectedValueStats(const Expression &expression,
                                                                      const RelationColumnStatsLookup &child_columns) {
-	// Only a direct, type-preserving argument has a known value domain here.
-	// Rewrites and sorted/state wrappers must declare their own contract; neither
-	// single-row identity nor a BaseStatistics callback implies value selection.
 	if (expression.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 		return nullptr;
 	}
 	const auto &aggregate = expression.Cast<BoundAggregateExpression>();
-	auto source = aggregate.Function().GetSelectedValueArgument();
-	if (!source.IsValid() || source.GetIndex() >= aggregate.GetChildren().size() ||
-	    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
+	if (aggregate.StateExportMode() != AggregateStateExportMode::NONE || aggregate.GetChildren().size() != 1 ||
+	    !IsFirstLastOrAnyValue(aggregate.Function())) {
 		return nullptr;
 	}
-	const auto &argument = *aggregate.GetChildren()[source.GetIndex()];
+	// The selected value has a known domain only for a direct, type-preserving column reference.
+	const auto &argument = *aggregate.GetChildren()[0];
 	if (argument.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 	    !argument.GetReturnType().EqualsIncludingCollation(aggregate.GetReturnType())) {
 		return nullptr;

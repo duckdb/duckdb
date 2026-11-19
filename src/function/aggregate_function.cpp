@@ -84,8 +84,7 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity &&
-	       selected_value_argument == rhs.selected_value_argument && is_holistic == rhs.is_holistic &&
-	       combine_source_retention == rhs.combine_source_retention;
+	       is_holistic == rhs.is_holistic && combine_source_retention == rhs.combine_source_retention;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);

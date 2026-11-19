@@ -489,7 +489,6 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
 	function.SetSingleValueIdentity(true);
-	function.SetSelectedValueArgument(0);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 	return nullptr;
@@ -515,7 +514,6 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
 	function.SetSingleValueIdentity(true);
-	function.SetSelectedValueArgument(0);
 	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return nullptr;
 }
@@ -536,12 +534,19 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 
 } // namespace
 
+bool IsFirstLastOrAnyValue(const BoundAggregateFunction &function) {
+	// All specializations and aliases bind one of these private callbacks. An
+	// implementation replacement installs its own callbacks even if it keeps the name.
+	auto rewrite = function.GetDirectRewriteCallback();
+	return rewrite == RewriteOrderedFirst<false, false> || rewrite == RewriteOrderedFirst<true, false> ||
+	       rewrite == RewriteOrderedFirst<false, true>;
+}
+
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.SetName("first");
 	fun.SetDirectRewriteCallback(RewriteOrderedFirst<false, false>);
 	fun.SetSingleValueIdentity(true);
-	fun.SetSelectedValueArgument(0);
 	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
@@ -551,7 +556,6 @@ AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	fun.SetName("last");
 	fun.SetDirectRewriteCallback(RewriteOrderedFirst<true, false>);
 	fun.SetSingleValueIdentity(true);
-	fun.SetSelectedValueArgument(0);
 	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }

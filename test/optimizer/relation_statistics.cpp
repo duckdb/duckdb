@@ -2541,27 +2541,20 @@ TEST_CASE("Selected aggregates preserve source domains without structural eviden
 	auto value = ColumnBinding(TableIndex(10), ProjectionIndex(1));
 	for (auto type : vector<LogicalType> {LogicalType::INTEGER, LogicalType::DECIMAL(12, 2), LogicalType::VARCHAR,
 	                                      LogicalType::STRUCT({{"key", LogicalType::BIGINT}})}) {
-		for (auto name : {"first", "last", "any_value"}) {
+		for (auto name : {"first", "last", "any_value", "arbitrary"}) {
 			INFO(name << " " << type.ToString());
 			auto expression =
 			    BindDomainAggregate(*connection.context, name, make_uniq<BoundColumnRefExpression>(type, value));
-			REQUIRE(expression->Function().GetSelectedValueArgument() == optional_idx(0));
-			// Copy and rebinding must retain the semantic property, including the
-			// DECIMAL implementation that replaces the registered ANY overload.
+			// Exercise the actual bound implementation after copying and rebinding,
+			// including the DECIMAL specialization and the arbitrary alias.
 			auto copy = expression->Copy();
-			REQUIRE(copy->Cast<BoundAggregateExpression>().Function().GetSelectedValueArgument() == optional_idx(0));
 			MemoryStream stream;
-			BinarySerializer::Serialize(*expression, stream);
+			BinarySerializer::Serialize(*copy, stream);
 			stream.Rewind();
 			bound_parameter_map_t parameters;
 			auto restored = BinaryDeserializer::Deserialize<Expression>(stream, *connection.context, parameters);
-			REQUIRE(restored->Cast<BoundAggregateExpression>().Function().GetSelectedValueArgument() ==
-			        optional_idx(0));
-			auto properties = expression->Function().GetProperties();
-			properties.selected_value_argument.SetInvalid();
-			REQUIRE(properties != expression->Function().GetProperties());
-
 			vector<unique_ptr<Expression>> expressions;
+			expressions.push_back(std::move(copy));
 			expressions.push_back(std::move(restored));
 			LogicalAggregate aggregate(TableIndex(20), TableIndex(30), std::move(expressions));
 			aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, group));
@@ -2571,13 +2564,15 @@ TEST_CASE("Selected aggregates preserve source domains without structural eviden
 			child.columns[1].semi_anti_join_domain_evidence.TightenDomainBound(100);
 			auto result = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child, *connection.context);
 			REQUIRE(result);
-			REQUIRE(result->columns.size() == 2);
-			const auto &selected = result->columns[1];
-			REQUIRE(selected.total_domain.distinct_count == 1000);
-			REQUIRE(selected.total_domain.source == DistinctCountSource::HLL);
-			REQUIRE(selected.current_domain.distinct_count == MinValue<idx_t>(100, result->cardinality));
-			REQUIRE(selected.current_domain.source == DistinctCountSource::CARDINALITY);
-			REQUIRE_FALSE(selected.GetSupportedSemiAntiDomainSize().IsValid());
+			REQUIRE(result->columns.size() == 3);
+			for (idx_t i = 1; i < result->columns.size(); i++) {
+				const auto &selected = result->columns[i];
+				REQUIRE(selected.total_domain.distinct_count == 1000);
+				REQUIRE(selected.total_domain.source == DistinctCountSource::HLL);
+				REQUIRE(selected.current_domain.distinct_count == MinValue<idx_t>(100, result->cardinality));
+				REQUIRE(selected.current_domain.source == DistinctCountSource::CARDINALITY);
+				REQUIRE_FALSE(selected.GetSupportedSemiAntiDomainSize().IsValid());
+			}
 		}
 	}
 	connection.Rollback();
@@ -2589,8 +2584,8 @@ TEST_CASE("Selected aggregate domain propagation falls back without a proven sou
 	Connection connection(db);
 	connection.BeginTransaction();
 	auto value = ColumnBinding(TableIndex(10), ProjectionIndex(0));
-	for (const auto &mode : {"plain", "sum", "constant", "cast", "state", "undeclared", "missing", "bad_index",
-	                         "filter", "type_mismatch", "collation_mismatch"}) {
+	for (const auto &mode : {"plain", "sum", "constant", "cast", "state", "replaced", "missing", "filter",
+	                         "type_mismatch", "collation_mismatch"}) {
 		INFO(mode);
 		auto type = string(mode) == "collation_mismatch" ? LogicalType::VARCHAR : LogicalType::INTEGER;
 		unique_ptr<Expression> argument = make_uniq<BoundColumnRefExpression>(type, value);
@@ -2608,10 +2603,14 @@ TEST_CASE("Selected aggregate domain propagation falls back without a proven sou
 			expression->SetReturnType(LogicalType::VARCHAR_COLLATION("nocase"));
 		} else if (string(mode) == "state") {
 			expression->StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
-		} else if (string(mode) == "undeclared") {
-			expression->FunctionMutable().SetSelectedValueArgument(optional_idx());
-		} else if (string(mode) == "bad_index") {
-			expression->FunctionMutable().SetSelectedValueArgument(9);
+		} else if (string(mode) == "replaced") {
+			// Keep the name and original catalog definition of first, but execute min.
+			auto replacement = BindDomainAggregate(*connection.context, "min", expression->GetChildren()[0]->Copy());
+			auto &function = expression->FunctionMutable();
+			auto definition = function.GetDefinition();
+			function.ReplaceImplementation(replacement->Function());
+			function.SetName("first");
+			REQUIRE(function.GetDefinition() == definition);
 		} else if (string(mode) == "filter") {
 			expression->GetFilterMutable() = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		}
