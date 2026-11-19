@@ -146,7 +146,7 @@ public:
 	void Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos);
 
 	bool CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &boundary_val);
-	void AddSingleHeap(DataChunk &input, Vector &sort_key);
+	void AddSingleHeap(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary);
 	void AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec);
 	void AddLargeHeap(DataChunk &input, const Vector &sort_keys_vec);
 

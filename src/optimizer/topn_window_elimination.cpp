@@ -689,8 +689,8 @@ optional_idx TopNWindowElimination::CanOptimize(LogicalOperator &op, ClientConte
 
 	// 	Window fusion works better than TopN for certain cases
 
-	//	Fusion is better for non-integral keys
-	if (!TypeIsIntegral(order.expression->GetReturnType().InternalType())) {
+	//	Fusion is better for non-numeric keys
+	if (!TypeIsNumeric(order.expression->GetReturnType().InternalType())) {
 		return cant_optimize;
 	}
 

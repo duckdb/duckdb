@@ -95,6 +95,10 @@ static unique_ptr<TopOneFunc> GetTopOneFunc(const BoundOrderByNode &order) {
 		return MakeTopOneFunc<hugeint_t, OP>();
 	case PhysicalType::UINT128:
 		return MakeTopOneFunc<uhugeint_t, OP>();
+	case PhysicalType::FLOAT:
+		return MakeTopOneFunc<float, OP>();
+	case PhysicalType::DOUBLE:
+		return MakeTopOneFunc<double, OP>();
 	case PhysicalType::INTERVAL:
 		return MakeTopOneFunc<interval_t, OP>();
 	default:
@@ -208,9 +212,9 @@ bool TopNHeap::CanOptimize(idx_t limit, idx_t cardinality) {
 	return true;
 }
 
-void TopNHeap::AddSingleHeap(DataChunk &input, Vector &sort_key) {
+void TopNHeap::AddSingleHeap(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary) {
 	const auto count = input.size();
-	const auto best = topone->update(topone_state.data(), sort_key, count);
+	const auto best = topone->update(topone_state.data(), sort_chunk.data[0], count);
 	if (!best.IsValid()) {
 		return;
 	}
@@ -220,6 +224,15 @@ void TopNHeap::AddSingleHeap(DataChunk &input, Vector &sort_key) {
 	matching_sel.set_index(match_count++, best.GetIndex());
 	heap_data.Reset();
 	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
+
+	// the new best row tightens the dynamic filter
+	if (global_boundary && global_boundary->dynamic_filter) {
+		sort_chunk.Slice(matching_sel, match_count);
+		sort_keys.Reset();
+		auto &sort_keys_vec = sort_keys.data[0];
+		CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
+		global_boundary->UpdateValue(FlatVector::GetData<string_t>(sort_keys_vec)[0]);
+	}
 }
 
 void TopNHeap::AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec) {
@@ -385,7 +398,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 
 	//	LIMIT 1 without OFFSET and a single scalar column with NULLS LAST
 	if (topone) {
-		AddSingleHeap(input, sort_chunk.data[0]);
+		AddSingleHeap(input, global_boundary);
 		return;
 	}
 
