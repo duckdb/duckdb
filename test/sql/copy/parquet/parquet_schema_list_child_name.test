@@ -78,7 +78,8 @@ SELECT id, l, s FROM read_parquet('{TEST_DIR}/list_child_name.parquet', schema =
 3	[]	{'ll': [], 'ls': []}
 4	[NULL]	{'ll': NULL, 'ls': NULL}
 
-# protection: the fields of a struct and the key and value of a map are still found by name
+# unchanged: the fields of a struct and the key and value of a map are matched by name, so a value that is
+# declared under another key takes its default
 statement ok
 COPY (SELECT {'m': MAP {1: 10, 2: 20}, 'x': 1} AS s) TO '{TEST_DIR}/list_child_name_map.parquet' (FORMAT parquet);
 
