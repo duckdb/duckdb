@@ -1,0 +1,40 @@
+# name: test/sql/copy/csv/read_ahead/csv_readahead_open_window.test
+# description: read_ahead_open_window bounds how many files a scan opens ahead without changing the result
+# group: [read_ahead]
+
+statement ok
+SET threads=4
+
+query I
+SELECT current_setting('read_ahead_open_window')
+----
+0
+
+statement ok
+COPY (SELECT range AS i FROM range(0, 50000)) TO '{TEST_DIR}/csv_ow_0.csv' (FORMAT csv)
+
+statement ok
+COPY (SELECT range AS i FROM range(50000, 100000)) TO '{TEST_DIR}/csv_ow_1.csv' (FORMAT csv)
+
+statement ok
+COPY (SELECT range AS i FROM range(100000, 150000)) TO '{TEST_DIR}/csv_ow_2.csv' (FORMAT csv)
+
+foreach window 0 1 2 64
+
+statement ok
+SET read_ahead_open_window={window}
+
+query IIII
+SELECT count(*), sum(i), min(i), max(i) FROM read_csv(['{TEST_DIR}/csv_ow_0.csv', '{TEST_DIR}/csv_ow_1.csv', '{TEST_DIR}/csv_ow_2.csv'])
+----
+150000	11249925000	0	149999
+
+endloop
+
+statement ok
+RESET read_ahead_open_window
+
+query I
+SELECT current_setting('read_ahead_open_window')
+----
+0

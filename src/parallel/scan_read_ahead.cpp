@@ -152,6 +152,10 @@ static idx_t GetOpenFileBudget(ClientContext &context) {
 }
 
 static idx_t GetOpenWindow(ClientContext &context, bool remote_files) {
+	const auto configured_window = Settings::Get<ReadAheadOpenWindowSetting>(context);
+	if (configured_window != 0) {
+		return configured_window;
+	}
 	const auto async_threads = TaskScheduler::GetScheduler(context).NumberOfAsyncThreads();
 	if (remote_files) {
 		return async_threads * 2;

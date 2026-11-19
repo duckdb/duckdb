@@ -244,6 +244,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingRendererSettingsSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_SETTING_CALLBACK(ReadAheadDepthSetting),
+    DUCKDB_SETTING(ReadAheadOpenWindowSetting),
     DUCKDB_SETTING(RedactHttpLogsSetting),
     DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarAggregateMergeThresholdSetting),
