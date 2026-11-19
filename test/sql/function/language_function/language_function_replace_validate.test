@@ -1,0 +1,41 @@
+# name: test/sql/function/language_function/language_function_replace_validate.test
+# description: The inputs and outputs of a language's CREATE-time validation
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+# CREATE-time validation receives copies of the members and the statement text
+statement ok
+CREATE FUNCTION f_desc(a INTEGER, b := 42) RETURNS BIGINT LANGUAGE testlang AS 'describe';
+
+query T
+SELECT description FROM duckdb_functions() WHERE function_name = 'f_desc';
+----
+memory.main.f_desc|testlang|a,b|INTEGER,UNKNOWN|,42|BIGINT|CREATE FUNCTION f_desc(a INTEGER, b := 42) RETURNS BIGINT LANGUAGE testlang AS 'describe';
+
+# ... rewrites a member's stored source
+statement ok
+CREATE FUNCTION f_rw(x) LANGUAGE testlang AS 'rewrite:stored';
+
+query TT
+SELECT f_rw(1), macro_definition FROM duckdb_functions() WHERE function_name = 'f_rw';
+----
+stored	stored
+
+# ... and a member added to an existing entry is validated on its own
+statement ok
+CREATE FUNCTION f_rw(x, y) LANGUAGE testlang AS 'rewrite:second';
+
+query T rowsort
+SELECT macro_definition FROM duckdb_functions() WHERE function_name = 'f_rw';
+----
+second
+stored

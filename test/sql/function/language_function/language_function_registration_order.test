@@ -1,0 +1,57 @@
+# name: test/sql/function/language_function/language_function_registration_order.test
+# description: Registering a language and same-named functions of another extension in the other load order
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+# the other extension's function first, then the language
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema.duckdb_extension';
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+query T
+SELECT schema_name FROM duckdb_functions() WHERE function_name = 'plang' ORDER BY ALL;
+----
+explicit_schema
+main
+
+query T
+SELECT explicit_schema.plang('x', 1);
+----
+explicit_schema plang
+
+statement ok
+CREATE FUNCTION plang_member(x INTEGER) LANGUAGE plang AS 'src';
+
+query T
+SELECT plang_member(1);
+----
+plang language: src
+
+# an extension that registers an overload of a language before declaring it fails to load: member calls would never
+# select the earlier overload
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/language_declaration_order.duckdb_extension';
+----
+<REGEX>:.*declare the language .*latelang.* before registering its overloads.*
+
+# an extension whose default schema was never created still registers its language in the main schema
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_missing_schema.duckdb_extension';
+
+statement ok
+CREATE FUNCTION missing_schema_member() LANGUAGE missinglang AS 'body';
+
+query T
+SELECT missing_schema_member();
+----
+missinglang: body

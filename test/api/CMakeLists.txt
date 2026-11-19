@@ -21,6 +21,7 @@ set(TEST_API_OBJECTS
     test_type_info_identity.cpp
     test_singleton_group_statistics.cpp
     test_runtime_filter_input.cpp
+    test_language_function_guard.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp

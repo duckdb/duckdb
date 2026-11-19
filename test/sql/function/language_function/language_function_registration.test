@@ -1,0 +1,123 @@
+# name: test/sql/function/language_function/language_function_registration.test
+# description: How a language function's declaration survives registration paths
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+# testmerge is first registered as a plain function, then the declared language overload is added to it
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'testmerge';
+----
+2
+
+statement ok
+CREATE FUNCTION merged() LANGUAGE testmerge AS 'rewrite:sql:7';
+
+query II
+SELECT merged(), macro_definition FROM duckdb_functions() WHERE function_name = 'merged';
+----
+7	sql:7
+
+statement error
+CREATE FUNCTION merged_rejected() LANGUAGE testmerge AS 'invalid';
+----
+<REGEX>:.*testlang: the source of "merged_rejected" may not contain.*
+
+# ... and the same when the declared overload arrives through AddFunctionOverload
+statement ok
+CREATE FUNCTION late_merged() LANGUAGE testlate AS 'rewrite:sql:8';
+
+query II
+SELECT late_merged(), macro_definition FROM duckdb_functions() WHERE function_name = 'late_merged';
+----
+8	sql:8
+
+statement error
+CREATE FUNCTION late_rejected() LANGUAGE testlate AS 'invalid';
+----
+<REGEX>:.*testlang: the source of "late_rejected" may not contain.*
+
+# an extension with a dedicated schema registers its language where member calls look it up, and an overload it
+# registers later without the declaration joins that language instead of creating explicit_schema.schemalang
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema.duckdb_extension';
+
+query TI
+SELECT schema_name, count(*) FROM duckdb_functions() WHERE function_name = 'schemalang' GROUP BY ALL;
+----
+main	2
+
+statement ok
+CREATE FUNCTION in_schema_integer(x INTEGER) LANGUAGE schemalang AS 'body';
+
+query T
+SELECT in_schema_integer(1);
+----
+schemalang integer: body
+
+# AddFunctionOverload carries the validator of the set it adds
+statement ok
+CREATE FUNCTION late_in_schema() LANGUAGE schemalang_late AS 'body';
+
+query T
+SELECT late_in_schema();
+----
+schemalang: body
+
+statement error
+CREATE FUNCTION late_in_schema_rejected() LANGUAGE schemalang_late AS 'invalid';
+----
+<REGEX>:.*schemalang: rejected.*
+
+statement ok
+CREATE FUNCTION in_schema() LANGUAGE schemalang AS 'body';
+
+query T
+SELECT in_schema();
+----
+schemalang: body
+
+statement error
+CREATE FUNCTION in_schema_rejected() LANGUAGE schemalang AS 'invalid';
+----
+<REGEX>:.*schemalang: rejected.*
+
+# a function of another extension that only shares the name of a language stays in that extension's schema, and
+# member calls do not select it
+query T
+SELECT schema_name FROM duckdb_functions() WHERE function_name = 'plang' ORDER BY ALL;
+----
+explicit_schema
+main
+
+query T
+SELECT explicit_schema.plang('x', 1);
+----
+explicit_schema plang
+
+statement ok
+CREATE FUNCTION plang_member(x INTEGER) LANGUAGE plang AS 'src';
+
+query T
+SELECT plang_member(1);
+----
+plang language: src
+
+# the missing-language error names the function the language needs, not an extension
+statement ok
+CREATE FUNCTION no_language() LANGUAGE no_such_language AS 'x';
+
+statement error
+SELECT no_language();
+----
+<REGEX>:.*Missing Extension Error: Function "no_language" is written in language "no_such_language", but no function implementing language "no_such_language" is loaded. Load the extension that registers the scalar function "no_such_language".*

@@ -1,0 +1,193 @@
+# name: test/sql/function/language_function/language_function_replace_inputs.test
+# description: The plain-value inputs a language's callbacks receive
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE t(i INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 'a');
+
+# argument types (bound standalone, the declared type for a typed parameter, UNKNOWN when not bound), the declared
+# parameter types and the RETURNS type
+statement ok
+CREATE FUNCTION f_types(a, b INTEGER, c := 'x') RETURNS VARCHAR LANGUAGE testlang AS 'types';
+
+query T
+SELECT f_types(1, 2);
+----
+INTEGER,INTEGER,VARCHAR|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+query T
+SELECT f_types(s, 2::TINYINT, c => i) FROM t;
+----
+VARCHAR,INTEGER,INTEGER|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+query T
+SELECT f_types(sum(i), 1) FROM t;
+----
+UNKNOWN,INTEGER,VARCHAR|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+query T
+SELECT f_types(x -> x + 1, 1);
+----
+UNKNOWN,INTEGER,VARCHAR|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+# folded constants: NULL is a constant, a column and a volatile call are not, a default folds like an argument
+statement ok
+CREATE FUNCTION f_values(a, b, c := 1 + 1) LANGUAGE testlang AS 'values';
+
+query T
+SELECT f_values(1, NULL);
+----
+1,NULL,2
+
+query T
+SELECT f_values('s' || 'x', i) FROM t;
+----
+'sx',?,2
+
+query T
+SELECT f_values(random(), [1, 2]);
+----
+?,[1, 2],2
+
+# properties: d default, k constant, c references columns, v volatile, a aggregate, w window, s subquery,
+# e does not bind standalone
+statement ok
+CREATE FUNCTION f_props(a, b, c := 1) LANGUAGE testlang AS 'props';
+
+query T
+SELECT f_props(i, (SELECT 1)) FROM t;
+----
+c,s,dk
+
+query T
+SELECT f_props(random(), (SELECT max(t2.i) FROM t t2 WHERE t2.i = t.i)) FROM t;
+----
+v,cs,dk
+
+query T
+SELECT f_props(sum(i), row_number() OVER ()) FROM t;
+----
+a,w,dk
+
+query T
+SELECT f_props(no_such_column, x -> x);
+----
+e,e,dk
+
+# argument SQL text, before the parameter cast and after the caller qualified its column references
+statement ok
+CREATE FUNCTION f_sql(a, b INTEGER) LANGUAGE testlang AS 'sqltext';
+
+query T
+SELECT f_sql(i + i, i::TINYINT) FROM t;
+----
+(memory.main.t.i + memory.main.t.i),CAST(memory.main.t.i AS TINYINT)
+
+query T
+SELECT f_sql(x -> x, i) FROM t;
+----
+(x -> x),memory.main.t.i
+
+# the called entry, catalog-qualified, the member index, the language and the parameter names
+statement ok
+CREATE FUNCTION f_name(a, b) LANGUAGE testlang AS 'name';
+
+statement ok
+CREATE FUNCTION f_name(a) LANGUAGE testlang AS 'name';
+
+query TT
+SELECT f_name(1), f_name(1, 2);
+----
+memory.main.f_name#1|testlang|a	memory.main.f_name#0|testlang|a,b
+
+# the call site's search path, which a view replaces with its own, led by the view's schema. USE sets the session's
+# entry explicitly, as test configs that attach their own database do
+statement ok
+CREATE FUNCTION f_path() LANGUAGE testlang AS 'path';
+
+statement ok
+USE memory;
+
+query T
+SELECT f_path();
+----
+temp.main,memory.main,main,system.main,system.pg_catalog
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+SET search_path = 's2,main';
+
+query T
+SELECT f_path();
+----
+temp.main,memory.s2,memory.main,main,system.main,system.pg_catalog
+
+statement ok
+CREATE VIEW v_path AS SELECT f_path() AS p;
+
+statement ok
+RESET search_path;
+
+query T
+SELECT p FROM s2.v_path;
+----
+temp.main,memory.s2,main,system.main,system.pg_catalog
+
+# an untyped prepared parameter defers the call to EXECUTE, which sees the parameter's type and value
+statement ok
+PREPARE p_types AS SELECT f_types(?, 1);
+
+query T
+EXECUTE p_types(1);
+----
+INTEGER,INTEGER,VARCHAR|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+query T
+EXECUTE p_types('x');
+----
+VARCHAR,INTEGER,VARCHAR|UNKNOWN,INTEGER,UNKNOWN|VARCHAR
+
+statement ok
+PREPARE p_values AS SELECT f_values(?, 1);
+
+query T
+EXECUTE p_values(3);
+----
+3,1,2
+
+query T
+EXECUTE p_values(4);
+----
+4,1,2
+
+# ... a typed parameter does not defer: the parameter is not a constant of the prepared plan
+statement ok
+CREATE FUNCTION f_typed_values(a INTEGER) LANGUAGE testlang AS 'values';
+
+statement ok
+PREPARE p_typed AS SELECT f_typed_values(?);
+
+query T
+EXECUTE p_typed(3);
+----
+?
+
+query T
+EXECUTE p_typed(4);
+----
+?
