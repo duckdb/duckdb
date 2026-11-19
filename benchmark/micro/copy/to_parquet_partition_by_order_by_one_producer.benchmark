@@ -1,0 +1,9 @@
+# name: benchmark/micro/copy/to_parquet_partition_by_order_by_one_producer.benchmark
+# description: Copy to Parquet with ORDER_BY from range(), one producer thread, 16 partitions
+# group: [copy]
+
+name Copy to Parquet with ORDER_BY from range(), one producer thread, 16 partitions
+group copy
+
+run
+COPY (SELECT i%16 AS part_col, (10000000 - i) AS v FROM range(0,10000000) tbl(i)) TO '${BENCHMARK_DIR}/partitioned_write' (FORMAT parquet, PARTITION_BY part_col, ORDER_BY (v), OVERWRITE);

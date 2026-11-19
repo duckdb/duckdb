@@ -1,0 +1,9 @@
+# name: benchmark/micro/copy/to_csv_partition_by_one_producer.benchmark
+# description: Copy to CSV from range(), one producer thread, 16 partitions
+# group: [copy]
+
+name Copy to CSV from range(), one producer thread, 16 partitions
+group copy
+
+run
+COPY (SELECT i%16 AS part_col, i AS v, i * 7 AS w FROM range(0,10000000) tbl(i)) TO '${BENCHMARK_DIR}/partitioned_write' (FORMAT csv, PARTITION_BY part_col, OVERWRITE);
