@@ -8,11 +8,14 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/distinctness.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
@@ -91,6 +94,35 @@ void RegisterPayloadAggregate(Connection &connection, const Identifier &source) 
 }
 
 } // namespace
+
+TEST_CASE("Distinctness forwards primary keys through Top N", "[api][singleton_group_statistics]") {
+	DuckDB database(nullptr);
+	Connection connection(database);
+	RunSingletonQuery(connection, "CREATE TABLE singleton_keys(id INTEGER PRIMARY KEY)");
+	connection.BeginTransaction();
+
+	Parser parser(*connection.context);
+	parser.ParseQuery("SELECT id, id AS alias_id FROM singleton_keys");
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	const auto bindings = planner.plan->GetColumnBindings();
+	REQUIRE(bindings.size() == 2);
+
+	vector<BoundOrderByNode> orders;
+	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+	                    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[0]));
+	LogicalTopN top_n(std::move(orders), 1, 0);
+	top_n.children.push_back(std::move(planner.plan));
+
+	Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS);
+	column_binding_set_t primary_key {bindings[0]};
+	CHECK(distinctness.IsDistinctOn(top_n, primary_key));
+
+	vector<unique_ptr<Expression>> aliased_key;
+	aliased_key.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[1]));
+	CHECK(distinctness.IsDistinctOn(top_n, aliased_key, *connection.context));
+	connection.Rollback();
+}
 
 TEST_CASE("Singleton aggregate domains reject overridden casts", "[api][singleton_group_statistics]") {
 	DuckDB database(nullptr);

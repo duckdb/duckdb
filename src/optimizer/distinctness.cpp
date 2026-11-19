@@ -14,6 +14,21 @@
 
 namespace duckdb {
 
+static bool ForwardsChildUniqueSets(LogicalOperatorType type, DistinctnessPropagation propagation) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return true;
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		return propagation == DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS;
+	default:
+		return false;
+	}
+}
+
 static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expression, ClientContext &context) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		return expression.Cast<BoundColumnRefExpression>().Binding();
@@ -55,30 +70,24 @@ bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t 
 	if (IsDistinctOn(op, keys)) {
 		return true;
 	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		column_binding_set_t child_keys;
-		auto bindings = op.GetColumnBindings();
-		for (idx_t i = 0; i < bindings.size(); i++) {
-			if (!keys.count(bindings[i])) {
-				continue;
-			}
-			auto binding = GetInjectiveColumnBinding(*op.expressions[i], context);
-			if (binding) {
-				child_keys.insert(*binding);
-			}
-		}
-		return IsDistinctOn(*op.children[0], child_keys, context);
-	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_WINDOW:
+	if (ForwardsChildUniqueSets(op.type, propagation)) {
 		return IsDistinctOn(*op.children[0], keys, context);
-	default:
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION) {
 		return false;
 	}
+	auto &projection = op.Cast<LogicalProjection>();
+	column_binding_set_t child_keys;
+	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
+		if (!keys.count(ColumnBinding(projection.table_index, expr_idx))) {
+			continue;
+		}
+		auto binding = GetInjectiveColumnBinding(*projection.expressions[expr_idx], context);
+		if (binding) {
+			child_keys.insert(*binding);
+		}
+	}
+	return IsDistinctOn(*projection.children[0], child_keys, context);
 }
 
 bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys) {
@@ -255,7 +264,7 @@ vector<column_binding_set_t> Distinctness::ComputeAggregateUniqueSets(LogicalAgg
 }
 
 vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalProjection &projection) {
-	// only plain column references forward a unique set: other expressions (e.g. casts) are not injective
+	// cache one plain output binding per input binding
 	vector<column_binding_set_t> result;
 	auto &child_sets = GetUniqueSets(*projection.children[0]);
 	if (child_sets.empty()) {
@@ -288,6 +297,9 @@ vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalPr
 }
 
 vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op) {
+	if (ForwardsChildUniqueSets(op.type, propagation)) {
+		return GetUniqueSets(*op.children[0]);
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return ComputeScanUniqueSets(op.Cast<LogicalGet>());
@@ -295,17 +307,6 @@ vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op
 		return ComputeAggregateUniqueSets(op.Cast<LogicalAggregate>());
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return ComputeProjectionUniqueSets(op.Cast<LogicalProjection>());
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_WINDOW:
-		// these remove rows or add columns, but never duplicate a row
-		return GetUniqueSets(*op.children[0]);
-	case LogicalOperatorType::LOGICAL_SAMPLE:
-		if (propagation != DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
-			break;
-		}
-		return GetUniqueSets(*op.children[0]);
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		if (propagation != DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
 			break;
