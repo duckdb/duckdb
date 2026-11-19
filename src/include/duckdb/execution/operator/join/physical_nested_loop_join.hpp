@@ -87,6 +87,8 @@ private:
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	// mark the build rows a probe chunk matches (RIGHT SEMI); the source phase emits them
+	void ResolveRightSemiJoin(ExecutionContext &context, DataChunk &input, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                      OperatorState &state) const;
