@@ -992,7 +992,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
     {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
-    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
+    {"Iceberg", "iceberg"},   {"IcebergDataFileWritten", "iceberg"},    {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {

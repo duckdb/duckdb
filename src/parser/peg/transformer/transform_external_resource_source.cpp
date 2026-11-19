@@ -10,12 +10,12 @@ namespace duckdb {
 // Both statements produce a normal ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY`
 // provisions a resource the statement owns; a bare `<name>` borrows a registered one.
 
-//! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)] — provision a fresh resource.
+//! NEW TEMPORARY EXTERNAL RESOURCE <type> [(create opts)] — provision a fresh resource.
 unique_ptr<ExternalResourceOptions> PEGTransformerFactory::TransformExternalResourceCreateClause(
-    PEGTransformer &transformer, const string &string_literal,
+    PEGTransformer &transformer, const string &external_resource_type,
     const optional<vector<GenericCopyOption>> &external_resource_creation_options) {
 	auto result = make_uniq<ExternalResourceOptions>();
-	result->provider = string_literal;
+	result->provider = external_resource_type;
 	if (external_resource_creation_options) {
 		CollectGenericOptions(*external_resource_creation_options, result->parsed_params, "EXTERNAL RESOURCE");
 	}

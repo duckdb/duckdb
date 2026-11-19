@@ -55,11 +55,11 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"@>", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^@", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__resolve", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__aws__cloudformation__quack_on_ec2__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__resolve", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__aws__cloudformation__stack__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__expired", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"__aws__s3__bucket__create", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__s3__bucket__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -351,6 +351,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_table_deletions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_info", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_insertions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_unreadable_macro_default", "ducklake", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"editdist3", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"element_at", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"encode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -383,6 +384,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fsum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"fts_analyze_pattern", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"fts_near_tf", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fts_tokenize_opensearch_standard", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"fuzz_all_functions", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fuzzyduck", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -424,6 +427,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"html_unescape", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"iceberg_bucket", "iceberg", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"iceberg_column_stats", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_expire_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_files", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_history", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_load_table_response", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -439,6 +443,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_scan_plan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan_tasks", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_schema_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_schemas", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_table_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_to_ducklake", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1465,12 +1470,14 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"httpfs_connection_caching", "httpfs"},
     {"httpfs_enable_credential_refresh", "httpfs"},
     {"iceberg_default_format_version", "iceberg"},
+    {"iceberg_enable_manifest_cache", "iceberg"},
     {"iceberg_enable_multi_file_scan_tasks", "iceberg"},
     {"iceberg_enable_scan_serialization", "iceberg"},
     {"iceberg_equality_delete_fast_filter", "iceberg"},
     {"iceberg_logging_post_body_truncate_limit", "iceberg"},
     {"iceberg_max_reserved_manifest_entries", "iceberg"},
     {"iceberg_metadata_log_clock_skew_ms", "iceberg"},
+    {"iceberg_store_written_files", "iceberg"},
     {"iceberg_test_force_token_expiry", "iceberg"},
     {"iceberg_unsafe_skip_puffin_verification", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
@@ -1599,10 +1606,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 
 // Resource types registered by extensions: CREATE/REGISTER EXTERNAL RESOURCE '<type>' autoloads the extension
 static constexpr ExtensionEntry EXTENSION_EXTERNAL_RESOURCE_TYPES[] = {
-    {"aws:cloudformation:quack-on-ec2", "aws"},
-    {"aws:s3:bucket", "aws"},
-    {"aws:s3tables:bucket", "aws"},
-    {"aws:system-table", "aws"},
+    {"aws.cloudformation.stack", "aws"},
+    {"aws.s3.bucket", "aws"},
+    {"aws.s3tables.bucket", "aws"},
+    {"aws.system-table", "aws"},
 }; // END_OF_EXTENSION_EXTERNAL_RESOURCE_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -1702,8 +1709,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
-    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
-    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},      {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"IcebergDataFileWritten", "iceberg"}, {"PostgresQueryLog", "postgres_scanner"},
+    {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"autocomplete",
