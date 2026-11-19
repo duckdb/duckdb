@@ -234,9 +234,10 @@ TEST_CASE("Keyword category masks require explicit conversions and valid IDs", "
 	REQUIRE((first & last) == keyword_categories_t());
 	REQUIRE(((first | last) & first) == first);
 	REQUIRE(first != keyword_categories_t());
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
-	                  InvalidInputException);
-	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(256), InvalidInputException);
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
+	                    Catch::Contains("Keyword category ID must be between"));
+	REQUIRE_THROWS_WITH(keyword_categories_t::CreateCategory(256),
+	                    Catch::Contains("Keyword category ID must be between"));
 }
 
 TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
@@ -595,7 +596,7 @@ TEST_CASE("Transform stack growth preserves processes and unwinds expression dep
 	{
 		TransformStack stack(transformer);
 		if (lifetime.throw_at_leaf || lifetime.throw_in_factory) {
-			REQUIRE_THROWS_AS(stack.Execute<bool>({*nodes.back()}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute<bool>({*nodes.back()}), Catch::Contains("Nested transform"));
 		} else {
 			REQUIRE(stack.Execute<bool>({*nodes.back()}));
 			REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
@@ -794,7 +795,8 @@ TEST_CASE("Failed generated process initialization releases child buffers", "[ap
 		ArenaAllocator results(underlying);
 		PEGTransformer transformer(results, iterator, options, *grammar);
 		for (idx_t i = 0; i < 512; i++) {
-			REQUIRE_THROWS_AS(transformer.Transform<bool>(input), InvalidInputException);
+			REQUIRE_THROWS_WITH(transformer.Transform<bool>(input),
+			                    Catch::Contains("Generated initializer test failure"));
 		}
 		REQUIRE(stats.peak < 4 * 1024 * 1024);
 	}
@@ -1110,8 +1112,9 @@ TEST_CASE("Small grammars resolve missing generated references only when used", 
 	PEGTransformer transformer(arena, iterator, options, grammar);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// InternalException aborts instead of throwing in crash-on-assert builds.
-	REQUIRE_THROWS_AS(transformer.GetRule(id), InternalException);
-	REQUIRE_THROWS_AS(transformer.GetRule("AdditiveExpression"), InternalException);
+	REQUIRE_THROWS_WITH(transformer.GetRule(id), Catch::Contains("No registered data exists for rule"));
+	REQUIRE_THROWS_WITH(transformer.GetRule("AdditiveExpression"),
+	                    Catch::Contains("No registered data exists for rule"));
 #endif
 }
 
@@ -1703,7 +1706,7 @@ TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[ap
 		lifetime.throw_at_leaf = true;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}), Catch::Contains("Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.state_valid);
@@ -2116,7 +2119,7 @@ TEST_CASE("Deep leading list chains retain heap-owned state through exceptions",
 	MatchContext context(suggestions, allocator, processes, max_position);
 	MatchState state(iterator, context);
 	if (lifetime.throw_at_leaf) {
-		REQUIRE_THROWS_AS(lists.back()->MatchParseResult(state), InvalidInputException);
+		REQUIRE_THROWS_WITH(lists.back()->MatchParseResult(state), Catch::Contains("Nested matcher test failure"));
 	} else {
 		REQUIRE(lists.back()->MatchParseResult(state).IsSuccess());
 	}
@@ -2382,7 +2385,9 @@ TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api
 		lifetime.depth = 130;
 		{
 			MatchStack stack;
-			REQUIRE_THROWS_AS(stack.Execute({matcher, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({matcher, state}),
+			                    Catch::Contains(lifetime.throw_in_constructor ? "Nested process constructor failure"
+			                                                                  : "Nested matcher test failure"));
 		}
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(lifetime.started == lifetime.depth);
@@ -3153,7 +3158,7 @@ TEST_CASE("Derived matchers can forward to built-in processes through deep heap 
 		MatchStack stack;
 		lifetime.throw_at_leaf = true;
 		starts = 0;
-		REQUIRE_THROWS_AS(stack.Execute({*lists.back(), state}), InvalidInputException);
+		REQUIRE_THROWS_WITH(stack.Execute({*lists.back(), state}), Catch::Contains("Nested matcher test failure"));
 		REQUIRE(starts == lists.size());
 		REQUIRE(lifetime.active == 0);
 		REQUIRE(processes.SizeInBytes() == parent_bytes);
@@ -3448,7 +3453,7 @@ TEST_CASE("Deep prepared list groups keep success and exception state on the hea
 		atom.should_throw = fail;
 		MatchState state(iterator, context);
 		if (fail) {
-			REQUIRE_THROWS_AS(stack.Execute({*root, state}), InvalidInputException);
+			REQUIRE_THROWS_WITH(stack.Execute({*root, state}), Catch::Contains("group leaf failure"));
 		} else {
 			auto result = stack.Execute({*root, state});
 			REQUIRE(result.IsSuccess());
@@ -3509,8 +3514,9 @@ TEST_CASE("Generated list finalization validates its tree before consuming child
 		process.SetChildResult(0, transformer.MakeResult<Identifier>("alpha"));
 		process.SetChildResult(1, transformer.MakeResult<Identifier>("beta"));
 		if (shape >= 2) {
-			REQUIRE_THROWS_AS(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
-			                  InternalException);
+			REQUIRE_THROWS_WITH(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
+			                    Catch::Contains("Failed to cast parse result") ||
+			                        Catch::Contains("Child index out of bounds"));
 			REQUIRE(process.GetResult<Identifier>(0) == Identifier("alpha"));
 			REQUIRE(process.GetResult<Identifier>(1) == Identifier("beta"));
 		} else {

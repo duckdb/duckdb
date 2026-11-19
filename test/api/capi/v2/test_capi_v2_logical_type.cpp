@@ -21,7 +21,7 @@ namespace test_capi_v2 {
 
 // The type name is a qualified name; every case here names an unqualified type, so it is wrapped in a one-part name.
 inline DUCKDB_V2_ERROR LTCreateTypeFromName(duckdb_v2_factory_handle factory, std::string_view name,
-                                            const char **param_names, const idx_t *param_names_lengths,
+                                            const char *const *param_names, const idx_t *param_names_lengths,
                                             const duckdb_v2_value_handle *param_values, idx_t param_count,
                                             duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_qname_handle qname = nullptr;

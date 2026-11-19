@@ -178,8 +178,8 @@ BaseFileSystem &VirtualFileSystem::GetLocalFileSystem() {
 }
 
 optional_ptr<BaseFileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
-                                                                          const FileCompressionType &compression,
-                                                                          const string &filepath, bool for_writing) {
+                                                                      const FileCompressionType &compression,
+                                                                      const string &filepath, bool for_writing) {
 	auto resolved = compression;
 	// For auto-detection, check whether any registered compression filesystem can handle this file.
 	if (resolved.IsAutoDetect()) {

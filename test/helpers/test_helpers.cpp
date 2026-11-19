@@ -2,6 +2,7 @@
 #include "test_reporter.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -125,8 +126,9 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 }
 
 FileSystem &TestLocalFileSystem() {
-	static DuckDB db(nullptr);
-	return FileSystem::GetLocal(*db.instance);
+	static LocalFileSystem local_fs;
+	static BoundFileSystem fs(local_fs, nullptr);
+	return fs;
 }
 
 void TestDeleteDirectory(string path) {

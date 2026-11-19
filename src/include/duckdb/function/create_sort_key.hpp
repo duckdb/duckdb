@@ -48,6 +48,9 @@ struct OrderModifiers {
 };
 
 struct CreateSortKeyHelpers {
+	static constexpr const char *NON_NULL_RESULT_PROPERTY = "duckdb.create_sort_key.non_null_result";
+
+	static bool IsNonNullSortKey(const Expression &expression);
 	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);

@@ -15,8 +15,8 @@ index 95dcca2..3fe3654 100644
  namespace {
  
 +FileSystem &TestLocalFileSystem() {
-+	static DuckDB db(nullptr);
-+	return FileSystem::GetLocal(*db.instance);
++	static LocalFileSystem fs;
++	return fs;
 +}
 +
  string TestRoot() {

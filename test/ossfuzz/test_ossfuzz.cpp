@@ -12,7 +12,6 @@ using namespace duckdb;
 constexpr const char *QUERY_DIRECTORY = "test/ossfuzz/cases";
 
 static void test_runner() {
-	auto &fs = TestLocalFileSystem();
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
 
 	duckdb::unique_ptr<QueryResult> result;

@@ -3933,8 +3933,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_han
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
-    duckdb_v2_environment_handle env, const char **option_names, const idx_t *option_names_lengths,
-    const char **option_values, const idx_t *option_values_lengths, idx_t option_count,
+    duckdb_v2_environment_handle env, const char *const *option_names, const idx_t *option_names_lengths,
+    const char *const *option_values, const idx_t *option_values_lengths, idx_t option_count,
     duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
@@ -3987,8 +3987,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
-    duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char **option_names,
-    const idx_t *option_names_lengths, const char **option_values, const idx_t *option_values_lengths,
+    duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
+    const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
     idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
@@ -4389,8 +4389,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(const char *text, idx_t text_
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_create(const char **parts, const idx_t *parts_lengths, idx_t part_count,
-                                                    duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_create(const char *const *parts, const idx_t *parts_lengths,
+                                                    idx_t part_count, duckdb_v2_qname_handle *name,
+                                                    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -9776,7 +9777,7 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
-    duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char **param_names,
+    duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char *const *param_names,
     const idx_t *param_names_lengths, const duckdb_v2_value_handle *param_values, idx_t param_count,
     duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 #endif
@@ -9827,7 +9828,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_name(
-    duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name, const char **param_names,
+    duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name, const char *const *param_names,
     const idx_t *param_names_lengths, const duckdb_v2_value_handle *param_values, idx_t param_count,
     duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 #endif
@@ -10878,7 +10879,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckd
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(
     duckdb_v2_replacement_scan_info_handle info, duckdb_v2_column_data_collection_handle collection,
-    const char **column_names, const idx_t *column_names_lengths, idx_t column_count, duckdb_v2_error_info_handle *err);
+    const char *const *column_names, const idx_t *column_names_lengths, idx_t column_count,
+    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -12068,7 +12070,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement,
                                                                 const char *name, idx_t name_length,
                                                                 duckdb_v2_column_data_collection_handle collection,
-                                                                const char **column_names,
+                                                                const char *const *column_names,
                                                                 const idx_t *column_names_lengths, idx_t column_count,
                                                                 duckdb_v2_error_info_handle *err);
 #endif
@@ -12940,9 +12942,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(
-    duckdb_v2_prepared_statement_handle prepared, const char **parameter_names, const idx_t *parameter_names_lengths,
-    const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, duckdb_v2_result_handle *out_result,
-    duckdb_v2_error_info_handle *err);
+    duckdb_v2_prepared_statement_handle prepared, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -13095,7 +13097,7 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(
-    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char **parameter_names,
+    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char *const *parameter_names,
     const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
     duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
@@ -17031,7 +17033,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array(duckdb_v2_factory_hand
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char **names,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char *const *names,
                                                            const idx_t *names_lengths,
                                                            const duckdb_v2_value_handle *children, idx_t field_count,
                                                            duckdb_v2_value_handle *out_value,
@@ -17325,7 +17327,7 @@ typedef struct _duckdb_v2_arrow_result {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context,
-                                                             struct ArrowSchema *schema, idx_t batch_size,
+                                                             const struct ArrowSchema *schema, idx_t batch_size,
                                                              duckdb_v2_arrow_importer_handle *out_importer,
                                                              duckdb_v2_error_info_handle *err);
 #endif
@@ -17479,7 +17481,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_im
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context,
                                                              const duckdb_v2_logical_type_handle *types,
-                                                             const char **names, const idx_t *names_lengths,
+                                                             const char *const *names, const idx_t *names_lengths,
                                                              idx_t count, idx_t batch_size,
                                                              duckdb_v2_arrow_exporter_handle *out_exporter,
                                                              duckdb_v2_error_info_handle *err);
@@ -17610,7 +17612,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_destroy(duckdb_v2_arrow_ex
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(
-    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char **parameter_names,
+    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char *const *parameter_names,
     const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
     idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
@@ -17637,9 +17639,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute_arrow(
-    duckdb_v2_prepared_statement_handle prepared, const char **parameter_names, const idx_t *parameter_names_lengths,
-    const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, idx_t batch_size,
-    duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
+    duckdb_v2_prepared_statement_handle prepared, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

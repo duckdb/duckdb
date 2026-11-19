@@ -24,6 +24,9 @@ struct NestedLoopJoinInner {
 struct NestedLoopJoinMark {
 	static void Perform(DataChunk &left, ColumnDataCollection &right, bool found_match[],
 	                    const vector<JoinCondition> &conditions, optional_ptr<bool> found_unknown = nullptr);
+	//! Marks the rows of `left` that a row of `right` matches
+	static void Perform(const Vector &left, const Vector &right, idx_t left_count, idx_t right_count,
+	                    bool found_match[], ExpressionType comparison);
 };
 
 } // namespace duckdb
