@@ -242,11 +242,9 @@ void PartialBlock::Clear() {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(Context &context_p, BlockManager &block_manager,
-                                         PartialBlockType partial_block_type, optional_idx max_partial_block_size_p,
-                                         uint32_t max_use_count)
-    : context(context_p), block_manager(block_manager), partial_block_type(partial_block_type),
-      max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
+                                         optional_idx max_partial_block_size_p, uint32_t max_use_count)
+    : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
 	} else {
@@ -266,7 +264,7 @@ block_id_t PartialBlockManager::GetFreeBlockId() {
 	}
 }
 
-void PartialBlockManager::Merge(PartialBlockManager &other) {
+void PartialBlockManager::Merge(Context &context, PartialBlockManager &other) {
 	if (&other == this) {
 		throw InternalException("Cannot merge into itself");
 	}
@@ -281,16 +279,16 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 
 		auto used_space = NumericCast<uint32_t>(block_manager.GetBlockSize() - other_offset);
 		if (used_space > max_partial_block_size) {
-			RetainOrFlush(std::move(other_block));
+			RetainOrFlush(context, std::move(other_block));
 			continue;
 		}
 		if (auto partial_block = TakePartialBlock(used_space)) {
 			partial_block->Merge(*other_block);
-			RetainOrFlush(std::move(partial_block));
+			RetainOrFlush(context, std::move(partial_block));
 			continue;
 		}
 
-		RetainOrFlush(std::move(other_block));
+		RetainOrFlush(context, std::move(other_block));
 	}
 
 	other.partially_filled_blocks.clear();
@@ -300,9 +298,9 @@ void PartialBlockManager::ClearBlocks() {
 	partially_filled_blocks.clear();
 }
 
-void PartialBlockManager::FlushPartialBlocks() {
+void PartialBlockManager::FlushPartialBlocks(Context &context) {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(GetQueryContext(), partial_block_type);
+		e.second->Flush(QueryContext(context), partial_block_type);
 	}
 	partially_filled_blocks.clear();
 }
@@ -360,33 +358,38 @@ unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
 	return block;
 }
 
-void PartialBlockManager::RetainOrFlush(unique_ptr<PartialBlock> partial_block) {
+static QueryContext ToQueryContext(optional_ptr<Context> context) {
+	return context ? QueryContext(*context) : QueryContext();
+}
+
+void PartialBlockManager::RetainOrFlush(optional_ptr<Context> context, unique_ptr<PartialBlock> partial_block) {
 	auto min_reusable_space = block_manager.GetBlockSize() - max_partial_block_size;
 	auto available_space = partial_block->AvailableSpace();
 
 	if (partial_block->UseCount() >= max_use_count) {
-		partial_block->Flush(GetQueryContext(), partial_block_type);
+		partial_block->Flush(ToQueryContext(context), partial_block_type);
 		return;
 	}
 	if (available_space < min_reusable_space) {
-		partial_block->Flush(GetQueryContext(), partial_block_type);
+		partial_block->Flush(ToQueryContext(context), partial_block_type);
 		return;
 	}
 
 	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
 
 	if (auto pruned_block = PruneFreeList()) {
-		pruned_block->Flush(GetQueryContext(), partial_block_type);
+		pruned_block->Flush(ToQueryContext(context), partial_block_type);
 	}
 }
 
-optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, BufferHandle &&source, uint32_t byte_size) {
+optional<BlockPointer> PartialBlockManager::Write(Context &context, BlockPackable &packable, BufferHandle &&source,
+                                                  uint32_t byte_size) {
 	BufferHandle owned_source(std::move(source));
 	unique_lock<mutex> lock(partial_block_lock);
 
 	auto block = AcquirePartialBlock(byte_size);
 	BlockPointer block_ptr = block->Store(packable, std::move(owned_source), byte_size);
-	RetainOrFlush(std::move(block));
+	RetainOrFlush(context, std::move(block));
 
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		D_ASSERT(block_ptr.IsValid());
@@ -396,13 +399,23 @@ optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, Buffe
 	return nullopt;
 }
 
+optional<BlockPointer> PartialBlockManager::Write(Context &context, BlockPackable &packable, const BufferHandle &source,
+                                                  uint32_t byte_size) {
+	return WriteCopy(context, packable, source, byte_size);
+}
+
 optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, const BufferHandle &source,
                                                   uint32_t byte_size) {
+	return WriteCopy(nullptr, packable, source, byte_size);
+}
+
+optional<BlockPointer> PartialBlockManager::WriteCopy(optional_ptr<Context> context, BlockPackable &packable,
+                                                      const BufferHandle &source, uint32_t byte_size) {
 	unique_lock<mutex> lock(partial_block_lock);
 
 	auto block = AcquirePartialBlock(byte_size);
 	BlockPointer block_ptr = block->Store(packable, source, byte_size);
-	RetainOrFlush(std::move(block));
+	RetainOrFlush(context, std::move(block));
 
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		D_ASSERT(block_ptr.IsValid());
@@ -414,10 +427,6 @@ optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, const
 
 BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
-}
-
-QueryContext PartialBlockManager::GetQueryContext() const {
-	return QueryContext(context);
 }
 
 } // namespace duckdb

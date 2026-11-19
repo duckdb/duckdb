@@ -300,7 +300,8 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	auto catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &transaction = MetaTransaction::Get(*connection->context);
 	auto &catalog = Catalog::GetCatalog(*connection->context, Identifier(catalog_name));
-	transaction.ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	transaction.ModifyDatabase(*connection->context, catalog.GetAttached(),
+	                           DatabaseModificationType::CREATE_CATALOG_ENTRY);
 	catalog.CreateType(*connection->context, info);
 
 	connection->Commit();

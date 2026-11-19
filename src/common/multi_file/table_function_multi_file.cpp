@@ -19,9 +19,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class TableFunctionMultiFileGlobalState : public GlobalTableFunctionState {
 public:
-	//! The operator the files are scanned for, and how many files that scan reads
+	explicit TableFunctionMultiFileGlobalState(const MultiFileList &file_list_p) : file_list(file_list_p) {
+	}
+
+	//! The operator and file list of the scan
 	optional_ptr<const PhysicalOperator> op;
-	idx_t file_count = 1;
+	const MultiFileList &file_list;
 	//! What the wrapped function has reported for the files of this scan - collected whenever a file may have
 	//! counted more, so that a reader can be released without losing what it counted.
 	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
@@ -270,7 +273,7 @@ TableFunctionInitInput TableFunctionFileReader::GetInitInput(TableFunctionFileIn
 		file_input.filter_global_indices = filter_global_indices;
 	}
 	file_input.file_index = file_list_idx;
-	file_input.file_count = scan_file_count;
+	file_input.file_list = scan_file_list;
 	if (!cast_map.empty()) {
 		file_input.cast_map = cast_map;
 	}
@@ -291,7 +294,7 @@ optional_idx TableFunctionFileReader::MaxThreads(ClientContext &context, GlobalT
 void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 	auto &scan_state = gstate.Cast<TableFunctionMultiFileGlobalState>();
 	scan_op = scan_state.op;
-	scan_file_count = scan_state.file_count;
+	scan_file_list = scan_state.file_list;
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
@@ -674,9 +677,8 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 unique_ptr<GlobalTableFunctionState>
 TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &,
                                                      MultiFileGlobalState &global_state) {
-	auto result = make_uniq<TableFunctionMultiFileGlobalState>();
+	auto result = make_uniq<TableFunctionMultiFileGlobalState>(global_state.file_list);
 	result->op = global_state.op;
-	result->file_count = global_state.file_list.GetTotalFileCount();
 	return std::move(result);
 }
 

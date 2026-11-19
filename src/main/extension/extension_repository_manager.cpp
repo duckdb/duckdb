@@ -295,34 +295,48 @@ bool ExtensionRepositoryManager::TrustsRepository(DatabaseInstance &db, const Ex
 void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	// modifying the trusted repositories changes the set of keys that are trusted to sign extensions, so it is gated
 	// by the configuration lock: a locked configuration freezes the trust store
+	if (Settings::Get<LockConfigurationSetting>(db)) {
+		throw InvalidInputException("Cannot add or drop extension repositories while the configuration is locked "
+		                            "(lock_configuration is true): they decide which signing keys are trusted, so they "
+		                            "are part of the configuration");
+	}
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
 }
 
-void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, bool from_host) {
+static constexpr const char *REPOSITORIES_DOCS = "https://duckdb.org/docs/stable/extensions/extension_repositories";
+
+void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host) {
 	CheckNotLocked(db);
 	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first - except for a
 	// repository resolved from its host: the name says who is trusted, and the host's own file says what, so the
 	// 'hosts' default lets it through
-	switch (GetAccess(db)) {
-	case ExtensionRepositoryAccess::ALLOWED:
+	auto access = GetAccess(db);
+	if (access == ExtensionRepositoryAccess::ALLOWED || (from_host && access != ExtensionRepositoryAccess::FORBIDDEN)) {
 		return;
-	case ExtensionRepositoryAccess::FORBIDDEN:
-		throw PermissionException("Adding extension repositories has been forbidden through configuration");
-	case ExtensionRepositoryAccess::HOSTS_ONLY:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories by prefix is not permitted while "
-		                          "allow_extension_repositories='hosts_only': use `CREATE EXTENSION REPOSITORY <host>` "
-		                          "without a prefix, so that the host names its repository");
-	default:
-		if (from_host) {
-			return;
-		}
-		throw PermissionException("Adding extension repositories is not enabled: set "
-		                          "allow_extension_repositories='allowed' to opt in, or use `CREATE EXTENSION "
-		                          "REPOSITORY <host>` without a prefix, so that the host names its repository");
 	}
+	string message;
+	if (access == ExtensionRepositoryAccess::FORBIDDEN) {
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is "
+		                             "'forbidden', which does not allow adding any repository.",
+		                             name);
+	} else {
+		// 'hosts' or 'hosts_only', and a prefix was given
+		message = StringUtil::Format("Cannot create extension repository '%s': allow_extension_repositories is '%s', "
+		                             "which does not allow adding arbitrary repositories, only repositories named by "
+		                             "their host.",
+		                             name, AccessToString(access));
+		auto host_form = IsHostName(name)
+		                     ? StringUtil::Format("`CREATE EXTENSION REPOSITORY %s` without a prefix", name)
+		                     : string("`CREATE EXTENSION REPOSITORY <host>` without a prefix");
+		if (access == ExtensionRepositoryAccess::HOSTS) {
+			// the default can still be opened up; 'hosts_only' cannot, the setting only tightens
+			message += "\nConsider changing the setting, or creating the repository by its host: " + host_form + ".";
+		} else {
+			message += "\nConsider creating the repository by its host: " + host_form + ".";
+		}
+	}
+	message += StringUtil::Format("\nCheck the docs: %s", REPOSITORIES_DOCS);
+	throw PermissionException(message);
 }
 
 bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, string &result) {
@@ -352,10 +366,17 @@ static string RepositoryNameOfFile(const string &file_name) {
 string ExtensionRepositoryManager::NormalizeRepositoryName(const string &name) {
 	string result;
 	if (!TryNormalizeRepositoryName(name, result)) {
+		string hint;
+		for (auto c : name) {
+			if (static_cast<unsigned char>(c) >= 0x80) {
+				hint = "\nAn internationalised host is spelled in its punycode form, 'xn--...', in quotes";
+				break;
+			}
+		}
 		throw InvalidInputException("Invalid extension repository name '%s': names cannot be empty and can only "
 		                            "contain letters, digits, '_', '-' and '.' (not at the start or the end, and not "
-		                            "two in a row)",
-		                            name);
+		                            "two in a row)%s",
+		                            name, hint);
 	}
 	return result;
 }
@@ -376,29 +397,49 @@ static constexpr const idx_t METADATA_FORMAT_VERSION = 1;
 //! and not localhost. A single word is not a host: it would be resolved through search domains to a host the user did
 //! not name. There is no stricter test short of the public suffix list; this one keeps out what is certainly not a
 //! public host
-bool ExtensionRepositoryManager::IsHostName(const string &text) {
-	idx_t label_count = 0;
-	idx_t label_start = 0;
-	for (idx_t i = 0; i <= text.size(); i++) {
-		if (i < text.size() && text[i] != '.') {
-			auto c = text[i];
-			if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c) && c != '-') {
+//! A host label: one or more words of letters and digits joined by single dashes, so no leading or trailing dash and
+//! no two dashes touching - except the one place two dashes are legitimate, the 'xn--' that opens an internationalised
+//! label in its punycode (A-label) form: 'xn--mnchen-3ya' for 'münchen'
+static bool IsHostLabel(const string &label) {
+	idx_t start = 0;
+	if (label.size() > 4 && StringUtil::CIEquals(label.substr(0, 4), "xn--")) {
+		start = 4;
+	}
+	idx_t word_length = 0;
+	for (idx_t i = start; i <= label.size(); i++) {
+		auto c = i < label.size() ? label[i] : '-';
+		if (c == '-') {
+			if (word_length == 0) {
 				return false;
 			}
+			word_length = 0;
 			continue;
 		}
-		// end of a label
-		if (i == label_start || text[label_start] == '-' || text[i - 1] == '-') {
+		if (!StringUtil::CharacterIsAlpha(c) && !StringUtil::CharacterIsDigit(c)) {
 			return false;
 		}
-		label_count++;
-		label_start = i + 1;
+		word_length++;
 	}
-	if (label_count < 2) {
+	return true;
+}
+
+bool ExtensionRepositoryManager::IsHostName(const string &text) {
+	// two or more labels separated by single dots, the last one letters only (an IPv4 literal is not a host), and not
+	// localhost
+	if (text.empty() || text.front() == '.' || text.back() == '.' || text.find("..") != string::npos) {
 		return false;
 	}
-	for (idx_t i = text.rfind('.') + 1; i < text.size(); i++) {
-		if (!StringUtil::CharacterIsAlpha(text[i])) {
+	auto labels = StringUtil::Split(text, '.');
+	if (labels.size() < 2) {
+		return false;
+	}
+	for (auto &label : labels) {
+		if (!IsHostLabel(label)) {
+			return false;
+		}
+	}
+	for (auto c : labels.back()) {
+		if (!StringUtil::CharacterIsAlpha(c)) {
 			return false;
 		}
 	}
@@ -519,12 +560,14 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 	// only a name that is a host on the public internet is reached: a single word would resolve through search
 	// domains to a host the user did not name, an IP literal or localhost is nobody's statement
 	if (!IsHostName(name)) {
-		throw InvalidInputException(
-		    "Cannot create extension repository '%s': '%s' is not a host name. A host has two or "
-		    "more labels of letters, digits and '-' separated by dots, the last one letters "
-		    "only, and is not localhost\nUse `WITH PREFIX '<url>'` to name the repository's "
-		    "location directly",
-		    name_p, name);
+		throw InvalidInputException("Cannot create extension repository '%s': '%s' is not a host name. A host has two "
+		                            "or more labels separated by "
+		                            "dots, each label words of letters and digits joined by single dashes (or a "
+		                            "punycode label, 'xn--...'), the "
+		                            "last label letters only, and is not localhost\nUse `WITH PREFIX '<url>'` to name "
+		                            "the repository's location "
+		                            "directly",
+		                            name_p, name);
 	}
 	ExtensionRepositoryResolution resolution;
 	resolution.host = name;
@@ -541,10 +584,14 @@ ExtensionRepositoryResolution ExtensionRepositoryManager::ResolveRepositoryFromH
 		// a policy refusal (verification switched off for the url): not something the host did
 		throw;
 	} catch (std::exception &ex) {
+		// the inner message already names the file and the reason ("Failed to read the host's metadata file '<url>':
+		// HTTP 404 Not Found"); say what it means for the statement, and what else can be done
 		ErrorData error(ex);
-		throw IOException("Cannot create extension repository '%s': the host does not serve a metadata file (failed to "
-		                  "read '%s': %s)\nUse `WITH PREFIX '<url>'` to name the repository's location directly",
-		                  name, metadata_path, error.RawMessage());
+		throw IOException(
+		    "Cannot create extension repository '%s': %s\nA repository is resolved from its host through "
+		    "https://<host>/.well-known/duckdb-extension-repo.json; use `WITH PREFIX '<url>'` to name the "
+		    "repository's location directly",
+		    name, error.RawMessage());
 	}
 	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	auto root = ReadVersionedObject(document, metadata_path);
@@ -763,7 +810,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		}
 	}
 	// from here on something is added: the opt-in applies
-	CheckCanCreate(db, from_host);
+	CheckCanCreate(db, name, from_host);
 
 	ExtensionRepository repository(name, requested.path, requested.public_keys);
 	vector<string> public_keys;
@@ -787,7 +834,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		                            name);
 	}
 	// the fetches took time: the access may have been tightened meanwhile, so check again before persisting
-	CheckCanCreate(db, from_host);
+	CheckCanCreate(db, name, from_host);
 
 	if (!fs.DirectoryExists(directory)) {
 		fs.CreateDirectoriesRecursive(directory);
@@ -842,6 +889,10 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(name_p);
+	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
+		// the built-in repositories are not stored files: there is nothing to remove, and no way to distrust them
+		throw NotImplementedException("Extension repository '%s' is built in and cannot be dropped", name);
+	}
 	auto file_path = GetRepositoryPath(db, fs, name);
 	if (!fs.FileExists(file_path)) {
 		if (on_entry_not_found == OnEntryNotFound::RETURN_NULL) {

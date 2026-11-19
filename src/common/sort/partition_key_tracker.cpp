@@ -17,8 +17,12 @@ static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state,
 	return idx;
 }
 
-PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<LogicalType> &key_types_p)
-    : key_count(key_types_p.size()) {
+PartitionKeyTracker::PartitionKeyTracker(Context &context, Allocator &allocator_p,
+                                         const vector<LogicalType> &key_types_p, const Expression &key_mismatch)
+    : key_count(key_types_p.size()), key_mismatch(context, key_mismatch) {
+	auto compare_types = key_types_p;
+	compare_types.insert(compare_types.end(), key_types_p.begin(), key_types_p.end());
+	compare_keys.InitializeEmpty(compare_types);
 	single_value_sel.Initialize();
 	candidate_input_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
 	candidate_rep_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
@@ -36,6 +40,12 @@ void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
 	hashes.resize(partition_count);
 	representatives.Reset();
 	representatives.SetChildCardinality(partition_count);
+	// the comparisons slice the representatives, so the bins without a key must hold valid (NULL) values
+	for (auto &representative : representatives.data) {
+		for (idx_t bin_idx = 0; bin_idx < partition_count; bin_idx++) {
+			FlatVector::SetNull(representative, bin_idx, true);
+		}
+	}
 }
 
 bool PartitionKeyTracker::CanBypass(idx_t hash_bin) const {
@@ -156,33 +166,20 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &input_hashes
 	return candidate_count;
 }
 
-idx_t PartitionKeyTracker::CompactCandidates(idx_t candidate_count) {
-	idx_t new_count = 0;
-	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
-		const auto bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
-		const auto input_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
-		const auto keep = states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY;
-		candidate_input_sel.set_index(new_count, input_idx);
-		candidate_rep_sel.set_index(new_count, bin_idx);
-		new_count += keep;
-	}
-	return new_count;
-}
-
 void PartitionKeyTracker::CompareCandidates(DataChunk &keys, idx_t candidate_count) {
 	D_ASSERT(candidate_count <= STANDARD_VECTOR_SIZE);
-	for (idx_t col_idx = 0; col_idx < key_count && candidate_count; col_idx++) {
-		Vector input_slice(keys.data[col_idx], candidate_input_sel, candidate_count);
-		Vector representative_slice(representatives.data[col_idx], candidate_rep_sel, candidate_count);
-		const auto mismatch_count = VectorOperations::DistinctFrom(input_slice, representative_slice, nullptr,
-		                                                           candidate_count, &mismatch_sel, nullptr);
-		for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
-			const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
-			MarkMixed(candidate_rep_sel.get_index_unsafe(candidate_idx));
-		}
-		if (mismatch_count && col_idx + 1 < key_count) {
-			candidate_count = CompactCandidates(candidate_count);
-		}
+	if (!candidate_count) {
+		return;
+	}
+	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+		compare_keys.data[col_idx].Slice(keys.data[col_idx], candidate_input_sel, candidate_count);
+		compare_keys.data[key_count + col_idx].Slice(representatives.data[col_idx], candidate_rep_sel, candidate_count);
+	}
+	compare_keys.CheckCardinality(candidate_count);
+	const auto mismatch_count = key_mismatch.SelectExpression(compare_keys, mismatch_sel);
+	for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
+		const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
+		MarkMixed(candidate_rep_sel.get_index_unsafe(candidate_idx));
 	}
 }
 
@@ -210,33 +207,21 @@ void PartitionKeyTracker::CombineBin(const PartitionKeyTracker &source, idx_t bi
 	candidate_count++;
 }
 
-idx_t PartitionKeyTracker::CompactTrackerCandidates(idx_t candidate_count) {
-	idx_t new_count = 0;
-	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
-		const auto bin_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
-		const auto source_bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
-		const auto keep = states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY;
-		candidate_input_sel.set_index(new_count, bin_idx);
-		candidate_rep_sel.set_index(new_count, source_bin_idx);
-		new_count += keep;
-	}
-	return new_count;
-}
-
 void PartitionKeyTracker::CompareTrackerCandidates(const PartitionKeyTracker &source, idx_t candidate_count) {
 	D_ASSERT(candidate_count <= PARTITION_KEY_TRACKER_CAPACITY);
-	for (idx_t col_idx = 0; col_idx < key_count && candidate_count; col_idx++) {
-		Vector target_slice(representatives.data[col_idx], candidate_input_sel, candidate_count);
-		Vector source_slice(source.representatives.data[col_idx], candidate_rep_sel, candidate_count);
-		const auto mismatch_count = VectorOperations::DistinctFrom(target_slice, source_slice, nullptr, candidate_count,
-		                                                           &mismatch_sel, nullptr);
-		for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
-			const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
-			MarkMixed(candidate_input_sel.get_index_unsafe(candidate_idx));
-		}
-		if (mismatch_count && col_idx + 1 < key_count) {
-			candidate_count = CompactTrackerCandidates(candidate_count);
-		}
+	if (!candidate_count) {
+		return;
+	}
+	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+		compare_keys.data[col_idx].Slice(representatives.data[col_idx], candidate_input_sel, candidate_count);
+		compare_keys.data[key_count + col_idx].Slice(source.representatives.data[col_idx], candidate_rep_sel,
+		                                             candidate_count);
+	}
+	compare_keys.CheckCardinality(candidate_count);
+	const auto mismatch_count = key_mismatch.SelectExpression(compare_keys, mismatch_sel);
+	for (idx_t mismatch_idx = 0; mismatch_idx < mismatch_count; mismatch_idx++) {
+		const auto candidate_idx = mismatch_sel.get_index_unsafe(mismatch_idx);
+		MarkMixed(candidate_input_sel.get_index_unsafe(candidate_idx));
 	}
 }
 

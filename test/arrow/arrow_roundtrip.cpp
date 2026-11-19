@@ -53,7 +53,7 @@ TEST_CASE("Arrow scan view supports repeated CTE references", "[arrow]") {
 	Connection source(db);
 	Connection con(db);
 	auto factory = make_shared_ptr<RepeatableArrowViewFactory>(source);
-	con.TableFunction("arrow_scan", {}, {}, factory)->CreateView("v", true, true);
+	ArrowTestHelper::CreateArrowScanView(con, factory, "v", true, true);
 
 	auto result = con.Query("WITH t AS (SELECT * FROM v) SELECT i FROM t UNION ALL SELECT i FROM t LIMIT 3");
 	REQUIRE_NO_FAIL(*result);
@@ -69,7 +69,7 @@ TEST_CASE("Arrow scan view supports serializer verification", "[arrow]") {
 	Connection source(db);
 	Connection con(db);
 	auto factory = make_shared_ptr<RepeatableArrowViewFactory>(source);
-	con.TableFunction("arrow_scan", {}, {}, factory)->CreateView("v", true, true);
+	ArrowTestHelper::CreateArrowScanView(con, factory, "v", true, true);
 	REQUIRE_NO_FAIL(con.Query("SET debug_verify_serializer = true"));
 
 	string query;
@@ -811,14 +811,13 @@ void MakeMutatedVariantStream(Connection &con, const string &query, VariantMutat
 	stream.private_data = data.release();
 }
 
-//! Scans the stream and expects the BIND to refuse it with `expected_error` (a refusal may surface as
-//! an error result or as an exception escaping the relation, depending on where the bind runs).
+//! Scans the stream and expects the BIND to refuse it with `expected_error`
 void ExpectVariantScanError(Connection &con, ArrowArrayStream &stream, const string &expected_error) {
 	auto params = ArrowTestHelper::ConstructArrowScan(stream);
 	bool refused = false;
 	string error_message;
 	try {
-		auto result = con.TableFunction("arrow_scan", {}, {}, params)->Execute();
+		auto result = con.Query(ArrowTestHelper::ArrowScanSelect(params));
 		if (result->HasError()) {
 			refused = true;
 			error_message = result->GetError();

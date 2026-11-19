@@ -85,6 +85,17 @@ TEST_CASE("Bloom sector indexing preserves concurrent inserts, folding and mappe
 			}
 		}
 		auto probe_hashes = probes.Values<hash_t>();
+		vector<bool> original_membership;
+		for (const auto &hash : probe_hashes) {
+			original_membership.push_back(filter.LookupOne(hash.GetValue()));
+		}
+		filter.ReplaceBuffer(filter.CopyBuffer(context));
+		filter.InstallReadCopy(filter.CopyBuffer(context));
+		for (idx_t row = 0; row < PROBE_COUNT; row++) {
+			for (idx_t copy = 0; copy < 2; copy++) {
+				CHECK(filter.GetReadView(copy).LookupOne(probe_hashes[row].GetValue()) == original_membership[row]);
+			}
+		}
 		SelectionVector input_sel(PROBE_COUNT), result_sel(PROBE_COUNT);
 		for (idx_t row = 0; row < PROBE_COUNT; row++) {
 			input_sel.set_index(row, (row * 73 + 19) % PROBE_COUNT);

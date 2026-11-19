@@ -81,6 +81,12 @@ CREATE EXTERNAL RESOURCE 'aws:ec2:it''s quacky' AS x
 ----
 <REGEX>:.*unknown resource type.*
 
+# a resource type spelled without quotes, as a dotted name: it prints quoted and reparses to the same string
+statement error
+CREATE EXTERNAL RESOURCE aws.ec2.quack AS x (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type "aws.ec2.quack".*
+
 # --- REGISTER: name plus an arbitrary handle expression ------------------------------------------------
 
 statement error

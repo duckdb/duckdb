@@ -36,15 +36,16 @@ TEST_CASE("Deserialize Literal validates text against its kind", "[serialization
 	REQUIRE_NOTHROW(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::HEX, "0a1b"); }));
 
 	// a tampered BOOLEAN literal that would otherwise render raw SQL text verbatim is rejected
-	REQUIRE_THROWS_AS(DeserializeLiteral(
-	                      [&](Serializer &s) { WriteLiteral(s, LiteralKind::BOOLEAN, "1);CREATE TABLE pwned(x INT"); }),
-	                  SerializationException);
-	REQUIRE_THROWS_AS(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::INTEGER, "1 OR 1=1"); }),
-	                  SerializationException);
-	REQUIRE_THROWS_AS(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::HEX, "0g"); }),
-	                  SerializationException);
-	REQUIRE_THROWS_AS(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::NULL_LITERAL, "x"); }),
-	                  SerializationException);
+	REQUIRE_THROWS_WITH(DeserializeLiteral([&](Serializer &s) {
+		                    WriteLiteral(s, LiteralKind::BOOLEAN, "1);CREATE TABLE pwned(x INT");
+	                    }),
+	                    Catch::Contains("Invalid BOOLEAN literal text"));
+	REQUIRE_THROWS_WITH(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::INTEGER, "1 OR 1=1"); }),
+	                    Catch::Contains("Invalid INTEGER literal text"));
+	REQUIRE_THROWS_WITH(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::HEX, "0g"); }),
+	                    Catch::Contains("Invalid HEX literal text"));
+	REQUIRE_THROWS_WITH(DeserializeLiteral([&](Serializer &s) { WriteLiteral(s, LiteralKind::NULL_LITERAL, "x"); }),
+	                    Catch::Contains("Invalid NULL literal"));
 }
 
 } // namespace duckdb

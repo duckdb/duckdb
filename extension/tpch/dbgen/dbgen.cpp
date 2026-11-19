@@ -43,6 +43,8 @@ enum class TPCHAppendMode : uint8_t { APPENDER, OPTIMISTIC };
 struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
+	//! The context of the optimistic append (set in InitializeOptimistic)
+	optional_ptr<ClientContext> optimistic_context;
 	optional_ptr<OptimisticWriteCollection> optimistic_collection;
 	optional_ptr<DuckTableEntry> table_entry;
 	PhysicalIndex optimistic_collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
@@ -82,9 +84,10 @@ struct tpch_append_information {
 	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table,
 	                          OptimisticWritePartialManagers partial_manager_type) {
 		table_entry = table;
-		optimistic_writer = make_uniq<OptimisticDataWriter>(context, table.GetStorage());
-		auto collection =
-		    optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes(), partial_manager_type);
+		optimistic_context = context;
+		optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
+		auto collection = optimistic_writer->CreateCollection(context.GetContext(), table.GetStorage(), table.GetTypes(),
+		                                                      partial_manager_type);
 		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		// the transaction id keeps the rows invisible to other transactions until the commit
@@ -116,7 +119,7 @@ struct tpch_append_information {
 			auto &row_collection = *optimistic_collection->collection;
 			auto flushed_row_group_idx = row_collection.Append(chunk, append_state);
 			if (flushed_row_group_idx.IsValid()) {
-				optimistic_writer->WriteNewRowGroup(*optimistic_collection, flushed_row_group_idx.GetIndex());
+				optimistic_writer->WriteNewRowGroup(optimistic_context->GetContext(), *optimistic_collection, flushed_row_group_idx.GetIndex());
 			}
 		}
 		chunk.Reset();
@@ -154,10 +157,10 @@ struct tpch_append_information {
 			storage.FinalizeLocalAppend(local_append_state);
 			ResetOptimisticCollection(context);
 		} else {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
+			optimistic_writer->WriteUnflushedRowGroups(context.GetContext(), *optimistic_collection);
 			storage.LocalMerge(context, table, *optimistic_collection);
 			auto &storage_writer = storage.GetOptimisticWriter(context);
-			storage_writer.Merge(*optimistic_writer);
+			storage_writer.Merge(context.GetContext(), *optimistic_writer);
 			ResetOptimisticCollection(context);
 		}
 		optimistic_writer.reset();
@@ -193,8 +196,8 @@ struct tpch_append_information {
 		auto &storage = table_entry->GetStorage();
 		auto &row_collection = *optimistic_collection->collection;
 		if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
-			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
-			optimistic_writer->FinalFlush();
+			optimistic_writer->WriteUnflushedRowGroups(optimistic_context->GetContext(), *optimistic_collection);
+			optimistic_writer->FinalFlush(optimistic_context->GetContext());
 		}
 	}
 };

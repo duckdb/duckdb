@@ -7,6 +7,10 @@ require tpch
 statement ok
 SET explain_output='optimized_only';
 
+# the ALL set operations below are the vehicle for a shared window subplan: keep them a join of two windows
+statement ok
+SET disabled_optimizers='set_operation_aggregate';
+
 # Bound scale factor selects static query strings.
 query II
 EXPLAIN (FORMAT JSON) SELECT * FROM tpch_queries(1) INTERSECT ALL SELECT * FROM tpch_queries(1);

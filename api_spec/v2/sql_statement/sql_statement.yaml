@@ -291,9 +291,8 @@ functions:
         type: column_data_collection
         description: The collection to bind. Borrowed; the caller keeps ownership and must keep it alive.
       column_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: Optional. An array of `column_count` names for the collection's columns, in order. Pass NULL for col1..colN.
       column_names_lengths:

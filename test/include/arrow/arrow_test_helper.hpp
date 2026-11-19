@@ -24,6 +24,7 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/arrow/arrow_format.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 class ArrowStreamTestFactory : public duckdb::ArrowScanFactory {
 public:
@@ -85,11 +86,14 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static bool CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query);
+	static bool CompareResults(Connection &con, shared_ptr<ArrowScanFactory> factory, const string &query);
 
 public:
 	static shared_ptr<ArrowScanFactory> ConstructArrowScan(ArrowTestFactory &factory);
 	static shared_ptr<ArrowScanFactory> ConstructArrowScan(ArrowArrayStream &stream);
 	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, shared_ptr<ArrowScanFactory> factory);
+	static unique_ptr<SelectStatement> ArrowScanSelect(shared_ptr<ArrowScanFactory> factory);
+	static void CreateArrowScanView(Connection &con, shared_ptr<ArrowScanFactory> factory, const string &name,
+	                                bool replace, bool temporary);
 };
 } // namespace duckdb

@@ -112,7 +112,7 @@ private:
 	ResolveRepositoryFromHost(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &name);
 
 	//! Throws unless adding a repository is currently allowed (opt-in and configuration lock)
-	static void CheckCanCreate(DatabaseInstance &db, bool from_host);
+	static void CheckCanCreate(DatabaseInstance &db, const string &name, bool from_host);
 	//! Throws if the configuration is locked, freezing the trust store
 	static void CheckNotLocked(DatabaseInstance &db);
 	static string GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name);
