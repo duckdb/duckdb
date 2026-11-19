@@ -126,17 +126,14 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 }
 
 string Hugeint::ToString(hugeint_t input) {
-	if (input == NumericLimits<hugeint_t>::Minimum()) {
-		return string(Hugeint::HUGEINT_MINIMUM_STRING);
-	}
-	bool negative = input.upper < 0;
+	const bool negative = input.upper < 0;
+	uhugeint_t magnitude(static_cast<uint64_t>(input.upper), input.lower);
 	if (negative) {
-		NegateInPlace(input);
+		magnitude = -magnitude;
 	}
-	// up to 39 digits and a sign
-	char buffer[40];
+	char buffer[Uhugeint::MAX_DIGITS + 1];
 	auto end = buffer + sizeof(buffer);
-	auto start = NumericHelper::FormatUnsigned(input, end);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
 	if (negative) {
 		*--start = '-';
 	}

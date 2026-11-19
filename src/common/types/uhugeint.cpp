@@ -60,7 +60,7 @@ const uhugeint_t Uhugeint::POWERS_OF_TEN[] {
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(100)};
 
 string Uhugeint::ToString(uhugeint_t input) {
-	char buffer[UhugeintToStringCast::MAX_LENGTH];
+	char buffer[MAX_DIGITS];
 	auto end = buffer + sizeof(buffer);
 	auto start = NumericHelper::FormatUnsigned(input, end);
 	return string(start, end);

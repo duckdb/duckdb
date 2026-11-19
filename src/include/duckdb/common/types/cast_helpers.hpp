@@ -184,11 +184,8 @@ template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint32_t width, uint32_t scale, char *dst, idx_t len);
 
 struct UhugeintToStringCast {
-	//! The maximum uhugeint (2^128 - 1) has 39 digits
-	static constexpr idx_t MAX_LENGTH = 39;
-
 	static string_t Format(uhugeint_t value, StringHeap &heap) {
-		char buffer[MAX_LENGTH];
+		char buffer[Uhugeint::MAX_DIGITS];
 		auto end = buffer + sizeof(buffer);
 		auto start = NumericHelper::FormatUnsigned(value, end);
 		return heap.AddString(start, NumericCast<idx_t>(end - start));

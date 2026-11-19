@@ -283,10 +283,9 @@ char *NumericHelper::FormatUnsigned(uhugeint_t value, char *ptr) {
 		uhugeint_t remainder;
 		value = Uhugeint::DivMod(value, uhugeint_t(DIVISOR), remainder);
 
-		auto startptr = ptr;
+		auto chunk_start = ptr - DIVISOR_DIGITS;
 		ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder.lower, ptr);
-		// pad with zeros in case the remainder has fewer digits than the divisor
-		for (auto format_length = NumericCast<idx_t>(startptr - ptr); format_length < DIVISOR_DIGITS; format_length++) {
+		while (ptr > chunk_start) {
 			*--ptr = '0';
 		}
 	}
