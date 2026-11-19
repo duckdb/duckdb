@@ -23,6 +23,7 @@ DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
 HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
 HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
+DEFAULT_TIMEOUT_RETRY_MULTIPLIER = 2.0
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
@@ -74,6 +75,7 @@ class TestRunnerConfig:
     fail_require_skip: bool
     coverage_profile_dir: Path | None
     timeout_policy: str = "fail"
+    timeout_retry_multiplier: float = DEFAULT_TIMEOUT_RETRY_MULTIPLIER
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,10 @@ class BatchRunState:
 
     def record_retry(self):
         self.retry_count += 1
+
+    def release_retries(self, count: int):
+        # Retries of a batch that eventually passed do not count against max_retries.
+        self.retry_count = max(0, self.retry_count - count)
 
     def record_failure(self):
         self.failed_count += 1
@@ -1611,7 +1617,9 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
     return genhtml_proc.returncode
 
 
-def run_batch(config: TestRunnerConfig, batch):
+def run_batch(config: TestRunnerConfig, batch, timeout_seconds: float | None = None):
+    if timeout_seconds is None:
+        timeout_seconds = config.batch_timeout_seconds
     failed = False
     stdout = ""
     stderr = ""
@@ -1659,7 +1667,7 @@ def run_batch(config: TestRunnerConfig, batch):
             stderr=stderr_capture,
             env=child_env,
         )
-        deadline = time.monotonic() + config.batch_timeout_seconds
+        deadline = time.monotonic() + timeout_seconds
 
         while proc.poll() is None:
             if stop_requested():
@@ -1679,7 +1687,7 @@ def run_batch(config: TestRunnerConfig, batch):
                 stdout, stderr = read_captures()
                 failed = True
                 timed_out = proc.returncode == (1 if os.name == "nt" else -signal.SIGKILL)
-                message = f"batch timed out after {config.batch_timeout_seconds} seconds"
+                message = f"batch timed out after {timeout_seconds} seconds"
                 break
             if proc.poll() is None:
                 time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
@@ -1732,13 +1740,24 @@ def find_require_skip_lines(output: str):
     return re.findall(pattern, output, flags=re.MULTILINE)
 
 
-def submit_batch(executor, config: TestRunnerConfig, batch, future_to_batch, batch_idx: int, attempt: int):
-    future = executor.submit(run_batch, config, batch)
+def submit_batch(
+    executor,
+    config: TestRunnerConfig,
+    batch,
+    future_to_batch,
+    batch_idx: int,
+    attempt: int,
+    timeout_seconds: float | None = None,
+):
+    if timeout_seconds is None:
+        timeout_seconds = config.batch_timeout_seconds
+    future = executor.submit(run_batch, config, batch, timeout_seconds)
     future_to_batch[future] = {
         "batch_idx": batch_idx,
         "batch": batch,
         "start": time.monotonic(),
         "attempt": attempt,
+        "timeout_seconds": timeout_seconds,
     }
 
 
@@ -1748,6 +1767,37 @@ def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch,
         submit_batch(executor, config, batch, future_to_batch, next_batch_idx, 0)
         next_batch_idx += 1
     return next_batch_idx
+
+
+def escape_workflow_command_value(value: str, is_property: bool = False):
+    value = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    if is_property:
+        value = value.replace(":", "%3A").replace(",", "%2C")
+    return value
+
+
+def emit_github_warning(progress, title: str, message: str):
+    # Surfaces as an annotation on the GitHub Actions run summary.
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    progress.print_message(
+        f"::warning title={escape_workflow_command_value(title, True)}::{escape_workflow_command_value(message)}"
+    )
+
+
+def describe_batch_failure(failure: FailureInfo, returncode: int | None):
+    if failure.kind == "timeout":
+        return "Test timeout", f"timed out after {format_duration_seconds(failure.timeout_seconds)}s"
+    signal_summary = format_signal_summary(returncode)
+    if signal_summary is not None:
+        return "Test killed", f"was killed by {signal_summary}"
+    return "Test failure", "failed"
+
+
+def warn_batch_failure(ctx: RunContext, failure: FailureInfo, result, retry_target: str, outcome: str):
+    title, description = describe_batch_failure(failure, result.get("returncode"))
+    flags = f" [{ctx.config.test_flags}]" if ctx.config.test_flags else ""
+    emit_github_warning(ctx.progress, title, f"{retry_target}{flags} {description}; {outcome}")
 
 
 def can_warn_timeout(config: TestRunnerConfig, batch, result):
@@ -1801,6 +1851,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         ctx.progress.print_message(
             f"warn: timeout ({format_duration_seconds(failure.timeout_seconds)}s) for {test_name}; not retried."
         )
+        warn_batch_failure(ctx, failure, result, test_name, "not retried")
         ctx.progress.print_message(
             "reproduce: "
             + shlex.join(
@@ -1817,9 +1868,20 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
     if result.get("allow_retry", True) and ctx.state.can_retry(batch_info, ctx.config):
         ctx.state.record_retry()
         next_attempt = batch_info["attempt"] + 1
+        next_timeout_seconds = batch_info["timeout_seconds"]
+        timeout_suffix = ""
+        if failure.kind == "timeout":
+            next_timeout_seconds = max(
+                next_timeout_seconds, ctx.config.batch_timeout_seconds * ctx.config.timeout_retry_multiplier
+            )
+            timeout_suffix = f", timeout {format_duration_seconds(next_timeout_seconds)}s"
         ctx.progress.print_message(
             f"retrying failed test {retry_target} "
-            f"(attempt {next_attempt}/{ctx.config.retry}, retry {ctx.state.retry_count}/{ctx.config.max_retries})"
+            f"(attempt {next_attempt}/{ctx.config.retry}, retry {ctx.state.retry_count}/{ctx.config.max_retries}"
+            f"{timeout_suffix})"
+        )
+        warn_batch_failure(
+            ctx, failure, result, retry_target, f"retrying (attempt {next_attempt}/{ctx.config.retry}{timeout_suffix})"
         )
         submit_batch(
             ctx.executor,
@@ -1828,6 +1890,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
             ctx.future_to_batch,
             batch_info["batch_idx"],
             next_attempt,
+            next_timeout_seconds,
         )
         return True
 
@@ -1835,6 +1898,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         ctx.progress.print_message(
             f"not retrying failed test {retry_target} after reaching {ctx.config.max_retries} retries"
         )
+    if failure.kind == "timeout":
+        warn_batch_failure(ctx, failure, result, retry_target, "not retried")
 
     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
     ctx.state.record_failed_test_names(attempt_summaries)
@@ -1922,6 +1987,12 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=float)
+    parser.add_argument(
+        "--timeout-retry-multiplier",
+        type=float,
+        default=DEFAULT_TIMEOUT_RETRY_MULTIPLIER,
+        help="retry timed-out batches with the batch timeout multiplied by this factor",
+    )
     parser.add_argument(
         "--timeout-policy",
         choices=("fail", "warn"),
@@ -2060,6 +2131,7 @@ def run_single_config(
             fail_require_skip=args.fail_require_skip,
             coverage_profile_dir=args.coverage_profile_dir,
             timeout_policy=args.timeout_policy,
+            timeout_retry_multiplier=args.timeout_retry_multiplier,
         )
 
         tests = load_tests(config.test_list)
@@ -2493,6 +2565,7 @@ def run_tests(
                         partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
                 else:
                     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
+                    ctx.state.release_retries(batch_info["attempt"])
                     if attempt_summaries:
                         ctx.progress.print_message(
                             format_batch_failure(

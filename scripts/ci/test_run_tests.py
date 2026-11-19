@@ -1431,6 +1431,145 @@ require windows: 2
         self.assertIn("retrying failed test test/sql/a.test", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)
 
+    def run_mocked_batches(self, test_names, batch_results, extra_args, env=None):
+        test_list_path = create_temp_file("".join(f"{name}\n" for name in test_names))
+        try:
+            with mock.patch.dict(os.environ, env or {"GITHUB_ACTIONS": ""}):
+                with mock.patch("scripts.ci.run_tests.run_batch", side_effect=batch_results) as run_batch:
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "1",
+                            "--batch-size",
+                            "1",
+                            *extra_args,
+                            "--test-list",
+                            str(test_list_path),
+                            "--test-command",
+                            "echo fake-run {test_list}",
+                            "unused-binary",
+                        ]
+                    )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+        return proc, run_batch
+
+    def test_timed_out_retry_uses_longer_timeout_and_warns(self):
+        proc, run_batch = self.run_mocked_batches(
+            ["test/sql/a.test"],
+            [
+                {
+                    "failed": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "message": "batch timed out after 0.5 seconds",
+                    "peak_rss_bytes": 0,
+                },
+                {"failed": False, "stdout": "", "stderr": "", "message": None, "peak_rss_bytes": 0},
+            ],
+            ["--retry", "1", "--batch-timeout", "0.5", "--timeout-retry-multiplier", "3"],
+            env={"GITHUB_ACTIONS": "true"},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.5])
+        self.assertIn("retrying failed test test/sql/a.test (attempt 1/1, retry 1/4, timeout 1.5s)", proc.stdout)
+        self.assertIn(
+            "::warning title=Test timeout::test/sql/a.test timed out after 0.5s; "
+            "retrying (attempt 1/1, timeout 1.5s)",
+            proc.stdout,
+        )
+
+    def test_timed_out_retries_do_not_compound_timeout(self):
+        timeout = {
+            "failed": True,
+            "stdout": "",
+            "stderr": "",
+            "message": "batch timed out after 0.5 seconds",
+            "peak_rss_bytes": 0,
+        }
+        success = {"failed": False, "stdout": "", "stderr": "", "message": None, "peak_rss_bytes": 0}
+        proc, run_batch = self.run_mocked_batches(
+            ["test/sql/a.test"],
+            [timeout, dict(timeout, message="batch timed out after 1.0 seconds"), success],
+            ["--retry", "2", "--batch-timeout", "0.5"],
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.0, 1.0])
+
+    def test_timeout_without_retries_warns(self):
+        proc, _ = self.run_mocked_batches(
+            ["test/sql/a.test"],
+            [
+                {
+                    "failed": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "message": "batch timed out after 0.5 seconds",
+                    "peak_rss_bytes": 0,
+                }
+            ],
+            ["--retry", "0", "--batch-timeout", "0.5"],
+            env={"GITHUB_ACTIONS": "true", "CI": ""},
+        )
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("::warning title=Test timeout::test/sql/a.test timed out after 0.5s; not retried", proc.stdout)
+
+    def test_killed_batch_retry_warns(self):
+        proc, run_batch = self.run_mocked_batches(
+            ["test/sql/a.test"],
+            [
+                {
+                    "failed": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "message": None,
+                    "returncode": -9,
+                    "peak_rss_bytes": 0,
+                },
+                {"failed": False, "stdout": "", "stderr": "", "message": None, "peak_rss_bytes": 0},
+            ],
+            ["--retry", "1", "--batch-timeout", "0.5"],
+            env={"GITHUB_ACTIONS": "true"},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 0.5])
+        self.assertIn("::warning title=Test killed::test/sql/a.test was killed by SIGKILL", proc.stdout)
+        self.assertIn("; retrying (attempt 1/1)", proc.stdout)
+
+    def test_recovered_batch_releases_retry_budget(self):
+        failure = {"failed": True, "stdout": "", "stderr": "fake failure\n", "message": None, "peak_rss_bytes": 0}
+        success = {"failed": False, "stdout": "", "stderr": "", "message": None, "peak_rss_bytes": 0}
+        proc, run_batch = self.run_mocked_batches(
+            ["test/sql/a.test", "test/sql/b.test"],
+            [failure, success, failure, success],
+            ["--retry", "1", "--max-retries", "1"],
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(run_batch.call_count, 4)
+        self.assertNotIn("not retrying failed test", proc.stdout)
+        self.assertNotIn("::warning", proc.stdout)
+
+    def test_failed_batch_keeps_consuming_retry_budget(self):
+        failure = {"failed": True, "stdout": "", "stderr": "fake failure\n", "message": None, "peak_rss_bytes": 0}
+        proc, run_batch = self.run_mocked_batches(
+            ["test/sql/a.test", "test/sql/b.test"],
+            [failure, failure, failure],
+            ["--retry", "1", "--max-retries", "1"],
+        )
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(run_batch.call_count, 3)
+        self.assertIn("not retrying failed test test/sql/b.test after reaching 1 retries", proc.stdout)
+
+    def test_escape_workflow_command_value(self):
+        self.assertEqual(run_tests.escape_workflow_command_value("a%b\r\nc:d,e"), "a%25b%0D%0Ac:d,e")
+        self.assertEqual(run_tests.escape_workflow_command_value("a:b,c", True), "a%3Ab%2Cc")
+
     def test_failed_batch_prints_single_compact_summary_after_retries(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
 
