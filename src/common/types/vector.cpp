@@ -203,7 +203,7 @@ void Vector::Reinterpret(const Vector &other) {
 }
 
 void Vector::ConstReference(const Vector &other) const {
-	AssignSharedPointer(buffer, other.buffer);
+	buffer = other.buffer;
 }
 
 void Vector::ResetFromCache(const VectorCache &cache) {
