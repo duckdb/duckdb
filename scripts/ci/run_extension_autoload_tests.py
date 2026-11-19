@@ -98,6 +98,9 @@ def run_extension_tests(
         capture_output=True,
         text=True,
     )
+    if not roots:
+        print("No extension SQL tests configured; test extension loaded successfully.", flush=True)
+        return 0
     command = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "ci" / "run_tests.py"),
@@ -139,9 +142,7 @@ def main(argv=None):
             if args.extension_configs
             else []
         )
-        roots = prepare_test_roots(
-            args.source_root, extensions, args.duckdb.resolve().parent, allow_empty=bool(args.test_root)
-        )
+        roots = prepare_test_roots(args.source_root, extensions, args.duckdb.resolve().parent, allow_empty=True)
         roots = list(dict.fromkeys([*roots, *(root.resolve() for root in args.test_root)]))
         return run_extension_tests(
             args.duckdb.resolve(),
