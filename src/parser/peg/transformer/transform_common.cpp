@@ -536,9 +536,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSetofType(PEGTransf
 // StringLiteral <- '\'' [^\']* '\''
 string PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &string_literal_pr = parse_result.Cast<StringLiteralParseResult>();
-	if (string_literal_pr.string_type == SpecialStringCharacter::ESCAPE_STRING) {
-		return string_literal_pr.DecodeEscapeString();
-	}
 	return string_literal_pr.result;
 }
 
