@@ -145,6 +145,9 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(204, "filter", filter, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(205, "order_bys", order_bys, unique_ptr<BoundOrderModifier>());
 	serializer.WritePropertyWithDefault(206, "state_export", state_export_mode, AggregateStateExportMode::NONE);
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault(207, "single_value_identity", function.HasSingleValueIdentity(), false);
+	}
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
@@ -160,6 +163,9 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
+	if (deserializer.ReadPropertyWithExplicitDefault<bool>(207, "single_value_identity", false)) {
+		result->FunctionMutable().SetSingleValueIdentity(true);
+	}
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");

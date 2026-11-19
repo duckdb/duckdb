@@ -297,7 +297,7 @@ statement ok
 CREATE TABLE nullable_unique(id INTEGER UNIQUE, x INTEGER);
 
 statement ok
-INSERT INTO nullable_unique SELECT CASE WHEN id = 7 THEN NULL ELSE id END, x FROM unique_list_values;
+INSERT INTO nullable_unique SELECT CASE WHEN id < 2 THEN NULL ELSE id END, x FROM unique_list_values;
 
 statement ok
 CREATE TABLE composite_unique(a INTEGER NOT NULL, b INTEGER NOT NULL, x INTEGER, UNIQUE(a, b));
@@ -315,13 +315,20 @@ JOIN (SELECT first(x) AS k FROM nonnull_unique GROUP BY id) r ON l.k = r.k;
 ----
 logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "32".*
 
-# Nullable keys do not certify singleton groups.
+# UNIQUE accepts both NULL keys, which GROUP BY combines into one group.
 query II
 EXPLAIN (FORMAT JSON) SELECT count(*)
-FROM (SELECT first(x) AS k FROM nullable_unique GROUP BY id) l
-JOIN (SELECT first(x) AS k FROM nullable_unique GROUP BY id) r ON l.k = r.k;
+FROM (SELECT first(x ORDER BY x) AS k FROM nullable_unique GROUP BY id) l
+JOIN (SELECT first(x ORDER BY x) AS k FROM nullable_unique GROUP BY id) r ON l.k = r.k;
 ----
-logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "7".*
+logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "6".*
+
+query I
+SELECT count(*)
+FROM (SELECT first(x ORDER BY x) AS k FROM nullable_unique GROUP BY id) l
+JOIN (SELECT first(x ORDER BY x) AS k FROM nullable_unique GROUP BY id) r ON l.k = r.k;
+----
+25
 
 # A composite key must be completely covered by the grouping expressions.
 query II
@@ -483,6 +490,58 @@ statement error
 SELECT first(x) FROM overflowing_keys GROUP BY id::TINYINT;
 ----
 out of range
+
+# Both overflowing TRY_CAST keys become NULL and form one group.
+query II
+EXPLAIN (FORMAT JSON) SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM overflowing_keys GROUP BY TRY_CAST(id AS TINYINT)) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM overflowing_keys GROUP BY TRY_CAST(id AS TINYINT)) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*"Join Type": "INNER",\s*"Conditions": "\(k = k\)",\s*"Estimated Cardinality": "1".*
+
+query I
+SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM overflowing_keys GROUP BY TRY_CAST(id AS TINYINT)) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM overflowing_keys GROUP BY TRY_CAST(id AS TINYINT)) r USING (k);
+----
+1
+
+# Keep the grouping sets in a single aggregate to exercise the singleton check.
+statement ok
+SET disabled_optimizers='grouping_sets';
+
+# A subtotal can combine distinct primary keys.
+query II
+EXPLAIN SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), ())) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), ())) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
+
+query I
+SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), ())) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), ())) r USING (k);
+----
+41
+
+# Repeated grouping sets emit each key twice.
+query II
+EXPLAIN SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
+----
+logical_opt	<REGEX>:(?s).*Comparison Join[^~]*~8 rows.*
+
+query I
+SELECT count(*)
+FROM (SELECT first(x ORDER BY id) AS k FROM unique_list_values GROUP BY GROUPING SETS ((id), (id))) l
+JOIN (SELECT first(x ORDER BY id) AS k FROM unique_list_values_right GROUP BY GROUPING SETS ((id), (id))) r USING (k);
+----
+128
+
+statement ok
+RESET disabled_optimizers;
 
 # The grouping alias can coexist with another projection of its source key.
 query II
