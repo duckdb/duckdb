@@ -331,20 +331,12 @@ index d212ddfd81..285f963b3c 100644
 diff --git a/third_party/mbedtls/library/constant_time_internal.h b/third_party/mbedtls/library/constant_time_internal.h
 --- a/third_party/mbedtls/library/constant_time_internal.h
 +++ b/third_party/mbedtls/library/constant_time_internal.h
-@@ -10,6 +10,7 @@
- 
- #include <stdint.h>
- #include <stddef.h>
-+#include <type_traits>
- 
- #include "common.h"
- 
-@@ -653,7 +654,7 @@
+@@ -653,7 +653,7 @@
   *              #MBEDTLS_CT_NULLIFY_IF_SPECULATING_NE if applicable.
   */
  #define MBEDTLS_CT_NULLIFY_IF_SPECULATING(ptr, cond)    \
 -    ((ptr) = (void *) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
-+    ((ptr) = (std::remove_reference<decltype(ptr)>::type) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
++    ((ptr) = (decltype(+(ptr))) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
  
  #else /* MBEDTLS_SPECTRE_V1_COUNTERMEASURES */
  

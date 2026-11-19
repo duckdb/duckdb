@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <type_traits>
 
 #include "common.h"
 
@@ -654,7 +653,7 @@ static inline uintptr_t mbedtls_ct_nullify_if_speculating(uintptr_t value,
  *              #MBEDTLS_CT_NULLIFY_IF_SPECULATING_NE if applicable.
  */
 #define MBEDTLS_CT_NULLIFY_IF_SPECULATING(ptr, cond)    \
-    ((ptr) = (std::remove_reference<decltype(ptr)>::type) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
+    ((ptr) = (decltype(+(ptr))) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
 
 #else /* MBEDTLS_SPECTRE_V1_COUNTERMEASURES */
 
