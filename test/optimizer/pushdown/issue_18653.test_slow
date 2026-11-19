@@ -37,7 +37,7 @@ from test_table t
 left join lateral unnest(t.values) as value on true
 where id = 87100;
 ----
-analyzed_plan	<REGEX>:(.*DELIM_JOIN.*FILTER.*)|(.*CTE Name:.*__duckdb_delim.*FILTER.*)
+analyzed_plan	<REGEX>:(.*DELIM_JOIN.*FILTER.*)|(.*CTE Name:.*__duckdb_delim.*FILTER.*)|(.*CTE Name:.*__duckdb_delim.*Filters: id = 87100.*)
 
 require json
 
