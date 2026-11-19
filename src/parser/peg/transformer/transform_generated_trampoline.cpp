@@ -1344,6 +1344,36 @@ static const TransformChildPlan FRAME_CHILDREN_CreateMacroStmt[] = {{PEGRuleId::
                                                                      {0, TRANSFORM_PATH_END, 0},
                                                                      {0, TRANSFORM_PATH_END, 0}}};
 static const TransformFramePlan FRAME_PLAN_CreateMacroStmt = {FRAME_CHILDREN_CreateMacroStmt, 4, 4, true, 0, {}};
+static const TransformChildPlan FRAME_CHILDREN_CreateLanguageFunctionStmt[] = {{PEGRuleId::ReturnsType,
+                                                                                TransformChildKind::OPTIONAL,
+                                                                                4,
+                                                                                3,
+                                                                                false,
+                                                                                {0, TRANSFORM_PATH_END, 0},
+                                                                                {0, TRANSFORM_PATH_END, 0}},
+                                                                               {PEGRuleId::MacroParameters,
+                                                                                TransformChildKind::OPTIONAL,
+                                                                                3,
+                                                                                2,
+                                                                                false,
+                                                                                {1, TRANSFORM_PATH_END, 0},
+                                                                                {0, TRANSFORM_PATH_END, 0}},
+                                                                               {PEGRuleId::QualifiedName,
+                                                                                TransformChildKind::REQUIRED,
+                                                                                2,
+                                                                                1,
+                                                                                false,
+                                                                                {0, TRANSFORM_PATH_END, 0},
+                                                                                {0, TRANSFORM_PATH_END, 0}},
+                                                                               {PEGRuleId::IfNotExists,
+                                                                                TransformChildKind::OPTIONAL,
+                                                                                1,
+                                                                                0,
+                                                                                false,
+                                                                                {0, TRANSFORM_PATH_END, 0},
+                                                                                {0, TRANSFORM_PATH_END, 0}}};
+static const TransformFramePlan FRAME_PLAN_CreateLanguageFunctionStmt = {
+    FRAME_CHILDREN_CreateLanguageFunctionStmt, 4, 4, false, 0, {}};
 static const TransformChildPlan FRAME_CHILDREN_CastOperator[] = {{PEGRuleId::Type,
                                                                   TransformChildKind::REQUIRED,
                                                                   1,
@@ -7761,6 +7791,8 @@ static const TransformFrameOps GENERATED_FRAME_OPS[] = {
      &PEGTransformerFactory::FinalizeNoneLiteralTrampoline, &FRAME_PLAN_Leaf},
     {"CreateMacroStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizeCreateMacroStmtTrampoline, &FRAME_PLAN_CreateMacroStmt},
+    {"CreateLanguageFunctionStmt", &PEGTransformerFactory::InitializePlannedTrampoline,
+     &PEGTransformerFactory::FinalizeCreateLanguageFunctionStmtTrampoline, &FRAME_PLAN_CreateLanguageFunctionStmt},
     {"ReturnsType", &PEGTransformerFactory::InitializePlannedTrampoline,
      &PEGTransformerFactory::FinalizePassthroughTrampoline, &FRAME_PLAN_CastOperator},
     {"MacroOrFunction", &PEGTransformerFactory::InitializePlannedChoiceTrampoline,
@@ -11756,6 +11788,31 @@ PEGTransformerFactory::FinalizeCreateMacroStmtTrampoline(PEGTransformer &transfo
 	}
 	auto result = TransformCreateMacroStmt(transformer, macro_or_function, if_not_exists, qualified_name,
 	                                       std::move(macro_definition));
+	return transformer.MakeResult<unique_ptr<CreateStatement>>(std::move(result));
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	optional<bool> if_not_exists {};
+	if (process.child_results[0]) {
+		if_not_exists = process.TakeResult<bool>(0);
+	}
+	auto qualified_name = process.TakeResult<QualifiedName>(1);
+	optional<vector<MacroParameter>> macro_parameters {};
+	if (process.child_results[2]) {
+		macro_parameters = process.TakeResult<vector<MacroParameter>>(2);
+	}
+	optional<LogicalType> returns_type {};
+	if (process.child_results[3]) {
+		returns_type = process.TakeResult<LogicalType>(3);
+	}
+	auto identifier = list_pr.GetChild(6).Cast<IdentifierParseResult>().identifier;
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(8));
+	auto result =
+	    TransformCreateLanguageFunctionStmt(transformer, if_not_exists, qualified_name, std::move(macro_parameters),
+	                                        returns_type, identifier, string_literal);
 	return transformer.MakeResult<unique_ptr<CreateStatement>>(std::move(result));
 }
 
