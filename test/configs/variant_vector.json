@@ -23,7 +23,9 @@
 				"test/parquet/parquet_schema_renamed_struct_filter.test",
 				"test/sql/copy/parquet/parquet_schema_pushdown_extract_nested_default.test",
 				"test/sql/copy/parquet/parquet_schema_default_only_struct.test",
-				"test/sql/copy/parquet/parquet_schema_default_only_list.test"
+				"test/sql/copy/parquet/parquet_schema_default_only_list.test",
+				"test/sql/copy/parquet/parquet_schema_list_child_name.test",
+				"test/sql/copy/parquet/parquet_schema_list_child_types.test"
 			]
 		},
 		{
