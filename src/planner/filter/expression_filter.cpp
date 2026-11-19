@@ -60,8 +60,8 @@ ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, con
 }
 
 unique_ptr<Expression> ExpressionFilter::CreateInExpression(unique_ptr<Expression> column, vector<Value> values) {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	result->GetChildrenMutable().push_back(std::move(column));
+	auto result =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN, std::move(column));
 	for (auto &value : values) {
 		result->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(value)));
 	}
@@ -72,8 +72,7 @@ unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Ex
                                                                    ExpressionType expression_type) {
 	D_ASSERT(expression_type == ExpressionType::OPERATOR_IS_NULL ||
 	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
-	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
-	result->GetChildrenMutable().push_back(std::move(column));
+	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN, std::move(column));
 	return std::move(result);
 }
 
@@ -219,6 +218,9 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
 			return StringStats::CheckZonemap(stats, comparison_type, values);
 		}
+		if (stats.GetStatsType() == StatisticsType::BIGNUM_STATS) {
+			return BignumStats::CheckZonemap(stats, comparison_type, values);
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -303,7 +305,7 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-			FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+			FunctionStatisticsInput input(func_copy, func_copy.BindInfoMutable(), child_stats, &expr_copy);
 			owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
 			return owned_stats.back().get();
 		}

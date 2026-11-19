@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <utility>
+#include <cstddef>
+#include <stdexcept>
 
 namespace duckdb_fastpforlib {
 namespace internal {
@@ -171,16 +174,15 @@ struct Unroller16<DELTA, 15> {
 
 template <uint16_t DELTA, uint16_t OINDEX = 0>
 struct Unroller {
-	static void Unpack(const uint32_t *__restrict &in, uint32_t *__restrict out) {
-		unpack_single_out<DELTA, (DELTA * OINDEX) % 32>(in, out + OINDEX);
-
-		Unroller<DELTA, OINDEX + 1>::Unpack(in, out);
-	}
-
-	static void Unpack(const uint32_t *__restrict &in, uint64_t *__restrict out) {
-		unpack_single_out<DELTA, (DELTA * OINDEX) % 32>(in, out + OINDEX);
-
-		Unroller<DELTA, OINDEX + 1>::Unpack(in, out);
+	template <bool APPLY_FRAME = false, class T>
+	static void Unpack(const uint32_t *__restrict &in, T *__restrict out, T frame = T(0)) {
+		T value;
+		unpack_single_out<DELTA, (DELTA * OINDEX) % 32>(in, &value);
+		if constexpr (APPLY_FRAME) {
+			value += frame;
+		}
+		out[OINDEX] = value;
+		Unroller<DELTA, OINDEX + 1>::template Unpack<APPLY_FRAME>(in, out, frame);
 	}
 
 	static void Pack(const uint32_t *__restrict in, uint32_t *__restrict out) {
@@ -200,16 +202,17 @@ template <uint16_t DELTA>
 struct Unroller<DELTA, 31> {
 	enum { SHIFT = (DELTA * 31) % 32 };
 
-	static void Unpack(const uint32_t *__restrict in, uint32_t *__restrict out) {
-		out[31] = (*in) >> SHIFT;
-	}
-
-	static void Unpack(const uint32_t *__restrict in, uint64_t *__restrict out) {
-		out[31] = (*in) >> SHIFT;
-		if (DELTA > 32) {
+	template <bool APPLY_FRAME, class T>
+	static void Unpack(const uint32_t *__restrict in, T *__restrict out, T frame) {
+		T value = (*in) >> SHIFT;
+		if constexpr (sizeof(T) > sizeof(uint32_t) && DELTA > 32) {
 			++in;
-			out[31] |= static_cast<uint64_t>(*in) << (32 - SHIFT);
+			value |= T(*in) << (32 - SHIFT);
 		}
+		if constexpr (APPLY_FRAME) {
+			value += frame;
+		}
+		out[31] = value;
 	}
 
 	static void Pack(const uint32_t *__restrict in, uint32_t *__restrict out) {
@@ -1280,5 +1283,54 @@ void __fastpack64(const uint64_t *__restrict in, uint32_t *__restrict out) {
 		out[2 * i + 1] = in[i] >> 32;
 	}
 }
+
+template <unsigned WIDTH, class T, bool APPLY_FRAME>
+static void UnpackGroupsWithFrame(const uint32_t *__restrict input, T *__restrict output, T frame, size_t groups) {
+	for (size_t group = 0; group < groups; group++) {
+		if constexpr (WIDTH == 0) {
+			for (size_t i = 0; i < 32; i++) {
+				output[i] = APPLY_FRAME ? frame : T(0);
+			}
+		} else if constexpr (WIDTH == 32) {
+			for (size_t i = 0; i < 32; i++) {
+				output[i] = T(input[i]) + (APPLY_FRAME ? frame : T(0));
+			}
+		} else if constexpr (WIDTH == 64) {
+			for (size_t i = 0; i < 32; i++) {
+				output[i] = (T(input[2 * i]) | (T(input[2 * i + 1]) << 32)) + (APPLY_FRAME ? frame : T(0));
+			}
+		} else {
+			auto current = input;
+			Unroller<WIDTH>::template Unpack<APPLY_FRAME>(current, output, frame);
+		}
+		if constexpr (WIDTH != 0) {
+			input += WIDTH;
+		}
+		output += 32;
+	}
+}
+
+template <class T, size_t... WIDTH>
+static void UnpackWithFrame(const uint32_t *__restrict input, T *__restrict output, uint32_t width, T frame, size_t groups,
+                            std::index_sequence<WIDTH...>) {
+	using unpack_function_t = void (*)(const uint32_t *, T *, T, size_t);
+	static constexpr unpack_function_t no_frame_functions[] = {UnpackGroupsWithFrame<WIDTH, T, false>...};
+	static constexpr unpack_function_t frame_functions[] = {UnpackGroupsWithFrame<WIDTH, T, true>...};
+	if (width >= sizeof...(WIDTH)) {
+		throw std::logic_error("Invalid bit width for bitpacking");
+	}
+	const auto function = frame == 0 ? no_frame_functions[width] : frame_functions[width];
+	function(input, output, frame, groups);
+}
 } // namespace internal
+void fastunpack_with_frame(const uint32_t *__restrict input, uint32_t *__restrict output, uint32_t width,
+                           uint32_t frame, size_t groups) {
+	internal::UnpackWithFrame(input, output, width, frame, groups, std::make_index_sequence<33>());
+}
+
+void fastunpack_with_frame(const uint32_t *__restrict input, uint64_t *__restrict output, uint32_t width,
+                           uint64_t frame, size_t groups) {
+	internal::UnpackWithFrame(input, output, width, frame, groups, std::make_index_sequence<65>());
+}
+
 } // namespace duckdb_fastpforlib

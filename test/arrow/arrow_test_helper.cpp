@@ -1,9 +1,12 @@
 #include "arrow/arrow_test_helper.hpp"
-#include "duckdb/main/relation/setop_relation.hpp"
-#include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::ProduceStream(duckdb::ArrowStreamParameters &parameters) {
@@ -98,32 +101,68 @@ void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
+static unique_ptr<TableRef> ArrowScanRef(shared_ptr<ArrowScanFactory> factory) {
+	// construct the `arrow_scan(...)` function expression
+	auto scan = make_uniq<TableFunctionRef>();
+	scan->function = make_uniq<FunctionExpression>("arrow_scan", vector<unique_ptr<ParsedExpression>>());
+	scan->bind_info = std::move(factory);
+	return std::move(scan);
+}
+
+unique_ptr<SelectStatement> ArrowTestHelper::ArrowScanSelect(shared_ptr<ArrowScanFactory> factory) {
+	// construct the `SELECT * FROM arrow_scan(...)` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = ArrowScanRef(std::move(factory));
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	return select;
+}
+
+void ArrowTestHelper::CreateArrowScanView(Connection &con, shared_ptr<ArrowScanFactory> factory, const string &name,
+                                          bool replace, bool temporary) {
+	CreateViewOver(con, ArrowScanRef(std::move(factory)), name, replace, temporary);
+}
+
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, shared_ptr<ArrowScanFactory> factory) {
-	auto arrow_result = con.TableFunction("arrow_scan", {}, {}, std::move(factory))->Execute();
+	auto arrow_result = con.Query(ArrowScanSelect(std::move(factory)));
 	if (arrow_result->HasError()) {
 		printf("-------------------------------------\n");
 		printf("Arrow round-trip query error: %s\n", arrow_result->GetError().c_str());
 		printf("-------------------------------------\n");
 		printf("-------------------------------------\n");
-		return nullptr;
+		arrow_result->ThrowError();
 	}
 	return arrow_result;
 }
 
-bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query) {
+bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<ArrowScanFactory> factory, const string &query) {
 	// run FROM arrow_scan(...) EXCEPT ALL <query> - this should be empty
-	shared_ptr<Relation> regular_result;
+	unique_ptr<QueryNode> regular_result;
 	auto statements = con.ExtractStatements(query);
 	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 		auto query_result = con.Query(query);
-		auto duck_collection = query_result->TakeCollection();
-		regular_result = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection),
-		                                                       query_result->GetNames(), duckdb::Identifier("duck"));
+		shared_ptr<ColumnDataCollection> duck_collection = query_result->TakeCollection();
+		auto names = query_result->GetNames();
+		QueryResult::DeduplicateColumns(names);
+		auto duck = make_uniq<ColumnDataRef>(std::move(duck_collection), std::move(names));
+		duck->alias = Identifier("duck");
+		auto node = make_uniq<SelectNode>();
+		node->select_list.push_back(make_uniq<StarExpression>());
+		node->from_table = std::move(duck);
+		regular_result = std::move(node);
 	} else {
-		regular_result = con.RelationFromQuery(query, "regular_result");
+		regular_result = std::move(statements[0]->Cast<SelectStatement>().node);
 	}
 
-	auto result = arrow_tbl->Except(regular_result)->Execute();
+	auto except = make_uniq<SetOperationNode>();
+	except->children.push_back(std::move(ArrowScanSelect(std::move(factory))->node));
+	except->children.push_back(std::move(regular_result));
+	except->setop_type = SetOperationType::EXCEPT;
+	except->setop_all = true;
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(except);
+	auto result = con.Query(std::move(select));
 	if (result->HasError()) {
 		std::ostringstream error_msg;
 		error_msg << "-------------------------------------\n";
@@ -209,8 +248,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 
-	auto arrow_scan = con.TableFunction("arrow_scan", {}, {}, params);
-	return CompareResults(con, std::move(arrow_scan), query);
+	return CompareResults(con, std::move(params), query);
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
@@ -220,9 +258,8 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, A
 	}
 	// construct the arrow scan
 	auto params = ConstructArrowScan(arrow_stream);
-	auto arrow_scan = con.TableFunction("arrow_scan", {}, {}, params);
 
-	auto success = CompareResults(con, std::move(arrow_scan), query);
+	auto success = CompareResults(con, std::move(params), query);
 	arrow_stream.release = nullptr;
 	return success;
 }

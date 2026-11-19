@@ -17,3 +17,14 @@ FROM (
 )
 ----
 4999950000
+
+statement ok
+CREATE TABLE adopt AS SELECT i % 20000 AS g, md5((CASE WHEN i // 20000 < 2 THEN -1 ELSE i % 37 END)::VARCHAR) AS s FROM range(100000) r(i);
+
+query I
+SELECT count(*) FROM (
+    SELECT DISTINCT g, histogram(s) OVER (PARTITION BY g) h, mode(s) OVER (PARTITION BY g) m FROM adopt
+) w JOIN (SELECT g, histogram(s) h, mode(s) m FROM adopt GROUP BY g) a USING (g)
+WHERE w.h != a.h OR w.m != a.m
+----
+0

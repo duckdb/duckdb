@@ -3,22 +3,37 @@ index 77a069e39b..c3f6bdc3de 100644
 --- a/third_party/mbedtls/VERSION
 +++ b/third_party/mbedtls/VERSION
 @@ -1 +1 @@
--3.6.7
+-3.6.8
 \ No newline at end of file
-+3.6.7
++3.6.8
 \ No newline at end of file
 diff --git a/third_party/mbedtls/library/aes.cpp b/third_party/mbedtls/library/aes.cpp
-index b1a5c3ed10..00d64c6173 100644
 --- a/third_party/mbedtls/library/aes.cpp
 +++ b/third_party/mbedtls/library/aes.cpp
 @@ -52,7 +52,6 @@
  #include "aesce.h"
  #endif
- 
+ #include "constant_time_internal.h"
 -#include "mbedtls/platform.h"
  #include "ctr.h"
  
  /*
+@@ -784,6 +783,7 @@
+ #endif
+ 
+ #if !defined(MBEDTLS_AES_USE_HARDWARE_ONLY)
++    {
+     const unsigned char *SK_address =
+         (const unsigned char *) (cty.buf + cty.rk_offset + cty.nr * 4);
+     mbedtls_aes_key_block_speculation_of_no_hardware(&SK_address);
+@@ -807,6 +807,7 @@
+     *RK++ = *SK++;
+     *RK++ = *SK++;
+     *RK++ = *SK++;
++    }
+ #endif /* !MBEDTLS_AES_USE_HARDWARE_ONLY */
+ exit:
+     mbedtls_aes_free(&cty);
 diff --git a/third_party/mbedtls/library/asn1parse.cpp b/third_party/mbedtls/library/asn1parse.cpp
 index e33fdf71da..8db38d8921 100644
 --- a/third_party/mbedtls/library/asn1parse.cpp
@@ -313,6 +328,18 @@ index d212ddfd81..285f963b3c 100644
      for (size_t i = 0; i < total; i++) {
          mbedtls_ct_condition_t no_op = mbedtls_ct_uint_gt(total - offset, i);
          /* The first `total - offset` passes are a no-op. The last
+diff --git a/third_party/mbedtls/library/constant_time_internal.h b/third_party/mbedtls/library/constant_time_internal.h
+--- a/third_party/mbedtls/library/constant_time_internal.h
++++ b/third_party/mbedtls/library/constant_time_internal.h
+@@ -653,7 +653,7 @@
+  *              #MBEDTLS_CT_NULLIFY_IF_SPECULATING_NE if applicable.
+  */
+ #define MBEDTLS_CT_NULLIFY_IF_SPECULATING(ptr, cond)    \
+-    ((ptr) = (void *) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
++    ((ptr) = (decltype(+(ptr))) mbedtls_ct_nullify_if_speculating((uintptr_t) (ptr), cond))
+ 
+ #else /* MBEDTLS_SPECTRE_V1_COUNTERMEASURES */
+ 
 diff --git a/third_party/mbedtls/library/md.cpp b/third_party/mbedtls/library/md.cpp
 index c95846aa04..00addd62c3 100644
 --- a/third_party/mbedtls/library/md.cpp

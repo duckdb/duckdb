@@ -94,7 +94,7 @@ inline void SetStringOut(const char **out, idx_t *out_length, const Identifier &
 //! reads as all-empty entries.
 class string_view_array {
 public:
-	string_view_array(const char **ptrs, const idx_t *lengths, idx_t count)
+	string_view_array(const char *const *ptrs, const idx_t *lengths, idx_t count)
 	    : ptrs(ptrs), lengths(lengths), count(count) {
 	}
 
@@ -106,7 +106,7 @@ public:
 	std::string_view operator[](idx_t i) const;
 
 private:
-	const char **ptrs;
+	const char *const *ptrs;
 	const idx_t *lengths;
 	idx_t count;
 };
@@ -346,6 +346,8 @@ public:
 class CV2Instance {
 public:
 	CV2Instance(CV2Environment &env, DBConfig &startup_config);
+	//! A handle to a database shared through the environment's instance cache, see instance_open_shared.
+	CV2Instance(CV2Environment &env, shared_ptr<DuckDB> shared_database);
 
 	//! Attaches the database at `path` under `name` (derived from the path when empty), like ATTACH, optionally as
 	//! the default for new connections.
@@ -507,6 +509,11 @@ void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PRO
                                DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
 void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
                                   DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
+//! Set / get a generic, named function property; shared by the scalar and aggregate entry points
+void SetGenericFunctionProperty(FunctionProperties &props, const char *name, idx_t name_length, const Value &value);
+//! Returns an owned copy of the property value, or nullptr if the property is not set
+auto GetGenericFunctionProperty(const FunctionProperties &props, const char *name, idx_t name_length)
+    -> duckdb_v2_value_handle;
 
 using CV2FunctionSignature = duckdb::FunctionSignature;
 

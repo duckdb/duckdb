@@ -1,0 +1,112 @@
+# name: test/sql/topn/test_top_n_non_constant_offset_row_group_pruner.test
+# description: Row groups can only be pruned with a limit and an offset that are known when the query is planned
+# group: [topn]
+
+load {TEST_DIR}/top_n_non_constant_offset_row_group_pruner_main.duckdb
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_non_constant_offset_row_group_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# 4 row groups
+statement ok
+CREATE TABLE db.t AS SELECT i AS a FROM range(8192) r(i)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_non_constant_offset_row_group_pruner_data.duckdb' AS db
+
+# non-constant offset
+query I
+SELECT a FROM db.t ORDER BY a LIMIT 1 OFFSET (random() * 0 + 3000)::BIGINT
+----
+3000
+
+query I
+SELECT a FROM db.t ORDER BY a DESC LIMIT 1 OFFSET (random() * 0 + 3000)::BIGINT
+----
+5191
+
+query I
+SELECT a + 1 FROM db.t ORDER BY a DESC LIMIT 2 OFFSET (random() * 0 + 5000)::BIGINT
+----
+3192
+3191
+
+query I
+SELECT count(*) FROM (SELECT a FROM db.t ORDER BY a OFFSET (random() * 0 + 3000)::BIGINT)
+----
+5192
+
+# the limit is larger than one row group
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a DESC LIMIT 3000 OFFSET (random() * 0 + 3000)::BIGINT)
+----
+3000	2192	5191
+
+# the limit is a parameter
+statement ok
+PREPARE q AS SELECT a FROM db.t ORDER BY a DESC LIMIT ? OFFSET (random() * 0 + 3000)::BIGINT
+
+query I
+EXECUTE q(1)
+----
+5191
+
+# non-constant limit
+query I
+SELECT a FROM db.t ORDER BY a LIMIT (random() * 0 + 1)::BIGINT
+----
+0
+
+query I
+SELECT a FROM db.t ORDER BY a LIMIT (random() * 0 + 1)::BIGINT OFFSET 3000
+----
+3000
+
+query I
+SELECT a FROM db.t ORDER BY a DESC LIMIT (random() * 0 + 1)::BIGINT OFFSET 3000
+----
+5191
+
+query I
+SELECT a FROM db.t ORDER BY a LIMIT (random() * 0 + 1)::BIGINT OFFSET (random() * 0 + 3000)::BIGINT
+----
+3000
+
+# a percentage limit counts the rows before the offset
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a LIMIT 10%)
+----
+819	0	818
+
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a LIMIT 10% OFFSET 3000)
+----
+819	3000	3818
+
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a DESC LIMIT 10% OFFSET 3000)
+----
+819	4373	5191
+
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a LIMIT (random() * 0 + 10)% OFFSET 3000)
+----
+819	3000	3818
+
+query III
+SELECT count(*), min(a), max(a) FROM (SELECT a FROM db.t ORDER BY a LIMIT 10% OFFSET (random() * 0 + 3000)::BIGINT)
+----
+819	3000	3818
+
+# constant limit and offset
+query I
+SELECT a + 1 FROM db.t ORDER BY a LIMIT 1 OFFSET 3000
+----
+3001
+
+query I
+SELECT a + 1 FROM db.t ORDER BY a DESC LIMIT 1 OFFSET 3000
+----
+5192

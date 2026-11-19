@@ -12,7 +12,6 @@ using namespace duckdb;
 constexpr const char *QUERY_DIRECTORY = "test/ossfuzz/cases";
 
 static void test_runner() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
 
 	duckdb::unique_ptr<QueryResult> result;
@@ -40,8 +39,8 @@ static void test_runner() {
 struct RegisterOssfuzzTests {
 	RegisterOssfuzzTests() {
 		// Register a separate test for each file in the QUERY_DIRECTORY.
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		fs->ListFiles(QUERY_DIRECTORY, [&](string path, bool) {
+		auto &fs = TestLocalFileSystem();
+		fs.ListFiles(QUERY_DIRECTORY, [&](string path, bool) {
 			REGISTER_TEST_CASE(test_runner, string(QUERY_DIRECTORY) + "/" + path, "[ossfuzz][.]");
 		});
 	}

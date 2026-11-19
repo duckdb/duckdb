@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -13,6 +14,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -108,11 +111,12 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::ExtractSubSystem(const string
 	return nullptr;
 }
 
-VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(make_uniq<LocalFileSystem>()) {
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
-    : file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
+    : owned_local_file_system(inner->IsLocalFileSystem() ? nullptr : make_uniq<LocalFileSystem>()),
+      file_system_registry(make_shared_ptr<FileSystemRegistry>(std::move(inner))) {
 	VirtualFileSystem::RegisterCompressionFilesystem(make_uniq<GZipFileSystem>());
 }
 
@@ -163,6 +167,14 @@ static FileCompressionType CompressionFromExtension(const string &lower_path) {
 		}
 	}
 	return FileCompressionType::UNCOMPRESSED;
+}
+
+FileSystem &VirtualFileSystem::GetLocalFileSystem() {
+	auto &fs = *file_system_registry->default_fs->file_system;
+	if (fs.IsLocalFileSystem()) {
+		return fs;
+	}
+	return *owned_local_file_system;
 }
 
 optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
@@ -416,6 +428,17 @@ void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = file_system_registry->SetDisabledFileSystems(names);
 	file_system_registry.atomic_store(new_registry);
+}
+
+vector<string> VirtualFileSystem::GetDisabledFileSystems() {
+	auto registry = file_system_registry.atomic_load();
+	auto &disabled_file_systems = registry->disabled_file_systems;
+	vector<string> names;
+	for (auto &name : disabled_file_systems) {
+		names.push_back(name);
+	}
+	std::sort(names.begin(), names.end());
+	return names;
 }
 
 unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {

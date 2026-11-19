@@ -34,12 +34,7 @@ static string GetCacheKey(const string &database_p, const DBConfig &config) {
 	// Currently the cache key is derived directly from the abs path,
 	// but it can apply more transformations to the path if necessary
 	string abs_database_path;
-	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
-	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database_p, *tmp_fs);
-	}
+	abs_database_path = GetDBAbsolutePath(database_p, *config.file_system);
 #if defined(_WIN32) || defined(__APPLE__)
 	return StringUtil::Lower(abs_database_path);
 #else  // !(_WIN32 or __APPLE__)
@@ -114,12 +109,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
                                                            const std::function<void(DuckDB &)> &on_create) {
 	D_ASSERT(db_instances_lock.owns_lock());
 	string abs_database_path;
-	if (config.file_system) {
-		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
-	} else {
-		auto tmp_fs = FileSystem::CreateLocal();
-		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
-	}
+	abs_database_path = GetDBAbsolutePath(database, *config.file_system);
 	// Creates new instance
 	string instance_path = abs_database_path;
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {

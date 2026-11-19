@@ -92,7 +92,10 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("generation_expression");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return SystemCatalogScanner::CreateBindData(names, return_types, "table_name", "table_oid");
+	SystemCatalogIdentityColumns columns;
+	columns.entry_name = "table_name";
+	columns.entry_oid = "table_oid";
+	return SystemCatalogScanner::CreateBindData(names, return_types, columns);
 }
 
 static unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {

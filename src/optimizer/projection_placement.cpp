@@ -20,6 +20,9 @@ namespace duckdb {
 namespace {
 
 constexpr double MINIMUM_COST_RATIO = 0.75;
+//! An expression up to this cost (e.g. a comparison of a numeric column with a constant) is not moved below joins
+//! unless that frees one of its inputs
+constexpr idx_t MAXIMUM_CHEAP_EXPRESSION_COST = 20;
 
 struct PathStep {
 	reference<LogicalOperator> op;
@@ -201,25 +204,25 @@ static bool BindingsBelongToChild(const Expression &expression, LogicalOperator 
 
 static bool RewriteThroughProjection(unique_ptr<Expression> &expression, LogicalProjection &projection) {
 	bool valid = true;
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expression, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+	expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(expression), [&](const BoundColumnRefExpression &colref) -> unique_ptr<Expression> {
 		    if (!valid || colref.Depth() != 0 || colref.Binding().table_index != projection.table_index ||
 		        colref.Binding().column_index.GetIndex() >= projection.expressions.size()) {
 			    valid = false;
-			    return;
+			    return nullptr;
 		    }
 		    auto &source = *projection.expressions[colref.Binding().column_index.GetIndex()];
 		    if (source.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 		        source.GetReturnType() != colref.GetReturnType()) {
 			    valid = false;
-			    return;
+			    return nullptr;
 		    }
 		    auto &source_colref = source.Cast<BoundColumnRefExpression>();
 		    if (source_colref.Depth() != 0) {
 			    valid = false;
-			    return;
+			    return nullptr;
 		    }
-		    colref.BindingMutable() = source_colref.Binding();
+		    return colref.WithBinding(source_colref.Binding());
 	    });
 	return valid;
 }
@@ -562,17 +565,17 @@ static ProjectionRewrite RebuildProjection(Optimizer &optimizer,
 }
 
 static void RewriteLiftedExpression(unique_ptr<Expression> &expression, const vector<LiftDependency> &dependencies) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expression, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+	expression = ExpressionIterator::PreorderReplace<BoundColumnRefExpression>(
+	    std::move(expression), [&](const BoundColumnRefExpression &colref) -> unique_ptr<Expression> {
 		    if (colref.Depth() != 0) {
-			    return;
+			    return nullptr;
 		    }
 		    for (auto &dependency : dependencies) {
 			    if (colref.Binding() == dependency.original_binding) {
-				    colref.BindingMutable() = dependency.current_binding;
-				    return;
+				    return colref.WithBinding(dependency.current_binding);
 			    }
 		    }
+		    return nullptr;
 	    });
 }
 
@@ -775,6 +778,11 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 		return false;
 	}
 	auto exclusive_input_width = GetExclusiveInputWidth(reading_expressions, input_bindings);
+	if (exclusive_input_width == 0 && ExpressionHeuristics::Cost(expression) <= MAXIMUM_CHEAP_EXPRESSION_COST) {
+		// the other expressions of the projection still read every input, so moving a cheap expression only adds
+		// a column that the joins below have to carry
+		return false;
+	}
 	idx_t output_width;
 	if (!GetBindingWidth(ColumnBinding(projection.table_index, ProjectionIndex(expression_index)),
 	                     expression.GetReturnType(), statistics_map, output_width)) {
@@ -951,8 +959,7 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 		auto expression_index = group.placements[i].expression_index;
 		auto alias = upper_projection.expressions[expression_index]->GetAlias();
 		auto replacement = make_uniq<BoundColumnRefExpression>(
-		    upper_projection.expressions[expression_index]->GetReturnType(), computed_bindings[i]);
-		replacement->SetAlias(std::move(alias));
+		    std::move(alias), upper_projection.expressions[expression_index]->GetReturnType(), computed_bindings[i]);
 		upper_projection.expressions[expression_index] = std::move(replacement);
 	}
 }

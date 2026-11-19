@@ -4,6 +4,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -12,7 +13,7 @@ namespace duckdb {
 
 BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
                                                    vector<unique_ptr<Expression>> children,
-                                                   unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
+                                                   unique_ptr<Expression> filter, cow_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
@@ -120,6 +121,12 @@ bool BoundAggregateExpression::PropagatesNullValues() const {
 	           : Expression::PropagatesNullValues();
 }
 
+bool BoundAggregateExpression::CanForwardSingletonInputDomain() const {
+	return function.HasSingleValueIdentity() ||
+	       (children.size() == 2 && function.GetProperties().GetBooleanProperty(NON_NULL_SELECTOR_DOMAIN_PROPERTY) &&
+	        CreateSortKeyHelpers::IsNonNullSortKey(*children[1]));
+}
+
 unique_ptr<Expression> BoundAggregateExpression::Copy() const {
 	vector<unique_ptr<Expression>> new_children;
 	new_children.reserve(children.size());
@@ -160,6 +167,7 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
 	                                             AggregateStateExportMode::NONE);
+	deserializer.ReadDeletedProperty<bool>(207, "single_value_identity");
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");

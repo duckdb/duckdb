@@ -2402,6 +2402,14 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "temp"));
 		string expected = R"([
 		    {
+		        'db_schema_name': collations,
+		        'db_schema_tables': []
+		    },
+		    {
+		        'db_schema_name': encodings,
+		        'db_schema_tables': []
+		    },
+		    {
 		        'db_schema_name': information_schema,
 		        'db_schema_tables': []
 		    },

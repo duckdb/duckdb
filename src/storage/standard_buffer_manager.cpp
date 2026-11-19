@@ -63,7 +63,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		// non re-usable buffer (or mmap-backed, which we cannot rewrite): allocate a new buffer
 		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
-	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
+	result->Initialize(Settings::Get<DebugInitializeSetting>(db));
 	return result;
 }
 
@@ -871,22 +871,23 @@ HugeAllocation BufferAllocator::AllocateHuge(idx_t size) {
 	D_ASSERT(size > 0);
 	auto &data = GetPrivateData()->Cast<BufferAllocatorData>();
 	auto reservation = data.Reserve(size);
-	auto pointer = BlockAllocator::Get(data.manager.GetDatabase()).AllocateHugeData(size);
+	optional_idx home;
+	auto pointer = BlockAllocator::Get(data.manager.GetDatabase()).AllocateHugeData(size, home);
 	reservation.size = 0;
-	return HugeAllocation(*this, pointer, size);
+	return HugeAllocation(*this, pointer, size, home);
 }
 
-void BufferAllocator::FreeHuge(data_ptr_t pointer, idx_t size) {
+void BufferAllocator::FreeHuge(data_ptr_t pointer, idx_t size, optional_idx home) {
 	auto &data = GetPrivateData()->Cast<BufferAllocatorData>();
 	data.Release(size);
-	BlockAllocator::Get(data.manager.GetDatabase()).FreeHugeData(pointer, size);
+	BlockAllocator::Get(data.manager.GetDatabase()).FreeHugeData(pointer, size, home);
 }
 
 HugeAllocation::HugeAllocation() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
-HugeAllocation::HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size)
-    : allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
+HugeAllocation::HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size, optional_idx home)
+    : allocator(allocator), pointer(pointer), allocated_size(allocated_size), allocation_shard(home) {
 	D_ASSERT(pointer);
 }
 
@@ -898,12 +899,14 @@ HugeAllocation::HugeAllocation(HugeAllocation &&other) noexcept
     : allocator(other.allocator), pointer(nullptr), allocated_size(0) {
 	std::swap(pointer, other.pointer);
 	std::swap(allocated_size, other.allocated_size);
+	std::swap(allocation_shard, other.allocation_shard);
 }
 
 HugeAllocation &HugeAllocation::operator=(HugeAllocation &&other) noexcept {
 	std::swap(allocator, other.allocator);
 	std::swap(pointer, other.pointer);
 	std::swap(allocated_size, other.allocated_size);
+	std::swap(allocation_shard, other.allocation_shard);
 	return *this;
 }
 
@@ -912,9 +915,10 @@ void HugeAllocation::Reset() {
 		return;
 	}
 	D_ASSERT(allocator);
-	allocator->FreeHuge(pointer, allocated_size);
+	allocator->FreeHuge(pointer, allocated_size, allocation_shard);
 	pointer = nullptr;
 	allocated_size = 0;
+	allocation_shard = optional_idx();
 }
 
 BufferAllocator &BufferAllocator::Get(ClientContext &context) {

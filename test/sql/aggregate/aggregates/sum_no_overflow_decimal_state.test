@@ -1,0 +1,56 @@
+# name: test/sql/aggregate/aggregates/sum_no_overflow_decimal_state.test
+# description: A DECIMAL sum specialized to sum_no_overflow keeps its decimal signature in an exported state
+# group: [aggregates]
+
+statement ok
+CREATE TABLE c AS SELECT i AS id, (i % 5) AS nk, CAST(i AS DECIMAL(15,2)) + 0.25 AS bal, CAST(CAST(i AS DECIMAL(9,1)) + 0.5 AS DECIMAL(9,1)) AS small_bal FROM range(100) t(i);
+
+statement ok
+CREATE TABLE s AS SELECT i AS id, (i % 5) AS nk FROM range(20) t(i);
+
+statement ok
+CREATE TABLE n AS SELECT i AS nk, (i % 3) AS rk FROM range(5) t(i);
+
+loop serializer 0 2
+
+statement ok
+SET debug_verify_serializer = {serializer};
+
+# the filter in the HAVING specializes the sums before double-eager pushdown exports their states
+query IIII
+SELECT sum(bal), sum(small_bal), sum(c.id), count(*)
+FROM c
+JOIN s ON c.nk = s.nk
+LEFT JOIN n ON c.nk = n.nk AND n.nk < -1
+GROUP BY n.rk
+HAVING ((count(*) <> 92.44) OR (n.rk < 0));
+----
+19900.00	20000.0	19800	400
+
+query I
+SELECT sum(bal)
+FROM c
+JOIN s ON c.nk = s.nk
+LEFT JOIN n ON c.nk = n.nk AND n.nk < -1
+GROUP BY n.rk
+HAVING ((count(*) <> 92) OR (n.rk IS NOT NULL));
+----
+19900.00
+
+# bound by name, the state of a DECIMAL sum_no_overflow finalizes to its decimal result
+query IIII
+SELECT sum_no_overflow(bal), finalize(sum_no_overflow(bal) EXPORT_STATE), sum_no_overflow(small_bal), finalize(sum_no_overflow(small_bal) EXPORT_STATE) FROM c;
+----
+4975.00	4975.00	5000.0	5000.0
+
+query IIII
+SELECT typeof(any_value(bal)), typeof(any_value(small_bal)), typeof(sum_no_overflow(bal)), typeof(finalize(sum_no_overflow(small_bal) EXPORT_STATE)) FROM c;
+----
+DECIMAL(16,2)	DECIMAL(9,1)	DECIMAL(38,2)	DECIMAL(38,1)
+
+query II
+SELECT finalize(combine_aggr(state)), finalize(combine_aggr(small_state)) FROM (SELECT sum_no_overflow(bal) EXPORT_STATE AS state, sum_no_overflow(small_bal) EXPORT_STATE AS small_state FROM c GROUP BY nk);
+----
+4975.00	5000.0
+
+endloop
