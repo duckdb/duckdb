@@ -6,12 +6,14 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
+#include "pcg_random.hpp"
+
 #include <algorithm>
 #include <cstdint>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -21,13 +23,50 @@ namespace {
 constexpr double DEFAULT_QUANTILE = 0.5;
 constexpr int32_t DEFAULT_SAMPLE_SIZE = 8192;
 
+//! The reservoir sampling of BaseReservoirSampling with all memory in the aggregate's arena
+struct ReservoirQuantileSampler : public ReservoirSampler<ReservoirQuantileSampler> {
+	using Weight = std::pair<double, idx_t>;
+
+	explicit ReservoirQuantileSampler(Weight *weights_p) : weights(weights_p) {
+		random.seed(1);
+	}
+
+	pcg32 random;
+	//! The next element to sample
+	idx_t next_index_to_sample = 0;
+	//! The reservoir threshold of the current min entry
+	double min_weight_threshold = 0;
+	//! The reservoir index of the current min entry
+	idx_t min_weighted_entry_index = 0;
+	//! The number of entries seen since the last sample
+	idx_t num_entries_to_skip_b4_next_sample = 0;
+	//! Max-heap of [-random key, index] with room for the whole sample
+	Weight *weights;
+	idx_t weight_count = 0;
+
+	const Weight &TopWeight() const {
+		D_ASSERT(weight_count > 0);
+		return weights[0];
+	}
+	void PopWeight() {
+		std::pop_heap(weights, weights + weight_count);
+		weight_count--;
+	}
+	void PushWeight(double weight, idx_t index) {
+		new (weights + weight_count++) Weight(weight, index);
+		std::push_heap(weights, weights + weight_count);
+	}
+};
+static_assert(std::is_trivially_destructible<ReservoirQuantileSampler>::value, "the sampler lives in an arena");
+
+//! All memory of the state is allocated from the aggregate's arena, so the state needs no destructor
 template <typename T>
 struct ReservoirQuantileState {
 	T *v;
 	idx_t len;
 	idx_t pos;
 	idx_t capacity;
-	BaseReservoirSampling *r_samp;
+	ReservoirQuantileSampler *r_samp;
 
 	void ReplaceElement(T &input) {
 		v[r_samp->min_weighted_entry_index] = input;
@@ -47,7 +86,14 @@ struct ReservoirQuantileState {
 				capacity = new_capacity;
 			}
 			v[pos++] = element;
-			r_samp->InitializeReservoirWeights(pos, len);
+			if (pos == len) {
+				// the sampler draws no random numbers before the reservoir is full
+				D_ASSERT(!r_samp);
+				auto weights = allocator.AllocateAligned(len * sizeof(ReservoirQuantileSampler::Weight));
+				r_samp = allocator.Make<ReservoirQuantileSampler>(
+				    reinterpret_cast<ReservoirQuantileSampler::Weight *>(weights));
+				r_samp->InitializeReservoirWeights(pos, len);
+			}
 		} else {
 			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
 			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
@@ -57,6 +103,27 @@ struct ReservoirQuantileState {
 			}
 		}
 	}
+};
+
+struct ReservoirQuantileFinalizeState : FunctionLocalState {
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<const FunctionData>) {
+		return make_uniq<ReservoirQuantileFinalizeState>();
+	}
+
+	template <class STATE, class T = typename std::remove_pointer<decltype(STATE::v)>::type>
+	static T *CopySample(const STATE &state, AggregateFinalizeData &finalize_data) {
+		D_ASSERT(finalize_data.input.local_state);
+		auto &scratch = finalize_data.input.local_state->Cast<ReservoirQuantileFinalizeState>();
+		const auto size = state.pos * sizeof(T);
+		if (scratch.buffer.GetSize() < size) {
+			scratch.buffer = finalize_data.input.allocator.GetUnderlyingAllocator().Allocate(NextPowerOfTwo(size));
+		}
+		auto result = reinterpret_cast<T *>(scratch.buffer.get());
+		memcpy(result, state.v, size);
+		return result;
+	}
+
+	AllocatedData buffer;
 };
 
 struct ReservoirQuantileBindData : public FunctionData {
@@ -118,9 +185,6 @@ struct ReservoirQuantileOperation {
 		if (state.pos == 0) {
 			state.len = MaxValue<idx_t>(state.len, bind_data.sample_size);
 		}
-		if (!state.r_samp) {
-			state.r_samp = new BaseReservoirSampling();
-		}
 		state.FillReservoir(bind_data.sample_size, input, unary_input.input.allocator);
 	}
 
@@ -132,19 +196,8 @@ struct ReservoirQuantileOperation {
 		if (target.pos == 0) {
 			target.len = MaxValue<idx_t>(target.len, source.len);
 		}
-		if (!target.r_samp) {
-			target.r_samp = new BaseReservoirSampling();
-		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
 			target.FillReservoir(target.len, source.v[src_idx], aggr_input_data.allocator);
-		}
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.r_samp) {
-			delete state.r_samp;
-			state.r_samp = nullptr;
 		}
 	}
 
@@ -163,7 +216,7 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 		D_ASSERT(state.v);
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ReservoirQuantileBindData>();
-		auto v_t = state.v;
+		auto v_t = ReservoirQuantileFinalizeState::CopySample(state, finalize_data);
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		auto offset = (idx_t)((double)(state.pos - 1) * bind_data.quantiles[0]);
 		std::nth_element(v_t, v_t + offset, v_t + state.pos);
@@ -171,7 +224,7 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 	}
 };
 
-AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
+AggregateFunction GetReservoirQuantileAggregateFunctionInternal(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
 		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int8_t>, int8_t, int8_t,
@@ -210,6 +263,12 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	}
 }
 
+AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
+	auto fun = GetReservoirQuantileAggregateFunctionInternal(type);
+	fun.SetInitLocalStateFinalizeCallback(ReservoirQuantileFinalizeState::Init);
+	return fun;
+}
+
 template <class CHILD_TYPE>
 struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 	template <class T, class STATE>
@@ -227,8 +286,8 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
-		auto v_t = state.v;
-		D_ASSERT(v_t);
+		D_ASSERT(state.v);
+		auto v_t = ReservoirQuantileFinalizeState::CopySample(state, finalize_data);
 
 		auto &entry = target;
 		entry.offset = ridx;
@@ -247,11 +306,13 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 AggregateFunction ReservoirQuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) {
 	LogicalType result_type = LogicalType::LIST(child_type);
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), nullptr);
+	fun.SetInitLocalStateFinalizeCallback(ReservoirQuantileFinalizeState::Init);
+	return fun;
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
@@ -369,6 +430,7 @@ static void SetDecimalImplementation(BoundAggregateFunction &function, const Log
 		default:
 			throw NotImplementedException("Invalid physical type for decimal reservoir quantile");
 		}
+		function.SetInitLocalStateFinalizeCallback(ReservoirQuantileFinalizeState::Init);
 	}
 	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
 		function.GetArguments().push_back(declared_arguments[i]);
@@ -455,6 +517,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
                                          const LogicalType &return_value) {
 	auto fun = AggregateFunction::UnaryAggregate<ReservoirQuantileState<int64_t>, int64_t, int64_t,
 	                                             ReservoirQuantileScalarOperation>(arguments[0], return_value);
+	fun.SetInitLocalStateFinalizeCallback(ReservoirQuantileFinalizeState::Init);
 	fun.SetBindCallback(BindReservoirQuantileDecimal);
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(DeserializeReservoirQuantileDecimal);
