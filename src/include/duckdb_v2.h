@@ -4891,7 +4891,10 @@ typedef enum DUCKDB_V2_SECRET_PROPERTY {
 	//! The provider the secret is created with, e.g. `config`.
 	DUCKDB_V2_SECRET_PROPERTY_PROVIDER = 1,
 
-	//! The name of the secret. Empty for an unnamed secret.
+	/*!
+	 * The name of the secret. A secret created without one is named `__default_<type>`, as by `CREATE SECRET`; only a
+	 * secret built with `duckdb_v2_secret_create()` and not named yet reads back empty.
+	 */
 	DUCKDB_V2_SECRET_PROPERTY_NAME = 2,
 
 	//! The name of the storage the secret lives in, e.g. `memory` or `local_file`. Empty when DuckDB chooses.
@@ -4937,11 +4940,13 @@ typedef struct _duckdb_v2_secret_function {
 
 /*!
  * A handle to a key/value secret. Owned when built with `duckdb_v2_secret_create()` or returned by
- * `duckdb_v2_context_lookup_secret()`, `duckdb_v2_context_get_secret_by_name()` and
- * `duckdb_v2_context_create_secret()`: the caller destroys it with `duckdb_v2_secret_destroy()` and may change it with
- * the setters, which never affects a stored secret. Borrowed when received by a create callback, valid only for the
- * duration of the call: the `input` is read-only, describing the `CREATE SECRET` statement with its options as keys,
- * and the `output` is the secret to fill, with its type, provider, name and scope already set from the statement.
+ * `duckdb_v2_context_lookup_secret()`, `duckdb_v2_context_get_secret_by_name()`, `duckdb_v2_context_create_secret()` or
+ * their `connection_*` equivalents (`duckdb_v2_connection_lookup_secret()`,
+ * `duckdb_v2_connection_get_secret_by_name()`, `duckdb_v2_connection_create_secret()`): the caller destroys it with
+ * `duckdb_v2_secret_destroy()` and may change it with the setters, which never affects a stored secret. Borrowed when
+ * received by a create callback, valid only for the duration of the call: the `input` is read-only, describing the
+ * `CREATE SECRET` statement with its options as keys, and the `output` is the secret to fill, with its properties and
+ * scope already set from the statement.
  */
 typedef struct _duckdb_v2_secret {
 	void *internal_ptr;
@@ -5126,8 +5131,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_function_set_user_data(duckdb_v2_s
  *
  * Registration is not transactional: it takes effect at once, also inside an explicit transaction, and a rollback does
  * not undo it. Registration requires a type, a provider and a create callback, defines the type if it is new, and fails
- * when a function for the same type and provider already exists. The secret function must have been created through a
- * factory of the same instance. The caller still owns the handle after registration and must destroy it with
+ * with `ERROR_INPUT_INVALID` when a function for the same type and provider already exists, or when the function is the
+ * default provider of a type that exists already. A type an extension of DuckDB's defines (e.g. `s3` of httpfs) is not
+ * defined here: registration loads that extension, autoloading it if enabled, and fails with `ERROR_INPUT_INVALID` (or
+ * the autoload error) when it cannot. The secret function must have been created through a factory of the same
+ * instance. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_secret_function_destroy()`, which does not affect the registered function.
  *
  * history:
@@ -5146,8 +5154,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_secret_function(duckd
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Registers the secret function on the loading extension's instance, visible to every connection, and attributes it and
- * its type to the extension, which DuckDB loads when a statement names the type.
+ * Registers the secret function on the loading extension's instance, visible to every connection. A type it defines is
+ * attributed to the extension in `duckdb_secret_types()`; this does not make DuckDB load the extension when a statement
+ * names the type.
  *
  * Use this from the extension's load callback. Otherwise as `duckdb_v2_connection_register_secret_function()`.
  *
@@ -5207,9 +5216,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_create(duckdb_v2_factory_handle fa
  * defaults to the default provider of the type, the name to one DuckDB chooses, the storage and persist type to what
  * DuckDB chooses.
  *
- * The value is borrowed and copied. An invalid persist type fails with `ERROR_INPUT_INVALID`. Fails with `ERROR_API` on
- * a read-only secret. On the secret a create callback fills it also fails with `ERROR_API` for the type, provider and
- * name.
+ * The value is borrowed and copied. An invalid persist type fails with `ERROR_INPUT_INVALID`. Fails with
+ * `ERROR_INPUT_INVALID` on a read-only secret and on the secret a create callback fills, whose properties are fixed by
+ * the statement.
  *
  * history:
  * - unstable: v2.0.0
@@ -5233,7 +5242,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_set_property(duckdb_v2_secret_hand
  * Adds a scope to the secret: a path prefix, e.g. `s3://bucket/dir`, the secret applies to. A lookup for a path picks
  * the secret whose scope is the longest prefix of the path. A secret without scope applies to every path.
  *
- * The scope is borrowed and copied. Fails with `ERROR_API` on a read-only secret.
+ * The scope is borrowed and copied. Fails with `ERROR_INPUT_INVALID` on a read-only secret.
  *
  * history:
  * - unstable: v2.0.0
@@ -5254,7 +5263,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_add_scope(duckdb_v2_secret_handle 
 /*!
  * Removes every scope from the secret. In a create callback this includes the ones the user gave; check
  * `duckdb_v2_secret_get_scope_count()` on the output first to supply a default scope only when the user gave none.
- * Fails with `ERROR_API` on a read-only secret.
+ * Fails with `ERROR_INPUT_INVALID` on a read-only secret.
  *
  * history:
  * - unstable: v2.0.0
@@ -5274,8 +5283,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_clear_scope(duckdb_v2_secret_handl
  *
  * The value is borrowed and copied and can be of any type, nested ones included; a NULL value is stored as a NULL.
  * Setting a key again replaces its value. Keys are matched case-insensitively and keep the casing given first. For the
- * options of a `CREATE SECRET` this is the value the named parameter was given. Fails with `ERROR_API` on a read-only
- * secret.
+ * options of a `CREATE SECRET` this is the value the named parameter was given. Fails with `ERROR_INPUT_INVALID` on a
+ * read-only secret.
  *
  * history:
  * - unstable: v2.0.0
@@ -5298,8 +5307,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_set_value(duckdb_v2_secret_handle 
 /*!
  * Marks a key as sensitive, so that its value is never displayed: `duckdb_secrets()` and the echo of `CREATE SECRET`
  * show it as `redacted`, while `duckdb_v2_secret_get_value()` still returns it. The key does not have to hold a value
- * yet, which suits keys only some secrets hold. Keys are matched case-insensitively. Fails with `ERROR_API` on a
- * read-only secret.
+ * yet, which suits keys only some secrets hold. Keys are matched case-insensitively. Fails with `ERROR_INPUT_INVALID`
+ * on a read-only secret.
  *
  * history:
  * - unstable: v2.0.0
@@ -5335,7 +5344,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_secret_destroy(duckdb_v2_secret_handle *s
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Borrows a string property of the secret, see `SECRET_PROPERTY`. Empty when the property is not set.
+ * Borrows a string property of the secret, see `SECRET_PROPERTY`. Empty when the property is not set, except the
+ * persist type, which then reads back as `default`.
  *
  * history:
  * - unstable: v2.0.0
@@ -5522,6 +5532,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_lookup_secret(duckdb_v2_context_h
  * compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()`. The returned secret is a copy owned by
  * the caller, to destroy via `duckdb_v2_secret_destroy()`.
  *
+ * Fails with `ERROR_CONFIGURATION_INVALID` when more than one storage holds a secret of the name.
+ *
  * history:
  * - unstable: v2.0.0
  *
@@ -5548,6 +5560,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_secret_by_name(duckdb_v2_cont
  * `transaction` persist type for credentials that must not outlive the transaction. `created` is optional: when given,
  * it receives a copy of the secret that now exists, which with `SECRET_ON_CONFLICT_IGNORE` is the existing one. The
  * copy is owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Redacted keys of the given secret are ignored: the provider decides which keys of the stored secret are redacted. A
+ * secret read back with storage `transaction` (a transaction secret) is created with the `transaction` persist type.
+ * Fails with `ERROR_CONFIGURATION_PERMISSION` when `enable_external_access` is off, before the keys are checked, as
+ * `CREATE SECRET` does.
+ *
+ * To refresh a secret, create a new one through its provider: copy the old secret's properties
+ * (`duckdb_v2_secret_get_property()` / `duckdb_v2_secret_set_property()`, skipping empty ones) and scopes, set the
+ * refresh options as keys, and create it with `SECRET_ON_CONFLICT_REPLACE`. Do not copy the old secret's keys as is:
+ * they are the stored values, not the provider's named parameters.
  *
  * history:
  * - unstable: v2.0.0
@@ -5610,6 +5632,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_lookup_secret(duckdb_v2_connec
  * compare `SECRET_PROPERTY_TYPE` read with `duckdb_v2_secret_get_property()`. The returned secret is a copy owned by
  * the caller, to destroy via `duckdb_v2_secret_destroy()`.
  *
+ * Fails with `ERROR_CONFIGURATION_INVALID` when more than one storage holds a secret of the name.
+ *
  * history:
  * - unstable: v2.0.0
  *
@@ -5638,6 +5662,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_secret_by_name(duckdb_v2_c
  * secret with the `transaction` persist type ends with the implicit transaction the call runs in. `created` is
  * optional: when given, it receives a copy of the secret that now exists, which with `SECRET_ON_CONFLICT_IGNORE` is the
  * existing one. The copy is owned by the caller, to destroy via `duckdb_v2_secret_destroy()`.
+ *
+ * Redacted keys of the given secret are ignored: the provider decides which keys of the stored secret are redacted. A
+ * secret read back with storage `transaction` (a transaction secret) is created with the `transaction` persist type.
+ * Fails with `ERROR_CONFIGURATION_PERMISSION` when `enable_external_access` is off, before the keys are checked, as
+ * `CREATE SECRET` does.
+ *
+ * To refresh a secret, create a new one through its provider: copy the old secret's properties
+ * (`duckdb_v2_secret_get_property()` / `duckdb_v2_secret_set_property()`, skipping empty ones) and scopes, set the
+ * refresh options as keys, and create it with `SECRET_ON_CONFLICT_REPLACE`. Do not copy the old secret's keys as is:
+ * they are the stored values, not the provider's named parameters.
  *
  * history:
  * - unstable: v2.0.0

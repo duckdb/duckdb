@@ -156,6 +156,25 @@ void SecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCrea
 	RegisterSecretFunctionInternal(std::move(function), on_conflict);
 }
 
+void SecretManager::RegisterSecretFunctionAndType(CreateSecretFunction function, SecretType &new_type) {
+	D_ASSERT(Identifier(function.secret_type) == new_type.name);
+	lock_guard<mutex> lck(manager_lock);
+	auto functions = secret_functions.find(new_type.name);
+	if (functions != secret_functions.end() && functions->second.ProviderExists(function.provider)) {
+		throw InvalidInputException("A secret function for type %s and provider %s already exists.", new_type.name,
+		                            function.provider);
+	}
+	auto type_exists = secret_types.find(new_type.name) != secret_types.end();
+	if (type_exists && !new_type.default_provider.empty()) {
+		throw InvalidInputException("Only the secret function that defines the type %s can be its default provider.",
+		                            new_type.name);
+	}
+	if (!type_exists) {
+		RegisterSecretTypeInternal(new_type);
+	}
+	RegisterSecretFunctionInternal(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
+}
+
 unique_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
                                                       unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
                                                       SecretPersistType persist_type, const string &storage) {
@@ -519,6 +538,10 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 
 SecretType SecretManager::LookupType(const string &type) {
 	return LookupTypeInternal(Identifier(type));
+}
+
+bool SecretManager::TryLookupType(const Identifier &type, SecretType &type_out) {
+	return TryLookupTypeInternal(type, type_out);
 }
 
 void SecretManager::RegisterSecretTypeInternal(SecretType &type) {

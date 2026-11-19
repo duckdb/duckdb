@@ -1,6 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 
@@ -44,11 +45,11 @@ public:
 
 	void CheckWritable(bool is_property) const {
 		if (mode == Mode::READ_ONLY) {
-			throw Exception(ExceptionType::INVALID, "The secret is read-only.");
+			throw InvalidInputException("The secret is read-only.");
 		}
 		if (mode == Mode::OUTPUT && is_property) {
-			throw Exception(ExceptionType::INVALID,
-			                "The properties of the secret a create callback fills are fixed by the statement.");
+			throw InvalidInputException(
+			    "The properties of the secret a create callback fills are fixed by the statement.");
 		}
 	}
 
@@ -162,30 +163,22 @@ public:
 		}
 
 		auto &manager = *DBConfig::GetConfig(target).secret_manager;
-		bool type_exists = false;
-		for (auto &existing : manager.AllSecretTypes()) {
-			if (existing.name == type) {
-				type_exists = true;
+		// a type an extension defines is loaded as CREATE SECRET would load it, never defined here
+		auto owner = ExtensionHelper::FindExtensionInEntries(type, EXTENSION_SECRET_TYPES);
+		if (!owner.empty() && owner != extension_name) {
+			SecretType existing_type;
+			if (!manager.TryLookupType(type, existing_type)) {
+				throw InvalidInputException(
+				    "Secret type %s is defined by the %s extension, load it before registering provider %s", type,
+				    owner, provider);
 			}
 		}
-		for (auto &existing : manager.AllSecretFunctions()) {
-			if (Identifier(existing.secret_type) == type && existing.provider == provider) {
-				throw InvalidInputException("A secret function for type %s and provider %s already exists.", type,
-				                            provider);
-			}
-		}
-		if (type_exists && is_default) {
-			throw InvalidInputException(
-			    "Only the secret function that defines the type %s can be its default provider.", type);
-		}
-		if (!type_exists) {
-			SecretType secret_type;
-			secret_type.name = type;
-			secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
-			secret_type.default_provider = is_default ? provider.GetIdentifierName() : string();
-			secret_type.extension = extension_name;
-			manager.RegisterSecretType(secret_type);
-		}
+
+		SecretType secret_type;
+		secret_type.name = type;
+		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+		secret_type.default_provider = is_default ? provider.GetIdentifierName() : string();
+		secret_type.extension = extension_name;
 
 		auto info = make_shared_ptr<CV2CreateSecretInfo>();
 		info->callback = callback;
@@ -197,7 +190,7 @@ public:
 		function.function = CallCreateCallback;
 		function.named_parameters = named_parameters;
 		function.info = std::move(info);
-		manager.RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
+		manager.RegisterSecretFunctionAndType(std::move(function), secret_type);
 	}
 
 public:
@@ -590,7 +583,6 @@ DUCKDB_V2_ERROR CreateSecret(CV2Context &ctx, duckdb_v2_secret_handle secret, DU
 		duckdb::CreateSecretInput input;
 		input.type = self.type;
 		input.provider = self.provider;
-		input.storage_type = duckdb::Identifier(self.storage);
 		// an unnamed secret gets the default name of its type, as CREATE SECRET without a name does
 		input.name = self.name.empty()
 		                 ? duckdb::Identifier("__default_" + duckdb::StringUtil::Lower(self.type.GetIdentifierName()))
@@ -600,8 +592,23 @@ DUCKDB_V2_ERROR CreateSecret(CV2Context &ctx, duckdb_v2_secret_handle secret, DU
 			input.options[value.first.GetIdentifierName()] = value.second;
 		}
 		input.on_conflict = ConvertOnConflict(on_conflict);
-		input.persist_type = self.persist_type;
+		// a looked-up transaction secret reports storage `transaction`: that is its persist type, not a storage
+		auto storage = duckdb::Identifier(self.storage);
+		auto persist_type = self.persist_type;
+		if (storage == duckdb::SecretManager::TRANSACTION_STORAGE_NAME) {
+			if (persist_type != duckdb::SecretPersistType::DEFAULT &&
+			    persist_type != duckdb::SecretPersistType::TRANSACTION) {
+				throw duckdb::InvalidInputException(
+				    "Storage 'transaction' requires the 'transaction' persist type, not '%s'",
+				    duckdb::string(CV2Secret::PersistTypeName(persist_type)));
+			}
+			persist_type = duckdb::SecretPersistType::TRANSACTION;
+			storage = duckdb::Identifier();
+		}
+		input.storage_type = storage;
+		input.persist_type = persist_type;
 		ctx.WithContext([&](duckdb::ClientContext &context) {
+			duckdb::SecretManager::ThrowIfSecretCreationDisabled(*context.db, input.type, input.provider);
 			auto &manager = duckdb::SecretManager::Get(context);
 			auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(context);
 			manager.BindCreateSecretOptions(context.GetContext(), transaction, input);

@@ -121,8 +121,13 @@ public:
 	DUCKDB_API void RegisterSecretType(SecretType &type);
 	//! Lookup a SecretType
 	DUCKDB_API SecretType LookupType(const string &type);
+	//! Lookup a SecretType, autoloading the extension that defines it; returns false if there is none
+	DUCKDB_API bool TryLookupType(const Identifier &type, SecretType &type_out);
 	//! Register a Secret Function i.e. a secret provider for a secret type
 	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict);
+	//! Atomically register a secret function and, if it does not exist yet, its type. Throws if the provider exists,
+	//! or if the type exists and new_type names a default provider.
+	DUCKDB_API void RegisterSecretFunctionAndType(CreateSecretFunction function, SecretType &new_type);
 	//! Register a secret by providing a secret manually
 	DUCKDB_API unique_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                  unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,

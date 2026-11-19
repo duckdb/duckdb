@@ -321,8 +321,8 @@ TEST_CASE("V2 secret: a registered provider creates secrets from SQL", "[capi_v2
 	REQUIRE_FALSE(log.by_name_found);
 
 	// Read-only input, fixed output properties.
-	REQUIRE(log.set_on_input_rc != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(log.set_property_on_output_rc != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(log.set_on_input_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(log.set_property_on_output_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 TEST_CASE("V2 secret: errors are reported as the statement's error", "[capi_v2][secret]") {
@@ -336,17 +336,19 @@ TEST_CASE("V2 secret: errors are reported as the statement's error", "[capi_v2][
 	REQUIRE(RunSql(fx.conn, "CREATE SECRET p (TYPE probe, by_name 'bad')") == DUCKDB_V2_ERROR_NONE);
 	REQUIRE_FALSE(log.by_name_found);
 	// Unknown and mistyped parameters, unknown provider
-	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, bogus 1)") != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, port 'not a number')") != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, PROVIDER nope)") != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, bogus 1)") == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, port 'not a number')") == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, PROVIDER nope)") == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// Registration is validated: a function exists once per type and provider, and only the function defining a type
 	// can be its default.
 	auto duplicate = MakeFunction(fx.factory, "demo", "config", CreateDemo, &demo_calls, false);
-	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, duplicate, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, duplicate, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_function_destroy(&duplicate);
 	auto second_default = MakeFunction(fx.factory, "demo", "other", CreateDemo, &demo_calls, true);
-	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, second_default, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, second_default, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_function_destroy(&second_default);
 	auto second_provider = MakeFunction(fx.factory, "demo", "other", CreateDemo, &demo_calls, false);
 	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, second_provider, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -356,7 +358,8 @@ TEST_CASE("V2 secret: errors are reported as the statement's error", "[capi_v2][
 	// A function needs a type, a provider and a callback.
 	duckdb_v2_secret_function_handle incomplete = nullptr;
 	REQUIRE(duckdb_v2_secret_function_create(fx.factory, &incomplete, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, incomplete, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, incomplete, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_function_destroy(&incomplete);
 }
 
@@ -388,7 +391,7 @@ TEST_CASE("V2 secret: a callback creates transaction secrets, which end with the
 	REQUIRE_FALSE(log.by_name_found);
 
 	// The same through SQL is refused, which is why the API creates them.
-	REQUIRE(RunSql(fx.conn, "CREATE SECRET t IN transaction (TYPE demo)") != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET t IN transaction (TYPE demo)") == DUCKDB_V2_ERROR_QUERY_BINDER);
 }
 
 TEST_CASE("V2 secret: a connection looks up and creates secrets without a callback", "[capi_v2][secret]") {
@@ -440,7 +443,7 @@ TEST_CASE("V2 secret: a connection looks up and creates secrets without a callba
 	duckdb_v2_secret_destroy(&created);
 	// The same name again: the conflict behavior decides.
 	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
-	                                           nullptr) != DUCKDB_V2_ERROR_NONE);
+	                                           nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, &created,
 	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(created != nullptr);
@@ -451,7 +454,7 @@ TEST_CASE("V2 secret: a connection looks up and creates secrets without a callba
 	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "", 0, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, nullptr,
-	                                           nullptr) != DUCKDB_V2_ERROR_NONE);
+	                                           nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_destroy(&request);
 	REQUIRE(duckdb_v2_connection_lookup_secret(fx.conn, "made://x", 8, "demo", 4, &secret, nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
@@ -512,12 +515,13 @@ TEST_CASE("V2 secret: a connection creates secrets as CREATE SECRET would", "[ca
 	};
 
 	// The parameters are checked and cast against the provider, also for a provider not registered via this API
-	REQUIRE(RunSql(fx.conn, "CREATE SECRET bad_sql (TYPE http, verify_ssl 'not-a-bool')") != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET bad_sql (TYPE http, verify_ssl 'not-a-bool')") ==
+	        DUCKDB_V2_ERROR_QUERY_BINDER);
 	auto bad_value = make_request("bad_api", {{"verify_ssl", "not-a-bool"}});
-	REQUIRE(create(bad_value, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(create(bad_value, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
 	duckdb_v2_secret_destroy(&bad_value);
 	auto unknown = make_request("unknown_api", {{"bogus", "1"}});
-	REQUIRE(create(unknown, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(create(unknown, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
 	duckdb_v2_secret_destroy(&unknown);
 	auto cast = make_request("cast_api", {{"verify_ssl", "false"}});
 	REQUIRE(create(cast, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -526,7 +530,7 @@ TEST_CASE("V2 secret: a connection creates secrets as CREATE SECRET would", "[ca
 	// An unnamed secret gets the default name of its type
 	REQUIRE(RunSql(fx.conn, "CREATE SECRET (TYPE http)") == DUCKDB_V2_ERROR_NONE);
 	auto unnamed = make_request(nullptr, {});
-	REQUIRE(create(unnamed, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(create(unnamed, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_secret_handle created = nullptr;
 	REQUIRE(create(unnamed, DUCKDB_V2_SECRET_ON_CONFLICT_IGNORE, &created) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(created != nullptr);
@@ -596,6 +600,155 @@ TEST_CASE("V2 secret: a parameter of type ANY takes the value as provided", "[ca
 	REQUIRE(log.values["anything"] == "free text");
 	duckdb_v2_secret_destroy(&created);
 	duckdb_v2_secret_destroy(&request);
+}
+
+TEST_CASE("V2 secret: a type an extension defines is loaded, not defined by a provider", "[capi_v2][secret]") {
+	EnvFixture fx;
+	REQUIRE(RunSql(fx.conn, "SET autoload_known_extensions = false") == DUCKDB_V2_ERROR_NONE);
+	idx_t calls = 0;
+	// mysql belongs to mysql_scanner, which is not loaded
+	auto function = MakeFunction(fx.factory, "mysql", "vault", CreateDemo, &calls, false);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, function, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_secret_function_destroy(&function);
+	REQUIRE(RunSql(fx.conn, "SELECT CASE WHEN count(*) > 0 THEN error('mysql was defined') END "
+	                        "FROM duckdb_secret_types() WHERE type = 'mysql'") == DUCKDB_V2_ERROR_NONE);
+	// a type no extension defines is defined by its first provider
+	auto own = MakeFunction(fx.factory, "my_vault", "vault", CreateDemo, &calls, true);
+	REQUIRE(duckdb_v2_connection_register_secret_function(fx.conn, own, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_function_destroy(&own);
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET v (TYPE my_vault)") == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(calls == 1);
+}
+
+TEST_CASE("V2 secret: a looked-up transaction secret can be created again", "[capi_v2][secret]") {
+	EnvFixture fx;
+	idx_t demo_calls = 0;
+	ProbeLog log;
+	RegisterProviders(fx, demo_calls, log);
+
+	auto set = [&](duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_PROPERTY property, std::string_view value) {
+		REQUIRE(duckdb_v2_secret_set_property(secret, property, value.data(), value.size(), nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	};
+	REQUIRE(RunSql(fx.conn, "BEGIN") == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_handle vended = nullptr;
+	REQUIRE(duckdb_v2_secret_create(fx.factory, &vended, nullptr) == DUCKDB_V2_ERROR_NONE);
+	set(vended, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo");
+	set(vended, DUCKDB_V2_SECRET_PROPERTY_NAME, "vended");
+	set(vended, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "transaction");
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, vended, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
+	                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_destroy(&vended);
+
+	// The refresh recipe: copy the properties of the old secret, set the refresh options as keys.
+	duckdb_v2_secret_handle old = nullptr;
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "vended", 6, &old, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(old != nullptr);
+	RecordSecret(log, old);
+	REQUIRE(log.storage == "transaction");
+	REQUIRE(log.persist == "transaction");
+	auto copy = [&](bool with_persist_type) {
+		duckdb_v2_secret_handle request = nullptr;
+		REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
+		for (auto property : {DUCKDB_V2_SECRET_PROPERTY_TYPE, DUCKDB_V2_SECRET_PROPERTY_PROVIDER,
+		                      DUCKDB_V2_SECRET_PROPERTY_NAME, DUCKDB_V2_SECRET_PROPERTY_STORAGE,
+		                      DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE}) {
+			if (property == DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE && !with_persist_type) {
+				continue;
+			}
+			const char *ptr = nullptr;
+			idx_t len = 0;
+			REQUIRE(duckdb_v2_secret_get_property(old, property, &ptr, &len, nullptr) == DUCKDB_V2_ERROR_NONE);
+			if (len > 0) {
+				set(request, property, std::string_view(ptr, len));
+			}
+		}
+		auto region = MakeVarcharValue(fx.factory, "refreshed");
+		REQUIRE(duckdb_v2_secret_set_value(request, "region", 6, region, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_value_destroy(&region);
+		return request;
+	};
+	for (bool with_persist_type : {true, false}) {
+		auto request = copy(with_persist_type);
+		duckdb_v2_secret_handle created = nullptr;
+		REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, &created,
+		                                           nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(created != nullptr);
+		RecordSecret(log, created);
+		REQUIRE(log.persist == "transaction");
+		REQUIRE(log.values["region"] == "refreshed");
+		duckdb_v2_secret_destroy(&created);
+		duckdb_v2_secret_destroy(&request);
+	}
+	// Storage `transaction` with another persist type is refused before the provider runs.
+	auto request = copy(false);
+	set(request, DUCKDB_V2_SECRET_PROPERTY_PERSIST_TYPE, "temporary");
+	auto calls_before = demo_calls;
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_REPLACE, nullptr,
+	                                           nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(demo_calls == calls_before);
+	duckdb_v2_secret_destroy(&request);
+	duckdb_v2_secret_destroy(&old);
+	REQUIRE(RunSql(fx.conn, "COMMIT") == DUCKDB_V2_ERROR_NONE);
+}
+
+TEST_CASE("V2 secret: creating secrets without external access is refused first", "[capi_v2][secret]") {
+	EnvFixture fx;
+	idx_t demo_calls = 0;
+	ProbeLog log;
+	RegisterProviders(fx, demo_calls, log);
+	REQUIRE(RunSql(fx.conn, "SET enable_external_access = false") == DUCKDB_V2_ERROR_NONE);
+
+	// The permission error comes before the parameters are checked, from SQL and from the API alike.
+	REQUIRE(RunSql(fx.conn, "CREATE SECRET x (TYPE demo, bogus 1)") == DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION);
+	duckdb_v2_secret_handle request = nullptr;
+	REQUIRE(duckdb_v2_secret_create(fx.factory, &request, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_secret_set_property(request, DUCKDB_V2_SECRET_PROPERTY_TYPE, "demo", 4, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	auto value = MakeInt32Value(fx.factory, 1);
+	REQUIRE(duckdb_v2_secret_set_value(request, "bogus", 5, value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&value);
+	REQUIRE(duckdb_v2_connection_create_secret(fx.conn, request, DUCKDB_V2_SECRET_ON_CONFLICT_ERROR, nullptr,
+	                                           nullptr) == DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION);
+	duckdb_v2_secret_destroy(&request);
+	REQUIRE(demo_calls == 0);
+}
+
+TEST_CASE("V2 secret: a persistent secret of an API-defined type survives a restart", "[capi_v2][secret]") {
+	auto secret_dir = duckdb::TestCreatePath("v2_secret_persistent");
+	auto set_dir = "SET secret_directory = '" + secret_dir + "'";
+	{
+		EnvFixture fx;
+		idx_t demo_calls = 0;
+		ProbeLog log;
+		RegisterProviders(fx, demo_calls, log);
+		REQUIRE(RunSql(fx.conn, set_dir) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(RunSql(fx.conn, "CREATE PERSISTENT SECRET kept (TYPE demo, region 'eu', token 'shh', port 5, "
+		                        "SCOPE 'demo://kept')") == DUCKDB_V2_ERROR_NONE);
+	}
+	EnvFixture fx;
+	idx_t demo_calls = 0;
+	ProbeLog log;
+	RegisterProviders(fx, demo_calls, log);
+	REQUIRE(RunSql(fx.conn, set_dir) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_secret_handle secret = nullptr;
+	REQUIRE(duckdb_v2_connection_get_secret_by_name(fx.conn, "kept", 4, &secret, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(secret != nullptr);
+	RecordSecret(log, secret);
+	REQUIRE(log.type == "demo");
+	REQUIRE(log.provider == "config");
+	REQUIRE(log.persist == "persistent");
+	REQUIRE(log.storage == "local_file");
+	REQUIRE(log.scopes == std::vector<std::string> {"demo://kept"});
+	REQUIRE(log.values["region"] == "eu");
+	REQUIRE(log.values["token"] == "shh");
+	REQUIRE(log.values["port"] == "5");
+	REQUIRE(log.token_redacted);
+	REQUIRE_FALSE(log.region_redacted);
+	duckdb_v2_secret_destroy(&secret);
+	REQUIRE(demo_calls == 0);
+	REQUIRE(RunSql(fx.conn, "DROP PERSISTENT SECRET kept") == DUCKDB_V2_ERROR_NONE);
 }
 
 } // namespace test_capi_v2
