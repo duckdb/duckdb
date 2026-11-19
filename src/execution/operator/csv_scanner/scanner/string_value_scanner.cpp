@@ -660,10 +660,9 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
 				string_t value;
 				if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV) {
-					const auto &delimiter = sm_options.delimiter.GetValue();
 					value = StringValueScanner::OpenCSVValue(
 					    value_ptr, length, sm_options.escape.GetValue(), sm_options.quote.GetValue(),
-					    delimiter.size() == 1 ? delimiter[0] : '\0', result.opencsv_units_before,
+					    sm_options.delimiter.GetValue(), result.opencsv_units_before,
 					    result.parse_chunk.data[result.chunk_col_id]);
 				} else {
 					value = StringValueScanner::RemoveEscape(
@@ -1528,8 +1527,16 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	return removed_escapes;
 }
 
-string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote, char separator,
-                                          idx_t units_before, Vector &vector) {
+string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote,
+                                          const string &separator, idx_t units_before, Vector &vector) {
+	// the opencsv separator is one character, which UTF-8 may spell in several bytes
+	auto prev_is_separator = [&](idx_t pos) {
+		return pos >= separator.size() &&
+		       memcmp(str_ptr + pos - separator.size(), separator.data(), separator.size()) == 0;
+	};
+	auto next_is_separator = [&](idx_t pos) {
+		return pos + 1 + separator.size() <= size && memcmp(str_ptr + pos + 1, separator.data(), separator.size()) == 0;
+	};
 	auto result_string = StringVector::EmptyString(vector, size);
 	auto result_ptr = result_string.GetDataWriteable();
 	idx_t result_pos = 0;
@@ -1564,7 +1571,7 @@ string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char 
 				continue;
 			}
 			// a lone quote toggles the quote state and is a kept literal away from the line start and separators
-			if (units > 2 && pos > 0 && str_ptr[pos - 1] != separator && has_next && str_ptr[pos + 1] != separator) {
+			if (units > 2 && pos > 0 && !prev_is_separator(pos) && has_next && !next_is_separator(pos)) {
 				if (all_whitespace && result_pos > 0) {
 					// a kept literal discards a field of only whitespace before it
 					result_pos = 0;
@@ -1805,11 +1812,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 					}
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
 					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV) {
-						const auto &delim_value = sm_options.delimiter.GetValue();
 						value = OpenCSVValue(over_buffer_string.c_str(), over_buffer_string.size(),
 						                     sm_options.escape.GetValue(), sm_options.quote.GetValue(),
-						                     delim_value.size() == 1 ? delim_value[0] : '\0',
-						                     result.opencsv_units_before, result.parse_chunk.data[result.chunk_col_id]);
+						                     sm_options.delimiter.GetValue(), result.opencsv_units_before,
+						                     result.parse_chunk.data[result.chunk_col_id]);
 					} else {
 						value = RemoveEscape(
 						    over_buffer_string.c_str(), over_buffer_string.size(), sm_options.escape.GetValue(),

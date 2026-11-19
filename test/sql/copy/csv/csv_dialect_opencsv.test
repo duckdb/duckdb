@@ -301,3 +301,84 @@ query TTT
 SELECT a = chr(65536) || 'x"y', b, c FROM read_csv('{TEST_DIR}/dialect_units.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
 ----
 true	5	1
+
+# a file that ends inside an open quote without a final line break reads that field as NULL
+query ITI
+SELECT * FROM read_csv('data/csv/opencsv_unclosed_eof.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY a;
+----
+1	ok	2
+3	NULL	NULL
+
+# fields beyond the last column are ignored, also when one of them holds an unclosed quote
+statement ok
+COPY (SELECT * FROM (VALUES ('1,2,"x'), ('3,4'), ('5,6,extra')) t(line)) TO '{TEST_DIR}/dialect_extra.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT * FROM read_csv('{TEST_DIR}/dialect_extra.csv', columns={'a': 'INTEGER', 'b': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY a;
+----
+1	2
+3	4
+5	6
+
+# a lone carriage return ends the record even inside quotes, as Hive's line reading splits it
+statement ok
+COPY (SELECT '1,"x' || chr(13) || 'y",7' || chr(13) || chr(10) || '2,ok,8' || chr(13) || chr(10) AS line) TO '{TEST_DIR}/dialect_lone_cr.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_lone_cr.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', new_line='\r\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
+----
+NULL	NULL	NULL
+1	NULL	NULL
+2	ok	8
+
+# the same with '\n' line breaks
+statement ok
+COPY (SELECT '1,"ab' || chr(13) || 'cd"' || chr(10) || '2,x' AS line) TO '{TEST_DIR}/dialect_cr_data.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_cr_data.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', new_line='\n', header=false, auto_detect=false) ORDER BY a NULLS FIRST;
+----
+NULL	NULL
+1	NULL
+2	x
+
+# an escape directly before the line break inside quotes still ends the record
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"ab\'), ('3,ok')) t(line)) TO '{TEST_DIR}/dialect_escape_eol.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_escape_eol.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY a;
+----
+1	NULL
+3	ok
+
+# a quoted field of one doubled quote is one quote
+statement ok
+COPY (SELECT '25,"""",33' AS line) TO '{TEST_DIR}/dialect_pure_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/dialect_pure_doubled.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
+----
+25	"	33
+
+# a separator of more than one byte is one character to the embedded quote rule
+statement ok
+COPY (SELECT * FROM (VALUES ('¦a"b"c'), ('a¦"x¦"y¦b')) t(line)) TO '{TEST_DIR}/dialect_wide_delim.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_delim.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim='¦', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY a;
+----
+(empty)	ab"c	NULL
+a	x¦y	b
+
+# a large file of open and closed quoted fields over small buffers and several threads
+statement ok
+SET threads=4;
+
+statement ok
+COPY (SELECT CASE WHEN i % 7 = 0 THEN i || ',"open ' || i ELSE i || ',"clo\"sed' || i || '""x",' || i END AS line FROM range(2000) t(i)) TO '{TEST_DIR}/dialect_stress.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IIII
+SELECT count(*), count(b), count(*) FILTER (b = 'clo"sed' || a || '"x'), count(c) FROM read_csv('{TEST_DIR}/dialect_stress.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, buffer_size=701, max_line_size=500);
+----
+2000	1714	1714	1714

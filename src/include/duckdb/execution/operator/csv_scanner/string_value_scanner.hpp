@@ -351,7 +351,14 @@ public:
 		if (state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::OPENCSV) {
 			return;
 		}
-		idx_t units = opencsv_units_before + state_machine.state_machine_options.delimiter.GetValue().size();
+		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();
+		idx_t units = opencsv_units_before;
+		for (idx_t i = 0; i < delimiter.size() && units < 3; i++) {
+			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
+			if ((static_cast<uint8_t>(delimiter[i]) & 0xC0) != 0x80) {
+				units += static_cast<uint8_t>(delimiter[i]) >= 0xF0 ? 2 : 1;
+			}
+		}
 		for (idx_t i = 0; i < size && units < 3; i++) {
 			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
 			if ((static_cast<uint8_t>(value_ptr[i]) & 0xC0) != 0x80) {
@@ -431,7 +438,7 @@ public:
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
 	//! Reads one field's raw bytes with opencsv's text rules, units_before being its clamped UTF-16 line offset
-	static string_t OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote, char separator,
+	static string_t OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote, const string &separator,
 	                             idx_t units_before, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
