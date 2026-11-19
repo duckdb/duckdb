@@ -111,8 +111,8 @@ void CV2Instance::SetDefault(const Identifier &name) {
 using namespace duckdb::capiv2;
 
 //! Applies the startup options of instance_create_with_options and instance_open_shared.
-static void SetStartupOptions(duckdb::DBConfig &startup_config, const char **option_names,
-                              const idx_t *option_names_lengths, const char **option_values,
+static void SetStartupOptions(duckdb::DBConfig &startup_config, const char *const *option_names,
+                              const idx_t *option_names_lengths, const char *const *option_values,
                               const idx_t *option_values_lengths, idx_t option_count) {
 	string_view_array names(option_names, option_names_lengths, option_count);
 	string_view_array values(option_values, option_values_lengths, option_count);
@@ -127,11 +127,11 @@ DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_handle env, duck
 	return duckdb_v2_instance_create_with_options(env, nullptr, nullptr, nullptr, nullptr, 0, out_instance, err);
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(duckdb_v2_environment_handle env, const char **option_names,
-                                                       const idx_t *option_names_lengths, const char **option_values,
-                                                       const idx_t *option_values_lengths, idx_t option_count,
-                                                       duckdb_v2_instance_handle *out_instance,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_instance_create_with_options(duckdb_v2_environment_handle env, const char *const *option_names,
+                                       const idx_t *option_names_lengths, const char *const *option_values,
+                                       const idx_t *option_values_lengths, idx_t option_count,
+                                       duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(env);
 	DUCKDB_CHECK_ARG(out_instance);
 	*out_instance = nullptr;
@@ -153,8 +153,8 @@ DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(duckdb_v2_environment_han
 }
 
 DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(duckdb_v2_environment_handle env, const char *path, idx_t path_length,
-                                               const char **option_names, const idx_t *option_names_lengths,
-                                               const char **option_values, const idx_t *option_values_lengths,
+                                               const char *const *option_names, const idx_t *option_names_lengths,
+                                               const char *const *option_values, const idx_t *option_values_lengths,
                                                idx_t option_count, duckdb_v2_instance_handle *out_instance,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(env);

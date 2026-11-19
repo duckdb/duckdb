@@ -251,7 +251,8 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 		auto deleter = detached_db->ExtractDeleter();
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
-		detached_db.reset();
+		detached_db->MarkDetached(AttachedDatabase::GetDetachCloseAction(context));
+		AttachedDatabase::InvokeCloseIfLastReference(detached_db, context);
 		// Best-effort teardown: the replacement is already in effect, so a deleter failure must not
 		// abort the statement mid-swap; TryDelete logs it as a warning instead.
 		if (deleter) {
@@ -287,6 +288,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 	auto deleter = attached_db->ExtractDeleter();
 	MetaTransaction::Get(context).DetachDatabase(*attached_db);
 	attached_db->OnDetach(context);
+	attached_db->MarkDetached(AttachedDatabase::GetDetachCloseAction(context));
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);

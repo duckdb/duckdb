@@ -77,6 +77,12 @@ SELECT min(o), max(o), count(DISTINCT o) FROM (SELECT b.o FROM ws a, ws b WHERE 
 ----
 60	199	140
 
+# bool_and / bool_or ignore duplicates as min and max do
+query II
+SELECT bool_or(o > 100), bool_and(o > 100) FROM (SELECT b.o FROM ws a, ws b WHERE b.o = a.o AND b.w <> a.w)
+----
+true	false
+
 # a BIGINT key and a DATE inequality
 query II
 SELECT count(*), sum(x) FROM q WHERE x IN (SELECT a.ob FROM wd a, wd b WHERE a.ob = b.ob AND a.dw <> b.dw)

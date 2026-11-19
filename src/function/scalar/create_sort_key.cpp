@@ -1027,6 +1027,16 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 #endif
 }
 
+bool CreateSortKeyHelpers::IsNonNullSortKey(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expression.Cast<BoundFunctionExpression>().Function();
+	return function.GetBindCallback() == CreateSortKeyBind &&
+	       function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING &&
+	       function.GetProperties().GetBooleanProperty(NON_NULL_RESULT_PROPERTY);
+}
+
 //===--------------------------------------------------------------------===//
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
@@ -1494,6 +1504,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	sort_key_function.GetSignature().GetParameter(0).SetName("key1");
 	sort_key_function.GetSignature().AddArgs("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	sort_key_function.GetProperties().SetProperty(CreateSortKeyHelpers::NON_NULL_RESULT_PROPERTY, Value::BOOLEAN(true));
 	return sort_key_function;
 }
 

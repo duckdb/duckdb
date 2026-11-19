@@ -334,6 +334,8 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterCollations();
 
+	RegisterEncodingFunctions();
+
 	RegisterExtensionOverloads();
 }
 

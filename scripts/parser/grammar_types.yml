@@ -1086,6 +1086,9 @@ String:
   by_value: false
   rules:
     - StringLiteral
+    - ExternalResourceType
+    - ExternalResourceTypeName
+    - ShowExternalResourcesType
     - DropOrSet
     - SequenceName
     - DottedColLabel
@@ -1824,8 +1827,9 @@ IdentifierType:
     - ColId
     - ColIdOrString
     - ExtensionRepositoryName
+    - ExtensionRepositoryHostName
     - FromSourceName
-    - ShowExternalResourcesType
+    - BareName
     - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
@@ -2015,6 +2019,7 @@ packrat_memoized_rules:
   - CatalogQualification
   - SchemaQualification
   - ReservedSchemaQualification
+  - SelectParens
 
 # rule_labels: see Matcher::SetLabel. When a syntax error lists what the parser expected at the failure point,
 # every alternative inside a labelled rule is summarised by the label instead of being spelled out. Only label

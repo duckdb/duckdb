@@ -1,0 +1,80 @@
+# name: test/sql/topn/test_top_n_unnest_row_group_pruner.test
+# description: UNNEST changes the row count, so row groups cannot be pruned with the limit or the offset
+# group: [topn]
+
+load {TEST_DIR}/top_n_unnest_row_group_pruner_main.duckdb
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_unnest_row_group_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# 4 row groups: empty lists, lists of two values, lists of one value, NULL lists
+statement ok
+CREATE TABLE db.t AS
+SELECT
+	i AS a,
+	format('{:04d}', i) AS s,
+	CASE WHEN i < 2048 THEN []::BIGINT[] WHEN i < 4096 THEN [i, -i] WHEN i < 6144 THEN [i] ELSE NULL END AS l
+FROM range(8192) r(i)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_unnest_row_group_pruner_data.duckdb' AS db
+
+# the row group with the smallest values has only empty lists
+query II
+SELECT a, unnest(l) AS u FROM db.t ORDER BY a, u LIMIT 3
+----
+2048	-2048
+2048	2048
+2049	-2049
+
+# the row group with the largest values has only NULL lists
+query II
+SELECT a, unnest(l) AS u FROM db.t ORDER BY a DESC LIMIT 2
+----
+6143	6143
+6142	6142
+
+query II
+SELECT s, unnest(l) AS u FROM db.t ORDER BY s, u LIMIT 1
+----
+2048	-2048
+
+# the offset counts the unnested rows
+query II
+SELECT a, unnest(l) AS u FROM db.t ORDER BY a, u LIMIT 1 OFFSET 2048
+----
+3072	-3072
+
+query II
+SELECT a, unnest(l) AS u FROM db.t ORDER BY a DESC, u LIMIT 1 OFFSET 2048
+----
+4095	-4095
+
+query I
+SELECT count(*) FROM (SELECT a, unnest(l) AS u FROM db.t ORDER BY a OFFSET 2048)
+----
+4096
+
+query I
+SELECT count(*) FROM (SELECT a, unnest(l) AS u FROM db.t ORDER BY a DESC OFFSET 2048)
+----
+4096
+
+# UNNEST in the FROM clause
+query II
+SELECT a, u FROM db.t, unnest(l) AS x(u) ORDER BY a, u LIMIT 1
+----
+2048	-2048
+
+query II
+SELECT a, u FROM db.t, unnest(l) AS x(u) ORDER BY a DESC, u LIMIT 1 OFFSET 2048
+----
+4095	-4095
+
+# the list is computed from the order column
+query II
+SELECT a, unnest(range(a // 6000)) AS u FROM db.t ORDER BY a LIMIT 1
+----
+6000	0

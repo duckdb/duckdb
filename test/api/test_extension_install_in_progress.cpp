@@ -17,11 +17,11 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	Connection con(db);
 
 	// what an install writes before it moves the files in place, first the extension and then its .info
-	auto fs = FileSystem::CreateLocal();
-	auto directory = ExtensionHelper::ExtensionDirectory(*db.instance, *fs);
-	auto temp_path = fs->JoinPath(directory, "in_progress.duckdb_extension.tmp-0b0e7d6c-5a0e-4e76-9d1f-"
-	                                         "3c1a5e9b2f40.duckdb_extension");
-	WriteExtensionDirectoryFile(*fs, temp_path, "not an extension yet");
+	auto &fs = TestLocalFileSystem();
+	auto directory = ExtensionHelper::ExtensionDirectory(*db.instance, fs);
+	auto temp_path = fs.JoinPath(directory, "in_progress.duckdb_extension.tmp-0b0e7d6c-5a0e-4e76-9d1f-"
+	                                        "3c1a5e9b2f40.duckdb_extension");
+	WriteExtensionDirectoryFile(fs, temp_path, "not an extension yet");
 
 	auto result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
@@ -29,7 +29,7 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 0);
 
-	WriteExtensionDirectoryFile(*fs, temp_path + ".info", "");
+	WriteExtensionDirectoryFile(fs, temp_path + ".info", "");
 	result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
@@ -38,10 +38,10 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	REQUIRE(result->RowCount() == 0);
 
 	// an installed extension is still listed, also while it is installed again
-	WriteExtensionDirectoryFile(*fs, fs->JoinPath(directory, "installed.duckdb_extension"), "stub");
-	WriteExtensionDirectoryFile(*fs,
-	                            fs->JoinPath(directory, "installed.duckdb_extension.tmp-5d2f8c1e-7b3a-4c9d-8e6f-"
-	                                                    "1a2b3c4d5e6f.duckdb_extension"),
+	WriteExtensionDirectoryFile(fs, fs.JoinPath(directory, "installed.duckdb_extension"), "stub");
+	WriteExtensionDirectoryFile(fs,
+	                            fs.JoinPath(directory, "installed.duckdb_extension.tmp-5d2f8c1e-7b3a-4c9d-8e6f-"
+	                                                   "1a2b3c4d5e6f.duckdb_extension"),
 	                            "not an extension yet");
 	result = con.Query("SELECT extension_name, installed, install_path LIKE '%.tmp-%' FROM duckdb_extensions() WHERE "
 	                   "extension_name IN ('in_progress', 'installed')");

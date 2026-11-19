@@ -389,5 +389,7 @@ public:
 	                                           const char *enum_name, uint32_t enum_value);
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
+
+	static string TruncateUTF8TOByteLength(const char *data, idx_t length, idx_t max_bytes);
 };
 } // namespace duckdb

@@ -160,6 +160,8 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundOperatorExpression &expr, 
 	// OPERATOR_IS_NULL, OPERATOR_IS_NOT_NULL
 	if (expr_type == ExpressionType::OPERATOR_IS_NULL || expr_type == ExpressionType::OPERATOR_IS_NOT_NULL) {
 		return sum + 5;
+	} else if (expr_type == ExpressionType::OPERATOR_COALESCE) {
+		return sum + 5 * (expr.GetChildren().size() - 1);
 	} else if (expr_type == ExpressionType::COMPARE_IN || expr_type == ExpressionType::COMPARE_NOT_IN) {
 		// COMPARE_IN, COMPARE_NOT_IN
 		return sum + (expr.GetChildren().size() - 1) * 100;

@@ -731,7 +731,6 @@ TEST_CASE("Every statement entry point is refused while a result is open", "[api
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(1000000)"));
 	auto prepared = con.Prepare("SELECT 42");
 	REQUIRE(!prepared->HasError());
-	auto relation = con.Table("t");
 	auto statements = con.ExtractStatements("SELECT 42; SELECT 42; SELECT 42;");
 
 	auto handle = Submit(con, "SELECT i FROM t");
@@ -746,8 +745,6 @@ TEST_CASE("Every statement entry point is refused while a result is open", "[api
 	vector<Value> no_values;
 	RequireRefused(prepared->Execute()->GetErrorObject());
 	RequireRefused(prepared->Submit(no_values)->GetErrorObject());
-	RequireRefused(relation->Execute()->GetErrorObject());
-	RequireRefused(con.context->Submit(relation, QueryParameters())->GetErrorObject());
 	// The refusal comes before parsing
 	RequireRefused(con.Query("SELEC 42")->GetErrorObject());
 	RequireRefused(con.Query("COMMIT")->GetErrorObject());

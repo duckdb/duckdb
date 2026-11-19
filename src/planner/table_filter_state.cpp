@@ -710,7 +710,8 @@ unique_ptr<TableFilterCache> SelectivityOptionalFilterExecutor::CreateCache(Vect
 class BloomFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	BloomFilterExecutor(const BloomFilterFunctionData &data, bool inside_selectivity_optional)
-	    : filter(data.filter), filters_null_values(data.filters_null_values), hashes(LogicalType::HASH) {
+	    : filter(data.filter), locality(data.locality), filters_null_values(data.filters_null_values),
+	      hashes(LogicalType::HASH) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
 			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
 			                                                                    data.selectivity_threshold);
@@ -773,18 +774,19 @@ public:
 
 private:
 	idx_t ProbeBloomFilter(optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count) {
+		const auto view = GetBloomFilterReadView(*filter, locality);
 		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			const auto hash = *ConstantVector::GetData<hash_t>(hashes);
-			return filter->LookupOne(hash) ? approved_tuple_count : 0;
+			return view.LookupOne(hash) ? approved_tuple_count : 0;
 		}
 		if (hashes.GetVectorType() != VectorType::FLAT_VECTOR) {
 			hashes.Flatten();
 		}
 		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 		if (sel) {
-			return filter->LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
+			return view.LookupHashes(hashes, *sel, bloom_sel, approved_tuple_count);
 		}
-		return filter->LookupHashes(hashes, bloom_sel, approved_tuple_count);
+		return view.LookupHashes(hashes, bloom_sel, approved_tuple_count);
 	}
 
 	idx_t AddNullsToBloomSelection(SelectionVector &sel, Vector &vector, idx_t bloom_count,
@@ -853,6 +855,7 @@ private:
 	}
 
 	shared_ptr<const BloomFilter> filter;
+	BloomFilterReadLocality locality;
 	bool filters_null_values;
 	Vector hashes;
 	SelectionVector bloom_sel;

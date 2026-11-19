@@ -27,6 +27,7 @@
     {
       "reason": "Counts the evaluations of volatile filters that only the optimizer pushes down or keeps above.",
       "paths": [
+        "test/optimizer/join_to_semi_join_volatile.test",
         "test/optimizer/pushdown/volatile_filter_aggregate_distinct.test"
       ]
     },
@@ -180,7 +181,7 @@
     {
       "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
       "paths": [
-        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test_slow"
       ]
     },
     {

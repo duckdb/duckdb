@@ -107,7 +107,7 @@ Krystýna Novák	23
 statement error
 FROM read_csv('{DATA_DIR}/csv/encodings/shift_jis.csv', encoding = 'utf-16')
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 statement error
 FROM read_csv('{DATA_DIR}/csv/encodings/shift_jis.csv', encoding = 'latin-1')
