@@ -1182,8 +1182,6 @@ jobs:
     env:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
-      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
-      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
       DISABLE_RTTI: 1
       # Compile with C++23 to test compatibility with the newer standard.
       CXX_STANDARD: 23
@@ -1214,7 +1212,7 @@ jobs:
       # copy of duckdb, so a type identity that is not stable across images only fails here.
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_release
+        run: build/release/test/run
 
  vector-sizes:
     name: Vector Sizes

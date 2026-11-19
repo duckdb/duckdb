@@ -400,7 +400,8 @@ TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exce
 	throwing_context.resolve_binding = [](const ColumnBinding &) -> optional<ResolvedSQLColumnReference> {
 		throw InvalidInputException("synthetic resolver failure");
 	};
-	REQUIRE_THROWS_AS(BoundExpressionSQLExporter::Export(expression, throwing_context), InvalidInputException);
+	REQUIRE_THROWS_WITH(BoundExpressionSQLExporter::Export(expression, throwing_context),
+	                    Catch::Contains("synthetic resolver failure"));
 }
 
 } // namespace bound_expression_sql_export_test

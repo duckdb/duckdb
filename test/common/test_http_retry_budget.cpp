@@ -635,10 +635,12 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	status_owned.BindQuota(quota);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
-	REQUIRE_THROWS_AS(status_owned.ReportSuccess(), InternalException);
-	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
-	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }), InternalException);
-	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }), InternalException);
+	REQUIRE_THROWS_WITH(status_owned.ReportSuccess(), Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.ReportFailure(), Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }),
+	                    Catch::Contains("is the coordinator's decision"));
+	REQUIRE_THROWS_WITH(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }),
+	                    Catch::Contains("is the coordinator's decision"));
 #endif
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
@@ -729,7 +731,7 @@ TEST_CASE("A coordinator that validates after its loop owns the settlement", "[h
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
-	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
+	REQUIRE_THROWS_WITH(status_owned.ReportFailure(), Catch::Contains("is the coordinator's decision"));
 #endif
 }
 

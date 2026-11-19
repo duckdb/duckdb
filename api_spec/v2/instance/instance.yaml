@@ -88,9 +88,8 @@ functions:
         type: environment
         description: "The environment."
       option_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: "Optional. An array of option_count option names (canonical or alias). Pass NULL when option_count is 0."
       option_names_lengths:
@@ -100,9 +99,8 @@ functions:
         kind: IN
         description: Byte lengths of the entries in `option_names`; element i is the length of `option_names[i]`. May be NULL only when `option_names` is NULL.
       option_values:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: "Optional. An array of option_count values, parallel to option_names, in the textual form SQL `SET` accepts. Pass NULL when option_count is 0."
       option_values_lengths:
@@ -179,9 +177,8 @@ functions:
         type: idx
         description: The length of `path` in bytes. `path` need not be null-terminated and may be NULL only when this is 0.
       option_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: "Optional. An array of option_count option names (canonical or alias). Pass NULL when option_count is 0."
       option_names_lengths:
@@ -191,9 +188,8 @@ functions:
         kind: IN
         description: Byte lengths of the entries in `option_names`; element i is the length of `option_names[i]`. May be NULL only when `option_names` is NULL.
       option_values:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: "Optional. An array of option_count values, parallel to option_names, in the textual form SQL `SET` accepts. Pass NULL when option_count is 0."
       option_values_lengths:

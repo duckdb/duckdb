@@ -2031,9 +2031,8 @@ functions:
         type: factory
         description: The factory to create with.
       names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: An array of field_count field names. Pass NULL when field_count is 0.
       names_lengths:

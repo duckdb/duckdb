@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -267,7 +268,7 @@ public:
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
 		// Truncate, so we don't print megabytes worth of JSON
-		auto input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		auto input = length > 50 ? StringUtil::TruncateUTF8TOByteLength(data, length, 47) : string(data, length);
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
 		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: \"%s\"", error.pos, error.msg,

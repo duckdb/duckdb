@@ -213,7 +213,7 @@ DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_name(duckdb_v2_sql_stateme
 DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement, const char *name,
                                                    idx_t name_length,
                                                    duckdb_v2_column_data_collection_handle collection,
-                                                   const char **column_names, const idx_t *column_names_lengths,
+                                                   const char *const *column_names, const idx_t *column_names_lengths,
                                                    idx_t column_count, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(statement);
 	DUCKDB_CHECK_STR_ARG(name, name_length);

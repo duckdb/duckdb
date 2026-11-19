@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher/number_literal_matcher.hpp"
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 
 namespace duckdb {
@@ -8,13 +9,15 @@ namespace duckdb {
 uint8_t ComputeMatcherTokenClass(TokenType type, const string &text) {
 	switch (type) {
 	case TokenType::KEYWORD:
-	case TokenType::IDENTIFIER:
 		return MatcherTokenClass::WORD;
+	case TokenType::IDENTIFIER:
+		return MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
 	case TokenType::STRING_LITERAL:
 		// string literals are also accepted in identifier positions (e.g. table and file names)
 		return MatcherTokenClass::STRING | MatcherTokenClass::WORD;
 	case TokenType::NUMBER_LITERAL:
-		return MatcherTokenClass::NUMBER;
+		// malformed literals such as 1.2.3 match nothing
+		return NumberLiteralMatcher::IsNumberLiteral(text) ? MatcherTokenClass::NUMBER : 0;
 	case TokenType::OPERATOR:
 		if (!text.empty() && !Tokenizer::CharacterIsOperator(text[0])) {
 			return 0;
@@ -291,16 +294,24 @@ bool Tokenizer::IsUnterminatedState(TokenizeState state) {
 bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
 	auto &sql = behavior.sql;
 	auto &tokens = behavior.tokens;
+	auto first_token = tokens.size();
+	bool autocomplete = false;
 	if (TokenizeInputInternal(behavior)) {
 		auto terminator = behavior.GetTerminator();
 		tokens.emplace_back("", sql.size(), terminator);
-		if (terminator == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			return true;
-		}
+		autocomplete = terminator == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	} else {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
-	return false;
+	// look every token up once here instead of lazily inside the matcher loop
+	auto &table = keyword_helper.GetLiteralTable();
+	for (idx_t i = first_token; i < tokens.size(); i++) {
+		auto &token = tokens[i];
+		if (!token.HasLiteralInfo(table)) {
+			token.SetLiteralInfo(table, table.Lookup(token.text));
+		}
+	}
+	return autocomplete;
 }
 
 void Tokenizer::PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) const {
