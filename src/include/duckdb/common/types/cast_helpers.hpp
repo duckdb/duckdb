@@ -79,6 +79,9 @@ public:
 		return result;
 	}
 
+	//! Formats value, including its sign, in reverse and returns a pointer to the beginning
+	static char *FormatSigned(hugeint_t value, char *ptr);
+
 	template <class T>
 	static std::string ToString(T value) {
 		return std::to_string(value);
@@ -184,12 +187,7 @@ template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint32_t width, uint32_t scale, char *dst, idx_t len);
 
 struct UhugeintToStringCast {
-	static string_t Format(uhugeint_t value, StringHeap &heap) {
-		char buffer[Uhugeint::MAX_DIGITS];
-		auto end = buffer + sizeof(buffer);
-		auto start = NumericHelper::FormatUnsigned(value, end);
-		return heap.AddString(start, NumericCast<idx_t>(end - start));
-	}
+	static string_t Format(uhugeint_t value, StringHeap &heap);
 };
 
 struct DateToStringCast {

@@ -126,17 +126,9 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 }
 
 string Hugeint::ToString(hugeint_t input) {
-	const bool negative = input.upper < 0;
-	uhugeint_t magnitude(static_cast<uint64_t>(input.upper), input.lower);
-	if (negative) {
-		magnitude = -magnitude;
-	}
-	char buffer[Uhugeint::MAX_DIGITS + 1];
+	char buffer[NumericLimits<hugeint_t>::Digits() + 1];
 	auto end = buffer + sizeof(buffer);
-	auto start = NumericHelper::FormatUnsigned(magnitude, end);
-	if (negative) {
-		*--start = '-';
-	}
+	auto start = NumericHelper::FormatSigned(input, end);
 	return string(start, end);
 }
 

@@ -171,32 +171,32 @@ int NumericHelper::UnsignedLength(hugeint_t value) {
 	}
 }
 
+char *NumericHelper::FormatSigned(hugeint_t value, char *ptr) {
+	const bool negative = value.upper < 0;
+	uhugeint_t magnitude(static_cast<uint64_t>(value.upper), value.lower);
+	if (negative) {
+		magnitude = -magnitude;
+	}
+	ptr = FormatUnsigned(magnitude, ptr);
+	if (negative) {
+		*--ptr = '-';
+	}
+	return ptr;
+}
+
 template <>
 string_t NumericHelper::FormatSigned(hugeint_t value, StringHeap &heap) {
-	int negative = value.upper < 0;
-	if (negative) {
-		if (value == NumericLimits<hugeint_t>::Minimum()) {
-			string_t result = heap.AddString(Hugeint::HUGEINT_MINIMUM_STRING);
-			return result;
-		}
-		Hugeint::NegateInPlace(value);
-	}
-	int length = UnsignedLength(value) + negative;
-	string_t result = heap.EmptyString(NumericCast<size_t>(length));
-	auto dataptr = result.GetDataWriteable();
-	auto endptr = dataptr + length;
-	if (value.upper == 0) {
-		// small value: format as uint64_t
-		endptr = NumericHelper::FormatUnsigned<uint64_t>(value.lower, endptr);
-	} else {
-		endptr = FormatUnsigned(value, endptr);
-	}
-	if (negative) {
-		*--endptr = '-';
-	}
-	D_ASSERT(endptr == dataptr);
-	result.Finalize();
-	return result;
+	char buffer[NumericLimits<hugeint_t>::Digits() + 1];
+	auto end = buffer + sizeof(buffer);
+	auto start = FormatSigned(value, end);
+	return heap.AddString(start, NumericCast<idx_t>(end - start));
+}
+
+string_t UhugeintToStringCast::Format(uhugeint_t value, StringHeap &heap) {
+	char buffer[NumericLimits<uhugeint_t>::Digits()];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(value, end);
+	return heap.AddString(start, NumericCast<idx_t>(end - start));
 }
 
 template <>
@@ -250,29 +250,8 @@ string_t DecimalToString::Format(hugeint_t value, uint32_t width, uint32_t scale
 
 template <>
 char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr) {
-	while (value.upper > 0) {
-		// while integer division is slow, hugeint division is MEGA slow
-		// we want to avoid doing as many divisions as possible
-		// for that reason we start off doing a division by a large power of ten that uint64_t can hold
-		// (100000000000000000) - this is the third largest
-		// the reason we don't use the largest is because that can result in an overflow inside the division
-		// function
-		uint64_t remainder;
-		value = Hugeint::DivModPositive(value, 100000000000000000ULL, remainder);
-
-		auto startptr = ptr;
-		// now we format the remainder: note that we need to pad with zero's in case
-		// the remainder is small (i.e. less than 10000000000000000)
-		ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder, ptr);
-
-		int format_length = UnsafeNumericCast<int>(startptr - ptr);
-		// pad with zero
-		for (int i = format_length; i < 17; i++) {
-			*--ptr = '0';
-		}
-	}
-	// once the value falls in the range of a uint64_t, fallback to formatting as uint64_t to avoid hugeint division
-	return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
+	D_ASSERT(value.upper >= 0);
+	return FormatUnsigned(uhugeint_t(static_cast<uint64_t>(value.upper), value.lower), ptr);
 }
 
 template <>
@@ -298,36 +277,28 @@ char *NumericHelper::FormatUnsigned(uhugeint_t value, char *ptr) {
 template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint32_t width, uint32_t scale, char *dst, idx_t len) {
 	auto endptr = dst + len;
-
-	int negative = value.upper < 0;
-	if (negative) {
+	if (value.upper < 0) {
 		Hugeint::NegateInPlace(value);
 		*dst = '-';
-		dst++;
 	}
+	auto start = NumericHelper::FormatUnsigned(value, endptr);
 	if (scale == 0) {
-		// with scale=0 we format the number as a regular number
-		NumericHelper::FormatUnsigned(value, endptr);
 		return;
 	}
-
-	// we write two numbers:
-	// the numbers BEFORE the decimal (major)
-	// and the numbers AFTER the decimal (minor)
-	hugeint_t minor;
-	hugeint_t major = Hugeint::DivMod(value, Hugeint::POWERS_OF_TEN[scale], minor);
-
-	// write the number after the decimal
-	dst = NumericHelper::FormatUnsigned(minor, endptr);
-	// (optionally) pad with zeros and add the decimal point
-	while (dst > (endptr - scale)) {
-		*--dst = '0';
+	auto point = endptr - scale;
+	if (start < point) {
+		// shift the digits before the decimal point one to the left to make room for it
+		D_ASSERT(width > scale);
+		memmove(start - 1, start, NumericCast<idx_t>(point - start));
+		point[-1] = '.';
+		return;
 	}
-	*--dst = '.';
-	// now write the part before the decimal
-	D_ASSERT(width > scale || major == 0);
+	while (start > point) {
+		*--start = '0';
+	}
+	*--start = '.';
 	if (width > scale) {
-		dst = NumericHelper::FormatUnsigned(major, dst);
+		*--start = '0';
 	}
 }
 

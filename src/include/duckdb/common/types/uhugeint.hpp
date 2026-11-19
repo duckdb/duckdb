@@ -158,8 +158,6 @@ public:
 
 	static constexpr uint8_t CACHED_POWERS_OF_TEN = 39;
 	static const uhugeint_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
-	//! The maximum uhugeint (2^128 - 1) has 39 digits
-	static constexpr idx_t MAX_DIGITS = 39;
 };
 
 template <>
