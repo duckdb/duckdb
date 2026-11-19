@@ -1,5 +1,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -52,16 +53,12 @@ VariantNumberKey BuildNumberKey(bool negative, const char *digits, idx_t count, 
 	return key;
 }
 
-//! Build a number key from a 128-bit magnitude, using 64-bit arithmetic whenever the value fits
+//! Build a number key from a 128-bit magnitude
 VariantNumberKey BuildNumberKey(bool negative, uhugeint_t magnitude, int64_t scale) {
-	if (magnitude.upper == 0) {
-		char buffer[20];
-		auto offset = UInt64Digits(magnitude.lower, buffer);
-		return BuildNumberKey(negative, buffer + offset, 20 - offset, scale);
-	}
-	// magnitudes above 64 bits are rare, and are guaranteed to fit inline (39 digits)
-	auto magnitude_digits = Uhugeint::ToString(magnitude);
-	return BuildNumberKey(negative, magnitude_digits.data(), magnitude_digits.size(), scale);
+	char buffer[Uhugeint::MAX_DIGITS];
+	auto end = buffer + sizeof(buffer);
+	auto start = NumericHelper::FormatUnsigned(magnitude, end);
+	return BuildNumberKey(negative, start, NumericCast<idx_t>(end - start), scale);
 }
 
 //! Decompose a 128-bit signed value (hugeint) into (sign, magnitude)
