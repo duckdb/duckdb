@@ -30,8 +30,10 @@ class IndexWriteHandle;
 class IndexBinder;
 struct IndexStorageInfo;
 struct DataTableInfo;
+struct IndexCheckpointResult;
 template <class T>
 class TableIndexIterationHelper;
+class TableIndexWriter;
 
 class TableIndexList {
 public:
@@ -150,6 +152,10 @@ private:
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
 };
+
+//! Persist the buffers of the given indexes and install replacements before returning their metadata.
+vector<shared_ptr<const IndexStorageInfo>> CheckpointIndexes(const vector<shared_ptr<IndexEntry>> &indexes,
+                                                             TableIndexWriter &writer);
 
 template <class T>
 class TableIndexIterationHelper {

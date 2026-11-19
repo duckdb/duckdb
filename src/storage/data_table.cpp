@@ -10,7 +10,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -30,7 +29,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/pending_publication.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
@@ -42,7 +40,6 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -1635,24 +1632,6 @@ private:
 	TableStatistics checkpoint_stats;
 };
 
-class PendingIndexPublication final : public PendingPublication {
-public:
-	PendingIndexPublication(shared_ptr<IndexEntry> entry_p, unique_ptr<BoundIndex> shadow_index_p)
-	    : entry(std::move(entry_p)), shadow_index(std::move(shadow_index_p)) {
-		D_ASSERT(entry);
-		D_ASSERT(shadow_index);
-	}
-
-	void Publish() override {
-		D_ASSERT(shadow_index);
-		entry->InstallShadow(std::move(shadow_index));
-	}
-
-private:
-	shared_ptr<IndexEntry> entry;
-	unique_ptr<BoundIndex> shadow_index;
-};
-
 } // namespace
 
 void DataTable::PublishCheckpoint(CollectionCheckpointResult result, TableStatistics &checkpoint_stats) {
@@ -1698,20 +1677,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	vector<shared_ptr<const IndexStorageInfo>> index_infos;
 	if (index_writer) {
 		// Only checkpoint indexes when we write to disk
-		auto indexes = writer.GetIndexes();
-		auto index_sleep_ms = Settings::Get<DebugCheckpointIndexSleepMsSetting>(db.GetDatabase());
-		index_infos.reserve(indexes.size());
-		for (const auto &index : indexes) {
-			auto checkpoint = index->Checkpoint(*index_writer);
-			if (checkpoint.shadow_index) {
-				index_writer->AddPendingPublication(
-				    make_uniq<PendingIndexPublication>(index, std::move(checkpoint.shadow_index)));
-			}
-			index_infos.push_back(std::move(checkpoint.storage_info));
-			if (index_sleep_ms > 0) {
-				ThreadUtil::SleepMs(index_sleep_ms);
-			}
-		}
+		index_infos = CheckpointIndexes(writer.GetIndexes(), *index_writer);
 	}
 
 	writer.FinalizeTable(checkpoint_stats, *info, *row_groups, index_infos, serializer);
