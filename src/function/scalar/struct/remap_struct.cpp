@@ -426,12 +426,13 @@ struct RemapEntry {
 				// the entry exists - add the default index
 				result_entry->second.default_index = default_idx;
 			}
+			if (!result_entry->second.child_remaps || !entry->second.child_map) {
+				// the field is mapped without a child mapping - a struct default would replace its source
+				throw BinderException("No child remaps found");
+			}
 			auto &child_types = StructType::GetChildTypes(default_type);
 			for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 				auto &child_default = child_types[child_idx];
-				if (!result_entry->second.child_remaps || !entry->second.child_map) {
-					throw BinderException("No child remaps found");
-				}
 				HandleDefault(child_idx, child_default.first.GetIdentifierName(), child_default.second,
 				              *entry->second.child_map, *result_entry->second.child_remaps);
 			}
