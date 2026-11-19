@@ -163,11 +163,11 @@ CREATE TABLE scalar_outer AS SELECT i AS id,i%15000 AS k FROM range(20000) t(i);
 statement ok
 CREATE TABLE scalar_inner AS SELECT i%100000 AS k FROM range(300000) t(i);
 
+# Preserve analyzed statistics across forced restarts.
 statement ok
 ANALYZE scalar_outer;
-
-statement ok
 ANALYZE scalar_inner;
+CHECKPOINT;
 
 query II
 EXPLAIN (FORMAT JSON)
@@ -197,6 +197,23 @@ DROP TABLE scalar_outer;
 statement ok
 DROP TABLE scalar_inner;
 
+# Equality-only grouping and recovery discard the substituted key.
+statement ok
+CREATE TABLE floating_outer AS SELECT (i%200)::DOUBLE AS k FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE floating_inner AS SELECT i::DOUBLE AS k FROM range(180) t(i);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT sum((SELECT count(*) FROM floating_inner i WHERE i.k=o.k)) FROM floating_outer o;
+----
+physical_plan	<!REGEX>:[\s\S]*(CTE|DELIM)[\s\S]*
+
+query I
+SELECT sum((SELECT count(*) FROM floating_inner i WHERE i.k=o.k)) FROM floating_outer o;
+----
+18000
+
 # Equal floating keys can expose different representations in the recovered projection.
 foreach type DOUBLE DOUBLE[]
 
@@ -214,6 +231,17 @@ WITH source AS MATERIALIZED (SELECT * FROM representation_outer)
 SELECT count(DISTINCT p.k::VARCHAR), count(*), sum(p.c)
 FROM source JOIN (
     SELECT d.k, a.c FROM (SELECT k FROM source GROUP BY k) d
+    LEFT JOIN (SELECT k, count(*) c FROM representation_inner GROUP BY k) a ON d.k=a.k
+) p ON source.k IS NOT DISTINCT FROM p.k;
+----
+1	2	2
+
+# The join key may be hidden while another projection observes its representation.
+query III
+WITH source AS MATERIALIZED (SELECT * FROM representation_outer)
+SELECT count(DISTINCT p.representation), count(*), sum(p.c)
+FROM source JOIN (
+    SELECT d.k, d.k::VARCHAR AS representation, a.c FROM (SELECT k FROM source GROUP BY k) d
     LEFT JOIN (SELECT k, count(*) c FROM representation_inner GROUP BY k) a ON d.k=a.k
 ) p ON source.k IS NOT DISTINCT FROM p.k;
 ----

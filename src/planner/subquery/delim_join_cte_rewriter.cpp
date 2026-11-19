@@ -949,7 +949,140 @@ static bool ReferencesDomain(Expression &expression, const GeneratedDomainRef &d
 	       ExpressionReferencesBinding(expression, domain.source_bindings);
 }
 
-static bool CanEvaluateUnmatchedRows(const LogicalOperator &op) {
+static bool DoesNotObserveKeys(const Expression &expression, const vector<ColumnBinding> &keys) {
+	switch (expression.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF: {
+		auto &column = expression.Cast<BoundColumnRefExpression>();
+		return column.Depth() == 0 && !FindBindingIndex(keys, column.Binding()).IsValid();
+	}
+	case ExpressionClass::BOUND_LAMBDA:
+	case ExpressionClass::BOUND_LAMBDA_REF:
+	case ExpressionClass::BOUND_SUBQUERY:
+	case ExpressionClass::BOUND_REF:
+		return false;
+	default:
+		break;
+	}
+	bool safe = true;
+	ExpressionIterator::EnumerateChildren(expression,
+	                                      [&](const Expression &child) { safe &= DoesNotObserveKeys(child, keys); });
+	return safe;
+}
+
+//! A floating-point key may change representation only while used as a plain equality/group key.
+static bool CanSubstituteFloatingKeys(const GeneratedDomainRef &domain, const vector<JoinCondition> &conditions,
+                                      LogicalOperator &target,
+                                      const vector<pair<reference<LogicalOperator>, idx_t>> &path) {
+	if (!domain.filters.empty()) {
+		return false;
+	}
+	for (auto &condition : conditions) {
+		if (!IsEqualityJoinCondition(condition)) {
+			return false;
+		}
+	}
+	vector<ColumnBinding> keys;
+	for (idx_t index = 0; index < domain.output_expressions.size(); index++) {
+		auto &expression = *domain.output_expressions[index];
+		if (expression.GetReturnType().IsFloating()) {
+			keys.push_back(domain.output_bindings[index]);
+		}
+	}
+	if (keys.empty()) {
+		return false;
+	}
+	for (auto &expression : domain.output_expressions) {
+		ColumnBinding binding;
+		if (!GetBoundColumnRefBinding(*expression, binding)) {
+			return false;
+		}
+	}
+	auto published = target.GetColumnBindings();
+	keys.erase(std::remove_if(keys.begin(), keys.end(),
+	                          [&](const ColumnBinding &key) { return !FindBindingIndex(published, key).IsValid(); }),
+	           keys.end());
+	// Only the candidate's layout is final; ancestor projection maps can still await binding repair.
+	for (auto entry = path.rbegin(); entry != path.rend(); ++entry) {
+		if (keys.empty()) {
+			return true;
+		}
+		auto &op = entry->first.get();
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &expressions = op.type == LogicalOperatorType::LOGICAL_PROJECTION ? op.expressions
+			                                                                       : op.Cast<LogicalAggregate>().groups;
+			auto outputs = op.GetColumnBindings();
+			vector<ColumnBinding> aliases;
+			for (idx_t index = 0; index < expressions.size(); index++) {
+				ColumnBinding binding;
+				if (GetBoundColumnRefBinding(*expressions[index], binding) &&
+				    FindBindingIndex(keys, binding).IsValid()) {
+					aliases.push_back(outputs[index]);
+				} else if (!DoesNotObserveKeys(*expressions[index], keys)) {
+					return false;
+				}
+			}
+			if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+				auto &aggregate = op.Cast<LogicalAggregate>();
+				if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1 ||
+				    (aggregate.grouping_sets.size() == 1 &&
+				     aggregate.grouping_sets[0].size() != aggregate.groups.size())) {
+					return false;
+				}
+				for (auto &expression : aggregate.expressions) {
+					if (!DoesNotObserveKeys(*expression, keys)) {
+						return false;
+					}
+				}
+			}
+			keys = std::move(aliases);
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			for (auto &condition : join.conditions) {
+				ColumnBinding left, right;
+				if (IsEqualityJoinCondition(condition) && GetBoundColumnRefBinding(condition.GetLHS(), left) &&
+				    GetBoundColumnRefBinding(condition.GetRHS(), right)) {
+					continue;
+				}
+				if (!condition.IsComparison() || !DoesNotObserveKeys(condition.GetLHS(), keys) ||
+				    !DoesNotObserveKeys(condition.GetRHS(), keys)) {
+					return false;
+				}
+			}
+			for (auto &expression : join.duplicate_eliminated_columns) {
+				if (!DoesNotObserveKeys(*expression, keys)) {
+					return false;
+				}
+			}
+			for (auto &expression : join.expressions) {
+				if (!DoesNotObserveKeys(*expression, keys)) {
+					return false;
+				}
+			}
+			if (IsSubqueryEvidenceSide(join, entry->second)) {
+				keys.clear();
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			for (auto &expression : op.expressions) {
+				if (!DoesNotObserveKeys(*expression, keys)) {
+					return false;
+				}
+			}
+			break;
+		default:
+			return false;
+		}
+	}
+	return keys.empty();
+}
+
+static bool CanEvaluateUnmatchedRows(const LogicalOperator &op, bool allow_aggregate = false) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:
@@ -957,6 +1090,11 @@ static bool CanEvaluateUnmatchedRows(const LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		break;
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		if (!allow_aggregate) {
+			return false;
+		}
 		break;
 	case LogicalOperatorType::LOGICAL_GET:
 		if (!op.Cast<LogicalGet>().GetTable()) {
@@ -982,7 +1120,7 @@ static bool CanEvaluateUnmatchedRows(const LogicalOperator &op) {
 		return false;
 	}
 	for (auto &child : op.children) {
-		if (!CanEvaluateUnmatchedRows(*child)) {
+		if (!CanEvaluateUnmatchedRows(*child, allow_aggregate)) {
 			return false;
 		}
 	}
@@ -996,7 +1134,8 @@ struct GeneratedDomainReplacement {
 	bool all_equality = true;
 
 	// Each candidate is analyzed once; successful analysis consumes its copied filters.
-	bool Analyze(const vector<JoinCondition> &conditions, GeneratedDomainRef &domain, GeneratedDomainAction action) {
+	bool Analyze(const vector<JoinCondition> &conditions, GeneratedDomainRef &domain, GeneratedDomainAction action,
+	             bool floating_keys_unobserved = false) {
 		vector<ColumnBinding> source_bindings;
 		vector<unique_ptr<Expression>> source_expressions;
 		vector<ColumnBinding> covered_bindings;
@@ -1015,7 +1154,8 @@ struct GeneratedDomainReplacement {
 			auto &domain_expression = *domain.output_expressions[domain_index];
 			auto &base_expression = left_index.IsValid() ? condition.GetRHS() : condition.GetLHS();
 			ColumnBinding base_binding;
-			if (!BoundComparisonExpression::EqualityPreservesValueRepresentation(domain_expression.GetReturnType()) ||
+			if ((!BoundComparisonExpression::EqualityPreservesValueRepresentation(domain_expression.GetReturnType()) &&
+			     !(floating_keys_unobserved && domain_expression.GetReturnType().IsFloating())) ||
 			    !GetBoundColumnRefBinding(base_expression, base_binding) ||
 			    !bindings.TryAdd(ReplacementBinding(domain.output_bindings[domain_index], base_binding,
 			                                        domain_expression.GetReturnType()))) {
@@ -1179,6 +1319,7 @@ private:
 	LogicalOperator &rewrite_root;
 	bool preserve_evidence_side;
 	bool preserve_nested_evidence_side;
+	vector<pair<reference<LogicalOperator>, idx_t>> consumer_path;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(Binder &binder, unique_ptr<LogicalOperator> &delim_join_op,
@@ -1188,6 +1329,7 @@ GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(Binder &binder, unique_
     : binder(binder), delim_join_op(delim_join_op), delim_join(delim_join_op->Cast<LogicalComparisonJoin>()),
       dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count), rewrite_root(rewrite_root),
       preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side) {
+	consumer_path.emplace_back(delim_join, 1);
 }
 
 static unique_ptr<GeneratedDomainRef>
@@ -1273,8 +1415,11 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
                                                  bool under_evidence_side) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op->children.empty()) {
-			return RewriteSubtree(op->children[0], preserve_selected_domain, replacements, under_aggregate,
-			                      under_evidence_side);
+			consumer_path.emplace_back(*op, 0);
+			auto rewritten = RewriteSubtree(op->children[0], preserve_selected_domain, replacements, under_aggregate,
+			                                under_evidence_side);
+			consumer_path.pop_back();
+			return rewritten;
 		}
 		return false;
 	}
@@ -1284,8 +1429,11 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		auto old_child_bindings = op->children[child_idx]->GetColumnBindings();
 		BindingReplacementGraph child_replacements;
-		if (RewriteSubtree(op->children[child_idx], preserve_selected_domain, child_replacements, child_under_aggregate,
-		                   under_evidence_side)) {
+		consumer_path.emplace_back(*op, child_idx);
+		auto child_rewritten = RewriteSubtree(op->children[child_idx], preserve_selected_domain, child_replacements,
+		                                      child_under_aggregate, under_evidence_side);
+		consumer_path.pop_back();
+		if (child_rewritten) {
 			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
 			replacements.Merge(child_replacements.ScopedToBoundary(op->children[child_idx]->GetColumnBindings()));
 			rewritten = true;
@@ -1524,7 +1672,10 @@ bool GeneratedDedupRefEliminator::RewriteJoin(unique_ptr<LogicalOperator> &op, B
 		}
 	}
 	GeneratedDomainReplacement replacement;
-	if (!replacement.Analyze(conditions, *domain, action)) {
+	const auto floating_keys_unobserved =
+	    CanSubstituteFloatingKeys(*domain, conditions, *op, consumer_path) &&
+	    (action == GeneratedDomainAction::PRESERVE || CanEvaluateUnmatchedRows(*delim_join.children[1], true));
+	if (!replacement.Analyze(conditions, *domain, action, floating_keys_unobserved)) {
 		return false;
 	}
 	if (!domain_filter_indices.empty() && !replacement.all_equality) {

@@ -204,7 +204,28 @@ WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>random());
 ----
 logical_opt	<REGEX>:.*CTE.*
 
-# Equality does not permit substituting the representation of a floating-point key.
+# Collation equality must not change values read by the domain predicate.
+statement ok
+CREATE TABLE collated_outer(id INTEGER, k VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO collated_outer VALUES (1, 'a'), (2, 'B'), (3, NULL), (4, 'c');
+
+statement ok
+CREATE TABLE collated_inner(k VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO collated_inner VALUES ('A'), ('b'), ('C'), ('c');
+
+query I
+SELECT id FROM collated_outer o WHERE EXISTS (
+    SELECT 1 FROM collated_inner i WHERE i.k=o.k AND ascii(o.k)>=97
+) ORDER BY id;
+----
+1
+4
+
+# A floating-point predicate must retain the original key's representation.
 statement ok
 CREATE TABLE zero_outer(k DOUBLE);
 
@@ -321,7 +342,36 @@ WHERE EXISTS (SELECT 1 FROM cast_inner i WHERE i.k=o.k AND o.k>0 AND i.k>random(
 ----
 logical_opt	<REGEX>:.*CTE.*
 
-# Representation-sensitive domain keys use the conservative fallback.
+# Floating-point domain removal must not expose casts on unrelated inner keys.
+statement ok
+CREATE TABLE double_cast_outer AS SELECT k::DOUBLE AS k FROM cast_outer;
+
+statement ok
+CREATE TABLE double_cast_inner AS SELECT k::DOUBLE AS k, s FROM cast_inner;
+
+query I
+SELECT (SELECT sum(CAST(i.s AS INTEGER)) FROM double_cast_inner i WHERE i.k=o.k)
+FROM double_cast_outer o ORDER BY k;
+----
+1
+3
+
+query I
+SELECT (SELECT CAST(i.s AS INTEGER) FROM double_cast_inner i WHERE i.k=o.k)
+FROM double_cast_outer o ORDER BY k;
+----
+1
+3
+
+query I
+SELECT k FROM double_cast_outer o WHERE EXISTS (
+    SELECT 1 FROM double_cast_inner i WHERE i.k=o.k AND __internal_barrier(CAST(i.s AS INTEGER)>0)
+) ORDER BY k;
+----
+1
+3
+
+# Floating-point equality can be optimized when the key's representation is unobserved.
 statement ok
 CREATE TABLE use_outer(k DOUBLE, j INTEGER);
 
@@ -334,17 +384,24 @@ CREATE TABLE use_inner(k DOUBLE, j INTEGER);
 statement ok
 INSERT INTO use_inner VALUES (0, 1), (0, 2), (1, 2), (2, 1), (NULL, 3);
 
-# Sensitive keys retain their domains even when consumers only check equality.
 query II
 EXPLAIN SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
 ----
-logical_opt	<REGEX>:.*(CTE|DELIM).*
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
 
 query I
 SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
 ----
 2
 
+query I
+SELECT (SELECT count(*) FROM use_inner i WHERE i.k=o.k) FROM use_outer o ORDER BY j;
+----
+2
+1
+0
+
+# A predicate reading the key retains the conservative fallback.
 query II
 EXPLAIN SELECT count(*) FROM use_outer o
 WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
@@ -384,6 +441,47 @@ SELECT signbit((SELECT q.k FROM (SELECT o.k AS k FROM use_inner i WHERE i.k=o.k 
 FROM use_outer o WHERE o.j=1;
 ----
 true
+
+query T
+SELECT (SELECT bool_or(signbit(o.k) AND i.j=1) FROM use_inner i WHERE i.k=o.k)
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+query T
+SELECT (SELECT list_transform([i.j], lambda x: signbit(o.k))[1]
+        FROM use_inner i WHERE i.k=o.k AND i.j=o.j)
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+statement ok
+CREATE TABLE real_outer(k FLOAT);
+
+statement ok
+INSERT INTO real_outer VALUES ('-0.0'), ('-0.0'), (1), (2), (NULL), ('NaN');
+
+statement ok
+CREATE TABLE real_inner(k FLOAT);
+
+statement ok
+INSERT INTO real_inner VALUES (0), (1), (NULL), ('NaN');
+
+query II
+EXPLAIN SELECT count(*) FROM real_outer o
+WHERE EXISTS (SELECT 1 FROM real_inner i WHERE i.k IS NOT DISTINCT FROM o.k);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM real_outer o WHERE EXISTS (SELECT 1 FROM real_inner i WHERE i.k=o.k);
+----
+4
+
+query I
+SELECT sum((SELECT count(*) FROM real_inner i WHERE i.k IS NOT DISTINCT FROM o.k)) FROM real_outer o;
+----
+5
 
 # Equal intervals need not have the same month/day representation.
 statement ok

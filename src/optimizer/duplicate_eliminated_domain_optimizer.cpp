@@ -1459,6 +1459,36 @@ static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 	return LogicalAggregate::KeysAreUnique(*join.children[1], std::move(bindings));
 }
 
+static bool ProjectionOnlyPassesKey(LogicalOperator &op, idx_t passthrough, ColumnBinding key) {
+	for (idx_t index = 0; index < op.expressions.size(); index++) {
+		if (index == passthrough) {
+			continue;
+		}
+		bool observes_key = false;
+		ExpressionIterator::EnumerateExpression(op.expressions[index], [&](const Expression &child) {
+			switch (child.GetExpressionClass()) {
+			case ExpressionClass::BOUND_COLUMN_REF: {
+				auto &column = child.Cast<BoundColumnRefExpression>();
+				observes_key |= column.Depth() != 0 || column.Binding() == key;
+				break;
+			}
+			case ExpressionClass::BOUND_LAMBDA:
+			case ExpressionClass::BOUND_LAMBDA_REF:
+			case ExpressionClass::BOUND_SUBQUERY:
+			case ExpressionClass::BOUND_REF:
+				observes_key = true;
+				break;
+			default:
+				break;
+			}
+		});
+		if (observes_key) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //! Matches, at an INNER / LEFT / SINGLE join,
 //!
 //!   JOIN (l.k IS NOT DISTINCT FROM p.k)
@@ -1557,7 +1587,6 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 	vector<idx_t> demand_indices(key_count);
 	for (auto &condition : join.conditions) {
 		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		    !BoundComparisonExpression::EqualityPreservesValueRepresentation(condition.GetLHS().GetReturnType()) ||
 		    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 		    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 		    condition.GetRHS().Cast<BoundColumnRefExpression>().Depth() != 0) {
@@ -1572,6 +1601,14 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 			return false;
 		}
 		auto binding = condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
+		auto &type = condition.GetLHS().GetReturnType();
+		const auto sensitive_key = !BoundComparisonExpression::EqualityPreservesValueRepresentation(type);
+		if (sensitive_key) {
+			auto outputs = join.GetColumnBindings();
+			if (!type.IsFloating() || std::find(outputs.begin(), outputs.end(), binding) != outputs.end()) {
+				return false;
+			}
+		}
 		for (auto &above : chain) {
 			if (above.get().type != LogicalOperatorType::LOGICAL_PROJECTION) {
 				continue;
@@ -1581,12 +1618,16 @@ static bool FindOuterDomainJoin(LogicalOperator &op, const vector<reference<Logi
 			if (entry == outputs.end()) {
 				return false;
 			}
-			auto &expression = *above.get().expressions[NumericCast<idx_t>(entry - outputs.begin())];
+			auto projection_index = NumericCast<idx_t>(entry - outputs.begin());
+			auto &expression = *above.get().expressions[projection_index];
 			if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
 			    expression.Cast<BoundColumnRefExpression>().Depth() != 0) {
 				return false;
 			}
 			binding = expression.Cast<BoundColumnRefExpression>().Binding();
+			if (sensitive_key && !ProjectionOnlyPassesKey(above.get(), projection_index, binding)) {
+				return false;
+			}
 		}
 		auto entry = std::find(domain_bindings.begin(), domain_bindings.end(), binding);
 		if (entry == domain_bindings.end()) {
