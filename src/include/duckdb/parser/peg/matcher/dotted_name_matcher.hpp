@@ -64,6 +64,11 @@ public:
 		first_set.SetAny();
 	}
 
+	bool ConsumesBrackets() const override {
+		// words, numbers, '.' and '-' only, see IsNamePart
+		return false;
+	}
+
 	//! A dotted name: two or more labels separated by single dots, each label one or more words joined by single
 	//! dashes, each word one or more letters, digits or '_' (bytes outside ASCII count as letters, so that a name like
 	//! münchen.de is a name here and gets the manager's answer rather than a syntax error). So no label starts or ends

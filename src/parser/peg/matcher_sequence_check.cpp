@@ -51,6 +51,8 @@ static bool IsCompositeMatcher(const Matcher &matcher) {
 struct ConsumedTokens {
 	MatcherTokenSet tokens;
 	bool safe = true;
+	//! every bracket the matcher consumes belongs to a balanced pair it consumes as well
+	bool balanced = true;
 	//! the tokens include balanced bracket pairs, which the tail scan skips
 	bool brackets = false;
 
@@ -60,17 +62,22 @@ struct ConsumedTokens {
 			safe = false;
 			changed = true;
 		}
+		if (balanced && !other.balanced) {
+			balanced = false;
+			changed = true;
+		}
 		if (!brackets && other.brackets) {
 			brackets = true;
 			changed = true;
 		}
 		return changed;
 	}
-	bool MarkUnsafe() {
-		if (!safe) {
+	bool MarkUnbalanced() {
+		if (!safe && !balanced) {
 			return false;
 		}
 		safe = false;
+		balanced = false;
 		return true;
 	}
 };
@@ -185,7 +192,7 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 			});
 			if (!complete) {
 				node.children.clear();
-				node.consumed.safe = false;
+				node.consumed.MarkUnbalanced();
 			}
 			for (auto child : node.children) {
 				nodes[child].parents.push_back(node_index);
@@ -209,10 +216,13 @@ SequenceCheckAnalysis::SequenceCheckAnalysis(const vector<unique_ptr<Matcher>> &
 			}
 			// a bracket is only consumed as part of a balanced pair in one sequence
 			if (node.bracket != TailBracket::NONE) {
-				node.consumed.safe = false;
+				node.consumed.MarkUnbalanced();
 			}
-		} else {
+		} else if (matcher.IsAtomic() && !static_cast<const AtomicMatcher &>(matcher).ConsumesBrackets()) {
+			// the tokens are unknown, but a sequence that brackets this matcher stays balanced
 			node.consumed.safe = false;
+		} else {
+			node.consumed.MarkUnbalanced();
 		}
 	}
 }
@@ -241,7 +251,7 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 			continue;
 		}
 		if (child.bracket == TailBracket::CLOSE) {
-			return changed | result.MarkUnsafe();
+			return changed | result.MarkUnbalanced();
 		}
 		// find the closing bracket of the same pair, nested pairs included
 		idx_t depth = 0;
@@ -260,13 +270,13 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 			}
 		}
 		if (close >= end) {
-			return changed | result.MarkUnsafe();
+			return changed | result.MarkUnbalanced();
 		}
-		// the interior is skipped at runtime, but it has to keep its own brackets balanced
+		// the interior is skipped at runtime, so only its brackets matter: they have to be balanced
 		for (idx_t interior = i + 1; interior < close; interior++) {
 			auto &interior_node = nodes[children[interior]];
-			if (interior_node.bracket == TailBracket::NONE && !interior_node.consumed.safe) {
-				changed |= result.MarkUnsafe();
+			if (interior_node.bracket == TailBracket::NONE && !interior_node.consumed.balanced) {
+				changed |= result.MarkUnbalanced();
 			}
 		}
 		if (!result.brackets) {

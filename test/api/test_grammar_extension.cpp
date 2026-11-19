@@ -2449,6 +2449,75 @@ TEST_CASE("Tail checks skip sequences whose later element cannot follow the pref
 	}
 }
 
+//! An atomic matcher that says nothing about the tokens it consumes
+class UnknownTokensMatcher : public AtomicMatcher {
+public:
+	explicit UnknownTokensMatcher(bool consumes_brackets_p)
+	    : AtomicMatcher(MatcherType::VARIABLE), consumes_brackets(consumes_brackets_p) {
+	}
+	MatcherResult MatchAtomic(MatchState &state) const override {
+		return MatcherResult::Failure();
+	}
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+	string ToString() const override {
+		return "UNKNOWN_TOKENS";
+	}
+	bool ConsumesBrackets() const override {
+		return consumes_brackets;
+	}
+
+private:
+	bool consumes_brackets;
+};
+
+TEST_CASE("Tail checks only need balanced brackets from what a bracket pair encloses", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+	auto &table = helper.GetLiteralTable();
+
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- '(' ')'");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &keywords = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers;
+	auto &open = keywords[0].get();
+	auto &close = keywords[1].get();
+	auto &identifier =
+	    matcher_allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME, helper));
+	auto &string_literal = matcher_allocator.Allocate(make_uniq<StringLiteralMatcher>());
+	auto &no_brackets = matcher_allocator.Allocate(make_uniq<UnknownTokensMatcher>(false));
+	auto &maybe_brackets = matcher_allocator.Allocate(make_uniq<UnknownTokensMatcher>(true));
+	auto Structural = [&](unique_ptr<Matcher> matcher) -> Matcher & {
+		matcher->SetStructural();
+		return matcher_allocator.Allocate(std::move(matcher));
+	};
+	auto List = [&](vector<reference<Matcher>> children) -> Matcher & {
+		return Structural(make_uniq<ListMatcher>(std::move(children)));
+	};
+	// Enclosed <- Identifier '(' NoBrackets ')' StringLiteral: the scan skips what the brackets enclose
+	auto &enclosed = List({List({identifier, open, no_brackets, close}), string_literal});
+	// Unbalanced <- Identifier '(' MaybeBrackets ')' StringLiteral: the enclosed tokens may close the pair early
+	auto &unbalanced = List({List({identifier, open, maybe_brackets, close}), string_literal});
+	// Bare <- Identifier NoBrackets StringLiteral: outside of brackets the tokens of the prefix have to be known
+	auto &bare = List({List({identifier, no_brackets}), string_literal});
+	auto &root = Structural(make_uniq<ChoiceMatcher>(vector<reference<Matcher>> {enclosed, unbalanced, bare}));
+	ComputeFirstSets(root, table);
+	matcher_allocator.InitializeSequenceChecks(table);
+
+	REQUIRE(enclosed.first_set.sequence_check_index != 0);
+	REQUIRE(unbalanced.first_set.sequence_check_index == 0);
+	REQUIRE(bare.first_set.sequence_check_index == 0);
+
+	idx_t rejected_until = 0;
+	REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, enclosed, "foo ( a b ) 'x'", rejected_until));
+	REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, enclosed, "foo ( a b ) , 1", rejected_until));
+	REQUIRE(rejected_until == 5);
+}
+
 TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);

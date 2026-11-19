@@ -532,6 +532,10 @@ public:
 	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
 		first_set.SetAny();
 	}
+	//! Whether the matcher can consume a bracket; only asked of matchers whose FIRST set does not list their tokens
+	virtual bool ConsumesBrackets() const {
+		return true;
+	}
 };
 
 class KeywordInfo {
