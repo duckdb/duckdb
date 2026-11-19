@@ -26,6 +26,14 @@ public:
 		return cache_id;
 	}
 
+	//! Calls fun(info) for every literal in the table
+	template <class FUN>
+	void ForEachLiteral(FUN &&fun) const {
+		for (auto &entry : literals) {
+			fun(entry.second);
+		}
+	}
+
 	LiteralInfo Lookup(const string &text) const {
 		return Lookup(text.data(), text.size());
 	}

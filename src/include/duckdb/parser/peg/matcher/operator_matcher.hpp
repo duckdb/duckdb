@@ -42,6 +42,7 @@ public:
 	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
 		first_set.class_mask = mode == OperatorMatcherMode::GENERIC_PRECEDENCE ? MatcherTokenClass::GENERIC_OPERATOR
 		                                                                       : MatcherTokenClass::OPERATOR;
+		first_set.SetSingleToken();
 	}
 
 private:
