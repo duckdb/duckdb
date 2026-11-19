@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -25,7 +26,7 @@ class LogicalProjection;
 
 //! The operators that unique sets are forwarded through
 enum class DistinctnessPropagation : uint8_t {
-	//! Filters, limits, orderings, windows and projections (plain column references only)
+	//! Filters, limits, orderings, windows and projections
 	UNARY_OPERATORS,
 	//! Additionally samples, the left side of SEMI / ANTI / MARK / SINGLE joins, and a side of an INNER join (the
 	//! left side of a LEFT join) whose other side is itself distinct on its equality keys
@@ -33,8 +34,7 @@ enum class DistinctnessPropagation : uint8_t {
 };
 
 //! Structural proofs that the output of an operator has at most one row per value of a set of columns, where NULLs
-//! count as one value (like for DISTINCT and GROUP BY). This is the one place where unique sets are inferred; it
-//! only reads the plan.
+//! count as one value (like for DISTINCT and GROUP BY). This is the one place where unique sets are inferred.
 //! The sources are the groups of an aggregate with a single grouping set and the PRIMARY KEY / UNIQUE NOT NULL
 //! constraints of a scanned table. They are forwarded through operators that never duplicate rows (see
 //! DistinctnessPropagation). Statistics (distinct counts) are estimates and are never used.
@@ -50,13 +50,15 @@ public:
 	static constexpr idx_t MAX_UNIQUE_SETS = 32;
 
 public:
-	explicit Distinctness(DistinctnessPropagation propagation) : propagation(propagation) {
+	//! A context allows cast proofs that account for registered overrides.
+	explicit Distinctness(DistinctnessPropagation propagation, optional_ptr<ClientContext> context = nullptr)
+	    : propagation(propagation), context(context) {
 	}
 
 	//! Whether the output of the operator has at most one row per value of the keys
 	bool IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys);
 	//! Checks expression keys, including aliases and built-in injective casts.
-	bool IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys, ClientContext &context);
+	bool IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys);
 	//! The sets of columns the output of the operator is distinct on (cached)
 	const vector<column_binding_set_t> &GetUniqueSets(LogicalOperator &op);
 	//! Gets the equality keys (= or IS NOT DISTINCT FROM) of the left (child_idx 0) or right (child_idx 1) side of a
@@ -64,7 +66,7 @@ public:
 	static bool GetJoinEqualityKeys(const LogicalComparisonJoin &join, idx_t child_idx, column_binding_set_t &keys);
 
 private:
-	bool IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys, ClientContext &context);
+	bool IsDistinctOnProjectedKeys(LogicalOperator &op, const column_binding_set_t &keys);
 	vector<column_binding_set_t> ComputeUniqueSets(LogicalOperator &op);
 	static vector<column_binding_set_t> ComputeScanUniqueSets(LogicalGet &get);
 	static vector<column_binding_set_t> ComputeAggregateUniqueSets(LogicalAggregate &aggr);
@@ -74,6 +76,7 @@ private:
 
 private:
 	const DistinctnessPropagation propagation;
+	const optional_ptr<ClientContext> context;
 	reference_map_t<LogicalOperator, vector<column_binding_set_t>> unique_sets;
 };
 

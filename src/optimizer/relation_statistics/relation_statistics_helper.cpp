@@ -513,8 +513,8 @@ static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate 
 	}
 	bool has_unique_groups = false;
 	if (preserves_group_evidence && !aggregate.groups.empty() && aggregate.children.size() == 1) {
-		Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS);
-		has_unique_groups = distinctness.IsDistinctOn(*aggregate.children[0], aggregate.groups, extractor.GetContext());
+		Distinctness distinctness(DistinctnessPropagation::UNARY_OPERATORS, extractor.GetContext());
+		has_unique_groups = distinctness.IsDistinctOn(*aggregate.children[0], aggregate.groups);
 		if (has_unique_groups) {
 			result.cardinality = child_stats.cardinality;
 		}

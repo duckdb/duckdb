@@ -120,8 +120,50 @@ TEST_CASE("Distinctness forwards primary keys through Top N", "[api][singleton_g
 
 	vector<unique_ptr<Expression>> aliased_key;
 	aliased_key.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[1]));
-	CHECK(distinctness.IsDistinctOn(top_n, aliased_key, *connection.context));
+	CHECK(distinctness.IsDistinctOn(top_n, aliased_key));
 	connection.Rollback();
+}
+
+TEST_CASE("Distinctness uses the same cast proof for projected keys", "[api][singleton_group_statistics]") {
+	DuckDB database(nullptr);
+	Connection connection(database);
+	RunSingletonQuery(connection, "CREATE TABLE projection_keys(id INTEGER PRIMARY KEY)");
+
+	for (bool registered_override : {false, true}) {
+		CAPTURE(registered_override);
+		if (registered_override) {
+			CastFunctionSet::Get(*connection.context)
+			    .RegisterCastFunction(LogicalType::INTEGER, LogicalType::BIGINT,
+			                          BoundCastInfo(SingletonCollapsingCast));
+		}
+		connection.BeginTransaction();
+		Parser parser(*connection.context);
+		parser.ParseQuery("SELECT id::BIGINT AS first_key, id::BIGINT AS second_key, id AS plain_key, "
+		                  "TRY_CAST(id AS TINYINT) AS try_key FROM projection_keys");
+		Planner planner(*connection.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		auto &projection = *planner.plan;
+		const auto bindings = projection.GetColumnBindings();
+		REQUIRE(bindings.size() == 4);
+
+		const column_binding_set_t first_key {bindings[0]};
+		const column_binding_set_t plain_key {bindings[2]};
+		const column_binding_set_t try_key {bindings[3]};
+		vector<unique_ptr<Expression>> second_key;
+		second_key.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, bindings[1]));
+
+		Distinctness without_context(DistinctnessPropagation::UNARY_OPERATORS);
+		CHECK_FALSE(without_context.IsDistinctOn(projection, first_key));
+		CHECK_FALSE(without_context.IsDistinctOn(projection, second_key));
+		CHECK(without_context.IsDistinctOn(projection, plain_key));
+
+		Distinctness with_context(DistinctnessPropagation::UNARY_OPERATORS, *connection.context);
+		CHECK(with_context.GetUniqueSets(projection).size() == 1);
+		CHECK(with_context.IsDistinctOn(projection, first_key) == !registered_override);
+		CHECK(with_context.IsDistinctOn(projection, second_key) == !registered_override);
+		CHECK_FALSE(with_context.IsDistinctOn(projection, try_key));
+		connection.Rollback();
+	}
 }
 
 TEST_CASE("Singleton aggregate domains reject overridden casts", "[api][singleton_group_statistics]") {

@@ -29,18 +29,19 @@ static bool ForwardsChildUniqueSets(LogicalOperatorType type, DistinctnessPropag
 	}
 }
 
-static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expression, ClientContext &context) {
+static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expression,
+                                                         optional_ptr<ClientContext> context) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		return expression.Cast<BoundColumnRefExpression>().Binding();
 	}
-	if (!BoundCastExpression::IsCast(expression)) {
+	if (!context || !BoundCastExpression::IsCast(expression)) {
 		return {};
 	}
 	auto &cast = expression.Cast<BoundFunctionExpression>();
 	auto source_type = BoundCastExpression::SourceType(cast);
 	auto &target_type = BoundCastExpression::TargetType(cast);
 	if (BoundCastExpression::IsTryCast(cast) ||
-	    CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
+	    CastFunctionSet::Get(*context).CanOverrideDefaultCast(source_type, target_type)) {
 		return {};
 	}
 	// Successful strict integral casts do not merge distinct input values.
@@ -51,8 +52,7 @@ static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expre
 	return GetInjectiveColumnBinding(BoundCastExpression::Child(cast), context);
 }
 
-bool Distinctness::IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys,
-                                ClientContext &context) {
+bool Distinctness::IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys) {
 	column_binding_set_t bindings;
 	for (auto &key : keys) {
 		auto binding = GetInjectiveColumnBinding(*key, context);
@@ -60,10 +60,10 @@ bool Distinctness::IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Exp
 			bindings.insert(*binding);
 		}
 	}
-	return IsDistinctOn(op, bindings, context);
+	return IsDistinctOnProjectedKeys(op, bindings);
 }
 
-bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys, ClientContext &context) {
+bool Distinctness::IsDistinctOnProjectedKeys(LogicalOperator &op, const column_binding_set_t &keys) {
 	if (keys.empty()) {
 		return false;
 	}
@@ -71,7 +71,7 @@ bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t 
 		return true;
 	}
 	if (ForwardsChildUniqueSets(op.type, propagation)) {
-		return IsDistinctOn(*op.children[0], keys, context);
+		return IsDistinctOnProjectedKeys(*op.children[0], keys);
 	}
 	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION) {
 		return false;
@@ -87,7 +87,7 @@ bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t 
 			child_keys.insert(*binding);
 		}
 	}
-	return IsDistinctOn(*projection.children[0], child_keys, context);
+	return IsDistinctOnProjectedKeys(*projection.children[0], child_keys);
 }
 
 bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys) {
@@ -264,7 +264,7 @@ vector<column_binding_set_t> Distinctness::ComputeAggregateUniqueSets(LogicalAgg
 }
 
 vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalProjection &projection) {
-	// cache one plain output binding per input binding
+	// cache one representative output binding per input binding
 	vector<column_binding_set_t> result;
 	auto &child_sets = GetUniqueSets(*projection.children[0]);
 	if (child_sets.empty()) {
@@ -272,10 +272,9 @@ vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalPr
 	}
 	column_binding_map_t<ColumnBinding> forwarded;
 	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
-		auto &expr = *projection.expressions[expr_idx];
-		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			forwarded.emplace(expr.Cast<BoundColumnRefExpression>().Binding(),
-			                  ColumnBinding(projection.table_index, expr_idx));
+		auto binding = GetInjectiveColumnBinding(*projection.expressions[expr_idx], context);
+		if (binding) {
+			forwarded.emplace(*binding, ColumnBinding(projection.table_index, expr_idx));
 		}
 	}
 	for (auto &child_set : child_sets) {
