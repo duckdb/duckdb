@@ -1,0 +1,110 @@
+# name: test/sql/function/language_function/language_function_duckdb_functions.test
+# description: duckdb_functions lists language members the same with and without pushed-down identity filters
+# group: [language_function]
+
+# Language function tests manage their own storage version (persistent entries need v2.1.0+)
+require noforcestorage
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
+
+statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
+CREATE SCHEMA s;
+
+# two members in main, one in s, one in another database, and a plain macro next to them
+statement ok
+CREATE FUNCTION lf(x) LANGUAGE testlang AS 'sql:x + 1';
+
+statement ok
+CREATE FUNCTION lf(x, y) LANGUAGE testlang AS 'sql:x + y';
+
+statement ok
+CREATE FUNCTION s.lf(x INTEGER) RETURNS INTEGER LANGUAGE testlang AS 'sql:x * 2';
+
+statement ok
+CREATE FUNCTION other.main.lf(x) LANGUAGE testinterp AS 'other';
+
+statement ok
+CREATE MACRO lm(x) AS x;
+
+statement ok
+CREATE TABLE unfiltered AS
+SELECT database_name, schema_name, function_name, function_oid, function_type, parameters, parameter_types,
+       return_type, macro_definition, language
+FROM duckdb_functions() WHERE function_name IN ('lf', 'lm');
+
+query TTTTTTT rowsort
+SELECT database_name, schema_name, function_type, parameters, return_type, macro_definition, language FROM unfiltered;
+----
+memory	main	macro	[x, y]	NULL	sql:x + y	testlang
+memory	main	macro	[x]	NULL	sql:x + 1	testlang
+memory	main	macro	[x]	NULL	x	NULL
+memory	s	macro	[x]	INTEGER	sql:x * 2	testlang
+other	main	macro	[x]	NULL	other	testinterp
+
+# each pushed identity filter returns exactly the rows of the unfiltered listing it selects
+query I
+SELECT count(*) FROM (
+    (SELECT database_name, schema_name, function_name, function_oid, function_type, parameters, parameter_types,
+            return_type, macro_definition, language FROM duckdb_functions() WHERE function_name = 'lf')
+    EXCEPT ALL (SELECT * FROM unfiltered WHERE function_name = 'lf'));
+----
+0
+
+query II
+SELECT (SELECT count(*) FROM duckdb_functions() WHERE function_name = 'lf'),
+       (SELECT count(*) FROM unfiltered WHERE function_name = 'lf');
+----
+4	4
+
+query II
+SELECT (SELECT count(*) FROM duckdb_functions() WHERE function_name = 'lf' AND schema_name = 's'),
+       (SELECT count(*) FROM unfiltered WHERE function_name = 'lf' AND schema_name = 's');
+----
+1	1
+
+query II
+SELECT (SELECT count(*) FROM duckdb_functions() WHERE function_name = 'lf' AND database_name = 'other'),
+       (SELECT count(*) FROM unfiltered WHERE function_name = 'lf' AND database_name = 'other');
+----
+1	1
+
+query I
+SELECT count(*) FROM (
+    (SELECT database_name, schema_name, function_name, function_oid, function_type, parameters, parameter_types,
+            return_type, macro_definition, language FROM duckdb_functions()
+     WHERE database_name = 'memory' AND schema_name = 'main' AND function_name IN ('lf', 'lm'))
+    EXCEPT ALL (SELECT * FROM unfiltered WHERE database_name = 'memory' AND schema_name = 'main'));
+----
+0
+
+# a function_oid filter returns every member row of that entry
+query II
+SELECT (SELECT count(*) FROM duckdb_functions()
+        WHERE function_oid = (SELECT DISTINCT function_oid FROM unfiltered
+                              WHERE function_name = 'lf' AND database_name = 'memory' AND schema_name = 'main')),
+       (SELECT count(*) FROM unfiltered WHERE function_name = 'lf' AND database_name = 'memory' AND schema_name = 'main');
+----
+2	2
+
+query I
+SELECT count(*) FROM (
+    (SELECT database_name, schema_name, function_name, function_oid, function_type, parameters, parameter_types,
+            return_type, macro_definition, language FROM duckdb_functions()
+     WHERE function_oid IN (SELECT function_oid FROM unfiltered))
+    EXCEPT ALL (SELECT * FROM unfiltered));
+----
+0
+
+# the filters are pushed into the catalog scan: one entry for the members of s.lf
+query II
+EXPLAIN ANALYZE SELECT * FROM duckdb_functions() WHERE database_name = 'memory' AND schema_name = 's' AND function_name = 'lf';
+----
+analyzed_plan	<REGEX>:.*Entries Scanned: 1/.*
