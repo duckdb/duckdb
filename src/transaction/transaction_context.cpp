@@ -195,7 +195,7 @@ void TransactionContext::ImportSnapshot(const string &snapshot_id) {
 	auto previous = TakeCurrentTransaction();
 	SetCurrentTransaction(source);
 	previous->MarkFinished();
-	previous->Rollback();
+	previous->Rollback(context);
 	for (auto const &s : context.GetContext().GetRegisteredState().States()) {
 		s->TransactionRollback(*previous, context, nullptr);
 	}
