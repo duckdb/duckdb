@@ -1,5 +1,6 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -94,6 +95,14 @@ struct ColumnMapper {
 	virtual MultiFileLocalIndex FindListChild(const MultiFileColumnDefinition &column) const {
 		return Find(column);
 	}
+	//! A mapper for children that the reader did not describe, which were derived from the type of its column
+	virtual unique_ptr<ColumnMapper> CreateForDerivedChildren() const {
+		return Create(vector<MultiFileColumnDefinition>());
+	}
+	//! Whether the children were derived from the type of the column
+	virtual bool ChildrenAreDerived() const {
+		return false;
+	}
 	virtual unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
 	                                                    bool is_root) const = 0;
 	virtual idx_t MapCount() const = 0;
@@ -156,7 +165,9 @@ private:
 };
 
 struct NameMapper : public ColumnMapper {
-	NameMapper(MultiFileColumnMapper &mapper, const vector<MultiFileColumnDefinition> &columns) : mapper(mapper) {
+	NameMapper(MultiFileColumnMapper &mapper, const vector<MultiFileColumnDefinition> &columns,
+	           bool children_are_derived = false)
+	    : mapper(mapper), children_are_derived(children_are_derived) {
 		for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
 			auto &column = columns[col_idx];
 			name_map.emplace(column.name, MultiFileLocalIndex(col_idx));
@@ -164,7 +175,13 @@ struct NameMapper : public ColumnMapper {
 	}
 
 	unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const override {
-		return make_uniq<NameMapper>(mapper, columns);
+		return make_uniq<NameMapper>(mapper, columns, children_are_derived);
+	}
+	unique_ptr<ColumnMapper> CreateForDerivedChildren() const override {
+		return make_uniq<NameMapper>(mapper, vector<MultiFileColumnDefinition>(), true);
+	}
+	bool ChildrenAreDerived() const override {
+		return children_are_derived;
 	}
 	MultiFileLocalIndex Find(const MultiFileColumnDefinition &column) const override {
 		auto entry = name_map.find(column.GetIdentifierName());
@@ -202,6 +219,7 @@ struct NameMapper : public ColumnMapper {
 
 private:
 	MultiFileColumnMapper &mapper;
+	bool children_are_derived;
 	case_insensitive_map_t<MultiFileLocalIndex> name_map;
 };
 
@@ -268,6 +286,43 @@ static ColumnMapResult MapColumnToLocal(ClientContext &context, const MultiFileC
                                         const ColumnMapper &mapper, MultiFileLocalIndex local_idx,
                                         MultiFileLocalIndex top_level_index = MultiFileLocalIndex());
 
+//! Whether the element of a list, or the key or value of a map, that the mapper found cannot be mapped on its own and
+//! needs the list or map to be cast as a whole. That is the case for derived children when the file has a value
+//! where the schema declares a nested type: remap_struct does not turn a value into a nested type, a cast can.
+//! Text (VARCHAR, JSON) is the common case, a JSON reader reports it for elements whose shape it has not seen.
+//! The existence of a cast to the declared type is all that decides: a BIGINT declared UNION(v BIGINT) is cast as
+//! well, and a cast that exists can still fail for the values (BIGINT to UNION(v DATE)).
+static bool ChildNeedsCastOfParent(ClientContext &context, const ColumnMapper &nested_mapper,
+                                   const vector<MultiFileColumnDefinition> &local_children,
+                                   MultiFileLocalIndex local_idx, const MultiFileColumnDefinition &global_child) {
+	if (!nested_mapper.ChildrenAreDerived() || !local_idx.IsValid()) {
+		return false;
+	}
+	auto is_remapped = [](const LogicalType &type) {
+		return type.IsNested() && type.id() != LogicalTypeId::VARIANT;
+	};
+	auto &local_type = local_children[local_idx].type;
+	auto &global_type = global_child.type;
+	if (is_remapped(local_type) || local_type.id() == LogicalTypeId::SQLNULL || !is_remapped(global_type)) {
+		return false;
+	}
+	// without a cast the mismatch is reported by the mapping of the child
+	GetCastFunctionInput input(context);
+	return !CastFunctionSet::Get(context).GetCastFunction(local_type, global_type, input).IsNullCast();
+}
+
+//! Map a list or map as one column that is cast to the declared type, as it is without declared children
+static ColumnMapResult MapColumnAsWhole(const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
+                                        const MultiFileLocalIndex &local_id,
+                                        unique_ptr<MultiFileIndexMapping> mapping) {
+	ColumnMapResult result;
+	result.column_map = Value(local_column.name);
+	result.column_index = make_uniq<ColumnIndex>(global_index.RemapRootIndex(local_id.GetIndex()));
+	result.mapping = std::move(mapping);
+	result.local_column = local_column;
+	return result;
+}
+
 static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                      const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                      const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -308,8 +363,12 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 
 	ColumnMapResult child_map;
 	if (is_selected) {
+		auto local_child_idx = nested_mapper->FindListChild(global_child);
+		if (ChildNeedsCastOfParent(context, *nested_mapper, local_column.children, local_child_idx, global_child)) {
+			return MapColumnAsWhole(global_index, local_column, local_id, std::move(mapping));
+		}
 		child_map = MapColumnToLocal(context, global_child, global_child_index.get(), local_column.children,
-		                             *nested_mapper, nested_mapper->FindListChild(global_child));
+		                             *nested_mapper, local_child_idx);
 	} else {
 		// column is not relevant for the query - push a NULL value
 		child_map.default_value = make_uniq<BoundConstantExpression>(Value(global_child.type));
@@ -427,6 +486,14 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	child_list_t<reference<const MultiFileColumnDefinition>> map_components;
 	map_components.emplace_back("key", global_key);
 	map_components.emplace_back("value", global_value);
+
+	for (auto &component : map_components) {
+		auto &global_component = component.second.get();
+		if (ChildNeedsCastOfParent(context, *nested_mapper, local_key_value.children,
+		                           nested_mapper->Find(global_component), global_component)) {
+			return MapColumnAsWhole(global_index, local_column, local_id, std::move(mapping));
+		}
+	}
 
 	for (idx_t i = 0; i < map_components.size(); i++) {
 		auto &name = map_components[i].first;
@@ -645,6 +712,26 @@ static ColumnMapResult MapColumnToLocal(ClientContext &context, const MultiFileC
 	if (global_column.type.id() != local_column.type.id()) {
 		throw BinderException("Failed to map file-column of type '%s' to result-column of type '%s'", local_column.type,
 		                      global_column.type);
+	}
+
+	if (local_column.children.empty() &&
+	    (local_column.type.id() == LogicalTypeId::LIST || local_column.type.id() == LogicalTypeId::MAP)) {
+		// A reader whose columns are described by name and type alone (JSON, read_duckdb) reports no children for a
+		// list or map. They follow from the type, so describe them here and map the declared children onto them.
+		auto described = MultiFileColumnDefinition::CreateNested(local_column.name, local_column.type);
+		auto derived_mapper = mapper.CreateForDerivedChildren();
+		auto result = local_column.type.id() == LogicalTypeId::LIST
+		                  ? MapColumnList(context, global_column, global_index, described, local_idx, *derived_mapper,
+		                                  std::move(mapping), is_root)
+		                  : MapColumnMap(context, global_column, global_index, described, local_idx, *derived_mapper,
+		                                 std::move(mapping), is_root);
+		// the reader is asked for the column as it describes it: without child indexes, and by its own definition
+		result.column_index = make_uniq<ColumnIndex>(local_idx.GetIndex());
+		if (global_index.HasType()) {
+			result.column_index->SetType(local_column.type);
+		}
+		result.local_column = local_column;
+		return result;
 	}
 
 	switch (global_column.type.id()) {

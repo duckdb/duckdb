@@ -1,0 +1,471 @@
+# name: test/sql/multi_file/multi_file_schema_nested_children_text.test
+# description: A list or map whose derived element, key or value is text where the schema declares a nested type is cast as a whole, and only that list or map
+# group: [multi_file]
+
+require json
+
+require parquet
+
+# a JSON reader reports JSON for a list element whose shape it has not seen, a database column can hold text.
+# Text has no children to map the declared ones onto, and remap_struct does not turn text into a nested type.
+# The list or map that holds it is cast as a whole, as it is without declared children. Its siblings and the
+# levels above keep their mapping.
+
+# t is empty in the first file: the reader reports STRUCT(a BIGINT, t JSON[])[]. Only t is cast, the fields of
+# the element around it are still mapped by their keys and take their defaults
+statement ok
+COPY (SELECT [{'a': 1, 't': []}] AS l) TO '{TEMP_DIR}/nested_text_1.json';
+
+statement ok
+COPY (SELECT [{'a': 2, 't': [{'x': 5}]}] AS l) TO '{TEMP_DIR}/nested_text_2.json';
+
+statement ok
+COPY (SELECT [{'a': 1, 't': []::STRUCT(x BIGINT)[]}] AS l) TO '{TEMP_DIR}/nested_text_1.parquet';
+
+statement ok
+COPY (SELECT [{'a': 2, 't': [{'x': 5}]}] AS l) TO '{TEMP_DIR}/nested_text_2.parquet';
+
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'l': {name: 'l', type: 'STRUCT(renamed BIGINT, t STRUCT(x BIGINT)[], d BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(renamed BIGINT, t STRUCT(x BIGINT)[], d BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'renamed', type: 'BIGINT', default_value: NULL, children: NULL},
+			't': {name: 't', type: 'STRUCT(x BIGINT)[]', default_value: NULL, children: MAP {
+				'list': {name: 'element', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+					'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+			'missing': {name: 'd', type: 'BIGINT', default_value: 7, children: NULL}}}}}
+};
+
+query I
+SELECT l FROM read_json('{TEMP_DIR}/nested_text_1.json', schema = getvariable('nested_schema'));
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+
+query I
+SELECT l FROM read_parquet('{TEMP_DIR}/nested_text_1.parquet', schema = getvariable('nested_schema'));
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+
+query I
+SELECT l FROM read_json(['{TEMP_DIR}/nested_text_1.json', '{TEMP_DIR}/nested_text_2.json'], schema = getvariable('nested_schema'))
+ORDER BY ALL;
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+[{'renamed': 2, 't': [{'x': 5}], 'd': 7}]
+
+query I
+SELECT l FROM read_parquet(['{TEMP_DIR}/nested_text_1.parquet', '{TEMP_DIR}/nested_text_2.parquet'], schema = getvariable('nested_schema'))
+ORDER BY ALL;
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+[{'renamed': 2, 't': [{'x': 5}], 'd': 7}]
+
+query I
+SELECT l FROM read_json(['{TEMP_DIR}/nested_text_1.json', '{TEMP_DIR}/nested_text_2.json'], schema = getvariable('nested_schema'))
+WHERE l[1].d = 7 ORDER BY ALL;
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+[{'renamed': 2, 't': [{'x': 5}], 'd': 7}]
+
+query I
+SELECT l FROM read_parquet(['{TEMP_DIR}/nested_text_1.parquet', '{TEMP_DIR}/nested_text_2.parquet'], schema = getvariable('nested_schema'))
+WHERE l[1].d = 7 ORDER BY ALL;
+----
+[{'renamed': 1, 't': [], 'd': 7}]
+[{'renamed': 2, 't': [{'x': 5}], 'd': 7}]
+
+# lists and maps that are empty in every row: a list of structs, a list of lists without an inner list, a list
+# with an empty inner list, a list in a struct, a map
+statement ok
+COPY (SELECT 4 AS id, [] AS ls, [] AS ll, [[]] AS le, {'l': []} AS s, MAP {} AS m)
+TO '{TEMP_DIR}/nested_text_empty.json';
+
+statement ok
+COPY (SELECT 1 AS id, [{'a': 1, 'b': 'x'}, NULL] AS ls, [[1], []] AS ll, [[2]] AS le, {'l': [{'a': 2}]} AS s)
+TO '{TEMP_DIR}/nested_text_full.json';
+
+statement ok
+COPY (SELECT 4 AS id, []::STRUCT(a BIGINT, b VARCHAR)[] AS ls, []::BIGINT[][] AS ll, [[]]::BIGINT[][] AS le,
+             {'l': []::STRUCT(a BIGINT)[]} AS s, MAP {}::MAP(VARCHAR, STRUCT(a BIGINT)) AS m)
+TO '{TEMP_DIR}/nested_text_empty.parquet';
+
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}},
+	'll': {name: 'll', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	'le': {name: 'le', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	's': {name: 's', type: 'STRUCT(l STRUCT(a BIGINT)[])', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}},
+	'm': {name: 'm', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+query IIIIII
+SELECT id, ls, ll, le, s, m FROM read_json('{TEMP_DIR}/nested_text_empty.json', schema = getvariable('nested_schema'));
+----
+4	[]	[]	[[]]	{'l': []}	{}
+
+query IIIIII
+SELECT id, ls, ll, le, s, m FROM read_parquet('{TEMP_DIR}/nested_text_empty.parquet', schema = getvariable('nested_schema'));
+----
+4	[]	[]	[[]]	{'l': []}	{}
+
+query IIIII
+SELECT id, ls, ll, le, s
+FROM read_json(['{TEMP_DIR}/nested_text_full.json', '{TEMP_DIR}/nested_text_empty.json'], schema = getvariable('nested_schema'))
+ORDER BY id;
+----
+1	[{'a': 1, 'b': x}, NULL]	[[1], []]	[[2]]	{'l': [{'a': 2}]}
+4	[]	[]	[[]]	{'l': []}
+
+# the same when the schema declares the element or value without children of its own: the declared type decides,
+# not the declared children
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: NULL}}},
+	'll': {name: 'll', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: NULL}}},
+	'le': {name: 'le', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: NULL}}},
+	's': {name: 's', type: 'STRUCT(l STRUCT(a BIGINT)[])', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT)', default_value: NULL, children: NULL}}}}},
+	'm': {name: 'm', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: NULL}}}
+};
+
+query IIIIII
+SELECT id, ls, ll, le, s, m FROM read_json('{TEMP_DIR}/nested_text_empty.json', schema = getvariable('nested_schema'));
+----
+4	[]	[]	[[]]	{'l': []}	{}
+
+query IIIIII
+SELECT id, ls, ll, le, s, m FROM read_parquet('{TEMP_DIR}/nested_text_empty.parquet', schema = getvariable('nested_schema'));
+----
+4	[]	[]	[[]]	{'l': []}	{}
+
+query IIIII
+SELECT id, ls, ll, le, s
+FROM read_json(['{TEMP_DIR}/nested_text_full.json', '{TEMP_DIR}/nested_text_empty.json'], schema = getvariable('nested_schema'))
+ORDER BY id;
+----
+1	[{'a': 1, 'b': x}, NULL]	[[1], []]	[[2]]	{'l': [{'a': 2}]}
+4	[]	[]	[[]]	{'l': []}
+
+# a map whose value is a list
+query I
+SELECT m FROM read_json('{TEMP_DIR}/nested_text_empty.json', schema = MAP {
+	'm': {name: 'm', type: 'MAP(VARCHAR, BIGINT[])', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'BIGINT[]', default_value: NULL, children: NULL}}}
+});
+----
+{}
+
+# the options of the JSON reader that leave an element as JSON: sample_size, columns, the array format,
+# records = false
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: NULL}}}
+};
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_empty.json', sample_size = 1, schema = getvariable('nested_schema'));
+----
+4	[]
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_empty.json', columns = {id: 'BIGINT', ls: 'JSON[]'}, schema = getvariable('nested_schema'));
+----
+4	[]
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_full.json', columns = {id: 'BIGINT', ls: 'JSON[]'}, schema = getvariable('nested_schema'));
+----
+1	[{'a': 1, 'b': x}, NULL]
+
+statement ok
+COPY (SELECT 4 AS id, [] AS ls) TO '{TEMP_DIR}/nested_text_array.json' (ARRAY true);
+
+query II
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_array.json', format = 'array', schema = getvariable('nested_schema'));
+----
+4	[]
+
+statement ok
+COPY (SELECT '[]' UNION ALL SELECT '[{"a": 1, "b": "x"}]' ORDER BY ALL)
+TO '{TEMP_DIR}/nested_text_values.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query I
+SELECT json FROM read_json('{TEMP_DIR}/nested_text_values.json', records = false, sample_size = 1, schema = MAP {
+	'json': {name: 'json', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}}
+}) ORDER BY ALL;
+----
+[]
+[{'a': 1, 'b': x}]
+
+# text that is not empty is parsed by the cast. Elements below maximum_depth are read as JSON
+statement ok
+SET VARIABLE nested_schema = MAP {
+	'id': {name: 'id', type: 'BIGINT', default_value: NULL, children: NULL},
+	'ls': {name: 'ls', type: 'STRUCT(a BIGINT, b VARCHAR)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b VARCHAR)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'VARCHAR', default_value: NULL, children: NULL}}}}},
+	'll': {name: 'll', type: 'BIGINT[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'BIGINT[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+query III
+SELECT id, ls, ll FROM read_json('{TEMP_DIR}/nested_text_full.json', maximum_depth = 2, schema = getvariable('nested_schema'));
+----
+1	[{'a': 1, 'b': x}, NULL]	[[1], []]
+
+query III
+SELECT id, ls, ll FROM read_json('{TEMP_DIR}/nested_text_full.json', schema = getvariable('nested_schema'));
+----
+1	[{'a': 1, 'b': x}, NULL]	[[1], []]
+
+# a row with elements after a sample of empty lists
+statement ok
+COPY (SELECT i AS id, CASE WHEN i < 5 THEN [] ELSE [{'a': i, 'b': 'x'}] END AS ls, [[i]] AS ll FROM range(7) t(i))
+TO '{TEMP_DIR}/nested_text_late.json';
+
+query III
+SELECT id, ls, ll FROM read_json('{TEMP_DIR}/nested_text_late.json', sample_size = 2, schema = getvariable('nested_schema'))
+WHERE id >= 4 ORDER BY id;
+----
+4	[]	[[4]]
+5	[{'a': 5, 'b': x}]	[[5]]
+6	[{'a': 6, 'b': x}]	[[6]]
+
+# the cast reports an element that is not of the declared shape, ignore_errors does not cover it
+statement ok
+COPY (SELECT '{"id": 1, "ls": [{"a": 1, "b": "x"}, 5]}')
+TO '{TEMP_DIR}/nested_text_mixed.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+statement error
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_mixed.json', schema = getvariable('nested_schema'));
+----
+<REGEX>:Conversion Error:.*failed to cast column "ls" from type JSON\[\] to STRUCT\(a BIGINT, b VARCHAR\)\[\].*Expected OBJECT.*
+
+statement error
+SELECT id, ls FROM read_json('{TEMP_DIR}/nested_text_mixed.json', ignore_errors = true, schema = getvariable('nested_schema'));
+----
+<REGEX>:Conversion Error:.*failed to cast column "ls" from type JSON\[\] to STRUCT\(a BIGINT, b VARCHAR\)\[\].*Expected OBJECT.*
+
+# text in a database: lists of JSON and VARCHAR, a list in a struct, a map value, the inner list of a list of lists
+statement ok
+ATTACH '{TEMP_DIR}/nested_text.db' AS file_db;
+
+statement ok
+CREATE TYPE file_db.text_enum AS ENUM ('{"a": 1, "b": 2}', '{"a": 3, "b": 4}');
+
+statement ok
+CREATE TABLE file_db.tbl AS SELECT
+	['{"a": 1, "b": 2}', '{"a": 3, "b": 4}']::JSON[] AS lj,
+	['{''a'': 1, ''b'': 2}', NULL]::VARCHAR[] AS lv,
+	{'l': ['{"a": 1, "b": 2}']::JSON[], 'k': 5::BIGINT} AS sj,
+	MAP {'k': '{"a": 1, "b": 2}'::JSON} AS mj,
+	[['{"a": 1, "b": 2}'::JSON], []] AS llj,
+	[{'a': 1::BIGINT, 'c': '{"x": 9}'::JSON}] AS lsf,
+	['{"a": 1, "b": 2}'::file_db.text_enum] AS le,
+	[{'a': 1::BIGINT, 'b': 2::BIGINT}::VARIANT] AS lvar,
+	['{"a": 1, "b": 2}'::BLOB] AS lb,
+	[1::BIGINT] AS li;
+
+statement ok
+DETACH file_db;
+
+statement ok
+COPY (SELECT ['{"a": 1, "b": 2}', '{"a": 3, "b": 4}']::JSON[] AS lj, ['{''a'': 1, ''b'': 2}', NULL]::VARCHAR[] AS lv)
+TO '{TEMP_DIR}/nested_text.parquet';
+
+# the list is cast by the names in the text, as it is without declared children
+query II
+SELECT lj, lv FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	'lv': {name: 'lv', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+});
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]	[{'a': 1, 'b': 2}, NULL]
+
+query II
+SELECT lj, lv FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: NULL},
+	'lv': {name: 'lv', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: NULL}
+});
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]	[{'a': 1, 'b': 2}, NULL]
+
+# the keys and defaults declared below such a list are not applied, text has no fields: crossed keys are not seen,
+# a declared field that the text does not have is NULL for VARCHAR and an error for JSON
+query II
+SELECT lj, lv FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'b': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'a': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	'lv': {name: 'lv', type: 'STRUCT(a BIGINT, b BIGINT, d BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT, d BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL},
+			'missing': {name: 'd', type: 'BIGINT', default_value: 7, children: NULL}}}}}
+});
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]	[{'a': 1, 'b': 2, 'd': NULL}, NULL]
+
+statement error
+SELECT lj FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT, d BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT, d BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL},
+			'missing': {name: 'd', type: 'BIGINT', default_value: 7, children: NULL}}}}}
+});
+----
+<REGEX>:Conversion Error:.*does not have key "d".*
+
+# a struct above the list is mapped field by field: k is renamed and x takes its default
+query I
+SELECT sj FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'sj': {name: 'sj', type: 'STRUCT(l STRUCT(a BIGINT, b BIGINT)[], rk BIGINT, x BIGINT)', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+				'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+		'k': {name: 'rk', type: 'BIGINT', default_value: NULL, children: NULL},
+		'missing': {name: 'x', type: 'BIGINT', default_value: 7, children: NULL}}}
+});
+----
+{'l': [{'a': 1, 'b': 2}], 'rk': 5, 'x': 7}
+
+# text as the value of a map and as the element of the inner list of a list of lists
+query II
+SELECT mj, llj FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'mj': {name: 'mj', type: 'MAP(VARCHAR, STRUCT(a BIGINT, b BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	'llj': {name: 'llj', type: 'STRUCT(a BIGINT, b BIGINT)[][]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+			'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+				'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}}
+});
+----
+{k={'a': 1, 'b': 2}}	[[{'a': 1, 'b': 2}], []]
+
+# any element that can be cast to the declared nested type takes the same route: ENUM and VARIANT
+query II
+SELECT le, lvar FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'le': {name: 'le', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}},
+	'lvar': {name: 'lvar', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+});
+----
+[{'a': 1, 'b': 2}]	[{'a': 1, 'b': 2}]
+
+# an element without a cast to the declared type is a binder error
+statement error
+SELECT lb FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lb': {name: 'lb', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(BLOB\) to target type \(STRUCT\(a BIGINT, b BIGINT\)\).*
+
+statement error
+SELECT li FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'li': {name: 'li', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(BIGINT\) to target type \(STRUCT\(a BIGINT, b BIGINT\)\).*
+
+# a text field of a struct is not the element of a list: the struct is not cast, and the field is a binder error,
+# also next to a field that is mapped
+statement error
+SELECT lsf FROM read_duckdb('{TEMP_DIR}/nested_text.db', schema = MAP {
+	'lsf': {name: 'lsf', type: 'STRUCT(ra BIGINT, c STRUCT(x BIGINT))[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(ra BIGINT, c STRUCT(x BIGINT))', default_value: NULL, children: MAP {
+			'a': {name: 'ra', type: 'BIGINT', default_value: NULL, children: NULL},
+			'c': {name: 'c', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+				'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(JSON\) to target type \(STRUCT\(x BIGINT\)\).*
+
+statement error
+SELECT s FROM read_json('{TEMP_DIR}/nested_text_empty.json', columns = {s: 'STRUCT(l JSON)'}, schema = MAP {
+	's': {name: 's', type: 'STRUCT(l STRUCT(a BIGINT)[])', default_value: NULL, children: MAP {
+		'l': {name: 'l', type: 'STRUCT(a BIGINT)[]', default_value: NULL, children: NULL}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(JSON\) to target type \(STRUCT\(a BIGINT\)\[\]\).*
+
+# the Parquet reader describes the children of its lists, they are not derived: text where the schema declares a
+# nested element is a binder error there, with and without declared element children
+statement error
+SELECT lj FROM read_parquet('{TEMP_DIR}/nested_text.parquet', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(JSON\) to target type \(STRUCT\(a BIGINT, b BIGINT\)\).*
+
+statement error
+SELECT lv FROM read_parquet('{TEMP_DIR}/nested_text.parquet', schema = MAP {
+	'lv': {name: 'lv', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: MAP {
+		'list': {name: 'element', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: NULL}}}
+});
+----
+<REGEX>:Binder Error:.*Can't change source type \(VARCHAR\) to target type \(STRUCT\(a BIGINT, b BIGINT\)\).*
+
+# protection: without declared children the Parquet list is cast as a whole
+query II
+SELECT lj, lv FROM read_parquet('{TEMP_DIR}/nested_text.parquet', schema = MAP {
+	'lj': {name: 'lj', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: NULL},
+	'lv': {name: 'lv', type: 'STRUCT(a BIGINT, b BIGINT)[]', default_value: NULL, children: NULL}
+});
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]	[{'a': 1, 'b': 2}, NULL]
