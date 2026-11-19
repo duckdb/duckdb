@@ -62,11 +62,13 @@ FROM range(5003) r(i);
 
 foreach target DECIMAL(39,0) DECIMAL(40,2) DECIMAL(76,38) DECIMAL(80,40)
 
+# Sort the wide results so the checks consume them after all input vectors.
 query I
-WITH rescaled AS MATERIALIZED (
+SELECT count(*) FILTER (WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y))
+FROM (
     SELECT TRY_CAST(d AS {target}) x, TRY_CAST(d::VARCHAR AS {target}) y FROM t
-)
-SELECT count(*) FROM rescaled WHERE x IS DISTINCT FROM y OR hash(x) IS DISTINCT FROM hash(y);
+    ORDER BY x
+) rescaled;
 ----
 0
 
