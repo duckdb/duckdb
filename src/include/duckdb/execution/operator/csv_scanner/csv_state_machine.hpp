@@ -37,8 +37,7 @@ struct CSVStates {
 	}
 
 	inline bool EmptyLastValue() const {
-		// It is a new row, if the previous state is not a record separator, and the current one is
-		// a field of only inert escapes (FIELD_START, escape_mode 'opencsv') is empty as well
+		// a field of only inert escapes (FIELD_START) is empty as well
 		return ((states[0] == CSVState::DELIMITER || states[0] == CSVState::FIELD_START) &&
 		        (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN ||
 		         states[1] == CSVState::DELIMITER)) ||

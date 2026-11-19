@@ -22,37 +22,33 @@ enum class NewLineIdentifier : uint8_t {
 
 //! Which characters the escape character can escape
 enum class CSVEscapeMode : uint8_t {
-	//! The escape character escapes any character that follows it, including the delimiter and a newline
+	//! The escape escapes any character after it
 	ALL = 0,
-	//! The escape character only escapes the quote and escape characters, and is inert before the first content of a
-	//! field, as in opencsv: a delimiter still separates values, a newline still ends the record, and '\\x' is 'x'
+	//! The escape only escapes the quote and escape characters and is inert anywhere else, as in opencsv
 	OPENCSV = 1
 };
 
 //! What quotes mean at record boundaries
 enum class CSVQuoteMode : uint8_t {
-	//! A quoted value continues across line breaks, and an unclosed quote runs on
+	//! A quoted value continues across line breaks
 	STANDARD = 0,
-	//! A line break ends the record even inside quotes, and a quote that is never closed reads its field as NULL,
-	//! as line-based readers such as OpenCSVSerde do; every line break is a record boundary
+	//! A line break ends the record even inside quotes, as line readers such as OpenCSVSerde do
 	LINES = 1
 };
 
-//! What a quote character in the middle of a field means
+//! What a quote in the middle of a field means
 enum class CSVEmbeddedQuote : uint8_t {
 	//! A plain data byte
 	DATA = 0,
-	//! The quote toggles the quote state, as opencsv's embedded quote rule does, so a lone quote in a field opens a
-	//! quoted section and an unclosed one reads the field as NULL
+	//! The quote follows opencsv's embedded quote rule and toggles the quote state
 	OPENCSV = 1
 };
 
-//! A named CSV dialect: a preset over the internal parsing options
+//! A named CSV dialect, a preset over the internal parsing options
 enum class CSVDialect : uint8_t {
 	//! DuckDB's own CSV reading, governed by the individual options
 	STANDARD = 0,
-	//! Hive/Athena's OpenCSVSerde: the escape character only escapes the quote and escape characters and is inert
-	//! before the first content of a field, and a line break ends the record even inside quotes
+	//! The CSV reading of Hive and Athena's OpenCSVSerde
 	OPENCSV = 1
 };
 

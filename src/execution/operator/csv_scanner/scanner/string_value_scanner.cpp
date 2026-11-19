@@ -1031,7 +1031,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
 		if (result.RecordEndsInsideQuotes()) {
-			// quote_mode 'lines': the line break ended the record inside an open quote
+			// the line break ended the record inside an open quote
 			result.AddUnterminatedQuoteNull();
 		} else if (result.quoted) {
 			result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
@@ -1475,8 +1475,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
                                           bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector) {
 	idx_t start = 0;
 	if (escape_inert_at_field_start) {
-		// escape_mode 'opencsv': every escape before the field's first content is inert - dropped without escaping
-		// the character after it, so '\\x' is 'x'
+		// every escape before the field's first content is inert and drops without escaping anything
 		while (start < end && str_ptr[start] == escape) {
 			start++;
 		}
@@ -1543,7 +1542,7 @@ string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char 
 		const bool has_next = pos + 1 < size;
 		if (c == escape) {
 			if ((in_quotes || in_field) && has_next && (str_ptr[pos + 1] == quote || str_ptr[pos + 1] == escape)) {
-				// an escaped quote or escape character; any other escape is consumed without effect
+				// an escaped quote or escape character, while any other escape is consumed without effect
 				result_ptr[result_pos++] = str_ptr[pos + 1];
 				all_whitespace = false;
 				units = units < 3 ? units + 2 : units;
@@ -1564,10 +1563,10 @@ string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char 
 				pos += 2;
 				continue;
 			}
-			// a lone quote away from the line start and the separators is a kept literal, unless the field so far
-			// is only whitespace, which it discards; either way the quote state toggles
+			// a lone quote toggles the quote state and is a kept literal away from the line start and separators
 			if (units > 2 && pos > 0 && str_ptr[pos - 1] != separator && has_next && str_ptr[pos + 1] != separator) {
 				if (all_whitespace && result_pos > 0) {
+					// a kept literal discards a field of only whitespace before it
 					result_pos = 0;
 				} else {
 					result_ptr[result_pos++] = quote;
@@ -1583,7 +1582,7 @@ string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char 
 		result_ptr[result_pos++] = c;
 		in_field = true;
 		all_whitespace = all_whitespace && StringUtil::CharacterIsSpace(c);
-		// count UTF-16 units: one per character, two for the characters UTF-8 encodes in four bytes
+		// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
 		if ((static_cast<uint8_t>(c) & 0xC0) != 0x80) {
 			units = units < 3 ? units + (static_cast<uint8_t>(c) >= 0xF0 ? 2 : 1) : units;
 		}
@@ -1724,7 +1723,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 	}
 	if (!skip_value && !result.comment && result.RecordEndsInsideQuotes()) {
-		// quote_mode 'lines': the line break ended the record inside an open quote
+		// the line break ended the record inside an open quote
 		result.AddUnterminatedQuoteNull();
 	} else if (!skip_value) {
 		string_t value;

@@ -1,12 +1,12 @@
 # name: test/sql/copy/csv/csv_dialect_opencsv.test
-# description: Test dialect='opencsv': OpenCSVSerde escapes and line-bound records
+# description: Test dialect 'opencsv' with OpenCSVSerde escapes and line records
 # group: [csv]
 
 # a file whose second line ends in an escape character
 statement ok
 COPY (SELECT * FROM (VALUES ('1,\'), ('2,b'), ('3,c')) t(line)) TO '{TEST_DIR}/dialect_rows.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
-# the standard dialect with escape '\' applies the escape to the line break: the second row is joined to the first
+# the standard dialect applies the escape to the line break and joins the second row to the first
 query I
 SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR'}, delim=',', quote='"', escape='\', strict_mode=false, null_padding=true, header=false, auto_detect=false);
 ----
@@ -20,7 +20,7 @@ SELECT id, concat('<', val, '>') FROM read_csv('{TEST_DIR}/dialect_rows.csv', co
 2	<b>
 3	<c>
 
-# the escape rules: inert at the start of a field, only the quote and escape characters within one
+# the escape is inert at the start of a field and escapes only the quote and escape characters within one
 statement ok
 COPY (SELECT * FROM (VALUES
     ('1,a\,7'),
@@ -32,12 +32,9 @@ COPY (SELECT * FROM (VALUES
     ('7,\"a,b",13')
 ) t(line)) TO '{TEST_DIR}/dialect_fields.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
-# - the escape never escapes the separator (1) and is dropped before ordinary characters (2)
-# - an escaped escape or quote is kept (3, 4)
-# - a trailing escape is dropped and missing fields are NULL (5)
-# - leading escapes are inert, so '\\x' is 'x' (6)
-# - a quote after an inert escape opens a quoted field, and since its neighbor is the escape rather than
-#   the separator, opencsv's embedded quote rule keeps it as a literal (7)
+# the escape never escapes the separator (1) and drops before ordinary characters (2)
+# an escaped escape or quote is kept (3, 4) and a trailing escape drops with missing fields NULL (5)
+# leading escapes are inert (6) and a quote after one opens a quoted field with the quote kept as a literal (7)
 query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', null_padding=true, header=false, auto_detect=false) ORDER BY id;
 ----
@@ -49,7 +46,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_fields.csv', columns={'id': 'INTEGER'
 6	x	12
 7	"a,b	13
 
-# a quoted value after an inert escape holds no escapes: it converts into a typed column
+# a quoted value after an inert escape holds no escapes and converts into a typed column
 statement ok
 COPY (SELECT * FROM (VALUES ('\"123"'), ('456')) t(line)) TO '{TEST_DIR}/dialect_typed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -78,9 +75,7 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': '
 ----
 2
 
-# dialect 'opencsv': the line break ends the record, the open quote reads its field as NULL, and the next line is
-# its own record - in parallel, since every line break is a record boundary; the lone quote in 'b"' toggles into a
-# quoted section too, so that line's first field is also unterminated
+# under the dialect each line is its own record and a field left open by a quote reads as NULL
 query TTT
 SELECT * FROM read_csv('{TEST_DIR}/dialect_newline.csv', columns={'id': 'VARCHAR', 'val': 'VARCHAR', 'n': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', null_padding=true, header=false, auto_detect=false) ORDER BY id NULLS FIRST;
 ----
@@ -105,7 +100,7 @@ SELECT id FROM read_csv('{TEST_DIR}/dialect_last.csv', columns={'id': 'INTEGER',
 1
 2
 
-# a closed quoted value on one line reads as always; the escape defaults to '\' under the dialect
+# a closed quoted value on one line reads as always, with the escape defaulting to backslash
 statement ok
 COPY (SELECT * FROM (VALUES ('3,"q uoted",9'), ('4,"a""b",10')) t(line)) TO '{TEST_DIR}/dialect_closed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -162,7 +157,7 @@ SELECT id, concat('<', val, '>') FROM dialect_rows ORDER BY id;
 2	<b>
 3	<c>
 
-# dialect is a read option: the CSV writer does not accept it
+# dialect is a read option that the CSV writer does not accept
 statement error
 COPY dialect_rows TO '{TEST_DIR}/dialect_write.csv' (FORMAT csv, DIALECT 'opencsv');
 ----
@@ -179,8 +174,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_doubled.csv', columns={'id': 'INTEGER
 6	a"b"c	12
 7	a"	13
 
-# a doubled quote in an unquoted field is one quote too; a lone quote in a field toggles into a quoted section, so
-# an unclosed one reads the field as NULL
+# a doubled quote in an unquoted field is one quote too, and an unclosed lone quote reads the field as NULL
 statement ok
 COPY (SELECT * FROM (VALUES ('8,a""b,14'), ('9,a"b,15'), ('10,a""b""c,16'), ('11,a"",17')) t(line)) TO '{TEST_DIR}/dialect_field_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -211,7 +205,7 @@ SELECT id, length(val), n FROM read_csv('{TEST_DIR}/dialect_nul.csv', columns={'
 ----
 1	3	7
 
-# a fully empty line is skipped, where OpenCSVSerde reads a row of one empty field: a known divergence
+# a fully empty line is skipped, where OpenCSVSerde reads a row of one empty field, a known divergence
 statement ok
 COPY (SELECT * FROM (VALUES ('1,a,7'), (''), ('2,b,8')) t(line)) TO '{TEST_DIR}/dialect_empty_line.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -220,8 +214,7 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id'
 ----
 2
 
-# a quote in the middle of a field follows opencsv's embedded quote rule: away from the line start and the
-# separators it is a kept literal, next to them it is dropped; either way it toggles the quote state
+# a quote in the middle of a field is a kept literal away from the line start and separators, dropped next to them
 statement ok
 COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -260,8 +253,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_toggled_escape.csv', columns={'id': '
 ----
 18	a"b"c"d	24
 
-# the embedded quote rule counts the quote's position from the line start: within the first three characters it is
-# dropped, so the same content reads differently in the first field and in a later one
+# a quote within the line's first three characters is dropped, so the first field reads differently
 statement ok
 COPY (SELECT * FROM (VALUES ('a"b"c,30,1'), ('x,a"b"c,2'), (',x"y"z,28')) t(line)) TO '{TEST_DIR}/dialect_gate.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -272,8 +264,7 @@ ab"c	30	1
 x	a"b"c	2
 (empty)	xy"z	28
 
-# a field of only whitespace before a kept-literal quote is discarded; a quote next to the separator or the line
-# end is dropped
+# a kept literal discards a field of only whitespace before it, and a quote next to separator or line end drops
 statement ok
 COPY (SELECT * FROM (VALUES ('20,  "ws",26'), ('21,a"b",27')) t(line)) TO '{TEST_DIR}/dialect_ws.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
@@ -283,8 +274,7 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_ws.csv', columns={'id': 'INTEGER', 'v
 20	ws	26
 21	a"b	27
 
-# every quote event also flips opencsv's field flag: after the doubled quote in a plain field the flag is off, so
-# the following escape is inert and its quote opens a section that never closes, reading the field as NULL
+# after a doubled quote in a plain field opencsv's field flag is off, making the escape inert and its field NULL
 statement ok
 COPY (SELECT * FROM (VALUES ('22,b ""\"x,29'), ('23,ok,31')) t(line)) TO '{TEST_DIR}/dialect_field_flag.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 

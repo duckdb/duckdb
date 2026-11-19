@@ -129,7 +129,7 @@ struct CSVReaderOptions {
 
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
-	//! The CSV dialect the file is read as: a preset over the internal parsing options
+	//! The CSV dialect the file is read as, a preset over the internal parsing options
 	CSVOption<CSVDialect> dialect = CSVDialect::STANDARD;
 	//! User defined parameters
 	identifier_tree_t<string> user_defined_parameters;

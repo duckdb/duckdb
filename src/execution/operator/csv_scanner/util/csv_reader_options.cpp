@@ -652,8 +652,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			throw BinderException("DIALECT 'opencsv' is not supported when STRICT_MODE is manually set to true: "
 			                      "OpenCSVSerde reading is not strict");
 		}
-		// the SerDe defines its quote, escape and comment characters, so the sniffer only detects the delimiter and
-		// the line ending: OpenCSVSerde reads with a '"' quote, a '\' escape and no comments when none are given
+		// OpenCSVSerde defines its quote, escape and comment characters, so the sniffer detects only the rest
 		if (!state_machine_options.quote.IsSetByUser()) {
 			state_machine_options.quote.ChangeSetByUserTrue();
 		}
@@ -685,7 +684,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		if (user_defined_parameters.count(Identifier("null_padding")) == 0) {
 			null_padding = true;
 		}
-		// the internal parsing options the dialect is made of, which only non-strict parsing accepts
+		// the internal parsing options the dialect is made of
 		state_machine_options.escape_mode.Set(CSVEscapeMode::OPENCSV, false);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
 		state_machine_options.strict_mode.Set(false, false);

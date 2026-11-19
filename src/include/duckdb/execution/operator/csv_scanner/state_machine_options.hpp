@@ -40,10 +40,9 @@ struct CSVStateMachineOptions {
 	CSVOption<CSVEscapeMode> escape_mode = CSVEscapeMode::ALL;
 	//! What quotes mean at record boundaries
 	CSVOption<CSVQuoteMode> quote_mode = CSVQuoteMode::STANDARD;
-	//! A doubled quote is one quote also when the escape character differs from the quote, in a quoted field or not,
-	//! as opencsv reads it
+	//! A doubled quote is one quote also outside quoted fields and with an unrelated escape, as in opencsv
 	CSVOption<bool> doubled_quotes = false;
-	//! What a quote character in the middle of a field means
+	//! What a quote in the middle of a field means
 	CSVOption<CSVEmbeddedQuote> embedded_quote = CSVEmbeddedQuote::DATA;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
