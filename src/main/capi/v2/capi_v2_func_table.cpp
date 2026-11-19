@@ -437,6 +437,7 @@ public:
 	duckdb_v2_table_function_claim_batch_callback_fn claim_batch_cb = nullptr;
 	duckdb_v2_table_function_get_bind_info_callback_fn get_bind_info_cb = nullptr;
 	duckdb_v2_table_function_metrics_callback_fn metrics_cb = nullptr;
+	duckdb_v2_table_function_to_string_callback_fn to_string_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
 	//! Whether the function sees the filters of the scan: it has a filter pushdown callback and projection pushdown
@@ -493,6 +494,44 @@ static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInf
 	}
 
 	return std::move(args.out_bind_info);
+}
+
+//! What the "to string" callback describes a bound call with in a query plan
+class CV2TableToStringInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+
+	InsertionOrderPreservingMap<string> out_entries;
+};
+
+static auto Convert(duckdb_v2_table_function_to_string_info_handle info) -> CV2TableToStringInfo * {
+	return reinterpret_cast<CV2TableToStringInfo *>(info);
+}
+static auto Convert(CV2TableToStringInfo *info) -> duckdb_v2_table_function_to_string_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_to_string_info_handle>(info);
+}
+
+static auto CV2TableToString(TableFunctionToStringInput &input) -> InsertionOrderPreservingMap<string> {
+	if (!input.bind_data) {
+		return InsertionOrderPreservingMap<string>();
+	}
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	CV2TableToStringInfo args;
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.to_string_cb(Convert(&args), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return std::move(args.out_entries);
 }
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
@@ -1246,6 +1285,9 @@ public:
 		}
 		if (info.get_bind_info_cb) {
 			function.get_bind_info = CV2TableGetBindInfo;
+		}
+		if (info.to_string_cb) {
+			function.to_string = CV2TableToString;
 		}
 
 		// a function registered through the C API makes no stability promise unless one was declared
@@ -2217,6 +2259,47 @@ duckdb_v2_table_function_get_bind_info_set_option(duckdb_v2_table_function_get_b
 	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
 		Convert(info)->out_bind_info.options[duckdb::string(Convert(key, key_length))] = *Convert(value);
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// To string
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_to_string_callback(duckdb_v2_table_function_handle function,
+                                                duckdb_v2_table_function_to_string_callback_fn callback,
+                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.to_string_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_user_data(duckdb_v2_table_function_to_string_info_handle info,
+                                                                 void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_bind_data(duckdb_v2_table_function_to_string_info_handle info,
+                                                                 void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_set(duckdb_v2_table_function_to_string_info_handle info,
+                                                       const char *key, idx_t key_length, const char *value,
+                                                       idx_t value_length, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_STR_ARG(key, key_length);
+	DUCKDB_CHECK_STR_ARG(value, value_length);
+	return WithErrorHandler(err, [&]() {
+		if (key_length == 0) {
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_to_string_set: the key cannot be empty");
+		}
+		Convert(info)->out_entries[duckdb::string(Convert(key, key_length))] =
+		    duckdb::string(Convert(value, value_length));
 	});
 }
 
