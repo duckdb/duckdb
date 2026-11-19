@@ -874,19 +874,20 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		const auto group = BlockAllocator::GetLocalShard(shard_count) * 2 / shard_count;
-		if (phase == HashJoinFilterCopyPhase::PRIMARY ||
-		    (group == copy.replica_group.GetIndex() && !copy.claimed.exchange(true, std::memory_order_relaxed))) {
+		const auto group = BlockAllocator::GetLocalShardGroup(shard_count);
+		const auto force = Settings::Get<DebugForceBloomFilterReplicationSetting>(context);
+		if (phase == HashJoinFilterCopyPhase::PRIMARY || ((force || group == copy.replica_group.GetIndex()) &&
+		                                                  !copy.claimed.exchange(true, std::memory_order_relaxed))) {
 			try {
 				auto buffer = copy.filter->CopyBuffer(context);
-				auto &allocator = BlockAllocator::Get(*context.db);
-				const auto home = allocator.GetFallbackAllocationShard(buffer.get(), buffer.GetSize());
-				if (home.IsValid()) {
-					const auto buffer_group = home.GetIndex() * 2 / shard_count;
+				const auto home = buffer.GetAllocationShard();
+				if (force || home.IsValid()) {
+					const auto buffer_group =
+					    force ? group : BlockAllocator::GetShardGroup(home.GetIndex(), shard_count);
 					if (phase == HashJoinFilterCopyPhase::PRIMARY) {
-						copy.replica_group = optional_idx(1 - buffer_group);
+						copy.replica_group = optional_idx(force ? group : 1 - buffer_group);
 						copy.buffer = std::move(buffer);
-					} else if (buffer_group == copy.replica_group.GetIndex()) {
+					} else if (force || buffer_group == copy.replica_group.GetIndex()) {
 						copy.buffer = std::move(buffer);
 					}
 				}
@@ -975,7 +976,8 @@ void JoinFilterPushdownInfo::FinalizeRuntimeFilters(Pipeline &pipeline, Event &e
 		ht.SealBloomFilters();
 		auto &gstate = *filter_state;
 		const auto shard_count = BlockAllocator::Get(*context.db).GetFallbackShardCount();
-		if (num_threads > 128 && shard_count > 32 && !gstate.deferred_runtime_filters.empty()) {
+		const auto force = Settings::Get<DebugForceBloomFilterReplicationSetting>(context);
+		if ((force || (num_threads > 128 && shard_count > 32)) && !gstate.deferred_runtime_filters.empty()) {
 			auto copies = make_shared_ptr<HashJoinFilterCopies>(shard_count);
 			vector<bool> considered(ht.GetBloomFilters().size(), false);
 			auto remaining = GetMemoryBudget(context);
@@ -995,7 +997,7 @@ void JoinFilterPushdownInfo::FinalizeRuntimeFilters(Pipeline &pipeline, Event &e
 				}
 				const auto bytes = filter->GetBitmapSize();
 				const auto budget = filter->GetMemoryBudget();
-				if (bytes < (1ULL << 20) || bytes > (256ULL << 20) || bytes > budget / 2 ||
+				if ((!force && bytes < (1ULL << 20)) || bytes > (256ULL << 20) || bytes > budget / 2 ||
 				    filter->GetAllocationSize() > budget - bytes || bytes > remaining) {
 					continue;
 				}

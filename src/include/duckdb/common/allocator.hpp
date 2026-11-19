@@ -197,17 +197,22 @@ public:
 	idx_t GetSize() const {
 		return allocated_size;
 	}
+	//! Approximate fallback-backing ownership supplied by BlockAllocator; unknown after untracked reuse.
+	optional_idx GetAllocationShard() const {
+		return allocation_shard;
+	}
 	bool IsSet() const {
 		return pointer;
 	}
 	DUCKDB_API void Reset();
 
 private:
-	HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size);
+	HugeAllocation(BufferAllocator &allocator, data_ptr_t pointer, idx_t allocated_size, optional_idx allocation_shard);
 
 	optional_ptr<BufferAllocator> allocator;
 	data_ptr_t pointer;
 	idx_t allocated_size;
+	optional_idx allocation_shard;
 };
 
 //! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the
@@ -230,7 +235,7 @@ public:
 private:
 	explicit BufferAllocator(StandardBufferManager &manager);
 
-	void FreeHuge(data_ptr_t pointer, idx_t size);
+	void FreeHuge(data_ptr_t pointer, idx_t size, optional_idx allocation_shard);
 };
 
 } // namespace duckdb

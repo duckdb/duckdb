@@ -199,7 +199,7 @@ BloomFilter::ReadView GetBloomFilterReadView(const BloomFilter &filter, const Bl
 	if (!locality.replica_group.IsValid()) {
 		return filter.GetReadView();
 	}
-	const auto group = BlockAllocator::GetLocalShard(locality.shard_count) * 2 / locality.shard_count;
+	const auto group = BlockAllocator::GetLocalShardGroup(locality.shard_count);
 	return filter.GetReadView(group == locality.replica_group.GetIndex() ? 1 : 0);
 }
 
