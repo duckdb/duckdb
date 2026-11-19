@@ -1241,9 +1241,21 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 		    OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
+			// the incoming set keeps its own validator, the existing set's declaration is kept
+			new_info.functions.MergeLanguageDeclaration(existing_function->functions, false);
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+			}
+		}
+		// checked on the merged set, which can inherit a declaration, and on the whole qualification: a language
+		// nested in system.s.main is not the system.main language a member call looks up
+		if (info.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
+		    info.Cast<CreateScalarFunctionInfo>().functions.IsLanguage()) {
+			const bool is_main = schema_path.empty() || (schema_path.size() == 1 && schema_path[0] == DEFAULT_SCHEMA);
+			if (!is_main) {
+				throw InvalidInputException("A function language must be registered in the main schema, where calls "
+				                            "of its members look it up");
 			}
 		}
 		// create function

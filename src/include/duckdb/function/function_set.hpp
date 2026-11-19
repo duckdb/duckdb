@@ -49,6 +49,35 @@ public:
 	void SetStatisticsCallback(function_statistics_t callback) {
 		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetStatisticsCallback(callback); });
 	}
+
+	//! Declare the set a function language: members of CREATE FUNCTION ... LANGUAGE <name> resolve through it. An
+	//! extension registers the declared set first: later sets of that name it registers without the declaration join
+	//! the language, while declaring a language after registering overloads of it in its own schema fails
+	void DeclareLanguage() {
+		is_language = true;
+	}
+	bool IsLanguage() const {
+		return is_language;
+	}
+	//! The CREATE-time validation of the language's members (if any)
+	void SetCreateValidateCallback(scalar_function_create_validate_t callback) {
+		create_validate = callback;
+	}
+	scalar_function_create_validate_t GetCreateValidateCallback() const {
+		return create_validate;
+	}
+	//! Merge the language declaration of a set whose overloads are merged with this one: the result is a language if
+	//! either set is, and the other set's validator wins if it has one and takes precedence, or this set has none
+	void MergeLanguageDeclaration(const ScalarFunctionSet &other, bool other_takes_precedence = true) {
+		is_language = is_language || other.is_language;
+		if (other.create_validate && (other_takes_precedence || !create_validate)) {
+			create_validate = other.create_validate;
+		}
+	}
+
+private:
+	bool is_language = false;
+	scalar_function_create_validate_t create_validate = nullptr;
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
