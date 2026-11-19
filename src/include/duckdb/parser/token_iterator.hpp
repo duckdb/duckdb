@@ -15,14 +15,20 @@
 
 namespace duckdb {
 struct SimpleToken;
+class TokenizerBehavior;
 
 //! Iterates over an already-tokenized query. A root iterator can own its tokens; child iterators
 //! reference the same tokens and carry an independent position for speculative parsing.
 class TokenIterator {
 public:
 	DUCKDB_API explicit TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens);
+	//! Takes ownership of the tokens the behavior produced (leaving its vector empty) and keeps a pointer to
+	//! `behavior.sql`, so Source() is always the string their offsets index into. That string has to outlive the
+	//! iterator and its children, the behavior itself does not.
+	DUCKDB_API explicit TokenIterator(TokenizerBehavior &behavior);
 	DUCKDB_API explicit TokenIterator(vector<MatcherToken> &tokens);
-	DUCKDB_API TokenIterator(const TokenIterator &other) : tokens(other.tokens), position(other.position) {
+	DUCKDB_API TokenIterator(const TokenIterator &other)
+	    : tokens(other.tokens), source(other.source), position(other.position) {
 	}
 	DUCKDB_API TokenIterator(TokenIterator &&other) noexcept;
 	TokenIterator &operator=(const TokenIterator &) = delete;
@@ -40,6 +46,12 @@ public:
 		return tokens.size();
 	}
 	DUCKDB_API idx_t EndOffset() const;
+	//! Byte offset just past the last consumed token, or 0 if no token has been consumed yet
+	DUCKDB_API idx_t ConsumedEndOffset() const;
+	//! The text the tokens were cut from (token offsets index into it), when built from a TokenizerBehavior
+	DUCKDB_API optional_ptr<const string> Source() const {
+		return source;
+	}
 
 	DUCKDB_API optional_ptr<const MatcherToken> Current() const {
 		if (position >= tokens.size()) {
@@ -48,18 +60,60 @@ public:
 		return tokens[position];
 	}
 	LiteralInfo CurrentLiteralInfo(const GrammarLiteralTable &table) {
-		if (position >= tokens.size()) {
+		return PeekLiteralInfo(table, 0);
+	}
+	//! The token "ahead" positions after the current one, or nullptr past the end
+	optional_ptr<const MatcherToken> Peek(idx_t ahead) const {
+		auto index = position + ahead;
+		if (index >= tokens.size()) {
+			return nullptr;
+		}
+		return tokens[index];
+	}
+	LiteralInfo PeekLiteralInfo(const GrammarLiteralTable &table, idx_t ahead) {
+		auto index = position + ahead;
+		if (index >= tokens.size()) {
 			return LiteralInfo();
 		}
-		return tokens[position].GetLiteralInfo(table);
+		return tokens[index].GetLiteralInfo(table);
 	}
 	DUCKDB_API const MatcherToken &Previous() const;
-	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
+	const MatcherToken &GetToken(idx_t index) const {
+		if (index >= tokens.size()) {
+			ThrowIndexError(index);
+		}
+		return tokens[index];
+	}
 
-	DUCKDB_API void Advance(idx_t count = 1);
-	DUCKDB_API void SetPosition(idx_t position);
-	DUCKDB_API void SetPosition(const TokenIterator &other);
-	DUCKDB_API void SetPreviousTokenType(TokenType type);
+	void Advance(idx_t count = 1) {
+		if (count > tokens.size() - position) {
+			ThrowAdvanceError(count);
+		}
+		position += count;
+	}
+	void SetPosition(idx_t position_p) {
+		if (position_p > tokens.size()) {
+			ThrowPositionError(position_p);
+		}
+		position = position_p;
+	}
+	void SetPosition(const TokenIterator &other) {
+		if (&tokens != &other.tokens) {
+			ThrowCollectionError();
+		}
+		SetPosition(other.position);
+	}
+	void SetPreviousTokenType(TokenType type) {
+		if (position == 0) {
+			ThrowNoPreviousError();
+		}
+		tokens[position - 1].type = type;
+	}
+	DUCKDB_API void ThrowIndexError(idx_t index) const;
+	DUCKDB_API void ThrowAdvanceError(idx_t count) const;
+	DUCKDB_API void ThrowPositionError(idx_t position_p) const;
+	DUCKDB_API void ThrowCollectionError() const;
+	DUCKDB_API void ThrowNoPreviousError() const;
 
 	DUCKDB_API vector<SimpleToken> RemainingTokens() const;
 	DUCKDB_API string ToString() const;
@@ -67,6 +121,7 @@ public:
 private:
 	unique_ptr<vector<MatcherToken>> owned_tokens;
 	vector<MatcherToken> &tokens;
+	optional_ptr<const string> source;
 	idx_t position = 0;
 };
 

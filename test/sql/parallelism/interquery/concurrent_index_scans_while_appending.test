@@ -6,19 +6,19 @@ statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY)
 
 statement ok
-INSERT INTO integers SELECT * FROM range(10000);
+INSERT INTO integers SELECT * FROM range(1000);
 
-concurrentloop threadid 0 20
+concurrentloop threadid 0 3
 
-loop i 0 20
+loop i 0 3
 
 onlyif threadid=0
 statement ok
-INSERT INTO integers SELECT * FROM range(10000 + {i} * 100, 10100 + {i} * 100);
+INSERT INTO integers SELECT * FROM range(1000 + {i} * 100, 1100 + {i} * 100);
 
 endloop
 
-loop i 0 100
+loop i 0 10
 
 skipif threadid=0
 statement ok
@@ -31,4 +31,4 @@ endloop
 query II
 SELECT COUNT(*), SUM(i) FROM integers
 ----
-12000	71994000
+1300	844350

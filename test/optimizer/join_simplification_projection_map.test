@@ -1,0 +1,93 @@
+# name: test/optimizer/join_simplification_projection_map.test
+# description: Join simplification below operators that keep a subset of the columns of the operator they rewrite: a LEFT join turned ANTI and a region that lost a relation give up columns in the middle of their parent's output
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+create table a as select i as x, i * 10 as y from range(6) t(i);
+
+statement ok
+create table b as select i as x, i % 2 as z from range(3) t(i);
+
+statement ok
+create table c as select i as k, i + 100 as w from range(6) t(i);
+
+statement ok
+create table d as select i as k, i + 101 as v from range(6) t(i);
+
+statement ok
+create table p as select * from (values (15, 35), (25, 45), (200, 300)) t(lo, hi);
+
+# the LEFT join is the left child of an INNER join: b's columns leave the middle of that join's output, the filter
+# and the projection above keep a.x and c.w
+query II
+explain select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null;
+----
+physical_plan	<REGEX>:.*Join Type: (RIGHT_)?ANTI.*
+
+query II
+select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null order by all;
+----
+3	103
+4	104
+5	105
+
+# the filter stays above the INNER join
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+query II
+explain select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null;
+----
+physical_plan	<REGEX>:.*Join Type: (RIGHT_)?ANTI.*
+
+query II
+select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null order by all;
+----
+3	103
+4	104
+5	105
+
+statement ok
+RESET disabled_optimizers;
+
+# an ORDER BY and a LIMIT above
+query II
+explain select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null order by c.w desc limit 2;
+----
+physical_plan	<REGEX>:.*Join Type: (RIGHT_)?ANTI.*
+
+query II
+select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null order by c.w desc limit 2;
+----
+5	105
+4	104
+
+# below the SEMI join of a correlated EXISTS
+query II
+explain select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null and exists (select 1 from d where d.k = a.x and d.v > c.w);
+----
+physical_plan	<REGEX>:.*Join Type: (RIGHT_)?ANTI.*
+
+query II
+select a.x, c.w from a left join b on a.x = b.x join c on a.x = c.k where b.x is null and exists (select 1 from d where d.k = a.x and d.v > c.w) order by all;
+----
+3	103
+4	104
+5	105
+
+# a region that loses p: the INNER join with c keeps c's columns behind the gap p leaves
+query II
+explain select distinct a.x, c.w from a, p, c where a.y > p.lo and a.x = c.k;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+query II
+select distinct a.x, c.w from a, p, c where a.y > p.lo and a.x = c.k order by all;
+----
+2	102
+3	103
+4	104
+5	105

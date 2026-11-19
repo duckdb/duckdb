@@ -11,9 +11,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/optimizer/recursive_join_planning.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/join_order/join_order_source_stats.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -41,6 +43,7 @@ public:
 	LogicalOperator &op;
 	optional_ptr<LogicalOperator> parent;
 	RelationStats stats;
+	RecursiveJoinProperties recursive_properties;
 };
 
 class RelationManager {
@@ -71,12 +74,16 @@ public:
 	bool TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const;
 	bool HasCompleteStats() const;
 	bool AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
+	bool HasRecursiveRelations() const;
+	const SingleJoinRelation &GetRelation(RelationIndex index) const;
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	bool AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
 	                             optional_ptr<LogicalOperator> parent, RelationStats &child_stats);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
 
 	const vector<RelationStats> GetRelationStats();
+	void SetSourceStats(shared_ptr<const JoinOrderSourceStats> stats);
+	const join_column_sources_t &GetColumnSources() const;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
@@ -106,7 +113,11 @@ private:
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 	column_binding_map_t<ColumnBinding> normalized_bindings;
+	unordered_set<TableIndex> active_recursive_ctes;
+	bool has_recursive_relations = false;
 	bool stats_complete = true;
+	shared_ptr<const JoinOrderSourceStats> source_stats;
+	join_column_sources_t column_sources;
 };
 
 } // namespace duckdb

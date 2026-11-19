@@ -1,0 +1,537 @@
+# name: test/optimizer/deliminator_domain_predicates.test
+# description: Eliminate equality domains with predicates on correlated keys
+# group: [optimizer]
+
+statement ok
+SET explain_output='optimized_only';
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Plain correlation also preserves the outer key's representation.
+statement ok
+CREATE TABLE zero_outer(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO zero_outer VALUES ('-0.0'::DOUBLE, 1);
+
+statement ok
+CREATE TABLE zero_inner(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO zero_inner VALUES ('0.0'::DOUBLE, 1);
+
+query I
+SELECT (SELECT signbit(o.k) FROM zero_inner i WHERE i.k=o.k AND i.j=o.j) FROM zero_outer o;
+----
+true
+
+# Selected aggregate correlation also preserves the outer key's representation.
+query I
+SELECT (SELECT bool_or(signbit(o.k) AND i.j=1) FROM zero_inner i WHERE i.k=o.k AND i.j=o.j)
+FROM zero_outer o WHERE o.j=1;
+----
+true
+
+statement ok
+DROP TABLE zero_outer;
+
+statement ok
+DROP TABLE zero_inner;
+
+statement ok
+CREATE TABLE domain_outer(id INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO domain_outer VALUES (1, 1), (2, 2), (3, 2), (4, 3), (5, NULL), (6, 4);
+
+statement ok
+CREATE TABLE domain_inner(k INTEGER);
+
+statement ok
+INSERT INTO domain_inner VALUES (1), (2), (2), (NULL), (5);
+
+# The key predicate must not keep the generated domain alive.
+query II
+EXPLAIN SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1) ORDER BY id;
+----
+2
+3
+
+# Reordering the conjunction and reversing the equality retains outer duplicates.
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE o.k>1 AND o.k=i.k) ORDER BY id;
+----
+2
+3
+
+query IT
+SELECT id, EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1)
+FROM domain_outer o ORDER BY id;
+----
+1	false
+2	true
+3	true
+4	false
+5	false
+6	false
+
+query I
+SELECT id FROM domain_outer o
+WHERE NOT EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1) ORDER BY id;
+----
+1
+4
+5
+6
+
+# NULL-safe equality and non-comparison predicates use the same substitution.
+query II
+EXPLAIN SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+5
+
+# A selected outer input retains the domain for a projected marker.
+query II
+EXPLAIN SELECT id, EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1)
+FROM domain_outer o WHERE id<6;
+----
+logical_opt	<REGEX>:.*Join Type: (RIGHT_)?SEMI.*
+
+query IT
+SELECT id, EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1)
+FROM domain_outer o WHERE id<6 ORDER BY id;
+----
+1	false
+2	true
+3	true
+4	false
+5	false
+
+# Aggregate subqueries keep their domain and its predicate.
+query II
+SELECT id, (SELECT count(*) FROM domain_inner i WHERE i.k=o.k AND o.k>1)
+FROM domain_outer o WHERE id<6 ORDER BY id;
+----
+1	0
+2	2
+3	2
+4	0
+5	0
+
+# A domain predicate cannot be substituted through an inequality correlation.
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k<o.k AND o.k>2) ORDER BY id;
+----
+4
+6
+
+# Every correlated column needs an equality, including columns used only by a predicate.
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.id>2) ORDER BY id;
+----
+3
+
+statement ok
+CREATE TABLE string_outer(k VARCHAR, tag VARCHAR);
+
+statement ok
+INSERT INTO string_outer VALUES ('1', 'a'), ('2', 'a'), ('2', 'a'), ('2', 'b'), (NULL, 'a');
+
+statement ok
+CREATE TABLE string_inner(k VARCHAR, tag VARCHAR);
+
+statement ok
+INSERT INTO string_inner VALUES ('1', 'a'), ('2', 'a'), ('bad', 'b');
+
+# Multiple keys, aliases and a disjunction over the domain.
+query II
+EXPLAIN SELECT * FROM string_outer o
+WHERE EXISTS (
+    SELECT 1 FROM (SELECT k AS x, tag AS y FROM string_inner) i
+    WHERE i.x=o.k AND i.y=o.tag AND (o.k='1' OR o.tag='a')
+);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query TT rowsort
+SELECT * FROM string_outer o
+WHERE EXISTS (
+    SELECT 1 FROM (SELECT k AS x, tag AS y FROM string_inner) i
+    WHERE i.x=o.k AND i.y=o.tag AND (o.k='1' OR o.tag='a')
+);
+----
+1	a
+2	a
+2	a
+
+# Removing the domain must not introduce a cast on the unrelated 'bad' row.
+query T rowsort
+SELECT k FROM string_outer o
+WHERE EXISTS (SELECT 1 FROM string_inner i WHERE i.k=o.k AND CAST(o.k AS INTEGER)>0);
+----
+1
+2
+2
+2
+
+query II
+EXPLAIN SELECT k FROM string_outer o
+WHERE EXISTS (SELECT 1 FROM string_inner i WHERE i.k=o.k AND CAST(o.k AS INTEGER)>0);
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query II
+EXPLAIN SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>random());
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# Collation equality must not change values read by the domain predicate.
+statement ok
+CREATE TABLE collated_outer(id INTEGER, k VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO collated_outer VALUES (1, 'a'), (2, 'B'), (3, NULL), (4, 'c');
+
+statement ok
+CREATE TABLE collated_inner(k VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO collated_inner VALUES ('A'), ('b'), ('C'), ('c');
+
+query I
+SELECT id FROM collated_outer o WHERE EXISTS (
+    SELECT 1 FROM collated_inner i WHERE i.k=o.k AND ascii(o.k)>=97
+) ORDER BY id;
+----
+1
+4
+
+# A floating-point predicate must retain the original key's representation.
+statement ok
+CREATE TABLE zero_outer(k DOUBLE);
+
+statement ok
+CREATE TABLE zero_inner(k DOUBLE);
+
+statement ok
+INSERT INTO zero_outer VALUES ('-0.0'::DOUBLE);
+
+statement ok
+INSERT INTO zero_inner VALUES ('0.0'::DOUBLE);
+
+query I
+SELECT count(*) FROM zero_outer o
+WHERE EXISTS (SELECT 1 FROM zero_inner i WHERE i.k=o.k AND signbit(o.k));
+----
+1
+
+query I
+SELECT count(*) FROM zero_outer o
+WHERE EXISTS (SELECT 1 FROM zero_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND signbit(o.k));
+----
+1
+
+statement ok
+CREATE TABLE nested_outer(k STRUCT(x DOUBLE));
+
+statement ok
+CREATE TABLE nested_inner(k STRUCT(x DOUBLE));
+
+statement ok
+INSERT INTO nested_outer VALUES ({'x': '-0.0'::DOUBLE});
+
+statement ok
+INSERT INTO nested_inner VALUES ({'x': '0.0'::DOUBLE});
+
+query I
+SELECT count(*) FROM nested_outer o
+WHERE EXISTS (SELECT 1 FROM nested_inner i WHERE i.k=o.k AND signbit(o.k.x));
+----
+1
+
+# Other expressions above the join can read a key that the domain predicate does not use.
+statement ok
+ALTER TABLE zero_outer ADD COLUMN j INTEGER DEFAULT 1;
+
+statement ok
+ALTER TABLE zero_inner ADD COLUMN j INTEGER DEFAULT 1;
+
+query T
+SELECT (
+    SELECT signbit(o.k) FROM zero_inner i
+    WHERE i.k=o.k AND i.j=o.j AND o.j>0
+)
+FROM zero_outer o;
+----
+true
+
+query T
+SELECT (
+    SELECT bool_or(signbit(o.k) AND i.j=1) FROM zero_inner i
+    WHERE i.k=o.k AND i.j=o.j AND o.j>0
+)
+FROM zero_outer o WHERE o.j=1;
+----
+true
+
+query T
+SELECT (
+    SELECT bool_or(signbit(o.k) AND i.j=1) FROM zero_inner i
+    WHERE i.k=o.k AND i.j=o.j AND o.j>0
+)
+FROM zero_outer o;
+----
+true
+
+# Additional rows must not reach throwing expressions elsewhere in the subquery.
+statement ok
+CREATE TABLE cast_outer(k INTEGER);
+
+statement ok
+INSERT INTO cast_outer VALUES (1), (3);
+
+statement ok
+CREATE TABLE cast_inner(k INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO cast_inner VALUES (1, '1'), (2, 'bad'), (3, '3');
+
+query I
+SELECT (
+    SELECT sum(CAST(i.s AS INTEGER)) FROM cast_inner i
+    WHERE i.k=o.k AND o.k>0
+)
+FROM cast_outer o ORDER BY k;
+----
+1
+3
+
+query I
+SELECT k FROM cast_outer o
+WHERE EXISTS (
+    SELECT 1 FROM cast_inner i
+    WHERE i.k=o.k AND o.k>0 AND __internal_barrier(CAST(i.s AS INTEGER)>0)
+)
+ORDER BY k;
+----
+1
+3
+
+query II
+EXPLAIN SELECT k FROM cast_outer o
+WHERE EXISTS (SELECT 1 FROM cast_inner i WHERE i.k=o.k AND o.k>0 AND i.k>random());
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# Floating-point domain removal must not expose casts on unrelated inner keys.
+statement ok
+CREATE TABLE double_cast_outer AS SELECT k::DOUBLE AS k FROM cast_outer;
+
+statement ok
+CREATE TABLE double_cast_inner AS SELECT k::DOUBLE AS k, s FROM cast_inner;
+
+query I
+SELECT (SELECT sum(CAST(i.s AS INTEGER)) FROM double_cast_inner i WHERE i.k=o.k)
+FROM double_cast_outer o ORDER BY k;
+----
+1
+3
+
+query I
+SELECT (SELECT CAST(i.s AS INTEGER) FROM double_cast_inner i WHERE i.k=o.k)
+FROM double_cast_outer o ORDER BY k;
+----
+1
+3
+
+query I
+SELECT k FROM double_cast_outer o WHERE EXISTS (
+    SELECT 1 FROM double_cast_inner i WHERE i.k=o.k AND __internal_barrier(CAST(i.s AS INTEGER)>0)
+) ORDER BY k;
+----
+1
+3
+
+# Floating-point equality can be optimized when the key's representation is unobserved.
+statement ok
+CREATE TABLE use_outer(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO use_outer VALUES ('-0.0', 1), (1, 2), (NULL, 3);
+
+statement ok
+CREATE TABLE use_inner(k DOUBLE, j INTEGER);
+
+statement ok
+INSERT INTO use_inner VALUES (0, 1), (0, 2), (1, 2), (2, 1), (NULL, 3);
+
+query II
+EXPLAIN SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM use_outer o WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k=o.k);
+----
+2
+
+query I
+SELECT (SELECT count(*) FROM use_inner i WHERE i.k=o.k) FROM use_outer o ORDER BY j;
+----
+2
+1
+0
+
+# A predicate reading the key retains the conservative fallback.
+query II
+EXPLAIN SELECT count(*) FROM use_outer o
+WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+logical_opt	<REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM use_outer o
+WHERE EXISTS (SELECT 1 FROM use_inner i WHERE i.k IS NOT DISTINCT FROM o.k AND o.k IS NULL);
+----
+1
+
+# The same fallback applies to nested floating-point keys.
+query II
+EXPLAIN SELECT count(*) FROM nested_outer o
+WHERE EXISTS (SELECT 1 FROM nested_inner i WHERE i.k=o.k);
+----
+logical_opt	<REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM nested_outer o
+WHERE EXISTS (SELECT 1 FROM nested_inner i WHERE i.k=o.k);
+----
+1
+
+# Multiple cleanup candidates preserve observable keys.
+query II
+SELECT (SELECT count(*) FROM use_inner i WHERE i.k=o.k),
+       signbit((SELECT o.k FROM use_inner i WHERE i.k=o.k AND i.j=o.j))
+FROM use_outer o WHERE o.j=1;
+----
+2	true
+
+# A projected alias must retain the original key's representation.
+query I
+SELECT signbit((SELECT q.k FROM (SELECT o.k AS k FROM use_inner i WHERE i.k=o.k AND i.j=o.j) q))
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+query T
+SELECT (SELECT bool_or(signbit(o.k) AND i.j=1) FROM use_inner i WHERE i.k=o.k)
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+query T
+SELECT (SELECT list_transform([i.j], lambda x: signbit(o.k))[1]
+        FROM use_inner i WHERE i.k=o.k AND i.j=o.j)
+FROM use_outer o WHERE o.j=1;
+----
+true
+
+statement ok
+CREATE TABLE real_outer(k FLOAT);
+
+statement ok
+INSERT INTO real_outer VALUES ('-0.0'), ('-0.0'), (1), (2), (NULL), ('NaN');
+
+statement ok
+CREATE TABLE real_inner(k FLOAT);
+
+statement ok
+INSERT INTO real_inner VALUES (0), (1), (NULL), ('NaN');
+
+query II
+EXPLAIN SELECT count(*) FROM real_outer o
+WHERE EXISTS (SELECT 1 FROM real_inner i WHERE i.k IS NOT DISTINCT FROM o.k);
+----
+logical_opt	<!REGEX>:.*(CTE|DELIM).*
+
+query I
+SELECT count(*) FROM real_outer o WHERE EXISTS (SELECT 1 FROM real_inner i WHERE i.k=o.k);
+----
+4
+
+query I
+SELECT sum((SELECT count(*) FROM real_inner i WHERE i.k IS NOT DISTINCT FROM o.k)) FROM real_outer o;
+----
+5
+
+# Equal intervals need not have the same month/day representation.
+statement ok
+CREATE TABLE interval_outer AS SELECT INTERVAL '1 month' AS k;
+
+statement ok
+CREATE TABLE interval_inner AS SELECT INTERVAL '30 days' AS k;
+
+# Normalized interval comparisons stay outside direct-column substitution.
+query II
+EXPLAIN SELECT count(*) FROM interval_outer o
+WHERE EXISTS (SELECT 1 FROM interval_inner i WHERE i.k=o.k);
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query I
+SELECT count(*) FROM interval_outer o WHERE EXISTS (SELECT 1 FROM interval_inner i WHERE i.k=o.k);
+----
+1
+
+query I
+SELECT (SELECT date_part('month', o.k) FROM interval_inner i WHERE i.k=o.k) FROM interval_outer o;
+----
+1
+
+statement ok
+DROP TABLE interval_outer;
+
+statement ok
+DROP TABLE interval_inner;
+
+statement ok
+DROP TABLE use_outer;
+
+statement ok
+DROP TABLE use_inner;
+
+# Named optimizer disablement keeps the original domain plan.
+statement ok
+SET disabled_optimizers='deliminator';
+
+query II
+EXPLAIN SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1);
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query I
+SELECT id FROM domain_outer o
+WHERE EXISTS (SELECT 1 FROM domain_inner i WHERE i.k=o.k AND o.k>1) ORDER BY id;
+----
+2
+3

@@ -1,4 +1,6 @@
 #include "duckdb/common/bswap.hpp"
+#include "duckdb/main/context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -120,11 +122,11 @@ string StringDecompressFunctionName() {
 
 struct StringDecompressLocalState : public FunctionLocalState {
 public:
-	explicit StringDecompressLocalState(ClientContext &context) : allocator(Allocator::Get(context)) {
+	explicit StringDecompressLocalState(Context &context) : allocator(Allocator::Get(context.GetDatabase())) {
 	}
 
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
-	                                           FunctionData *bind_data) {
+	                                           optional_ptr<const FunctionData> bind_data) {
 		return make_uniq<StringDecompressLocalState>(state.GetContext());
 	}
 
@@ -213,7 +215,7 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 	}
 }
 
-void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                const BoundScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.GetArguments());
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
@@ -226,7 +228,7 @@ unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer,
 	return nullptr;
 }
 
-void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                  const BoundScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.GetArguments());
 }

@@ -156,6 +156,10 @@ public:
 		LoadAllSegments(l);
 		return nodes.size();
 	}
+	//! The number of segments that are loaded so far: unlike GetSegmentCount this does not load the other segments
+	idx_t GetLoadedSegmentCount(SegmentLock &l) const {
+		return nodes.size();
+	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
 	optional_ptr<SegmentNode<T>> GetSegmentByIndex(int64_t index) const {
 		auto l = Lock();
@@ -482,10 +486,12 @@ private:
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>(row_start, std::move(segment), nodes.size());
-		if (!nodes.empty()) {
-			nodes.back()->SetNext(*node);
-		}
+		auto &new_node = *node;
+		optional_ptr<SegmentNode<T>> previous_node = nodes.empty() ? nullptr : nodes.back().get();
 		nodes.push_back(std::move(node));
+		if (previous_node) {
+			previous_node->SetNext(new_node);
+		}
 	}
 	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment) const {
 		idx_t row_start;

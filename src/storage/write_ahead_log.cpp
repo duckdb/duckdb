@@ -494,12 +494,6 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
-
-	// mark written blocks as checkpointed
-	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
-	for (auto &block_id : data.GetBlockIds()) {
-		block_manager.MarkBlockAsCheckpointed(block_id);
-	}
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
@@ -617,6 +611,10 @@ void WriteAheadLog::SyncUpTo(idx_t offset) {
 		if (error.HasError()) {
 			// the OS may have dropped the dirty pages: this WAL must never be synced again
 			sync_failed = true;
+			auto &attached = GetDatabase();
+			if (attached.SupportsScopedInvalidation()) {
+				attached.Invalidate("syncing its WAL failed", error.RawMessage());
+			}
 		} else {
 			durable_offset = target;
 		}

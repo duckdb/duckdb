@@ -431,7 +431,7 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement,
-                                            const char **parameter_names, const idx_t *parameter_names_lengths,
+                                            const char *const *parameter_names, const idx_t *parameter_names_lengths,
                                             const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
                                             duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err) {
 	// The refusals here never reach the engine and leave the statement intact

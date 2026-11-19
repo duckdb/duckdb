@@ -1,7 +1,8 @@
 #include "duckdb/execution/index/art/art_builder.hpp"
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
 
@@ -35,9 +36,16 @@ ARTConflictType ARTBuilder::Build() {
 				return ARTConflictType::CONSTRAINT;
 			}
 
+			// Create the prefix, if any. The tail stays pinned while we fill its child.
 			reference<NodePtr> node_ptr_ref(entry.node_ptr);
+			optional<PrefixHandle> tail;
 			auto count = UnsafeNumericCast<idx_t>(start.len - prefix_depth);
-			Prefix::New(art, node_ptr_ref, start, prefix_depth, count);
+			if (count != 0) {
+				auto chain = PrefixHandle::New(art, start, prefix_depth, count);
+				entry.node_ptr = chain.root_ptr;
+				tail = std::move(chain.tail);
+				node_ptr_ref = tail->Child(art);
+			}
 
 			// Inline the row ID.
 			if (row_id_count == 1) {
@@ -56,10 +64,16 @@ ARTConflictType ARTBuilder::Build() {
 			continue;
 		}
 
-		// Create the prefix. Returns early, if the prefix_length is zero.
+		// Create the prefix, if any. The tail stays pinned while we fill its child.
 		reference<NodePtr> node_ptr_ref(entry.node_ptr);
+		optional<PrefixHandle> tail;
 		auto prefix_length = entry.depth - prefix_depth;
-		Prefix::New(art, node_ptr_ref, start, prefix_depth, prefix_length);
+		if (prefix_length != 0) {
+			auto chain = PrefixHandle::New(art, start, prefix_depth, prefix_length);
+			entry.node_ptr = chain.root_ptr;
+			tail = std::move(chain.tail);
+			node_ptr_ref = tail->Child(art);
+		}
 
 		vector<idx_t> child_offsets;
 		child_offsets.emplace_back(entry.start);

@@ -1,0 +1,156 @@
+# name: test/sql/copy/parquet/parquet_schema_pushdown_extract_types.test
+# description: Extracts preserve schema conversions when nested children are not explicitly defined
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(1, {'n': {'a': 10, 'b': 20}, 'x': 1.6::DOUBLE, 'empty': NULL}),
+		(2, NULL),
+		(3, {'n': NULL, 'x': 2.4::DOUBLE, 'empty': NULL})
+	) t(id, s)
+) TO '{TEMP_DIR}/extract_schema_types.parquet' (FIELD_IDS {id: 1, s: 2})
+
+statement ok
+CREATE VIEW mapped AS FROM read_parquet('{TEMP_DIR}/extract_schema_types.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL},
+	2: {name: 's', type: 'STRUCT(n STRUCT(b INTEGER, a INTEGER), x INTEGER, empty STRUCT(k INTEGER))', default_value: NULL}
+})
+
+# A cast on the extracted struct must see the schema's field order.
+query II
+SELECT id, s.n::VARCHAR FROM mapped ORDER BY id
+----
+1	{'b': 20, 'a': 10}
+2	NULL
+3	NULL
+
+query I
+SELECT id FROM mapped WHERE s.n::VARCHAR = '{''b'': 20, ''a'': 10}'
+----
+1
+
+# The file-to-schema conversion precedes the pushed cast.
+query II
+SELECT id, s.x::VARCHAR FROM mapped ORDER BY id
+----
+1	2
+2	NULL
+3	2
+
+query I
+SELECT id FROM mapped WHERE s.x::VARCHAR = '2' ORDER BY id
+----
+1
+3
+
+# An explicitly NULL file field can occur before the end of the extract path.
+query II
+SELECT id, s.empty.k::VARCHAR FROM mapped ORDER BY id
+----
+1	NULL
+2	NULL
+3	NULL
+
+query I
+SELECT count(*) FROM mapped WHERE s.empty.k::VARCHAR IS NULL
+----
+3
+
+query I
+SELECT count(*) FROM mapped WHERE s.empty.k = 7
+----
+0
+
+# Match names case-insensitively, including at a reordered nested position.
+statement ok
+CREATE VIEW mixed_case AS FROM read_parquet('{TEMP_DIR}/extract_schema_types.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL},
+	2: {name: 's', type: 'STRUCT(N STRUCT(B INTEGER, A INTEGER), X DOUBLE)', default_value: NULL}
+})
+
+query III
+SELECT id, s.N.B, s.N.A FROM mixed_case ORDER BY id
+----
+1	20	10
+2	NULL	NULL
+3	NULL	NULL
+
+query I
+SELECT id FROM mixed_case WHERE s.N.B = 20
+----
+1
+
+# A conversion on the extract path must happen before interpreting child indexes.
+statement ok
+CREATE VIEW as_variant AS FROM read_parquet('{TEMP_DIR}/extract_schema_types.parquet', schema = MAP {
+	1: {name: 'id', type: 'INTEGER', default_value: NULL},
+	2: {name: 's', type: 'STRUCT(n VARIANT)', default_value: NULL}
+})
+
+query II
+SELECT id, s.n.a::INTEGER FROM as_variant ORDER BY id
+----
+1	10
+2	NULL
+3	NULL
+
+query I
+SELECT id FROM as_variant WHERE s.n.a::INTEGER = 10
+----
+1
+
+# Older releases cannot deserialize VARIANT in persisted views.
+statement ok
+DROP VIEW as_variant
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES (1, {'n': '{a: 42}'}), (2, NULL), (3, {'n': NULL})) t(id, s)
+) TO '{TEMP_DIR}/extract_text_struct.parquet'
+
+statement ok
+CREATE VIEW from_text AS FROM read_parquet('{TEMP_DIR}/extract_text_struct.parquet', schema = MAP {
+	'id': {name: 'id', type: 'INTEGER', default_value: NULL},
+	's': {name: 's', type: 'STRUCT(n STRUCT(a INTEGER))', default_value: NULL}
+})
+
+query II
+SELECT id, s.n.a FROM from_text ORDER BY id
+----
+1	42
+2	NULL
+3	NULL
+
+# Invalid source text reports a conversion error instead of an internal error.
+statement ok
+COPY (SELECT 'not a struct' AS s) TO '{TEMP_DIR}/extract_invalid_text.parquet'
+
+statement error
+SELECT s.a FROM read_parquet('{TEMP_DIR}/extract_invalid_text.parquet', schema = MAP {
+	's': {name: 's', type: 'STRUCT(a INTEGER)', default_value: NULL}
+})
+----
+can't be cast to the destination type STRUCT(a INTEGER)
+
+query I
+SELECT id FROM from_text WHERE s.n.a = 42
+----
+1
+
+# The conversion may also apply to the root column.
+statement ok
+COPY (SELECT id, s.n AS s FROM '{TEMP_DIR}/extract_text_struct.parquet')
+TO '{TEMP_DIR}/extract_text_root.parquet'
+
+query II
+SELECT id, s.a FROM read_parquet('{TEMP_DIR}/extract_text_root.parquet', schema = MAP {
+	'id': {name: 'id', type: 'INTEGER', default_value: NULL},
+	's': {name: 's', type: 'STRUCT(a INTEGER)', default_value: NULL}
+}) ORDER BY id
+----
+1	42
+2	NULL
+3	NULL
