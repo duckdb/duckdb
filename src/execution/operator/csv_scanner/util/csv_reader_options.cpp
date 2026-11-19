@@ -666,7 +666,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		const auto &delimiter = state_machine_options.delimiter.GetValue();
 		const auto quote = state_machine_options.quote.GetValue();
 		const auto escape = state_machine_options.escape.GetValue();
-		if (delimiter.empty() || quote == '\0' || escape == '\0') {
+		if (delimiter.empty() || delimiter.find('\0') != string::npos || quote == '\0' || escape == '\0') {
 			throw BinderException(
 			    "DIALECT 'opencsv' requires a delimiter, a quote character and an escape character, as opencsv does");
 		}
@@ -678,7 +678,8 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			throw BinderException("DIALECT 'opencsv' does not support a comment character: opencsv has no comments");
 		}
 		// OpenCSVSerde reads an empty field as an empty string and pads missing fields with NULL
-		if (null_str.size() == 1 && null_str[0].empty()) {
+		if (user_defined_parameters.count(Identifier("nullstr")) == 0 &&
+		    user_defined_parameters.count(Identifier("null")) == 0 && null_str.size() == 1 && null_str[0].empty()) {
 			null_str.clear();
 		}
 		if (user_defined_parameters.count(Identifier("null_padding")) == 0) {

@@ -268,6 +268,10 @@ public:
 
 	//! The current field's UTF-16 offset from the line start, clamped at three units
 	idx_t opencsv_units_before = 0;
+	//! Whether the current field was quoted before DemoteUnenclosedQuotedValue rerouted it
+	bool opencsv_quoted = false;
+	//! Scratch heap for opencsv normalized text before its conversion into the column's type
+	Vector opencsv_scratch {LogicalType::VARCHAR, 1ULL};
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -342,6 +346,7 @@ public:
 				return;
 			}
 		}
+		opencsv_quoted = true;
 		quoted = false;
 		// the raw bytes run through the opencsv text pass on the escaped path
 		escaped = true;

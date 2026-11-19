@@ -216,7 +216,7 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/dialect_empty_line.csv', columns={'id'
 
 # a quote in the middle of a field is a kept literal away from the line start and separators, dropped next to them
 statement ok
-COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+COPY (SELECT * FROM (VALUES ('12,a"b"c,18'), ('13,"a"b,19'), ('14,a"b" x,20'), ('30,filler one,98'), ('31,filler two,99')) t(line)) TO '{TEST_DIR}/dialect_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
 
 query ITI
 SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGER', 'val': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false) ORDER BY id;
@@ -224,6 +224,8 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGE
 12	a"b"c	18
 13	a"b	19
 14	a"b" x	20
+30	filler one	98
+31	filler two	99
 
 # the same file read over tiny buffers, so the toggled fields cross buffer boundaries
 query ITI
@@ -232,6 +234,8 @@ SELECT * FROM read_csv('{TEST_DIR}/dialect_embedded.csv', columns={'id': 'INTEGE
 12	a"b"c	18
 13	a"b	19
 14	a"b" x	20
+30	filler one	98
+31	filler two	99
 
 # an unclosed quoted section in the middle of the record reads its field as NULL and pads the rest
 statement ok
@@ -382,3 +386,81 @@ query IIII
 SELECT count(*), count(b), count(*) FILTER (b = 'clo"sed' || a || '"x'), count(c) FROM read_csv('{TEST_DIR}/dialect_stress.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, buffer_size=701, max_line_size=500);
 ----
 2000	1714	1714	1714
+
+# a field whose normalized text fits the column type converts, wherever the buffer boundary falls
+statement ok
+COPY (SELECT * FROM (VALUES ('"1"23'), ('12'), ('456')) t(line)) TO '{TEST_DIR}/dialect_typed_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+foreach bsz 10 11 12 2000000
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/dialect_typed_embedded.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, parallel=false, buffer_size={bsz}, max_line_size=9) ORDER BY a;
+----
+12
+123
+456
+
+endloop
+
+# a conversion error in a value crossing the buffer boundary does not swallow the following row
+statement ok
+COPY (SELECT * FROM (VALUES ('12'), ('4x5'), ('456'), ('789')) t(line)) TO '{TEST_DIR}/dialect_span_error.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT * FROM read_csv('{TEST_DIR}/dialect_span_error.csv', columns={'a': 'INTEGER'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, parallel=false, ignore_errors=true, buffer_size=8, max_line_size=7) ORDER BY a;
+----
+12
+456
+789
+
+# the delimiter prefix of a separator wider than one byte stays out of the field crossing the boundary
+statement ok
+COPY (SELECT * FROM (VALUES (repeat('x', 58)), ('ab"x"¦z')) t(line)) TO '{TEST_DIR}/dialect_wide_boundary.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
+----
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	NULL
+abx	z
+
+statement ok
+COPY (SELECT * FROM (VALUES (repeat('x', 60)), ('¦a"b"c')) t(line)) TO '{TEST_DIR}/dialect_wide_boundary2.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_wide_boundary2.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim='¦', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false, parallel=false, buffer_size=61) ORDER BY b NULLS FIRST;
+----
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	NULL
+(empty)	ab"c
+
+# a user NULL string compares against the normalized text, with the field counting as quoted for allow_quoted_nulls
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"N\ULL"'), ('2,"NULL"'), ('3,NULL')) t(line)) TO '{TEST_DIR}/dialect_nullstr.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT a, b, b IS NULL FROM read_csv('{TEST_DIR}/dialect_nullstr.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', nullstr='NULL', allow_quoted_nulls=false, header=false, auto_detect=false) ORDER BY a;
+----
+1	NULL	false
+2	NULL	false
+3	NULL	true
+
+# an explicit empty NULL string is honored rather than replaced by the dialect's empty string reading
+query II
+SELECT a, b IS NULL FROM read_csv('{TEST_DIR}/dialect_padding.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'n': 'INTEGER'}, delim=',', quote='"', dialect='opencsv', nullstr='', header=false, auto_detect=false) ORDER BY a;
+----
+1	false
+2	false
+
+# whitespace is what Java reads as whitespace, so an em space before a kept literal quote is discarded too
+statement ok
+COPY (SELECT 'xx,' || chr(8195) || '"a",z' AS line) TO '{TEST_DIR}/dialect_uni_ws.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/dialect_uni_ws.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', dialect='opencsv', header=false, auto_detect=false);
+----
+xx	a	z
+
+# a NUL byte is not a separator, as opencsv refuses it
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/dialect_rows.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=chr(0), dialect='opencsv', header=false, auto_detect=false);
+----
+DIALECT 'opencsv' requires a delimiter
