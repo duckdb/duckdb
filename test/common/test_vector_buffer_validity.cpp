@@ -118,6 +118,7 @@ TEST_CASE("Buffer slices retain their payload after the source is destroyed", "[
 				}
 			}
 			REQUIRE_FALSE(*destroyed);
+			REQUIRE(result.size() == (mode == 0 ? 7 : mode == 2 ? 3 : 2));
 			for (idx_t row = 0; row < result.size(); row++) {
 				const bool is_null = (mode == 2 && row == 1) || (mode == 3 && row == 0);
 				REQUIRE(result.GetValue(row) == (is_null ? Value(value.type()) : value));
