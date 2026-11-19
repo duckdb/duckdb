@@ -4,19 +4,24 @@
 
 require quack
 
+require httpfs
+
 # Capture recipe calls so we can prove the deleter fired (the deleter runs on an internal connection).
 statement ok
 CALL enable_logging('ExternalResource', storage='memory');
 
+# Let the OS choose a port so concurrent test processes cannot share the listener.
 statement ok
-CALL quack_serve(token='test_token');
+SET VARIABLE server_uri = (SELECT concat('''', listen_uri, '''') FROM quack_serve('quack:localhost:0', token='test_token'));
+
+set variable server_uri <variable:server_uri>
 
 statement ok
 CREATE MACRO qk_create(p) AS TABLE SELECT MAP {'id': 'q1'} AS handle;
 
 statement ok
 CREATE MACRO qk_status(h) AS TABLE
-  SELECT 'ready' AS state, MAP {'uri': 'localhost', 'attached_db_type': 'quack', 'token': 'test_token'} AS result;
+  SELECT 'ready' AS state, MAP {'uri': {server_uri}, 'attached_db_type': 'quack', 'token': 'test_token'} AS result;
 
 statement ok
 CREATE MACRO qk_destroy(h) AS TABLE SELECT 'gone' AS status;
@@ -74,10 +79,10 @@ statement ok
 CREATE EXTERNAL RESOURCE 'quack@local' AS r2;
 
 query IIII
-SELECT name, type, uri, attached_db_type FROM duckdb_external_resources() ORDER BY name;
+SELECT name, type, uri = {server_uri}, attached_db_type FROM duckdb_external_resources() ORDER BY name;
 ----
-r1	quack@local	localhost	quack
-r2	quack@local	localhost	quack
+r1	quack@local	true	quack
+r2	quack@local	true	quack
 
 # DESTROY deregisters, so it drops out of the listing.
 statement ok
