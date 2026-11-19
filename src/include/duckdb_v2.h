@@ -3874,6 +3874,20 @@ typedef struct _duckdb_v2_attach_options {
 
 /* --- Function pointer typedefs for instance --- */
 
+/*!
+ * Initializes an instance that `duckdb_v2_instance_open_shared()` has just created, before the instance is shared:
+ * calls for the same file wait until it returns. It can, for instance, write GLOBAL settings that cannot be given at
+ * startup, or create a connection and run SQL that sets up the database.
+ *
+ * `err` is a live error slot, never NULL. Populate it with `duckdb_v2_error_info_set_code()` /
+ * `duckdb_v2_error_info_set_text()` to fail the initialization; do not destroy it.
+ *
+ * The callback must not throw or unwind across the boundary, and must not open the same file through
+ * `duckdb_v2_instance_open_shared()`, which would wait for the callback to return.
+ */
+typedef void (*duckdb_v2_instance_init_callback_fn)(duckdb_v2_instance_handle instance, void *user_data,
+                                                    duckdb_v2_error_info_handle *err);
+
 /* --- Functions for instance --- */
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3949,12 +3963,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * `duckdb_v2_instance_destroy()`; the instance is destroyed once the last handle and the last connection on it are, and
  * a call for the same file meanwhile waits for it to be, rather than opening the file again while it is being closed.
  *
- * An existing instance is shared only when it was created with the same startup options, compared as written: an option
- * given under an alias, or a value written differently, counts as a different configuration, as for
- * `duckdb_get_or_create_from_cache` in the V1 API. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty
- * view opens a new in-memory instance on every call, which is never shared; a named in-memory database such as
- * `:memory:name` is shared like a file. The startup options are those of `duckdb_v2_instance_create_with_options()`,
- * with the same restrictions.
+ * `init`, when given, is called once with the instance this call creates, before any other call can share it: calls for
+ * the same file wait until it returns. It is not called when the call shares an existing instance. When it reports an
+ * error, the instance is destroyed, the call fails with that error, and the next call for the file creates an instance
+ * again.
+ *
+ * An existing instance is shared only when it was created with the same startup options, compared by the settings they
+ * give: both name the same options, an alias counting as the option it stands for, and each value is equal once
+ * converted to the option's type, with text compared regardless of case, so that `threads=03` matches `threads=3` and
+ * `access_mode=read_only` matches `access_mode=READ_ONLY`. The value of an option DuckDB does not know is compared as
+ * written. Otherwise ERROR_RESOURCE_IN_USE is returned. `:memory:` or an empty view opens a new in-memory instance on
+ * every call, which is never shared; a named in-memory database such as `:memory:name` is shared like a file. The
+ * startup options are those of `duckdb_v2_instance_create_with_options()`, with the same restrictions.
  *
  * A file that an instance of the environment attached with `duckdb_v2_instance_attach()` is not shared, and opening it
  * returns an error like a second `duckdb_v2_instance_attach()` would; nor can a file opened here be attached to another
@@ -3962,8 +3982,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * shared handle change the instance for every handle to it.
  *
  * A client cannot compose this from the other functions: telling that two paths name the same file as DuckDB resolves
- * it, and waiting for an instance whose last handle and connection were just destroyed to finish closing its files,
- * both need the engine.
+ * it, waiting for an instance whose last handle and connection were just destroyed to finish closing its files, and
+ * initializing a new instance before another call can share it, all need the engine.
  *
  * history:
  * - unstable: v2.0.0
@@ -3981,6 +4001,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * @param option_values_lengths Byte lengths of the entries in `option_values`; element i is the length of
  * `option_values[i]`. May be NULL only when `option_values` is NULL.
  * @param option_count The number of startup options.
+ * @param init Optional. Initializes the instance when this call creates it. Pass NULL for none.
+ * @param init_user_data Opaque pointer passed through to `init` untouched. May be NULL.
  * @param out_instance Receives a new handle to the shared instance.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -3989,7 +4011,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
     duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
     const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
-    idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
+    idx_t option_count, duckdb_v2_instance_init_callback_fn init, void *init_user_data,
+    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
