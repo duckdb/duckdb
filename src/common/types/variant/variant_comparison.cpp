@@ -80,10 +80,11 @@ uhugeint_t HugeintMagnitude(const hugeint_t value, bool &negative) {
 	return uhugeint_t(hi, lo);
 }
 
-//! Decompose a native (<= 64-bit) integer value into (sign, magnitude) in 64-bit arithmetic
+//! Build a number key from a native (<= 64-bit) integer value, computing the magnitude and its
+//! decimal digits in 64-bit arithmetic instead of widening every value to uhugeint_t.
 template <class T>
-uint64_t IntegerMagnitude(T value, bool &negative) {
-	negative = false;
+VariantNumberKey IntegerNumberKey(T value) {
+	bool negative = false;
 	auto magnitude = static_cast<uint64_t>(value);
 	if constexpr (std::is_signed_v<T>) {
 		if (value < 0) {
@@ -91,24 +92,9 @@ uint64_t IntegerMagnitude(T value, bool &negative) {
 			magnitude = static_cast<uint64_t>(0) - magnitude; // unsigned negate -> |value| (also handles the minimum)
 		}
 	}
-	return magnitude;
-}
-
-//! Build a number key from a native (<= 64-bit) integer value, computing the magnitude and its
-//! decimal digits in 64-bit arithmetic instead of widening every value to uhugeint_t.
-template <class T>
-VariantNumberKey IntegerNumberKey(T value) {
-	bool negative;
-	const auto magnitude = IntegerMagnitude(value, negative);
 	char buffer[20];
 	auto offset = UInt64Digits(magnitude, buffer);
 	return BuildNumberKey(negative, buffer + offset, 20 - offset, 0);
-}
-
-template <class T>
-bool ReadIntegerValue(const VariantNode &node, bool &negative, uhugeint_t &magnitude) {
-	magnitude = uhugeint_t(0, IntegerMagnitude(Load<T>(node.GetDataPointer()), negative));
-	return true;
 }
 } // namespace
 
@@ -253,37 +239,6 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNo
 		return BuildNumberKey(false, Load<uhugeint_t>(node.GetDataPointer()), 0);
 	default:
 		throw InternalException("VariantGetNumberKey called on non-number type %s", EnumUtil::ToString(type_id));
-	}
-}
-
-bool VariantTryGetIntegerValue(VariantLogicalType type_id, const VariantNode &node, bool &negative,
-                               uhugeint_t &magnitude) {
-	switch (type_id) {
-	case VariantLogicalType::INT8:
-		return ReadIntegerValue<int8_t>(node, negative, magnitude);
-	case VariantLogicalType::INT16:
-		return ReadIntegerValue<int16_t>(node, negative, magnitude);
-	case VariantLogicalType::INT32:
-		return ReadIntegerValue<int32_t>(node, negative, magnitude);
-	case VariantLogicalType::INT64:
-		return ReadIntegerValue<int64_t>(node, negative, magnitude);
-	case VariantLogicalType::UINT8:
-		return ReadIntegerValue<uint8_t>(node, negative, magnitude);
-	case VariantLogicalType::UINT16:
-		return ReadIntegerValue<uint16_t>(node, negative, magnitude);
-	case VariantLogicalType::UINT32:
-		return ReadIntegerValue<uint32_t>(node, negative, magnitude);
-	case VariantLogicalType::UINT64:
-		return ReadIntegerValue<uint64_t>(node, negative, magnitude);
-	case VariantLogicalType::INT128:
-		magnitude = HugeintMagnitude(Load<hugeint_t>(node.GetDataPointer()), negative);
-		return true;
-	case VariantLogicalType::UINT128:
-		negative = false;
-		magnitude = Load<uhugeint_t>(node.GetDataPointer());
-		return true;
-	default:
-		return false;
 	}
 }
 

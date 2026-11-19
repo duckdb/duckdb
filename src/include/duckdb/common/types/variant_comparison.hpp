@@ -13,7 +13,6 @@
 namespace duckdb {
 
 class VariantNode;
-struct uhugeint_t;
 
 //! The sort-key rank of a variant value - determines the cross-type ordering (type-first).
 //! Ranks start at 1 so that every rank is strictly greater than the LIST/STRING delimiter (0); this
@@ -106,9 +105,6 @@ VariantComparisonType GetVariantComparisonType(VariantLogicalType type);
 double VariantGetRealValue(VariantLogicalType type_id, const VariantNode &node);
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
 VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNode &node);
-//! Read an integer of the NUMBER rank as a sign and a magnitude. Returns false for DECIMAL and BIGNUM
-bool VariantTryGetIntegerValue(VariantLogicalType type_id, const VariantNode &node, bool &negative,
-                               uhugeint_t &magnitude);
 //! Compute the nanoseconds since the epoch for any TIMESTAMP rank value
 hugeint_t VariantGetTimestampValue(VariantLogicalType type_id, const VariantNode &node);
 //! Compute the nanoseconds since the epoch (UTC) for any TIMESTAMP_TZ rank value

@@ -14,16 +14,12 @@ namespace {
 // Comparing primitive values
 //===--------------------------------------------------------------------===//
 
-//! The value that is looked for, with its type. The forms a NUMBER is compared by are derived once
+//! The value that is looked for, with its type. The key a NUMBER is compared by is built once
 struct VariantNeedle {
 	explicit VariantNeedle(const VariantNode &node_p)
 	    : node(node_p), type_id(node.GetTypeId()), category(GetVariantComparisonType(type_id)) {
-		if (category == VariantComparisonType::NUMBER) {
-			is_integer = VariantTryGetIntegerValue(type_id, node, negative, magnitude);
-		}
 	}
 
-	//! Only a DECIMAL or a BIGNUM on either side is compared by number key
 	const VariantNumberKey &NumberKey() {
 		if (!number_key) {
 			number_key = VariantGetNumberKey(type_id, node);
@@ -34,22 +30,8 @@ struct VariantNeedle {
 	VariantNode node;
 	VariantLogicalType type_id;
 	VariantComparisonType category;
-	//! The sign and magnitude of an integer
-	bool is_integer = false;
-	bool negative = false;
-	uhugeint_t magnitude;
 	optional<VariantNumberKey> number_key;
 };
-
-bool IsNumberEqual(const VariantNode &haystack, VariantLogicalType haystack_type, VariantNeedle &needle) {
-	bool negative;
-	uhugeint_t magnitude;
-	if (needle.is_integer && VariantTryGetIntegerValue(haystack_type, haystack, negative, magnitude)) {
-		return negative == needle.negative && magnitude.lower == needle.magnitude.lower &&
-		       magnitude.upper == needle.magnitude.upper;
-	}
-	return VariantGetNumberKey(haystack_type, haystack) == needle.NumberKey();
-}
 
 //! Whether two primitive values of the same comparison category are equal
 bool IsPrimitiveEqual(const VariantNode &haystack, VariantLogicalType haystack_type, VariantNeedle &needle) {
@@ -65,7 +47,7 @@ bool IsPrimitiveEqual(const VariantNode &haystack, VariantLogicalType haystack_t
 		return Radix::EncodeDouble(VariantGetRealValue(haystack_type, haystack)) ==
 		       Radix::EncodeDouble(VariantGetRealValue(needle.type_id, needle.node));
 	case VariantComparisonType::NUMBER:
-		return IsNumberEqual(haystack, haystack_type, needle);
+		return VariantGetNumberKey(haystack_type, haystack) == needle.NumberKey();
 	case VariantComparisonType::TIME:
 		return VariantGetTimeValue(haystack_type, haystack) == VariantGetTimeValue(needle.type_id, needle.node);
 	case VariantComparisonType::TIME_TZ:
