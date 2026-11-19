@@ -379,16 +379,13 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list, idx_t index_oid) {
+void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, IndexEntry &index) {
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
-	auto info = list.SerializeToWAL(index_oid, storage_version);
-	if (!info) {
-		return;
-	}
+	auto info = index.SerializeToWAL(storage_version);
 
-	serializer.WriteProperty(102, "index_storage_info", *info);
-	serializer.WriteList(103, "index_storage", info->buffers.size(), [&](Serializer::List &list, idx_t i) {
-		auto &buffers = info->buffers[i];
+	serializer.WriteProperty(102, "index_storage_info", info);
+	serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
+		auto &buffers = info.buffers[i];
 		for (auto buffer : buffers) {
 			list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
 		}
@@ -400,10 +397,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
 	// Serialize the index data to the persistent storage and write the metadata.
-	auto &index_entry = entry.Cast<DuckIndexEntry>();
-	auto &list = index_entry.GetDataTableInfo().GetIndexes();
-	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, index_entry.oid);
+	SerializeIndex(GetDatabase(), serializer, *entry.Cast<DuckIndexEntry>().GetIndexEntry());
 	serializer.End();
 }
 
@@ -531,13 +525,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &parent = entry.Parent().Cast<DuckTableEntry>();
-	auto added_oids = parent.GetAddedUniqueIndexOids(table);
-	if (added_oids.size() != 1) {
-		throw InternalException("WriteAlter: expected one added UNIQUE constraint on table %s, found %llu", parent.name,
-		                        added_oids.size());
-	}
-	auto &list = parent.GetStorage().GetDataTableInfo()->GetIndexes();
-	SerializeIndex(GetDatabase(), serializer, list, added_oids[0]);
+	SerializeIndex(GetDatabase(), serializer, *parent.GetAddedConstraintIndex(table));
 	serializer.End();
 }
 

@@ -12,14 +12,17 @@
 
 namespace duckdb {
 class CommitDropState;
+class IndexEntry;
 class TableCatalogEntry;
 
-//! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
+//! The storage of a DuckIndexEntry, shared by all versions of the entry (e.g. after COMMENT ON INDEX)
 struct IndexDataTableInfo {
-	explicit IndexDataTableInfo(shared_ptr<DataTableInfo> info_p);
+	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, shared_ptr<IndexEntry> index_p);
 
 	//! Pointer to the DataTableInfo
 	shared_ptr<DataTableInfo> info;
+	//! The index entry of the catalog entry
+	shared_ptr<IndexEntry> index;
 };
 
 //! A duck index entry
@@ -45,6 +48,10 @@ public:
 	Identifier GetTableName() const override;
 
 	DataTableInfo &GetDataTableInfo() const;
+	//! Returns the index entry of this catalog entry. It is pending until its physical index is built or loaded and
+	//! added to the indexes of the table (see TableIndexList::AddIndex), and retired once the drop of this catalog
+	//! entry is committed (see IndexEntry::GetBindState).
+	shared_ptr<IndexEntry> GetIndexEntry() const;
 
 	//! Saves index removal into drop_state to be removed after FlushCommit().
 	void CommitDrop(CommitDropState &drop_state);

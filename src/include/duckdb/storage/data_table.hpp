@@ -29,6 +29,7 @@ class DistinctStatistics;
 class DuckTransaction;
 class Expression;
 class Index;
+class IndexEntry;
 class OptimisticDataWriter;
 class RowGroup;
 class RowGroupCollection;
@@ -297,12 +298,11 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-	//! AddIndex initializes an index and adds it to the table's index list.
+	//! AddIndex initializes the index of a constraint and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
-	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              IndexStorageInfo index_info, idx_t index_oid, ConstraintCheckMode check_mode);
-	//! AddIndex moves an index to this table's index list.
-	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
+	shared_ptr<IndexEntry> AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
+	                                const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid,
+	                                ConstraintCheckMode check_mode);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

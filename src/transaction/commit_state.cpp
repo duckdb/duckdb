@@ -14,6 +14,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -38,8 +39,8 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
-	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
+void CommitDropState::RemoveIndex(shared_ptr<IndexDataTableInfo> index_info) {
+	pending_index_removals.push_back(std::move(index_info));
 }
 
 void CommitDropState::FinalizeCommit() {
@@ -51,8 +52,8 @@ void CommitDropState::FinalizeCommit() {
 	// assert that !block_manager -> dropped_block_ids.empty()
 	D_ASSERT(block_manager || dropped_block_ids.empty());
 
-	for (auto &removal : pending_index_removals) {
-		removal.indexes.get().RemoveIndex(removal.index_oid);
+	for (auto &index_info : pending_index_removals) {
+		index_info->info->GetIndexes().RemoveIndex(*index_info->index);
 	}
 	dropped_block_ids.clear();
 	pending_index_removals.clear();

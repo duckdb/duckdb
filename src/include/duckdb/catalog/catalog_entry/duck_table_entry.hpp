@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class CommitDropState;
+class IndexEntry;
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
@@ -23,9 +24,11 @@ struct CreateTriggerInfo;
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
+	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info);
+	//! Create a new version of a table: it takes over the triggers and the constraint indexes of its parent.
+	//! A constraint that the parent does not have gets a pending index entry (see GetAddedConstraintIndex).
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr,
-	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
+	               const DuckTableEntry &parent, shared_ptr<DataTable> storage);
 
 public:
 	const ColumnList &GetColumns() const override;
@@ -52,8 +55,12 @@ public:
 	void CommitAlter(string &column_name, CommitDropState &drop_state);
 	void CommitDrop(CommitDropState &drop_state);
 
-	//! Returns the backing index OIDs of UNIQUE constraints that are not in prev_table.
-	vector<idx_t> GetAddedUniqueIndexOids(const DuckTableEntry &prev_table) const;
+	//! Returns the constraint indexes of this table that prev_table does not have.
+	vector<shared_ptr<IndexEntry>> GetAddedConstraintIndexes(const DuckTableEntry &prev_table) const;
+	//! Returns the index of the one constraint that ALTER TABLE added to prev_table.
+	shared_ptr<IndexEntry> GetAddedConstraintIndex(const DuckTableEntry &prev_table) const;
+	//! Returns the index that backs the constraint at the given position, or nullptr if it has no index.
+	shared_ptr<IndexEntry> GetConstraintIndex(idx_t constraint_idx) const;
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
@@ -113,6 +120,8 @@ protected:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The indexes that back the constraints, by constraint position (nullptr for a constraint without index)
+	vector<shared_ptr<IndexEntry>> constraint_indexes;
 	//! The catalog set holding triggers for this table
 	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table
