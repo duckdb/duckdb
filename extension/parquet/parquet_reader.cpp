@@ -1122,6 +1122,36 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 //! The maximum nesting depth of a Parquet schema - deeper schemas would overflow the stack while being read
 static constexpr idx_t MAX_PARQUET_SCHEMA_DEPTH = 500;
 
+//! The VARIANT reader reads the 'metadata' and 'value' columns as binary
+static bool IsVariantBinaryColumn(const ParquetColumnSchema &schema) {
+	// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
+	const auto is_binary = schema.type.id() == LogicalTypeId::BLOB || schema.type.id() == LogicalTypeId::VARCHAR;
+	return schema.children.empty() && schema.parquet_type == duckdb_parquet::Type::BYTE_ARRAY && is_binary &&
+	       schema.schema_type == ParquetColumnSchemaType::COLUMN;
+}
+
+//! The first 'value' column below a shredded 'typed_value' that is not binary, if any
+static optional_ptr<const ParquetColumnSchema> FindNonBinaryShreddedValue(const ParquetColumnSchema &typed_value) {
+	if (typed_value.type.id() != LogicalTypeId::STRUCT && typed_value.type.id() != LogicalTypeId::LIST) {
+		return nullptr;
+	}
+	// the fields of an object and the element of an array are groups of 'value' and 'typed_value'
+	for (auto &group : typed_value.children) {
+		for (auto &child : group.children) {
+			if (child.name == "value" && !IsVariantBinaryColumn(child)) {
+				return &child;
+			}
+			if (child.name == "typed_value") {
+				auto shredded_value = FindNonBinaryShreddedValue(child);
+				if (shredded_value) {
+					return shredded_value;
+				}
+			}
+		}
+	}
+	return nullptr;
+}
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
@@ -1234,16 +1264,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			is_variant = true;
 		}
 		if (is_variant) {
-			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			if (child_schemas.size() < 2) {
+				throw DataCorruptionException("Failed to read Parquet file \"%s\": VARIANT column \"%s\" must have a "
+				                              "'metadata' and a 'value' column",
+				                              file.path, string(s_ele.name));
+			}
 			for (auto &child_schema : child_schemas) {
 				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					// the 'value' columns of the groups below 'typed_value' are read as binary as well
+					if (FindNonBinaryShreddedValue(child_schema)) {
+						throw DataCorruptionException(
+						    "Failed to read Parquet file \"%s\": the 'value' column of a shredded field of VARIANT "
+						    "column \"%s\" must be a binary BYTE_ARRAY column",
+						    file.path, string(s_ele.name));
+					}
 					continue;
 				}
-				// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
-				const auto is_binary =
-				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
-				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
-				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
+				if (!IsVariantBinaryColumn(child_schema)) {
 					throw DataCorruptionException(
 					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
 					    "must be a binary BYTE_ARRAY column",

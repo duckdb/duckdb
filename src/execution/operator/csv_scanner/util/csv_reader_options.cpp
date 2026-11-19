@@ -857,7 +857,6 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 		SetReadOption(context.GetContext(), key, val, name_list);
 	}
 }
-//! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
 void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;

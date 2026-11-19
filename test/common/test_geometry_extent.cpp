@@ -143,14 +143,14 @@ TEST_CASE("Geodetic extent: intersection is exact on integer arcs", "[geometry]"
 	}
 }
 
-TEST_CASE("Geodetic extent: containment has no false positives", "[geometry]") {
+static void CheckGeodeticContainment(int32_t grid_step, int32_t point_step) {
 	// A false "contains" can turn a filter into FILTER_ALWAYS_TRUE, returning wrong rows.
 	std::vector<double> grid;
-	for (int d = -180; d <= 180; d += 15) {
+	for (int32_t d = -180; d <= 180; d += grid_step) {
 		grid.push_back(d);
 	}
 	std::vector<double> pts;
-	for (int d = -180; d <= 180; d++) {
+	for (int32_t d = -180; d <= 180; d += point_step) {
 		pts.push_back(d);
 	}
 	for (auto alo : grid) {
@@ -172,6 +172,14 @@ TEST_CASE("Geodetic extent: containment has no false positives", "[geometry]") {
 			}
 		}
 	}
+}
+
+TEST_CASE("Geodetic extent: containment has no false positives", "[geometry]") {
+	CheckGeodeticContainment(60, 15);
+}
+
+TEST_CASE("Geodetic extent: exhaustive containment has no false positives", "[geometry][.]") {
+	CheckGeodeticContainment(15, 1);
 }
 
 TEST_CASE("Geodetic extent: antimeridian seam and degenerate cases", "[geometry]") {
@@ -312,7 +320,7 @@ static Vec3 Slerp(const Vec3 &a, const Vec3 &b, double t) {
 	return {wa * a.x + wb * b.x, wa * a.y + wb * b.y, wa * a.z + wb * b.z};
 }
 
-TEST_CASE("Geodetic extent: covers sampled points along geodesic edges", "[geometry]") {
+static void CheckGeodeticEdgeSamples(idx_t edge_count) {
 	// Random geodesic edges: every point sampled along the great-circle arc must lie within the
 	// computed extent (the edge-aware "bulge" handling). This is the coverage contract of the
 	// geodetic extents.
@@ -323,7 +331,7 @@ TEST_CASE("Geodetic extent: covers sampled points along geodesic edges", "[geome
 		const double norm = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 		return Vec3 {v.x / norm, v.y / norm, v.z / norm};
 	};
-	for (int iter = 0; iter < 20000; iter++) {
+	for (idx_t iter = 0; iter < edge_count; iter++) {
 		const auto a = random_point();
 		const auto b = random_point();
 		const double dot = a.x * b.x + a.y * b.y + a.z * b.z;
@@ -348,6 +356,14 @@ TEST_CASE("Geodetic extent: covers sampled points along geodesic edges", "[geome
 			REQUIRE(LonExtentContains(extent.x_min, extent.x_max, p.first));
 		}
 	}
+}
+
+TEST_CASE("Geodetic extent: covers sampled points along geodesic edges", "[geometry]") {
+	CheckGeodeticEdgeSamples(1000);
+}
+
+TEST_CASE("Geodetic extent: covers an extended sample of geodesic edges", "[geometry][.]") {
+	CheckGeodeticEdgeSamples(20000);
 }
 
 TEST_CASE("Geodetic extent: polygon interiors follow the interior-on-the-left rule", "[geometry]") {

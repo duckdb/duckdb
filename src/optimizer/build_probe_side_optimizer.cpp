@@ -429,12 +429,13 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		switch (join.join_type) {
 		case JoinType::SEMI:
 		case JoinType::ANTI: {
-			// if the conditions have no equality, do not flip the children.
-			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
+			// flip only where a physical operator implements the flipped join: the hash join on an equality, and the
+			// piecewise merge join for a RIGHT SEMI join on a single range condition
 			idx_t has_range = 0;
 			bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
-			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
+			const bool has_equality = join.HasEquality(has_range);
+			const bool single_range = join.join_type == JoinType::SEMI && join.conditions.size() == 1 && has_range == 1;
+			if ((has_equality && !prefer_range_joins) || single_range) {
 				TryFlipJoinChildren(join);
 			}
 			break;

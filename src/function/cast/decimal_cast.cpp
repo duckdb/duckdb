@@ -4,13 +4,26 @@
 #include "duckdb/common/vector_operations/general_cast.hpp"
 #include "duckdb/common/types/decimal_helper.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
+struct BignumDecimalCastState : public WideDecimalCastState {
+	explicit BignumDecimalCastState(optional_ptr<ClientContext> context)
+	    : WideDecimalCastState(context), rescale(context) {
+	}
+
+	DecimalHelper<bignum_t>::RescaleState rescale;
+};
+
 static unique_ptr<FunctionLocalState> InitWideDecimalCastState(CastLocalStateParameters &parameters) {
 	return make_uniq<WideDecimalCastState>(parameters.context);
+}
+
+static unique_ptr<FunctionLocalState> InitBignumDecimalCastState(CastLocalStateParameters &parameters) {
+	return make_uniq<BignumDecimalCastState>(parameters.context);
 }
 
 static bool IsWideDecimal(const LogicalType &type) {
@@ -19,7 +32,11 @@ static bool IsWideDecimal(const LogicalType &type) {
 
 BoundCastInfo DefaultCasts::WideDecimalCast(BoundCastInfo info, const LogicalType &source, const LogicalType &target) {
 	if (!info.HasInitLocalState() && (IsWideDecimal(source) || IsWideDecimal(target))) {
-		info.SetInitLocalState(InitWideDecimalCastState);
+		if (source.id() == LogicalTypeId::DECIMAL && target.id() == LogicalTypeId::DECIMAL) {
+			info.SetInitLocalState(InitBignumDecimalCastState);
+		} else {
+			info.SetInitLocalState(InitWideDecimalCastState);
+		}
 	}
 	return info;
 }
@@ -142,24 +159,9 @@ struct DecimalScaleDownOperator {
 // This function detects if we can scale a decimal down to another.
 template <class INPUT_TYPE>
 static bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) {
-	int64_t divisor = UnsafeNumericCast<int64_t>(data.factor);
+	const auto divisor = data.factor;
 	auto value = input % divisor;
 	auto rounded_input = input;
-	if (rounded_input < 0) {
-		rounded_input *= -1;
-		value *= -1;
-	}
-	if (value >= divisor / 2) {
-		rounded_input += divisor;
-	}
-	return rounded_input < data.limit && rounded_input > -data.limit;
-}
-
-template <>
-bool CanScaleDownDecimal<hugeint_t>(hugeint_t input, DecimalScaleInput<hugeint_t> &data) {
-	auto divisor = UnsafeNumericCast<hugeint_t>(data.factor);
-	hugeint_t value = input % divisor;
-	hugeint_t rounded_input = input;
 	if (rounded_input < 0) {
 		rounded_input *= -1;
 		value *= -1;
@@ -216,7 +218,12 @@ struct BignumDecimalScaleInput {
 	                        uint32_t source_scale_p, uint32_t target_width_p, uint32_t target_scale_p)
 	    : result(result_p), vector_cast_data(result, parameters), source_width(source_width_p),
 	      source_scale(source_scale_p), target_width(target_width_p), target_scale(target_scale_p),
-	      rescale_state(DefaultCasts::WideDecimalCastContext(parameters)) {
+	      rescale_state(parameters.local_state->Cast<BignumDecimalCastState>().rescale) {
+		const auto source_integer_digits = source_width - source_scale;
+		const auto target_integer_digits = target_width - target_scale;
+		// Scaling down can round into an extra integer digit.
+		check_width = target_scale >= source_scale ? source_integer_digits > target_integer_digits
+		                                           : source_integer_digits >= target_integer_digits;
 	}
 
 	Vector &result;
@@ -225,39 +232,28 @@ struct BignumDecimalScaleInput {
 	uint32_t source_scale;
 	uint32_t target_width;
 	uint32_t target_scale;
-	DecimalHelper<bignum_t>::RescaleState rescale_state;
+	bool check_width;
+	DecimalHelper<bignum_t>::RescaleState &rescale_state;
 };
-
-//! The unscaled value of a decimal as a BIGNUM (the blob of a fixed-size tier is written into "blob")
-static bignum_t UnscaledBignum(bignum_t input, string &blob) {
-	return input;
-}
-
-template <class INPUT_TYPE>
-static bignum_t UnscaledBignum(INPUT_TYPE input, string &blob) {
-	blob = DecimalHelper<bignum_t>::FromInteger(hugeint_t(input));
-	return bignum_t(string_t(blob));
-}
 
 struct BignumDecimalScaleOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, BignumDecimalScaleInput &data) {
-		string unscaled_blob;
-		auto unscaled = UnscaledBignum(input, unscaled_blob);
-		string rescaled;
-		if (!DecimalHelper<bignum_t>::TryRescale(data.rescale_state, unscaled, data.source_scale, data.target_width,
-		                                         data.target_scale, rescaled)) {
+		data.rescale_state.Reset();
+		auto rescaled =
+		    DecimalHelper<bignum_t>::Rescale(data.rescale_state, input, data.source_scale, data.target_scale);
+		if (data.check_width && !DecimalHelper<bignum_t>::FitsWidth(rescaled, data.target_width)) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data.source_width, data.source_scale),
 			                                data.result.GetType().ToString());
 			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data.vector_cast_data);
 		}
 		if constexpr (std::is_same<RESULT_TYPE, bignum_t>::value) {
-			return bignum_t(StringVector::AddStringOrBlob(data.result, rescaled.data(), rescaled.size()));
+			return bignum_t(StringVector::AddStringOrBlob(data.result, rescaled.data));
 		} else {
 			// the checked width guarantees the value fits the integer
 			hugeint_t value;
-			if (!DecimalHelper<bignum_t>::TryToHugeint(bignum_t(string_t(rescaled)), value)) {
+			if (!DecimalHelper<bignum_t>::TryToHugeint(rescaled, value)) {
 				throw InternalException("Rescaled decimal does not fit a HUGEINT despite the width check");
 			}
 			return Cast::Operation<hugeint_t, RESULT_TYPE>(value);
@@ -301,6 +297,9 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 	source.GetType().Verify();
 	result.GetType().Verify();
 
+	if (result.GetType().InternalType() == PhysicalType::VARCHAR) {
+		return TemplatedBignumDecimalScale<SOURCE, bignum_t>(source, result, count, parameters);
+	}
 	// we need to either multiply or divide by the difference in scales
 	if (result_scale >= source_scale) {
 		// multiply
@@ -317,8 +316,6 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 		case PhysicalType::INT128:
 			return TemplatedDecimalScaleUp<SOURCE, hugeint_t, POWERS_SOURCE, Hugeint>(source, result, count,
 			                                                                          parameters);
-		case PhysicalType::VARCHAR:
-			return TemplatedBignumDecimalScale<SOURCE, bignum_t>(source, result, count, parameters);
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
 		}
@@ -333,8 +330,6 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 			return TemplatedDecimalScaleDown<SOURCE, int64_t, POWERS_SOURCE>(source, result, count, parameters);
 		case PhysicalType::INT128:
 			return TemplatedDecimalScaleDown<SOURCE, hugeint_t, POWERS_SOURCE>(source, result, count, parameters);
-		case PhysicalType::VARCHAR:
-			return TemplatedBignumDecimalScale<SOURCE, bignum_t>(source, result, count, parameters);
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
 		}

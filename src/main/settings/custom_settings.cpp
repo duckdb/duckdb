@@ -93,16 +93,6 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	return LossyNumericCast<idx_t>(result);
 }
 
-//! The available system memory. The config's filesystem is not set until the database starts, but
-//! options can be configured before that, so fall back to a temporary local filesystem.
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
-	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
-	}
-	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
-}
-
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -310,7 +300,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
 	vector<string> directories;
@@ -346,7 +336,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
@@ -1287,8 +1277,8 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 			throw InvalidInputException("%s setting cannot be NULL", MaxMemorySetting::Name);
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-		maximum_memory =
-		    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(info.config); });
+		maximum_memory = ParseMemoryLimitOrPercentage(
+		    input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(*info.config.file_system); });
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);
@@ -1842,6 +1832,19 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
 
+//! Undo the dialect_compatibility_mode that selecting the current dialect has set
+static void ClearDialectCompatibilityMode(ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (!client_config.current_dialect) {
+		return;
+	}
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+	auto dialect_extension = config.GetCallbackManager().GetDialectExtension(*client_config.current_dialect);
+	if (dialect_extension && dialect_extension->GetCompatibilityMode()) {
+		client_config.user_settings.ClearSetting(DialectCompatibilityModeSetting::SettingIndex);
+	}
+}
+
 void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input) {
 	if (!OnLocalSet(context, input)) {
 		return;
@@ -1850,6 +1853,7 @@ void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input)
 	auto &config = DatabaseInstance::GetDatabase(context).config;
 
 	if (input.IsNull()) {
+		ClearDialectCompatibilityMode(context);
 		client_config.current_dialect = std::nullopt;
 		return;
 	}
@@ -1862,6 +1866,7 @@ void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input)
 	auto &dialect_extension = *dialect_extension_p;
 	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
 	(void)dialect_extension.GetCompiledGrammar(context);
+	ClearDialectCompatibilityMode(context);
 	client_config.current_dialect = dialect_name;
 	auto &compatibility_mode = dialect_extension.GetCompatibilityMode();
 	if (compatibility_mode) {
@@ -1874,6 +1879,7 @@ void CurrentDialectSetting::ResetLocal(ClientContext &context) {
 	if (!OnLocalReset(context)) {
 		return;
 	}
+	ClearDialectCompatibilityMode(context);
 	ClientConfig::GetConfig(context).current_dialect = std::nullopt;
 }
 

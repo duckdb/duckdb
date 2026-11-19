@@ -121,8 +121,7 @@ static optional_ptr<const Expression> GetFilterColumn(ClientContext &context, co
 		    !BoundCastExpression::CastIsInvertibleForEquality(source_type, target_type)) {
 			return nullptr;
 		}
-		if (!BoundCastExpression::IsDefaultCast(cast) &&
-		    CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
+		if (CastFunctionSet::Get(context).CanOverrideDefaultCast(source_type, target_type)) {
 			return nullptr;
 		}
 		column = BoundCastExpression::Child(cast);
@@ -555,9 +554,7 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 		child->expressions.emplace_back(std::move(filter_expr));
 	}
 
-	// not allowed to let filter pushdown change mark joins to semi joins.
-	// semi joins are potentially slower AND the conversion can ruin column binding information
-	FilterPushdown filter_pushdown(optimizer, false);
+	FilterPushdown filter_pushdown(optimizer);
 	child = filter_pushdown.Rewrite(std::move(child));
 	PropagateExpression(expr);
 }

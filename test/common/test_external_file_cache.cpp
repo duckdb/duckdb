@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "caching_test_utils.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "test_helpers.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
@@ -171,8 +172,8 @@ string ReadSequential(CachingFileHandle &handle, idx_t size) {
 }
 
 void WriteTestContent(const string &path, const string &content) {
-	auto local_fs = FileSystem::CreateLocal();
-	auto handle = local_fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	auto &local_fs = TestLocalFileSystem();
+	auto handle = local_fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
 	handle->Sync();
 }
@@ -912,11 +913,11 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 	CachingFileSystem cfs(*tracking_fs, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
 
-	auto local_fs = FileSystem::CreateLocal();
+	auto &local_fs = TestLocalFileSystem();
 	const auto missing_a = TestCreatePath("test_efc_missing_a.bin");
 	const auto missing_b = TestCreatePath("test_efc_missing_b.bin");
-	local_fs->TryRemoveFile(missing_a);
-	local_fs->TryRemoveFile(missing_b);
+	local_fs.TryRemoveFile(missing_a);
+	local_fs.TryRemoveFile(missing_b);
 
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ));
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_b), FileFlags::FILE_FLAGS_READ));

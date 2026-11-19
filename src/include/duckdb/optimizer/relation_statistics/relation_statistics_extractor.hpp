@@ -30,6 +30,10 @@ public:
 	RelationStatsExtractor(ClientContext &context, shared_ptr<const JoinOrderSourceStats> source_stats);
 
 public:
+	ClientContext &GetContext() const {
+		return context;
+	}
+
 	optional_ptr<const RelationStats> Extract(LogicalOperator &op);
 	optional_ptr<LogicalOperator> GetCTEDefinition(const LogicalCTERef &cte_ref) const;
 	idx_t ExtractedOperatorCount() const;

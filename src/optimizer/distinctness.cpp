@@ -1,15 +1,94 @@
 #include "duckdb/optimizer/distinctness.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+static bool ForwardsChildUniqueSets(LogicalOperatorType type, DistinctnessPropagation propagation) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return true;
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		return propagation == DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS;
+	default:
+		return false;
+	}
+}
+
+static optional<ColumnBinding> GetInjectiveColumnBinding(const Expression &expression,
+                                                         optional_ptr<ClientContext> context) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return expression.Cast<BoundColumnRefExpression>().Binding();
+	}
+	if (!context || !BoundCastExpression::IsCast(expression)) {
+		return {};
+	}
+	auto &cast = expression.Cast<BoundFunctionExpression>();
+	auto source_type = BoundCastExpression::SourceType(cast);
+	auto &target_type = BoundCastExpression::TargetType(cast);
+	if (BoundCastExpression::IsTryCast(cast) ||
+	    CastFunctionSet::Get(*context).CanOverrideDefaultCast(source_type, target_type)) {
+		return {};
+	}
+	// Successful strict integral casts do not merge distinct input values.
+	if (source_type != target_type && !(source_type.IsIntegral() && target_type.IsIntegral()) &&
+	    !BoundCastExpression::CastIsInvertibleForEquality(source_type, target_type)) {
+		return {};
+	}
+	return GetInjectiveColumnBinding(BoundCastExpression::Child(cast), context);
+}
+
+bool Distinctness::IsDistinctOn(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys) {
+	column_binding_set_t bindings;
+	for (auto &key : keys) {
+		auto binding = GetInjectiveColumnBinding(*key, context);
+		if (binding) {
+			bindings.insert(*binding);
+		}
+	}
+	return IsDistinctOnProjectedKeys(op, bindings);
+}
+
+bool Distinctness::IsDistinctOnProjectedKeys(LogicalOperator &op, const column_binding_set_t &keys) {
+	if (keys.empty()) {
+		return false;
+	}
+	if (IsDistinctOn(op, keys)) {
+		return true;
+	}
+	if (ForwardsChildUniqueSets(op.type, propagation)) {
+		return IsDistinctOnProjectedKeys(*op.children[0], keys);
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return false;
+	}
+	auto &projection = op.Cast<LogicalProjection>();
+	column_binding_set_t child_keys;
+	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
+		if (!keys.count(ColumnBinding(projection.table_index, expr_idx))) {
+			continue;
+		}
+		auto binding = GetInjectiveColumnBinding(*projection.expressions[expr_idx], context);
+		if (binding) {
+			child_keys.insert(*binding);
+		}
+	}
+	return IsDistinctOnProjectedKeys(*projection.children[0], child_keys);
+}
 
 bool Distinctness::IsDistinctOn(LogicalOperator &op, const column_binding_set_t &keys) {
 	if (keys.empty()) {
@@ -185,7 +264,7 @@ vector<column_binding_set_t> Distinctness::ComputeAggregateUniqueSets(LogicalAgg
 }
 
 vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalProjection &projection) {
-	// only plain column references forward a unique set: other expressions (e.g. casts) are not injective
+	// cache one representative output binding per input binding
 	vector<column_binding_set_t> result;
 	auto &child_sets = GetUniqueSets(*projection.children[0]);
 	if (child_sets.empty()) {
@@ -193,10 +272,9 @@ vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalPr
 	}
 	column_binding_map_t<ColumnBinding> forwarded;
 	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
-		auto &expr = *projection.expressions[expr_idx];
-		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			forwarded.emplace(expr.Cast<BoundColumnRefExpression>().Binding(),
-			                  ColumnBinding(projection.table_index, expr_idx));
+		auto binding = GetInjectiveColumnBinding(*projection.expressions[expr_idx], context);
+		if (binding) {
+			forwarded.emplace(*binding, ColumnBinding(projection.table_index, expr_idx));
 		}
 	}
 	for (auto &child_set : child_sets) {
@@ -218,6 +296,9 @@ vector<column_binding_set_t> Distinctness::ComputeProjectionUniqueSets(LogicalPr
 }
 
 vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op) {
+	if (ForwardsChildUniqueSets(op.type, propagation)) {
+		return GetUniqueSets(*op.children[0]);
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return ComputeScanUniqueSets(op.Cast<LogicalGet>());
@@ -225,17 +306,6 @@ vector<column_binding_set_t> Distinctness::ComputeUniqueSets(LogicalOperator &op
 		return ComputeAggregateUniqueSets(op.Cast<LogicalAggregate>());
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return ComputeProjectionUniqueSets(op.Cast<LogicalProjection>());
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_WINDOW:
-		// these remove rows or add columns, but never duplicate a row
-		return GetUniqueSets(*op.children[0]);
-	case LogicalOperatorType::LOGICAL_SAMPLE:
-		if (propagation != DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
-			break;
-		}
-		return GetUniqueSets(*op.children[0]);
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		if (propagation != DistinctnessPropagation::UNARY_OPERATORS_AND_JOINS) {
 			break;

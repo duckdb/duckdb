@@ -71,7 +71,8 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle 
 }
 
 DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statement_handle prepared,
-                                                     const char **parameter_names, const idx_t *parameter_names_lengths,
+                                                     const char *const *parameter_names,
+                                                     const idx_t *parameter_names_lengths,
                                                      const duckdb_v2_value_handle *parameter_values,
                                                      idx_t parameter_count, duckdb_v2_result_handle *out_result,
                                                      duckdb_v2_error_info_handle *err) {
@@ -95,9 +96,9 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statemen
 }
 
 DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute_arrow(
-    duckdb_v2_prepared_statement_handle prepared, const char **parameter_names, const idx_t *parameter_names_lengths,
-    const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, idx_t batch_size,
-    duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err) {
+    duckdb_v2_prepared_statement_handle prepared, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out_result);
 	*out_result = nullptr;
 	DUCKDB_CHECK_ARG(prepared);

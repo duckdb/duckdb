@@ -1,0 +1,51 @@
+--- a/database-connector/src/include/dbconnector/storage/transaction_manager.hpp
++++ b/database-connector/src/include/dbconnector/storage/transaction_manager.hpp
+@@ -5,6 +5,8 @@
+ #include "duckdb/common/reference_map.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/client_context.hpp"
++#include "duckdb/main/context.hpp"
++#include "duckdb/transaction/meta_transaction.hpp"
+ #include "duckdb/transaction/transaction_manager.hpp"
+ 
+ namespace dbconnector {
+@@ -17,7 +19,7 @@
+ 	    : duckdb::TransactionManager(db_p), catalog(catalog_p) {
+ 	}
+ 
+-	duckdb::Transaction &StartTransaction(duckdb::ClientContext &context) override {
++	duckdb::Transaction &StartTransaction(duckdb::Context &context, duckdb::MetaTransaction &) override {
+ 		auto transaction = duckdb::make_uniq<TransactionT>(catalog, *this, context);
+ 		transaction->Start();
+ 		auto &result = *transaction;
+@@ -30,7 +32,7 @@
+ 		auto &db_transaction = transaction.Cast<TransactionT>();
+ 		duckdb::ErrorData error;
+ 		try {
+-			db_transaction.Commit();
++			db_transaction.Commit(context);
+ 		} catch (const std::exception &ex) {
+ 			error = duckdb::ErrorData(ex);
+ 		} catch (...) {
+@@ -40,10 +42,10 @@
+ 		return error;
+ 	}
+ 
+-	void RollbackTransaction(duckdb::Transaction &transaction) override {
++	void RollbackTransaction(duckdb::ClientContext &context, duckdb::Transaction &transaction) override {
+ 		auto &db_transaction = transaction.Cast<TransactionT>();
+ 		try {
+-			db_transaction.Rollback();
++			db_transaction.Rollback(context);
+ 		} catch (...) {
+ 			DestroyTransaction(transaction);
+ 			throw;
+@@ -53,7 +55,7 @@
+ 
+ 	void Checkpoint(duckdb::ClientContext &context, bool force = false) override {
+ 		auto &transaction = TransactionT::Get(context, db.GetCatalog());
+-		auto &conn = transaction.GetConnection();
++		auto &conn = transaction.GetConnection(context);
+ 		conn.Execute(context, "CHECKPOINT");
+ 	}
+ 

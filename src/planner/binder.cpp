@@ -87,8 +87,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
 		return Bind(statement.Cast<UpdateStatement>());
-	case StatementType::RELATION_STATEMENT:
-		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
 		return Bind(statement.Cast<CreateStatement>());
 	case StatementType::DROP_STATEMENT:

@@ -5,6 +5,10 @@
 statement ok
 SET explain_output='optimized_only';
 
+# the ALL set operations below are the vehicle for a shared window subplan: keep them a join of two windows
+statement ok
+SET disabled_optimizers='set_operation_aggregate';
+
 statement ok
 CREATE TABLE repeatable_input AS SELECT * FROM (VALUES (1), (1), (NULL::INTEGER)) t(i);
 

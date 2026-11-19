@@ -5,6 +5,15 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks MARK conversion plan shapes and its optimizer gate.",
+      "paths": [
+        "test/optimizer/mark_join_simplifier.test",
+        "test/optimizer/mark_predicates.test",
+        "test/optimizer/mark_join_scalar_subquery.test",
+        "test/optimizer/joins/filtering_join_predicate_ownership.test"
+      ]
+    },
+    {
       "reason": "Checks nested field projection pushdown through UNION ALL in the optimized plan.",
       "paths": [
         "test/sql/optimizer/union_extract_pushdown_plan.test"
@@ -33,6 +42,7 @@
     {
       "reason": "Counts the evaluations of volatile filters that only the optimizer pushes down or keeps above.",
       "paths": [
+        "test/optimizer/join_to_semi_join_volatile.test",
         "test/optimizer/pushdown/volatile_filter_aggregate_distinct.test"
       ]
     },
@@ -186,7 +196,7 @@
     {
       "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
       "paths": [
-        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test_slow"
       ]
     },
     {

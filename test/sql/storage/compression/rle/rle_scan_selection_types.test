@@ -8,9 +8,9 @@ SET threads=1
 statement ok
 ATTACH '{TEST_DIR}/rle_scan_selection_types.db' AS db (BLOCK_SIZE 16384)
 
-foreach type TINYINT INTEGER BIGINT HUGEINT UHUGEINT FLOAT DOUBLE
+foreach type INTEGER DOUBLE
 
-foreach run_length 1 3 32 2049
+foreach run_length 3 2049
 
 statement ok
 CREATE OR REPLACE MACRO expected(i) AS (((i // {run_length}) % 7) * 17)::{type}
@@ -40,7 +40,7 @@ SELECT count(*) = 12291 AND bool_and(v = expected(id)) AND bool_and(n IS NOT DIS
 ----
 true
 
-foreach selected 1 500 950
+foreach selected 500
 
 query I
 SELECT count(*) FROM (

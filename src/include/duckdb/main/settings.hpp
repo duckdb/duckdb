@@ -872,6 +872,19 @@ struct ForceBitpackingModeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugForceBloomFilterReplicationSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_bloom_filter_replication";
+	static constexpr const char *Description =
+	    "Force join Bloom filter copies regardless of machine size or allocation locality.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugForceCheckpointSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_checkpoint";
