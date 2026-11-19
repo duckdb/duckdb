@@ -86,15 +86,14 @@ struct ReservoirQuantileState {
 				capacity = new_capacity;
 			}
 			v[pos++] = element;
-			if (pos == len) {
-				// the sampler draws no random numbers before the reservoir is full
-				D_ASSERT(!r_samp);
-				auto weights = allocator.AllocateAligned(len * sizeof(ReservoirQuantileSampler::Weight));
-				r_samp = allocator.Make<ReservoirQuantileSampler>(
-				    reinterpret_cast<ReservoirQuantileSampler::Weight *>(weights));
-				r_samp->InitializeReservoirWeights(pos, len);
-			}
 		} else {
+			if (!r_samp) {
+				auto weights = allocator.AllocateAligned(len * sizeof(ReservoirQuantileSampler::Weight));
+				auto sampler = allocator.Make<ReservoirQuantileSampler>(
+				    reinterpret_cast<ReservoirQuantileSampler::Weight *>(weights));
+				sampler->InitializeReservoirWeights(pos, len);
+				r_samp = sampler;
+			}
 			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
 			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
 				ReplaceElement(element);
