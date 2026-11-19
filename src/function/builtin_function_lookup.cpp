@@ -26,21 +26,6 @@ shared_ptr<const ScalarFunction> GetBuiltinScalarFunction(ClientContext &context
 	return entry.functions.GetFunctionByArguments(context, arguments);
 }
 
-shared_ptr<const ScalarFunction> TryGetBuiltinScalarFunction(ClientContext &context, const Identifier &name,
-                                                             const vector<LogicalType> &arguments) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, BuiltinName(catalog, name), OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
-		return nullptr;
-	}
-	auto index = FunctionBinder::SelectFunction(context, entry->functions, arguments);
-	if (!index.IsSuccess()) {
-		return nullptr;
-	}
-	return index.GetBinding().GetFunction<ScalarFunction>();
-}
-
 shared_ptr<const AggregateFunction> GetBuiltinAggregateFunction(ClientContext &context, const Identifier &name,
                                                                 const vector<LogicalType> &arguments) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
