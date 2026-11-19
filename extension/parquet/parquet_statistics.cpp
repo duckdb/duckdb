@@ -770,6 +770,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);

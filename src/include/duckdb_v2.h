@@ -4523,8 +4523,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_han
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
-    duckdb_v2_environment_handle env, const char **option_names, const idx_t *option_names_lengths,
-    const char **option_values, const idx_t *option_values_lengths, idx_t option_count,
+    duckdb_v2_environment_handle env, const char *const *option_names, const idx_t *option_names_lengths,
+    const char *const *option_values, const idx_t *option_values_lengths, idx_t option_count,
     duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
@@ -4577,8 +4577,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create_with_options(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_open_shared(
-    duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char **option_names,
-    const idx_t *option_names_lengths, const char **option_values, const idx_t *option_values_lengths,
+    duckdb_v2_environment_handle env, const char *path, idx_t path_length, const char *const *option_names,
+    const idx_t *option_names_lengths, const char *const *option_values, const idx_t *option_values_lengths,
     idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 #endif
 
@@ -4979,8 +4979,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(const char *text, idx_t text_
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_create(const char **parts, const idx_t *parts_lengths, idx_t part_count,
-                                                    duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_create(const char *const *parts, const idx_t *parts_lengths,
+                                                    idx_t part_count, duckdb_v2_qname_handle *name,
+                                                    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -10366,7 +10367,7 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
-    duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char **param_names,
+    duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const char *const *param_names,
     const idx_t *param_names_lengths, const duckdb_v2_value_handle *param_values, idx_t param_count,
     duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 #endif
@@ -10417,7 +10418,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_id(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_from_name(
-    duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name, const char **param_names,
+    duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name, const char *const *param_names,
     const idx_t *param_names_lengths, const duckdb_v2_value_handle *param_values, idx_t param_count,
     duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 #endif
@@ -11468,7 +11469,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckd
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(
     duckdb_v2_replacement_scan_info_handle info, duckdb_v2_column_data_collection_handle collection,
-    const char **column_names, const idx_t *column_names_lengths, idx_t column_count, duckdb_v2_error_info_handle *err);
+    const char *const *column_names, const idx_t *column_names_lengths, idx_t column_count,
+    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -12658,7 +12660,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement,
                                                                 const char *name, idx_t name_length,
                                                                 duckdb_v2_column_data_collection_handle collection,
-                                                                const char **column_names,
+                                                                const char *const *column_names,
                                                                 const idx_t *column_names_lengths, idx_t column_count,
                                                                 duckdb_v2_error_info_handle *err);
 #endif
@@ -13530,9 +13532,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(
-    duckdb_v2_prepared_statement_handle prepared, const char **parameter_names, const idx_t *parameter_names_lengths,
-    const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, duckdb_v2_result_handle *out_result,
-    duckdb_v2_error_info_handle *err);
+    duckdb_v2_prepared_statement_handle prepared, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -13685,7 +13687,7 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(
-    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char **parameter_names,
+    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char *const *parameter_names,
     const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
     duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
@@ -14103,6 +14105,15 @@ typedef struct _duckdb_v2_table_function_get_bind_info_info {
 } * duckdb_v2_table_function_get_bind_info_info_handle;
 
 /*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the engine describes a bound call of it
+ * in a query plan, e.g. for `EXPLAIN`. The "to string" callback receives this handle and can use it to report the
+ * key-value pairs the plan shows for the scan.
+ */
+typedef struct _duckdb_v2_table_function_to_string_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_to_string_info_handle;
+
+/*!
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
@@ -14167,6 +14178,9 @@ typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
 typedef void (*duckdb_v2_table_function_stats_callback_fn)(duckdb_v2_table_function_stats_info_handle info,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_to_string_callback_fn)(duckdb_v2_table_function_to_string_info_handle info,
+                                                               duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -16039,6 +16053,98 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Sets the optional "to string" callback of the table function.
+ *
+ * The engine invokes the callback with the bind data of a bound call when it renders a query plan that scans the
+ * function, e.g. for `EXPLAIN`, `EXPLAIN ANALYZE` and the profiler, both for the logical and for the physical plan. The
+ * callback reports what the plan shows for the scan as key-value pairs with `duckdb_v2_table_function_to_string_set()`,
+ * e.g. the file or the remote table it reads. Without the callback the physical plan shows the name of the function
+ * under the key `Function`; with it, the plan shows what the callback reports instead, so a callback that wants the
+ * name shown reports it itself. The engine shows the projections, filters and estimated cardinality of the scan next to
+ * them either way. The callback may be invoked more than once for the same bind data, and is not invoked with the
+ * global state of a scan, so it should only report what the bind already determined. A function wrapped in a multi-file
+ * function is not asked: the plan describes the multi-file scan.
+ *
+ * With profiling enabled (including `EXPLAIN ANALYZE`), the engine also invokes the callback while the query executes,
+ * once per worker thread that scans the function. Calls can therefore run concurrently with the same bind data and user
+ * data, so the callback must not modify them without synchronization, and an error it reports there fails the query.
+ * Builds with assertions enabled also invoke it while executing queries without profiling.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The "to string" callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_to_string_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_to_string_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_user_data(
+    duckdb_v2_table_function_to_string_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data the function's bind callback set for the bound call being described.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_get_bind_data(
+    duckdb_v2_table_function_to_string_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Reports a key-value pair the query plan shows for the scan, e.g. `File` and the path of the file it reads. The plan
+ * shows the pairs in the order they were first reported; setting a key again replaces its value in place. Fails with
+ * `ERROR_INPUT_INVALID` when the key is empty.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The to string info handle.
+ * @param key The key. Borrowed and copied.
+ * @param key_length The length of `key` in bytes. `key` need not be null-terminated.
+ * @param value The value. Borrowed and copied. May span several lines.
+ * @param value_length The length of `value` in bytes. `value` need not be null-terminated and may be NULL only when
+ * this is 0.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_to_string_set(duckdb_v2_table_function_to_string_info_handle info,
+                                                                    const char *key, idx_t key_length,
+                                                                    const char *value, idx_t value_length,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Creates a new multi-file function through a factory.
  *
  * The function starts out empty: give it a name with `duckdb_v2_multi_file_function_set_name()` and the single-file
@@ -17621,7 +17727,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array(duckdb_v2_factory_hand
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char **names,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory, const char *const *names,
                                                            const idx_t *names_lengths,
                                                            const duckdb_v2_value_handle *children, idx_t field_count,
                                                            duckdb_v2_value_handle *out_value,
@@ -17915,7 +18021,7 @@ typedef struct _duckdb_v2_arrow_result {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context,
-                                                             struct ArrowSchema *schema, idx_t batch_size,
+                                                             const struct ArrowSchema *schema, idx_t batch_size,
                                                              duckdb_v2_arrow_importer_handle *out_importer,
                                                              duckdb_v2_error_info_handle *err);
 #endif
@@ -18069,7 +18175,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_im
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context,
                                                              const duckdb_v2_logical_type_handle *types,
-                                                             const char **names, const idx_t *names_lengths,
+                                                             const char *const *names, const idx_t *names_lengths,
                                                              idx_t count, idx_t batch_size,
                                                              duckdb_v2_arrow_exporter_handle *out_exporter,
                                                              duckdb_v2_error_info_handle *err);
@@ -18200,7 +18306,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_destroy(duckdb_v2_arrow_ex
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(
-    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char **parameter_names,
+    duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement, const char *const *parameter_names,
     const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
     idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
@@ -18227,9 +18333,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute_arrow(
-    duckdb_v2_prepared_statement_handle prepared, const char **parameter_names, const idx_t *parameter_names_lengths,
-    const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, idx_t batch_size,
-    duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
+    duckdb_v2_prepared_statement_handle prepared, const char *const *parameter_names,
+    const idx_t *parameter_names_lengths, const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+    idx_t batch_size, duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

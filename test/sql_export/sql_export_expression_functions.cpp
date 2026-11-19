@@ -713,7 +713,7 @@ TEST_CASE("Function deserialization restores enclosing context after callback ex
 	const const_expression_list_t enclosing_children {*enclosing_child};
 	deserializer.Set<const LogicalType &>(enclosing_type);
 	deserializer.Set<const const_expression_list_t &>(enclosing_children);
-	REQUIRE_THROWS_AS(deserializer.Deserialize<Expression>(), InvalidInputException);
+	REQUIRE_THROWS_WITH(deserializer.Deserialize<Expression>(), Catch::Contains("Synthetic deserialization failure"));
 	REQUIRE(&deserializer.Get<const LogicalType &>() == &enclosing_type);
 	REQUIRE(&deserializer.Get<const const_expression_list_t &>() == &enclosing_children);
 	connection.Rollback();

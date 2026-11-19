@@ -20,6 +20,8 @@ primitives:
     c_type: void
   - name: char
     c_type: char
+  - name: readonly_char_ptr
+    c_type: const char *const
   - name: bool
     c_type: bool
   - name: i8

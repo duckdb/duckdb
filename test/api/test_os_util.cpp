@@ -40,7 +40,8 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		DuckDB db(nullptr, &config);
 		auto &os_util = OSUtil::Get(*db.instance);
 		string value;
-		REQUIRE_THROWS_AS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL", value), PermissionException);
+		REQUIRE_THROWS_WITH(os_util.GetEnv("DUCKDB_TEST_OS_UTIL", value),
+		                    Catch::Contains("environment access is disabled by configuration"));
 		REQUIRE_THROWS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL"));
 		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE(value == "quack");
