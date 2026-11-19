@@ -300,7 +300,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
 	vector<string> directories;
@@ -336,7 +336,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	if (!config.file_system) {
+	if (!db) {
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
@@ -1277,9 +1277,8 @@ void MaxMemorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 			throw InvalidInputException("%s setting cannot be NULL", MaxMemorySetting::Name);
 		}
 		// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-		maximum_memory = ParseMemoryLimitOrPercentage(input.ToString(), [&]() {
-			return DBConfig::GetSystemAvailableMemory(info.config.GetBootstrapFileSystem());
-		});
+		maximum_memory = ParseMemoryLimitOrPercentage(
+		    input.ToString(), [&]() { return DBConfig::GetSystemAvailableMemory(*info.config.file_system); });
 	}
 	if (info.db) {
 		BufferManager::GetBufferManager(*info.db).SetMemoryLimit(maximum_memory);

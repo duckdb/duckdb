@@ -56,7 +56,7 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
-	bootstrap_file_system = make_uniq<VirtualFileSystem>();
+	file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
@@ -399,9 +399,6 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
-		if (!config.file_system) {
-			throw InternalException("No file system!?");
-		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
 			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
@@ -526,6 +523,8 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
+	config.file_system = std::move(new_config.file_system);
+	new_config.file_system = make_uniq<VirtualFileSystem>();
 	config.options = new_config.options;
 	config.SetDisabledOptimizers(config.options.disabled_optimizers);
 	config.user_settings = new_config.user_settings;
@@ -550,11 +549,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
-	}
-	if (new_config.file_system) {
-		config.file_system = std::move(new_config.file_system);
-	} else {
-		config.file_system = make_uniq<VirtualFileSystem>();
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
