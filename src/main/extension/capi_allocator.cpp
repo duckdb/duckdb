@@ -1,213 +1,148 @@
 #include "duckdb/main/extension/capi_allocator.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/storage/buffer/buffer_pool.hpp"
-
-#include <cstddef>
-#include <cstring>
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 namespace {
 
-// Charges to the buffer pools are batched, so the lock is only taken once the held bytes moved this far.
-constexpr int64_t PUBLISH_THRESHOLD = 64 * 1024;
-
-struct PoolCharge {
-	shared_ptr<BufferPool> pool;
-	idx_t attach_count;
-};
-
-} // namespace
-
-struct CApiAllocatorData : public PrivateAllocatorData {
-	atomic<int64_t> allocated {0};
-	//! The bytes each attached pool is currently charged.
-	atomic<int64_t> published {0};
+struct ExtensionCounters {
 	mutex lock;
-	vector<PoolCharge> pools;
+	unordered_map<string, reference_set_t<atomic<int64_t>>> by_name;
 
-	void Charge(int64_t delta) {
-		auto total = allocated.fetch_add(delta, std::memory_order_relaxed) + delta;
-		if (AbsValue(total - published.load(std::memory_order_relaxed)) >= PUBLISH_THRESHOLD) {
-			Publish();
-		}
-	}
-
-	void Publish() {
-		lock_guard<mutex> guard(lock);
-		auto total = allocated.load(std::memory_order_relaxed);
-		auto delta = total - published.load(std::memory_order_relaxed);
-		if (delta == 0) {
-			return;
-		}
-		for (auto &entry : pools) {
-			entry.pool->UpdateUsedMemory(MemoryTag::EXTENSION, delta);
-		}
-		published.store(total, std::memory_order_relaxed);
-	}
-
-	void Attach(shared_ptr<BufferPool> pool) {
-		lock_guard<mutex> guard(lock);
-		for (auto &entry : pools) {
-			if (entry.pool == pool) {
-				entry.attach_count++;
-				return;
-			}
-		}
-		pool->UpdateUsedMemory(MemoryTag::EXTENSION, published.load(std::memory_order_relaxed));
-		pools.push_back(PoolCharge {std::move(pool), 1});
-	}
-
-	void Detach(BufferPool &pool) {
-		lock_guard<mutex> guard(lock);
-		for (idx_t i = 0; i < pools.size(); i++) {
-			auto &entry = pools[i];
-			if (entry.pool.get() != &pool) {
-				continue;
-			}
-			if (--entry.attach_count == 0) {
-				pool.UpdateUsedMemory(MemoryTag::EXTENSION, -published.load(std::memory_order_relaxed));
-				pools.erase_at(i);
-			}
-			return;
-		}
-		D_ASSERT(false);
+	static shared_ptr<ExtensionCounters> Get() {
+		static auto registry = make_shared_ptr<ExtensionCounters>();
+		return registry;
 	}
 };
 
-namespace {
-
-CApiAllocatorData &GetData(PrivateAllocatorData *data) {
-	return data->Cast<CApiAllocatorData>();
-}
-
-data_ptr_t CApiAllocate(PrivateAllocatorData *data, idx_t size) {
-	auto result = Allocator::DefaultAllocate(data, size);
-	if (result) {
-		GetData(data).Charge(NumericCast<int64_t>(size));
+struct ScopedAllocatorData : PrivateAllocatorData {
+	virtual void Register(const string &name) {
+		throw InvalidInputException("Cannot register a database-scoped allocator with an extension");
 	}
-	return result;
-}
+};
 
-void CApiFree(PrivateAllocatorData *data, data_ptr_t pointer, idx_t size) {
-	Allocator::DefaultFree(data, pointer, size);
-	GetData(data).Charge(-NumericCast<int64_t>(size));
-}
+struct ExtensionAllocatorData : ScopedAllocatorData {
+	atomic<int64_t> bytes {0};
+	shared_ptr<ExtensionCounters> registry;
+	string extension_name;
 
-data_ptr_t CApiReallocate(PrivateAllocatorData *data, data_ptr_t pointer, idx_t old_size, idx_t size) {
-	auto result = Allocator::DefaultReallocate(data, pointer, old_size, size);
-	if (result) {
-		GetData(data).Charge(NumericCast<int64_t>(size) - NumericCast<int64_t>(old_size));
+	void Register(const string &name) override {
+		auto counters = ExtensionCounters::Get();
+		lock_guard<mutex> guard(counters->lock);
+		if (registry) {
+			if (extension_name != name) {
+				throw InvalidInputException("Allocator is already registered to extension '%s'", extension_name);
+			}
+			return;
+		}
+		extension_name = name;
+		counters->by_name[name].insert(bytes);
+		registry = std::move(counters);
 	}
-	return result;
-}
 
-// malloc aligns every allocation for any object that fits in it, up to this alignment, so rounding the size up to the
-// alignment is enough below it. 64-bit x86 and ARM allocators all align to 16, even where max_align_t is smaller.
-#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
-constexpr idx_t MALLOC_ALIGNMENT = MaxValue<idx_t>(16, alignof(std::max_align_t));
-#else
-constexpr idx_t MALLOC_ALIGNMENT = alignof(std::max_align_t);
-#endif
-
-bool IsOverAligned(idx_t alignment) {
-	return alignment > MALLOC_ALIGNMENT;
-}
-
-// Over-aligned allocations reserve `alignment` extra bytes: the aligned pointer is at most that far in, and the
-// original pointer is stored right in front of it.
-idx_t BackingSize(idx_t size, idx_t alignment) {
-	if (!IsOverAligned(alignment)) {
-		return MaxValue(size, alignment);
+	~ExtensionAllocatorData() override {
+		if (registry) {
+			lock_guard<mutex> guard(registry->lock);
+			registry->by_name.at(extension_name).erase(bytes);
+		}
 	}
-	return size + alignment;
-}
 
-void CheckSize(idx_t size, idx_t alignment) {
-	if (alignment >= Allocator::MAXIMUM_ALLOC_SIZE || size >= Allocator::MAXIMUM_ALLOC_SIZE - alignment) {
-		throw OutOfMemoryException("Failed to allocate block of %llu bytes aligned to %llu (bad allocation)", size,
-		                           alignment);
+	static data_ptr_t Allocate(PrivateAllocatorData *data, idx_t size) {
+		auto ptr = Allocator::DefaultAllocate(data, size);
+		if (ptr) {
+			data->Cast<ExtensionAllocatorData>().bytes.fetch_add(size, std::memory_order_relaxed);
+		}
+		return ptr;
 	}
-}
+
+	static void Free(PrivateAllocatorData *data, data_ptr_t ptr, idx_t size) {
+		Allocator::DefaultFree(data, ptr, size);
+		data->Cast<ExtensionAllocatorData>().bytes.fetch_sub(size, std::memory_order_relaxed);
+	}
+
+	static data_ptr_t Reallocate(PrivateAllocatorData *data, data_ptr_t ptr, idx_t old_size, idx_t size) {
+		auto result = Allocator::DefaultReallocate(data, ptr, old_size, size);
+		if (result) {
+			data->Cast<ExtensionAllocatorData>().bytes.fetch_add(int64_t(size) - int64_t(old_size),
+			                                                     std::memory_order_relaxed);
+		}
+		return result;
+	}
+};
+
+struct DatabaseAllocatorData : ScopedAllocatorData {
+	explicit DatabaseAllocatorData(DatabaseInstance &instance)
+	    : db(instance.shared_from_this()), allocator(Allocator::Get(instance)),
+	      manager(BufferManager::GetBufferManager(instance)) {
+	}
+
+	shared_ptr<DatabaseInstance> db;
+	Allocator &allocator;
+	BufferManager &manager;
+
+	static data_ptr_t Allocate(PrivateAllocatorData *data, idx_t size) {
+		return Reallocate(data, nullptr, 0, size);
+	}
+
+	static void Free(PrivateAllocatorData *data, data_ptr_t ptr, idx_t size) {
+		auto &state = data->Cast<DatabaseAllocatorData>();
+		state.allocator.FreeData(ptr, size);
+		state.manager.FreeReservedMemory(size);
+	}
+
+	static data_ptr_t Reallocate(PrivateAllocatorData *data, data_ptr_t ptr, idx_t old_size, idx_t size) {
+		auto &state = data->Cast<DatabaseAllocatorData>();
+		if (size > old_size) {
+			state.manager.ReserveMemory(size - old_size);
+		}
+		data_ptr_t result;
+		try {
+			result = ptr ? state.allocator.ReallocateData(ptr, old_size, size) : state.allocator.AllocateData(size);
+		} catch (...) {
+			if (size > old_size) {
+				state.manager.FreeReservedMemory(size - old_size);
+			}
+			throw;
+		}
+		if (size < old_size) {
+			state.manager.FreeReservedMemory(old_size - size);
+		}
+		return result;
+	}
+};
 
 } // namespace
 
-CApiAllocator::CApiAllocator(string extension_name_p)
-    : Allocator(CApiAllocate, CApiFree, CApiReallocate, make_uniq<CApiAllocatorData>()),
-      data(GetData(GetPrivateData())), extension_name(std::move(extension_name_p)) {
+unique_ptr<Allocator> ExtensionAllocator::Create() {
+	return make_uniq<Allocator>(ExtensionAllocatorData::Allocate, ExtensionAllocatorData::Free,
+	                            ExtensionAllocatorData::Reallocate, make_uniq<ExtensionAllocatorData>());
 }
 
-CApiAllocator &CApiAllocator::Get(const string &extension_name) {
-	// Leaked on purpose: extension memory may still be freed while static destructors run.
-	static auto *registry_lock = new mutex();
-	static auto *registry = new unordered_map<string, unique_ptr<CApiAllocator>>();
+unique_ptr<Allocator> ExtensionAllocator::Create(DatabaseInstance &db) {
+	return make_uniq<Allocator>(DatabaseAllocatorData::Allocate, DatabaseAllocatorData::Free,
+	                            DatabaseAllocatorData::Reallocate, make_uniq<DatabaseAllocatorData>(db));
+}
 
-	lock_guard<mutex> guard(*registry_lock);
-	auto &entry = (*registry)[extension_name];
-	if (!entry) {
-		entry = unique_ptr<CApiAllocator>(new CApiAllocator(extension_name));
+void ExtensionAllocator::Register(Allocator &allocator, const string &extension_name) {
+	allocator.GetPrivateData()->Cast<ScopedAllocatorData>().Register(extension_name);
+}
+
+optional_idx ExtensionAllocator::GetUsage(const string &extension_name) {
+	auto registry = ExtensionCounters::Get();
+	lock_guard<mutex> guard(registry->lock);
+	auto it = registry->by_name.find(extension_name);
+	if (it == registry->by_name.end()) {
+		return optional_idx();
 	}
-	return *entry;
-}
-
-idx_t CApiAllocator::GetAllocatedSize() const {
-	auto allocated = data.allocated.load(std::memory_order_relaxed);
-	return allocated > 0 ? NumericCast<idx_t>(allocated) : 0;
-}
-
-data_ptr_t CApiAllocator::AllocateAligned(idx_t size, idx_t alignment) {
-	D_ASSERT(size > 0 && IsPowerOfTwo(alignment));
-	CheckSize(size, alignment);
-	auto backing = AllocateData(BackingSize(size, alignment));
-	if (!IsOverAligned(alignment)) {
-		return backing;
+	idx_t total = 0;
+	for (auto &bytes : it->second) {
+		total += NumericCast<idx_t>(bytes.get().load(std::memory_order_relaxed));
 	}
-	auto address = reinterpret_cast<uintptr_t>(backing) + sizeof(data_ptr_t);
-	auto result = reinterpret_cast<data_ptr_t>(AlignValue<uintptr_t>(address, alignment));
-	memcpy(result - sizeof(data_ptr_t), &backing, sizeof(data_ptr_t));
-	return result;
-}
-
-void CApiAllocator::FreeAligned(data_ptr_t pointer, idx_t size, idx_t alignment) {
-	D_ASSERT(pointer && size > 0 && IsPowerOfTwo(alignment));
-	auto backing = pointer;
-	if (IsOverAligned(alignment)) {
-		memcpy(&backing, pointer - sizeof(data_ptr_t), sizeof(data_ptr_t));
-	}
-	FreeData(backing, BackingSize(size, alignment));
-}
-
-data_ptr_t CApiAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t alignment, idx_t new_size) {
-	D_ASSERT(pointer && old_size > 0 && new_size > 0 && IsPowerOfTwo(alignment));
-	CheckSize(new_size, alignment);
-	if (!IsOverAligned(alignment)) {
-		return ReallocateData(pointer, BackingSize(old_size, alignment), BackingSize(new_size, alignment));
-	}
-	// realloc does not keep the alignment, so move the data to a fresh allocation
-	auto result = AllocateAligned(new_size, alignment);
-	memcpy(result, pointer, MinValue(old_size, new_size));
-	FreeAligned(pointer, old_size, alignment);
-	return result;
-}
-
-void CApiAllocator::Attach(shared_ptr<BufferPool> pool) {
-	data.Attach(std::move(pool));
-}
-
-void CApiAllocator::Detach(BufferPool &pool) {
-	data.Detach(pool);
-}
-
-CApiAllocatorAttachment::CApiAllocatorAttachment(CApiAllocator &allocator, shared_ptr<BufferPool> pool_p)
-    : allocator(allocator), pool(std::move(pool_p)) {
-	allocator.Attach(pool);
-}
-
-CApiAllocatorAttachment::~CApiAllocatorAttachment() {
-	allocator.Detach(*pool);
+	return total;
 }
 
 } // namespace duckdb

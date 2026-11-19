@@ -13,8 +13,6 @@
 #include "duckdb/main/extension_load_options.hpp"
 
 namespace duckdb {
-class CApiAllocator;
-class CApiAllocatorAttachment;
 class ErrorData;
 
 class ExtensionInfo {
@@ -70,15 +68,10 @@ public:
 
 	void RemoveExtensionInfo(const string &name);
 
-	//! Charges the allocator to this database's buffer pool until the database closes.
-	DUCKDB_API void AttachAllocator(CApiAllocator &allocator);
-	DUCKDB_API vector<reference<CApiAllocator>> GetAllocators();
-
 private:
 	DatabaseInstance &db;
 	mutex lock;
 	identifier_map_t<shared_ptr<ExtensionInfo>> loaded_extensions_info;
-	vector<unique_ptr<CApiAllocatorAttachment>> allocator_attachments;
 	string extension_load_prefix;
 };
 

@@ -29,9 +29,15 @@ static unique_ptr<FunctionData> DuckDBExtensionMemoryBind(ClientContext &context
 static unique_ptr<GlobalTableFunctionState> DuckDBExtensionMemoryInit(ClientContext &context,
                                                                       TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBExtensionMemoryData>();
-	for (auto &entry : ExtensionManager::Get(context).GetAllocators()) {
-		auto &allocator = entry.get();
-		result->entries.push_back({allocator.GetExtensionName(), allocator.GetAllocatedSize()});
+	auto &manager = ExtensionManager::Get(context);
+	for (auto &name : manager.GetExtensions()) {
+		auto info = manager.GetExtensionInfo(name);
+		if (info && info->is_loaded) {
+			auto usage = ExtensionAllocator::GetUsage(info->orig_ext_name);
+			if (usage.IsValid()) {
+				result->entries.push_back({name, usage.GetIndex()});
+			}
+		}
 	}
 	return std::move(result);
 }
@@ -49,10 +55,8 @@ static void DuckDBExtensionMemoryFunction(ClientContext &context, TableFunctionI
 }
 
 void DuckDBExtensionMemoryFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction function("duckdb_extension_memory", {}, DuckDBExtensionMemoryFunction, DuckDBExtensionMemoryBind,
-	                       DuckDBExtensionMemoryInit);
-	function.stability = FunctionStability::VOLATILE;
-	set.AddFunction(std::move(function));
+	set.AddFunction(TableFunction("duckdb_extension_memory", {}, DuckDBExtensionMemoryFunction,
+	                              DuckDBExtensionMemoryBind, DuckDBExtensionMemoryInit));
 }
 
 } // namespace duckdb
