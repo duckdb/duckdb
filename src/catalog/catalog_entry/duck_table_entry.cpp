@@ -1,4 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -1415,6 +1417,37 @@ shared_ptr<IndexEntry> DuckTableEntry::GetAddedConstraintIndex(const DuckTableEn
 shared_ptr<IndexEntry> DuckTableEntry::GetConstraintIndex(idx_t constraint_idx) const {
 	D_ASSERT(constraint_idx < constraint_indexes.size());
 	return constraint_indexes[constraint_idx];
+}
+
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetConstraintIndexes() const {
+	vector<shared_ptr<IndexEntry>> result;
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		if (!constraints[i]->NeedsBackingIndex()) {
+			continue;
+		}
+		D_ASSERT(constraint_indexes[i]);
+		result.push_back(constraint_indexes[i]);
+	}
+	return result;
+}
+
+vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(CatalogTransaction transaction) const {
+	auto result = GetConstraintIndexes();
+	auto dependency_manager = catalog.GetDependencyManager();
+	if (!dependency_manager) {
+		return result;
+	}
+	// an index catalog entry depends on its table
+	auto &table_info = *storage->GetDataTableInfo();
+	for (auto &entry : dependency_manager->GetDependents(transaction, *this, CatalogType::INDEX_ENTRY)) {
+		auto &index = entry.get().Cast<DuckIndexEntry>();
+		if (&index.GetDataTableInfo() != &table_info) {
+			throw InternalException("Index \"%s\" depends on table \"%s\", but is an index of another table",
+			                        index.name, name);
+		}
+		result.push_back(index.GetIndexEntry());
+	}
+	return result;
 }
 
 void DuckTableEntry::OnDrop() {

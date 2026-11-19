@@ -3,8 +3,6 @@
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/checkpoint/pending_publication.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -498,45 +496,6 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 		column_ids.insert(index_info.column_set.begin(), index_info.column_set.end());
 	}
 	return column_ids;
-}
-
-namespace {
-
-class PendingIndexPublication final : public PendingPublication {
-public:
-	PendingIndexPublication(shared_ptr<IndexEntry> entry_p, unique_ptr<BoundIndex> shadow_index_p)
-	    : entry(std::move(entry_p)), shadow_index(std::move(shadow_index_p)) {
-		D_ASSERT(entry);
-		D_ASSERT(shadow_index);
-	}
-
-	void Publish() override {
-		D_ASSERT(shadow_index);
-		entry->InstallShadow(std::move(shadow_index));
-	}
-
-private:
-	shared_ptr<IndexEntry> entry;
-	unique_ptr<BoundIndex> shadow_index;
-};
-
-} // namespace
-
-vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
-
-	vector<shared_ptr<const IndexStorageInfo>> infos;
-	infos.reserve(index_entries.size());
-
-	for (const auto &entry : index_entries) {
-		auto checkpoint = entry->Checkpoint(writer);
-		if (checkpoint.shadow_index) {
-			writer.AddPendingPublication(make_uniq<PendingIndexPublication>(entry, std::move(checkpoint.shadow_index)));
-		}
-		infos.push_back(std::move(checkpoint.storage_info));
-	}
-
-	return infos;
 }
 
 vector<unordered_set<column_t>> TableIndexList::GetConflictTargetColumns(const ConflictInfo &conflict_info) const {

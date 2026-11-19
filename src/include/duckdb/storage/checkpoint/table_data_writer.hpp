@@ -17,6 +17,7 @@
 namespace duckdb {
 class TableIndexList;
 class DuckTableEntry;
+class IndexEntry;
 class TableStatistics;
 class SingleFileCheckpointWriter;
 class RowGroupCollection;
@@ -35,7 +36,8 @@ public:
 	virtual ~TableDataWriter();
 
 public:
-	void WriteTableData(Serializer &metadata_serializer);
+	//! Writes the table data and the given indexes of the table
+	void WriteTableData(Serializer &metadata_serializer, const vector<shared_ptr<IndexEntry>> &indexes);
 
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                                 idx_t total_rows, idx_t next_row_id) = 0;

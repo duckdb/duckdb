@@ -93,7 +93,8 @@ void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &seri
 	InMemoryTableDataWriter data_writer(*this, table);
 
 	// Write the table data
-	table.GetStorage().Checkpoint(data_writer, serializer);
+	// indexes are only written to disk
+	table.GetStorage().Checkpoint(data_writer, serializer, {});
 }
 
 InMemoryRowGroupWriter::InMemoryRowGroupWriter(TableDataWriter &writer, TableCatalogEntry &table,

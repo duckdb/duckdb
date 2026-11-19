@@ -30,10 +30,8 @@ class IndexWriteHandle;
 class IndexBinder;
 struct IndexStorageInfo;
 struct DataTableInfo;
-struct IndexCheckpointResult;
 template <class T>
 class TableIndexIterationHelper;
-class TableIndexWriter;
 
 class TableIndexList {
 public:
@@ -126,8 +124,6 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
-	//! Persist index buffers and install replacements before returning their metadata.
-	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
 	//! Returns the column sets of unique indexes matching the conflict target.

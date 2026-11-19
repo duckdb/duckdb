@@ -38,9 +38,9 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, Context &context_p)
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
+void TableDataWriter::WriteTableData(Serializer &metadata_serializer, const vector<shared_ptr<IndexEntry>> &indexes) {
 	// start scanning the table and append the data to the uncompressed segments
-	table.GetStorage().Checkpoint(*this, metadata_serializer);
+	table.GetStorage().Checkpoint(*this, metadata_serializer, indexes);
 }
 
 void TableDataWriter::AddPendingPublication(unique_ptr<PendingPublication> publication) {
