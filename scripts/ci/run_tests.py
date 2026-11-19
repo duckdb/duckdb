@@ -21,9 +21,8 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
-HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
+HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 150
 HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
-DEFAULT_TIMEOUT_RETRY_MULTIPLIER = 2.0
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
@@ -75,7 +74,6 @@ class TestRunnerConfig:
     fail_require_skip: bool
     coverage_profile_dir: Path | None
     timeout_policy: str = "fail"
-    timeout_retry_multiplier: float = DEFAULT_TIMEOUT_RETRY_MULTIPLIER
 
 
 @dataclass(frozen=True)
@@ -1871,9 +1869,8 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         next_timeout_seconds = batch_info["timeout_seconds"]
         timeout_suffix = ""
         if failure.kind == "timeout":
-            next_timeout_seconds = max(
-                next_timeout_seconds, ctx.config.batch_timeout_seconds * ctx.config.timeout_retry_multiplier
-            )
+            # Each retry after a timeout extends the timeout by the base batch timeout.
+            next_timeout_seconds += ctx.config.batch_timeout_seconds
             timeout_suffix = f", timeout {format_duration_seconds(next_timeout_seconds)}s"
         ctx.progress.print_message(
             f"retrying failed test {retry_target} "
@@ -1987,12 +1984,6 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=float)
-    parser.add_argument(
-        "--timeout-retry-multiplier",
-        type=float,
-        default=DEFAULT_TIMEOUT_RETRY_MULTIPLIER,
-        help="retry timed-out batches with the batch timeout multiplied by this factor",
-    )
     parser.add_argument(
         "--timeout-policy",
         choices=("fail", "warn"),
@@ -2131,7 +2122,6 @@ def run_single_config(
             fail_require_skip=args.fail_require_skip,
             coverage_profile_dir=args.coverage_profile_dir,
             timeout_policy=args.timeout_policy,
-            timeout_retry_multiplier=args.timeout_retry_multiplier,
         )
 
         tests = load_tests(config.test_list)

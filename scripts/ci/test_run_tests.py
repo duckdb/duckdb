@@ -1467,20 +1467,19 @@ require windows: 2
                 },
                 {"failed": False, "stdout": "", "stderr": "", "message": None, "peak_rss_bytes": 0},
             ],
-            ["--retry", "1", "--batch-timeout", "0.5", "--timeout-retry-multiplier", "3"],
+            ["--retry", "1", "--batch-timeout", "0.5"],
             env={"GITHUB_ACTIONS": "true"},
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.5])
-        self.assertIn("retrying failed test test/sql/a.test (attempt 1/1, retry 1/4, timeout 1.5s)", proc.stdout)
+        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.0])
+        self.assertIn("retrying failed test test/sql/a.test (attempt 1/1, retry 1/4, timeout 1s)", proc.stdout)
         self.assertIn(
-            "::warning title=Test timeout::test/sql/a.test timed out after 0.5s; "
-            "retrying (attempt 1/1, timeout 1.5s)",
+            "::warning title=Test timeout::test/sql/a.test timed out after 0.5s; " "retrying (attempt 1/1, timeout 1s)",
             proc.stdout,
         )
 
-    def test_timed_out_retries_do_not_compound_timeout(self):
+    def test_timed_out_retries_extend_timeout_linearly(self):
         timeout = {
             "failed": True,
             "stdout": "",
@@ -1496,7 +1495,7 @@ require windows: 2
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.0, 1.0])
+        self.assertEqual([call.args[2] for call in run_batch.call_args_list], [0.5, 1.0, 1.5])
 
     def test_timeout_without_retries_warns(self):
         proc, _ = self.run_mocked_batches(
