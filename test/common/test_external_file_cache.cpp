@@ -6,7 +6,11 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_file_opener.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -296,6 +300,62 @@ TEST_CASE("Uncached reads are split at the cache block size", "[external_file_ca
 	REQUIRE(!con.Query("SET threads=1")->HasError());
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
+//! Counts the tasks that run for a client context
+struct TaskStartCounter : ClientContextState {
+	void OnTaskStart(Context &) override {
+		starts++;
+	}
+	void OnTaskStop(Context &) override {
+		stops++;
+	}
+	atomic<idx_t> starts {0};
+	atomic<idx_t> stops {0};
+};
+
+TEST_CASE("Read tasks run for the client context of the reading handle", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
+	Connection con(db);
+	REQUIRE(!con.Query("SET threads=4")->HasError());
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_task_hooks.bin", content);
+
+	auto counter = make_shared_ptr<TaskStartCounter>();
+	con.context->GetContext().GetRegisteredState().Insert("test_efc_task_hooks", counter);
+	// a handle opened with a client opener takes its client context, which its read tasks run for
+	ClientContextFileOpener opener(con.context->GetContext());
+	CachingFileSystem cfs(*recording_fs, db_instance);
+
+	SECTION("cached reads") {
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags(), &opener);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(recording_fs->TakeReads().size() == 4);
+		REQUIRE(counter->starts == 4);
+		REQUIRE(counter->stops == 4);
+	}
+	SECTION("uncached reads") {
+		cache.SetEnabled(false);
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ, &opener);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(recording_fs->TakeReads().size() == 4);
+		REQUIRE(counter->starts == 4);
+		REQUIRE(counter->stops == 4);
+	}
+	SECTION("reads without a client context") {
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+		REQUIRE(recording_fs->TakeReads().size() == 4);
+		REQUIRE(counter->starts == 0);
+	}
 }
 
 TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
