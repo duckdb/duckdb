@@ -981,6 +981,7 @@ void LogicalWindow::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<TableIndex>(200, "window_index", window_index);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
 	serializer.WritePropertyWithDefault<optional_idx>(202, "partition_limit", partition_limit, optional_idx());
+	serializer.WritePropertyWithDefault<bool>(203, "is_delim_row_number", is_delim_row_number, false);
 }
 
 unique_ptr<LogicalOperator> LogicalWindow::Deserialize(Deserializer &deserializer) {
@@ -989,6 +990,7 @@ unique_ptr<LogicalOperator> LogicalWindow::Deserialize(Deserializer &deserialize
 	auto partition_limit = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(202, "partition_limit", optional_idx());
 	auto result = duckdb::unique_ptr<LogicalWindow>(new LogicalWindow(window_index, partition_limit));
 	result->expressions = std::move(expressions);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(203, "is_delim_row_number", result->is_delim_row_number, false);
 	return std::move(result);
 }
 

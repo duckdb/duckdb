@@ -178,6 +178,25 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	auto &window = op->Cast<LogicalWindow>();
 	FilterPushdown pushdown(optimizer, projection_mode);
 
+	if (window.is_delim_row_number) {
+		// Split the filters: those that do not read the row numbers go under the window, the rest stay above.
+		// Nothing reads these numbers except the duplicate elimination pairing the two sides of the join, and
+		// both sides are fed from the same place, so they stay in step wherever the filter runs. A volatile
+		// filter stays above regardless, as it does for the partitioned window further down.
+		vector<unique_ptr<Filter>> leftover_filters;
+		for (idx_t i = 0; i < filters.size(); i++) {
+			auto &f = *filters.at(i);
+			if (f.bindings.find(window.window_index) != f.bindings.end() || f.filter->IsVolatile()) {
+				leftover_filters.push_back(std::move(filters.at(i)));
+			} else {
+				pushdown.filters.push_back(std::move(filters.at(i)));
+			}
+		}
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		filters = std::move(leftover_filters);
+		return PushFinalFilters(std::move(op));
+	}
+
 	// 1. Loop through the expressions, find the window expressions and investigate the partitions
 	// if a filter applies to a partition in each window expression then you can push the filter
 	// into the children.
