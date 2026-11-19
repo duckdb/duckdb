@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <stdlib.h>
 
 namespace duckdb {
 
@@ -27,28 +26,26 @@ struct ReservoirQuantileState {
 	T *v;
 	idx_t len;
 	idx_t pos;
+	idx_t capacity;
 	BaseReservoirSampling *r_samp;
-
-	void Resize(idx_t new_len) {
-		if (new_len <= len) {
-			return;
-		}
-		T *old_v = v;
-		v = (T *)realloc(v, new_len * sizeof(T));
-		if (!v) {
-			free(old_v);
-			throw InternalException("Memory allocation failure");
-		}
-		len = new_len;
-	}
 
 	void ReplaceElement(T &input) {
 		v[r_samp->min_weighted_entry_index] = input;
 		r_samp->ReplaceElement();
 	}
 
-	void FillReservoir(idx_t sample_size, T element) {
+	void FillReservoir(idx_t sample_size, T element, ArenaAllocator &allocator) {
 		if (pos < sample_size) {
+			if (pos == capacity) {
+				// grow lazily, so that small groups do not pay for the full sample size
+				const auto new_capacity = MinValue<idx_t>(len, MaxValue<idx_t>(1, capacity * 2));
+				D_ASSERT(new_capacity > pos);
+				const auto new_size = new_capacity * sizeof(T);
+				v = reinterpret_cast<T *>(
+				    v ? allocator.ReallocateAligned(data_ptr_cast(v), capacity * sizeof(T), new_size)
+				      : allocator.AllocateAligned(new_size));
+				capacity = new_capacity;
+			}
 			v[pos++] = element;
 			r_samp->InitializeReservoirWeights(pos, len);
 		} else {
@@ -119,37 +116,32 @@ struct ReservoirQuantileOperation {
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		auto &bind_data = unary_input.input.bind_data->template Cast<ReservoirQuantileBindData>();
 		if (state.pos == 0) {
-			state.Resize(bind_data.sample_size);
+			state.len = MaxValue<idx_t>(state.len, bind_data.sample_size);
 		}
 		if (!state.r_samp) {
 			state.r_samp = new BaseReservoirSampling();
 		}
-		D_ASSERT(state.v);
-		state.FillReservoir(bind_data.sample_size, input);
+		state.FillReservoir(bind_data.sample_size, input, unary_input.input.allocator);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		if (source.pos == 0) {
 			return;
 		}
 		if (target.pos == 0) {
-			target.Resize(source.len);
+			target.len = MaxValue<idx_t>(target.len, source.len);
 		}
 		if (!target.r_samp) {
 			target.r_samp = new BaseReservoirSampling();
 		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
-			target.FillReservoir(target.len, source.v[src_idx]);
+			target.FillReservoir(target.len, source.v[src_idx], aggr_input_data.allocator);
 		}
 	}
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.v) {
-			free(state.v);
-			state.v = nullptr;
-		}
 		if (state.r_samp) {
 			delete state.r_samp;
 			state.r_samp = nullptr;
