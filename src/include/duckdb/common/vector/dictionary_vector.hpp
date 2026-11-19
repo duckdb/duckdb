@@ -35,9 +35,9 @@ public:
 class DictionaryBuffer : public VectorBuffer {
 public:
 	explicit DictionaryBuffer(const SelectionVector &sel, idx_t sel_count, buffer_ptr<DictionaryEntry> entry_p);
-	explicit DictionaryBuffer(SelectionData data, idx_t sel_count, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count, buffer_ptr<DictionaryEntry> entry_p);
 	explicit DictionaryBuffer(const SelectionVector &sel, idx_t sel_count);
-	explicit DictionaryBuffer(SelectionData data, idx_t sel_count);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count);
 	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:
@@ -107,11 +107,12 @@ private:
 
 class SelectionDataHolder : public AuxiliaryDataHolder {
 public:
-	explicit SelectionDataHolder(SelectionData selection_data_p) : selection_data(std::move(selection_data_p)) {
+	explicit SelectionDataHolder(buffer_ptr<SelectionData> selection_data_p)
+	    : selection_data(std::move(selection_data_p)) {
 	}
 
 private:
-	SelectionData selection_data;
+	buffer_ptr<SelectionData> selection_data;
 };
 
 struct DictionaryVector {

@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "vector_buffer_lifetime.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -185,11 +186,10 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		column.Dictionary(entry, original, 3);
 	}
 	output.Slice(input, select, 2);
-	duckdb::weak_ptr<VectorBuffer> retained = output.data[0].GetBufferRef();
 	for (idx_t iteration = 0; iteration < 3; iteration++) {
-		retained = output.data[0].GetBufferRef();
+		auto destroyed = ObserveVectorBufferDestruction(output.data[0]);
 		output.Reset();
-		REQUIRE(retained.expired());
+		REQUIRE(*destroyed);
 		REQUIRE(output.size() == 0);
 		REQUIRE(output.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 		REQUIRE(output.GetAllocationSize() == 0);
@@ -223,7 +223,7 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		}
 		REQUIRE(output.GetValue(0, 0) == Value::BIGINT(9));
 	}
-	REQUIRE(retained.expired());
+	REQUIRE(*destroyed);
 }
 
 TEST_CASE("Empty lazy buffers preserve slicing ownership", "[lazy_vector]") {
@@ -354,13 +354,17 @@ TEST_CASE("Recursive reset releases nested dictionary inputs", "[lazy_vector]") 
 		for (idx_t iteration = 0; iteration < 3; iteration++) {
 			FlatVector::SetSize(column, type.InternalType() == PhysicalType::ARRAY ? 1 : 2);
 			column.Buffer().Verify(type);
-			duckdb::weak_ptr<DictionaryEntry> entry = lists.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
-			duckdb::weak_ptr<DictionaryEntry> child_entry =
-			    elements.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
-			auto entry_references = entry.use_count();
+			auto lists_destroyed = ObserveVectorBufferDestruction(lists);
+			auto elements_destroyed = ObserveVectorBufferDestruction(elements);
+			// The input dictionary remains alive independently of the reset chunk.
+			auto &input_dictionary = dictionary.BufferMutable().Cast<DictionaryBuffer>();
+			auto entry_references = input_dictionary.GetEntryPtr().use_count();
+			const bool shares_entry =
+			    &lists.Buffer().Cast<DictionaryBuffer>().GetEntry() == &input_dictionary.GetEntry();
 			chunk.Reset();
-			REQUIRE(entry.use_count() == entry_references - 1);
-			REQUIRE(child_entry.expired());
+			REQUIRE(input_dictionary.GetEntryPtr().use_count() == entry_references - (shares_entry ? 1 : 0));
+			REQUIRE(*lists_destroyed);
+			REQUIRE(*elements_destroyed);
 			REQUIRE(lists.GetVectorType() == VectorType::FLAT_VECTOR);
 			REQUIRE(elements.GetVectorType() == VectorType::FLAT_VECTOR);
 			REQUIRE(column.size() == 0);

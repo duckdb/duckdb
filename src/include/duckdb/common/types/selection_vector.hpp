@@ -43,7 +43,7 @@ struct SelectionVector {
 	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)), capacity(other.capacity) {
 		other.sel_vector = nullptr;
 	}
-	explicit SelectionVector(SelectionData &&data) {
+	explicit SelectionVector(buffer_ptr<SelectionData> &&data) {
 		Initialize(std::move(data));
 	}
 	SelectionVector &operator=(SelectionVector &&other) noexcept {
@@ -89,20 +89,20 @@ public:
 			(void)sel[capacity_p - 1];
 		}
 #endif
-		selection_data.Reset();
+		selection_data.reset();
 		sel_vector = sel;
 		capacity = capacity_p;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = SelectionData::Allocate(count);
-		sel_vector = reinterpret_cast<sel_t *>(selection_data.GetData());
+		selection_data = make_buffer<SelectionData>(count);
+		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 		capacity = count;
 	}
-	void Initialize(SelectionData data) {
+	void Initialize(buffer_ptr<SelectionData> data) {
 		selection_data = std::move(data);
 		if (selection_data) {
-			sel_vector = reinterpret_cast<sel_t *>(selection_data.GetData());
-			capacity = selection_data.GetSize() / sizeof(sel_t);
+			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
+			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
 		} else {
 			sel_vector = nullptr;
 			capacity = 0ULL;
@@ -139,13 +139,13 @@ public:
 	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	const SelectionData &sel_data() { // NOLINT: allow casing for legacy reasons
+	const buffer_ptr<SelectionData> &sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
 	idx_t Capacity() const {
 		return capacity;
 	}
-	SelectionData Slice(const SelectionVector &sel, idx_t count) const;
+	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0) const;
@@ -174,7 +174,7 @@ public:
 
 private:
 	sel_t *sel_vector;
-	SelectionData selection_data;
+	buffer_ptr<SelectionData> selection_data;
 	idx_t capacity;
 };
 
