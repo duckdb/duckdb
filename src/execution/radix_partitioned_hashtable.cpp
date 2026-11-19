@@ -17,6 +17,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -132,9 +133,10 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
       block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
       any_abandoned(false), radix_ht(radix_ht_p),
-      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())), config(*this),
-      stored_allocators_size(0), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0), size_before_combining(0), max_partition_size(0) {
+      spill_plan(AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout())),
+      force_external(Settings::Get<DebugForceExternalSetting>(context)), config(*this), stored_allocators_size(0),
+      finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
+      size_before_combining(0), max_partition_size(0) {
 	spill_phase = SpillPhase::NATIVE_ALLOWED;
 
 	SetReservationFloor(context, MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
@@ -623,7 +625,7 @@ bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &l
 		// every current state is inline, and exporting would only cost
 		return false;
 	}
-	if (gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
+	if (gstate.force_external || gstate.StatePressureExceeded(ht) || !lstate.abandoned_exported_data.empty()) {
 		return true;
 	}
 	if (!gstate.external) {
@@ -956,8 +958,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 		// If true there is no need to combine, it was all done by a single thread in a single HT.
 		// This is the case when only one thread contributed data and the HT never overflowed its
-		// capacity (which would have caused Abandon() to be called, creating duplicates).
-		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned;
+		// capacity (which would have caused Abandon() to be called, creating duplicates) or exported states.
+		const auto single_ht = !gstate.external && gstate.active_threads == 1 && !gstate.any_abandoned &&
+		                       gstate.uncombined_exported_data.empty();
 
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
 		const auto n_partitions = uncombined_partition_data.size();
