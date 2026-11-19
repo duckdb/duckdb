@@ -81,7 +81,7 @@ struct ReservoirQuantileState {
 				D_ASSERT(new_capacity > pos);
 				const auto new_size = new_capacity * sizeof(T);
 				v = reinterpret_cast<T *>(
-				    v ? allocator.ReallocateAligned(data_ptr_cast(v), capacity * sizeof(T), new_size)
+				    v ? allocator.ReallocateAligned(data_ptr_cast(v), AlignValue<idx_t>(capacity * sizeof(T)), new_size)
 				      : allocator.AllocateAligned(new_size));
 				capacity = new_capacity;
 			}
