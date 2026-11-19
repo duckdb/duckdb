@@ -35,12 +35,12 @@ WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= po
 ----
 physical_plan	<!REGEX>:.*PIECEWISE_MERGE_JOIN.*
 
-# both the range join and the range join of the subquery
+# the range join; the range join of the subquery can also become a nested loop join on a small estimate
 query II
 EXPLAIN SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
 WHERE (SELECT count(*) FROM points p2 WHERE p2.p >= intervals.low AND p2.p <= points.p) > 1
 ----
-physical_plan	<REGEX>:.*IE_JOIN.*IE_JOIN.*
+physical_plan	<REGEX>:.*IE_JOIN.*
 
 query I
 SELECT count(*) FROM intervals JOIN points ON p > low AND p <= high
