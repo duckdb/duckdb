@@ -551,7 +551,7 @@ static optional<RelationStats> ExtractAggregationStatsInternal(LogicalAggregate 
 		if (has_unique_groups && expression->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &bound_aggregate = expression->Cast<BoundAggregateExpression>();
 			auto &agg_children = bound_aggregate.GetChildren();
-			if (bound_aggregate.Function().HasSingleValueIdentity() && !bound_aggregate.GetFilter() &&
+			if (bound_aggregate.CanForwardSingletonInputDomain() && !bound_aggregate.GetFilter() &&
 			    !agg_children.empty() && expression->GetReturnType() == agg_children[0]->GetReturnType() &&
 			    agg_children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				auto binding = agg_children[0]->Cast<BoundColumnRefExpression>().Binding();

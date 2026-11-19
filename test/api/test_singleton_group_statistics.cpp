@@ -1,12 +1,19 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/planner.hpp"
 
 using namespace duckdb;
 
@@ -70,6 +77,19 @@ optional_ptr<const BoundAggregateExpression> FindSingletonAggregate(const Logica
 	return nullptr;
 }
 
+void RegisterPayloadAggregate(Connection &connection, const Identifier &source) {
+	auto &context = *connection.context;
+	context.RunFunctionInTransaction([&]() {
+		auto &entry =
+		    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, QualifiedName("system", "main", source));
+		auto functions = entry.functions;
+		functions.SetName("test_singleton_payload");
+		functions.ApplyToFunctions([](AggregateFunction &function) { function.SetName("test_singleton_payload"); });
+		CreateAggregateFunctionInfo info(std::move(functions));
+		Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+	});
+}
+
 } // namespace
 
 TEST_CASE("Singleton aggregate domains reject overridden casts", "[api][singleton_group_statistics]") {
@@ -91,27 +111,29 @@ TEST_CASE("Singleton aggregate domains reject overridden casts", "[api][singleto
 	CheckSingletonResult(connection, "1");
 }
 
-TEST_CASE("Ordered singleton aggregate identity survives serialization",
+TEST_CASE("Ordered singleton aggregate domain proof survives rebinding",
           "[api][serialization][singleton_group_statistics]") {
 	DuckDB database(nullptr);
 	Connection connection(database);
-	RunSingletonQuery(connection, "CREATE TABLE roundtrip_keys(id INTEGER PRIMARY KEY, x INTEGER, p INTEGER)");
-	RunSingletonQuery(connection, "INSERT INTO roundtrip_keys VALUES (0, 0, NULL), (1, 1, 3)");
+	RunSingletonQuery(connection, "CREATE TABLE roundtrip_keys(id INTEGER PRIMARY KEY, x INTEGER, p INTEGER, "
+	                              "items INTEGER[], amount DECIMAL(12,2))");
+	RunSingletonQuery(connection, "INSERT INTO roundtrip_keys VALUES (0, 0, NULL, [0], 1.23), (1, 1, 3, [1], 4.56)");
 	connection.BeginTransaction();
 
 	const pair<string, bool> cases[] = {{"first(x ORDER BY p)", true},     {"last(x ORDER BY p)", true},
 	                                    {"any_value(x ORDER BY p)", true}, {"arg_min(x, p)", false},
-	                                    {"arg_min_null(x, p)", false},     {"arg_max_null(x, p)", false}};
+	                                    {"arg_min_null(x, p)", false},     {"arg_max_null(x, p)", false},
+	                                    {"first(items ORDER BY p)", true}, {"first(amount ORDER BY p)", true}};
 	for (const auto &entry : cases) {
 		CAPTURE(entry.first);
 		auto plan = connection.ExtractPlan("SELECT " + entry.first + " FROM roundtrip_keys GROUP BY id");
 		auto aggregate = FindSingletonAggregate(*plan);
 		REQUIRE(aggregate);
-		REQUIRE(aggregate->Function().HasSingleValueIdentity() == entry.second);
+		REQUIRE(aggregate->CanForwardSingletonInputDomain() == entry.second);
+		CHECK_FALSE(aggregate->Function().HasSingleValueIdentity());
 		for (const auto &compatibility :
 		     {StorageCompatibility::Latest(), StorageCompatibility::FromIndex(StorageVersion::V2_0_0)}) {
-			const bool preserves_identity = compatibility.Compare(StorageVersion::V2_1_0);
-			CAPTURE(preserves_identity);
+			CAPTURE(compatibility.duckdb_version);
 			MemoryStream stream;
 			SerializationOptions options;
 			options.storage_compatibility = compatibility;
@@ -122,8 +144,52 @@ TEST_CASE("Ordered singleton aggregate identity survives serialization",
 			REQUIRE(copy->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &rebound = copy->Cast<BoundAggregateExpression>();
 			CHECK(rebound.Function().GetName() == aggregate->Function().GetName());
-			CHECK(rebound.Function().HasSingleValueIdentity() == (entry.second && preserves_identity));
+			CHECK(rebound.CanForwardSingletonInputDomain() == entry.second);
+			CHECK_FALSE(rebound.Function().HasSingleValueIdentity());
 		}
 	}
 	connection.Rollback();
+}
+
+TEST_CASE("Rebound recursive payload aggregates use the reader's singleton identity",
+          "[api][serialization][singleton_group_statistics]") {
+	DuckDB writer_database(nullptr);
+	DuckDB reader_database(nullptr);
+	Connection writer(writer_database);
+	Connection reader(reader_database);
+	RegisterPayloadAggregate(writer, "max");
+	RegisterPayloadAggregate(reader, "count");
+
+	const string sql = "WITH RECURSIVE t(k, v) USING KEY(k, test_singleton_payload(v)) AS ("
+	                   "SELECT 0, 11::BIGINT UNION SELECT k + 1, v + 9 FROM t WHERE k < 2"
+	                   ") SELECT list(v ORDER BY k) FROM t";
+	auto original = RunSingletonQuery(writer, sql)->Fetch();
+	REQUIRE(original);
+	CHECK(original->GetValue(0, 0).ToString() == "[11, 20, 29]");
+	auto fresh = RunSingletonQuery(reader, sql)->Fetch();
+	REQUIRE(fresh);
+	REQUIRE(fresh->GetValue(0, 0).ToString() == "[1, 1, 1]");
+
+	writer.BeginTransaction();
+	reader.BeginTransaction();
+	Parser parser(*writer.context);
+	parser.ParseQuery(sql);
+	Planner planner(*writer.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	MemoryStream stream;
+	SerializationOptions options;
+	options.storage_compatibility = StorageCompatibility::Latest();
+	BinarySerializer::Serialize(*planner.plan, stream, options);
+	stream.Rewind();
+	bound_parameter_map_t parameters;
+	auto rebound = BinaryDeserializer::Deserialize<LogicalOperator>(stream, *reader.context, parameters);
+	rebound->ResolveOperatorTypes();
+	auto result = reader.Query(make_uniq<LogicalPlanStatement>(std::move(rebound)));
+	result->Complete();
+	result->ThrowIfError();
+	auto chunk = result->Fetch();
+	REQUIRE(chunk);
+	CHECK(chunk->GetValue(0, 0) == fresh->GetValue(0, 0));
+	reader.Rollback();
+	writer.Rollback();
 }
