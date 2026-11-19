@@ -2679,6 +2679,8 @@ public:
 	                                                                             GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCommitTransactionTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeSetTransactionSnapshotTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeReadOrWriteTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeReadOnlyTrampoline(PEGTransformer &transformer,
@@ -4567,6 +4569,8 @@ public:
 	                                                          const optional<TransactionModifierType> &read_or_write);
 	static unique_ptr<SQLStatement> TransformRollbackTransaction(PEGTransformer &transformer, const bool &has_result);
 	static unique_ptr<SQLStatement> TransformCommitTransaction(PEGTransformer &transformer, const bool &has_result);
+	static unique_ptr<SQLStatement> TransformSetTransactionSnapshot(PEGTransformer &transformer,
+	                                                                const string &snapshot_id);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    const TransactionModifierType &read_only_or_read_write);
 	static TransactionModifierType TransformReadOnly(PEGTransformer &transformer);

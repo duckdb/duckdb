@@ -75,6 +75,16 @@ struct CurrentTransactionId {
 	static ScalarFunction GetFunction();
 };
 
+struct PgExportSnapshot {
+	static constexpr const char *Name = "pg_export_snapshot";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Export the current transaction so that other connections can join it using SET TRANSACTION SNAPSHOT";
+	static constexpr const char *Example = "pg_export_snapshot()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";

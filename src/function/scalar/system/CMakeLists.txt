@@ -4,6 +4,7 @@ add_library_unity(
   aggregate_export.cpp
   write_log.cpp
   current_transaction_id.cpp
+  pg_export_snapshot.cpp
   current_connection_id.cpp
   current_query_id.cpp
   parse_log_message.cpp)

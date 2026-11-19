@@ -92,6 +92,9 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	auto &context = retriever.GetContext();
 	auto &db_manager = DatabaseManager::Get(context);
 	if (catalog_name == TEMP_CATALOG) {
+		if (context.transaction.HasActiveTransaction()) {
+			return &context.transaction.ActiveTransaction().GetTemporaryObjects().GetCatalog();
+		}
 		return &ClientData::Get(context).temporary_objects->GetCatalog();
 	}
 	if (catalog_name == SYSTEM_CATALOG) {

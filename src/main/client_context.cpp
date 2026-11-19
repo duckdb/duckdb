@@ -1288,6 +1288,9 @@ void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info)
 		}
 		break;
 	}
+	case TransactionType::SET_SNAPSHOT:
+		transaction.ImportSnapshot(info.snapshot_id);
+		break;
 	case TransactionType::COMMIT:
 		if (transaction.IsAutoCommit()) {
 			throw TransactionException("cannot commit - no transaction is active");

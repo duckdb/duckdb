@@ -1199,6 +1199,7 @@ static const char *const PEG_RULE_NAMES[] = {
     "BeginTransaction",
     "RollbackTransaction",
     "CommitTransaction",
+    "SetTransactionSnapshot",
     "StartOrBegin",
     "Transaction",
     "ReadOrWrite",

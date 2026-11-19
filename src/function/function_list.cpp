@@ -223,6 +223,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ParseLogMessage),
 	DUCKDB_SCALAR_FUNCTION(PathJoinFun),
 	DUCKDB_WINDOW_FUNCTION(PercentRankFun),
+	DUCKDB_SCALAR_FUNCTION(PgExportSnapshot),
 	DUCKDB_SCALAR_FUNCTION(PrefixFun),
 	DUCKDB_WINDOW_FUNCTION(RankFun),
 	DUCKDB_WINDOW_FUNCTION_ALIAS(RankDenseFun),

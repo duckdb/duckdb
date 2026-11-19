@@ -1,8 +1,9 @@
-TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
+TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction / SetTransactionSnapshot
 
 BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
 RollbackTransaction <- AbortOrRollback Transaction?
 CommitTransaction <- CommitOrEnd Transaction?
+SetTransactionSnapshot <- 'SET' 'TRANSACTION' 'SNAPSHOT' StringLiteral
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'

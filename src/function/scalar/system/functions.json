@@ -43,6 +43,13 @@
         "struct": "CurrentTransactionId"
     },
     {
+        "name": "pg_export_snapshot",
+        "description": "Export the current transaction so that other connections can join it using SET TRANSACTION SNAPSHOT",
+        "example": "pg_export_snapshot()",
+        "type": "scalar_function",
+        "struct": "PgExportSnapshot"
+    },
+    {
         "name": "current_query_id",
         "description": "Get the current query_id",
         "example": "current_query_id()",

@@ -10,12 +10,31 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 namespace duckdb {
 
 TransactionContext::TransactionContext(ClientContext &context)
     : context(context), auto_commit(true), invalidation_policy(TransactionInvalidationPolicy::STANDARD_POLICY),
       auto_rollback(false), current_transaction(nullptr) {
+}
+
+void TransactionContext::SetCurrentTransaction(shared_ptr<MetaTransaction> transaction) {
+	lock_guard<mutex> guard(current_transaction_lock);
+	current_transaction = std::move(transaction);
+}
+
+shared_ptr<MetaTransaction> TransactionContext::TakeCurrentTransaction() {
+	lock_guard<mutex> guard(current_transaction_lock);
+	return std::move(current_transaction);
+}
+
+shared_ptr<MetaTransaction> TransactionContext::GetExportedTransaction(const string &snapshot_id) {
+	lock_guard<mutex> guard(current_transaction_lock);
+	if (current_transaction && current_transaction->GetSnapshotId() == snapshot_id) {
+		return current_transaction;
+	}
+	return nullptr;
 }
 
 TransactionContext::~TransactionContext() {
@@ -27,7 +46,8 @@ void TransactionContext::BeginTransaction() {
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
 	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
-	current_transaction = make_uniq<MetaTransaction>(*context.db, start_timestamp, global_transaction_id);
+	SetCurrentTransaction(make_shared_ptr<MetaTransaction>(*context.db, context.client_data->temporary_objects,
+	                                                       start_timestamp, global_transaction_id));
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.GetContext().GetRegisteredState().States()) {
@@ -52,8 +72,18 @@ void TransactionContext::Commit() {
 		throw TransactionException("failed to commit: no transaction active");
 	}
 	autocheckpoint_error = ErrorData();
-	auto transaction = std::move(current_transaction);
+	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
+	bool commit_result = true;
+	if (!LeaveTransaction(*transaction, true, commit_result)) {
+		// other connections still participate in the transaction, the last one to leave ends it
+		return;
+	}
+	if (!commit_result) {
+		// a participant rolled back: the transaction cannot be committed
+		RollbackTransaction(std::move(transaction), nullptr);
+		throw TransactionException("Failed to commit: a connection sharing the transaction rolled it back");
+	}
 	auto error = transaction->Commit(context);
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
@@ -92,9 +122,16 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
-	auto transaction = std::move(current_transaction);
+	auto transaction = TakeCurrentTransaction();
 	ClearTransaction();
+	bool commit_result = false;
+	if (!LeaveTransaction(*transaction, false, commit_result)) {
+		return;
+	}
+	RollbackTransaction(std::move(transaction), error);
+}
 
+void TransactionContext::RollbackTransaction(shared_ptr<MetaTransaction> transaction, optional_ptr<ErrorData> error) {
 	ErrorData rollback_error;
 	try {
 		transaction->Rollback(context);
@@ -117,16 +154,67 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	transaction->Finalize(context);
 }
 
+bool TransactionContext::LeaveTransaction(MetaTransaction &transaction, bool commit, bool &commit_result) {
+	auto result = transaction.Leave(commit);
+	commit_result = result.commit;
+	return result.last;
+}
+
+string TransactionContext::ExportSnapshot() {
+	if (!HasActiveTransaction() || auto_commit) {
+		throw TransactionException("a snapshot can only be exported from within a transaction");
+	}
+	return current_transaction->ExportSnapshot();
+}
+
+void TransactionContext::ImportSnapshot(const string &snapshot_id) {
+	if (!HasActiveTransaction() || auto_commit) {
+		throw TransactionException("SET TRANSACTION SNAPSHOT must be called within a transaction");
+	}
+	if (!current_transaction->GetSnapshotId().empty() || !current_transaction->OpenedTransactions().empty()) {
+		throw TransactionException("SET TRANSACTION SNAPSHOT must be called before any query in the transaction");
+	}
+	// find a connection that participates in the exported transaction
+	shared_ptr<MetaTransaction> source;
+	for (auto &connection : ConnectionManager::Get(*context.db).GetConnectionList()) {
+		if (connection.get() == &context) {
+			continue;
+		}
+		source = connection->transaction.GetExportedTransaction(snapshot_id);
+		if (source) {
+			break;
+		}
+	}
+	if (!source || source->IsFinished()) {
+		throw TransactionException("invalid snapshot identifier: \"%s\"", snapshot_id);
+	}
+	if (!source->Join()) {
+		throw TransactionException("invalid snapshot identifier: \"%s\"", snapshot_id);
+	}
+	// discard our own (empty) transaction and continue in the shared one
+	auto previous = TakeCurrentTransaction();
+	SetCurrentTransaction(source);
+	previous->MarkFinished();
+	previous->Rollback();
+	for (auto const &s : context.GetContext().GetRegisteredState().States()) {
+		s->TransactionRollback(*previous, context, nullptr);
+	}
+	previous->Finalize(context);
+	for (auto &state : context.GetContext().GetRegisteredState().States()) {
+		state->TransactionBegin(*current_transaction, context);
+	}
+}
+
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
-	current_transaction = nullptr;
+	SetCurrentTransaction(nullptr);
 }
 
 idx_t TransactionContext::GetActiveQuery() {
 	if (!current_transaction) {
 		throw InternalException("GetActiveQuery called without active transaction");
 	}
-	return current_transaction->GetActiveQuery();
+	return active_query_id;
 }
 
 void TransactionContext::ResetActiveQuery() {
@@ -139,6 +227,7 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 	if (!current_transaction) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}
+	active_query_id = query_number;
 	current_transaction->SetActiveQuery(query_number);
 }
 
