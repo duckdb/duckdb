@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_prefetch_tracked_memory.test
+# name: test/sql/copy/parquet/parquet_prefetch_tracked_memory.test_slow
 # description: Parquet prefetch must materialize into buffer tracked memory
 # group: [parquet]
 

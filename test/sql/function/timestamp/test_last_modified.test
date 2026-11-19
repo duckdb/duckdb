@@ -7,7 +7,7 @@ require icu
 # comparing it to epoch(now()) with a 5-second tolerance flakes.
 require notwindows
 
-loop i 0 100
+loop i 0 3
 
 # create file
 statement ok

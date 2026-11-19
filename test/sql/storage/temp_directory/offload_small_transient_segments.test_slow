@@ -1,4 +1,4 @@
-# name: test/sql/storage/temp_directory/offload_small_transient_segments.test
+# name: test/sql/storage/temp_directory/offload_small_transient_segments.test_slow
 # description: Small transient segments of an in-memory table, including nested and validity columns, can be offloaded
 # group: [temp_directory]
 

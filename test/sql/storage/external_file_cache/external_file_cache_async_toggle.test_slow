@@ -1,4 +1,4 @@
-# name: test/sql/storage/external_file_cache/external_file_cache_async_toggle.test
+# name: test/sql/storage/external_file_cache/external_file_cache_async_toggle.test_slow
 # description: Concurrent cache toggles must not invalidate file handles used by async Parquet reads
 # group: [external_file_cache]
 

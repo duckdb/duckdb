@@ -1,4 +1,4 @@
-# name: test/sql/storage/temp_directory/offload_small_transient_segments_no_optimistic_write.test
+# name: test/sql/storage/temp_directory/offload_small_transient_segments_no_optimistic_write.test_slow
 # description: Transaction-local data that is not written optimistically can be offloaded and checkpointed
 # group: [temp_directory]
 

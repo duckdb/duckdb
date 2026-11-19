@@ -1,4 +1,4 @@
-# name: test/sql/join/external/external_join_multi_key_runtime_filter.test
+# name: test/sql/join/external/external_join_multi_key_runtime_filter.test_slow
 # description: An external join with several equality keys pushes a bloom filter per key column
 # group: [external]
 

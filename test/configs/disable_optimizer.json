@@ -181,7 +181,7 @@
     {
       "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
       "paths": [
-        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test_slow"
       ]
     },
     {

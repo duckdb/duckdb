@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/read_ahead/readahead_memory_limit.test
+# name: test/sql/copy/parquet/read_ahead/readahead_memory_limit.test_slow
 # description: In automatic mode the read-ahead backlog is bounded by the memory limit, so a copy that fits without read-ahead also fits with it
 # group: [read_ahead]
 

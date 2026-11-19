@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_hive2.test
+# name: test/sql/copy/parquet/parquet_hive2.test_slow
 # description: Test generating hive partitioning scheme
 # group: [parquet]
 

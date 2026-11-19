@@ -1,4 +1,4 @@
-# name: test/sql/timezone/test_icu_calendar_chinese.test
+# name: test/sql/timezone/test_icu_calendar_chinese.test_slow
 # description: The Chinese and Korean lunisolar calendars
 # group: [timezone]
 

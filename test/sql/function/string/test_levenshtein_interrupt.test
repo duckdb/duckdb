@@ -3,10 +3,10 @@
 # group: [string]
 
 statement ok
-SET max_execution_time=1000;
+SET max_execution_time=50;
 
 statement error
-SELECT levenshtein(repeat('a',300000), repeat('b',300000));
+SELECT levenshtein(repeat('a',30000), repeat('b',30000));
 ----
 <REGEX>:.*Query exceeded maximum execution time.*
 
