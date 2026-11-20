@@ -1718,21 +1718,24 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 	gstate.deferred_runtime_filters.clear();
 }
 
+enum class DynamicMinMaxFilterMode { PRUNING_ONLY, ROW_FILTERING, ADAPTIVE };
+
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<Expression> filter_expr,
-                                      const LogicalType &column_type, bool selectivity_optional) {
+                                      const LogicalType &column_type, DynamicMinMaxFilterMode mode) {
 	if (!filter_expr) {
 		return;
 	}
-	if (selectivity_optional) {
+	if (mode == DynamicMinMaxFilterMode::ADAPTIVE) {
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
 		    CreateSelectivityOptionalExpressionFilter(std::move(filter_expr), column_type,
 		                                              SelectivityOptionalFilterType::MIN_MAX));
 	} else {
-		info.dynamic_filters->PushFilter(
-		    op, filter_col_idx,
-		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(filter_expr), column_type)));
+		if (mode == DynamicMinMaxFilterMode::PRUNING_ONLY) {
+			filter_expr = CreateOptionalFilterExpression(std::move(filter_expr), column_type);
+		}
+		info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(filter_expr)));
 	}
 }
 
@@ -1834,7 +1837,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
                                        ClientContext &context, const JoinFilterPushdownColumn &column,
                                        ProjectionIndex filter_col_idx, ExpressionType cmp, const Value &min_val,
                                        const Value &max_val, const LogicalType &condition_type,
-                                       bool reconstruct_expression, bool selectivity_optional) {
+                                       bool reconstruct_expression, DynamicMinMaxFilterMode mode) {
 	auto filter_column_type = reconstruct_expression ? column.storage_type : condition_type;
 	const auto retain_nulls = cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	switch (cmp) {
@@ -1846,7 +1849,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		    op, info, filter_col_idx,
 		    CreateJoinFilterComparisonExpression(context, column, ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val,
 		                                         condition_type, reconstruct_expression, retain_nulls),
-		    filter_column_type, selectivity_optional);
+		    filter_column_type, mode);
 		break;
 	}
 	default:
@@ -1861,7 +1864,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		    op, info, filter_col_idx,
 		    CreateJoinFilterComparisonExpression(context, column, ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val,
 		                                         condition_type, reconstruct_expression, retain_nulls),
-		    filter_column_type, selectivity_optional);
+		    filter_column_type, mode);
 		break;
 	}
 	default:
@@ -1945,7 +1948,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					// min != max - generate range filters for non-equality comparisons.
 					// For non-equalities, the range must be half-open.
 					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
-					                           max_val, condition_type, reconstruct_filter_expression, true);
+					                           max_val, condition_type, reconstruct_filter_expression,
+					                           DynamicMinMaxFilterMode::ADAPTIVE);
 					continue;
 				}
 
@@ -1983,12 +1987,17 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					}
 				}
 
-				if (!pushed_in_filter) {
+				const bool emit_bloom_filter = allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
+				                               CanUseBloomFilter(info, context, op, cmp, ht) &&
+				                               (ht->HasPublishableBloomFilter() || allow_prefix_range_filters);
+				// An IN filter only prunes statistics; retain row filtering when there is no Bloom/PRF.
+				if (!pushed_in_filter || !emit_bloom_filter) {
+					const auto mode = emit_bloom_filter ? DynamicMinMaxFilterMode::PRUNING_ONLY
+					                                    : DynamicMinMaxFilterMode::ROW_FILTERING;
 					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
-					                           max_val, condition_type, reconstruct_filter_expression, false);
+					                           max_val, condition_type, reconstruct_filter_expression, mode);
 				}
-				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
-				    CanUseBloomFilter(info, context, op, cmp, ht)) {
+				if (emit_bloom_filter) {
 					if (ht->HasPublishableBloomFilter()) {
 						// a complete filter was accumulated during Sink (external joins build it there)
 						DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,

@@ -322,6 +322,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	}
 	registered = false;
 	spilling = false;
+	adaptivity.Reset();
 	abandoned_data.reset();
 	abandoned_exported_data.clear();
 	if (!ht) {
@@ -656,21 +657,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 
-	if (!memory_pressure) {
-		if (RadixHTAdaptivity::TryGrow(gstate, lstate)) {
-			return;
-		}
-		RadixHTAdaptivity::MaybeSkipLookups(gstate, lstate);
-	}
-
-	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
-		// Keep the materialized rows and clear only the local pointer table
-		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
-		gstate.any_abandoned = true;
-		ht.Abandon();
-		if (!memory_pressure) {
-			RadixHTAdaptivity::MaybeResumeLookups(gstate, lstate);
-		}
+	if (lstate.adaptivity.HandleSinkBoundary(gstate, lstate, memory_pressure)) {
+		return;
 	}
 
 	// Check if we need to repartition

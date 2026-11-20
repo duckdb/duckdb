@@ -1899,6 +1899,11 @@ bool ParquetReader::FiltersExcludeRowGroup(ClientContext &context, ParquetReader
 		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return true;
 		}
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			scan_filter.filter_state.reset();
+		} else if (!scan_filter.filter_state) {
+			scan_filter.filter_state = TableFilterState::Initialize(context, scan_filter.filter);
+		}
 	}
 	return false;
 }
@@ -2757,8 +2762,12 @@ idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &r
 
 		auto &result_vector = result.data[local_idx.GetIndex()];
 		ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
-		child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
-		                    filter_count, is_first_filter);
+		if (scan_filter.filter_state) {
+			child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
+			                    filter_count, is_first_filter);
+		} else {
+			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
+		}
 		if (log_prefetch) {
 			auto &filters_used = state.prefetch_metrics.logger.filters_used;
 			if (filters_used.size() != state.scan_filters.size()) {

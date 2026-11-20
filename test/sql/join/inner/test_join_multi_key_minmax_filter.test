@@ -1,0 +1,91 @@
+# name: test/sql/join/inner/test_join_multi_key_minmax_filter.test
+# description: Multi-key joins filter probe rows when runtime Bloom/prefix filters are unavailable
+# group: [inner]
+
+require parquet
+
+statement ok
+SET threads=1;
+
+statement ok
+SET disabled_optimizers='statistics_propagation,join_order,build_side_probe_side';
+
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+# Every row group overlaps the build range; exercise build/probe ratios 0.13 and 1.0.
+statement ok
+CREATE TABLE native_probe AS SELECT (i*7919)%120000 AS k,(i*7919)%120000 AS k2 FROM range(120000)t(i);
+
+statement ok
+COPY native_probe TO '{TEST_DIR}/minmax_probe.parquet' (FORMAT PARQUET);
+
+foreach build_count 15600 120000
+
+statement ok
+CREATE OR REPLACE TABLE build_keys AS SELECT i%300 AS k,i AS k2 FROM range(${build_count})t(i);
+
+foreach source native_probe read_parquet('{TEST_DIR}/minmax_probe.parquet')
+
+query I
+SELECT count(*) FROM ${source} p JOIN build_keys b ON p.k=b.k AND p.k2=b.k2;
+----
+300
+
+query II
+EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*) FROM ${source} p JOIN build_keys b ON p.k=b.k AND p.k2=b.k2;
+----
+analyzed_plan	<REGEX>:(?s).*(native_probe|minmax_probe\.parquet)[^}]*},\s*"intermediate_rows": 300,.*
+
+endloop
+
+endloop
+
+# A pruning-only IN filter must not suppress row-level min/max filtering.
+statement ok
+SET dynamic_or_filter_threshold=1000;
+
+statement ok
+CREATE TABLE small_build AS SELECT k,k AS k2 FROM (VALUES(0::BIGINT),(100),(299))t(k);
+
+foreach source native_probe read_parquet('{TEST_DIR}/minmax_probe.parquet')
+
+query I
+SELECT count(*) FROM ${source} p JOIN small_build b ON p.k=b.k AND p.k2=b.k2;
+----
+3
+
+query II
+EXPLAIN (ANALYZE,FORMAT JSON) SELECT count(*) FROM ${source} p JOIN small_build b ON p.k=b.k AND p.k2=b.k2;
+----
+analyzed_plan	<REGEX>:(?s).*(native_probe|minmax_probe\.parquet)[^}]*},\s*"intermediate_rows": 300,.*
+
+query I
+SELECT count(*) FROM ${source} p JOIN small_build b ON p.k=b.k AND p.k2=b.k2 WHERE p.k<>100;
+----
+2
+
+endloop
+
+# NULL-safe equality retains NULL keys alongside the generated bounds.
+statement ok
+CREATE TABLE nullable_probe AS SELECT * FROM small_build UNION ALL SELECT NULL,NULL;
+
+statement ok
+CREATE TABLE nullable_build AS FROM nullable_probe;
+
+query I
+SELECT count(*) FROM nullable_probe p JOIN nullable_build b ON p.k=b.k AND p.k2=b.k2;
+----
+3
+
+query I
+SELECT count(*) FROM nullable_probe p JOIN nullable_build b ON p.k IS NOT DISTINCT FROM b.k AND p.k2 IS NOT DISTINCT FROM b.k2;
+----
+4
+
+statement ok
+RESET disabled_optimizers;
+
+statement ok
+RESET dynamic_or_filter_threshold;
