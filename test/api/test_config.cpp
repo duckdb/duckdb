@@ -508,6 +508,25 @@ TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
 	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
 	headers.InsertIfAbsent("CACHE-CONTROL", "ignored");
 	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"max-age=600", "no-store"});
+
+	headers.Set("CACHE-CONTROL", "private");
+	REQUIRE(headers.GetHeaderValue("cache-control") == "private");
+	REQUIRE(headers.GetHeaderValues("Cache-Control") == vector<string> {"private"});
+
+	headers.Set("X-Empty", "");
+	headers.Append("Cache-Control", "no-cache");
+	case_insensitive_map_t<vector<string>> fields;
+	for (const auto &field : headers) {
+		fields[field.first].push_back(field.second);
+	}
+	REQUIRE(fields.size() == 2);
+	REQUIRE(fields.at("cache-control") == vector<string> {"private", "no-cache"});
+	REQUIRE(fields.at("x-empty") == vector<string> {""});
+
+	headers.RemoveAll("cAcHe-CoNtRoL");
+	REQUIRE_FALSE(headers.HasHeader("Cache-Control"));
+	headers.RemoveAll("Cache-Control");
+	REQUIRE(headers.GetHeaderValue("X-Empty").empty());
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {
