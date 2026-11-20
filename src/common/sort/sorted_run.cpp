@@ -16,6 +16,13 @@
 
 namespace duckdb {
 
+void ThrowSortKeyExceedsFixedSize(idx_t key_size, idx_t fixed_size) {
+	throw DataCorruptionException("Sort key of %llu bytes does not fit the fixed-size sort key of %llu bytes that was "
+	                              "selected using the statistics of the sort columns - the statistics do not match "
+	                              "the data",
+	                              key_size, fixed_size);
+}
+
 //===--------------------------------------------------------------------===//
 // SortedRunScanState
 //===--------------------------------------------------------------------===//

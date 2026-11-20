@@ -1,0 +1,63 @@
+# name: test/sql/order/sort_key_exceeds_statistics.test
+# description: Sorting strings that are longer than their statistics claim throws a data corruption error
+# group: [order]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+# cut (i INTEGER, s VARCHAR) and long (i INTEGER, s VARCHAR) hold 1000 rows each with strings of 30 and 60 bytes.
+# The stored statistics of both s columns claim a maximum string length of 20.
+# The sort selects a fixed-size sort key using the maximum string length, the keys of these strings do not fit.
+unzip data/storage/corrupt/sort_key_exceeds_statistics.db.gz {TEST_DIR}/sort_key_exceeds_statistics.db
+
+load {TEST_DIR}/sort_key_exceeds_statistics.db readonly
+
+query IIII
+SELECT count(*), min(length(s)), max(length(s)), count(DISTINCT s) FROM cut
+----
+1000	30	30	1000
+
+# the sort column is returned from the payload
+statement error
+SELECT i FROM cut ORDER BY s
+----
+does not fit the fixed-size sort key
+
+# the sort column is decoded from the key
+statement error
+SELECT s FROM cut ORDER BY s
+----
+does not fit the fixed-size sort key
+
+statement error
+SELECT s FROM long ORDER BY s DESC
+----
+does not fit the fixed-size sort key
+
+statement error
+SELECT i FROM long ORDER BY s
+----
+does not fit the fixed-size sort key
+
+# window sort
+statement error
+SELECT count(*) FROM (SELECT lag(s) OVER (ORDER BY s) AS previous, s FROM cut) WHERE previous > s
+----
+does not fit the fixed-size sort key
+
+# sorts that do not use the statistics of s are unaffected
+query I
+SELECT s FROM cut ORDER BY s LIMIT 2
+----
+prefix_shared_by_all_rows_0000
+prefix_shared_by_all_rows_0001
+
+query I
+SELECT count(*) FROM (SELECT i FROM cut ORDER BY i)
+----
+1000
+
+query I
+SELECT 42
+----
+42
