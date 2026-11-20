@@ -1,0 +1,299 @@
+# name: test/sql/multi_file/multi_file_schema_text_map_component.test
+# description: A map whose key or value is text where the schema declares a nested type is cast as a whole only when the cast maps the key and the value the way the schema declares them
+# group: [multi_file]
+
+require json
+
+require parquet
+
+# the cast of a map reads the key and the value of the file by position and casts both. A key or value that the
+# schema declares under another identifier, or with children that a cast does not reproduce, is a binder error
+
+# m has a text value, mk a text key, mb both, ms a text key and a struct value, mn keys that are numbers,
+# mm a text value in a map in a map
+statement ok
+ATTACH '{TEMP_DIR}/text_map.db' AS file_db;
+
+statement ok
+CREATE TABLE file_db.tbl AS SELECT
+	MAP {'k1': '{"a": 1}'::JSON, 'k2': '{"a": 2}'::JSON} AS m,
+	MAP {'{"x": 1}'::JSON: 10::BIGINT, '{"x": 2}'::JSON: 20::BIGINT} AS mk,
+	MAP {'{"x": 1}'::JSON: '{"a": 1}'::JSON} AS mb,
+	MAP {'{"x": 1}'::JSON: {'a': 1, 'b': 2}} AS ms,
+	MAP {'1': '{"a": 1}'::JSON} AS mn,
+	MAP {'o': MAP {'i': '{"a": 1}'::JSON}} AS mm;
+
+statement ok
+DETACH file_db;
+
+statement ok
+COPY (SELECT MAP {'k1': '{"a": 1}'::JSON, 'k2': '{"a": 2}'::JSON} AS m) TO '{TEMP_DIR}/text_map.json';
+
+# the same rows as a Parquet file with the declared shapes
+statement ok
+COPY (SELECT
+	MAP {'k1': {'a': 1::BIGINT}, 'k2': {'a': 2::BIGINT}} AS m,
+	MAP {{'x': 1::BIGINT}: 10::BIGINT, {'x': 2::BIGINT}: 20::BIGINT} AS mk,
+	MAP {{'x': 1::BIGINT}: {'a': 1::BIGINT}} AS mb,
+	MAP {{'x': 1::BIGINT}: {'a': 1, 'b': 2}} AS ms,
+	MAP {'1': {'a': 1::BIGINT}} AS mn,
+	MAP {'o': MAP {'i': {'a': 1::BIGINT}}} AS mm) TO '{TEMP_DIR}/text_map.parquet';
+
+# the value is text, the key is declared as the file has it: the map is cast
+statement ok
+SET VARIABLE map_schema = MAP {
+	'm': {name: 'm', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+# the schema is passed in a variable, so that the readers get the same one
+statement ok
+CREATE MACRO from_duckdb() AS TABLE
+SELECT * FROM read_duckdb('{TEMP_DIR}/text_map.db', schema = getvariable('map_schema'));
+
+statement ok
+CREATE MACRO from_json() AS TABLE
+SELECT * FROM read_json('{TEMP_DIR}/text_map.json', columns = {m: 'MAP(VARCHAR, JSON)'}, schema = getvariable('map_schema'));
+
+statement ok
+CREATE MACRO from_parquet() AS TABLE
+SELECT * FROM read_parquet('{TEMP_DIR}/text_map.parquet', schema = getvariable('map_schema'));
+
+query III
+SELECT (SELECT m FROM from_duckdb()), (SELECT m FROM from_json()), (SELECT m FROM from_parquet());
+----
+{k1={'a': 1}, k2={'a': 2}}	{k1={'a': 1}, k2={'a': 2}}	{k1={'a': 1}, k2={'a': 2}}
+
+# the key is declared under an identifier the file does not have, with a default. The Parquet file takes the
+# default for every key, the cast would read the keys of the file
+statement ok
+SET VARIABLE map_schema = MAP {
+	'm': {name: 'm', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'zz': {name: 'key', type: 'VARCHAR', default_value: 'dk', children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+statement error
+SELECT m FROM from_duckdb();
+----
+<REGEX>:Binder Error:.*Failed to map file-column "m" of type 'MAP\(VARCHAR, JSON\)' to result-column of type 'MAP\(VARCHAR, STRUCT\(a BIGINT\)\)': the map has to be cast as a whole, which does not map its key the way the schema declares it.*
+
+statement error
+SELECT m FROM from_json();
+----
+<REGEX>:Binder Error:.*the map has to be cast as a whole, which does not map its key the way the schema declares it.*
+
+query II
+SELECT map_keys(m), map_values(m) FROM from_parquet();
+----
+[dk, dk]	[{'a': 1}, {'a': 2}]
+
+# the same with a NULL default for the key, which no reader accepts
+statement ok
+SET VARIABLE map_schema = MAP {
+	'm': {name: 'm', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'zz': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+statement error
+SELECT m FROM from_duckdb();
+----
+<REGEX>:Invalid Input Error:.*'key' of MAP did not map to a value and the registered DEFAULT is NULL.*
+
+statement error
+SELECT m FROM from_json();
+----
+<REGEX>:Invalid Input Error:.*'key' of MAP did not map to a value and the registered DEFAULT is NULL.*
+
+statement error
+SELECT m FROM from_parquet();
+----
+<REGEX>:Invalid Input Error:.*'key' of MAP did not map to a value and the registered DEFAULT is NULL.*
+
+# an empty JSON object is read as MAP(VARCHAR, JSON)
+statement ok
+COPY (SELECT {} AS o) TO '{TEMP_DIR}/text_map_empty.json';
+
+statement error
+SELECT o FROM read_json('{TEMP_DIR}/text_map_empty.json', schema = MAP {
+	'o': {name: 'o', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'zz': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: NULL}}}
+});
+----
+<REGEX>:Invalid Input Error:.*'key' of MAP did not map to a value and the registered DEFAULT is NULL.*
+
+query I
+SELECT o FROM read_json('{TEMP_DIR}/text_map_empty.json', schema = MAP {
+	'o': {name: 'o', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: NULL}}}
+});
+----
+{}
+
+# the key is text, the value is declared as the file has it or under another identifier
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mk': {name: 'mk', type: 'MAP(STRUCT(x BIGINT), BIGINT)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+			'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'value': {name: 'value', type: 'BIGINT', default_value: NULL, children: NULL}}}
+};
+
+query II
+SELECT (SELECT mk FROM from_duckdb()), (SELECT mk FROM from_parquet());
+----
+{{'x': 1}=10, {'x': 2}=20}	{{'x': 1}=10, {'x': 2}=20}
+
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mk': {name: 'mk', type: 'MAP(STRUCT(x BIGINT), BIGINT)', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+			'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'zz': {name: 'value', type: 'BIGINT', default_value: 3, children: NULL}}}
+};
+
+statement error
+SELECT mk FROM from_duckdb();
+----
+<REGEX>:Binder Error:.*Failed to map file-column "mk" of type 'MAP\(JSON, BIGINT\)' to result-column of type 'MAP\(STRUCT\(x BIGINT\), BIGINT\)': the map has to be cast as a whole, which does not map its value the way the schema declares it.*
+
+query I
+SELECT mk FROM from_parquet();
+----
+{{'x': 1}=3, {'x': 2}=3}
+
+# the key and the value are both text: nothing is declared below either that a cast does not do
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mb': {name: 'mb', type: 'MAP(STRUCT(x BIGINT), STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: MAP {
+			'x': {name: 'x', type: 'BIGINT', default_value: NULL, children: NULL}}},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+query II
+SELECT (SELECT mb FROM from_duckdb()), (SELECT mb FROM from_parquet());
+----
+{{'x': 1}={'a': 1}}	{{'x': 1}={'a': 1}}
+
+# the other component has another type and no declared children: the cast of the map casts it, as the mapping
+# of the component would
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mn': {name: 'mn', type: 'MAP(BIGINT, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'BIGINT', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+query II
+SELECT (SELECT mn FROM from_duckdb()), (SELECT mn FROM from_parquet());
+----
+{1={'a': 1}}	{1={'a': 1}}
+
+# the other component is a struct: declared with the fields of the file or without children it is cast with the map
+statement ok
+SET VARIABLE map_schema = MAP {
+	'ms': {name: 'ms', type: 'MAP(STRUCT(x BIGINT), STRUCT(a INTEGER, b INTEGER))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a INTEGER, b INTEGER)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'INTEGER', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+};
+
+query II
+SELECT (SELECT ms FROM from_duckdb()), (SELECT ms FROM from_parquet());
+----
+{{'x': 1}={'a': 1, 'b': 2}}	{{'x': 1}={'a': 1, 'b': 2}}
+
+statement ok
+SET VARIABLE map_schema = MAP {
+	'ms': {name: 'ms', type: 'MAP(STRUCT(x BIGINT), STRUCT(a BIGINT, b BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: NULL}}}
+};
+
+query II
+SELECT (SELECT ms FROM from_duckdb()), (SELECT ms FROM from_parquet());
+----
+{{'x': 1}={'a': 1, 'b': 2}}	{{'x': 1}={'a': 1, 'b': 2}}
+
+# its fields crossed are a mapping that the cast does not do
+statement ok
+SET VARIABLE map_schema = MAP {
+	'ms': {name: 'ms', type: 'MAP(STRUCT(x BIGINT), STRUCT(a INTEGER, b INTEGER))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a INTEGER, b INTEGER)', default_value: NULL, children: MAP {
+			'b': {name: 'a', type: 'INTEGER', default_value: NULL, children: NULL},
+			'a': {name: 'b', type: 'INTEGER', default_value: NULL, children: NULL}}}}}
+};
+
+statement error
+SELECT ms FROM from_duckdb();
+----
+<REGEX>:Binder Error:.*the map has to be cast as a whole, which does not map its value the way the schema declares it.*
+
+query I
+SELECT ms FROM from_parquet();
+----
+{{'x': 1}={'a': 2, 'b': 1}}
+
+# its fields widened are cast by the mapping as well, so the cast of the map is what the schema declares
+statement ok
+SET VARIABLE map_schema = MAP {
+	'ms': {name: 'ms', type: 'MAP(STRUCT(x BIGINT), STRUCT(a BIGINT, b BIGINT))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'STRUCT(x BIGINT)', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'STRUCT(a BIGINT, b BIGINT)', default_value: NULL, children: MAP {
+			'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL},
+			'b': {name: 'b', type: 'BIGINT', default_value: NULL, children: NULL}}}}}
+};
+
+query II
+SELECT (SELECT ms FROM from_duckdb()), (SELECT ms FROM from_parquet());
+----
+{{'x': 1}={'a': 1, 'b': 2}}	{{'x': 1}={'a': 1, 'b': 2}}
+
+# a map in a map: the inner map is cast, the outer map is mapped and takes the default for its key
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mm': {name: 'mm', type: 'MAP(VARCHAR, MAP(VARCHAR, STRUCT(a BIGINT)))', default_value: NULL, children: MAP {
+		'zz': {name: 'key', type: 'VARCHAR', default_value: 'dk', children: NULL},
+		'value': {name: 'value', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+			'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+			'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}}
+};
+
+query II
+SELECT (SELECT mm FROM from_duckdb()), (SELECT mm FROM from_parquet());
+----
+{dk={i={'a': 1}}}	{dk={i={'a': 1}}}
+
+# the inner key under another identifier is rejected at the inner map
+statement ok
+SET VARIABLE map_schema = MAP {
+	'mm': {name: 'mm', type: 'MAP(VARCHAR, MAP(VARCHAR, STRUCT(a BIGINT)))', default_value: NULL, children: MAP {
+		'key': {name: 'key', type: 'VARCHAR', default_value: NULL, children: NULL},
+		'value': {name: 'value', type: 'MAP(VARCHAR, STRUCT(a BIGINT))', default_value: NULL, children: MAP {
+			'zz': {name: 'key', type: 'VARCHAR', default_value: 'dk', children: NULL},
+			'value': {name: 'value', type: 'STRUCT(a BIGINT)', default_value: NULL, children: MAP {
+				'a': {name: 'a', type: 'BIGINT', default_value: NULL, children: NULL}}}}}}}
+};
+
+statement error
+SELECT mm FROM from_duckdb();
+----
+<REGEX>:Binder Error:.*Failed to map file-column "value" of type 'MAP\(VARCHAR, JSON\)' to result-column of type 'MAP\(VARCHAR, STRUCT\(a BIGINT\)\)': the map has to be cast as a whole, which does not map its key the way the schema declares it.*
+
+query I
+SELECT mm FROM from_parquet();
+----
+{o={dk={'a': 1}}}
