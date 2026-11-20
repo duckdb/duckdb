@@ -122,7 +122,7 @@ select count(*) from
 query II
 explain select * from
 	(select x, y, sum(a) s from t group by x, y) g1
-	join (select x, y, max(b) m from t group by x, y) g2 on g1.x = g2.x and g1.y % 10 = g2.y % 10;
+	join (select x, y, max(b) m from t where b < 11 group by x, y) g2 on g1.x = g2.x and g1.y % 10 = g2.y % 10;
 ----
 physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[0-9,]{10,} rows.*
 
