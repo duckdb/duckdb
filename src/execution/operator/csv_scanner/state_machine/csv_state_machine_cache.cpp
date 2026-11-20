@@ -200,7 +200,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	const bool multi_byte_delimiter = delimiter_value.size() > 1;
 
-	const bool enable_unquoted_escape = state_machine_options.strict_mode.GetValue() == false &&
+	// when not set the escape mode follows strict_mode, which allows escaping outside quoted values when off
+	const auto escape_mode =
+	    state_machine_options.escape_mode.IsSetByUser()
+	        ? state_machine_options.escape_mode.GetValue()
+	        : (state_machine_options.strict_mode.GetValue() ? CSVEscapeMode::QUOTED_ONLY : CSVEscapeMode::ALL);
+	const bool enable_unquoted_escape = escape_mode != CSVEscapeMode::QUOTED_ONLY &&
 	                                    state_machine_options.quote != state_machine_options.escape &&
 	                                    state_machine_options.escape != '\0';
 	// Now set values depending on configuration
@@ -528,7 +533,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// 12) Unquoted Escape State
 	if (enable_unquoted_escape) {
-		if (state_machine_options.escape_mode.GetValue() != CSVEscapeMode::ALL) {
+		if (escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE) {
 			// the escape only escapes the quote and escape characters, so other bytes keep their Standard meaning
 			split_on_delimiter(CSVState::UNQUOTED_ESCAPE);
 			end_record_on_line_break(CSVState::UNQUOTED_ESCAPE);
@@ -543,7 +548,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 
 	// 12.1) Field Start State, where escape_mode 'quote_and_escape' makes escapes before the field's content inert
-	if (enable_unquoted_escape && state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE) {
+	if (enable_unquoted_escape && escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE) {
 		const auto field_start = static_cast<uint8_t>(CSVState::FIELD_START);
 		const vector<uint8_t> fresh_states {
 		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),

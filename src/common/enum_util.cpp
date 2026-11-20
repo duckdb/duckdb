@@ -1136,19 +1136,20 @@ CSVEmbeddedQuote EnumUtil::FromString<CSVEmbeddedQuote>(const char *value) {
 const StringUtil::EnumStringLiteral *GetCSVEscapeModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CSVEscapeMode::ALL), "ALL" },
-		{ static_cast<uint32_t>(CSVEscapeMode::QUOTE_AND_ESCAPE), "QUOTE_AND_ESCAPE" }
+		{ static_cast<uint32_t>(CSVEscapeMode::QUOTE_AND_ESCAPE), "QUOTE_AND_ESCAPE" },
+		{ static_cast<uint32_t>(CSVEscapeMode::QUOTED_ONLY), "QUOTED_ONLY" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVEscapeMode>(CSVEscapeMode value) {
-	return StringUtil::EnumToString(GetCSVEscapeModeValues(), 2, "CSVEscapeMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVEscapeModeValues(), 3, "CSVEscapeMode", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVEscapeMode EnumUtil::FromString<CSVEscapeMode>(const char *value) {
-	return static_cast<CSVEscapeMode>(StringUtil::StringToEnum(GetCSVEscapeModeValues(), 2, "CSVEscapeMode", value));
+	return static_cast<CSVEscapeMode>(StringUtil::StringToEnum(GetCSVEscapeModeValues(), 3, "CSVEscapeMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCSVQuoteModeValues() {

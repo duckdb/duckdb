@@ -20,12 +20,14 @@ enum class NewLineIdentifier : uint8_t {
 
 };
 
-//! Which characters the escape character can escape
+//! Which characters the escape character can escape, following strict_mode when not set
 enum class CSVEscapeMode : uint8_t {
-	//! The escape escapes any character after it
+	//! The escape escapes any character after it, in and outside quoted values, the default when not strict
 	ALL = 0,
 	//! The escape only escapes the quote and escape characters and is inert anywhere else, as in opencsv
-	QUOTE_AND_ESCAPE = 1
+	QUOTE_AND_ESCAPE = 1,
+	//! The escape only escapes within quoted values, the default of strict parsing
+	QUOTED_ONLY = 2
 };
 
 //! What quotes mean at record boundaries
@@ -184,6 +186,8 @@ private:
 			return "all";
 		case CSVEscapeMode::QUOTE_AND_ESCAPE:
 			return "quote_and_escape";
+		case CSVEscapeMode::QUOTED_ONLY:
+			return "quoted_only";
 		default:
 			throw InternalException("Invalid CSV Escape Mode Detected.");
 		}

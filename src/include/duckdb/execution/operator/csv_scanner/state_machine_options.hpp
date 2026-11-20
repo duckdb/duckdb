@@ -36,7 +36,7 @@ struct CSVStateMachineOptions {
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! How Strict the parser should be
 	CSVOption<bool> strict_mode = true;
-	//! Which characters the escape character can escape
+	//! Which characters the escape character can escape, following strict_mode when not set
 	CSVOption<CSVEscapeMode> escape_mode = CSVEscapeMode::ALL;
 	//! What quotes mean at record boundaries
 	CSVOption<CSVQuoteMode> quote_mode = CSVQuoteMode::STANDARD;

@@ -641,7 +641,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 			null_padding = true;
 		}
 		// the internal parsing options the dialect is made of
-		state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE_AND_ESCAPE, false);
+		state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE_AND_ESCAPE, true);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
 		// pinned as set, so parallel boundary detection searches with the dialect's rules rather than a strict table
 		if (!state_machine_options.strict_mode.IsSetByUser()) {
