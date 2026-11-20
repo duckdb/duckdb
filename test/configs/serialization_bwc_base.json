@@ -83,6 +83,7 @@
         "test/sql/storage/many_self_append.test",
         "test/sql/storage/null_byte_storage.test",
         "test/sql/storage/partial_blocks/many_columns_drop_table.test",
+        "test/sql/storage/partial_blocks/many_columns_drop_table.test_slow",
         "test/sql/storage/types/list/empty_float_arrays.test",
         "test/sql/storage/update/dictionary_update_null.test",
         "test/sql/transactions/rollback_drop.test",
@@ -150,7 +151,7 @@
         "test/sql/copy/csv/csv_windows_mixed_separators.test",
         "test/sql/copy/format_uuid.test",
         "test/sql/copy/partitioned/hive_partition_append.test",
-        "test/sql/copy/parquet/parquet_hive2.test",
+        "test/sql/copy/parquet/parquet_hive2.test_slow",
         "test/sql/copy/row_groups_per_file.test"
       ]
     },

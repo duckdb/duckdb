@@ -855,8 +855,9 @@ static bool IsLessThan(ExpressionType type) {
 
 //! Returns the relaxation margin in native units of the source type for a temporal cast.
 //! Returns -1 if the cast pair is not supported for relaxed pushdown.
-//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+//! Margins: 48h for timestamp casts that read the time zone, 1 day DATE->TIMESTAMPTZ, 24h for time of day, 1s rounding.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
+	static constexpr int64_t TIME_ZONE_MARGIN = 2LL * Interval::MICROS_PER_DAY; // microseconds
 	if (source == target) {
 		switch (source) {
 		case LogicalTypeId::DATE:
@@ -874,12 +875,10 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		// native unit: microseconds
 		switch (target) {
-		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return 2LL * Interval::MICROS_PER_HOUR;
+			return TIME_ZONE_MARGIN;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY;
 		case LogicalTypeId::TIMESTAMP_MS:
@@ -888,8 +887,18 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		default:
 			return -1;
 		}
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return TIME_ZONE_MARGIN;
+		default:
+			return -1;
+		}
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -898,6 +907,19 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return Interval::MICROS_PER_SEC * 1000LL;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		// ICU does not override these, so they only lose precision
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+			return TIME_ZONE_MARGIN * 1000LL;
 		default:
 			return -1;
 		}

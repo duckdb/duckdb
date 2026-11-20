@@ -47,15 +47,17 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 			return false;
 		}
 
-		const auto op_type = current_op.get().type;
-		if (op_type == LogicalOperatorType::LOGICAL_LIMIT) {
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_LIMIT:
 			return false;
-		}
-		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
-		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-		    op_type == LogicalOperatorType::LOGICAL_WINDOW) {
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			break;
+		default:
+			// Any other operator can change the row count, so we only order the row groups but do not prune
 			row_limit.SetInvalid();
 			row_offset.SetInvalid();
+			break;
 		}
 		current_op = *current_op.get().children[0];
 	}
@@ -100,6 +102,12 @@ void RowGroupPruner::GetLimitAndOffset(const LogicalLimit &logical_limit, option
 		row_offset = logical_limit.offset_val.GetConstantValue();
 	} else if (logical_limit.offset_val.Type() == LimitNodeType::UNSET) {
 		row_offset = 0;
+	}
+
+	const auto limit_type = logical_limit.limit_val.Type();
+	if (limit_type == LimitNodeType::CONSTANT_PERCENTAGE || limit_type == LimitNodeType::EXPRESSION_PERCENTAGE) {
+		// A percentage limit counts the rows before the offset, so we cannot prune with the offset
+		row_offset.SetInvalid();
 	}
 }
 
@@ -172,9 +180,11 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 	const auto order_type = primary_order.type;
 	const auto null_order = primary_order.null_order;
 	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-	optional_idx combined_limit = row_limit.IsValid()
-	                                  ? row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0)
-	                                  : optional_idx();
+	// Without a known offset, we cannot tell which rows the limit keeps
+	optional_idx combined_limit;
+	if (row_limit.IsValid() && row_offset.IsValid()) {
+		combined_limit = row_limit.GetIndex() + row_offset.GetIndex();
+	}
 
 	if (row_offset.IsValid() && row_offset.GetIndex() > 0 && logical_get.function.get_partition_stats) {
 		// Try to prune with offset

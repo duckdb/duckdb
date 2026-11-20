@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -192,6 +193,13 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 }
 
 bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		// the copy binds the function again, which brings back the files a filter pruned
+		if (!get.function.HasSerializationCallbacks() && !get.extra_info.file_filters.empty()) {
+			return false;
+		}
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:

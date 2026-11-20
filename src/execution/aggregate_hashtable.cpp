@@ -658,6 +658,9 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, row_count);
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+	// This chunk needs its own pointer prefix; retain the metadata for the cached dictionary.
+	const auto dictionary_high_bits = dict_state.address_high_bits;
+	const auto dictionary_high_bits_uniform = dict_state.address_high_bits_uniform;
 	dict_state.address_high_bits_uniform = (sizeof(uintptr_t) == sizeof(uint64_t));
 	dict_state.address_high_bits = static_cast<uint64_t>(aggregate_address) & GID_HIGH_MASK;
 	for (idx_t i = 0; i < row_count; i++) {
@@ -667,6 +670,8 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	// ht_offsets are only valid for the single constant group, not the full payload
 	UpdateAggregates(payload, filter, row_count, false);
+	dict_state.address_high_bits = dictionary_high_bits;
+	dict_state.address_high_bits_uniform = dictionary_high_bits_uniform;
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
@@ -1264,7 +1269,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
-		context.InterruptCheck();
+		context.FastInterruptCheck();
 		auto &source_rows = fm_state.scan_state.chunk_state;
 		const auto chunk_count = fm_state.groups.size();
 		if (!layout_ptr->AllConstant()) {

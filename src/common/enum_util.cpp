@@ -71,7 +71,6 @@
 #include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
-#include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
 #include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
@@ -4775,19 +4774,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::CASE_TO_FILTER_AGGREGATE), "CASE_TO_FILTER_AGGREGATE" },
 		{ static_cast<uint32_t>(OptimizerType::WINDOW_FUSION), "WINDOW_FUSION" },
 		{ static_cast<uint32_t>(OptimizerType::SET_OPERATION_AGGREGATE), "SET_OPERATION_AGGREGATE" },
-		{ static_cast<uint32_t>(OptimizerType::JOIN_TO_SEMI_JOIN), "JOIN_TO_SEMI_JOIN" }
+		{ static_cast<uint32_t>(OptimizerType::JOIN_TO_SEMI_JOIN), "JOIN_TO_SEMI_JOIN" },
+		{ static_cast<uint32_t>(OptimizerType::MARK_JOIN_SIMPLIFIER), "MARK_JOIN_SIMPLIFIER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 58, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 59, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 58, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 59, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -5855,51 +5855,6 @@ const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSem
 template<>
 RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value) {
 	return static_cast<RegexMatchOperatorSemantics>(StringUtil::StringToEnum(GetRegexMatchOperatorSemanticsValues(), 2, "RegexMatchOperatorSemantics", value));
-}
-
-const StringUtil::EnumStringLiteral *GetRelationTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(RelationType::INVALID_RELATION), "INVALID_RELATION" },
-		{ static_cast<uint32_t>(RelationType::TABLE_RELATION), "TABLE_RELATION" },
-		{ static_cast<uint32_t>(RelationType::PROJECTION_RELATION), "PROJECTION_RELATION" },
-		{ static_cast<uint32_t>(RelationType::FILTER_RELATION), "FILTER_RELATION" },
-		{ static_cast<uint32_t>(RelationType::EXPLAIN_RELATION), "EXPLAIN_RELATION" },
-		{ static_cast<uint32_t>(RelationType::CROSS_PRODUCT_RELATION), "CROSS_PRODUCT_RELATION" },
-		{ static_cast<uint32_t>(RelationType::JOIN_RELATION), "JOIN_RELATION" },
-		{ static_cast<uint32_t>(RelationType::AGGREGATE_RELATION), "AGGREGATE_RELATION" },
-		{ static_cast<uint32_t>(RelationType::SET_OPERATION_RELATION), "SET_OPERATION_RELATION" },
-		{ static_cast<uint32_t>(RelationType::DISTINCT_RELATION), "DISTINCT_RELATION" },
-		{ static_cast<uint32_t>(RelationType::LIMIT_RELATION), "LIMIT_RELATION" },
-		{ static_cast<uint32_t>(RelationType::ORDER_RELATION), "ORDER_RELATION" },
-		{ static_cast<uint32_t>(RelationType::CREATE_VIEW_RELATION), "CREATE_VIEW_RELATION" },
-		{ static_cast<uint32_t>(RelationType::CREATE_TABLE_RELATION), "CREATE_TABLE_RELATION" },
-		{ static_cast<uint32_t>(RelationType::INSERT_RELATION), "INSERT_RELATION" },
-		{ static_cast<uint32_t>(RelationType::VALUE_LIST_RELATION), "VALUE_LIST_RELATION" },
-		{ static_cast<uint32_t>(RelationType::MATERIALIZED_RELATION), "MATERIALIZED_RELATION" },
-		{ static_cast<uint32_t>(RelationType::DELETE_RELATION), "DELETE_RELATION" },
-		{ static_cast<uint32_t>(RelationType::UPDATE_RELATION), "UPDATE_RELATION" },
-		{ static_cast<uint32_t>(RelationType::WRITE_CSV_RELATION), "WRITE_CSV_RELATION" },
-		{ static_cast<uint32_t>(RelationType::WRITE_PARQUET_RELATION), "WRITE_PARQUET_RELATION" },
-		{ static_cast<uint32_t>(RelationType::READ_CSV_RELATION), "READ_CSV_RELATION" },
-		{ static_cast<uint32_t>(RelationType::SUBQUERY_RELATION), "SUBQUERY_RELATION" },
-		{ static_cast<uint32_t>(RelationType::TABLE_FUNCTION_RELATION), "TABLE_FUNCTION_RELATION" },
-		{ static_cast<uint32_t>(RelationType::VIEW_RELATION), "VIEW_RELATION" },
-		{ static_cast<uint32_t>(RelationType::QUERY_RELATION), "QUERY_RELATION" },
-		{ static_cast<uint32_t>(RelationType::DELIM_JOIN_RELATION), "DELIM_JOIN_RELATION" },
-		{ static_cast<uint32_t>(RelationType::DELIM_GET_RELATION), "DELIM_GET_RELATION" },
-		{ static_cast<uint32_t>(RelationType::EXTENSION_RELATION), "EXTENSION_RELATION" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<RelationType>(RelationType value) {
-	return StringUtil::EnumToString(GetRelationTypeValues(), 29, "RelationType", static_cast<uint32_t>(value));
-}
-
-template<>
-RelationType EnumUtil::FromString<RelationType>(const char *value) {
-	return static_cast<RelationType>(StringUtil::StringToEnum(GetRelationTypeValues(), 29, "RelationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRemoteCapabilityValues() {

@@ -93,10 +93,24 @@ struct TableFilterFunctions {
 //! describes a complete key set, so only a sealed filter may be looked up or handed to a scan.
 class BloomFilter {
 public:
+	class ReadView {
+	public:
+		ReadView(const uint64_t *buffer, uint64_t bitmask) : buffer(buffer), bitmask(bitmask) {
+		}
+
+		bool LookupOne(hash_t hash) const;
+		idx_t LookupHashes(const Vector &hashes, SelectionVector &result, idx_t count) const;
+		idx_t LookupHashes(const Vector &hashes, const SelectionVector &sel, SelectionVector &result,
+		                   idx_t count) const;
+
+	private:
+		const uint64_t *buffer;
+		uint64_t bitmask;
+	};
+
 	//! Deferred buffers must be cleared through InitializeRange before inserting any keys.
 	enum class Initialization { IMMEDIATE, DEFERRED };
 
-	BloomFilter() = default;
 	//! Cap the bitmap size without reducing its desired bits per key.
 	void Initialize(ClientContext &context_p, idx_t number_of_rows,
 	                idx_t max_bitmap_bytes = NumericLimits<idx_t>::Maximum(),
@@ -119,6 +133,21 @@ public:
 	//! Folds the filter down to the smallest size that still meets the target false positive rate, releases excess
 	//! spare capacity, and marks the filter complete.
 	void Seal(ClientContext &context);
+
+	idx_t GetBitmapSize() const {
+		return num_sectors * sizeof(uint64_t);
+	}
+	idx_t GetAllocationSize() const {
+		return buf_.GetSize();
+	}
+	idx_t GetMemoryBudget() const {
+		return memory_budget;
+	}
+	//! Completed buffers may be replaced only before publication.
+	HugeAllocation CopyBuffer(ClientContext &context) const;
+	void ReplaceBuffer(HugeAllocation buffer);
+	void InstallReadCopy(HugeAllocation buffer);
+	ReadView GetReadView(idx_t buffer_index = 0) const;
 
 	//! Allocation and geometry are configured; only a sealed filter is ready for lookup.
 	bool IsInitialized() const {
@@ -153,8 +182,7 @@ private:
 
 private:
 	idx_t num_sectors;
-	//! Sector capacity of buf_, so an unpublished filter can be reused across recursive iterations
-	idx_t allocated_sectors = 0;
+	idx_t memory_budget = 0;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
 	bool initialized = false;
@@ -164,16 +192,27 @@ private:
 	Initialization initialization = Initialization::IMMEDIATE;
 	HugeAllocation buf_;
 	uint64_t *bf;
+	HugeAllocation read_copy;
 };
+
+//! Captured by the producer; a missing group selects the primary buffer.
+struct BloomFilterReadLocality {
+	idx_t shard_count = 1;
+	optional_idx replica_group;
+};
+
+BloomFilter::ReadView GetBloomFilterReadView(const BloomFilter &filter, const BloomFilterReadLocality &locality);
 
 //! FunctionData for bloom filter internal function
 struct BloomFilterFunctionData : public FunctionData {
 	BloomFilterFunctionData(shared_ptr<const BloomFilter> filter_p, bool filters_null_values_p,
 	                        const string &key_column_name_p, const LogicalType &key_type_p,
-	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p);
+	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p,
+	                        BloomFilterReadLocality locality_p = {});
 
 	//! Published filters are shared and immutable: the hash table may drop its own reference at any time
 	shared_ptr<const BloomFilter> filter;
+	BloomFilterReadLocality locality;
 	bool filters_null_values;
 	string key_column_name;
 	LogicalType key_type;

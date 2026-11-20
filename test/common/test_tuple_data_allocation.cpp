@@ -5,6 +5,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "test_helpers.hpp"
 
 namespace duckdb {
 
@@ -229,6 +230,44 @@ TEST_CASE("Tuple data heap reclamation crosses chunks without heap references", 
 			REQUIRE(chunk_idx == test_case.string_lengths.size());
 		}
 	}
+}
+
+TEST_CASE("Out-of-memory pin during append does not leave counted rows", "[tuple_data_allocation]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// Unpinned blocks can be evicted, and the fillers below can reach the limit
+	REQUIRE_NO_FAIL(con.Query("SET temp_directory='" + TestCreatePath("tuple_data_allocation_oom") + "'"));
+	REQUIRE_NO_FAIL(con.Query("SET memory_limit='2MB'"));
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+
+	// With an aggregate destructor, appends re-pin the row block to zero the states
+	AggregateFunction function({}, LogicalType::BIGINT, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(),
+	                           [](Vector &, AggregateInputData &, idx_t) {});
+	vector<AggregateObject> aggregates;
+	aggregates.emplace_back(BoundAggregateFunction(function), nullptr, 0, sizeof(uint64_t), AggregateType::NON_DISTINCT,
+	                        PhysicalType::INT64);
+	vector<LogicalType> types {LogicalType::BIGINT};
+	auto layout = make_shared_ptr<TupleDataLayout>();
+	layout->Initialize(types, std::move(aggregates), TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	TupleDataCollection collection(buffer_manager, layout, MemoryTag::HASH_TABLE);
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+	chunk.data[0].Sequence(0, 1, STANDARD_VECTOR_SIZE);
+	chunk.CheckCardinality(STANDARD_VECTOR_SIZE);
+	// Leaves room in the row block, which is unpinned afterwards
+	collection.Append(chunk);
+
+	// Evict the row block and pin all remaining memory
+	vector<BufferHandle> fillers;
+	try {
+		while (true) {
+			fillers.push_back(buffer_manager.Allocate(MemoryTag::EXTENSION, buffer_manager.GetBlockSize()));
+		}
+	} catch (std::exception &) {
+	}
+	REQUIRE_THROWS_WITH(collection.Append(chunk), Catch::Contains("failed to pin block"));
+	REQUIRE(collection.ChunkCount() == 1);
 }
 
 } // namespace duckdb

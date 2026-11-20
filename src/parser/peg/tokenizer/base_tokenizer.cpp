@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher/number_literal_matcher.hpp"
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 
 namespace duckdb {
@@ -8,13 +9,15 @@ namespace duckdb {
 uint8_t ComputeMatcherTokenClass(TokenType type, const string &text) {
 	switch (type) {
 	case TokenType::KEYWORD:
-	case TokenType::IDENTIFIER:
 		return MatcherTokenClass::WORD;
+	case TokenType::IDENTIFIER:
+		return MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
 	case TokenType::STRING_LITERAL:
 		// string literals are also accepted in identifier positions (e.g. table and file names)
 		return MatcherTokenClass::STRING | MatcherTokenClass::WORD;
 	case TokenType::NUMBER_LITERAL:
-		return MatcherTokenClass::NUMBER;
+		// malformed literals such as 1.2.3 match nothing
+		return NumberLiteralMatcher::IsNumberLiteral(text) ? MatcherTokenClass::NUMBER : 0;
 	case TokenType::OPERATOR:
 		if (!text.empty() && !Tokenizer::CharacterIsOperator(text[0])) {
 			return 0;

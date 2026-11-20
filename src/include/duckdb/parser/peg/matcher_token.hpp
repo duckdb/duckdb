@@ -25,6 +25,8 @@ struct MatcherTokenClass {
 	static constexpr uint8_t GENERIC_OPERATOR = 4;
 	static constexpr uint8_t STRING = 8;
 	static constexpr uint8_t NUMBER = 16;
+	//! a word that is not a keyword of the grammar
+	static constexpr uint8_t IDENTIFIER = 32;
 };
 
 //! A token class that the caller already derived for the text it passes to a MatcherToken
@@ -48,8 +50,13 @@ struct MatcherToken {
 	//! Builds the text in place from a range of the input
 	MatcherToken(const char *data, idx_t size, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
 	    : type(type_p), text(data, size), offset(offset_p), length(size), unterminated(unterminated_p) {
-		const bool is_word = type == TokenType::KEYWORD || type == TokenType::IDENTIFIER;
-		token_class = is_word ? MatcherTokenClass::WORD : ComputeMatcherTokenClass(type, text);
+		if (type == TokenType::KEYWORD) {
+			token_class = MatcherTokenClass::WORD;
+		} else if (type == TokenType::IDENTIFIER) {
+			token_class = MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
+		} else {
+			token_class = ComputeMatcherTokenClass(type, text);
+		}
 	}
 	MatcherToken(const char *data, idx_t size, idx_t offset_p, TokenType type_p, PrecomputedTokenClass token_class_p)
 	    : type(type_p), text(data, size), offset(offset_p), length(size), token_class(token_class_p.value) {
