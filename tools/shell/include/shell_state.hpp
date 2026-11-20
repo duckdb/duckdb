@@ -451,6 +451,7 @@ public:
 	int ProcessInput(InputMode mode);
 	bool GetBailOnError(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
+	static bool UnsplitInput();
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
 	static int64_t StringToInt(const string &arg);

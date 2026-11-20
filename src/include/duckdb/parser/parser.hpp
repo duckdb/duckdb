@@ -110,6 +110,7 @@ private:
 	//! Run the `parse_function` extensions over the unconsumed tail of `query`. Returns the produced
 	//! `ExtensionStatement` and advances `token_iterator` past the tokens the extension claimed, or
 	//! nullptr if no extension claims the segment.
+	void ParseWithGrammar(const string &query);
 	unique_ptr<SQLStatement> TryParseExtensionStatement(TokenIterator &token_iterator, const string &query);
 	CompiledGrammar &GetGrammar();
 

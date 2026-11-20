@@ -2952,6 +2952,14 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	return parser.IsQueryComplete(zSql);
 }
 
+bool ShellState::UnsplitInput() {
+	auto &state = ShellState::Get();
+	if (!state.conn || !state.conn->context || !state.conn->context->IsConnected()) {
+		return false;
+	}
+	return duckdb::ClientConfig::GetConfig(*state.conn->context).ConnectedUnsplitInput();
+}
+
 void ShellState::ShellAddHistory(const char *history) {
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
@@ -3144,7 +3152,8 @@ int ShellState::ProcessInput(InputMode mode) {
 			memcpy(zSql + nSql, zLine, nLine + 1);
 			nSql += nLine;
 		}
-		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql)) {
+		bool complete = line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && SQLIsComplete(zSql);
+		if (nSql && (complete || UnsplitInput())) {
 			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {

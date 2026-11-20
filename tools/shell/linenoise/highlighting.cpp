@@ -7,12 +7,14 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#include "shell_state.hpp"
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 
 namespace duckdb {
 
 bool Highlighting::IsEnabled() {
-	return duckdb_shell::ShellHighlight::IsEnabled();
+	// what is typed for a database that takes its input whole is not SQL: no SQL highlighting
+	return duckdb_shell::ShellHighlight::IsEnabled() && !duckdb_shell::ShellState::UnsplitInput();
 }
 
 static tokenType convertToken(TokenType token_type) {

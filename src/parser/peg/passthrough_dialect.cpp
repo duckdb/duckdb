@@ -46,4 +46,13 @@ void PassthroughDialect::ApplyGrammarChanges(GrammarChangesInput &input) {
 	grammar.ReplaceRule("Statement <- DisconnectStatement / PassthroughStatement", statement_rule->transform_process);
 }
 
+void UnsplitDialect::ApplyGrammarChanges(GrammarChangesInput &input) {
+	auto &grammar = input.parsed_grammar;
+	auto statement_rule = grammar.GetRule("Statement");
+	if (!statement_rule) {
+		throw InternalException("The unsplit dialect requires a Statement rule");
+	}
+	grammar.ReplaceRule("Statement <- DisconnectStatement", statement_rule->transform_process);
+}
+
 } // namespace duckdb

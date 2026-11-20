@@ -10,6 +10,7 @@ class ClientContext;
 class DialectExtension;
 class GrammarExtension;
 class PassthroughDialect;
+class UnsplitDialect;
 
 using compiled_rules_map_t = case_insensitive_map_t<unique_ptr<CompiledGrammarRule>>;
 
@@ -74,6 +75,8 @@ public:
 	shared_ptr<CompiledGrammar> GetMatcher(const ClientContext &context, const vector<string> &active_extensions);
 	//! The grammar that forwards statements instead of interpreting them, used while CONNECT-ed
 	shared_ptr<CompiledGrammar> GetPassthroughMatcher(const ClientContext &context);
+	//! The grammar that knows DISCONNECT only, used while CONNECT-ed to a database that takes its input whole
+	shared_ptr<CompiledGrammar> GetUnsplitMatcher(const ClientContext &context);
 
 private:
 	std::mutex mutex;
@@ -83,6 +86,7 @@ private:
 	vector<pair<vector<string>, shared_ptr<CompiledGrammar>>> extension_matchers;
 	std::mutex passthrough_mutex;
 	unique_ptr<PassthroughDialect> passthrough_dialect;
+	unique_ptr<UnsplitDialect> unsplit_dialect;
 };
 
 } // namespace duckdb

@@ -8,6 +8,7 @@
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
@@ -251,6 +252,21 @@ string Parser::NormalizeSQLString(const string &query) {
 
 void Parser::ParseQuery(const string &query_p) {
 	const string query = NormalizeSQLString(query_p);
+	if (options.unsplit_input) {
+		// The grammar of a database that takes its input whole knows DISCONNECT only. Whatever it does not
+		// accept is one statement handed over as it was typed: quotes are characters, a semicolon is no boundary
+		idx_t parsed_before = statements.size();
+		try {
+			ParseWithGrammar(query);
+		} catch (ParserException &) {
+			statements.erase(statements.begin() + NumericCast<int64_t>(parsed_before), statements.end());
+			auto statement = make_uniq<PassthroughStatement>();
+			statement->query = query;
+			statement->stmt_location = QueryLocation(0, query.size());
+			statements.push_back(std::move(statement));
+		}
+		return;
+	}
 	if (options.extensions) {
 		bool has_strict_extension_error = false;
 		ErrorData last_strict_extension_error;
@@ -280,7 +296,11 @@ void Parser::ParseQuery(const string &query_p) {
 			last_strict_extension_error.Throw();
 		}
 	}
-	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
+	ParseWithGrammar(query);
+}
+
+void Parser::ParseWithGrammar(const string &query) {
+	// Tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
 	ParserTokenizerBehavior behavior(query);
