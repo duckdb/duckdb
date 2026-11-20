@@ -3,7 +3,7 @@
 # group: [optimizer]
 
 # Every query runs with the rule disabled and enabled, at one thread (where it merges also the branches over
-# small tables) and at the default; the expected rows are those of the unoptimized plan.
+# small tables) and at four threads; the expected rows are those of the unoptimized plan.
 
 statement ok
 CREATE TABLE sales AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (2000 + i % 3)::INTEGER AS year, (i % 5)::INTEGER AS store, CASE WHEN i % 10 = 0 THEN NULL ELSE i % 100 END::BIGINT AS amount, 'c' || (i % 4) AS category, DATE '2024-01-01' + (i % 6)::INTEGER AS day, (i % 3)::DOUBLE AS ratio, CASE i % 2 WHEN 0 THEN 'a' ELSE 'A' END COLLATE NOCASE AS code FROM range(3000) r(i) WHERE i * 7 % 12 + 1 <> 4;
