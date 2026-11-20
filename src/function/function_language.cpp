@@ -96,12 +96,78 @@ const string &ScalarFunctionCallReplaceInput::GetErrorNote() const {
 	return error_note;
 }
 
+LanguageTypeView::LanguageTypeView(LogicalType type_p) : type(std::move(type_p)) {
+}
+
+string LanguageTypeView::ToString() const {
+	return type.ToString();
+}
+
+LogicalTypeId LanguageTypeView::GetId() const {
+	return type.id();
+}
+
+string LanguageTypeView::GetAlias() const {
+	return type.HasAlias() ? type.GetAlias() : string();
+}
+
+idx_t LanguageTypeView::GetChildCount() const {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+		return StructType::GetChildCount(type) - (type.id() == LogicalTypeId::UNION ? 1 : 0);
+	case LogicalTypeId::MAP:
+		return 2;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+string LanguageTypeView::GetChildName(idx_t child_idx) const {
+	if (child_idx >= GetChildCount()) {
+		throw InvalidInputException("GetChildName: child index %llu is out of range", child_idx);
+	}
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		return StructType::GetChildName(type, child_idx).GetIdentifierName();
+	case LogicalTypeId::UNION:
+		return UnionType::GetMemberName(type, child_idx).GetIdentifierName();
+	case LogicalTypeId::MAP:
+		return child_idx == 0 ? "key" : "value";
+	default:
+		return string();
+	}
+}
+
+LanguageTypeView LanguageTypeView::GetChild(idx_t child_idx) const {
+	if (child_idx >= GetChildCount()) {
+		throw InvalidInputException("GetChild: child index %llu is out of range", child_idx);
+	}
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		return LanguageTypeView(StructType::GetChildType(type, child_idx));
+	case LogicalTypeId::UNION:
+		return LanguageTypeView(UnionType::GetMemberType(type, child_idx));
+	case LogicalTypeId::MAP:
+		return LanguageTypeView(child_idx == 0 ? MapType::KeyType(type) : MapType::ValueType(type));
+	case LogicalTypeId::LIST:
+		return LanguageTypeView(ListType::GetChildType(type));
+	default:
+		return LanguageTypeView(ArrayType::GetChildType(type));
+	}
+}
+
 ScalarFunctionCreateValidateInput::ScalarFunctionCreateValidateInput(ClientContext &context,
                                                                      const QualifiedName &function_name,
                                                                      const string &statement_text,
-                                                                     vector<LanguageMemberView> members_p)
+                                                                     vector<LanguageMemberView> members_p,
+                                                                     vector<vector<LogicalType>> description_types_p)
     : context(context), function_name(function_name), statement_text(statement_text), members(std::move(members_p)),
-      member_sources(members.size()) {
+      member_sources(members.size()), description_types(std::move(description_types_p)) {
+	D_ASSERT(description_types.size() == members.size());
 }
 
 void ScalarFunctionCreateValidateInput::SetMemberSource(idx_t member_idx, string source) {
@@ -111,7 +177,16 @@ void ScalarFunctionCreateValidateInput::SetMemberSource(idx_t member_idx, string
 	member_sources[member_idx] = std::move(source);
 }
 
-void ScalarFunctionCreateValidateInput::AddDescription(FunctionDescription description) {
+void ScalarFunctionCreateValidateInput::AddDescription(idx_t member_idx, FunctionDescription description) {
+	if (member_idx >= members.size()) {
+		throw InvalidInputException("AddDescription: member index %llu is out of range", member_idx);
+	}
+	auto &member = members[member_idx];
+	description.parameter_names.clear();
+	for (auto &name : member.parameter_names) {
+		description.parameter_names.push_back(name.GetIdentifierName());
+	}
+	description.parameter_types = description_types[member_idx];
 	descriptions.push_back(std::move(description));
 }
 

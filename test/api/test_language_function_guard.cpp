@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/function/function_language.hpp"
 #include "duckdb/function/language_macro_function.hpp"
@@ -21,9 +22,9 @@ using namespace duckdb;
 
 // SQL cannot reach the invariants below: it cannot create an internal macro entry, the stock grammar never nests an
 // unresolved type inside a container, CREATE FUNCTION ... LANGUAGE carries one member per statement, an undeclared
-// RETURNS type with metadata needs a hand-built member, extension type metadata a validator could mutate only exists on
-// programmatically built types, and ClientContext::RegisterFunction is a C++ registration path. The SQL-observable
-// behavior stays in test/sql/function/language_function.
+// RETURNS type with metadata needs a hand-built member, the validator's type views are a C++ interface over types
+// with extension metadata only programmatic types carry, and ClientContext::RegisterFunction is a C++ registration
+// path. The SQL-observable behavior stays in test/sql/function/language_function.
 
 namespace {
 
@@ -313,21 +314,6 @@ TEST_CASE("Metadata on an undeclared RETURNS type is rejected at the catalog bou
 
 //! Build a type the way only the raw C++ constructor can: a parameterless (INVALID) info carrying
 //! extension metadata
-//! A member with one parameter of the given type and the given source
-static unique_ptr<LanguageMacroFunction> ParameterMember(const string &language, const string &source,
-                                                         LogicalType type) {
-	auto member = make_uniq<LanguageMacroFunction>(language, source);
-	member->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier("p")));
-	member->types.push_back(std::move(type));
-	return member;
-}
-
-static LogicalType ModifiedInteger(int32_t modifier) {
-	auto ext_info = make_uniq<ExtensionTypeInfo>();
-	ext_info->modifiers.emplace_back(Value::INTEGER(modifier));
-	return LogicalType(LogicalTypeId::INTEGER).WithExtensionInfo(std::move(ext_info));
-}
-
 static void CreateMembers(Connection &con, const string &name, vector<unique_ptr<LanguageMacroFunction>> members) {
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	info->SetFunctionName(Identifier(name));
@@ -339,234 +325,74 @@ static void CreateMembers(Connection &con, const string &name, vector<unique_ptr
 	REQUIRE_NO_FAIL(con.Query(std::move(statement)));
 }
 
-static LogicalType ModifiedType(LogicalTypeId id, int32_t modifier) {
-	auto metadata = make_uniq<ExtensionTypeInfo>();
-	metadata->modifiers.emplace_back(Value::INTEGER(modifier));
-	return LogicalType(id).WithExtensionInfo(std::move(metadata));
-}
+// the view gives the validator no handle to a stored type: every accessor returns a value or another view
+static_assert(!std::is_convertible<LanguageTypeView, LogicalType>::value, "a view must not convert to a type");
+static_assert(std::is_same<decltype(std::declval<const LanguageTypeView &>().GetChild(0)), LanguageTypeView>::value,
+              "a child is a view by value");
+static_assert(std::is_same<decltype(std::declval<const LanguageTypeView &>().ToString()), string>::value,
+              "the rendering is a copy");
+static_assert(
+    std::is_same<decltype(std::declval<const LanguageMemberView &>().parameter_types), vector<LanguageTypeView>>::value,
+    "parameter types are views");
 
-static void AppendModifier(const LogicalType &type) {
-	type.GetTypeInfo().extension_info->modifiers.emplace_back(Value::INTEGER(9));
-}
+static string received_rendering;
 
-static void CreateMembersExpectingError(Connection &con, const string &name,
-                                        vector<unique_ptr<LanguageMacroFunction>> members, const string &error) {
-	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
-	info->SetFunctionName(Identifier(name));
-	for (auto &member : members) {
-		info->macros.push_back(std::move(member));
+//! Renders a member's types through the view
+static string RenderView(const LanguageTypeView &view) {
+	string result = view.ToString() + "|" + EnumUtil::ToString(view.GetId()) + "|" + view.GetAlias();
+	for (idx_t i = 0; i < view.GetChildCount(); i++) {
+		result += "|" + view.GetChildName(i) + ":" + view.GetChild(i).ToString();
 	}
-	auto statement = make_uniq<CreateStatement>();
-	statement->info = std::move(info);
-	auto result = con.Query(std::move(statement));
-	REQUIRE_FAIL(result);
-	REQUIRE(StringUtil::Contains(result->GetError(), error));
-	// nothing was stored
-	auto stored = con.Query("SELECT count(*) FROM duckdb_functions() WHERE function_name = '" + name + "'");
-	REQUIRE(CHECK_COLUMN(stored, 0, {0}));
+	return result;
 }
 
-static void CreateMemberExpectingError(Connection &con, const string &name, unique_ptr<LanguageMacroFunction> member,
-                                       const string &error) {
-	vector<unique_ptr<LanguageMacroFunction>> members;
-	members.push_back(std::move(member));
-	CreateMembersExpectingError(con, name, std::move(members), error);
+static void RecordViews(ScalarFunctionCreateValidateInput &input) {
+	received_rendering.clear();
+	for (auto &type : input.members[0].parameter_types) {
+		received_rendering += RenderView(type) + "\n";
+	}
+	received_rendering += RenderView(input.members[0].return_type);
 }
 
-static void AppendParameterModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(input.members[0].parameter_types[0]);
-}
-
-static void AppendReturnModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(input.members[0].return_type);
-}
-
-static void CollapseSecondMember(ScalarFunctionCreateValidateInput &input) {
-	auto parameter_type = input.members[1].parameter_types[0];
-	parameter_type.GetTypeInfo().extension_info->modifiers[0].value = Value::INTEGER(1);
-}
-
-static void AppendNestedModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(StructType::GetChildTypes(input.members[0].parameter_types[0])[0].second);
-}
-
-TEST_CASE("A validator that changes a stored signature fails the CREATE", "[api]") {
+TEST_CASE("A validator reads member types through read-only views", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	// the validator receives the stored types, whose extension info stays mutable behind the const accessor: CREATE
-	// compares the persisted signatures before and after the callback
-	RegisterTestLanguage(*db.instance, "sigmut", AppendParameterModifier);
-	CreateMemberExpectingError(con, "sig_mutated", ParameterMember("sigmut", "x", ModifiedInteger(1)),
-	                           "language validator for \"sig_mutated\" changed the signature of member 1");
-
-	RegisterTestLanguage(*db.instance, "retmut", AppendReturnModifier);
-	auto ret_member = make_uniq<LanguageMacroFunction>("retmut", "x");
-	ret_member->return_type = ModifiedInteger(1);
-	CreateMemberExpectingError(con, "ret_mutated", std::move(ret_member),
-	                           "language validator for \"ret_mutated\" changed the signature of member 1");
-
-	// two members distinct only in a modifier cannot be made identical after the batch overload check
-	RegisterTestLanguage(*db.instance, "collapselang", CollapseSecondMember);
-	vector<unique_ptr<LanguageMacroFunction>> pair_members;
-	pair_members.push_back(ParameterMember("collapselang", "x", ModifiedInteger(1)));
-	pair_members.push_back(ParameterMember("collapselang", "y", ModifiedInteger(2)));
-	CreateMembersExpectingError(con, "collapsed_fun", std::move(pair_members), "changed the signature of member 2");
-
-	// metadata nested below the top level is part of the signature as well
-	RegisterTestLanguage(*db.instance, "nestmut", AppendNestedModifier);
-	CreateMemberExpectingError(con, "nest_mutated",
-	                           ParameterMember("nestmut", "x", LogicalType::STRUCT({{"i", ModifiedInteger(1)}})),
-	                           "changed the signature of member 1");
-}
-
-//! Validators that record the type they received, to compare it with the stored member
-static LogicalType received_parameter_type;
-
-static void RecordParameterType(ScalarFunctionCreateValidateInput &input) {
-	received_parameter_type = input.members[0].parameter_types[0];
-}
-
-TEST_CASE("A validator receives the member types that are stored - no storage migration", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	// the types keep their identity: a storage round trip would migrate a BLOB aliased as GEOMETRY to the native
-	// geometry type, and the legacy aggregate state and unnamed struct migrations apply too
-	RegisterTestLanguage(*db.instance, "geomlang", RecordParameterType);
+	RegisterTestLanguage(*db.instance, "viewlang", RecordViews);
+	// the view keeps the stored identity: a BLOB aliased as GEOMETRY stays one, where a storage round trip would
+	// migrate it to the native geometry type
 	auto metadata = make_uniq<ExtensionTypeInfo>();
 	metadata->modifiers.emplace_back(Value::INTEGER(1));
 	auto geometry_alias = LogicalType(LogicalTypeId::BLOB).WithAlias("GEOMETRY").WithExtensionInfo(std::move(metadata));
+	auto member = make_uniq<LanguageMacroFunction>("viewlang", "x");
+	for (auto name : {"g", "s", "m", "l", "u"}) {
+		member->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(name)));
+	}
+	member->types.push_back(geometry_alias);
+	member->types.push_back(LogicalType::STRUCT({{"a", LogicalType::INTEGER}, {"b", LogicalType::VARCHAR}}));
+	member->types.push_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::BIGINT));
+	member->types.push_back(LogicalType::LIST(LogicalType::DOUBLE));
+	member->types.push_back(LogicalType::UNKNOWN);
 	vector<unique_ptr<LanguageMacroFunction>> members;
-	members.push_back(ParameterMember("geomlang", "x", geometry_alias));
-	CreateMembers(con, "geometry_alias_fun", std::move(members));
+	members.push_back(std::move(member));
+	CreateMembers(con, "view_fun", std::move(members));
+	REQUIRE(received_rendering == "GEOMETRY(1)|BLOB|GEOMETRY\n"
+	                              "STRUCT(a INTEGER, b VARCHAR)|STRUCT||a:INTEGER|b:VARCHAR\n"
+	                              "MAP(VARCHAR, BIGINT)|MAP||key:VARCHAR|value:BIGINT\n"
+	                              "DOUBLE[]|LIST||:DOUBLE\n"
+	                              "UNKNOWN|UNKNOWN|\n"
+	                              "UNKNOWN|UNKNOWN|");
 
-	REQUIRE(received_parameter_type.id() == LogicalTypeId::BLOB);
-	REQUIRE(received_parameter_type.GetTypeInfo().alias == "GEOMETRY");
-	REQUIRE(received_parameter_type.GetTypeInfo().extension_info);
-	REQUIRE(received_parameter_type.GetTypeInfo().extension_info->modifiers[0].value == Value::INTEGER(1));
+	// the stored type is unchanged, metadata included
 	con.BeginTransaction();
-	auto &entry = Catalog::GetEntry(
-	    *con.context, CatalogType::MACRO_ENTRY,
-	    QualifiedName(Identifier("memory"), Identifier::DefaultSchema(), Identifier("geometry_alias_fun")));
+	auto &entry =
+	    Catalog::GetEntry(*con.context, CatalogType::MACRO_ENTRY,
+	                      QualifiedName(Identifier("memory"), Identifier::DefaultSchema(), Identifier("view_fun")));
 	auto &stored = entry.Cast<ScalarMacroCatalogEntry>().macros[0]->types[0];
-	REQUIRE(&stored.GetTypeInfo() == &received_parameter_type.GetTypeInfo());
+	REQUIRE(stored.id() == LogicalTypeId::BLOB);
+	REQUIRE(stored.GetAlias() == "GEOMETRY");
+	REQUIRE(stored.GetTypeInfo().extension_info->modifiers.size() == 1);
 	con.Rollback();
-	received_parameter_type = LogicalType::UNKNOWN;
-}
-
-static void AppendVariantChildModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(StructType::GetChildType(input.members[0].parameter_types[0], 3));
-}
-
-static void AppendMapEntryModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(ListType::GetChildType(input.members[0].parameter_types[0]));
-}
-
-TEST_CASE("A validator that changes internal nodes of VARIANT and MAP types fails the CREATE", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	// VARIANT keeps its children in a StructTypeInfo, and MAP's child is an internal entry STRUCT. SQL cannot attach
-	// extension metadata to these internal nodes
-	RegisterTestLanguage(*db.instance, "variantlang", AppendVariantChildModifier);
-	auto children = StructType::GetChildTypes(LogicalType::VARIANT());
-	children[3].second = ModifiedType(LogicalTypeId::BLOB, 1);
-	auto variant_type = LogicalType(LogicalTypeId::VARIANT, make_uniq<StructTypeInfo>(std::move(children)));
-	CreateMemberExpectingError(con, "variant_fun", ParameterMember("variantlang", "x", variant_type),
-	                           "changed the signature of member 1");
-
-	RegisterTestLanguage(*db.instance, "maplang", AppendMapEntryModifier);
-	auto entry = LogicalType::STRUCT({{"key", LogicalType::INTEGER}, {"value", LogicalType::INTEGER}})
-	                 .WithExtensionInfo(make_uniq<ExtensionTypeInfo>());
-	auto map_type = LogicalType(LogicalTypeId::MAP, make_uniq<ListTypeInfo>(entry));
-	CreateMemberExpectingError(con, "map_fun", ParameterMember("maplang", "x", map_type),
-	                           "changed the signature of member 1");
-}
-
-static void AppendLiteralConstantModifier(ScalarFunctionCreateValidateInput &input) {
-	auto &info = input.members[0].parameter_types[0].GetTypeInfo().Cast<IntegerLiteralTypeInfo>();
-	AppendModifier(info.constant_value.type());
-}
-
-static const ExtensionTypeInfo &MemberMetadata(ScalarFunctionCreateValidateInput &input) {
-	return *input.members[0].parameter_types[0].GetTypeInfo().extension_info;
-}
-
-static void AppendModifierValueModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(MemberMetadata(input).modifiers[0].value.type());
-}
-
-static void AppendPropertyValueModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(MemberMetadata(input).properties.at("nested").type());
-}
-
-static void AppendListChildModifier(ScalarFunctionCreateValidateInput &input) {
-	AppendModifier(ListValue::GetChildren(MemberMetadata(input).properties.at("list"))[0].type());
-}
-
-TEST_CASE("A validator that changes the types of values in type metadata fails the CREATE", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	// a Value copy shares its type's info: the constant of an INTEGER_LITERAL and the values of extension modifiers
-	// and properties are persisted with the signature. Only programmatic members carry such metadata
-	RegisterTestLanguage(*db.instance, "literallang", AppendLiteralConstantModifier);
-	auto literal_type =
-	    LogicalType::INTEGER_LITERAL(Value::INTEGER(7).WithType(ModifiedType(LogicalTypeId::INTEGER, 1)));
-	CreateMemberExpectingError(con, "literal_fun", ParameterMember("literallang", "x", literal_type),
-	                           "changed the signature of member 1");
-
-	auto metadata = make_uniq<ExtensionTypeInfo>();
-	auto list_child_type = ModifiedType(LogicalTypeId::BIGINT, 1);
-	metadata->modifiers.emplace_back(Value::INTEGER(3).WithType(ModifiedType(LogicalTypeId::INTEGER, 1)));
-	metadata->properties.emplace("nested", Value(ModifiedType(LogicalTypeId::VARCHAR, 1)));
-	// a child of a nested value is persisted under its declared child type, shared here
-	metadata->properties.emplace("list", Value::LIST(list_child_type, {Value::BIGINT(5).WithType(list_child_type)}));
-	auto outer_type = LogicalType(LogicalTypeId::INTEGER).WithExtensionInfo(std::move(metadata));
-	RegisterTestLanguage(*db.instance, "modvaluelang", AppendModifierValueModifier);
-	CreateMemberExpectingError(con, "modvalue_fun", ParameterMember("modvaluelang", "x", outer_type),
-	                           "changed the signature of member 1");
-	RegisterTestLanguage(*db.instance, "propvaluelang", AppendPropertyValueModifier);
-	CreateMemberExpectingError(con, "propvalue_fun", ParameterMember("propvaluelang", "x", outer_type),
-	                           "changed the signature of member 1");
-	RegisterTestLanguage(*db.instance, "listvaluelang", AppendListChildModifier);
-	CreateMemberExpectingError(con, "listvalue_fun", ParameterMember("listvaluelang", "x", outer_type),
-	                           "changed the signature of member 1");
-}
-
-static idx_t read_property_count;
-
-static void ReadMetadata(ScalarFunctionCreateValidateInput &input) {
-	read_property_count = MemberMetadata(input).properties.size();
-}
-
-TEST_CASE("A validator that only reads type metadata creates the function", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	RegisterTestLanguage(*db.instance, "readlang", ReadMetadata);
-	auto metadata = make_uniq<ExtensionTypeInfo>();
-	metadata->modifiers.emplace_back(Value::INTEGER(3).WithType(ModifiedType(LogicalTypeId::INTEGER, 1)));
-	metadata->properties.emplace("row", Value::STRUCT({{"a", Value::INTEGER(1)}}));
-	metadata->properties.emplace("list", Value::LIST(LogicalType::BIGINT, {Value::BIGINT(5)}));
-	metadata->properties.emplace(
-	    "map", Value::MAP(LogicalType::VARCHAR, LogicalType::INTEGER, {Value("k")}, {Value::INTEGER(1)}));
-	metadata->properties.emplace(
-	    "union", Value::UNION({{"i", LogicalType::INTEGER}, {"s", LogicalType::VARCHAR}}, 1, Value("s")));
-	metadata->properties.emplace("array", Value::ARRAY(LogicalType::INTEGER, {Value::INTEGER(1), Value::INTEGER(2)}));
-	auto variant = con.Query("SELECT {'x': [1, 2]}::VARIANT");
-	REQUIRE_NO_FAIL(*variant);
-	metadata->properties.emplace("variant", variant->Collection().GetValue(0, 0));
-	// a row relabeled to another row type is persisted as it is: no cast runs at CREATE
-	auto source_row = Value::STRUCT({{"a", Value::INTEGER(1)}, {"b", Value::INTEGER(2)}});
-	auto target_row = LogicalType::STRUCT({{"b", LogicalType::INTEGER}, {"a", LogicalType::INTEGER}});
-	metadata->properties.emplace("relabeled",
-	                             Value::LIST(source_row.type(), {source_row}).WithType(LogicalType::LIST(target_row)));
-	auto signature_type = LogicalType(LogicalTypeId::INTEGER).WithExtensionInfo(std::move(metadata));
-	vector<unique_ptr<LanguageMacroFunction>> members;
-	members.push_back(ParameterMember("readlang", "x", signature_type));
-	members.push_back(ParameterMember(
-	    "readlang", "y",
-	    LogicalType::INTEGER_LITERAL(Value::INTEGER(7).WithType(ModifiedType(LogicalTypeId::INTEGER, 1)))));
-	read_property_count = 0;
-	CreateMembers(con, "read_fun", std::move(members));
-	REQUIRE(read_property_count == 7);
+	received_rendering.clear();
 }
 
 static void NoDirectCall(DataChunk &args, ExpressionState &state, Vector &result) {

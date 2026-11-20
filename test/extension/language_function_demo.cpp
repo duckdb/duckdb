@@ -184,14 +184,9 @@ static void TestLangCreateValidate(ScalarFunctionCreateValidateInput &input) {
 			source = source.substr(8);
 			input.SetMemberSource(member_idx, source);
 		}
-		// publish per-member documentation: function metadata must survive member mutations
+		// publish per-member documentation: function metadata must survive member mutations. Core attaches the
+		// member's signature, an untyped parameter documented as a wildcard like built-in function docs
 		FunctionDescription description;
-		for (idx_t i = 0; i < member.parameter_names.size(); i++) {
-			description.parameter_names.push_back(member.parameter_names[i].GetIdentifierName());
-			// an untyped parameter is documented as a wildcard, like built-in function docs
-			auto &type = member.parameter_types[i];
-			description.parameter_types.push_back(type.id() == LogicalTypeId::UNKNOWN ? LogicalType::ANY : type);
-		}
 		// a per-source description, so tests distinguish stale metadata from replaced metadata
 		description.description = "testlang: " + source;
 		if (source == "describe") {
@@ -207,7 +202,7 @@ static void TestLangCreateValidate(ScalarFunctionCreateValidateInput &input) {
 			                          StringUtil::Join(member.parameter_defaults, ",") + "|" +
 			                          member.return_type.ToString() + "|" + input.statement_text;
 		}
-		input.AddDescription(std::move(description));
+		input.AddDescription(member_idx, std::move(description));
 	}
 }
 
