@@ -354,13 +354,33 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 static bool MinMaxUsesCollation(ClientContext &context, const LogicalType &input_type) {
 	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT, TIMETZ and VARIANT use
 	// explicit binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
-	const auto varchar_collation =
-	    input_type.id() == LogicalTypeId::VARCHAR &&
-	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
-	const auto nested_collation = StructType::IsStruct(input_type) || input_type.id() == LogicalTypeId::LIST ||
-	                              input_type.id() == LogicalTypeId::ARRAY;
-	return input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::TIME_TZ ||
-	       input_type.id() == LogicalTypeId::VARIANT || varchar_collation || nested_collation;
+	if (input_type.HasAlias()) {
+		return true;
+	}
+	switch (input_type.id()) {
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::VARIANT:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return !StringType::GetCollation(input_type).empty() ||
+		       !Settings::Get<DefaultCollationSetting>(context).empty();
+	case LogicalTypeId::TUPLE:
+	case LogicalTypeId::STRUCT: {
+		for (auto &child_type : StructType::GetChildTypes(input_type)) {
+			if (MinMaxUsesCollation(context, child_type.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::LIST:
+		return MinMaxUsesCollation(context, ListType::GetChildType(input_type));
+	case LogicalTypeId::ARRAY:
+		return MinMaxUsesCollation(context, ArrayType::GetChildType(input_type));
+	default:
+		return false;
+	}
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
