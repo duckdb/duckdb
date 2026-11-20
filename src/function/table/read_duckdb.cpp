@@ -157,7 +157,7 @@ struct DuckDBReadLocalState : LocalTableFunctionState {
 	DataChunk row_id_chunk;
 	//! The columns of the current file that are converted after the table scan
 	vector<DuckDBConvertedColumn> converted_columns;
-	//! For each scan column, whether a conversion produces or reads it
+	//! For each scan column, whether it is one of the converted columns
 	vector<bool> converted_position;
 	//! The filters on the converted columns, as the position of the scan column and the filter state
 	vector<pair<idx_t, unique_ptr<TableFilterState>>> converted_filters;
@@ -400,9 +400,7 @@ void DuckDBReader::InitializeConvertedColumns(ClientContext &context, DuckDBRead
 		converted.input = make_uniq<DataChunk>();
 		converted.input->InitializeEmpty(input_types);
 		lstate.converted_position.resize(scan_column_indexes.size(), false);
-		for (idx_t i = 0; i < input_types.size(); i++) {
-			lstate.converted_position[converted.position + i] = true;
-		}
+		lstate.converted_position[converted.position] = true;
 		lstate.converted_columns.push_back(std::move(converted));
 	}
 	if (lstate.converted_columns.empty() || !filters) {
