@@ -1,4 +1,5 @@
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -14,6 +15,11 @@ ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnDa
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {
+	if (Exception::UncaughtException()) {
+		// an exception is unwinding, and the segments written by this state may be freed once it is destroyed:
+		// drop the partial blocks that still reference them, before another task finalizes them while flushing
+		partial_block_manager.ClearBlocks();
+	}
 }
 
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
