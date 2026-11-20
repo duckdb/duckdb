@@ -134,26 +134,6 @@ constexpr hugeint_t HugeintNegate(hugeint_t n) {
 	return hugeint_t(static_cast<int64_t>(~static_cast<uint64_t>(n.upper) + (n.lower == 0)), 0 - n.lower);
 }
 
-constexpr int HugeintSign(hugeint_t n) {
-	// the sign is not decided by upper alone: upper == 0 with a non-zero lower is positive
-	return int(HugeintGreaterThan(n, hugeint_t(0))) - int(HugeintLessThan(n, hugeint_t(0)));
-}
-
-constexpr hugeint_t HugeintAbs(hugeint_t n) {
-	return n.upper < 0 ? HugeintNegate(n) : n;
-}
-
-constexpr hugeint_t HugeintAddOne(hugeint_t n) {
-	const uint64_t carry = (n.lower == UINT64_MAX) ? 1 : 0;
-	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) + carry), n.lower + 1);
-}
-
-constexpr hugeint_t HugeintSubtractOne(hugeint_t n) {
-	// lower wraps to UINT64_MAX, so a borrow is taken out of upper
-	const uint64_t borrow = (n.lower == 0) ? 1 : 0;
-	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) - borrow), n.lower - 1);
-}
-
 constexpr hugeint_t HugeintMultiplyUnchecked(hugeint_t lhs, hugeint_t rhs) {
 	// Unchecked multiplication uses the low 128 bits, including for negative operands.
 #if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
