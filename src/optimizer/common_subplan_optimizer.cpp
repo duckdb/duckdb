@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace duckdb {
 
@@ -2162,6 +2163,62 @@ private:
 		return signatures.back().get();
 	}
 
+	//! Whether two constants of different branches are the same value of the same type, not only equal: INTERVAL
+	//! '1 month' equals INTERVAL '30 days' and 0.0 equals -0.0, but a branch that returns one of them, or computes
+	//! with it, is not the branch with the other. Only a constant that is identical in all branches stays in the
+	//! merged plan, any other one comes from the list of the branches. The serialized form holds the type with its
+	//! modifiers and the value as it is stored
+	static bool IdenticalValues(const Value &left, const Value &right) {
+		if (left.type() != right.type() || left.IsNull() != right.IsNull()) {
+			return false;
+		}
+		MemoryStream left_stream;
+		MemoryStream right_stream;
+		BinarySerializer::Serialize(left, left_stream);
+		BinarySerializer::Serialize(right, right_stream);
+		return left_stream.GetPosition() == right_stream.GetPosition() &&
+		       memcmp(left_stream.GetData(), right_stream.GetData(), left_stream.GetPosition()) == 0;
+	}
+
+	//! Whether two expressions are equal and their constants identical
+	static bool IdenticalExpressions(const Expression &left, const Expression &right) {
+		if (!Expression::Equals(left, right)) {
+			return false;
+		}
+		vector<reference<const BoundConstantExpression>> left_constants;
+		vector<reference<const BoundConstantExpression>> right_constants;
+		ExpressionIterator::VisitExpression<BoundConstantExpression>(
+		    left, [&](const BoundConstantExpression &constant) { left_constants.push_back(constant); });
+		ExpressionIterator::VisitExpression<BoundConstantExpression>(
+		    right, [&](const BoundConstantExpression &constant) { right_constants.push_back(constant); });
+		if (left_constants.size() != right_constants.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < left_constants.size(); i++) {
+			if (!IdenticalValues(left_constants[i].get().GetValue(), right_constants[i].get().GetValue())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//! Whether two scans of the same columns have the same table filters, with identical constants
+	static bool IdenticalTableFilters(LogicalGet &left, LogicalGet &right) {
+		if (!left.table_filters.Equals(right.table_filters)) {
+			return false;
+		}
+		auto right_entry = right.table_filters.begin();
+		for (auto &entry : left.table_filters) {
+			auto &left_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
+			auto &right_filter = ExpressionFilter::GetExpressionFilter((*right_entry).Filter(), "UnionAggregateMerge");
+			if (!IdenticalExpressions(*left_filter.expr, *right_filter.expr)) {
+				return false;
+			}
+			++right_entry;
+		}
+		return true;
+	}
+
 	//! Whether the values of a type that are equal are the same value, so that grouping by a column of the type
 	//! separates what the comparisons with different constants separate
 	static bool IsKeyType(const LogicalType &type) {
@@ -2229,7 +2286,7 @@ private:
 				auto &right = branch.scans[i].get()->Cast<LogicalGet>();
 				if (left.GetColumnIds() != right.GetColumnIds()) {
 					valid = false;
-				} else if (!left.table_filters.Equals(right.table_filters)) {
+				} else if (!IdenticalTableFilters(left, right)) {
 					valid = !branch_varying.IsValid();
 					branch_varying = i;
 				}
@@ -2269,7 +2326,7 @@ private:
 				same = same && other != filters.equalities.end() && other->second.type() == entry.second.type();
 			}
 			for (idx_t i = 0; i < filters.others.size() && same; i++) {
-				same = Expression::Equals(*filters.others[i], *primary_filters.others[i]);
+				same = IdenticalExpressions(*filters.others[i], *primary_filters.others[i]);
 			}
 			if (!same) {
 				continue;
@@ -2315,7 +2372,7 @@ private:
 		vector<idx_t> result;
 		for (idx_t c = 0; c < primary.constants.size(); c++) {
 			for (auto &branch : merged) {
-				if (!Value::NotDistinctFrom(branch.get().constants[c].second, primary.constants[c].second)) {
+				if (!IdenticalValues(branch.get().constants[c].second, primary.constants[c].second)) {
 					result.push_back(c);
 					break;
 				}
