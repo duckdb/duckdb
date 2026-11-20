@@ -27,7 +27,14 @@ AND (
     FALSE
 );
 ----
-logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+logical_opt	<!REGEX>:.*(JOIN|single_col_table).*
+
+query II
+SELECT count(*), count(hd.col1)
+FROM big_table c
+LEFT OUTER JOIN single_col_table hd ON hd.col1=c.col1 AND FALSE;
+----
+100	0
 
 # RHS contains multiple tables
 statement ok

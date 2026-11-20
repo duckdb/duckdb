@@ -112,10 +112,11 @@ public:
 		return allocator.IsInitialized();
 	}
 	static data_ptr_t AllocateHuge(const BlockAllocator &allocator, idx_t size) {
-		return allocator.AllocateHugeData(size);
+		optional_idx home;
+		return allocator.AllocateHugeData(size, home);
 	}
 	static void FreeHuge(const BlockAllocator &allocator, data_ptr_t pointer, idx_t size) {
-		allocator.FreeHugeData(pointer, size);
+		allocator.FreeHugeData(pointer, size, optional_idx());
 	}
 
 private:
@@ -998,11 +999,16 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	constexpr idx_t SIZE = 512 * 1024;
 	HugeAllocation empty;
 	CHECK_FALSE(empty.IsSet());
+	CHECK_FALSE(empty.GetAllocationShard().IsValid());
 	CHECK(empty.GetSize() == 0);
 	empty.Reset();
 	{
 		auto first = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
 		auto second = second_manager.GetBufferAllocator().AllocateHuge(2 * SIZE);
+		const auto first_home = first.GetAllocationShard();
+		const auto second_home = second.GetAllocationShard();
+		REQUIRE(first_home.IsValid());
+		REQUIRE(second_home.IsValid());
 		CHECK(first_manager.GetUsedMemory() == first_memory + SIZE);
 		CHECK(second_manager.GetUsedMemory() == second_memory + 2 * SIZE);
 		first.get()[0] = 42;
@@ -1010,13 +1016,25 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 		HugeAllocation moved(std::move(first));
 		CHECK_FALSE(first.IsSet());
 		CHECK(first.GetSize() == 0);
+		CHECK_FALSE(first.GetAllocationShard().IsValid());
+		CHECK(moved.GetAllocationShard() == first_home);
 		second = std::move(moved);
 		CHECK(second.GetSize() == SIZE);
+		CHECK(second.GetAllocationShard() == first_home);
+		CHECK(moved.GetAllocationShard() == second_home);
+		// Swap distinct valid/invalid descriptors as well as two live allocations.
+		empty = std::move(second);
+		CHECK(empty.GetAllocationShard() == first_home);
+		CHECK_FALSE(second.GetAllocationShard().IsValid());
+		second = std::move(empty);
+		CHECK(second.GetAllocationShard() == first_home);
+		CHECK_FALSE(empty.GetAllocationShard().IsValid());
 		CHECK(second.get()[0] == 42);
 		CHECK(second.get()[SIZE - 1] == 84);
 		second.Reset();
 		CHECK_FALSE(second.IsSet());
 		CHECK(second.GetSize() == 0);
+		CHECK_FALSE(second.GetAllocationShard().IsValid());
 		second.Reset();
 		CHECK(first_manager.GetUsedMemory() == first_memory);
 		// Move assignment swaps ownership; moved still owns the second manager's allocation.
@@ -1024,11 +1042,47 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	}
 	CHECK(second_manager.GetUsedMemory() == second_memory);
 #ifndef DUCKDB_NO_THREADS
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	auto cpus = affinity.CPUs();
+	const bool pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#else
+	const bool pinned = false;
+#endif
 	auto cross_thread = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
-	std::thread receiver([owned = std::move(cross_thread)]() mutable { owned.Reset(); });
+	const auto home = cross_thread.GetAllocationShard();
+	const auto pointer = cross_thread.get();
+	optional_idx other_cpu;
+#if defined(__linux__)
+	const auto shard_count = BlockAllocator::Get(*first_db.instance).GetFallbackShardCount();
+	for (auto cpu : cpus) {
+		if (home.IsValid() && (idx_t(cpu) / 4) % shard_count != home.GetIndex()) {
+			other_cpu = idx_t(cpu);
+			break;
+		}
+	}
+#endif
+	bool receiver_pinned = false;
+	std::thread receiver([&, owned = std::move(cross_thread)]() mutable {
+#if defined(__linux__)
+		AllocationCacheTestAffinity receiver_affinity;
+		if (other_cpu.IsValid()) {
+			receiver_pinned = receiver_affinity.Pin(NumericCast<int>(other_cpu.GetIndex()));
+		}
+#endif
+		owned.Reset();
+	});
 	receiver.join();
 	CHECK_FALSE(cross_thread.IsSet());
 	CHECK(first_manager.GetUsedMemory() == first_memory);
+	auto reused = client_manager.GetBufferAllocator().AllocateHuge(SIZE);
+	if (pinned) {
+		if (other_cpu.IsValid()) {
+			CHECK(receiver_pinned);
+		}
+		CHECK(reused.get() == pointer);
+		CHECK(reused.GetAllocationShard() == home);
+	}
 #endif
 }
 
@@ -1104,6 +1158,8 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 		control.fail_allocate = false;
 		auto owned = allocator.AllocateHuge(SIZE);
 		auto pointer = owned.get();
+		const auto home = owned.GetAllocationShard();
+		REQUIRE(home.IsValid());
 		pointer[0] = 42;
 		pointer[SIZE - 1] = 84;
 		control.fail_allocate = true;
@@ -1114,6 +1170,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 			REQUIRE(live_bytes.load() == SIZE);
 			REQUIRE(owned.GetSize() == SIZE);
 			REQUIRE(owned.get() == pointer);
+			REQUIRE(owned.GetAllocationShard() == home);
 			REQUIRE(pointer[0] == 42);
 			REQUIRE(pointer[SIZE - 1] == 84);
 		}
@@ -1124,6 +1181,7 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 		REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
 		REQUIRE(live_bytes.load() == SIZE);
 		REQUIRE(owned.get() == pointer);
+		REQUIRE(owned.GetAllocationShard() == home);
 		REQUIRE(pointer[0] == 42);
 		REQUIRE_NO_FAIL(connection.Query("RESET memory_limit"));
 		owned = allocator.AllocateHuge(2 * SIZE);
@@ -1190,12 +1248,18 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	auto huge = buffer_allocator.AllocateHuge(CACHE_SIZE);
 	if (pinned) {
 		CHECK(huge.get() == cached);
+		CHECK_FALSE(huge.GetAllocationShard().IsValid());
 		CHECK(huge.get()[0] == 42);
 	}
 	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + CACHE_SIZE;
 	CHECK(allocator.GetCachedMemory() == retained);
 	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
-	huge.Reset();
+	HugeAllocation moved_unknown(std::move(huge));
+	CHECK_FALSE(huge.GetAllocationShard().IsValid());
+	if (moved_unknown.get() == cached) {
+		CHECK_FALSE(moved_unknown.GetAllocationShard().IsValid());
+	}
+	moved_unknown.Reset();
 	CHECK(allocator.GetCachedMemory() == retained + CACHE_SIZE);
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
 	auto ordinary = buffer_allocator.AllocateData(CACHE_SIZE);
@@ -1790,7 +1854,7 @@ private:
 } // namespace
 
 TEST_CASE("Allocation cache idle decay uses bounded tasks and preserves active size classes",
-          "[api][allocation_cache]") {
+          "[api][allocation_cache][.]") {
 	constexpr idx_t SIZE = 512 * 1024;
 	constexpr idx_t COUNT = 40;
 	atomic<idx_t> live_bytes {0};
@@ -2016,7 +2080,7 @@ TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and
 	CHECK_NOTHROW(db.reset());
 }
 
-TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator][.]") {
 	DBConfig config;
 	Settings::Set<ThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(2));
 	Settings::Set<AsyncThreadsSetting>(config, SetScope::GLOBAL, Value::BIGINT(0));
@@ -2221,7 +2285,8 @@ TEST_CASE("BlockAllocator destruction is safe before thread exit and during allo
 }
 #endif
 
-TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes", "[api][allocation_cache]") {
+TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes",
+          "[api][allocation_cache][.]") {
 	if (sizeof(void *) != 8) {
 		return;
 	}
@@ -2332,7 +2397,7 @@ TEST_CASE("BlockAllocator prefers local touched backing after mixed frees",
 	CHECK(allocator.GetCachedMemory() == 0);
 }
 
-TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality]") {
+TEST_CASE("BlockAllocator peer reuse expires old allocation classes", "[api][block_allocator][allocator_locality][.]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t POOL_BLOCKS = 257;
 	constexpr idx_t OLD_SIZE = 512 * 1024;

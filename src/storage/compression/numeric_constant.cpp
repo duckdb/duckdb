@@ -11,6 +11,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
@@ -173,10 +174,9 @@ unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, Colum
 //===--------------------------------------------------------------------===//
 // Scan Partial
 //===--------------------------------------------------------------------===//
-void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+void ConstantFillFunctionValidity(ColumnSegment &segment, ValidityMask &mask, idx_t start_idx, idx_t count) {
 	const auto &stats = segment.GetStats();
 	if (stats.CanHaveNull()) {
-		auto &mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
 		}
@@ -197,8 +197,8 @@ void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_id
 	}
 }
 
-void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                                 idx_t result_offset) {
+void ConstantScanValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, ValidityMask &result,
+                          idx_t result_offset, ScanVectorType) {
 	ConstantFillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
@@ -211,19 +211,6 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	const auto &stats = segment.GetStats();
-	if (stats.CanHaveNull()) {
-		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
-		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			ConstantVector::SetNull(result, count_t(scan_count));
-		} else {
-			result.Flatten();
-			ConstantFillFunctionValidity(segment, result, 0, scan_count);
-		}
-	}
-}
-
 template <class T>
 void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	const auto &nstats = segment.GetStats();
@@ -237,14 +224,9 @@ void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t 
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                            const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
-                            ScanVectorType scan_type) {
-	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
-		ConstantScanFunctionValidity(segment, state, sel_count, result);
-		return;
-	}
-	ConstantScanPartialValidity(segment, state, sel_count, result, result_offset);
+void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, ValidityMask &result,
+                            const SelectionVector &sel, idx_t sel_count, idx_t result_offset) {
+	ConstantFillFunctionValidity(segment, result, result_offset, sel_count);
 }
 
 template <class T>
@@ -297,7 +279,7 @@ void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_
 			return;
 		}
 	}
-	ConstantScanFunctionValidity(segment, state, vector_count, result);
+	ValidityColumnData::ScanValidity(segment, state, vector_count, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -306,10 +288,12 @@ void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_
 CompressionFunction ConstantGetFunctionValidity(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
 	CompressionFunction result(CompressionType::COMPRESSION_CONSTANT, data_type, nullptr, nullptr, nullptr, nullptr,
-	                           nullptr, nullptr, ConstantInitScan, ConstantScanFunctionValidity,
-	                           ConstantScanPartialValidity, UncompressedFunctions::EmptySkip, nullptr, nullptr, nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, ConstantSelectValidity,
-	                           ConstantFilterValidity);
+	                           nullptr, nullptr, ConstantInitScan, ValidityColumnData::ScanValidity,
+	                           ValidityColumnData::ScanPartialValidity, UncompressedFunctions::EmptySkip, nullptr,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           ValidityColumnData::SelectValidity, ConstantFilterValidity);
+	result.scan_validity = ConstantScanValidity;
+	result.select_validity = ConstantSelectValidity;
 	result.supports_null_block = true;
 	return result;
 }

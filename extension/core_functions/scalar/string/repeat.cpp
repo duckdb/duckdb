@@ -9,6 +9,28 @@
 
 namespace duckdb {
 
+// Doubles the repeated prefix until it reaches a cache-resident block, then copies that block forward.
+static void RepeatInto(char *result, const char *input, idx_t input_size, idx_t total_size) {
+	static constexpr idx_t REPEAT_BLOCK_SIZE = 16384;
+	if (input_size == 1) {
+		memset(result, input[0], total_size);
+		return;
+	}
+	memcpy(result, input, input_size);
+	idx_t filled = input_size;
+	while (filled < total_size && filled < REPEAT_BLOCK_SIZE) {
+		const auto next = MinValue<idx_t>(filled, total_size - filled);
+		memcpy(result + filled, result, next);
+		filled += next;
+	}
+	const auto block_size = filled;
+	while (filled < total_size) {
+		const auto next = MinValue<idx_t>(block_size, total_size - filled);
+		memcpy(result + filled, result, next);
+		filled += next;
+	}
+}
+
 static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	const auto &str_vector = args.data[0];
 	const auto &cnt_vector = args.data[1];
@@ -23,8 +45,8 @@ static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		    if (TryMultiplyOperator::Operation(size_str, copy_count, copy_size)) {
 			    auto result_str = StringVector::EmptyString(result, copy_size);
 			    auto result_data = result_str.GetDataWriteable();
-			    for (idx_t i = 0; i < copy_count; i++) {
-				    memcpy(result_data + i * size_str, input_str, size_str);
+			    if (copy_size > 0) {
+				    RepeatInto(result_data, input_str, size_str, copy_size);
 			    }
 			    result_str.Finalize();
 			    return result_str;

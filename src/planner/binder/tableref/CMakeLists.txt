@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   bind_basetableref.cpp
   bind_bound_table_ref.cpp
-  bind_delimgetref.cpp
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
   bind_column_data_ref.cpp

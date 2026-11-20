@@ -1628,6 +1628,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_context_create_secret)
 	(duckdb_v2_context_handle ctx, duckdb_v2_secret_handle secret, DUCKDB_V2_SECRET_ON_CONFLICT on_conflict,
 	 duckdb_v2_secret_handle *created, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_context_get_object_cache)
+	(duckdb_v2_context_handle context, duckdb_v2_object_cache_handle *cache, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_secret_by_name)
 	(duckdb_v2_context_handle ctx, const char *name, idx_t name_length, duckdb_v2_secret_handle *secret,
 	 duckdb_v2_error_info_handle *err);
@@ -1636,6 +1638,24 @@ typedef struct {
 	 duckdb_v2_secret_handle *secret, int64_t *score, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_secret_function)
 	(duckdb_v2_extension_handle extension, duckdb_v2_secret_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_get_object_cache)
+	(duckdb_v2_instance_handle instance, duckdb_v2_object_cache_handle *cache, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_delete)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_object_cache_entry_destroy)(duckdb_v2_object_cache_entry_handle *entry);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_entry_get_data)
+	(duckdb_v2_object_cache_entry_handle entry, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_get)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_object_cache_entry_handle *entry, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_get_or_create)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_object_cache_create_callback_fn create, void *create_user_data,
+	 duckdb_v2_object_cache_entry_handle *entry, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_put)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_opaque *data, idx_t size_bytes, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_add_redacted_key)
 	(duckdb_v2_secret_handle secret, const char *key, idx_t key_length, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_secret_add_scope)
@@ -3787,6 +3807,9 @@ typedef struct {
 #define duckdb_v2_context_create_secret duckdb_ext_api.duckdb_v2_context_create_secret
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_context_get_object_cache duckdb_ext_api.duckdb_v2_context_get_object_cache
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_context_get_secret_by_name duckdb_ext_api.duckdb_v2_context_get_secret_by_name
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -3794,6 +3817,27 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_extension_register_secret_function duckdb_ext_api.duckdb_v2_extension_register_secret_function
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_instance_get_object_cache duckdb_ext_api.duckdb_v2_instance_get_object_cache
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_delete duckdb_ext_api.duckdb_v2_object_cache_delete
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_entry_destroy duckdb_ext_api.duckdb_v2_object_cache_entry_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_entry_get_data duckdb_ext_api.duckdb_v2_object_cache_entry_get_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_get duckdb_ext_api.duckdb_v2_object_cache_get
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_get_or_create duckdb_ext_api.duckdb_v2_object_cache_get_or_create
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_object_cache_put duckdb_ext_api.duckdb_v2_object_cache_put
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_secret_add_redacted_key duckdb_ext_api.duckdb_v2_secret_add_redacted_key

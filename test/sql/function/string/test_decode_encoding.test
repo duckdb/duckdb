@@ -1,0 +1,77 @@
+# name: test/sql/function/string/test_decode_encoding.test
+# description: Test the encoding scalar functions
+# group: [string]
+
+query I
+SELECT system.encodings."latin-1"('caf\xe9'::BLOB)
+----
+café
+
+query I
+SELECT system.encodings."utf-16"('a\x00\xe9\x00\x3d\xd8\x00\xde'::BLOB)
+----
+aé😀
+
+query I
+SELECT system.encodings."utf-16"(NULL::BLOB)
+----
+NULL
+
+query I
+SELECT SYSTEM.ENCODINGS."LATIN-1"(''::BLOB)
+----
+(empty)
+
+statement error
+SELECT system.encodings."latin-1"('\x85'::BLOB)
+----
+File is not latin-1 encoded
+
+statement error
+SELECT system.encodings."utf-16"('a'::BLOB)
+----
+Input is not valid UTF-16
+
+# streaming overload: an incomplete trailing character is not consumed
+query I
+SELECT system.encodings."utf-16"('a\x00\xe9'::BLOB, false)
+----
+{'decoded': a, 'consumed': 2}
+
+query I
+SELECT system.encodings."utf-16"('a\x00\x3d\xd8'::BLOB, false)
+----
+{'decoded': a, 'consumed': 2}
+
+statement error
+SELECT system.encodings."utf-16"('a\x00\xe9'::BLOB, true)
+----
+Input is not valid UTF-16
+
+# the CSV reader finds encodings through the catalog
+statement error
+SELECT * FROM read_csv('data/csv/test/date.csv', encoding='no-such-encoding')
+----
+The CSV Reader does not support the encoding
+
+# an unknown encoding named like a function of another extension (inet) does not autoload that extension
+statement error
+SELECT * FROM read_csv('data/csv/test/date.csv', encoding='broadcast')
+----
+The CSV Reader does not support the encoding
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'inet' AND loaded
+----
+0
+
+# encodings live in their own schema, not in the search path
+statement error
+SELECT "latin-1"('a'::BLOB)
+----
+Catalog Error
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE schema_name = 'encodings' AND function_name = 'utf-16'
+----
+2

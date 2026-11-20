@@ -55,7 +55,9 @@ ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 		transaction_manager.ResetActiveCheckpoint();
 	}
 	if (checkpoint_transaction) {
-		transaction_manager.RollbackTransaction(*checkpoint_transaction);
+		// only a checkpoint started by a connection has a checkpoint transaction
+		D_ASSERT(checkpoint_context);
+		transaction_manager.RollbackTransaction(*checkpoint_context, *checkpoint_transaction);
 		checkpoint_transaction = nullptr;
 	}
 	if (checkpoint_context) {

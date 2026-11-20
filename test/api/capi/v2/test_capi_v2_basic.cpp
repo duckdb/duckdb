@@ -1,4 +1,5 @@
 #include "test_capi_v2.hpp"
+#include "test_helpers.hpp"
 
 #include <thread>
 
@@ -294,13 +295,13 @@ TEST_CASE("V2: several databases on one handle, with an explicit default", "[cap
 TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][db]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_environment_create(&env, nullptr);
-	auto fs = duckdb::FileSystem::CreateLocal();
+	auto &fs = duckdb::TestLocalFileSystem();
 	auto dir_a = duckdb::TestCreatePath("v2_attach_opts_a");
 	auto dir_b = duckdb::TestCreatePath("v2_attach_opts_b");
 	auto dir_c = duckdb::TestCreatePath("v2_attach_opts_c");
 	for (auto &dir : {dir_a, dir_b, dir_c}) {
-		if (!fs->DirectoryExists(dir)) {
-			fs->CreateDirectory(dir);
+		if (!fs.DirectoryExists(dir)) {
+			fs.CreateDirectory(dir);
 		}
 	}
 	// Three files with the same base name.

@@ -1,0 +1,224 @@
+diff --git a/src/include/storage/quack_transaction.hpp b/src/include/storage/quack_transaction.hpp
+index b78bfd8..59dc8f4 100644
+--- a/src/include/storage/quack_transaction.hpp
++++ b/src/include/storage/quack_transaction.hpp
+@@ -20,20 +20,20 @@ enum class QuackTransactionState { TRANSACTION_NOT_YET_STARTED, TRANSACTION_STAR
+ 
+ class QuackTransaction : public Transaction {
+ public:
+-	QuackTransaction(QuackCatalog &quack_catalog_p, TransactionManager &manager_p, ClientContext &context_p);
++	QuackTransaction(QuackCatalog &quack_catalog_p, TransactionManager &manager_p, Context &context_p);
+ 	~QuackTransaction() override;
+ 
+ 	//! Lazily start a transaction - this won't actually do anything until the first query is fired
+ 	void Start();
+ 	//! Forcibly start a transaction - ensure we actually start a transaction server-side
+-	void ForceStart();
+-	void Commit();
+-	void Rollback();
++	void ForceStart(ClientContext &context);
++	void Commit(ClientContext &context);
++	void Rollback(ClientContext &context);
+ 
+ 	static QuackTransaction &Get(ClientContext &context, Catalog &catalog);
+ 	static QuackTransaction &Get(CatalogTransaction transaction);
+ 
+-	unique_ptr<ColumnDataCollection> Query(const string &query);
++	unique_ptr<ColumnDataCollection> Query(ClientContext &context, const string &query);
+ 
+ 	idx_t StartVersion() const {
+ 		return start_version;
+diff --git a/src/include/storage/quack_transaction_manager.hpp b/src/include/storage/quack_transaction_manager.hpp
+index 164c63e..3a292f1 100644
+--- a/src/include/storage/quack_transaction_manager.hpp
++++ b/src/include/storage/quack_transaction_manager.hpp
+@@ -19,9 +19,9 @@ class QuackTransactionManager : public TransactionManager {
+ public:
+ 	QuackTransactionManager(AttachedDatabase &db_p, QuackCatalog &sqlite_catalog);
+ 
+-	Transaction &StartTransaction(ClientContext &context) override;
++	Transaction &StartTransaction(Context &context, MetaTransaction &meta_transaction) override;
+ 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+-	void RollbackTransaction(Transaction &transaction) override;
++	void RollbackTransaction(ClientContext &context, Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+diff --git a/src/quack_scan.cpp b/src/quack_scan.cpp
+index fd89af7..4013a7b 100644
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -117,7 +117,7 @@ static unique_ptr<FunctionData> QuackScanBindCatalogName(ClientContext &context,
+ 	if (use_transaction) {
+ 		// start a transaction if "use_transaction" is specified
+ 		auto &transaction = QuackTransaction::Get(context, catalog);
+-		transaction.ForceStart();
++		transaction.ForceStart(context);
+ 	}
+ 
+ 	// TODO some of this stuff below is duplicated af
+diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
+index 7ecd2ff..375174c 100644
+--- a/src/storage/quack_catalog.cpp
++++ b/src/storage/quack_catalog.cpp
+@@ -250,7 +250,7 @@ optional_ptr<CatalogEntry> QuackCatalog::CreateSchema(CatalogTransaction transac
+ 	auto remote_info = unique_ptr_cast<CreateInfo, CreateSchemaInfo>(info.Copy());
+ 	remote_info->StripCatalogQualification();
+ 	auto &quack_transaction = QuackTransaction::Get(transaction);
+-	quack_transaction.Query(remote_info->ToString());
++	quack_transaction.Query(transaction.GetContext(), remote_info->ToString());
+ 	Invalidate();
+ 
+ 	auto existing = target_set.get().GetEntry(info.SchemaName().GetIdentifierName());
+@@ -348,7 +348,7 @@ void QuackCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 	auto drop_info = info.Copy();
+ 	drop_info->SetQualifiedName(remote_name);
+ 	auto &transaction = QuackTransaction::Get(context, *this);
+-	transaction.Query(drop_info->ToString());
++	transaction.Query(context, drop_info->ToString());
+ 	Invalidate();
+ }
+ 
+diff --git a/src/storage/quack_insert.cpp b/src/storage/quack_insert.cpp
+index 55409a6..2335315 100644
+--- a/src/storage/quack_insert.cpp
++++ b/src/storage/quack_insert.cpp
+@@ -76,7 +76,7 @@ unique_ptr<GlobalSinkState> QuackInsert::GetGlobalSinkState(ClientContext &conte
+ 	    SQLString(stream_id), StructPrototype(types), order_mode != AppendOrderMode::UNORDERED ? "true" : "false");
+ 
+ 	if (!context.transaction.IsAutoCommit()) {
+-		QuackTransaction::Get(context, quack_catalog).ForceStart();
++		QuackTransaction::Get(context, quack_catalog).ForceStart(context);
+ 	}
+ 
+ 	// inline_rows = 0, because the statement waits for our batches and has no row to answer with. The
+diff --git a/src/storage/quack_schema.cpp b/src/storage/quack_schema.cpp
+index 39860a6..fed03d7 100644
+--- a/src/storage/quack_schema.cpp
++++ b/src/storage/quack_schema.cpp
+@@ -186,7 +186,7 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateTable(CatalogTransacti
+ 	create_table_info->SetQualifiedName(GetRemoteName(create_table_info->GetQualifiedName().Name()));
+ 
+ 	auto &quack_transaction = QuackTransaction::Get(transaction);
+-	quack_transaction.Query(create_table_info->ToString());
++	quack_transaction.Query(transaction.GetContext(), create_table_info->ToString());
+ 	ParentCatalog().Cast<QuackCatalog>().Invalidate();
+ 	auto existing = tables->GetEntry(create_table_info->GetQualifiedName().Name().GetIdentifierName());
+ 	if (existing && info.Base().on_conflict != OnCreateConflict::REPLACE_ON_CONFLICT) {
+@@ -203,7 +203,7 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateView(CatalogTransactio
+ 
+ 	// create the view verbatim in the serer
+ 	auto &quack_transaction = QuackTransaction::Get(transaction);
+-	quack_transaction.Query(create_view_info->ToString());
++	quack_transaction.Query(transaction.GetContext(), create_view_info->ToString());
+ 	ParentCatalog().Cast<QuackCatalog>().Invalidate();
+ 
+ 	// locally, override the query with a remote procedure call to ensure the view is evaluated remotely
+@@ -254,7 +254,7 @@ void QuackSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo &info_p
+ 		throw NotImplementedException("Drop not supported yet for this entry");
+ 	}
+ 	auto &transaction = QuackTransaction::Get(context, ParentCatalog());
+-	transaction.Query(drop_info->ToString());
++	transaction.Query(context, drop_info->ToString());
+ 	ParentCatalog().Cast<QuackCatalog>().Invalidate();
+ }
+ void QuackSchemaCatalogEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+diff --git a/src/storage/quack_transaction.cpp b/src/storage/quack_transaction.cpp
+index d4caff3..d80f186 100644
+--- a/src/storage/quack_transaction.cpp
++++ b/src/storage/quack_transaction.cpp
+@@ -6,8 +6,7 @@
+ 
+ namespace duckdb {
+ 
+-QuackTransaction::QuackTransaction(QuackCatalog &quack_catalog_p, TransactionManager &manager_p,
+-                                   ClientContext &context_p)
++QuackTransaction::QuackTransaction(QuackCatalog &quack_catalog_p, TransactionManager &manager_p, Context &context_p)
+     : Transaction(manager_p, context_p), quack_catalog(quack_catalog_p),
+       transaction_state(QuackTransactionState::TRANSACTION_NOT_YET_STARTED),
+       start_version(quack_catalog_p.InvalidatedVersion()) {
+@@ -20,24 +19,24 @@ void QuackTransaction::Start() {
+ 	transaction_state = QuackTransactionState::TRANSACTION_NOT_YET_STARTED;
+ }
+ 
+-void QuackTransaction::ForceStart() {
++void QuackTransaction::ForceStart(ClientContext &context) {
+ 	if (transaction_state == QuackTransactionState::TRANSACTION_NOT_YET_STARTED) {
+ 		transaction_state = QuackTransactionState::TRANSACTION_STARTED;
+-		Query("BEGIN TRANSACTION");
++		Query(context, "BEGIN TRANSACTION");
+ 	}
+ }
+ 
+-void QuackTransaction::Commit() {
++void QuackTransaction::Commit(ClientContext &context) {
+ 	if (transaction_state == QuackTransactionState::TRANSACTION_STARTED) {
+ 		transaction_state = QuackTransactionState::TRANSACTION_FINISHED;
+-		Query("COMMIT");
++		Query(context, "COMMIT");
+ 	}
+ }
+ 
+-void QuackTransaction::Rollback() {
++void QuackTransaction::Rollback(ClientContext &context) {
+ 	if (transaction_state == QuackTransactionState::TRANSACTION_STARTED) {
+ 		transaction_state = QuackTransactionState::TRANSACTION_FINISHED;
+-		Query("ROLLBACK");
++		Query(context, "ROLLBACK");
+ 	}
+ }
+ 
+@@ -65,14 +64,9 @@ QuackTransaction &QuackTransaction::Get(CatalogTransaction transaction) {
+ 	return transaction.transaction->Cast<QuackTransaction>();
+ }
+ 
+-unique_ptr<ColumnDataCollection> QuackTransaction::Query(const string &query) {
+-	ForceStart();
+-	auto context_ref = context.lock();
+-	if (!context_ref) {
+-		// context has been destroyed - silently ignore the query
+-		return nullptr;
+-	}
+-	return quack_catalog.ExecuteCommandInternal(*context_ref, query);
++unique_ptr<ColumnDataCollection> QuackTransaction::Query(ClientContext &context, const string &query) {
++	ForceStart(context);
++	return quack_catalog.ExecuteCommandInternal(context, query);
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/quack_transaction_manager.cpp b/src/storage/quack_transaction_manager.cpp
+index a71374b..5a5ecac 100644
+--- a/src/storage/quack_transaction_manager.cpp
++++ b/src/storage/quack_transaction_manager.cpp
+@@ -9,7 +9,7 @@ QuackTransactionManager::QuackTransactionManager(AttachedDatabase &db_p, QuackCa
+     : TransactionManager(db_p), quack_catalog(quack_catalog_p) {
+ }
+ 
+-Transaction &QuackTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &QuackTransactionManager::StartTransaction(Context &context, MetaTransaction &) {
+ 	auto transaction = make_uniq<QuackTransaction>(quack_catalog, *this, context);
+ 	transaction->Start();
+ 	auto &result = *transaction;
+@@ -21,7 +21,7 @@ ErrorData QuackTransactionManager::CommitTransaction(ClientContext &context, Tra
+ 	auto &quack_transaction = transaction.Cast<QuackTransaction>();
+ 	ErrorData error;
+ 	try {
+-		quack_transaction.Commit();
++		quack_transaction.Commit(context);
+ 	} catch (const std::exception &ex) {
+ 		error = ErrorData(ex);
+ 	} catch (...) {
+@@ -34,11 +34,11 @@ ErrorData QuackTransactionManager::CommitTransaction(ClientContext &context, Tra
+ 	return error;
+ }
+ 
+-void QuackTransactionManager::RollbackTransaction(Transaction &transaction) {
++void QuackTransactionManager::RollbackTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &quack_transaction = transaction.Cast<QuackTransaction>();
+ 	std::exception_ptr failure;
+ 	try {
+-		quack_transaction.Rollback();
++		quack_transaction.Rollback(context);
+ 	} catch (...) {
+ 		failure = std::current_exception();
+ 	}

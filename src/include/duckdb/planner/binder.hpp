@@ -23,7 +23,6 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_statement.hpp"
@@ -538,7 +537,6 @@ private:
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
-	BoundStatement Bind(RelationStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
@@ -645,7 +643,6 @@ private:
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
-	BoundStatement Bind(DelimGetRef &ref);
 	BoundStatement Bind(ExpressionListRef &ref);
 	BoundStatement Bind(ColumnDataRef &ref);
 	BoundStatement Bind(PivotRef &expr);
