@@ -1,0 +1,22 @@
+# name: test/sql/function/printf/test_printf_modX_smaller_than_0point1.test
+# group: [printf]
+
+query IIIIIIII
+SELECT
+    printf('%#.0f', CAST(0.0 AS DOUBLE))     AS zero,
+    printf('%#.0f', CAST(0.1 AS DOUBLE))     AS tenth,
+    printf('%#.0f', CAST(0.0999 AS DOUBLE))  AS just_below_tenth,
+    printf('%#.0f', CAST(0.05 AS DOUBLE))    AS twentieth,
+    printf('%#.0f', CAST(1e-10 AS DOUBLE))   AS tiny,
+    printf('%#.0f', CAST(-0.05 AS DOUBLE))   AS neg_twentieth,
+    printf('%#.0f', CAST(0.05 AS FLOAT))     AS float_twentieth,
+    format('{:#.0f}', CAST(0.05 AS DOUBLE))  AS fmt_style;
+----
+0.
+0.
+0.
+0.
+0.
+-0.
+0.
+0.
