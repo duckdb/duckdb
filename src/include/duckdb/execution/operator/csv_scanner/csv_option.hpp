@@ -20,6 +20,40 @@ enum class NewLineIdentifier : uint8_t {
 
 };
 
+//! Which characters the escape character can escape, following strict_mode when not set
+enum class CSVEscapeMode : uint8_t {
+	//! The escape escapes any character after it, in and outside quoted values, the default when not strict
+	ALL = 0,
+	//! The escape only escapes the quote and escape characters and is inert anywhere else, as in opencsv
+	QUOTE_AND_ESCAPE = 1,
+	//! The escape only escapes within quoted values, the default of strict parsing
+	QUOTED_ONLY = 2
+};
+
+//! What quotes mean at record boundaries
+enum class CSVQuoteMode : uint8_t {
+	//! A quoted value continues across line breaks
+	STANDARD = 0,
+	//! A line break ends the record even inside quotes, as line readers such as OpenCSVSerde do
+	LINES = 1
+};
+
+//! What a quote in the middle of a field means
+enum class CSVEmbeddedQuote : uint8_t {
+	//! A plain data byte
+	DATA = 0,
+	//! The quote toggles the quote state and may stay as a literal, following opencsv's embedded quote rule
+	TOGGLE = 1
+};
+
+//! A named CSV dialect, a preset over the internal parsing options
+enum class CSVDialect : uint8_t {
+	//! DuckDB's own CSV reading, governed by the individual options
+	STANDARD = 0,
+	//! The CSV reading of Hive and Athena's OpenCSVSerde
+	OPENCSV = 1
+};
+
 class Serializer;
 class Deserializer;
 
@@ -143,6 +177,52 @@ private:
 			return "Single-Line File";
 		default:
 			throw InternalException("Invalid Newline Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVEscapeMode &val) const {
+		switch (val) {
+		case CSVEscapeMode::ALL:
+			return "all";
+		case CSVEscapeMode::QUOTE_AND_ESCAPE:
+			return "quote_and_escape";
+		case CSVEscapeMode::QUOTED_ONLY:
+			return "quoted_only";
+		default:
+			throw InternalException("Invalid CSV Escape Mode Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVQuoteMode &val) const {
+		switch (val) {
+		case CSVQuoteMode::STANDARD:
+			return "standard";
+		case CSVQuoteMode::LINES:
+			return "lines";
+		default:
+			throw InternalException("Invalid CSV Quote Mode Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVEmbeddedQuote &val) const {
+		switch (val) {
+		case CSVEmbeddedQuote::DATA:
+			return "data";
+		case CSVEmbeddedQuote::TOGGLE:
+			return "toggle";
+		default:
+			throw InternalException("Invalid CSV Embedded Quote Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const CSVDialect &val) const {
+		switch (val) {
+		case CSVDialect::STANDARD:
+			return "standard";
+		case CSVDialect::OPENCSV:
+			return "opencsv";
+		default:
+			throw InternalException("Invalid CSV Dialect Detected.");
 		}
 	}
 

@@ -1,0 +1,177 @@
+# name: test/sql/copy/csv/test_csv_rule_options.test
+# description: The individual parsing rule options behind the CSV dialects
+# group: [csv]
+
+statement ok
+COPY (SELECT * FROM (VALUES ('1,a\,7'), ('2,a\x,8'), ('3,c\')) t(line)) TO '{TEST_DIR}/rule_escape.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+# escape_mode follows strict_mode when not set, escaping everything when strict is off
+query TTT
+SELECT a, replace(b, chr(10), '<nl>'), c FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, strict_mode=false, parallel=false) ORDER BY a;
+----
+1	a,7	NULL
+2	ax	8
+3	c<nl>	NULL
+
+# escape_mode 'quote_and_escape' keeps the delimiter and line break active after an escape
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, strict_mode=false, escape_mode='quote_and_escape') ORDER BY a;
+----
+1	a	7
+2	ax	8
+3	c	NULL
+
+# escape_mode 'quoted_only' reads the escape as data outside quotes, as strict parsing does
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, strict_mode=false, escape_mode='quoted_only') ORDER BY a;
+----
+1	a\	7
+2	a\x	8
+3	c\	NULL
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', escape_mode='banana');
+----
+'banana' is not accepted as an escape_mode
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_escape.csv', quote='"', escape='"', escape_mode='quote_and_escape');
+----
+ESCAPE_MODE 'quote_and_escape' requires an ESCAPE character other than the QUOTE character
+
+# quote_mode 'lines' ends the record on a line break even inside quotes, on its own
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"x'), ('y",2'), ('3,ok,4')) t(line)) TO '{TEST_DIR}/rule_lines.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, null_padding=true, strict_mode=false, quote_mode='lines') ORDER BY a;
+----
+1	NULL	NULL
+3	ok	4
+y"	2	NULL
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_lines.csv', quote_mode='banana');
+----
+'banana' is not accepted as a quote_mode
+
+# doubled_quotes collapses a doubled quote with an unrelated escape, in and outside quoted values
+statement ok
+COPY (SELECT * FROM (VALUES ('1,"a""b"'), ('2,p""q')) t(line)) TO '{TEST_DIR}/rule_doubled.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TT
+SELECT a, b FROM read_csv('{TEST_DIR}/rule_doubled.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, strict_mode=false, doubled_quotes=true) ORDER BY a;
+----
+1	a"b
+2	p"q
+
+# embedded_quote 'toggle' applies opencsv's embedded quote rule on its own
+statement ok
+COPY (SELECT '1,a"b"c,2' AS line) TO '{TEST_DIR}/rule_embedded.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, strict_mode=false, embedded_quote='toggle', doubled_quotes=true);
+----
+1	a"b"c	2
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', quote='"', escape='"', embedded_quote='toggle');
+----
+EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character
+
+# under the dialect a directly set rule wins over the dialect's own value
+statement ok
+COPY (SELECT '1,a"b,2' AS line) TO '{TEST_DIR}/rule_override.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query TTT
+SELECT * FROM read_csv('{TEST_DIR}/rule_override.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, dialect='opencsv', embedded_quote='data');
+----
+1	a"b	2
+
+# mixed_line_breaks reads any line break as a record boundary, also in strict mode
+statement ok
+COPY (SELECT 'a,b' || chr(13) || chr(10) || '1,2' || chr(10) || '3,4' || chr(13) || '5,6' || chr(13) || chr(10) AS line) TO '{TEST_DIR}/rule_mixed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line='\r\n', columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false, mixed_line_breaks=true);
+----
+3
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', header=true, new_line='\r\n', columns={'a': 'INTEGER', 'b': 'INTEGER'}, auto_detect=false);
+----
+<REGEX>:.*invalid state.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_mixed.csv', mixed_line_breaks=false, strict_mode=false);
+----
+MIXED_LINE_BREAKS = false is only supported with STRICT_MODE = true
+
+# ignore_extra_columns reads fields beyond the last column as ignored, also in strict mode
+statement ok
+COPY (SELECT '1,x,extra' AS line) TO '{TEST_DIR}/rule_extra.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, ignore_extra_columns=true);
+----
+1	x
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false);
+----
+<REGEX>:.*Expected Number of Columns.*
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_extra.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, ignore_extra_columns=false, strict_mode=false);
+----
+<REGEX>:.*Expected Number of Columns.*
+
+# allow_unescaped_quotes reads content after a closing quote as in unstrict parsing, also in strict mode
+statement ok
+COPY (SELECT '1,"a"x,2' AS line) TO '{TEST_DIR}/rule_unescaped.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query ITI
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false, allow_unescaped_quotes=true);
+----
+1	a	2
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR', 'c': 'INTEGER'}, delim=',', header=false, auto_detect=false);
+----
+<REGEX>:.*(invalid state|unterminated quote).*
+
+# allow_unterminated_quotes reads a quote that never closes as a value, also in strict mode
+statement ok
+COPY (SELECT '1,"abc' AS line) TO '{TEST_DIR}/rule_unterminated.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
+
+query IT
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, allow_unterminated_quotes=true, parallel=false);
+----
+1	abc
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unterminated.csv', columns={'a': 'INTEGER', 'b': 'VARCHAR'}, delim=',', header=false, auto_detect=false, strict_mode=false, allow_unterminated_quotes=false, parallel=false);
+----
+ALLOW_UNTERMINATED_QUOTES = false is only supported with STRICT_MODE = true
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/rule_unescaped.csv', strict_mode=false, allow_unescaped_quotes=false);
+----
+ALLOW_UNESCAPED_QUOTES = false is only supported with STRICT_MODE = true
+
+# COPY FROM reads the rule options, the writer refuses them
+statement ok
+CREATE TABLE rule_rows (a VARCHAR, b VARCHAR, c VARCHAR);
+
+statement ok
+COPY rule_rows FROM '{TEST_DIR}/rule_escape.csv' (DELIM ',', QUOTE '"', ESCAPE '\', HEADER false, STRICT_MODE false, NULL_PADDING true, AUTO_DETECT false, ESCAPE_MODE 'quote_and_escape');
+
+query I
+SELECT count(*) FROM rule_rows;
+----
+3
+
+statement error
+COPY rule_rows TO '{TEST_DIR}/rule_out.csv' (ESCAPE_MODE 'quote_and_escape');
+----
+<REGEX>:.*not supported for writing.*

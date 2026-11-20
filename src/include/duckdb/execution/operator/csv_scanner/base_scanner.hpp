@@ -752,14 +752,20 @@ protected:
 				T::AddValue(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				break;
-			case CSVState::QUOTED: {
-				if ((states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) &&
+			case CSVState::QUOTED:
+			case CSVState::QUOTED_NO_FIELD: {
+				if (states.states[0] == CSVState::FIELD_START) {
+					// the inert escapes before the opening quote are not part of the quoted value
+					result.escaped = false;
+				}
+				if ((states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::UNQUOTED_IN_FIELD ||
+				     states.states[0] == CSVState::MAYBE_QUOTED) &&
 				    has_escaped_value) {
 					ever_escaped = true;
 					T::SetEscaped(result);
 				}
 				if ((states.states[0] == CSVState::ESCAPE || states.states[0] == CSVState::ESCAPED_RETURN ||
-				     states.states[0] == CSVState::UNQUOTED_ESCAPE) &&
+				     states.states[0] == CSVState::UNQUOTED_ESCAPE || states.states[0] == CSVState::ESCAPE_NO_FIELD) &&
 				    (buffer_handle_ptr[iterator.pos.buffer_pos] ==
 				         state_machine->dialect_options.state_machine_options.quote.GetValue() ||
 				     !state_machine->dialect_options.state_machine_options.strict_mode.GetValue())) {
@@ -772,9 +778,12 @@ protected:
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				skipper.SkipToStop(state_machine->transition_array.skip_quoted, to_pos, iterator.pos.buffer_pos);
+				if (states.states[1] == CSVState::QUOTED) {
+					skipper.SkipToStop(state_machine->transition_array.skip_quoted, to_pos, iterator.pos.buffer_pos);
+				}
 			} break;
-			case CSVState::UNQUOTED: {
+			case CSVState::UNQUOTED:
+			case CSVState::UNQUOTED_IN_FIELD: {
 				if (states.states[0] == CSVState::MAYBE_QUOTED) {
 					ever_escaped = true;
 					T::SetEscaped(result);
@@ -785,10 +794,13 @@ protected:
 			}
 			case CSVState::ESCAPE:
 			case CSVState::ESCAPED_RETURN:
+			case CSVState::ESCAPE_NO_FIELD:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::UNQUOTED_ESCAPE:
+			case CSVState::FIELD_START:
+			case CSVState::FIELD_QUOTE:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				used_unstrictness = true;

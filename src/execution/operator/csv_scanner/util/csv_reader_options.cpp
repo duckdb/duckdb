@@ -187,6 +187,86 @@ void CSVReaderOptions::SetRFC4180(bool input) {
 	this->dialect_options.state_machine_options.strict_mode.Set(input);
 }
 
+string CSVReaderOptions::GetDialect() const {
+	return dialect.FormatValue();
+}
+
+void CSVReaderOptions::SetDialect(const string &input) {
+	auto dialect_name = StringUtil::Lower(input);
+	if (dialect_name == "standard") {
+		dialect.Set(CSVDialect::STANDARD);
+	} else if (dialect_name == "opencsv") {
+		dialect.Set(CSVDialect::OPENCSV);
+	} else {
+		throw BinderException("'%s' is not accepted as a dialect. The dialect option must be one of:\n* 'standard' "
+		                      "(default): DuckDB's own CSV reading, governed by the individual options\n* 'opencsv': "
+		                      "read as Hive/Athena's OpenCSVSerde does - the escape character only escapes the quote "
+		                      "and escape characters and is inert before the first content of a field, and a line "
+		                      "break ends the record even inside quotes",
+		                      input);
+	}
+}
+
+string CSVReaderOptions::GetEscapeMode() const {
+	return dialect_options.state_machine_options.escape_mode.FormatValue();
+}
+
+void CSVReaderOptions::SetEscapeMode(const string &input) {
+	auto mode = StringUtil::Lower(input);
+	auto &option = dialect_options.state_machine_options.escape_mode;
+	if (mode == "all") {
+		option.Set(CSVEscapeMode::ALL);
+	} else if (mode == "quote_and_escape") {
+		option.Set(CSVEscapeMode::QUOTE_AND_ESCAPE);
+	} else if (mode == "quoted_only") {
+		option.Set(CSVEscapeMode::QUOTED_ONLY);
+	} else {
+		throw BinderException("'%s' is not accepted as an escape_mode. The option must be one of 'quoted_only' (the "
+		                      "default when STRICT_MODE is on), 'all' (the default when STRICT_MODE is off, the escape "
+		                      "escapes any character after it) or 'quote_and_escape' (the escape only escapes the "
+		                      "quote and escape characters, as in opencsv)",
+		                      input);
+	}
+}
+
+string CSVReaderOptions::GetQuoteMode() const {
+	return dialect_options.state_machine_options.quote_mode.FormatValue();
+}
+
+void CSVReaderOptions::SetQuoteMode(const string &input) {
+	auto mode = StringUtil::Lower(input);
+	auto &option = dialect_options.state_machine_options.quote_mode;
+	if (mode == "standard") {
+		option.Set(CSVQuoteMode::STANDARD);
+	} else if (mode == "lines") {
+		option.Set(CSVQuoteMode::LINES);
+	} else {
+		throw BinderException("'%s' is not accepted as a quote_mode. The option must be 'standard' (a quoted value "
+		                      "continues across line breaks) or 'lines' (a line break ends the record even inside "
+		                      "quotes, as line readers such as OpenCSVSerde do)",
+		                      input);
+	}
+}
+
+string CSVReaderOptions::GetEmbeddedQuote() const {
+	return dialect_options.state_machine_options.embedded_quote.FormatValue();
+}
+
+void CSVReaderOptions::SetEmbeddedQuote(const string &input) {
+	auto mode = StringUtil::Lower(input);
+	auto &option = dialect_options.state_machine_options.embedded_quote;
+	if (mode == "data") {
+		option.Set(CSVEmbeddedQuote::DATA);
+	} else if (mode == "toggle") {
+		option.Set(CSVEmbeddedQuote::TOGGLE);
+	} else {
+		throw BinderException("'%s' is not accepted as an embedded_quote. The option must be 'data' (a quote in the "
+		                      "middle of a field is a plain byte) or 'toggle' (the quote toggles the quote state and "
+		                      "may stay as a literal, following opencsv's embedded quote rule)",
+		                      input);
+	}
+}
+
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -336,6 +416,24 @@ void CSVReaderOptions::SetReadOption(Context &context, const Identifier &loption
 		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
+	} else if (loption == "dialect") {
+		SetDialect(ParseString(value, loption));
+	} else if (loption == "escape_mode") {
+		SetEscapeMode(ParseString(value, loption));
+	} else if (loption == "quote_mode") {
+		SetQuoteMode(ParseString(value, loption));
+	} else if (loption == "embedded_quote") {
+		SetEmbeddedQuote(ParseString(value, loption));
+	} else if (loption == "doubled_quotes") {
+		dialect_options.state_machine_options.doubled_quotes.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "mixed_line_breaks") {
+		dialect_options.state_machine_options.mixed_line_breaks.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "ignore_extra_columns") {
+		ignore_extra_columns.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "allow_unescaped_quotes") {
+		dialect_options.state_machine_options.allow_unescaped_quotes.Set(ParseBoolean(context, value, loption));
+	} else if (loption == "allow_unterminated_quotes") {
+		allow_unterminated_quotes.Set(ParseBoolean(context, value, loption));
 	} else if (loption == "thousands") {
 		if (!value.IsNull()) {
 			auto thousands_separator_string = ParseString(value, loption);
@@ -497,6 +595,10 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	error += FormatOptionLine("comment", comment);
 	// strict_mode
 	error += FormatOptionLine("strict_mode", strict_mode);
+	// dialect (only ever set by the user, never sniffed)
+	if (dialect.IsSetByUser()) {
+		error += FormatOptionLine("dialect", dialect);
+	}
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -575,6 +677,97 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	}
 	if (rejects_limit != 0 && !store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+	}
+	if (dialect.GetValue() == CSVDialect::OPENCSV) {
+		auto &state_machine_options = dialect_options.state_machine_options;
+		if (state_machine_options.strict_mode.GetValue() && state_machine_options.strict_mode.IsSetByUser()) {
+			throw BinderException("DIALECT 'opencsv' is not supported when STRICT_MODE is manually set to true: "
+			                      "OpenCSVSerde reading is not strict");
+		}
+		// OpenCSVSerde defines its quote, escape and comment characters, so the sniffer detects only the rest
+		if (!state_machine_options.quote.IsSetByUser()) {
+			state_machine_options.quote.Set(state_machine_options.quote.GetValue(), true);
+		}
+		if (!state_machine_options.escape.IsSetByUser()) {
+			state_machine_options.escape.Set('\\', true);
+		}
+		if (!state_machine_options.comment.IsSetByUser()) {
+			state_machine_options.comment.Set(state_machine_options.comment.GetValue(), true);
+		}
+		const auto &delimiter = state_machine_options.delimiter.GetValue();
+		const auto quote = state_machine_options.quote.GetValue();
+		const auto escape = state_machine_options.escape.GetValue();
+		if (delimiter.empty() || delimiter.find('\0') != string::npos || quote == '\0' || escape == '\0') {
+			throw BinderException(
+			    "DIALECT 'opencsv' requires a delimiter, a quote character and an escape character, as opencsv does");
+		}
+		if (quote == escape || delimiter.find(quote) != string::npos || delimiter.find(escape) != string::npos) {
+			throw BinderException("DIALECT 'opencsv' requires the delimiter, quote and escape characters to differ, "
+			                      "as opencsv requires");
+		}
+		if (state_machine_options.comment.GetValue() != '\0') {
+			throw BinderException("DIALECT 'opencsv' does not support a comment character: opencsv has no comments");
+		}
+		// OpenCSVSerde reads an empty field as an empty string and pads missing fields with NULL
+		if (user_defined_parameters.count(Identifier("nullstr")) == 0 &&
+		    user_defined_parameters.count(Identifier("null")) == 0 && null_str.size() == 1 && null_str[0].empty()) {
+			null_str.clear();
+		}
+		if (user_defined_parameters.count(Identifier("null_padding")) == 0) {
+			null_padding = true;
+		}
+		// the parsing options the dialect is made of, each giving way to an explicit user setting
+		if (!state_machine_options.escape_mode.IsSetByUser()) {
+			state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE_AND_ESCAPE);
+		}
+		if (!state_machine_options.quote_mode.IsSetByUser()) {
+			state_machine_options.quote_mode.Set(CSVQuoteMode::LINES);
+		}
+		if (!state_machine_options.doubled_quotes.IsSetByUser()) {
+			state_machine_options.doubled_quotes.Set(true);
+		}
+		if (!state_machine_options.embedded_quote.IsSetByUser()) {
+			state_machine_options.embedded_quote.Set(CSVEmbeddedQuote::TOGGLE);
+		}
+		if (!state_machine_options.mixed_line_breaks.IsSetByUser()) {
+			state_machine_options.mixed_line_breaks.Set(true);
+		}
+		if (!ignore_extra_columns.IsSetByUser()) {
+			ignore_extra_columns.Set(true);
+		}
+		// pinned as set, so parallel boundary detection searches with the dialect's rules rather than a strict table
+		if (!state_machine_options.strict_mode.IsSetByUser()) {
+			state_machine_options.strict_mode.Set(false, true);
+		}
+	}
+	{
+		// the rules a user set directly need the characters they act on
+		const auto &state_machine_options = dialect_options.state_machine_options;
+		const auto quote = state_machine_options.quote.GetValue();
+		const auto escape = state_machine_options.escape.GetValue();
+		if (state_machine_options.escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE &&
+		    (escape == '\0' || escape == quote)) {
+			throw BinderException(
+			    "ESCAPE_MODE 'quote_and_escape' requires an ESCAPE character other than the QUOTE character");
+		}
+		if (state_machine_options.embedded_quote == CSVEmbeddedQuote::TOGGLE && (quote == '\0' || quote == escape)) {
+			throw BinderException("EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character");
+		}
+		if (state_machine_options.mixed_line_breaks.IsSetByUser() &&
+		    !state_machine_options.mixed_line_breaks.GetValue() && !state_machine_options.strict_mode.GetValue()) {
+			throw BinderException("MIXED_LINE_BREAKS = false is only supported with STRICT_MODE = true, as unstrict "
+			                      "reading recovers rows over any line break");
+		}
+		if (state_machine_options.allow_unescaped_quotes.IsSetByUser() &&
+		    !state_machine_options.allow_unescaped_quotes.GetValue() && !state_machine_options.strict_mode.GetValue()) {
+			throw BinderException("ALLOW_UNESCAPED_QUOTES = false is only supported with STRICT_MODE = true, as "
+			                      "unstrict reading recovers such rows");
+		}
+		if (allow_unterminated_quotes.IsSetByUser() && !allow_unterminated_quotes.GetValue() &&
+		    !state_machine_options.strict_mode.GetValue()) {
+			throw BinderException("ALLOW_UNTERMINATED_QUOTES = false is only supported with STRICT_MODE = true, as "
+			                      "unstrict reading recovers such rows");
+		}
 	}
 	// Validate CSV Buffer and max_line_size do not conflict.
 	if (buffer_size_option.IsSetByUser() && maximum_line_size.IsSetByUser()) {

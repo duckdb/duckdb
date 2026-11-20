@@ -34,6 +34,18 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
+      tolerate_extra_columns(state_machine.options.ignore_extra_columns.IsSetByUser()
+                                 ? state_machine.options.ignore_extra_columns.GetValue()
+                                 : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
+      allow_unescaped_quotes(state_machine.state_machine_options.allow_unescaped_quotes.IsSetByUser()
+                                 ? state_machine.state_machine_options.allow_unescaped_quotes.GetValue()
+                                 : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
+      allow_unterminated_quotes(
+          state_machine.options.allow_unterminated_quotes.IsSetByUser()
+              ? state_machine.options.allow_unterminated_quotes.GetValue()
+              : !state_machine.options.dialect_options.state_machine_options.strict_mode.GetValue()),
+      quote_mode_lines(state_machine.state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES),
+      embedded_quote_toggle(state_machine.state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
@@ -172,7 +184,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
 	if (cur_col_id >= number_of_columns) {
-		if (state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (!tolerate_extra_columns) {
 			bool error = true;
 			if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 				// we make an exception if the first over-value is null
@@ -259,13 +271,15 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
 	}
+	const bool policy_quoted = quoted || was_quoted;
 	if (cur_col_id >= number_of_columns) {
-		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (tolerate_extra_columns) {
 			used_unstrictness = true;
 			return;
 		}
 		bool error = true;
-		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		if (cur_col_id == number_of_columns &&
+		    ((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
@@ -287,10 +301,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		return;
 	}
 
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+	if (((policy_quoted && state_machine.options.allow_quoted_nulls) || !policy_quoted)) {
 		// Check for the occurrence of escaped null string like \N only if strict_mode is disabled
-		const bool check_unquoted_escaped_null =
-		    state_machine.state_machine_options.strict_mode.GetValue() == false && escaped && !quoted && size == 1;
+		const bool check_unquoted_escaped_null = state_machine.state_machine_options.strict_mode.GetValue() == false &&
+		                                         escaped && !policy_quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
@@ -588,6 +602,36 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.quoted = false;
 }
 
+void StringValueResult::AddUnterminatedQuoteNull() {
+	quoted = false;
+	escaped = false;
+	was_quoted = false;
+	if (cur_col_id >= number_of_columns) {
+		if (tolerate_extra_columns) {
+			used_unstrictness = true;
+		}
+		return;
+	}
+	if (projecting_columns && !projected_columns[cur_col_id]) {
+		cur_col_id++;
+		return;
+	}
+	bool empty = false;
+	if (cur_col_id < state_machine.options.force_not_null.size()) {
+		empty = state_machine.options.force_not_null[cur_col_id];
+	}
+	if (empty && parse_types[chunk_col_id].type_id == LogicalTypeId::VARCHAR) {
+		static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+	} else if (empty) {
+		// a forced empty string does not convert into another type
+		current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+	} else {
+		validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
+	}
+	cur_col_id++;
+	chunk_col_id++;
+}
+
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
@@ -598,15 +642,20 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
-		if (result.cur_col_id >= result.number_of_columns &&
-		    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+		if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 			result.used_unstrictness = true;
 			return;
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
-			// If it's an escaped value we have to remove all the escapes, this is not really great
-			// If we are going to escape, this vector must be a varchar vector
-			if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+			const auto &sm_opts = result.state_machine.dialect_options.state_machine_options;
+			if (sm_opts.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
+				// normalize the raw bytes first and convert the result into the column's type as any plain value
+				auto value = StringValueScanner::ResolveEmbeddedQuotes(
+				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
+				    sm_opts.delimiter.GetValue(), result.units_before_field, result.value_scratch);
+				result.AddValueToVector(value.GetData(), value.GetSize(), true);
+			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
 				result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id, result.last_position);
 				if (!result.state_machine.options.IgnoreErrors()) {
 					// We have to write the cast error message.
@@ -622,10 +671,10 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				result.chunk_col_id++;
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
-				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
-				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
-				    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-				    result.parse_chunk.data[result.chunk_col_id]);
+				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
+				    !result.allow_unescaped_quotes,
+				    !result.quoted && sm_opts.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
+				    sm_opts.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
 		}
@@ -639,6 +688,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 	}
 	result.escaped = false;
+	result.was_quoted = false;
 }
 
 inline idx_t StringValueResult::HandleMultiDelimiter(const idx_t buffer_pos) const {
@@ -662,6 +712,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
+	if (result.embedded_quote_toggle) {
+		result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+		                                   result.HandleMultiDelimiter(buffer_pos));
+	}
 	if (result.quoted) {
 		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
@@ -670,6 +724,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
+	}
+	if (result.embedded_quote_toggle) {
+		result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+		                              result.HandleMultiDelimiter(buffer_pos));
 	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
@@ -874,6 +932,7 @@ void StringValueResult::StoreLinePosition() {
 }
 
 bool StringValueResult::AddRowInternal() {
+	units_before_field = 0;
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
 	current_line_position.begin = current_line_position.end;
@@ -977,8 +1036,20 @@ void StringValueResult::SetLastPositionAfterNewline(const idx_t buffer_pos) {
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
-		if (result.quoted) {
-			AddQuotedValue(result, buffer_pos);
+		if (result.quote_mode_lines && result.RecordEndsInsideQuotes()) {
+			// the line break ended the record inside an open quote
+			result.AddUnterminatedQuoteNull();
+		} else if (result.quoted) {
+			if (result.embedded_quote_toggle) {
+				result.DemoteUnenclosedQuotedValue(result.buffer_ptr + result.last_position.buffer_pos,
+				                                   buffer_pos - result.last_position.buffer_pos);
+			}
+			if (result.quoted) {
+				AddQuotedValue(result, buffer_pos);
+			} else {
+				AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
+				                        buffer_pos - result.last_position.buffer_pos, false);
+			}
 		} else {
 			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
@@ -1360,12 +1431,17 @@ void StringValueScanner::ProcessExtraRow() {
 			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::QUOTED:
-			if (states.states[0] == CSVState::UNQUOTED) {
+		case CSVState::QUOTED_NO_FIELD:
+			if (states.states[0] == CSVState::FIELD_START) {
+				// the inert escapes before the opening quote are not part of the quoted value
+				result.escaped = false;
+			}
+			if (states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::UNQUOTED_IN_FIELD) {
 				result.SetEscaped(result);
 			}
 			result.SetQuoted(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
-			while (iterator.pos.buffer_pos < to_pos - 1 &&
+			while (states.states[1] == CSVState::QUOTED && iterator.pos.buffer_pos < to_pos - 1 &&
 			       state_machine->transition_array
 			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])]) {
 				iterator.pos.buffer_pos++;
@@ -1374,6 +1450,9 @@ void StringValueScanner::ProcessExtraRow() {
 		case CSVState::ESCAPE:
 		case CSVState::UNQUOTED_ESCAPE:
 		case CSVState::ESCAPED_RETURN:
+		case CSVState::FIELD_START:
+		case CSVState::FIELD_QUOTE:
+		case CSVState::ESCAPE_NO_FIELD:
 			result.SetEscaped(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1385,7 +1464,8 @@ void StringValueScanner::ProcessExtraRow() {
 				iterator.pos.buffer_pos++;
 			}
 			break;
-		case CSVState::UNQUOTED: {
+		case CSVState::UNQUOTED:
+		case CSVState::UNQUOTED_IN_FIELD: {
 			result.SetUnquoted(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1411,36 +1491,30 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
-                                          Vector &vector) {
-	// Figure out the exact size
-	idx_t str_pos = 0;
-	bool just_escaped = false;
-	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
-		if (str_ptr[cur_pos] == escape && !just_escaped) {
-			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !strict_mode) {
-				str_pos++;
-			}
-			just_escaped = false;
-		} else {
-			just_escaped = false;
-			str_pos++;
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote,
+                                          bool drop_unescaped_quotes, bool escape_inert_at_field_start,
+                                          bool doubled_quotes, Vector &vector) {
+	idx_t start = 0;
+	if (escape_inert_at_field_start) {
+		// every escape before the field's first content is inert and drops without escaping anything
+		while (start < end && str_ptr[start] == escape) {
+			start++;
 		}
 	}
-
-	auto removed_escapes = StringVector::EmptyString(vector, str_pos);
+	auto removed_escapes = StringVector::EmptyString(vector, end - start);
 	auto removed_escapes_ptr = removed_escapes.GetDataWriteable();
-	// Allocate string and copy it
-	str_pos = 0;
-	just_escaped = false;
-	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
+	idx_t str_pos = 0;
+	bool just_escaped = false;
+	for (idx_t cur_pos = start; cur_pos < end; cur_pos++) {
 		const char c = str_ptr[cur_pos];
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !strict_mode) {
+		} else if (c == quote) {
+			if (doubled_quotes && !just_escaped && cur_pos + 1 < end && str_ptr[cur_pos + 1] == quote) {
+				// a doubled quote is one quote
+				cur_pos++;
+			}
+			if (just_escaped || !drop_unescaped_quotes) {
 				removed_escapes_ptr[str_pos++] = c;
 			}
 			just_escaped = false;
@@ -1449,8 +1523,121 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 			removed_escapes_ptr[str_pos++] = c;
 		}
 	}
-	removed_escapes.Finalize();
+	removed_escapes.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(str_pos), end - start);
 	return removed_escapes;
+}
+
+//! Decodes one UTF-8 character without throwing, as the field may hold any bytes; an invalid byte stands alone
+static int32_t DecodeCharacter(const char *str, idx_t remaining, idx_t &char_len) {
+	const auto lead = static_cast<uint8_t>(str[0]);
+	char_len = 1;
+	if (lead < 0x80) {
+		return lead;
+	}
+	const idx_t needed = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : (lead >= 0xC0 ? 2 : 0));
+	if (needed == 0 || needed > remaining) {
+		return -1;
+	}
+	int32_t code_point = lead & (0x7F >> needed);
+	for (idx_t i = 1; i < needed; i++) {
+		if ((static_cast<uint8_t>(str[i]) & 0xC0) != 0x80) {
+			return -1;
+		}
+		code_point = (code_point << 6) | (static_cast<uint8_t>(str[i]) & 0x3F);
+	}
+	char_len = needed;
+	return code_point;
+}
+
+static bool IsUnicodeWhitespace(int32_t code_point) {
+	// Java's isWhitespace, the space separators except the non breaking ones plus the line and paragraph separators
+	return (code_point >= 0x09 && code_point <= 0x0D) || code_point == 0x20 ||
+	       (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x1680 ||
+	       (code_point >= 0x2000 && code_point <= 0x200A && code_point != 0x2007) || code_point == 0x2028 ||
+	       code_point == 0x2029 || code_point == 0x205F || code_point == 0x3000;
+}
+
+string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
+                                                   const string &separator, idx_t units_before, vector<char> &scratch) {
+	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
+	auto prev_is_separator = [&](idx_t pos) {
+		return pos >= separator.size() &&
+		       memcmp(str_ptr + pos - separator.size(), separator.data(), separator.size()) == 0;
+	};
+	auto next_is_separator = [&](idx_t pos) {
+		return pos + 1 + separator.size() <= size && memcmp(str_ptr + pos + 1, separator.data(), separator.size()) == 0;
+	};
+	if (size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException("Cannot create a string of size: '%d', the maximum supported string size is: '%d'",
+		                          size, string_t::MAX_STRING_SIZE);
+	}
+	// the normalized text is at most as long as the raw bytes and is copied or converted before the next field
+	if (scratch.size() < size) {
+		scratch.resize(size);
+	}
+	auto result_ptr = scratch.data();
+	idx_t result_pos = 0;
+	idx_t units = units_before;
+	auto add_units = [&units](idx_t count) {
+		units = units < 3 ? units + count : units;
+	};
+	bool in_quotes = false;
+	bool in_field = false;
+	bool all_whitespace = true;
+	for (idx_t pos = 0; pos < size;) {
+		const char c = str_ptr[pos];
+		const bool has_next = pos + 1 < size;
+		if (c == escape) {
+			if ((in_quotes || in_field) && has_next && (str_ptr[pos + 1] == quote || str_ptr[pos + 1] == escape)) {
+				// an escaped quote or escape character, while any other escape is consumed without effect
+				result_ptr[result_pos++] = str_ptr[pos + 1];
+				all_whitespace = false;
+				add_units(2);
+				pos += 2;
+				continue;
+			}
+			add_units(1);
+			pos++;
+			continue;
+		}
+		if (c == quote) {
+			if ((in_quotes || in_field) && has_next && str_ptr[pos + 1] == quote) {
+				// a doubled quote is one quote
+				result_ptr[result_pos++] = quote;
+				all_whitespace = false;
+				in_field = !in_field;
+				add_units(2);
+				pos += 2;
+				continue;
+			}
+			// a lone quote toggles the quote state and is a kept literal away from the line start and separators
+			if (units > 2 && pos > 0 && !prev_is_separator(pos) && has_next && !next_is_separator(pos)) {
+				if (all_whitespace && result_pos > 0) {
+					// a kept literal discards a field of only whitespace before it
+					result_pos = 0;
+				} else {
+					result_ptr[result_pos++] = quote;
+					all_whitespace = false;
+				}
+			}
+			in_quotes = !in_quotes;
+			in_field = !in_field;
+			add_units(1);
+			pos++;
+			continue;
+		}
+		// a plain character sets the field flag and counts one UTF-16 unit, or two beyond the basic plane
+		idx_t char_len;
+		const auto code_point = DecodeCharacter(str_ptr + pos, size - pos, char_len);
+		all_whitespace = all_whitespace && IsUnicodeWhitespace(code_point);
+		for (idx_t i = 0; i < char_len; i++) {
+			result_ptr[result_pos++] = str_ptr[pos + i];
+		}
+		in_field = true;
+		add_units(code_point >= 0x10000 ? 2 : 1);
+		pos += char_len;
+	}
+	return string_t(scratch.data(), UnsafeNumericCast<uint32_t>(result_pos));
 }
 
 void StringValueScanner::ProcessOverBufferValue() {
@@ -1472,6 +1659,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 			break;
 		} else if (!result.comment) {
 			over_buffer_string += previous_buffer[i];
+		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1554,6 +1745,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else if (!result.comment && !states.IsComment()) {
 			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
+		if (states.states[1] == CSVState::QUOTED && states.states[0] == CSVState::FIELD_START) {
+			// the inert escapes before the opening quote are not part of the quoted value
+			result.escaped = false;
+		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
 		}
@@ -1569,8 +1764,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 		j++;
 	}
 	if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-	    states.IsQuotedCurrent() && state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-		// the file ended inside a quoted value: record that before the value itself is added
+	    states.IsQuotedCurrent() && !result.allow_unterminated_quotes) {
+		// the file ended inside a quoted value, recorded before the value itself is added
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
 	bool skip_value = false;
@@ -1580,11 +1775,19 @@ void StringValueScanner::ProcessOverBufferValue() {
 			skip_value = true;
 		}
 	}
-	if (!skip_value) {
+	if (!skip_value && !result.comment && result.RecordEndsInsideQuotes()) {
+		// the line break ended the record inside an open quote
+		result.AddUnterminatedQuoteNull();
+	} else if (!skip_value) {
 		string_t value;
 		const auto &delimiter = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 		const idx_t extra_delimiter_bytes = states.IsDelimiter() && !delimiter.empty() ? delimiter.size() - 1 : 0;
 		bool removed_extra_delimiter_bytes = false;
+		if (!result.comment && over_buffer_string.size() >= extra_delimiter_bytes) {
+			result.DemoteUnenclosedQuotedValue(over_buffer_string.c_str(),
+			                                   over_buffer_string.size() - extra_delimiter_bytes);
+		}
+		bool cast_errored = false;
 		if (result.quoted && !result.comment) {
 			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
 			while (length > 0 && result.ignore_empty_values &&
@@ -1600,8 +1803,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			removed_extra_delimiter_bytes = true;
 			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
@@ -1620,23 +1822,34 @@ void StringValueScanner::ProcessOverBufferValue() {
 							FullLinePosition::SanitizeError(error_string);
 							result.current_errors.ModifyErrorMessageOfLastError(error_string);
 						}
-						return;
+						result.cur_col_id++;
+						result.chunk_col_id++;
+						cast_errored = true;
+					} else {
+						value = RemoveEscape(
+						    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						    !result.allow_unescaped_quotes, false,
+						    result.state_machine.dialect_options.state_machine_options.doubled_quotes.GetValue(),
+						    result.parse_chunk.data[result.chunk_col_id]);
 					}
-					value = RemoveEscape(
-					    str_ptr, length, state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					    state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				if (result.cur_col_id >= result.number_of_columns &&
-				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+				if (result.cur_col_id >= result.number_of_columns && result.tolerate_extra_columns) {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
+					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
+						// normalize the raw bytes without the trailing delimiter prefix, through the scratch buffer
+						value = ResolveEmbeddedQuotes(
+						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
+						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
+						    result.units_before_field, result.value_scratch);
+						removed_extra_delimiter_bytes = true;
+					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
@@ -1651,20 +1864,22 @@ void StringValueScanner::ProcessOverBufferValue() {
 							FullLinePosition::SanitizeError(error_string);
 							result.current_errors.ModifyErrorMessageOfLastError(error_string);
 						}
-						return;
+						result.cur_col_id++;
+						result.chunk_col_id++;
+						cast_errored = true;
+					} else {
+						value = RemoveEscape(
+						    over_buffer_string.c_str(), over_buffer_string.size(), sm_options.escape.GetValue(),
+						    sm_options.quote.GetValue(), !result.allow_unescaped_quotes,
+						    sm_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
+						    sm_options.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
 					}
-					value =
-					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
-		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
+		} else if (!cast_errored && !states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
 			if (!removed_extra_delimiter_bytes) {
 				if (extra_delimiter_bytes > value_size) {
@@ -1681,6 +1896,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 	}
 
+	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
+	const idx_t tail_extra_bytes = states.IsDelimiter() && !delimiter_tail.empty() ? delimiter_tail.size() - 1 : 0;
+	result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
+	                                                              ? over_buffer_string.size() - tail_extra_bytes
+	                                                              : 0);
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
@@ -1702,6 +1922,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	// Be sure to reset the quoted and escaped variables
 	result.quoted = false;
 	result.escaped = false;
+	result.was_quoted = false;
 }
 
 StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
@@ -1757,8 +1978,7 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 			result.AddRow(result, previous_buffer_handle->actual_size);
 		}
 		lines_read++;
-	} else if (states.IsQuotedCurrent() &&
-	           state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+	} else if (states.IsQuotedCurrent() && !result.allow_unterminated_quotes) {
 		// Unterminated quote
 		LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 		result.current_line_position.begin = result.current_line_position.end;
@@ -1768,8 +1988,7 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
 		} else {
-			if (result.quoted && states.IsDelimiterBytes() &&
-			    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			if (result.quoted && states.IsDelimiterBytes() && !result.allow_unterminated_quotes) {
 				result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 				                             result.last_position);
 			}
@@ -2079,7 +2298,7 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 	const bool found_error =
 	    result.current_errors.HasErrorType(UNTERMINATED_QUOTES) || result.current_errors.HasErrorType(INVALID_STATE);
 	if (states.IsQuotedCurrent() && !found_error) {
-		if (!state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+		if (result.allow_unterminated_quotes) {
 			used_unstrictness = true;
 		} else if (cur_buffer_handle) {
 			// a row still open in a quoted state after its buffer has unterminated quotes; once the file has ended,

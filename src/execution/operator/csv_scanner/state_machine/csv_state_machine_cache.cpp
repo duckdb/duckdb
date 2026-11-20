@@ -17,6 +17,12 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 	const auto quote = static_cast<uint8_t>(options.quote.GetValue());
 	const auto escape = static_cast<uint8_t>(options.escape.GetValue());
 	const auto comment = static_cast<uint8_t>(options.comment.GetValue());
+	// the block scan reads the standard dialect, so its skipped value hooks do no dialect bookkeeping
+	if (options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE ||
+	    options.quote_mode.GetValue() != CSVQuoteMode::STANDARD || options.doubled_quotes.GetValue() ||
+	    options.embedded_quote.GetValue() != CSVEmbeddedQuote::DATA) {
+		return false;
+	}
 	if (delimiter.empty() || delimiter.size() > 4 || (escape != '\0' && escape != quote)) {
 		return false;
 	}
@@ -145,6 +151,14 @@ static bool BlockScanEligible(const StateMachine &transition_array, const CSVSta
 }
 
 void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_options) {
+	// when not set, any line break ends a record exactly when strict_mode is off
+	const bool mixed_line_breaks = state_machine_options.mixed_line_breaks.IsSetByUser()
+	                                   ? state_machine_options.mixed_line_breaks.GetValue()
+	                                   : !state_machine_options.strict_mode.GetValue();
+	// when not set, a quote that does not close its value is data exactly when strict_mode is off
+	const bool allow_unescaped_quotes = state_machine_options.allow_unescaped_quotes.IsSetByUser()
+	                                        ? state_machine_options.allow_unescaped_quotes.GetValue()
+	                                        : !state_machine_options.strict_mode.GetValue();
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[state_machine_options];
@@ -159,11 +173,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-			if (state_machine_options.strict_mode.GetValue()) {
-				// If we have an unquoted state, following rfc 4180, our base state is invalid
+			if (!allow_unescaped_quotes) {
+				// content after a closing quote is invalid, following rfc 4180
 				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			} else {
-				// This will allow us to accept unescaped quotes
 				InitializeTransitionArray(transition_array, cur_state, CSVState::UNQUOTED);
 			}
 			break;
@@ -171,11 +184,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::COMMENT);
 			break;
 		case CSVState::CARRIAGE_RETURN:
-			if (state_machine_options.strict_mode.GetValue()) {
-				// If we have an unquoted state, following rfc 4180, our base state is invalid
+			if (!mixed_line_breaks) {
+				// a carriage return that does not open the file's line break is invalid
 				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			} else {
-				// This will allow us to accept unescaped quotes
 				InitializeTransitionArray(transition_array, cur_state, CSVState::STANDARD);
 			}
 			break;
@@ -200,7 +212,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	const bool multi_byte_delimiter = delimiter_value.size() > 1;
 
-	const bool enable_unquoted_escape = state_machine_options.strict_mode.GetValue() == false &&
+	// when not set the escape mode follows strict_mode, which allows escaping outside quoted values when off
+	const auto escape_mode =
+	    state_machine_options.escape_mode.IsSetByUser()
+	        ? state_machine_options.escape_mode.GetValue()
+	        : (state_machine_options.strict_mode.GetValue() ? CSVEscapeMode::QUOTED_ONLY : CSVEscapeMode::ALL);
+	const bool enable_unquoted_escape = escape_mode != CSVEscapeMode::QUOTED_ONLY &&
 	                                    state_machine_options.quote != state_machine_options.escape &&
 	                                    state_machine_options.escape != '\0';
 	// Now set values depending on configuration
@@ -217,21 +234,21 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
 			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
-			} else if (!state_machine_options.strict_mode.GetValue()) {
+			} else if (mixed_line_breaks) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			} else {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
 			}
 		} else if (new_line_id == NewLineIdentifier::SINGLE_N) {
 			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			if (!state_machine_options.strict_mode.GetValue()) {
+			if (mixed_line_breaks) {
 				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 			} else {
 				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::INVALID;
 			}
 		} else if (new_line_id == NewLineIdentifier::SINGLE_R) {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
-			if (!state_machine_options.strict_mode.GetValue()) {
+			if (mixed_line_breaks) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			} else {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
@@ -338,8 +355,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::UNQUOTED_ESCAPE;
 	}
-	if (state_machine_options.strict_mode.GetValue()) {
-		// strict rules to error on the new line delimiter
+	if (!mixed_line_breaks) {
+		// error on any line break that is not the file's
 		switch (new_line_id) {
 		case NewLineIdentifier::CARRY_ON:
 		case NewLineIdentifier::SINGLE_R:
@@ -358,7 +375,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// 4) Carriage Return State
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
 	    CSVState::RECORD_SEPARATOR;
-	if (state_machine_options.strict_mode.GetValue()) {
+	if (!mixed_line_breaks) {
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
 		    CSVState::INVALID;
 	} else {
@@ -406,8 +423,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (state_machine_options.strict_mode.GetValue()) {
-		// strict rules to error on the new line delimiter
+	if (!mixed_line_breaks) {
+		// error on any line break that is not the file's
 		switch (new_line_id) {
 		case NewLineIdentifier::CARRY_ON:
 		case NewLineIdentifier::SINGLE_R:
@@ -506,12 +523,150 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		    CSVState::RECORD_SEPARATOR;
 	}
 
+	// A delimiter byte starts a split from 'state'
+	auto split_on_delimiter = [&](CSVState state) {
+		const auto from = static_cast<uint8_t>(state);
+		if (multi_byte_delimiter) {
+			transition_array[delimiter_first_byte][from] = CSVState::DELIMITER_FIRST_BYTE;
+		} else {
+			transition_array[delimiter_first_byte][from] = CSVState::DELIMITER;
+		}
+	};
+	// A line break ends the record from 'state'
+	auto end_record_on_line_break = [&](CSVState state) {
+		const auto from = static_cast<uint8_t>(state);
+		transition_array[static_cast<uint8_t>('\n')][from] = CSVState::RECORD_SEPARATOR;
+		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::CARRIAGE_RETURN;
+		} else {
+			transition_array[static_cast<uint8_t>('\r')][from] = CSVState::RECORD_SEPARATOR;
+		}
+	};
+
 	// 12) Unquoted Escape State
 	if (enable_unquoted_escape) {
-		// Any character can be escaped, so default to STANDARD
-		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		if (escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE) {
+			// the escape only escapes the quote and escape characters, so other bytes keep their Standard meaning
+			split_on_delimiter(CSVState::UNQUOTED_ESCAPE);
+			end_record_on_line_break(CSVState::UNQUOTED_ESCAPE);
+			if (comment != '\0') {
+				transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::COMMENT;
+			}
+		} else if (new_line_id == NewLineIdentifier::CARRY_ON) {
+			// Any character can be escaped, so default to STANDARD
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
 			    CSVState::ESCAPED_RETURN;
+		}
+	}
+
+	// 12.1) Field Start State, where escape_mode 'quote_and_escape' makes escapes before the field's content inert
+	if (enable_unquoted_escape && escape_mode == CSVEscapeMode::QUOTE_AND_ESCAPE) {
+		const auto field_start = static_cast<uint8_t>(CSVState::FIELD_START);
+		const vector<uint8_t> fresh_states {
+		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN), static_cast<uint8_t>(CSVState::NOT_SET),
+		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)};
+		for (const auto state : fresh_states) {
+			transition_array[escape][state] = CSVState::FIELD_START;
+		}
+		transition_array[escape][field_start] = CSVState::FIELD_START;
+		if (quote != '\0') {
+			transition_array[quote][field_start] = CSVState::QUOTED;
+		}
+		split_on_delimiter(CSVState::FIELD_START);
+		end_record_on_line_break(CSVState::FIELD_START);
+		if (comment != '\0') {
+			transition_array[comment][field_start] = CSVState::COMMENT;
+		}
+	}
+
+	// 12.2) Line records, where quote_mode 'lines' makes every line break a record boundary even inside quotes
+	if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
+		for (const auto state :
+		     {CSVState::QUOTED, CSVState::ESCAPE, CSVState::UNQUOTED_ESCAPE, CSVState::ESCAPED_RETURN}) {
+			end_record_on_line_break(state);
+		}
+	}
+
+	// 12.3) Field Quote State, where doubled_quotes reads a doubled quote in an unquoted field as one literal quote
+	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		// a space is field content, as in opencsv, so a quote after it is a quote in a field
+		const vector<uint8_t> space_states {
+		    static_cast<uint8_t>(CSVState::DELIMITER),        static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
+		    static_cast<uint8_t>(CSVState::CARRIAGE_RETURN),  static_cast<uint8_t>(CSVState::NOT_SET),
+		    static_cast<uint8_t>(CSVState::STANDARD_NEWLINE), static_cast<uint8_t>(CSVState::FIELD_START)};
+		for (const auto state : space_states) {
+			transition_array[' '][state] = CSVState::STANDARD;
+		}
+		transition_array[quote][static_cast<uint8_t>(CSVState::STANDARD)] = CSVState::FIELD_QUOTE;
+		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::STANDARD);
+		transition_array[quote][field_quote] = CSVState::STANDARD;
+		if (enable_unquoted_escape) {
+			transition_array[escape][field_quote] = CSVState::UNQUOTED_ESCAPE;
+		}
+		split_on_delimiter(CSVState::FIELD_QUOTE);
+		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		if (comment != '\0') {
+			transition_array[comment][field_quote] = CSVState::COMMENT;
+		}
+	}
+
+	// 12.4) Embedded quotes, where every quote event under embedded_quote 'toggle' flips the quote state and flag
+	if (state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE && quote != '\0' &&
+	    quote != escape) {
+		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
+		const auto unquoted = static_cast<uint8_t>(CSVState::UNQUOTED);
+		const auto unquoted_in_field = static_cast<uint8_t>(CSVState::UNQUOTED_IN_FIELD);
+		const auto standard_no_field = static_cast<uint8_t>(CSVState::STANDARD_NO_FIELD);
+		const auto quoted_no_field = static_cast<uint8_t>(CSVState::QUOTED_NO_FIELD);
+		// a quote after field content, which a data byte makes a toggle into quotes and a quote a literal pair
+		InitializeTransitionArray(transition_array, CSVState::FIELD_QUOTE, CSVState::QUOTED);
+		transition_array[quote][field_quote] = CSVState::STANDARD_NO_FIELD;
+		if (enable_unquoted_escape) {
+			transition_array[escape][field_quote] = CSVState::ESCAPE_NO_FIELD;
+		}
+		end_record_on_line_break(CSVState::FIELD_QUOTE);
+		// after a close with the field flag off an escape is inert and a quote is a pair staying inside quotes
+		InitializeTransitionArray(transition_array, CSVState::UNQUOTED, CSVState::STANDARD);
+		transition_array[quote][unquoted] = CSVState::QUOTED_NO_FIELD;
+		if (enable_unquoted_escape) {
+			transition_array[escape][unquoted] = CSVState::FIELD_START;
+		}
+		split_on_delimiter(CSVState::UNQUOTED);
+		end_record_on_line_break(CSVState::UNQUOTED);
+		// after a close with the field flag on an escape escapes and a quote is a pair staying inside quotes
+		InitializeTransitionArray(transition_array, CSVState::UNQUOTED_IN_FIELD, CSVState::STANDARD);
+		transition_array[quote][unquoted_in_field] = CSVState::QUOTED;
+		if (enable_unquoted_escape) {
+			transition_array[escape][unquoted_in_field] = CSVState::UNQUOTED_ESCAPE;
+		}
+		split_on_delimiter(CSVState::UNQUOTED_IN_FIELD);
+		end_record_on_line_break(CSVState::UNQUOTED_IN_FIELD);
+		// outside quotes with the field flag off, after a literal pair in a plain field
+		InitializeTransitionArray(transition_array, CSVState::STANDARD_NO_FIELD, CSVState::STANDARD);
+		transition_array[quote][standard_no_field] = CSVState::QUOTED;
+		if (enable_unquoted_escape) {
+			transition_array[escape][standard_no_field] = CSVState::FIELD_START;
+		}
+		split_on_delimiter(CSVState::STANDARD_NO_FIELD);
+		end_record_on_line_break(CSVState::STANDARD_NO_FIELD);
+		// inside quotes with the field flag off, so its close lands with the flag on
+		InitializeTransitionArray(transition_array, CSVState::QUOTED_NO_FIELD, CSVState::QUOTED);
+		transition_array[quote][quoted_no_field] = CSVState::UNQUOTED_IN_FIELD;
+		if (escape != '\0') {
+			transition_array[escape][quoted_no_field] = CSVState::ESCAPE_NO_FIELD;
+		}
+		// only the quote and escape characters are escaped, while any other byte is plain content after an inert escape
+		InitializeTransitionArray(transition_array, CSVState::ESCAPE_NO_FIELD, CSVState::QUOTED);
+		const auto escape_no_field = static_cast<uint8_t>(CSVState::ESCAPE_NO_FIELD);
+		transition_array[quote][escape_no_field] = CSVState::QUOTED_NO_FIELD;
+		if (escape != '\0') {
+			transition_array[escape][escape_no_field] = CSVState::QUOTED_NO_FIELD;
+		}
+		if (state_machine_options.quote_mode.GetValue() == CSVQuoteMode::LINES) {
+			end_record_on_line_break(CSVState::QUOTED_NO_FIELD);
+			end_record_on_line_break(CSVState::ESCAPE_NO_FIELD);
 		}
 	}
 
@@ -565,6 +720,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_standard[comment] = false;
 	if (enable_unquoted_escape) {
 		transition_array.skip_standard[escape] = false;
+	}
+	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+		// a quote in the middle of a field changes the state
+		transition_array.skip_standard[quote] = false;
 	}
 
 	// For quoted we only care about quote, escape and for delimiters \r and \n

@@ -222,6 +222,15 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["strict_mode"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["dialect"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["escape_mode"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["quote_mode"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["embedded_quote"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["doubled_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["mixed_line_breaks"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["ignore_extra_columns"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_unescaped_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_unterminated_quotes"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 }
 
 //===--------------------------------------------------------------------===//

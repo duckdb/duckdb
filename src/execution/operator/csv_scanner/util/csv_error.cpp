@@ -385,6 +385,13 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 	std::ostringstream how_to_fix_it;
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		how_to_fix_it << "Possible fixes:" << '\n';
+		if (!options.dialect_options.state_machine_options.mixed_line_breaks.IsSetByUser()) {
+			how_to_fix_it << "* Accept any line break as a record boundary (mixed_line_breaks=true)" << '\n';
+		}
+		if (!options.dialect_options.state_machine_options.allow_unescaped_quotes.IsSetByUser()) {
+			how_to_fix_it << "* Accept quotes that do not close their value as data (allow_unescaped_quotes=true)"
+			              << '\n';
+		}
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
 		                 "comply with the CSV standard."
 		              << '\n';
@@ -552,6 +559,9 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		if (!options.allow_unterminated_quotes.IsSetByUser()) {
+			how_to_fix_it << "* Read a quote that is never closed as a value (allow_unterminated_quotes=true)" << '\n';
+		}
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
 		                 "comply with the CSV standard."
 		              << '\n';
@@ -570,6 +580,9 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		if (actual_columns >= options.dialect_options.num_cols && !options.ignore_extra_columns.IsSetByUser()) {
+			how_to_fix_it << "* Ignore the fields beyond the last column (ignore_extra_columns=true)" << '\n';
+		}
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
 		                 "comply with the CSV standard."
 		              << '\n';

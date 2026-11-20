@@ -730,6 +730,33 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", options.multi_file_reader);
 	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", options.buffer_size_option);
 	serializer.WritePropertyWithDefault<idx_t>(144, "rejects_line_size_limit", options.rejects_line_size_limit, 10000);
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<CSVDialect>>(147, "dialect", options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<bool>>(148, "doubled_quotes", options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<bool>>(150, "mixed_line_breaks", options.dialect_options.state_machine_options.mixed_line_breaks, CSVOption<bool>(false));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<bool>>(151, "ignore_extra_columns", options.ignore_extra_columns, CSVOption<bool>(false));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<bool>>(152, "allow_unescaped_quotes", options.dialect_options.state_machine_options.allow_unescaped_quotes, CSVOption<bool>(false));
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		serializer.WritePropertyWithDefault<CSVOption<bool>>(153, "allow_unterminated_quotes", options.allow_unterminated_quotes, CSVOption<bool>(false));
+	}
 }
 
 SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -816,6 +843,15 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.options.multi_file_reader);
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.options.buffer_size_option);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", result.options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVDialect>>(147, "dialect", result.options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", result.options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(150, "mixed_line_breaks", result.options.dialect_options.state_machine_options.mixed_line_breaks, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(151, "ignore_extra_columns", result.options.ignore_extra_columns, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(152, "allow_unescaped_quotes", result.options.dialect_options.state_machine_options.allow_unescaped_quotes, CSVOption<bool>(false));
+	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(153, "allow_unterminated_quotes", result.options.allow_unterminated_quotes, CSVOption<bool>(false));
 	return result;
 }
 
