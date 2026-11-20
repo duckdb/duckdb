@@ -95,3 +95,21 @@ SELECT a, s, st FROM test ORDER BY rowid
 10	ten	{'x': 1, 'y': a}
 NULL	NULL	NULL
 NULL	NULL	{'x': 3, 'y': c}
+
+# the value kept below a row updated to NULL is a string in the heap of the vector, which the same update compacts
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+CREATE TABLE long_strings AS SELECT 'base_' || i s FROM range(3000) t(i)
+
+statement ok
+UPDATE long_strings SET s = repeat('a', 100) WHERE rowid = 0
+
+statement ok
+UPDATE long_strings SET s = CASE WHEN rowid = 0 THEN NULL ELSE repeat('b', 100) END WHERE rowid < 200
+
+query IIII
+SELECT COUNT(s), COUNT(*), SUM(length(s)), BOOL_AND(s = repeat('b', 100)) FROM long_strings WHERE rowid < 200
+----
+199	200	19900	true

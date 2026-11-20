@@ -158,3 +158,50 @@ updated
 
 statement ok con1
 COMMIT
+
+# long strings: the hand-over copies the old values into the string heap of the vector, which a later update compacts
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE long_strings AS SELECT CASE WHEN i % 5 = 0 THEN NULL ELSE 'base_value_number_' || i END s FROM range(3000) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN TRANSACTION
+
+query IIII con1
+SELECT COUNT(s), SUM(length(s)), MIN(s), MAX(s) FROM long_strings
+----
+2400	51912	base_value_number_1	base_value_number_999
+
+statement ok con2
+UPDATE long_strings SET s = 'updated_value_number_' || rowid WHERE rowid < 100
+
+statement ok con2
+CHECKPOINT
+
+statement ok con2
+UPDATE long_strings SET s = repeat('n', 100) || rowid WHERE rowid < 1000
+
+query IIII con1
+SELECT COUNT(s), SUM(length(s)), MIN(s), MAX(s) FROM long_strings
+----
+2400	51912	base_value_number_1	base_value_number_999
+
+query I con1
+SELECT s FROM long_strings WHERE rowid < 3 ORDER BY rowid
+----
+NULL
+base_value_number_1
+base_value_number_2
+
+query III con2
+SELECT COUNT(s), SUM(length(s)), MIN(s) FROM long_strings
+----
+2600	138090	base_value_number_1001
+
+statement ok con1
+COMMIT
