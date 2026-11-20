@@ -189,10 +189,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			continue;
 		}
 		// Keep expressions owned by InClauseRewriter in the logical plan so they can become hash joins.
-		// NOT IN is parsed as NOT (IN (...)), so walk the whole expression, not only the root type.
-		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
-		if (InClauseRewriter::HasRewritableInClause(expr) ||
-		    (expr.GetExpressionType() == ExpressionType::COMPARE_IN && expr.CanThrow())) {
+		// NOT IN is parsed as NOT (IN (...)). Also skip throwing IN: scan pushdown loses short-circuit.
+		if ((expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
+		     expr.GetExpressionType() == ExpressionType::OPERATOR_NOT) &&
+		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
 			continue;
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
