@@ -83,7 +83,8 @@ def generate_header(data: dict) -> str:
     ]
 
     current_group = None
-    for group, metric_name, info in iter_metrics(data):
+    metric_count = 0
+    for metric_index, (group, metric_name, info) in enumerate(iter_metrics(data)):
         full_name = f"{group}.{metric_name}"
         struct_name = to_pascal_case(full_name)
         cpp_type = CPP_TYPE_MAP[info["metric_type"]]
@@ -103,11 +104,17 @@ def generate_header(data: dict) -> str:
             f'\tstatic constexpr const char *Description = "{description}";',
             f'\tstatic constexpr const char *Unit = "{unit}";',
             f'\tstatic constexpr const char *TypeStr = "{info["metric_type"]}";',
+            f"\tstatic constexpr idx_t MetricIndex = {metric_index};",
             "};",
         ]
+        metric_count = metric_index + 1
 
     live_metrics = [to_pascal_case(f"{group}.{name}") for group, name, info in iter_metrics(data) if info.get("live")]
     lines += [
+        "",
+        "struct GeneratedMetricInfo {",
+        f"\tstatic constexpr idx_t MaxMetricIndex = {metric_count};",
+        "};",
         "",
         "template <class... METRICS>",
         "struct MetricList {};",

@@ -10,8 +10,12 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/array.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
+#include "duckdb/main/profiler/metric_info.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -23,7 +27,32 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+class MetricsManager;
 struct MetricsTimer;
+
+//! The timing or counter of a metric with an index, which any thread updates with atomics
+struct MetricSlot {
+	//! A timing's nanoseconds or a counter's count
+	atomic<uint64_t> value {0};
+	//! The earliest start and latest end of a timing, in microseconds since the epoch
+	atomic<int64_t> start {NumericLimits<int64_t>::Maximum()};
+	atomic<int64_t> end {NumericLimits<int64_t>::Minimum()};
+	atomic<bool> set {false};
+	//! How the metric is updated; set before the slot is published
+	MetricSlotKind kind = MetricSlotKind::NONE;
+
+	void Reset() {
+		value.store(0, std::memory_order_relaxed);
+		start.store(NumericLimits<int64_t>::Maximum(), std::memory_order_relaxed);
+		end.store(NumericLimits<int64_t>::Minimum(), std::memory_order_relaxed);
+		set.store(false, std::memory_order_relaxed);
+	}
+	DUCKDB_API void Add(idx_t amount);
+	DUCKDB_API void AddTiming(idx_t elapsed_ns, timestamp_t start_time, timestamp_t end_time);
+	bool HasBounds() const {
+		return start.load(std::memory_order_relaxed) != NumericLimits<int64_t>::Maximum();
+	}
+};
 
 // Top level query metrics
 struct QueryMetrics {
@@ -54,20 +83,19 @@ public:
 	atomic<idx_t> total_memory_allocated;
 
 public:
-	void UpdateMetric(const string &key, idx_t addition) {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		string_timings[key].Add(addition);
-	}
+	//! The database's metrics, for the metrics extensions register; without it only the profiler's own have an index
+	void SetMetricsManager(const MetricsManager &manager);
 
-	void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time) {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		string_timings[key].Add(addition, start_time, end_time);
-	}
+	//! Add to a timing or counter by name: one of the profiler's own is updated by its index, without a lock
+	DUCKDB_API void UpdateMetric(const string &key, idx_t addition);
+	DUCKDB_API void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time);
+	DUCKDB_API void UpdateMetricCounter(const string &key, idx_t addition);
 
-	void UpdateMetricCounter(const string &key, idx_t addition) {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		string_counters[key] += addition;
-	}
+	//! Add to the timing or counter of a metric index, without a lock
+	DUCKDB_API void AddToMetricTiming(idx_t metric_index, idx_t elapsed_ns);
+	DUCKDB_API void AddToMetricTiming(idx_t metric_index, idx_t elapsed_ns, timestamp_t start_time,
+	                                  timestamp_t end_time);
+	DUCKDB_API void AddToMetricCounter(idx_t metric_index, idx_t addition);
 
 	void SetMetricValue(const string &key, Value value) {
 		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
@@ -97,23 +125,10 @@ public:
 		total_memory_allocated += n;
 	}
 
-	double GetStringMetricInSeconds(const string &key) const {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		auto it = string_timings.find(key);
-		if (it == string_timings.end()) {
-			return 0.0;
-		}
-		return static_cast<double>(it->second.duration) / 1e9;
-	}
-
-	idx_t GetStringCounter(const string &key) const {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		auto it = string_counters.find(key);
-		if (it == string_counters.end()) {
-			return 0;
-		}
-		return it->second;
-	}
+	//! A timing by name, in seconds, or 0 when the query has not timed it
+	DUCKDB_API double GetStringMetricInSeconds(const string &key) const;
+	//! A counter by name, or 0 when the query has not counted it
+	DUCKDB_API idx_t GetStringCounter(const string &key) const;
 
 	idx_t GetBytesRead() const {
 		return bytes_read.load();
@@ -151,15 +166,8 @@ public:
 	}
 
 	//! A copy, as timers and counters may still be updated from other threads
-	unordered_map<string, MetricTiming> GetMetricTimings() const {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		return string_timings;
-	}
-
-	unordered_map<string, idx_t> GetMetricCounters() const {
-		annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
-		return string_counters;
-	}
+	DUCKDB_API unordered_map<string, MetricTiming> GetMetricTimings() const;
+	DUCKDB_API unordered_map<string, idx_t> GetMetricCounters() const;
 
 	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
 	void ResetLiveMetrics() {
@@ -175,7 +183,7 @@ public:
 	}
 
 	void Reset() {
-		// ended before taking the lock: the timer adds its time to string_timings
+		// ended first, as the timer adds its time to the metrics reset below
 		latency_timer.reset();
 		{
 			annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
@@ -183,6 +191,8 @@ public:
 			string_counters.clear();
 			string_values.clear();
 		}
+		// a late update from another thread may land in the next query
+		ResetMetricSlots();
 
 		query_sql = "";
 		system_peak_buffer_memory = 0;
@@ -200,8 +210,13 @@ public:
 	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
-		auto other_timings = other.GetMetricTimings();
-		auto other_counters = other.GetMetricCounters();
+		unordered_map<string, MetricTiming> other_timings;
+		unordered_map<string, idx_t> other_counters;
+		{
+			annotated_lock_guard<annotated_mutex> other_guard(other.string_metrics_lock);
+			other_timings = other.string_timings;
+			other_counters = other.string_counters;
+		}
 		{
 			annotated_lock_guard<annotated_mutex> guard(string_metrics_lock);
 			for (const auto &entry : other_timings) {
@@ -211,6 +226,7 @@ public:
 				string_counters[entry.first] += entry.second;
 			}
 		}
+		MergeMetricSlots(other);
 		bytes_read += other.bytes_read.load();
 		read_operations += other.read_operations.load();
 		read_time_us += other.read_time_us.load();
@@ -223,18 +239,40 @@ public:
 	}
 
 private:
-	// Guards the string-keyed metrics below, which operators, timers and extensions update from any thread
+	//! Segment s holds the slots of 128 << s consecutive indexes, so the slots never move as more are needed
+	static constexpr idx_t FIRST_SEGMENT_SIZE = 128;
+	static constexpr idx_t SEGMENT_COUNT = 57;
+	MetricSlot &SlotAt(idx_t metric_index) const;
+
+	//! The index of the metric `key`, without a lock; invalid when the database does not know it
+	optional_idx TryGetMetricIndex(const string &key) const;
+	//! The slot of the metric `key` when it has an index and is updated as `kind`
+	optional_ptr<MetricSlot> GetSlotByName(const string &key, MetricSlotKind kind);
+	string GetMetricName(idx_t metric_index) const;
+	//! The slot of a known metric index, or nullptr for an index the database does not know
+	optional_ptr<MetricSlot> GetSlot(idx_t metric_index);
+	optional_ptr<MetricSlot> GrowSlots(idx_t metric_index);
+	optional_ptr<const MetricSlot> TryGetSlot(idx_t metric_index) const;
+	//! Calls `callback(name, slot)` for every slot the query updated
+	template <class FUNC>
+	void ForEachSetSlot(FUNC &&callback) const;
+	DUCKDB_API void ResetMetricSlots();
+	DUCKDB_API void MergeMetricSlots(const QueryMetrics &other);
+
+	optional_ptr<const MetricsManager> metrics_manager;
+	// Segments below slot_limit never move and live as long as the metrics, so updates need no lock
+	array<unique_array<MetricSlot>, SEGMENT_COUNT> slot_segments;
+	atomic<idx_t> slot_limit {0};
+	mutex slot_segments_lock;
+	// Guards the string-keyed metrics below, which extensions update from any thread
 	mutable annotated_mutex string_metrics_lock;
-	// String-keyed timings for optimizer, storage and phase timing metrics
 	unordered_map<string, MetricTiming> string_timings DUCKDB_GUARDED_BY(string_metrics_lock);
-	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters DUCKDB_GUARDED_BY(string_metrics_lock);
 	// Values set by QueryProfiler::SetMetric, kept until the query's metrics are gathered
 	profiler_metrics_t string_values DUCKDB_GUARDED_BY(string_metrics_lock);
 
 public:
-	// Declared after string_timings and string_metrics_lock so it is destroyed first; its destructor writes to
-	// string_timings.
+	// Declared last so it is destroyed first, as its destructor adds its time to the metrics above
 	unique_ptr<MetricsTimer> latency_timer;
 };
 
@@ -244,6 +282,15 @@ public:
 	}
 	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
 	    : query_metrics(query_metrics), metric_name(std::move(key)), is_active(is_active) {
+		if (!is_active) {
+			return;
+		}
+		start_time = Timestamp::GetCurrentTimestamp();
+		profiler.Start();
+	}
+	//! A timer of a metric index
+	MetricsTimer(QueryMetrics &query_metrics, idx_t metric_index, const bool is_active = true)
+	    : query_metrics(query_metrics), metric_index(metric_index), is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
@@ -262,6 +309,7 @@ public:
 	MetricsTimer(MetricsTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(metric_index, other.metric_index);
 		std::swap(profiler, other.profiler);
 		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
@@ -269,6 +317,7 @@ public:
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(metric_index, other.metric_index);
 		std::swap(profiler, other.profiler);
 		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
@@ -282,7 +331,12 @@ public:
 		}
 		is_active = false;
 		profiler.End();
-		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos(), start_time, Timestamp::GetCurrentTimestamp());
+		auto end_time = Timestamp::GetCurrentTimestamp();
+		if (metric_index.IsValid()) {
+			query_metrics->AddToMetricTiming(metric_index.GetIndex(), profiler.ElapsedNanos(), start_time, end_time);
+		} else {
+			query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos(), start_time, end_time);
+		}
 	}
 
 	void Reset() {
@@ -296,6 +350,8 @@ public:
 private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
+	//! Valid for a timer of a metric index, which then has no metric_name
+	optional_idx metric_index;
 	Profiler profiler;
 	timestamp_t start_time = timestamp_t::epoch();
 	bool is_active;
