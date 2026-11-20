@@ -25,7 +25,7 @@ enum class CSVEscapeMode : uint8_t {
 	//! The escape escapes any character after it
 	ALL = 0,
 	//! The escape only escapes the quote and escape characters and is inert anywhere else, as in opencsv
-	OPENCSV = 1
+	QUOTE_AND_ESCAPE = 1
 };
 
 //! What quotes mean at record boundaries
@@ -40,8 +40,8 @@ enum class CSVQuoteMode : uint8_t {
 enum class CSVEmbeddedQuote : uint8_t {
 	//! A plain data byte
 	DATA = 0,
-	//! The quote follows opencsv's embedded quote rule and toggles the quote state
-	OPENCSV = 1
+	//! The quote toggles the quote state and may stay as a literal, following opencsv's embedded quote rule
+	TOGGLE = 1
 };
 
 //! A named CSV dialect, a preset over the internal parsing options
@@ -187,8 +187,8 @@ private:
 		switch (val) {
 		case CSVEscapeMode::ALL:
 			return "all";
-		case CSVEscapeMode::OPENCSV:
-			return "opencsv";
+		case CSVEscapeMode::QUOTE_AND_ESCAPE:
+			return "quote_and_escape";
 		default:
 			throw InternalException("Invalid CSV Escape Mode Detected.");
 		}

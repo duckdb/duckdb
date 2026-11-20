@@ -241,7 +241,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
 	}
-	const bool policy_quoted = quoted || opencsv_quoted;
+	const bool policy_quoted = quoted || was_quoted;
 	if (cur_col_id >= number_of_columns) {
 		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
 			used_unstrictness = true;
@@ -600,7 +600,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddUnterminatedQuoteNull() {
 	quoted = false;
 	escaped = false;
-	opencsv_quoted = false;
+	was_quoted = false;
 	if (cur_col_id >= number_of_columns) {
 		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
 			used_unstrictness = true;
@@ -644,11 +644,11 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			const auto &sm_opts = result.state_machine.dialect_options.state_machine_options;
-			if (sm_opts.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV) {
+			if (sm_opts.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
 				// normalize the raw bytes first and convert the result into the column's type as any plain value
-				auto value = StringValueScanner::OpenCSVValue(value_ptr, length, sm_opts.escape.GetValue(),
-				                                              sm_opts.quote.GetValue(), sm_opts.delimiter.GetValue(),
-				                                              result.opencsv_units_before, result.opencsv_scratch);
+				auto value = StringValueScanner::ResolveEmbeddedQuotes(
+				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
+				    sm_opts.delimiter.GetValue(), result.units_before_field, result.value_scratch);
 				result.AddValueToVector(value.GetData(), value.GetSize(), true);
 			} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 				// If it's an escaped value we have to remove all the escapes, and that needs a varchar vector
@@ -669,7 +669,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, sm_opts.escape.GetValue(), sm_opts.quote.GetValue(),
 				    sm_opts.strict_mode.GetValue(),
-				    !result.quoted && sm_opts.escape_mode.GetValue() == CSVEscapeMode::OPENCSV,
+				    !result.quoted && sm_opts.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
 				    sm_opts.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -684,7 +684,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		}
 	}
 	result.escaped = false;
-	result.opencsv_quoted = false;
+	result.was_quoted = false;
 }
 
 inline idx_t StringValueResult::HandleMultiDelimiter(const idx_t buffer_pos) const {
@@ -719,8 +719,8 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        result.HandleMultiDelimiter(buffer_pos));
 	}
-	result.UpdateOpenCSVUnits(result.buffer_ptr + result.last_position.buffer_pos,
-	                          result.HandleMultiDelimiter(buffer_pos));
+	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+	                              result.HandleMultiDelimiter(buffer_pos));
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
@@ -732,7 +732,7 @@ void StringValueResult::SkipValueInternal() {
 	cur_col_id++;
 	quoted = false;
 	escaped = false;
-	opencsv_quoted = false;
+	was_quoted = false;
 }
 
 void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -740,8 +740,8 @@ void StringValueResult::SkipValue(StringValueResult &result, const idx_t buffer_
 		return;
 	}
 	result.SkipValueInternal();
-	result.UpdateOpenCSVUnits(result.buffer_ptr + result.last_position.buffer_pos,
-	                          result.HandleMultiDelimiter(buffer_pos));
+	result.UpdateUnitsBeforeField(result.buffer_ptr + result.last_position.buffer_pos,
+	                              result.HandleMultiDelimiter(buffer_pos));
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
 
@@ -927,7 +927,7 @@ void StringValueResult::StoreLinePosition() {
 }
 
 bool StringValueResult::AddRowInternal() {
-	opencsv_units_before = 0;
+	units_before_field = 0;
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
 	current_line_position.begin = current_line_position.end;
@@ -1529,7 +1529,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	return removed_escapes;
 }
 
-static bool OpenCSVIsWhitespace(const char *str, idx_t char_len) {
+static bool IsUnicodeWhitespace(const char *str, idx_t char_len) {
 	const auto lead = static_cast<uint8_t>(str[0]);
 	if (char_len == 1) {
 		return (lead >= 0x09 && lead <= 0x0D) || lead == 0x20 || (lead >= 0x1C && lead <= 0x1F);
@@ -1549,9 +1549,9 @@ static bool OpenCSVIsWhitespace(const char *str, idx_t char_len) {
 	       code_point == 0x2028 || code_point == 0x2029 || code_point == 0x205F || code_point == 0x3000;
 }
 
-string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote,
-                                          const string &separator, idx_t units_before, Vector &vector) {
-	// the opencsv separator is one character, which UTF-8 may spell in several bytes
+string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
+                                                   const string &separator, idx_t units_before, Vector &vector) {
+	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
 	auto prev_is_separator = [&](idx_t pos) {
 		return pos >= separator.size() &&
 		       memcmp(str_ptr + pos - separator.size(), separator.data(), separator.size()) == 0;
@@ -1614,7 +1614,7 @@ string_t StringValueScanner::OpenCSVValue(const char *str_ptr, idx_t size, char 
 		if (char_len > size - pos) {
 			char_len = size - pos;
 		}
-		all_whitespace = all_whitespace && OpenCSVIsWhitespace(str_ptr + pos, char_len);
+		all_whitespace = all_whitespace && IsUnicodeWhitespace(str_ptr + pos, char_len);
 		for (idx_t i = 0; i < char_len; i++) {
 			result_ptr[result_pos++] = str_ptr[pos + i];
 		}
@@ -1825,12 +1825,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 					result.used_unstrictness = true;
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
-					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV) {
+					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
 						// normalize the raw bytes without the trailing delimiter prefix, through the scratch heap
-						value = OpenCSVValue(
+						value = ResolveEmbeddedQuotes(
 						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
 						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),
-						    result.opencsv_units_before, result.opencsv_scratch);
+						    result.units_before_field, result.value_scratch);
 						removed_extra_delimiter_bytes = true;
 					} else if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
@@ -1854,7 +1854,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 						value = RemoveEscape(
 						    over_buffer_string.c_str(), over_buffer_string.size(), sm_options.escape.GetValue(),
 						    sm_options.quote.GetValue(), sm_options.strict_mode.GetValue(),
-						    sm_options.escape_mode.GetValue() == CSVEscapeMode::OPENCSV,
+						    sm_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE,
 						    sm_options.doubled_quotes.GetValue(), result.parse_chunk.data[result.chunk_col_id]);
 					}
 				}
@@ -1881,9 +1881,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 
 	const auto &delimiter_tail = result.state_machine.dialect_options.state_machine_options.delimiter.GetValue();
 	const idx_t tail_extra_bytes = states.IsDelimiter() && !delimiter_tail.empty() ? delimiter_tail.size() - 1 : 0;
-	result.UpdateOpenCSVUnits(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
-	                                                          ? over_buffer_string.size() - tail_extra_bytes
-	                                                          : 0);
+	result.UpdateUnitsBeforeField(over_buffer_string.c_str(), over_buffer_string.size() >= tail_extra_bytes
+	                                                              ? over_buffer_string.size() - tail_extra_bytes
+	                                                              : 0);
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
@@ -1905,7 +1905,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	// Be sure to reset the quoted and escaped variables
 	result.quoted = false;
 	result.escaped = false;
-	result.opencsv_quoted = false;
+	result.was_quoted = false;
 }
 
 StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {

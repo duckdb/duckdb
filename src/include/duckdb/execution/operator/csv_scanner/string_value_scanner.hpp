@@ -267,11 +267,11 @@ public:
 	bool ignore_empty_values = true;
 
 	//! The current field's UTF-16 offset from the line start, clamped at three units
-	idx_t opencsv_units_before = 0;
+	idx_t units_before_field = 0;
 	//! Whether the current field was quoted before DemoteUnenclosedQuotedValue rerouted it
-	bool opencsv_quoted = false;
-	//! Scratch heap for opencsv normalized text before its conversion into the column's type
-	Vector opencsv_scratch {LogicalType::VARCHAR, 1ULL};
+	bool was_quoted = false;
+	//! Scratch heap for normalized field text before its conversion into the column's type
+	Vector value_scratch {LogicalType::VARCHAR, 1ULL};
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -316,17 +316,17 @@ public:
 	}
 	//! Reads the field a record end inside an open quote left in progress as NULL
 	void AddUnterminatedQuoteNull();
-	//! Routes a quoted field through the opencsv text pass when that pass could change it
+	//! Routes a quoted field through the embedded quote text pass when that pass could change it
 	inline void DemoteUnenclosedQuotedValue(const char *value_ptr, idx_t size) {
 		if (!quoted || size == 0 ||
-		    state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::OPENCSV) {
+		    state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::TOGGLE) {
 			return;
 		}
 		const auto quote_character = state_machine.state_machine_options.quote.GetValue();
 		const auto escape_character = state_machine.state_machine_options.escape.GetValue();
 		// inert escapes before the opening quote are not part of the value
 		idx_t start = 0;
-		if (state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::OPENCSV) {
+		if (state_machine.state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE) {
 			while (start < size && value_ptr[start] == escape_character) {
 				start++;
 			}
@@ -334,7 +334,7 @@ public:
 		const bool enclosed =
 		    size - start >= 2 && value_ptr[start] == quote_character && value_ptr[size - 1] == quote_character;
 		// an enclosed field with a plain inside and a dropped opening quote reads as the plain quoted value
-		if (enclosed && (start == 0 || opencsv_units_before + start <= 2)) {
+		if (enclosed && (start == 0 || units_before_field + start <= 2)) {
 			bool plain_inside = true;
 			for (idx_t i = start + 1; i + 1 < size; i++) {
 				if (value_ptr[i] == quote_character || value_ptr[i] == escape_character) {
@@ -346,18 +346,18 @@ public:
 				return;
 			}
 		}
-		opencsv_quoted = true;
+		was_quoted = true;
 		quoted = false;
-		// the raw bytes run through the opencsv text pass on the escaped path
+		// the raw bytes run through the embedded quote text pass on the escaped path
 		escaped = true;
 	}
-	//! Advances the opencsv line offset past the field just consumed and its separator
-	inline void UpdateOpenCSVUnits(const char *value_ptr, idx_t size) {
-		if (state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::OPENCSV) {
+	//! Advances the line offset past the field just consumed and its separator
+	inline void UpdateUnitsBeforeField(const char *value_ptr, idx_t size) {
+		if (state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::TOGGLE) {
 			return;
 		}
 		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();
-		idx_t units = opencsv_units_before;
+		idx_t units = units_before_field;
 		for (idx_t i = 0; i < delimiter.size() && units < 3; i++) {
 			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
 			if ((static_cast<uint8_t>(delimiter[i]) & 0xC0) != 0x80) {
@@ -370,7 +370,7 @@ public:
 				units += static_cast<uint8_t>(value_ptr[i]) >= 0xF0 ? 2 : 1;
 			}
 		}
-		opencsv_units_before = units < 3 ? units : 3;
+		units_before_field = units < 3 ? units : 3;
 	}
 	//! Moves last_position past the newline that ends the row at buffer_pos
 	inline void SetLastPositionAfterNewline(idx_t buffer_pos);
@@ -442,9 +442,9 @@ public:
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
 	                             bool escape_inert_at_field_start, bool doubled_quotes, Vector &vector);
 
-	//! Reads one field's raw bytes with opencsv's text rules, units_before being its clamped UTF-16 line offset
-	static string_t OpenCSVValue(const char *str_ptr, idx_t size, char escape, char quote, const string &separator,
-	                             idx_t units_before, Vector &vector);
+	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
+	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
+	                                      const string &separator, idx_t units_before, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);

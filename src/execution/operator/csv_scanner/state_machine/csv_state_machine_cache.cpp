@@ -542,8 +542,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	// 12.1) Field Start State, where escape_mode 'opencsv' makes every escape before the field's first content inert
-	if (enable_unquoted_escape && state_machine_options.escape_mode.GetValue() == CSVEscapeMode::OPENCSV) {
+	// 12.1) Field Start State, where escape_mode 'quote_and_escape' makes escapes before the field's content inert
+	if (enable_unquoted_escape && state_machine_options.escape_mode.GetValue() == CSVEscapeMode::QUOTE_AND_ESCAPE) {
 		const auto field_start = static_cast<uint8_t>(CSVState::FIELD_START);
 		const vector<uint8_t> fresh_states {
 		    static_cast<uint8_t>(CSVState::DELIMITER), static_cast<uint8_t>(CSVState::RECORD_SEPARATOR),
@@ -595,8 +595,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	// 12.4) Embedded quotes, where every quote event under embedded_quote 'opencsv' toggles the quote state and flag
-	if (state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::OPENCSV && quote != '\0' &&
+	// 12.4) Embedded quotes, where every quote event under embedded_quote 'toggle' flips the quote state and flag
+	if (state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE && quote != '\0' &&
 	    quote != escape) {
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
 		const auto unquoted = static_cast<uint8_t>(CSVState::UNQUOTED);
