@@ -635,6 +635,38 @@ SELECT count(*), sum(c) FROM (SELECT 'jan' AS name, amount, count(*) AS c FROM b
 ----
 200000	200000
 
+# aggregates that can fail, in branches without groups: one of them is evaluated even if none is read
+
+query I
+SELECT count(*) FROM (SELECT sum(amount::TINYINT) FROM sales WHERE month = 1 UNION ALL SELECT sum(amount::TINYINT) FROM sales WHERE month = 2);
+----
+2
+
+# one branch for the values of two columns, where the other branches differ in one
+
+query IIII
+SELECT year, month, store, sum(amount) FROM sales WHERE year = 2000 AND month = 1 GROUP BY ALL UNION ALL SELECT year, month, store, sum(amount) FROM sales WHERE year = 2001 AND month = 1 GROUP BY ALL UNION ALL SELECT year, month, store, sum(amount) FROM sales WHERE year = 2000 AND month = 2 GROUP BY ALL ORDER BY ALL;
+----
+2000	1	0	NULL
+2000	1	1	2800
+2000	1	2	2600
+2000	1	3	2400
+2000	1	4	2200
+
+query III
+SELECT store, first(amount), list(amount)[1:2] FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, first(amount), list(amount)[1:2] FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+0	55	[55, 15]
+0	NULL	[NULL, NULL]
+1	31	[31, 91]
+1	36	[36, 96]
+2	7	[7, 67]
+2	12	[12, 72]
+3	43	[43, 3]
+3	48	[48, 8]
+4	19	[19, 79]
+4	24	[24, 84]
+
 endloop
 
 endloop

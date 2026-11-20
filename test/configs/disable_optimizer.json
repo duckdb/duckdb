@@ -20,6 +20,12 @@
       ]
     },
     {
+      "reason": "Checks which UNION ALL branches the union aggregate merge computes with one aggregate.",
+      "paths": [
+        "test/optimizer/union_aggregate_merge_plan.test"
+      ]
+    },
+    {
       "reason": "Checks the plans the scalar aggregate merge produces.",
       "paths": [
         "test/sql/optimizer/scalar_aggregate_merge_files_plan.test",

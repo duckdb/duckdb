@@ -23,6 +23,7 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1891,12 +1892,6 @@ private:
 //
 // One pass is not always faster than the branches, see IsProfitable.
 class UnionAggregateMerge {
-	// UBODEBUG
-	static void Debug(const string &reason) {
-		if (getenv("UBO_DEBUG")) {
-			fprintf(stderr, "UBO %s\n", reason.c_str());
-		}
-	}
 	//! The branches are merged if their work per thread is estimated to be at least this many times the work of the
 	//! merged plan
 	static constexpr double MIN_GAIN = 1.25;
@@ -2071,7 +2066,8 @@ private:
 		}
 		for (auto &entry : get.table_filters) {
 			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
-			if (ExpressionFilter::IsOptionalFilter(filter) || filter.expr->HasParameter()) {
+			if (ExpressionFilter::IsOptionalFilter(filter) || filter.expr->HasParameter() ||
+			    filter.expr->IsVolatile() || ExpressionBarrier::Contains(*filter.expr)) {
 				return create();
 			}
 		}
@@ -2102,11 +2098,22 @@ private:
 		if (aggregate.grouping_sets.size() == 1 && aggregate.grouping_sets[0].size() != aggregate.groups.size()) {
 			return nullptr;
 		}
-		if (IsUngrouped(aggregate) &&
-		    (having || !RemoveRedundantOrder::AggregateDiscardsOrder(aggregate) || aggregate.expressions.empty())) {
-			// a branch without groups returns a row for an empty input, which a filter above it could remove, and
-			// reads its rows in order if an aggregate asks for that
+		if (IsUngrouped(aggregate) && (having || aggregate.expressions.empty())) {
+			// a branch without groups returns a row for an empty input, which a filter above it could remove
 			return nullptr;
+		}
+		for (auto &expr : aggregate.expressions) {
+			auto &bound = expr->Cast<BoundAggregateExpression>();
+			if (!bound.GetOrderBys() &&
+			    bound.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+				// the merged plan reads the rows in another order, which first(x) or list(x) show
+				return nullptr;
+			}
+			if (IsUngrouped(aggregate) && expr->CanThrow()) {
+				// an aggregate without groups keeps one of its aggregates if none is read (count(*) over the
+				// branches), which then fails where the merged aggregate, with its groups, drops them all
+				return nullptr;
+			}
 		}
 		branch.projection = child->Cast<LogicalProjection>();
 		branch.aggregate = aggregate;
@@ -2185,8 +2192,8 @@ private:
 					auto &constant = right.get().Cast<BoundConstantExpression>().GetValue();
 					const auto column_index = column.Binding().column_index.GetIndex();
 					if (column.Depth() == 0 && column.Binding().table_index == target.table_index &&
-					    !constant.IsNull() && constant.type() == column.GetReturnType() &&
-					    IsKeyType(constant.type()) && IsKeyType(column.GetReturnType()) &&
+					    !constant.IsNull() && constant.type() == column.GetReturnType() && IsKeyType(constant.type()) &&
+					    IsKeyType(column.GetReturnType()) &&
 					    result.equalities.find(column_index) == result.equalities.end()) {
 						result.equalities.emplace(column_index, constant);
 						continue;
@@ -2224,7 +2231,6 @@ private:
 				}
 			}
 			if (!valid || !branch_varying.IsValid()) {
-				Debug("  branch: valid=" + to_string(valid) + " varying=" + to_string(branch_varying.IsValid())); // UBODEBUG
 				continue;
 			}
 			if (!varying.IsValid()) {
@@ -2240,7 +2246,6 @@ private:
 		varying_scan = varying.GetIndex();
 		auto &primary_get = primary.scans[varying_scan].get()->Cast<LogicalGet>();
 		if (!GetScanFilters(primary_get, primary_get, primary_filters) || primary_filters.equalities.empty()) {
-			Debug("  primary has no equalities"); // UBODEBUG
 			return false;
 		}
 		// the filters of the other branches: the same comparisons, with other constants
@@ -2252,7 +2257,6 @@ private:
 			if (!GetScanFilters(get, primary_get, filters) ||
 			    filters.equalities.size() != primary_filters.equalities.size() ||
 			    filters.others.size() != primary_filters.others.size()) {
-				Debug("  branch: filter counts differ"); // UBODEBUG
 				continue;
 			}
 			bool same = true;
@@ -2264,7 +2268,6 @@ private:
 				same = Expression::Equals(*filters.others[i], *primary_filters.others[i]);
 			}
 			if (!same) {
-				Debug("  branch: other filters differ"); // UBODEBUG
 				continue;
 			}
 			comparable.push_back(candidate);
@@ -2280,7 +2283,6 @@ private:
 			}
 		}
 		if (key_columns.empty()) {
-			Debug("  no key columns, candidates=" + to_string(candidates.size())); // UBODEBUG
 			return false;
 		}
 		// the branches with constants that no earlier branch has
@@ -2400,8 +2402,8 @@ private:
 						if (!statistics[k]) {
 							continue;
 						}
-						auto pruning =
-						    ExpressionFilter::CheckExpressionStatistics(context, *branch_filters[k]->expr, *statistics[k]);
+						auto pruning = ExpressionFilter::CheckExpressionStatistics(context, *branch_filters[k]->expr,
+						                                                           *statistics[k]);
 						skipped = pruning == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 						          pruning == FilterPropagateResult::FILTER_FALSE_OR_NULL;
 					}
@@ -2476,9 +2478,6 @@ private:
 		const auto scan_tasks = std::ceil(MaxValue<double>(largest_scan, 1) / ROWS_PER_SCAN_TASK);
 		const auto branch_threads = MinValue(threads, branch_count * scan_tasks);
 		const auto merged_threads = MinValue(threads, scan_tasks);
-		Debug("cost other=" + to_string(other_rows) + " branch_rows=" + to_string(branch_rows) + " merged_rows=" +
-		      to_string(merged_rows) + " input=" + to_string(input_rows) + " tasks=" + to_string(scan_tasks) +
-		      " threads=" + to_string(threads)); // UBODEBUG
 		if (branch_work / branch_threads < MIN_GAIN * merged_work / merged_threads) {
 			return false;
 		}
@@ -2499,7 +2498,6 @@ private:
 		if (!aggregate_stats) {
 			return false;
 		}
-		Debug("groups=" + to_string(aggregate_stats->cardinality)); // UBODEBUG
 		return double(aggregate_stats->cardinality) * MIN_GROUP_REDUCTION <= branch_input_rows;
 	}
 
@@ -2516,8 +2514,9 @@ private:
 			if (std::find(key_columns.begin(), key_columns.end(), entry.first) != key_columns.end()) {
 				continue;
 			}
-			expressions.push_back(BoundComparisonExpression::Create(
-			    ExpressionType::COMPARE_EQUAL, key_column(entry.first), make_uniq<BoundConstantExpression>(entry.second)));
+			expressions.push_back(BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+			                                                        key_column(entry.first),
+			                                                        make_uniq<BoundConstantExpression>(entry.second)));
 		}
 		if (key_columns.size() == 1) {
 			vector<Value> values;
@@ -2534,6 +2533,12 @@ private:
 					if (seen.insert(branch.get().keys[k]).second) {
 						values.push_back(branch.get().keys[k]);
 					}
+				}
+				if (values.size() == 1) {
+					expressions.push_back(
+					    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, key_column(key_columns[k]),
+					                                      make_uniq<BoundConstantExpression>(values[0])));
+					continue;
 				}
 				expressions.push_back(
 				    ExpressionFilter::CreateInExpression(key_column(key_columns[k]), std::move(values)));
@@ -2570,11 +2575,11 @@ private:
 			if (column.Binding().table_index != aggregate_index) {
 				return;
 			}
-			auto is_missing = make_uniq<BoundOperatorExpression>(
-			    ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN,
-			    make_uniq<BoundColumnRefExpression>(marker_type, marker));
-			auto empty = make_uniq<BoundColumnRefExpression>(
-			    column.GetReturnType(), ColumnBinding(empty_index, column.Binding().column_index));
+			auto is_missing =
+			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN,
+			                                       make_uniq<BoundColumnRefExpression>(marker_type, marker));
+			auto empty = make_uniq<BoundColumnRefExpression>(column.GetReturnType(),
+			                                                 ColumnBinding(empty_index, column.Binding().column_index));
 			auto alias = expr->GetAlias();
 			auto result = make_uniq<BoundCaseExpression>(std::move(is_missing), std::move(empty), std::move(expr));
 			result->SetAlias(alias);
@@ -2666,8 +2671,7 @@ private:
 			rows.push_back(std::move(row));
 		}
 		const auto list_index = binder.GenerateTableIndex();
-		unique_ptr<LogicalOperator> list =
-		    make_uniq<LogicalExpressionGet>(list_index, list_types, std::move(rows));
+		unique_ptr<LogicalOperator> list = make_uniq<LogicalExpressionGet>(list_index, list_types, std::move(rows));
 		list->children.push_back(make_uniq<LogicalDummyScan>(binder.GenerateTableIndex()));
 
 		auto join = make_uniq<LogicalComparisonJoin>(ungrouped ? JoinType::LEFT : JoinType::INNER);
@@ -2750,17 +2754,13 @@ private:
 			}
 			groups[entry.first->second].push_back(std::move(branch));
 		}
-		Debug("union children=" + to_string(op->children.size()) + " signatures=" + to_string(groups.size()) +
-		      " order_discarded=" + to_string(order_discarded)); // UBODEBUG
 		unordered_set<idx_t> removed;
 		for (auto &branches : groups) {
 			if (branches.size() < 2) {
-				Debug("single_signature"); // UBODEBUG
 				continue;
 			}
 			const auto ungrouped = IsUngrouped(*branches[0].aggregate);
 			if (!ungrouped && !order_discarded) {
-				Debug("grouped_order_observable n=" + to_string(branches.size())); // UBODEBUG
 				continue;
 			}
 			if (ungrouped && !order_discarded && branches.size() != op->children.size()) {
@@ -2772,17 +2772,14 @@ private:
 			vector<idx_t> key_columns;
 			ScanFilters primary_filters;
 			if (!FindMergeableBranches(branches, merged, varying_scan, key_columns, primary_filters)) {
-				Debug("not_mergeable n=" + to_string(branches.size())); // UBODEBUG
 				continue;
 			}
 			if (ungrouped && !order_discarded && merged.size() != op->children.size()) {
 				continue;
 			}
 			if (!IsProfitable(merged, varying_scan, key_columns)) {
-				Debug("not_profitable n=" + to_string(merged.size())); // UBODEBUG
 				continue;
 			}
-			Debug("merged n=" + to_string(merged.size())); // UBODEBUG
 			Merge(merged, varying_scan, key_columns, primary_filters, order_discarded);
 			for (idx_t b = 1; b < merged.size(); b++) {
 				removed.insert(merged[b].get().child_index);

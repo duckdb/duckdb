@@ -313,6 +313,25 @@ physical_plan	<!REGEX>:.*Union.*
 
 # a table with row groups for several threads, unordered in month and clustered by batch
 
+# aggregates that can fail, in branches without groups: one of them is evaluated even if none is read
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT sum(amount::TINYINT) FROM sales WHERE month = 1 UNION ALL SELECT sum(amount::TINYINT) FROM sales WHERE month = 2);
+----
+physical_plan	<REGEX>:.*Union.*
+
+# one branch for the values of two columns, where the other branches differ in one
+
+query II
+EXPLAIN SELECT year, month, store, sum(amount) FROM sales WHERE year = 2000 AND month = 1 GROUP BY ALL UNION ALL SELECT year, month, store, sum(amount) FROM sales WHERE year = 2001 AND month = 1 GROUP BY ALL UNION ALL SELECT year, month, store, sum(amount) FROM sales WHERE year = 2000 AND month = 2 GROUP BY ALL ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, first(amount), list(amount)[1:2] FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, first(amount), list(amount)[1:2] FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
 # the rows of big are clustered by batch: every branch reads its own row groups, and one pass has nothing to save
 query II
 EXPLAIN SELECT 'a' AS name, sum(amount), count(*) FROM big WHERE batch = 1 UNION ALL SELECT 'b', sum(amount), count(*) FROM big WHERE batch = 5 UNION ALL SELECT 'c', sum(amount), count(*) FROM big WHERE batch = 9;
