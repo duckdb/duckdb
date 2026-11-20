@@ -642,6 +642,21 @@ SELECT DISTINCT k FROM (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) 
 3
 5
 
+# a DISTINCT over an aggregate that was split this way is redundant as well
+query II
+EXPLAIN SELECT DISTINCT k, c, s FROM (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k);
+----
+physical_plan	<!REGEX>:.*GROUP_BY.*GROUP_BY.*GROUP_BY.*GROUP_BY.*
+
+query III
+SELECT DISTINCT k, c, s FROM (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d WHERE v > 2 GROUP BY k) ORDER BY ALL;
+----
+1	1	3
+2	2	9
+3	2	13
+5	1	12
+NULL	4	38
+
 # a materialized CTE that is defined above the join and read by the inner side stays a reference: the join stays, and
 # so does the CTE for its other readers
 query II
@@ -653,3 +668,69 @@ query III
 WITH g AS MATERIALIZED (SELECT k, max(v) AS m FROM d WHERE v > 2 GROUP BY k) SELECT sum(f.x), count(*), (SELECT count(*) FROM g) FROM f LEFT JOIN g ON f.k = g.k;
 ----
 126	9	5
+
+# keys whose equality is not identity. DOUBLE: 0.0 = -0.0 and NaN = NaN, for the GROUP BY like for the join
+statement ok
+CREATE TABLE fd(k DOUBLE, x INTEGER);
+
+statement ok
+INSERT INTO fd VALUES (0.0, 1), (-0.0, 2), ('NaN', 3), ('NaN', 4), (1.5, 5), (NULL, 6), ('inf', 7);
+
+statement ok
+CREATE TABLE dd(k DOUBLE, v INTEGER);
+
+statement ok
+INSERT INTO dd VALUES (0.0, 1), (-0.0, 2), ('NaN', 3), ('NaN', 4), (1.5, 5), (1.5, 6), (NULL, 7), (NULL, 8), ('inf', 9);
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k = g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k = g.k;
+----
+28	7
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, max(v) AS m FROM dd WHERE v > 1 GROUP BY k) g ON fd.k IS NOT DISTINCT FROM g.k;
+----
+28	7
+
+query II
+EXPLAIN SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, v FROM dd WHERE v > 1) g ON fd.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fd.x), count(*) FROM fd LEFT JOIN (SELECT k, v FROM dd WHERE v > 1) g ON fd.k = g.k;
+----
+40	10
+
+# a collation: the inner side is grouped by the binary value and joined by the collated one, so 'b' matches 'b' and 'B'
+statement ok
+CREATE TABLE fs(k VARCHAR COLLATE NOCASE, x INTEGER);
+
+statement ok
+INSERT INTO fs VALUES ('a', 1), ('A', 2), ('b', 3), (NULL, 4), ('c', 5);
+
+statement ok
+CREATE TABLE ds(k VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO ds VALUES ('a', 1), ('A', 2), ('B', 3), ('b', 4), (NULL, 5), (NULL, 6);
+
+query II
+EXPLAIN SELECT sum(fs.x), count(*) FROM fs LEFT JOIN (SELECT k, max(v) AS m FROM ds WHERE v > 1 GROUP BY k) g ON fs.k = g.k;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+SELECT sum(fs.x), count(*) FROM fs LEFT JOIN (SELECT k, max(v) AS m FROM ds WHERE v > 1 GROUP BY k) g ON fs.k = g.k;
+----
+18	6
