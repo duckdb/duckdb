@@ -535,6 +535,9 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		// The finalizer copies state.value when state.is_set and returns NULL otherwise
+		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
+		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -544,6 +547,9 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		// The finalizer copies state.value when state.is_set and returns NULL otherwise
+		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
+		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		return function;
 	}
 	case PhysicalType::INT128: {
@@ -553,6 +559,9 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		// The finalizer copies state.value when state.is_set and returns NULL otherwise
+		function.SetStateProjection(AggregateStateProjection::ValueIfSet(offsetof(SumState<hugeint_t>, value),
+		                                                                 offsetof(SumState<hugeint_t>, is_set)));
 		function.SetFallible(); // adding HUGEINT values to the HUGEINT accumulator throws on overflow
 		return function;
 	}
@@ -845,6 +854,9 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	// The finalizer copies state.value when state.is_set and returns NULL otherwise
+	sum_double.SetStateProjection(
+	    AggregateStateProjection::ValueIfSet(offsetof(SumState<double>, value), offsetof(SumState<double>, is_set)));
 	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
 	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
