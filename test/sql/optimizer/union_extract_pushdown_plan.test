@@ -10,7 +10,7 @@ COPY (SELECT {'k': i, 'unused': repeat('x', 100)}::VARIANT AS v,
 TO '{TEST_DIR}/union_extract_pushdown_plan.parquet';
 
 statement ok
-PRAGMA explain_output = optimized_only;
+SET explain_output = optimized_only;
 
 # Every union column is retained, but only a nested field is needed.
 query II
