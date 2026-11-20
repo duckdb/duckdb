@@ -248,3 +248,20 @@ SELECT grp, subgrp, grp % 2, COUNT(*) FROM measurements GROUP BY CUBE(grp, subgr
 0	6	0	48
 0	6	NULL	48
 0	NULL	0	334
+
+# approx_top_k sketches are cascaded: the grand total combines the per-group sketches
+statement ok
+CREATE TABLE topk AS SELECT g, v FROM (VALUES (0, 'a', 8), (0, 'b', 6), (0, 'c', 5), (0, 'd', 5), (0, 'e', 5), (0, 'f', 5),
+	(1, 'x', 8), (1, 'y', 6), (1, 'u', 5), (1, 'v', 5), (1, 'w', 5), (1, 'z', 5)) t(g, v, n), range(n);
+
+query II
+EXPLAIN SELECT g, approx_top_k(v, 2) FROM topk GROUP BY ROLLUP(g);
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+query II
+SELECT g, list_sort(approx_top_k(v, 2)) FROM topk GROUP BY ROLLUP(g) ORDER BY ALL;
+----
+0	[a, b]
+1	[x, y]
+NULL	[a, x]
