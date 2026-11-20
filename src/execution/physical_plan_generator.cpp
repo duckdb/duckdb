@@ -15,6 +15,15 @@
 
 namespace duckdb {
 
+void PhysicalPlan::ReleaseOperatorStates() {
+	for (auto &op : ops) {
+		auto &op_ref = op.get();
+		lock_guard<mutex> guard(op_ref.lock);
+		op_ref.sink_state.reset();
+		op_ref.op_state.reset();
+	}
+}
+
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
 }
 
