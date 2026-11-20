@@ -195,7 +195,7 @@ public:
 struct LeastGreatestCollationState : public FunctionLocalState {
 	LeastGreatestCollationState(Context &context, const LogicalType &input_type, const Expression &collation,
 	                            idx_t column_count)
-	    : executor(context, collation), winner_keys(LogicalType::BLOB), winners(STANDARD_VECTOR_SIZE),
+	    : executor(context, collation), winners(STANDARD_VECTOR_SIZE),
 	      modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST) {
 		collation_input.InitializeEmpty({input_type});
 		collated.Initialize(Allocator::DefaultAllocator(), {collation.GetReturnType()});
@@ -211,7 +211,6 @@ struct LeastGreatestCollationState : public FunctionLocalState {
 	DataChunk collation_keys;
 	//! Sort keys of the arguments, from which the result is decoded
 	DataChunk value_keys;
-	Vector winner_keys;
 	//! The argument each row takes its result from, INVALID_INDEX if all arguments are NULL
 	vector<idx_t> winners;
 	//! NULL arguments are skipped before comparing, so the NULL ordering is irrelevant
@@ -238,7 +237,10 @@ void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vec
 	const auto count = args.size();
 	lstate.collation_keys.Reset();
 	lstate.value_keys.Reset();
+	auto &winners = lstate.winners;
+	std::fill_n(winners.begin(), count, DConstants::INVALID_INDEX);
 
+	// NULL arguments are skipped, and on equal keys the first argument wins
 	auto result_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
@@ -253,34 +255,17 @@ void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vec
 		lstate.executor.ExecuteExpression(lstate.collation_input, collated);
 		CreateSortKeyHelpers::CreateSortKey(collated, lstate.modifiers, lstate.collation_keys.data[col_idx]);
 		CreateSortKeyHelpers::CreateSortKey(input, lstate.modifiers, lstate.value_keys.data[col_idx]);
-	}
 
-	// NULL arguments are skipped, and on equal keys the first argument wins
-	auto &winners = lstate.winners;
-	auto winner_keys = FlatVector::ScatterWriter<string_t>(lstate.winner_keys);
-	{
-		auto validity = args.data[0].Validity();
-		auto keys = lstate.collation_keys.data[0].Values<string_t>();
-		for (idx_t i = 0; i < count; i++) {
-			if (!validity.IsValid(i)) {
-				winners[i] = DConstants::INVALID_INDEX;
-				continue;
-			}
-			winners[i] = 0;
-			winner_keys[i] = keys[i].GetValue();
-		}
-	}
-	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		auto validity = args.data[col_idx].Validity();
-		auto keys = lstate.collation_keys.data[col_idx].Values<string_t>();
+		auto validity = input.Validity();
+		auto keys = FlatVector::GetData<string_t>(lstate.collation_keys.data[col_idx]);
 		for (idx_t i = 0; i < count; i++) {
 			if (!validity.IsValid(i)) {
 				continue;
 			}
-			auto key = keys[i].GetValue();
-			if (winners[i] == DConstants::INVALID_INDEX || OP::template Operation<string_t>(key, winner_keys[i])) {
+			if (winners[i] == DConstants::INVALID_INDEX ||
+			    OP::template Operation<string_t>(
+			        keys[i], FlatVector::GetData<string_t>(lstate.collation_keys.data[winners[i]])[i])) {
 				winners[i] = col_idx;
-				winner_keys[i] = key;
 			}
 		}
 	}
@@ -289,15 +274,10 @@ void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vec
 	for (idx_t i = 0; i < count; i++) {
 		if (winners[i] == DConstants::INVALID_INDEX) {
 			result_mask.SetInvalid(i);
+			continue;
 		}
-	}
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		auto values = lstate.value_keys.data[col_idx].Values<string_t>();
-		for (idx_t i = 0; i < count; i++) {
-			if (winners[i] == col_idx) {
-				CreateSortKeyHelpers::DecodeSortKey(values[i].GetValue(), result, i, lstate.modifiers);
-			}
-		}
+		auto values = FlatVector::GetData<string_t>(lstate.value_keys.data[winners[i]]);
+		CreateSortKeyHelpers::DecodeSortKey(values[i], result, i, lstate.modifiers);
 	}
 	result.SetVectorType(result_type);
 }
@@ -307,8 +287,7 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto &return_type = expr.GetReturnType();
-	// with a collation (bind data), the child min/max do not follow the order the result is chosen by
-	if (input.bind_data || BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
+	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
 	    return_type.InternalType() == PhysicalType::BOOL) {
 		return nullptr;
 	}
@@ -446,6 +425,8 @@ unique_ptr<FunctionData> LeastGreatestBind(BindScalarFunctionInput &input) {
 	}
 	bound_function.SetFunctionCallback(LeastGreatestCollationFunction<typename LEAST_GREATER_OP::OP>);
 	bound_function.SetInitStateCallback(LeastGreatestCollationInit);
+	// the child min/max do not follow the collation order
+	bound_function.SetStatisticsCallback(nullptr);
 	return make_uniq<LeastGreatestCollationData>(std::move(collation));
 }
 
