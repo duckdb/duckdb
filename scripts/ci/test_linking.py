@@ -1,9 +1,11 @@
 """Test Windows static export removal and self-contained extension linkage."""
 
 import importlib.util
+from collections import Counter
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +18,16 @@ EXPORTS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXPORTS)
 LLVM_TOOLS = ["clang-cl", "llvm-lib", "lld-link", "llvm-readobj", "llvm-objcopy", "llvm-ar"]
 CMAKE_TOOLS = ["cmake", "ninja", *LLVM_TOOLS]
+
+
+def non_export_directives(archive):
+    result = subprocess.run(["llvm-readobj", "--coff-directives", str(archive)], check=True, capture_output=True)
+    return Counter(
+        token
+        for line in result.stdout.splitlines()
+        if line.startswith(b"Directive(s):")
+        for token in EXPORTS.filter_directives(line.removeprefix(b"Directive(s):"))[0].split()
+    )
 
 
 class StripCoffExportsTests(unittest.TestCase):
@@ -51,9 +63,20 @@ class StripCoffExportsTests(unittest.TestCase):
     @unittest.skipUnless(all(shutil.which(tool) for tool in LLVM_TOOLS), "Requires the LLVM Windows tools")
     def test_real_archive_relinks_without_exports_and_preserves_shared_objects(self):
         source = """
+#if defined(_M_IX86)
+#pragma comment(linker, "/include:_keep")
+#pragma comment(linker, "/alternatename:_weak_symbol=_fallback")
+#else
+#pragma comment(linker, "/include:keep")
+#pragma comment(linker, "/alternatename:weak_symbol=fallback")
+#endif
+#pragma detect_mismatch("fixture", "release")
 __declspec(dllexport) volatile unsigned char unused_data[32768] = {1};
 __declspec(dllexport) int unused_function(void) { return unused_data[0]; }
-__declspec(dllexport) int extension_init(void) { return 42; }
+int fallback = 42;
+extern int weak_symbol;
+int keep(void) { return 17; }
+__declspec(dllexport) int extension_init(void) { return weak_symbol; }
 """
         for arch, triple in [
             ("x86", "i686-pc-windows-msvc"),
@@ -72,6 +95,7 @@ __declspec(dllexport) int extension_init(void) { return 42; }
                 run("clang-cl", f"--target={triple}", "/nologo", "/c", "/O2", "/Gy", "/Gw", "/GS-", "fixture.c")
                 object_before = (root / "fixture.obj").read_bytes()
                 run("llvm-lib", "/out:fixture.lib", "fixture.obj")
+                original_directives = non_export_directives(root / "fixture.lib")
                 common = [
                     "lld-link",
                     f"/machine:{arch}",
@@ -84,8 +108,9 @@ __declspec(dllexport) int extension_init(void) { return 42; }
                 run(*common, "/out:before.dll", "fixture.lib", "/export:extension_init")
                 self.assertEqual(EXPORTS.strip_exports(root / "fixture.lib"), 3)
                 self.assertEqual((root / "fixture.obj").read_bytes(), object_before)
+                self.assertEqual(non_export_directives(root / "fixture.lib"), original_directives)
                 self.assertEqual(EXPORTS.strip_exports(root / "fixture.lib"), 0)
-                run(*common, "/out:after.dll", "fixture.lib", "/export:extension_init")
+                run(*common, "/out:after.dll", "/map:after.map", "fixture.lib", "/export:extension_init")
                 run(*common, "/out:shared.dll", "fixture.obj")
                 before = run("llvm-readobj", "--coff-exports", "before.dll")
                 after = run("llvm-readobj", "--coff-exports", "after.dll")
@@ -97,7 +122,75 @@ __declspec(dllexport) int extension_init(void) { return 42; }
                 self.assertIn("Name: extension_init", after)
                 self.assertIn("Name: unused_function", shared)
                 self.assertIn("Name: unused_data", shared)
+                mapping = (root / "after.map").read_text()
+                for symbol in ["keep", "fallback"]:
+                    self.assertRegex(mapping, r"\s_?" + symbol + r"\s")
+                self.assertNotIn("unused_function", mapping)
+                self.assertNotIn("unused_data", mapping)
                 self.assertLess((root / "after.dll").stat().st_size, (root / "before.dll").stat().st_size - 30000)
+
+    @unittest.skipUnless(all(shutil.which(tool) for tool in LLVM_TOOLS), "Requires the LLVM Windows tools")
+    def test_duplicate_basenames_without_directives_rebuild_and_link(self):
+        with tempfile.TemporaryDirectory(prefix="duckdb archive ") as directory:
+            root = Path(directory)
+
+            def run(*command, cwd=root):
+                result = subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                return result.stdout
+
+            originals = []
+            for folder, function, value in [("a", "first", 1), ("b", "second", 2)]:
+                (root / folder).mkdir()
+                (root / folder / "same.c").write_text(f"int {function}(void) {{ return {value}; }}\n")
+                run(
+                    "clang-cl",
+                    "--target=x86_64-pc-windows-msvc",
+                    "/nologo",
+                    "/c",
+                    "/Zl",
+                    "/GS-",
+                    "same.c",
+                    cwd=root / folder,
+                )
+                originals.append((root / folder / "same.obj").read_bytes())
+            archive = root / "same names.lib"
+            run("llvm-lib", f"/out:{archive}", "a/same.obj", "b/same.obj")
+            self.assertEqual(non_export_directives(archive), Counter())
+            self.assertEqual(EXPORTS.strip_exports(archive), 0)
+            symbols = run("llvm-readobj", "--symbols", str(archive))
+            self.assertIn("Name: first", symbols)
+            self.assertIn("Name: second", symbols)
+            self.assertEqual([(root / folder / "same.obj").read_bytes() for folder in ["a", "b"]], originals)
+            run(
+                "lld-link",
+                "/dll",
+                "/noentry",
+                "/nodefaultlib",
+                "/out:check.dll",
+                "/implib:check-imports.lib",
+                "/export:first",
+                "/export:second",
+                str(archive),
+            )
+
+    @unittest.skipUnless(all(shutil.which(tool) for tool in LLVM_TOOLS), "Requires the LLVM Windows tools")
+    def test_failed_librarian_does_not_modify_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "fixture.c").write_text("__declspec(dllexport) int unused(void) { return 42; }\n")
+            for command in [
+                ["clang-cl", "--target=x86_64-pc-windows-msvc", "/nologo", "/c", "fixture.c"],
+                ["llvm-lib", "/out:fixture.lib", "fixture.obj"],
+            ]:
+                result = subprocess.run(command, cwd=root, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            archive = root / "fixture.lib"
+            original = archive.read_bytes()
+            with self.assertRaises(subprocess.CalledProcessError):
+                EXPORTS.strip_exports(archive, librarian=sys.executable)
+            self.assertEqual(archive.read_bytes(), original)
+            self.assertEqual(list(root.glob("duckdb-exports-*")), [])
 
 
 @unittest.skipUnless(
@@ -105,6 +198,14 @@ __declspec(dllexport) int extension_init(void) { return 42; }
 )
 class WindowsStaticExtensionLinkTests(unittest.TestCase):
     def test_archive_loadables_select_core_after_targets_exist(self):
+        for triple, platform in [
+            ("x86_64-pc-windows-msvc", "windows_amd64"),
+            ("aarch64-pc-windows-msvc", "windows_arm64"),
+        ]:
+            with self.subTest(platform=platform):
+                self.check_archive_loadables(triple, platform)
+
+    def check_archive_loadables(self, triple, platform):
         source = (ROOT / "src/CMakeLists.txt").read_text()
         first = source.index("if(", source.index("duckdb_make_native_lto_archive(duckdb_static)"))
         hook = source[first : source.index("\n#\n# FIXME", first)]
@@ -118,7 +219,7 @@ class WindowsStaticExtensionLinkTests(unittest.TestCase):
                 "build_extension_library",
             ]
         )
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(prefix="duckdb linking ") as directory:
             root = Path(directory)
             (root / "scripts").mkdir()
             shutil.copyfile(ROOT / "scripts/strip_coff_exports.py", root / "scripts/strip_coff_exports.py")
@@ -143,8 +244,8 @@ class WindowsStaticExtensionLinkTests(unittest.TestCase):
                 "set(CMAKE_SYSTEM_NAME Windows)\n"
                 f'set(CMAKE_C_COMPILER "{Path(shutil.which("clang-cl")).as_posix()}")\n'
                 f'set(CMAKE_CXX_COMPILER "{Path(shutil.which("clang-cl")).as_posix()}")\n'
-                "set(CMAKE_C_COMPILER_TARGET x86_64-pc-windows-msvc)\n"
-                "set(CMAKE_CXX_COMPILER_TARGET x86_64-pc-windows-msvc)\n"
+                f"set(CMAKE_C_COMPILER_TARGET {triple})\n"
+                f"set(CMAKE_CXX_COMPILER_TARGET {triple})\n"
                 f'set(CMAKE_AR "{Path(shutil.which("llvm-lib")).as_posix()}")\n'
                 f'set(CMAKE_LINKER "{Path(shutil.which("lld-link")).as_posix()}")\n'
                 "set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)\n"
@@ -168,7 +269,7 @@ set(EXTENSION_TESTS_ONLY ON)
 set(DUCKDB_NORMALIZED_VERSION fixture)
 set(DUCKDB_MODULE_BASE_DIR "@REPO@")
 set(DuckDB_BINARY_DIR "${CMAKE_BINARY_DIR}")
-file(WRITE "${CMAKE_BINARY_DIR}/duckdb_platform_out" windows_amd64)
+file(WRITE "${CMAKE_BINARY_DIR}/duckdb_platform_out" @PLATFORM@)
 add_custom_target(duckdb_platform)
 @FUNCTIONS@
 # Match DuckDB's configure order: extensions precede src/CMakeLists.txt.
@@ -201,6 +302,7 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
                 )
                 .replace("@FUNCTIONS@", functions)
                 .replace("@HOOK@", hook)
+                .replace("@PLATFORM@", platform)
             )
 
             def run(*command):
@@ -288,6 +390,25 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/host-core.txt"
                         self.assertIn("Name: duckdb.dll", imports)
                         self.assertIn("Symbol: used ", imports)
                         self.assertIn("Symbol: used_data ", imports)
+
+            run(
+                "cmake",
+                "-S",
+                str(root),
+                "-B",
+                str(build),
+                "-DWINDOWS_STATIC_LIBRARY_EXPORTS=OFF",
+                "-DEXTENSION_STATIC_BUILD=ON",
+            )
+            run("cmake", "--build", str(build))
+            self.assertIn("no work to do", run("cmake", "--build", str(build)))
+            with (root / "core.c").open("a") as file:
+                file.write("\n__declspec(dllexport) int newly_unused(void) { return 91; }\n")
+            run("cmake", "--build", str(build))
+            extension = run("llvm-readobj", "--coff-exports", str(extension_path))
+            host = run("llvm-readobj", "--coff-exports", str(build / "host.dll"))
+            self.assertIn("Name: newly_unused", host)
+            self.assertNotIn("Name: newly_unused", extension)
 
 
 if __name__ == "__main__":
