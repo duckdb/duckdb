@@ -145,11 +145,7 @@ statement ok
 SET debug_checkpoint_scan_sleep_ms=0
 
 # the rollback unlinked the last version: nothing needs the update segment anymore, so the checkpoint drops it and
-# rewrites the column to make its statistics exact again (a checkpoint with nothing in the WAL does nothing, so give
-# it something)
-statement ok
-CREATE TABLE tick(i INTEGER)
-
+# rewrites the column to make its statistics exact again, although the WAL is empty
 statement ok
 CHECKPOINT
 

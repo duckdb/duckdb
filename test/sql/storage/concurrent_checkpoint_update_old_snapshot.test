@@ -75,10 +75,7 @@ statement ok con1
 COMMIT
 
 # con1 was the last reader of the old values: its commit cleaned them up, and the next checkpoint drops the
-# update segments (a checkpoint with nothing in the WAL does nothing, so give it something)
-statement ok
-CREATE TABLE tick(i INTEGER)
-
+# update segments, although the WAL is empty
 statement ok
 CHECKPOINT
 

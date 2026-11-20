@@ -156,6 +156,7 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 	}
 	// older transactions still read values from the segment, so the target's statistics must cover them
 	target.stats_inexact = true;
+	GetStorageManager().MarkInexactStatistics();
 	if (type.id() != LogicalTypeId::VALIDITY) {
 		// a validity column receives its parent's statistics, which the parent merges itself
 		target_stats.Merge(old_stats);

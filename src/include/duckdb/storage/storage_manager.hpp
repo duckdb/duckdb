@@ -84,6 +84,8 @@ public:
 	void SetWALSize(idx_t size);
 	void MarkBufferedIndexReplays();
 	bool HasBufferedIndexReplays() const;
+	//! Makes the next checkpoint run without changes in the WAL, to rewrite statistics that this one left widened
+	void MarkInexactStatistics();
 	//! Gets the number of WAL entries since last checkpoint
 	idx_t GetWALEntriesCount() const;
 	void ResetWALEntriesCount();
@@ -213,6 +215,8 @@ protected:
 	atomic<idx_t> wal_entries_count;
 	//! Set when an unbound index buffers an operation. Cleared by BindIndexesForCheckpoint once none remain.
 	atomic<bool> buffered_index_replays {false};
+	//! Set when a checkpoint leaves statistics that updates widened for older transactions
+	atomic<bool> inexact_statistics {false};
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
 	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
