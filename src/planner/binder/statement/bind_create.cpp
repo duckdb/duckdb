@@ -56,8 +56,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
@@ -443,56 +441,35 @@ void Binder::CheckMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &i
 	}
 }
 
-//! The signature of a member as it is persisted: create_validate receives the stored types, whose extension metadata
-//! stays mutable behind the const accessor, so CREATE compares this before and after the callback
-static string SerializedSignature(const LanguageMacroFunction &member) {
-	MemoryStream stream;
-	SerializationOptions options;
-	options.storage_compatibility = StorageCompatibility::Latest();
-	BinarySerializer serializer(stream, std::move(options));
-	serializer.Begin();
-	serializer.WriteProperty(100, "types", member.types);
-	serializer.WriteProperty(101, "return_type", member.return_type);
-	serializer.End();
-	return string(const_char_ptr_cast(stream.GetData()), stream.GetPosition());
-}
-
-//! Run a language's CREATE-time validation on views of the members, reject signature changes, and copy its outputs
-//! back
+//! Run a language's CREATE-time validation on read-only views of the members, and copy its outputs back
 static void ValidateLanguageMembers(ClientContext &context, scalar_function_create_validate_t validate,
                                     CreateMacroInfo &info) {
 	vector<LanguageMemberView> members;
-	vector<string> signatures;
-	vector<string> signature_names;
+	vector<vector<LogicalType>> description_types;
 	for (auto &function : info.macros) {
 		auto &member = function->Cast<LanguageMacroFunction>();
 		LanguageMemberView view;
 		view.language = member.language;
 		view.source = member.source;
+		vector<LogicalType> documented;
 		for (idx_t param_idx = 0; param_idx < member.parameters.size(); param_idx++) {
 			auto &param_name = member.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			view.parameter_names.push_back(param_name);
-			view.parameter_types.push_back(param_idx < member.types.size() ? member.types[param_idx]
-			                                                               : LogicalType::UNKNOWN);
+			auto type = param_idx < member.types.size() ? member.types[param_idx] : LogicalType::UNKNOWN;
+			documented.push_back(type.id() == LogicalTypeId::UNKNOWN ? LogicalType::ANY : type);
+			view.parameter_types.emplace_back(std::move(type));
 			auto default_it = member.default_parameters.find(param_name);
 			view.parameter_defaults.push_back(
 			    default_it == member.default_parameters.end() ? string() : default_it->second->ToString());
 		}
-		view.return_type = member.return_type;
-		signatures.push_back(SerializedSignature(member));
-		signature_names.push_back(member.SignatureToString());
+		view.return_type = LanguageTypeView(member.return_type);
+		description_types.push_back(std::move(documented));
 		members.push_back(std::move(view));
 	}
 	auto function_name = info.GetQualifiedName();
-	ScalarFunctionCreateValidateInput input(context, function_name, info.sql, std::move(members));
+	ScalarFunctionCreateValidateInput input(context, function_name, info.sql, std::move(members),
+	                                        std::move(description_types));
 	validate(input);
-	for (idx_t member_idx = 0; member_idx < info.macros.size(); member_idx++) {
-		if (SerializedSignature(info.macros[member_idx]->Cast<LanguageMacroFunction>()) != signatures[member_idx]) {
-			throw InvalidInputException("language validator for \"%s\" changed the signature of member %llu (%s)",
-			                            info.GetFunctionName().GetIdentifierName(), member_idx + 1,
-			                            signature_names[member_idx]);
-		}
-	}
 	for (idx_t member_idx = 0; member_idx < info.macros.size(); member_idx++) {
 		auto source = input.GetMemberSource(member_idx);
 		if (source) {

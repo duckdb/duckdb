@@ -118,28 +118,49 @@ private:
 	string error_note;
 };
 
-//! One member of a definition under CREATE-time validation: copies of its text fields and the stored types
+//! A read-only view of a member type under CREATE-time validation. It exposes the rendered type and the parts of it a
+//! validator inspects, but no handle to the stored type, so a validator cannot change a stored signature. Each
+//! accessor maps onto a function over an opaque type handle
+class LanguageTypeView {
+public:
+	explicit LanguageTypeView(LogicalType type = LogicalType::UNKNOWN);
+
+	//! The type as SQL text. UNKNOWN for an untyped parameter or an undeclared RETURNS type
+	string ToString() const;
+	LogicalTypeId GetId() const;
+	//! The alias of a user type, empty when there is none
+	string GetAlias() const;
+	//! The fields of a STRUCT or UNION, the element of a LIST or ARRAY, and the key and value of a MAP
+	idx_t GetChildCount() const;
+	//! The name of a STRUCT or UNION field, "key" and "value" for a MAP, empty for a LIST or ARRAY element
+	string GetChildName(idx_t child_idx) const;
+	LanguageTypeView GetChild(idx_t child_idx) const;
+
+private:
+	LogicalType type;
+};
+
+//! One member of a definition under CREATE-time validation, as copies and read-only type views
 struct LanguageMemberView {
 	string language;
 	string source;
 	vector<Identifier> parameter_names;
 	//! UNKNOWN for an untyped parameter
-	vector<LogicalType> parameter_types;
+	vector<LanguageTypeView> parameter_types;
 	//! The default as SQL text, empty for a parameter without a default
 	vector<string> parameter_defaults;
 	//! UNKNOWN when no RETURNS type is declared
-	LogicalType return_type = LogicalType::UNKNOWN;
+	LanguageTypeView return_type;
 };
 
-//! The input of a language's create_validate callback. The member types are the stored types: their extension
-//! metadata stays mutable behind the const accessor, but modifying them is undefined behavior. CREATE compares the
-//! persisted signature of every member before and after the callback and rejects a change, but cannot undo it: the
-//! types share their info with the catalog and with types the extension registered. Core copies the rewritten
-//! sources and the published descriptions back after the callback
+//! The input of a language's create_validate callback. The members are copies with read-only type views, so the
+//! callback cannot change a stored signature. Core copies the rewritten sources and the published descriptions back
+//! after the callback
 class ScalarFunctionCreateValidateInput {
 public:
 	ScalarFunctionCreateValidateInput(ClientContext &context, const QualifiedName &function_name,
-	                                  const string &statement_text, vector<LanguageMemberView> members);
+	                                  const string &statement_text, vector<LanguageMemberView> members,
+	                                  vector<vector<LogicalType>> description_types);
 
 	ClientContext &context;
 	//! The function being created, catalog-qualified
@@ -151,9 +172,9 @@ public:
 public:
 	//! Rewrite the stored source of a member
 	void SetMemberSource(idx_t member_idx, string source);
-	//! Publish documentation. A description must carry its member's parameter types, with ANY for untyped
-	//! parameters, so it is released with the member when the member is replaced or dropped
-	void AddDescription(FunctionDescription description);
+	//! Publish documentation for a member. Core sets the description's parameter names and types to the member's
+	//! signature, ANY for untyped parameters, so it is released with the member when the member is replaced or dropped
+	void AddDescription(idx_t member_idx, FunctionDescription description);
 
 	//! The rewritten source of a member, if any
 	optional_ptr<const string> GetMemberSource(idx_t member_idx) const;
@@ -162,6 +183,8 @@ public:
 private:
 	vector<optional<string>> member_sources;
 	vector<FunctionDescription> descriptions;
+	//! The documented parameter types of each member, ANY for untyped parameters
+	vector<vector<LogicalType>> description_types;
 };
 
 //! The scalar function set implementing a language, looked up in the system catalog with autoload by name. Returns
