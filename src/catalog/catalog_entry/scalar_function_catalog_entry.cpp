@@ -40,7 +40,7 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransacti
 		throw BinderException("Failed to add new function overloads to function %s: function overload already exists",
 		                      name);
 	}
-	new_set.MergeLanguageDeclaration(add_overloads.new_overloads->functions);
+	new_set.MergeLanguageDeclaration(functions, add_overloads.new_overloads->functions);
 	CreateScalarFunctionInfo new_info(std::move(new_set));
 	new_info.internal = internal;
 	new_info.descriptions = descriptions;
