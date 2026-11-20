@@ -2,6 +2,7 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -750,7 +751,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads() {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
@@ -762,7 +763,8 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 			return MaxValue<idx_t>(slurm_threads, 1);
 		}
 	}
-	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
+	VirtualFileSystem local_fs;
+	return MaxValue<idx_t>(CGroups::GetCPULimit(local_fs, physical_cores), 1);
 #else
 	return MaxValue<idx_t>(physical_cores, 1);
 #endif
@@ -777,8 +779,8 @@ static idx_t AsyncThreadsForThreads(idx_t threads) {
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
-	return AsyncThreadsForThreads(GetSystemMaxThreads(fs));
+idx_t DBConfig::GetSystemMaxAsyncThreads() {
+	return AsyncThreadsForThreads(GetSystemMaxThreads());
 }
 
 idx_t DBConfig::GetDefaultThreads() const {
@@ -786,7 +788,7 @@ idx_t DBConfig::GetDefaultThreads() const {
 	if (threads != 0) {
 		return threads;
 	}
-	threads = GetSystemMaxThreads(*file_system);
+	threads = GetSystemMaxThreads();
 	// a user config does not have its final file system yet
 	if (!is_user_config) {
 		default_threads = threads;
@@ -816,7 +818,7 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	} else if (slurm_mem_per_cpu) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
-			idx_t num_threads = GetSystemMaxThreads(fs);
+			idx_t num_threads = GetSystemMaxThreads();
 			return mem_per_cpu.GetIndex() * num_threads;
 		}
 	}
