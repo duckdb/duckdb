@@ -10,7 +10,7 @@ SET threads=4;
 loop i 0 3
 
 statement ok
-COPY (SELECT ${i} * 256000 + j AS k FROM range(256000) t(j)) TO '{TEST_DIR}/union_partial_${i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 102400);
+COPY (SELECT {i} * 256000 + j AS k FROM range(256000) t(j)) TO '{TEST_DIR}/union_partial_{i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 102400);
 
 endloop
 
@@ -50,7 +50,7 @@ SELECT count(*), bool_and(k = file_row_number) FROM read_parquet('{TEST_DIR}/uni
 loop i 0 4
 
 statement ok
-COPY (SELECT ${i} AS k) TO '{TEST_DIR}/union_small_${i}.parquet' (FORMAT parquet);
+COPY (SELECT {i} AS k) TO '{TEST_DIR}/union_small_{i}.parquet' (FORMAT parquet);
 
 endloop
 
