@@ -294,6 +294,8 @@ public:
 	void SetTableName(Identifier new_name);
 
 	TableStorageInfo GetStorageInfo() const;
+	//! Estimate checkpointed column data size from a bounded number of row group samples.
+	optional_idx GetEstimatedDataSize(ClientContext &context, idx_t sample_row_groups);
 
 	idx_t GetRowGroupSize() const;
 

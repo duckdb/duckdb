@@ -1,0 +1,355 @@
+# name: test/sql/table_function/duckdb_table_storage.test
+# description: Estimate checkpointed table data size using cached, stratified metadata samples
+# group: [table_function]
+
+require noforcestorage
+
+foreach budget 0 -1 NULL
+
+statement error
+SELECT * FROM duckdb_table_storage(sample_row_groups := {budget});
+----
+sample_row_groups must be a positive integer
+
+endloop
+
+statement ok
+CREATE TABLE memory_table(i INTEGER);
+
+statement ok
+CREATE TEMP TABLE temporary_table(i INTEGER);
+
+statement ok
+CREATE VIEW ignored_view AS SELECT 1;
+
+query TI rowsort
+SELECT table_name, estimated_data_bytes IS NULL FROM duckdb_table_storage();
+----
+memory_table	true
+temporary_table	true
+
+statement ok
+ATTACH '{TEST_DIR}/table_storage_estimates.db' AS sizes (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 8192);
+
+statement ok
+USE sizes;
+
+statement ok
+CREATE TEMP VIEW sizes_at_checkpoint AS
+SELECT table_name, estimated_data_bytes AS bytes FROM duckdb_table_storage() WHERE database_name='sizes';
+
+statement ok
+SET threads=1;
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true;
+
+statement ok
+SET force_compression='uncompressed';
+
+statement ok
+CREATE TABLE empty_table(i BIGINT);
+
+statement ok
+CREATE TABLE numbers AS SELECT i FROM range(1024) t(i);
+
+query I
+SELECT count(*) FROM sizes_at_checkpoint WHERE bytes IS NULL;
+----
+2
+
+statement ok
+CHECKPOINT sizes;
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='empty_table';
+----
+0
+
+query TTT
+SELECT table_name, database_name, schema_name FROM duckdb_table_storage() WHERE table_name='numbers';
+----
+numbers	sizes	main
+
+# Catalog-only queries do not need a storage sample.
+query II
+EXPLAIN SELECT table_name FROM duckdb_table_storage();
+----
+physical_plan	<REGEX>:.*Function: DUCKDB_TABLE_STORAGE.*Projections: table_name.*
+
+query I
+SELECT bytes BETWEEN 8192 AND 16384 FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+true
+
+# Large budgets are capped by the actual row group count.
+query I nosort first_numbers_size
+SELECT estimated_data_bytes FROM duckdb_table_storage(sample_row_groups := 9223372036854775807)
+WHERE database_name='sizes' AND table_name='numbers';
+----
+
+# Appends in the WAL do not change the checkpointed estimate.
+statement ok
+INSERT INTO numbers SELECT i FROM range(1024, 4096) t(i);
+
+query I nosort first_numbers_size
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+
+statement ok
+CHECKPOINT sizes;
+
+query I
+SELECT bytes BETWEEN 32768 AND 65536 FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+true
+
+statement ok
+CREATE TABLE nested AS SELECT [i, NULL] AS a, {'x': i, 'text': i::VARCHAR} AS b FROM range(1024) t(i);
+
+statement ok
+CREATE TABLE overflow_strings AS SELECT repeat('abcdefgh', 1024) || i::VARCHAR AS s FROM range(32) t(i);
+
+statement ok
+CREATE TABLE weighted AS SELECT i FROM range(58368) t(i);
+
+statement ok
+CHECKPOINT sizes;
+
+# Count nested columns, overflow blocks and the short final row group.
+query T rowsort
+SELECT table_name FROM sizes_at_checkpoint
+WHERE (table_name='nested' AND bytes > 8192)
+   OR (table_name='overflow_strings' AND bytes >= 262144)
+   OR (table_name='weighted' AND bytes BETWEEN 466944 AND 500000);
+----
+nested
+overflow_strings
+weighted
+
+statement ok
+SET force_compression='auto';
+
+statement ok
+CREATE TABLE constants AS SELECT 42::BIGINT AS i FROM range(1000);
+
+# The boundary falls inside one of the four strata, making cache reuse observable.
+statement ok
+CREATE TABLE stratified AS SELECT CASE WHEN i < 24576 THEN 0::UBIGINT ELSE hash(i) END AS i FROM range(65536) t(i);
+
+statement ok
+CHECKPOINT sizes;
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='constants';
+----
+0
+
+query I
+SELECT bytes BETWEEN 200000 AND 400000 FROM sizes_at_checkpoint WHERE table_name='stratified';
+----
+true
+
+# Changing the prepared sample budget must select the corresponding estimate.
+statement ok
+PREPARE storage_sample AS
+SELECT (estimated_data_bytes BETWEEN 200000 AND 400000) = $2
+FROM duckdb_table_storage(sample_row_groups := $1) WHERE database_name='sizes' AND table_name='stratified';
+
+foreach budget,in_range 1,false 16,true 1,false
+
+query I
+EXECUTE storage_sample({budget}, {in_range});
+----
+true
+
+endloop
+
+statement ok
+DEALLOCATE storage_sample;
+
+query I nosort four_group_size
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
+----
+
+query I nosort four_group_size
+SELECT estimated_data_bytes FROM duckdb_table_storage(sample_row_groups := 4) WHERE database_name='sizes' AND table_name='stratified';
+----
+
+statement ok
+UPDATE stratified SET i=0;
+
+query I nosort four_group_size
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
+----
+
+statement ok
+CHECKPOINT sizes;
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
+----
+0
+
+# Request a different budget so a reader has to sample while competing with the checkpoint.
+statement ok
+INSERT INTO weighted VALUES (42);
+
+concurrentloop connection 0 4
+
+onlyif connection=0
+statement ok
+FORCE CHECKPOINT sizes;
+
+onlyif connection<>0
+query I
+SELECT estimated_data_bytes > 0 FROM duckdb_table_storage(sample_row_groups := 2) WHERE database_name='sizes' AND table_name='weighted';
+----
+true
+
+endloop
+
+statement ok
+ALTER TABLE weighted RENAME TO renamed_weighted;
+
+statement ok
+DELETE FROM renamed_weighted;
+
+query I
+SELECT bytes > 0 FROM sizes_at_checkpoint WHERE table_name='renamed_weighted';
+----
+true
+
+statement ok
+ALTER TABLE numbers ADD COLUMN s VARCHAR DEFAULT 'hello';
+
+query I
+SELECT bytes >= 32768 FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+true
+
+statement ok
+CHECKPOINT sizes;
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='renamed_weighted';
+----
+0
+
+query I
+SELECT bytes >= 32768 FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+true
+
+# Reload the existing checkpoint without persisting any estimate fields.
+statement ok
+USE memory;
+
+query I nosort nested_size
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='nested';
+----
+
+statement ok
+DETACH sizes;
+
+statement ok
+ATTACH '{TEST_DIR}/table_storage_estimates.db' AS sizes (READ_ONLY);
+
+query I
+SELECT bytes BETWEEN 32768 AND 65536 FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+true
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_table_storage() WHERE database_name='sizes' AND schema_name='missing';
+----
+0
+
+statement ok
+DETACH sizes;
+
+statement ok
+ATTACH '{TEST_DIR}/table_storage_estimates.db' AS sizes;
+
+# WAL-only appends leave a previously checkpointed empty table at zero, including after reopening.
+statement ok
+INSERT INTO sizes.empty_table VALUES (99);
+
+query I
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='empty_table';
+----
+0
+
+# On a cold cache, read the checkpoint's column layout even if the live schema has changed.
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE sizes.nested DROP COLUMN b;
+
+query I nosort nested_size
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='nested';
+----
+
+statement ok
+ROLLBACK;
+
+# A failed checkpoint preserves the previous size even after the new rows are recovered from the WAL.
+query I nosort before_failed_checkpoint
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+
+statement ok
+INSERT INTO sizes.numbers(i) SELECT i FROM range(16384) t(i);
+
+statement ok
+SET debug_checkpoint_abort='before_header_non_fatal';
+
+statement error
+CHECKPOINT sizes;
+----
+Checkpoint aborted before header write
+
+statement ok
+SET debug_checkpoint_abort='none';
+
+statement ok
+DETACH sizes;
+
+statement ok
+ATTACH '{TEST_DIR}/table_storage_estimates.db' AS sizes;
+
+query I nosort before_failed_checkpoint
+SELECT bytes FROM sizes_at_checkpoint WHERE table_name='numbers';
+----
+
+query I
+SELECT count(*) FROM sizes.numbers;
+----
+20480
+
+statement ok
+DETACH sizes;
+
+# Older storage versions do not have segment byte sizes.
+statement ok
+ATTACH '{TEST_DIR}/table_storage_estimates_legacy.db' AS legacy (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+CREATE TABLE legacy.numbers AS SELECT hash(i) AS i FROM range(1024) t(i);
+
+statement ok
+CHECKPOINT legacy;
+
+query I
+SELECT estimated_data_bytes IS NULL FROM duckdb_table_storage() WHERE database_name='legacy' AND table_name='numbers';
+----
+true
+
+statement ok
+DETACH legacy;
