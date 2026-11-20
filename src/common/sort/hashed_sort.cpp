@@ -1,4 +1,5 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/execution/chunk_hasher.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -9,7 +10,6 @@
 #include "duckdb/common/types/row/integer_partitioned_tuple_data.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -372,6 +372,7 @@ public:
 	ExpressionExecutor hash_exec;
 	ExpressionExecutor sort_exec;
 	DataChunk group_chunk;
+	unique_ptr<ChunkHasher> group_hasher;
 	DataChunk sort_chunk;
 	DataChunk payload_chunk;
 
@@ -409,6 +410,9 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 
 	auto hash_types = hashed_sort.payload_types;
 	group_chunk.Initialize(allocator, group_types);
+	if (!group_types.empty()) {
+		group_hasher = make_uniq<ChunkHasher>(context.client, group_types);
+	}
 	hash_types.emplace_back(LogicalType::HASH);
 	payload_chunk.Initialize(allocator, hash_types);
 
@@ -430,11 +434,7 @@ void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector)
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
-	const idx_t count = group_chunk.size();
-	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
-	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
-		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
-	}
+	group_hasher->Hash(group_chunk, hash_vector);
 }
 
 SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chunk, OperatorSinkInput &sink) const {
