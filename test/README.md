@@ -123,3 +123,8 @@ and buffer sizes.
 ### ADBC
 
 The ADBC tests are in `test/api/adbc/test_adbc.cpp`. To run them the DuckDB library path must be provided in the `DUCKDB_INSTALL_LIB` variable.
+
+### Timing test runs
+
+Check CPU utilization and wait for unrelated heavy compilation or test jobs to finish before
+measuring. Use a release build and the runner's default worker concurrency.
