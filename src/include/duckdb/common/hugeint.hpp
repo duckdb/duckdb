@@ -243,6 +243,24 @@ constexpr uint32_t Uint64LeadingZeros(uint64_t value) {
 #endif
 }
 
+//! Returns the low 64 bits of a * b and sets high to its high 64 bits
+constexpr uint64_t Uint64MultiplyFull(uint64_t a, uint64_t b, uint64_t &high) {
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	const auto product = static_cast<__uint128_t>(a) * b;
+	high = static_cast<uint64_t>(product >> 64);
+	return static_cast<uint64_t>(product);
+#else
+	constexpr uint64_t HALF_MASK = 0xFFFFFFFFULL;
+	const uint64_t low_low = (a & HALF_MASK) * (b & HALF_MASK);
+	const uint64_t low_high = (a & HALF_MASK) * (b >> 32);
+	const uint64_t high_low = (a >> 32) * (b & HALF_MASK);
+	const uint64_t high_high = (a >> 32) * (b >> 32);
+	const uint64_t middle = (low_low >> 32) + (low_high & HALF_MASK) + (high_low & HALF_MASK);
+	high = high_high + (low_high >> 32) + (high_low >> 32) + (middle >> 32);
+	return (low_low & HALF_MASK) | (middle << 32);
+#endif
+}
+
 //! Divides high * 2^64 + low by a divisor larger than high, so that the quotient fits 64 bits; sets the remainder.
 //! Two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division.
 // no D_ASSERT: must stay usable in constant expressions
@@ -300,11 +318,11 @@ constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint
 		quotient--;
 	}
 	// the quotient does not exceed the exact one, so the product fits 128 bits and the remainder is non-negative
-	const hugeint_t product =
-	    HugeintMultiplyUnchecked(hugeint_t(0, quotient), hugeint_t(static_cast<int64_t>(rhs_upper), rhs_lower));
-	const uint64_t product_upper = static_cast<uint64_t>(product.upper);
-	uint64_t remainder_lower = lhs_lower - product.lower;
-	uint64_t remainder_upper = lhs_upper - product_upper - (lhs_lower < product.lower ? 1 : 0);
+	uint64_t product_upper = 0;
+	const uint64_t product_lower = Uint64MultiplyFull(quotient, rhs_lower, product_upper);
+	product_upper += quotient * rhs_upper;
+	uint64_t remainder_lower = lhs_lower - product_lower;
+	uint64_t remainder_upper = lhs_upper - product_upper - (lhs_lower < product_lower ? 1 : 0);
 	if (remainder_upper > rhs_upper || (remainder_upper == rhs_upper && remainder_lower >= rhs_lower)) {
 		const uint64_t borrow = remainder_lower < rhs_lower ? 1 : 0;
 		remainder_lower -= rhs_lower;
