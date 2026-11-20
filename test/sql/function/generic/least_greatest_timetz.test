@@ -1,0 +1,32 @@
+# name: test/sql/function/generic/least_greatest_timetz.test
+# description: Test LEAST/GREATEST on TIMETZ follows the TIMETZ comparison order
+# group: [generic]
+
+# 13:00:00+01 is 12:00 UTC, which is earlier than 12:30:00+00
+query II
+SELECT least('13:00:00+01'::TIMETZ, '12:30:00+00'::TIMETZ), greatest('13:00:00+01'::TIMETZ, '12:30:00+00'::TIMETZ)
+----
+13:00:00+01	12:30:00+00
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM (VALUES ('13:00:00+01'::TIMETZ, '12:30:00+00'::TIMETZ), (NULL, '01:00:00+05')) v(a, b);
+
+query II
+SELECT least(a, b), greatest(a, b) FROM tbl
+----
+13:00:00+01	12:30:00+00
+01:00:00+05	01:00:00+05
+
+# the filters must not be pruned by statistics derived from the physical TIMETZ order
+statement ok
+CREATE TABLE stats_tbl AS SELECT '13:00:00+01'::TIMETZ AS a, '12:30:00+00'::TIMETZ AS b;
+
+query I
+SELECT count(*) FROM stats_tbl WHERE least(a, b) = '13:00:00+01'::TIMETZ
+----
+1
+
+query I
+SELECT count(*) FROM stats_tbl WHERE greatest(a, b) = '12:30:00+00'::TIMETZ
+----
+1

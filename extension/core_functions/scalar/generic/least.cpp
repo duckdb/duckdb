@@ -177,8 +177,9 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto &return_type = expr.GetReturnType();
+	// TIMETZ min/max stats follow the physical bit order, which differs from the logical order
 	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
-	    return_type.InternalType() == PhysicalType::BOOL) {
+	    return_type.InternalType() == PhysicalType::BOOL || return_type.id() == LogicalTypeId::TIME_TZ) {
 		return nullptr;
 	}
 	constexpr bool IS_LEAST = std::is_same_v<LEAST_GREATER_OP, LeastOp>;
@@ -265,7 +266,24 @@ void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	default:
 		break;
 	}
+	for (auto &arg : bound_function.GetArguments()) {
+		arg = child_type;
+	}
+	bound_function.SetReturnType(child_type);
+
 	using OP = typename LEAST_GREATER_OP::OP;
+	// types whose logical order differs from the order of their physical representation
+	switch (child_type.id()) {
+	case LogicalTypeId::TIME_TZ:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<dtime_tz_t, OP>);
+		return;
+	case LogicalTypeId::INTERVAL:
+		bound_function.SetFunctionCallback(LeastGreatestFunction<interval_t, OP>);
+		return;
+	default:
+		break;
+	}
+	// all other types are ordered by their physical representation
 	switch (child_type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(least_greatest_types)
 	case PhysicalType::BOOL:
@@ -297,10 +315,6 @@ void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	for (auto &arg : bound_function.GetArguments()) {
-		arg = child_type;
-	}
-	bound_function.SetReturnType(child_type);
 }
 
 template <class OP>
