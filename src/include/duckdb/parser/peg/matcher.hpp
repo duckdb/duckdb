@@ -33,7 +33,7 @@ class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
 struct ListMatchChain;
-struct MatcherSequenceCheck;
+class MatcherSequenceCheck;
 class MatchProcess;
 
 enum class SuggestionState : uint8_t {
@@ -206,10 +206,10 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&...args);
+	MatcherResult AllocateParseResult(ARGS &&... args);
 
 	template <class PROCESS, class... ARGS>
-	arena_ptr<MatchProcess> Make(ARGS &&...args);
+	arena_ptr<MatchProcess> Make(ARGS &&... args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -323,24 +323,59 @@ struct MatcherTokenSet {
 
 class ChoiceMatcher;
 
-//! Lookahead refinements of a sequence, derived from the grammar once. Leading single-token elements fix the tokens
-//! at positions 2, 3, ... (`later_tokens`). A leading choice is checked per alternative:
-//! the second token has to continue the alternative that accepts the first one (or start the rest of the sequence
-//! after a one-token alternative). A tail check scans the tokens the prefix can consume outside of balanced brackets
-//! (`alphabet`): the first other token has to start the element after the prefix (`required`).
-struct MatcherSequenceCheck {
-	//! tokens the sequence needs at positions 2, 3, ... when its leading elements each consume exactly one token
+//! Lookahead refinements of a sequence, derived from the grammar once (matcher_sequence_check.cpp). A sequence has
+//! one when at least one of three tests can reject it after its first two tokens passed the FIRST and SECOND sets.
+class MatcherSequenceCheck {
+public:
+	explicit MatcherSequenceCheck(const GrammarLiteralTable &table_p) : table(table_p) {
+	}
+
+public:
+	//! Whether the sequence can match at the current token. A rejection does not advance the error position:
+	//! it records how far the sequence could have come in MatchContext::tail_rejected_until instead.
+	DUCKDB_API bool MightMatch(MatchState &state) const;
+
+	//! Leading elements that each consume exactly one token fix the tokens the sequence needs at positions 2, 3, ...
+	void SetLaterTokens(vector<MatcherTokenSet> later_tokens_p) {
+		later_tokens = std::move(later_tokens_p);
+	}
+	//! The sequence starts with a choice: the second token has to continue the alternative that accepts the first
+	//! one, or start the rest of the sequence (rest_first, rest_nullable) after a one-token alternative
+	void SetLeadingChoice(const ChoiceMatcher &choice, MatcherTokenSet rest_first_p, bool rest_nullable_p) {
+		leading_choice = choice;
+		rest_first = std::move(rest_first_p);
+		rest_nullable = rest_nullable_p;
+	}
+	optional_ptr<const ChoiceMatcher> GetLeadingChoice() const {
+		return leading_choice;
+	}
+	//! The check of each alternative of the leading choice that is a checked sequence itself, nullptr otherwise
+	void SetAlternativeChecks(vector<optional_ptr<const MatcherSequenceCheck>> alternative_checks_p) {
+		alternative_checks = std::move(alternative_checks_p);
+	}
+	//! The first token the prefix cannot consume outside of balanced brackets (alphabet) has to start the element
+	//! after the prefix (required). When the prefix consumes no brackets, an opening bracket has to start it as well.
+	void SetTail(MatcherTokenSet alphabet_p, MatcherTokenSet required_p, bool bracket_ends_prefix_p) {
+		has_tail = true;
+		alphabet = std::move(alphabet_p);
+		required = std::move(required_p);
+		bracket_ends_prefix = bracket_ends_prefix_p;
+	}
+
+private:
+	bool MightMatchLeadingChoice(MatchState &state) const;
+	bool MightMatchTail(MatchState &state) const;
+
+private:
+	const GrammarLiteralTable &table;
 	vector<MatcherTokenSet> later_tokens;
 	optional_ptr<const ChoiceMatcher> leading_choice;
-	//! one-based sequence check of each alternative of the leading choice, zero for an alternative without one
-	vector<uint16_t> alternative_checks;
-	//! FIRST set of the sequence after the leading choice
+	vector<optional_ptr<const MatcherSequenceCheck>> alternative_checks;
 	MatcherTokenSet rest_first;
 	bool rest_nullable = false;
 	bool has_tail = false;
 	MatcherTokenSet alphabet;
 	MatcherTokenSet required;
-	//! the prefix consumes no brackets, so an opening bracket after it has to start the element
 	bool bracket_ends_prefix = false;
 };
 
@@ -406,13 +441,8 @@ struct MatcherFirstSet : public MatcherTokenSet {
 	}
 	//! The lookahead check for a token in FIRST: a one-token match or a valid second token, then the tail check
 	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
-	//! The sequence check of a matcher whose first two tokens passed
+	//! The sequence check of a matcher whose first two tokens passed, if it has one and the checks are switched on
 	DUCKDB_API bool MightMatchSequence(MatchState &state) const;
-	DUCKDB_API bool MightMatchSequence(const MatcherSequenceCheck &check, MatchState &state) const;
-	//! The per-alternative second-token check of a sequence that starts with a choice
-	DUCKDB_API bool MightMatchLeadingChoice(const MatcherSequenceCheck &check, MatchState &state) const;
-	//! Scans past the tokens the prefix can consume and checks that the element after it can start there
-	DUCKDB_API bool MightMatchTail(const MatcherSequenceCheck &check, MatchState &state) const;
 };
 
 class Matcher {
@@ -587,7 +617,7 @@ public:
 	~ParseResultAllocator();
 
 	template <class RESULT, class... ARGS>
-	optional_ptr<ParseResult> Make(ARGS &&...args) {
+	optional_ptr<ParseResult> Make(ARGS &&... args) {
 		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
 		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
 		if (ParseResultNeedsDestructor<RESULT>::value) {
@@ -630,7 +660,7 @@ private:
 };
 
 template <class PROCESS, class... ARGS>
-arena_ptr<MatchProcess> MatchState::Make(ARGS &&...args) {
+arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
@@ -644,7 +674,7 @@ void ParseResult::SetNameFrom(const Matcher &matcher_p) {
 }
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

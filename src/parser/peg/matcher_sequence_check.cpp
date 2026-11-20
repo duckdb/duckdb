@@ -6,7 +6,164 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Tail check analysis
+// Sequence check
+//===--------------------------------------------------------------------===//
+static constexpr idx_t MAX_TAIL_SCAN = 128;
+
+namespace {
+enum class BracketKind : uint8_t { NONE, OPEN, CLOSE };
+} // namespace
+
+static BracketKind TokenBracket(const MatcherToken &token) {
+	if (token.length != 1) {
+		return BracketKind::NONE;
+	}
+	switch (token.text[0]) {
+	case '(':
+	case '[':
+	case '{':
+		return BracketKind::OPEN;
+	case ')':
+	case ']':
+	case '}':
+		return BracketKind::CLOSE;
+	default:
+		return BracketKind::NONE;
+	}
+}
+
+//! String literals also carry the WORD class for name positions; alphabets mark string consumption with STRING
+static uint8_t TailTokenClass(const MatcherToken &token) {
+	return token.type == TokenType::STRING_LITERAL ? MatcherTokenClass::STRING : token.token_class;
+}
+
+//! A skipped sequence could have come as far as the token that stopped the scan
+static bool RejectTail(MatchState &state, idx_t stop_position) {
+	if (stop_position > state.context.tail_rejected_until) {
+		state.context.tail_rejected_until = stop_position;
+	}
+	return false;
+}
+
+bool MatcherSequenceCheck::MightMatch(MatchState &state) const {
+	auto &iterator = state.token_iterator;
+	for (idx_t i = 0; i < later_tokens.size(); i++) {
+		auto ahead = i + 2;
+		auto later = iterator.Peek(ahead);
+		// the autocomplete cursor can stand for any token
+		if (!later || later->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return true;
+		}
+		if (!later_tokens[i].Contains(*later, [&]() { return iterator.PeekLiteralInfo(table, ahead); })) {
+			return RejectTail(state, iterator.Position() + ahead);
+		}
+	}
+	if (leading_choice && !MightMatchLeadingChoice(state)) {
+		return false;
+	}
+	return !has_tail || MightMatchTail(state);
+}
+
+bool MatcherSequenceCheck::MightMatchLeadingChoice(MatchState &state) const {
+	auto &iterator = state.token_iterator;
+	auto token = iterator.Current();
+	auto next = iterator.Peek(1);
+	// the autocomplete cursor can stand for any token
+	if (!next || next->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+		return true;
+	}
+	auto current_literal = [&]() {
+		return iterator.CurrentLiteralInfo(table);
+	};
+	auto next_literal = [&]() {
+		return iterator.PeekLiteralInfo(table, 1);
+	};
+	auto &alternatives = leading_choice->matchers;
+	for (idx_t i = 0; i < alternatives.size(); i++) {
+		auto &first = alternatives[i].get().first_set;
+		if (!first.computed || first.any || first.nullable) {
+			return true;
+		}
+		if (!first.Contains(*token, current_literal)) {
+			continue;
+		}
+		// an alternative that is a checked sequence itself cannot match when its own check rejects it
+		auto alternative_check = alternative_checks[i];
+		if (alternative_check && !alternative_check->MightMatch(state)) {
+			continue;
+		}
+		if (first.second.Contains(*next, next_literal)) {
+			return true;
+		}
+		// a one-token alternative is followed by the rest of the sequence
+		if (first.one.Contains(*token, current_literal) &&
+		    (rest_nullable || rest_first.Contains(*next, next_literal))) {
+			return true;
+		}
+	}
+	// the sequence would have consumed the current token before failing: keep the error position
+	if (iterator.Position() + 1 > state.context.max_token_index) {
+		state.context.max_token_index = iterator.Position() + 1;
+	}
+	return false;
+}
+
+bool MatcherSequenceCheck::MightMatchTail(MatchState &state) const {
+	auto &iterator = state.token_iterator;
+	idx_t depth = 0;
+	for (idx_t ahead = 0; ahead < MAX_TAIL_SCAN; ahead++) {
+		auto token = iterator.Peek(ahead);
+		// the autocomplete cursor can stand for any token
+		if (!token || token->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return true;
+		}
+		switch (TokenBracket(*token)) {
+		case BracketKind::OPEN:
+			if (depth == 0 && bracket_ends_prefix) {
+				// the prefix consumes no brackets: this one has to start the element
+				auto literal_id = iterator.PeekLiteralInfo(table, ahead).LiteralId();
+				if (literal_id && required.HasLiteral(literal_id)) {
+					return true;
+				}
+				return RejectTail(state, iterator.Position() + ahead);
+			}
+			depth++;
+			continue;
+		case BracketKind::CLOSE:
+			if (depth == 0) {
+				// neither the prefix nor the element can consume an unbalanced closing bracket
+				return RejectTail(state, iterator.Position() + ahead);
+			}
+			depth--;
+			continue;
+		default:
+			break;
+		}
+		if (depth > 0) {
+			continue;
+		}
+		auto token_class = TailTokenClass(*token);
+		if (token_class & alphabet.class_mask) {
+			continue;
+		}
+		auto literal_id = iterator.PeekLiteralInfo(table, ahead).LiteralId();
+		if (literal_id && alphabet.HasLiteral(literal_id)) {
+			continue;
+		}
+		// the first token the prefix cannot consume has to start the element
+		if (token_class & required.class_mask) {
+			return true;
+		}
+		if (literal_id && required.HasLiteral(literal_id)) {
+			return true;
+		}
+		return RejectTail(state, iterator.Position() + ahead);
+	}
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Sequence check analysis
 //===--------------------------------------------------------------------===//
 namespace {
 
@@ -342,7 +499,7 @@ SequenceCheckAnalysis::CheckFor(vector<pair<reference<ListMatcher>, unique_ptr<M
 			return *entry.second;
 		}
 	}
-	checks.emplace_back(matcher.Cast<ListMatcher>(), make_uniq<MatcherSequenceCheck>());
+	checks.emplace_back(matcher.Cast<ListMatcher>(), make_uniq<MatcherSequenceCheck>(table));
 	return *checks.back().second;
 }
 
@@ -432,11 +589,10 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 			if (!prefix.safe || !Disjoint(prefix, element_first)) {
 				continue;
 			}
-			auto check = make_uniq<MatcherSequenceCheck>();
-			check->has_tail = true;
-			check->bracket_ends_prefix = !prefix.brackets;
-			check->alphabet = std::move(prefix.tokens);
-			check->required = static_cast<const MatcherTokenSet &>(element_first);
+			auto check = make_uniq<MatcherSequenceCheck>(table);
+			// the element has to start with a token of its FIRST set
+			const MatcherTokenSet &required = element_first;
+			check->SetTail(std::move(prefix.tokens), required, !prefix.brackets);
 			sequence_checks.emplace_back(matcher.Cast<ListMatcher>(), std::move(check));
 			break;
 		}
@@ -481,14 +637,15 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 		if (!informative) {
 			continue;
 		}
-		auto &check = CheckFor(sequence_checks, matcher);
-		check.leading_choice = choice;
-		check.rest_nullable = true;
-		for (idx_t i = 1; i < node.children.size() && check.rest_nullable; i++) {
-			auto &rest_first = nodes[node.children[i]].matcher.first_set;
-			check.rest_first.MergeTokens(rest_first);
-			check.rest_nullable = rest_first.nullable;
+		// what can follow a one-token alternative: the FIRST set of the rest of the sequence
+		MatcherTokenSet rest_first;
+		bool rest_nullable = true;
+		for (idx_t i = 1; i < node.children.size() && rest_nullable; i++) {
+			auto &element_first = nodes[node.children[i]].matcher.first_set;
+			rest_first.MergeTokens(element_first);
+			rest_nullable = element_first.nullable;
 		}
+		CheckFor(sequence_checks, matcher).SetLeadingChoice(choice, std::move(rest_first), rest_nullable);
 	}
 	// leading single-token elements fix the tokens beyond the two the FIRST and SECOND sets cover
 	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
@@ -502,8 +659,7 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 		if (pattern.size() < 3) {
 			continue;
 		}
-		auto &check = CheckFor(sequence_checks, matcher);
-		check.later_tokens.assign(pattern.begin() + 2, pattern.end());
+		CheckFor(sequence_checks, matcher).SetLaterTokens(vector<MatcherTokenSet>(pattern.begin() + 2, pattern.end()));
 	}
 	return sequence_checks;
 }
@@ -535,18 +691,22 @@ void MatcherAllocator::InitializeSequenceChecks(const GrammarLiteralTable &table
 	}
 	// the alternatives of a leading choice that are checked sequences themselves, behind their rule wrappers
 	for (auto &check : sequence_checks) {
-		if (!check->leading_choice) {
+		auto leading_choice = check->GetLeadingChoice();
+		if (!leading_choice) {
 			continue;
 		}
-		for (auto &alternative : check->leading_choice->matchers) {
+		vector<optional_ptr<const MatcherSequenceCheck>> alternative_checks;
+		for (auto &alternative : leading_choice->matchers) {
 			reference<const Matcher> sequence(alternative.get());
 			while (!sequence.get().first_set.sequence_check_index && sequence.get().IsStructural() &&
 			       sequence.get().Type() == MatcherType::LIST &&
 			       sequence.get().Cast<ListMatcher>().matchers.size() == 1) {
 				sequence = sequence.get().Cast<ListMatcher>().matchers[0].get();
 			}
-			check->alternative_checks.push_back(sequence.get().first_set.sequence_check_index);
+			auto index = sequence.get().first_set.sequence_check_index;
+			alternative_checks.push_back(index ? sequence_checks[index - 1].get() : nullptr);
 		}
+		check->SetAlternativeChecks(std::move(alternative_checks));
 	}
 	// a repetition of a checked sequence starts like the sequence
 	for (auto &matcher : matchers) {

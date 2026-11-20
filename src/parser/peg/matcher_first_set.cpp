@@ -85,8 +85,6 @@ void MatcherFirstSet::Finalize() {
 	first_suffices = true;
 }
 
-static bool RejectTail(MatchState &state, idx_t stop_position);
-
 bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 	auto &iterator = state.token_iterator;
 	auto token = iterator.Current();
@@ -112,70 +110,7 @@ bool MatcherFirstSet::MightMatchSequence(MatchState &state) const {
 	if (!sequence_check_index || !state.context.sequence_checks) {
 		return true;
 	}
-	return MightMatchSequence(*(*state.context.sequence_checks)[sequence_check_index - 1], state);
-}
-
-bool MatcherFirstSet::MightMatchSequence(const MatcherSequenceCheck &check, MatchState &state) const {
-	auto &iterator = state.token_iterator;
-	for (idx_t i = 0; i < check.later_tokens.size(); i++) {
-		auto ahead = i + 2;
-		auto later = iterator.Peek(ahead);
-		// the autocomplete cursor can stand for any token
-		if (!later || later->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			return true;
-		}
-		if (!check.later_tokens[i].Contains(*later, [&]() { return iterator.PeekLiteralInfo(*table, ahead); })) {
-			return RejectTail(state, iterator.Position() + ahead);
-		}
-	}
-	if (check.leading_choice && !MightMatchLeadingChoice(check, state)) {
-		return false;
-	}
-	return !check.has_tail || MightMatchTail(check, state);
-}
-
-bool MatcherFirstSet::MightMatchLeadingChoice(const MatcherSequenceCheck &check, MatchState &state) const {
-	auto &iterator = state.token_iterator;
-	auto token = iterator.Current();
-	auto next = iterator.Peek(1);
-	// the autocomplete cursor can stand for any token
-	if (!next || next->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-		return true;
-	}
-	auto current_literal = [&]() {
-		return iterator.CurrentLiteralInfo(*table);
-	};
-	auto next_literal = [&]() {
-		return iterator.PeekLiteralInfo(*table, 1);
-	};
-	auto &alternatives = check.leading_choice->matchers;
-	for (idx_t i = 0; i < alternatives.size(); i++) {
-		auto &first = alternatives[i].get().first_set;
-		if (!first.computed || first.any || first.nullable) {
-			return true;
-		}
-		if (!first.Contains(*token, current_literal)) {
-			continue;
-		}
-		// an alternative that is a checked sequence itself cannot match when its own check rejects it
-		auto alternative_check = check.alternative_checks[i];
-		if (alternative_check && !MightMatchSequence(*(*state.context.sequence_checks)[alternative_check - 1], state)) {
-			continue;
-		}
-		if (first.second.Contains(*next, next_literal)) {
-			return true;
-		}
-		// a one-token alternative is followed by the rest of the sequence
-		if (first.one.Contains(*token, current_literal) &&
-		    (check.rest_nullable || check.rest_first.Contains(*next, next_literal))) {
-			return true;
-		}
-	}
-	// the sequence would have consumed the current token before failing: keep the error position
-	if (iterator.Position() + 1 > state.context.max_token_index) {
-		state.context.max_token_index = iterator.Position() + 1;
-	}
-	return false;
+	return (*state.context.sequence_checks)[sequence_check_index - 1]->MightMatch(state);
 }
 
 bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
@@ -349,100 +284,6 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	for (auto &entry : matchers) {
 		entry.get().first_set.Finalize();
 	}
-}
-
-//===--------------------------------------------------------------------===//
-// Tail checks
-//===--------------------------------------------------------------------===//
-static constexpr idx_t MAX_TAIL_SCAN = 128;
-
-namespace {
-enum class BracketKind : uint8_t { NONE, OPEN, CLOSE };
-} // namespace
-
-static BracketKind TokenBracket(const MatcherToken &token) {
-	if (token.length != 1) {
-		return BracketKind::NONE;
-	}
-	switch (token.text[0]) {
-	case '(':
-	case '[':
-	case '{':
-		return BracketKind::OPEN;
-	case ')':
-	case ']':
-	case '}':
-		return BracketKind::CLOSE;
-	default:
-		return BracketKind::NONE;
-	}
-}
-
-//! String literals also carry the WORD class for name positions; alphabets mark string consumption with STRING
-static uint8_t TailTokenClass(const MatcherToken &token) {
-	return token.type == TokenType::STRING_LITERAL ? MatcherTokenClass::STRING : token.token_class;
-}
-
-//! A skipped sequence could have come as far as the token that stopped the scan
-static bool RejectTail(MatchState &state, idx_t stop_position) {
-	if (stop_position > state.context.tail_rejected_until) {
-		state.context.tail_rejected_until = stop_position;
-	}
-	return false;
-}
-
-bool MatcherFirstSet::MightMatchTail(const MatcherSequenceCheck &check, MatchState &state) const {
-	auto &iterator = state.token_iterator;
-	idx_t depth = 0;
-	for (idx_t ahead = 0; ahead < MAX_TAIL_SCAN; ahead++) {
-		auto token = iterator.Peek(ahead);
-		// the autocomplete cursor can stand for any token
-		if (!token || token->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			return true;
-		}
-		switch (TokenBracket(*token)) {
-		case BracketKind::OPEN:
-			if (depth == 0 && check.bracket_ends_prefix) {
-				// the prefix consumes no brackets: this one has to start the element
-				auto literal_id = iterator.PeekLiteralInfo(*table, ahead).LiteralId();
-				if (literal_id && check.required.HasLiteral(literal_id)) {
-					return true;
-				}
-				return RejectTail(state, iterator.Position() + ahead);
-			}
-			depth++;
-			continue;
-		case BracketKind::CLOSE:
-			if (depth == 0) {
-				// neither the prefix nor the element can consume an unbalanced closing bracket
-				return RejectTail(state, iterator.Position() + ahead);
-			}
-			depth--;
-			continue;
-		default:
-			break;
-		}
-		if (depth > 0) {
-			continue;
-		}
-		auto token_class = TailTokenClass(*token);
-		if (token_class & check.alphabet.class_mask) {
-			continue;
-		}
-		auto literal_id = iterator.PeekLiteralInfo(*table, ahead).LiteralId();
-		if (literal_id && check.alphabet.HasLiteral(literal_id)) {
-			continue;
-		}
-		// the first token the prefix cannot consume has to start the element
-		if (token_class & check.required.class_mask) {
-			return true;
-		}
-		if (literal_id && check.required.HasLiteral(literal_id)) {
-			return true;
-		}
-		return RejectTail(state, iterator.Position() + ahead);
-	}
-	return true;
 }
 
 } // namespace duckdb
