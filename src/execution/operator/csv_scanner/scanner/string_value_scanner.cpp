@@ -1558,7 +1558,7 @@ static bool IsUnicodeWhitespace(int32_t code_point) {
 }
 
 string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-                                                   const string &separator, idx_t units_before, Vector &vector) {
+                                                   const string &separator, idx_t units_before, vector<char> &scratch) {
 	// the separator is one character to the embedded quote rule, which UTF-8 may spell in several bytes
 	auto prev_is_separator = [&](idx_t pos) {
 		return pos >= separator.size() &&
@@ -1567,8 +1567,15 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 	auto next_is_separator = [&](idx_t pos) {
 		return pos + 1 + separator.size() <= size && memcmp(str_ptr + pos + 1, separator.data(), separator.size()) == 0;
 	};
-	auto result_string = StringVector::EmptyString(vector, size);
-	auto result_ptr = result_string.GetDataWriteable();
+	if (size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException("Cannot create a string of size: '%d', the maximum supported string size is: '%d'",
+		                          size, string_t::MAX_STRING_SIZE);
+	}
+	// the normalized text is at most as long as the raw bytes and is copied or converted before the next field
+	if (scratch.size() < size) {
+		scratch.resize(size);
+	}
+	auto result_ptr = scratch.data();
 	idx_t result_pos = 0;
 	idx_t units = units_before;
 	auto add_units = [&units](idx_t count) {
@@ -1630,8 +1637,7 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 		add_units(code_point >= 0x10000 ? 2 : 1);
 		pos += char_len;
 	}
-	result_string.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(result_pos), size);
-	return result_string;
+	return string_t(scratch.data(), UnsafeNumericCast<uint32_t>(result_pos));
 }
 
 void StringValueScanner::ProcessOverBufferValue() {
@@ -1837,7 +1843,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto &sm_options = result.state_machine.dialect_options.state_machine_options;
 					if (sm_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) {
-						// normalize the raw bytes without the trailing delimiter prefix, through the scratch heap
+						// normalize the raw bytes without the trailing delimiter prefix, through the scratch buffer
 						value = ResolveEmbeddedQuotes(
 						    over_buffer_string.c_str(), over_buffer_string.size() - extra_delimiter_bytes,
 						    sm_options.escape.GetValue(), sm_options.quote.GetValue(), sm_options.delimiter.GetValue(),

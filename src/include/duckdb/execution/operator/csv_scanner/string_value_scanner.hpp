@@ -282,8 +282,8 @@ public:
 	idx_t units_before_field = 0;
 	//! Whether the current field was quoted before DemoteUnenclosedQuotedValue rerouted it
 	bool was_quoted = false;
-	//! Scratch heap for normalized field text before its conversion into the column's type
-	Vector value_scratch {LogicalType::VARCHAR, 1ULL};
+	//! Scratch buffer for normalized field text before its conversion into the column's type, reused by every field
+	vector<char> value_scratch;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -460,7 +460,7 @@ public:
 
 	//! Reads one field's raw bytes with the embedded quote text rules of opencsv, with its clamped UTF-16 line offset
 	static string_t ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
-	                                      const string &separator, idx_t units_before, Vector &vector);
+	                                      const string &separator, idx_t units_before, vector<char> &scratch);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
