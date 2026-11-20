@@ -1,0 +1,34 @@
+# name: test/sql/join/hash_join/empty_build_probe.test
+# description: Empty hash builds skip probe execution and still complete their output
+# group: [hash_join]
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+COPY (SELECT 'invalid' AS i) TO '{TEST_DIR}/empty_build_probe.csv' (HEADER);
+
+# Reading the probe raises a conversion error, so an empty build must skip it.
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/empty_build_probe.csv', columns={'i':'INTEGER'}, header=true, auto_detect=false) p
+INNER JOIN range(0) b(i) USING (i);
+----
+0
+
+statement error
+SELECT count(*) FROM read_csv('{TEST_DIR}/empty_build_probe.csv', columns={'i':'INTEGER'}, header=true, auto_detect=false) p
+INNER JOIN range(1) b(i) USING (i);
+----
+Conversion Error
+
+# COPY still writes its header when the join produces no chunks.
+statement ok
+COPY (
+    SELECT p.i FROM read_csv('{TEST_DIR}/empty_build_probe.csv', columns={'i':'INTEGER'}, header=true, auto_detect=false) p
+    INNER JOIN range(0) b(i) USING (i)
+) TO '{TEST_DIR}/empty_build_output.csv' (HEADER);
+
+query T
+SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/empty_build_output.csv');
+----
+i

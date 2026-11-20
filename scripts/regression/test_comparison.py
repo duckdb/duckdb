@@ -1,3 +1,5 @@
+import contextlib
+import io
 import math
 import os
 import re
@@ -7,8 +9,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
+from scripts import plan_cost_runner
+from scripts.plan_cost_runner import PlanCost, op_inspect
 from scripts.regression.benchmark import (
     BENCHMARK_DATA_DIRECTORY,
     BenchmarkRunner,
@@ -18,6 +22,116 @@ from scripts.regression.benchmark import (
     find_extension_directory,
 )
 from scripts.regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
+
+
+class TestPlanCostComparison(unittest.TestCase):
+    def test_membership_rewrite_preserves_input_work(self):
+        def cost(join_type, rows):
+            return op_inspect(
+                {
+                    'type': 'HASH_JOIN',
+                    'intermediate_rows': rows,
+                    'extra_info': {'Join Type': join_type},
+                    'children': [
+                        {'type': 'TABLE_SCAN', 'intermediate_rows': 100, 'children': []},
+                        {'type': 'TABLE_SCAN', 'intermediate_rows': 10, 'children': []},
+                    ],
+                }
+            )
+
+        old = cost('MARK', 100)
+        self.assertEqual((old.total, old.build_side, old.probe_side), (100, 10, 100))
+        for join_type in ('SEMI', 'ANTI', 'RIGHT_SEMI', 'RIGHT_ANTI'):
+            new = cost(join_type, 5)
+            self.assertEqual((new.total, new.build_side, new.probe_side), (5, 10, 100))
+            self.assertFalse(new > old)
+
+    def test_mixed_work_uses_timing_and_comparisons_agree(self):
+        old = PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
+        for total, build, probe, time, needs_timing, regressed in (
+            (20, 10, 20, 2.0, False, False),
+            (30, 40, 100, 0.9, False, True),
+            (5, 10, 20, 2.0, True, False),
+            (5, 40, 20, 1.1, True, True),
+            (5, 10, 100, 1.1, True, True),
+            (5, 40, 100, 1.02, True, False),
+            (5, 40, 100, 0.9, True, False),
+        ):
+            with self.subTest(total=total, build=build, probe=probe, time=time):
+                new = PlanCost()
+                new.total, new.build_side, new.probe_side, new.time = total, build, probe, time
+                self.assertEqual(old.needs_timing(new), needs_timing)
+                self.assertEqual(new.needs_timing(old), needs_timing)
+                self.assertEqual(new > old, regressed)
+                self.assertEqual(old < new, regressed)
+                self.assertFalse(new > old and old > new)
+
+    def test_run_to_run_variation_is_not_a_difference(self):
+        def cost(total, build, probe):
+            result = PlanCost()
+            result.total, result.build_side, result.probe_side = total, build, probe
+            return result
+
+        def profile(old_probes, new_probes):
+            samples = {
+                'old': [cost(20, 10, probe) for probe in old_probes],
+                'new': [cost(20, 10, probe) for probe in new_probes],
+            }
+            with patch.object(
+                plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: samples[cli].pop(0)
+            ):
+                return plan_cost_runner.query_plan_costs('old', 'new', 'db', 'SELECT 1;')
+
+        old, new = profile([100], [100])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [102, 97, 100, 99, 105])
+        self.assertEqual(old, new)
+        old, new = profile([100, 104, 98, 101, 103], [150, 151, 149, 150, 152])
+        self.assertEqual((old.probe_side, new.probe_side), (101, 150))
+        varying = [1652908, 1626111, 1629118, 1679707, 1626186]
+        old, new = profile(varying, [int(probe * 1.03) for probe in varying])
+        self.assertEqual((old.probe_side, new.probe_side), (1629118, 1677991))
+        self.assertTrue(old.needs_timing(new) or new > old)
+
+    def test_runner_confirms_hot_regression_on_shared_database(self):
+        old, new = PlanCost(), PlanCost()
+        old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
+        new.total, new.build_side, new.probe_side, new.time = 5, 40, 100, 0.9
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            root = Path(directory)
+            (root / 'queries').mkdir()
+            (root / 'queries/q.sql').write_text('SELECT 1;')
+            database = str(root / 'plan_cost.duckdb')
+            stack.enter_context(patch.object(plan_cost_runner, 'DB_NAME', database))
+            initialize = stack.enter_context(patch.object(plan_cost_runner, 'init_db'))
+            profiles = stack.enter_context(
+                patch.object(
+                    plan_cost_runner, 'query_plan_cost', side_effect=lambda cli, db, query: old if cli == 'old' else new
+                )
+            )
+            timings = stack.enter_context(
+                patch.object(
+                    plan_cost_runner,
+                    'query_timings',
+                    side_effect=lambda cli, db, query, runs: [1.0 if cli == 'old' else 1.1] * runs,
+                )
+            )
+            stack.enter_context(patch.object(plan_cost_runner.os, 'remove'))
+            stack.enter_context(patch('sys.argv', ['runner', '--old', 'old', '--new', 'new', '--dir', directory]))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            with self.assertRaises(SystemExit) as result:
+                plan_cost_runner.main()
+            self.assertEqual(result.exception.code, 1)
+            initialize.assert_called_once_with('old', database, directory, [])
+            self.assertEqual(
+                profiles.call_args_list,
+                [call(cli, database, 'SELECT 1;') for cli in ('old', 'new') * plan_cost_runner.PROFILE_RUNS],
+            )
+            self.assertEqual(
+                timings.call_args_list,
+                [call(cli, database, 'SELECT 1;', 5) for cli in ('old', 'new', 'new', 'old') * 4],
+            )
 
 
 class TestBenchmarkRunner(unittest.TestCase):

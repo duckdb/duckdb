@@ -77,9 +77,8 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
-Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
+Transaction &DuckTransactionManager::StartTransaction(Context &context, MetaTransaction &meta_transaction) {
 	// obtain the transaction lock during this function
-	auto &meta_transaction = MetaTransaction::Get(context);
 	unique_lock<mutex> start_lock(start_transaction_lock, std::defer_lock);
 	if (!meta_transaction.IsReadOnly()) {
 		start_lock.lock();
@@ -250,7 +249,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		lock_guard<mutex> start_lock(start_transaction_lock);
 		// wait until any active transactions are finished
 		while (!lock) {
-			context.InterruptCheck();
+			context.FastInterruptCheck();
 			lock = checkpoint_lock.TryGetExclusiveLock();
 		}
 	}
@@ -591,7 +590,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+void DuckTransactionManager::RollbackTransaction(ClientContext &, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Rollback", transaction.GetTransactionId());

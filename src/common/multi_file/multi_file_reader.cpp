@@ -117,14 +117,6 @@ unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &functio
 	return res;
 }
 
-Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) {
-	vector<Value> files;
-	for (auto &file : file_list) {
-		files.push_back(file);
-	}
-	return Value::LIST(LogicalType::VARCHAR, std::move(files));
-}
-
 void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
 	auto add_options = [&](TypedKwargs &options) {
 		if (which == MultiFileParameters::ALL) {

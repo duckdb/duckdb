@@ -166,10 +166,10 @@ public:
 	DUCKDB_API void SuppressInterrupts();
 	DUCKDB_API void CancelTransaction();
 
+	//! InterruptCheck that only reads the clock for the timeout every 256th call, for hot loops
+	DUCKDB_API void FastInterruptCheck() const;
 	//! Check for interrupt or timeout, throws InterruptException if triggered
 	DUCKDB_API void InterruptCheck() const;
-	//! InterruptCheck that reads the clock on every call, for waits that block between checks
-	DUCKDB_API void BlockingInterruptCheck() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
@@ -327,6 +327,9 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Rolls back the active transaction (if any) without throwing, while the context is still fully alive
+	void RollbackActiveTransaction();
+
 	friend class Parser;
 	friend class ParseIterator;
 	ParserOptions GetParserOptions();
