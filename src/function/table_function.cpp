@@ -1,6 +1,8 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 #include <algorithm>
 
@@ -18,13 +20,25 @@ PartitionStatistics::PartitionStatistics() : row_start(0), count(0), count_type(
 TableFunctionInfo::~TableFunctionInfo() {
 }
 
+TableFunctionFilterConditionedStatistics::TableFunctionFilterConditionedStatistics(
+    idx_t filtered_cardinality, vector<unique_ptr<BaseStatistics>> filtered_column_statistics,
+    vector<unique_ptr<DistinctStatistics>> filtered_distinct_statistics)
+    : filtered_cardinality(filtered_cardinality), filtered_column_statistics(std::move(filtered_column_statistics)),
+      filtered_distinct_statistics(std::move(filtered_distinct_statistics)) {
+}
+
+TableFunctionFilterConditionedStatistics::~TableFunctionFilterConditionedStatistics() {
+}
+
 BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_bind_t bind,
                                      table_function_init_global_t init_global, table_function_init_local_t init_local)
     : bind(bind), bind_replace(nullptr), bind_operator(nullptr), init_global(init_global), init_local(init_local),
       function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
-      statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
-      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), to_string(nullptr), table_scan_progress(nullptr),
-      get_partition_data(nullptr), get_bind_info(nullptr), get_table_entry(nullptr),
+      statistics_extended(nullptr), collect_filter_conditioned_statistics(nullptr),
+      prepare_filter_conditioned_statistics(nullptr), collect_filter_conditioned_statistics_batch(nullptr),
+      estimate_filter_conditioned_statistics_cost(nullptr), dependency(nullptr), cardinality(nullptr),
+      get_metrics(nullptr), pushdown_complex_filter(nullptr), pushdown_expression(nullptr), to_string(nullptr),
+      table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr), get_table_entry(nullptr),
       projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr),
       get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr),
@@ -90,6 +104,10 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	in_out_function_final = function.in_out_function_final;
 	statistics = function.statistics;
 	statistics_extended = function.statistics_extended;
+	collect_filter_conditioned_statistics = function.collect_filter_conditioned_statistics;
+	prepare_filter_conditioned_statistics = function.prepare_filter_conditioned_statistics;
+	collect_filter_conditioned_statistics_batch = function.collect_filter_conditioned_statistics_batch;
+	estimate_filter_conditioned_statistics_cost = function.estimate_filter_conditioned_statistics_cost;
 	dependency = function.dependency;
 	cardinality = function.cardinality;
 	get_metrics = function.get_metrics;
@@ -168,7 +186,12 @@ bool BaseTableFunction::operator==(const BaseTableFunction &rhs) const {
 	return bind == rhs.bind && bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator &&
 	       init_global == rhs.init_global && init_local == rhs.init_local && function == rhs.function &&
 	       in_out_function == rhs.in_out_function && in_out_function_final == rhs.in_out_function_final &&
-	       statistics == rhs.statistics && dependency == rhs.dependency && cardinality == rhs.cardinality &&
+	       statistics == rhs.statistics &&
+	       collect_filter_conditioned_statistics == rhs.collect_filter_conditioned_statistics &&
+	       prepare_filter_conditioned_statistics == rhs.prepare_filter_conditioned_statistics &&
+	       collect_filter_conditioned_statistics_batch == rhs.collect_filter_conditioned_statistics_batch &&
+	       estimate_filter_conditioned_statistics_cost == rhs.estimate_filter_conditioned_statistics_cost &&
+	       dependency == rhs.dependency && cardinality == rhs.cardinality &&
 	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
 	       to_string == rhs.to_string && to_sql == rhs.to_sql && table_scan_progress == rhs.table_scan_progress &&
 	       get_partition_data == rhs.get_partition_data && get_bind_info == rhs.get_bind_info &&

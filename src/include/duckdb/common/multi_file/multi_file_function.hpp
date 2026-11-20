@@ -27,6 +27,10 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	//! Whether this interface can forward the wrapped single-file filter-conditioned statistics callback.
+	virtual bool SupportsFilterConditionedStatistics() const {
+		return false;
+	}
 	//! Whether the scans of this reader report operator.bytes_scanned
 	virtual bool ReportsBytesScanned() const {
 		return false;

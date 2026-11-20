@@ -280,6 +280,8 @@ enum class FileSyncMode : uint8_t;
 
 enum class FileWriteMode : uint8_t;
 
+enum class FilterConditionedStatisticsMode : uint8_t;
+
 enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
@@ -1092,6 +1094,9 @@ const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value);
 
 template<>
 const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<FilterConditionedStatisticsMode>(FilterConditionedStatisticsMode value);
 
 template<>
 const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value);
@@ -2125,6 +2130,9 @@ FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value);
 
 template<>
 FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
+
+template<>
+FilterConditionedStatisticsMode EnumUtil::FromString<FilterConditionedStatisticsMode>(const char *value);
 
 template<>
 FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *value);

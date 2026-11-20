@@ -11,6 +11,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 namespace duckdb {
 
@@ -191,6 +192,7 @@ shared_ptr<BaseUnionData> TableFunctionFileReader::GetUnionData(idx_t file_idx) 
 	result->types = types;
 	result->cardinality = cardinality;
 	result->bind_data = bind_data;
+	result->physical_columns = columns;
 	result->statistics = function.statistics_extended;
 	if (file_idx == 0) {
 		// keep the first reader around so we don't need to bind it again
@@ -920,6 +922,133 @@ vector<PartitionStatistics> TableFunctionMultiFileWrapper::GetPartitionStats(Cli
 	return function.get_partition_stats(context, file_input);
 }
 
+bool TableFunctionMultiFileWrapper::OpenFilesForFilterConditionedStatistics(ClientContext &context,
+                                                                            MultiFileBindData &bind_data,
+                                                                            idx_t maximum_files) {
+	if (!bind_data.multi_file_reader->IsDefaultReader() ||
+	    !bind_data.interface->SupportsFilterConditionedStatistics()) {
+		return false;
+	}
+	auto file_count = bind_data.file_list->GetFileCount(maximum_files + 1);
+	if (file_count.type != FileExpansionType::ALL_FILES_EXPANDED || file_count.count == 0 ||
+	    file_count.count > maximum_files) {
+		return false;
+	}
+	if (bind_data.union_readers.size() != file_count.count) {
+		auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+		auto file_options = bind_data.file_options;
+		file_options.maximum_files_for_stats = maximum_files;
+		bind_data.multi_file_reader->ReadFilesForStatistics(context, *bind_data.file_list, bind_data, data.options,
+		                                                    file_options);
+	}
+	return bind_data.union_readers.size() == file_count.count;
+}
+
+static bool HasFilterConditionedStatisticsIdentityMapping(const MultiFileBindData &bind_data,
+                                                          const TableFunctionUnionData &file) {
+	return bind_data.HasIdentityMapping(file.physical_columns);
+}
+
+optional<TableFunctionFilterConditionedStatisticsCost>
+TableFunctionMultiFileWrapper::EstimateFilterConditionedStatisticsCost(
+    ClientContext &context, TableFunctionFilterConditionedStatisticsInput &input) {
+	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	if (!bind_data.multi_file_reader->IsDefaultReader() ||
+	    !bind_data.interface->SupportsFilterConditionedStatistics()) {
+		return nullopt;
+	}
+	auto file_count = bind_data.file_list->GetTotalFileCount();
+	if (file_count == 0 || bind_data.union_readers.size() != file_count) {
+		return nullopt;
+	}
+	DynamicCastCheck<TableFunctionMultiFileWrapper>(bind_data.interface.get());
+	auto &wrapper = static_cast<const TableFunctionMultiFileWrapper &>(*bind_data.interface);
+	auto &function = wrapper.function;
+	if (!function.estimate_filter_conditioned_statistics_cost) {
+		return nullopt;
+	}
+	TableFunctionFilterConditionedStatisticsCost result {0, 0, 0};
+	for (auto &union_reader : bind_data.union_readers) {
+		auto &file = union_reader->Cast<TableFunctionUnionData>();
+		if (!file.bind_data || !HasFilterConditionedStatisticsIdentityMapping(bind_data, file)) {
+			return nullopt;
+		}
+		auto cost =
+		    function.estimate_filter_conditioned_statistics_cost(context, *file.bind_data, input.scan_column_indexes);
+		if (!cost || !TryAddOperator::Operation(result.rows, cost->rows, result.rows) ||
+		    !TryAddOperator::Operation(result.compressed_bytes, cost->compressed_bytes, result.compressed_bytes) ||
+		    !TryAddOperator::Operation(result.uncompressed_bytes, cost->uncompressed_bytes,
+		                               result.uncompressed_bytes)) {
+			return nullopt;
+		}
+	}
+	return result;
+}
+
+unique_ptr<TableFunctionFilterConditionedStatistics> TableFunctionMultiFileWrapper::CollectFilterConditionedStatistics(
+    ClientContext &context, TableFunctionFilterConditionedStatisticsInput &input) {
+	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	if (!bind_data.multi_file_reader->IsDefaultReader() ||
+	    !bind_data.interface->SupportsFilterConditionedStatistics()) {
+		return nullptr;
+	}
+	auto file_count = bind_data.file_list->GetTotalFileCount();
+	if (file_count == 0 || bind_data.union_readers.size() != file_count) {
+		return nullptr;
+	}
+	DynamicCastCheck<TableFunctionMultiFileWrapper>(bind_data.interface.get());
+	auto &wrapper = static_cast<const TableFunctionMultiFileWrapper &>(*bind_data.interface);
+	auto &function = wrapper.function;
+	if (!function.collect_filter_conditioned_statistics) {
+		return nullptr;
+	}
+	unique_ptr<TableFunctionFilterConditionedStatistics> result;
+	for (auto &union_reader : bind_data.union_readers) {
+		auto &file = union_reader->Cast<TableFunctionUnionData>();
+		if (!file.bind_data || !HasFilterConditionedStatisticsIdentityMapping(bind_data, file)) {
+			return nullptr;
+		}
+		TableFunctionFilterConditionedStatisticsInput file_input(file.bind_data.get(), input.statistics_column_indexes,
+		                                                         input.scan_column_indexes, input.filters);
+		auto file_result = function.collect_filter_conditioned_statistics(context, file_input);
+		if (!file_result || file_result->filtered_column_statistics.size() != input.statistics_column_indexes.size() ||
+		    file_result->filtered_distinct_statistics.size() != input.statistics_column_indexes.size()) {
+			return nullptr;
+		}
+		if (!result) {
+			result = std::move(file_result);
+			continue;
+		}
+		if (!TryAddOperator::Operation(result->filtered_cardinality, file_result->filtered_cardinality,
+		                               result->filtered_cardinality)) {
+			return nullptr;
+		}
+		for (idx_t column_idx = 0; column_idx < input.statistics_column_indexes.size(); column_idx++) {
+			auto &statistics = result->filtered_column_statistics[column_idx];
+			auto &file_statistics = file_result->filtered_column_statistics[column_idx];
+			auto &distinct = result->filtered_distinct_statistics[column_idx];
+			auto &file_distinct = file_result->filtered_distinct_statistics[column_idx];
+			if (static_cast<bool>(statistics) != static_cast<bool>(file_statistics) ||
+			    static_cast<bool>(distinct) != static_cast<bool>(file_distinct)) {
+				return nullptr;
+			}
+			if (statistics) {
+				statistics->Merge(*file_statistics);
+			}
+			if (distinct) {
+				distinct->Merge(*file_distinct);
+			}
+		}
+	}
+	for (idx_t column_idx = 0; column_idx < result->filtered_column_statistics.size(); column_idx++) {
+		if (result->filtered_column_statistics[column_idx] && result->filtered_distinct_statistics[column_idx]) {
+			result->filtered_column_statistics[column_idx]->SetDistinctCount(
+			    result->filtered_distinct_statistics[column_idx]->GetCount());
+		}
+	}
+	return result;
+}
+
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
                                                             TableFunctionMultiFileSettings settings,
                                                             table_function_bind_t bind) {
@@ -967,8 +1096,12 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 		// the statistics of the scan are those of its files, combined
 		result.statistics_extended = TableFunctionMultiFileFunction::MultiFileScanStatsExtended;
 	}
-	// NOTE: callbacks that take bind data are NOT forwarded - through the wrapper they are handed the bind data of
-	// the multi-file scan, not the bind data the wrapped function produced for a file. A format that wants one sets
+	if (single_file_function.collect_filter_conditioned_statistics) {
+		// precise filtered statistics are forwarded only for directly mapped files
+		result.collect_filter_conditioned_statistics = CollectFilterConditionedStatistics;
+	}
+	// NOTE: other callbacks that take bind data are NOT forwarded - through the wrapper they are handed the bind data
+	// of the multi-file scan, not the bind data the wrapped function produced for a file. A format that wants one sets
 	// it on the function this returns
 	if (!bind) {
 		// the bind below reads the wrapped function from here - a function that brought its own bind does not need

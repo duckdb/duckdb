@@ -7,7 +7,11 @@
 #include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -380,6 +384,311 @@ static void ReadSingleParquetFileFunction(ClientContext &context, TableFunctionI
 	}
 }
 
+static optional<TableFunctionFilterConditionedStatisticsCost>
+EstimateSingleParquetFileFilterConditionedStatisticsCost(ClientContext &context, const FunctionData &bind_data,
+                                                         const vector<ColumnIndex> &column_indexes) {
+	auto &parquet_data = bind_data.Cast<ReadSingleParquetFileData>();
+	if (!parquet_data.metadata) {
+		return nullopt;
+	}
+	auto &metadata_reader = parquet_data.GetMetadataReader(context);
+	auto &row_groups = metadata_reader.GetFileMetadata()->row_groups;
+	unordered_set<idx_t> physical_columns;
+	TableFunctionFilterConditionedStatisticsCost result {0, 0, 0};
+	for (auto &row_group : row_groups) {
+		if (row_group.num_rows < 0 ||
+		    !TryAddOperator::Operation(result.rows, static_cast<idx_t>(row_group.num_rows), result.rows)) {
+			return nullopt;
+		}
+	}
+	for (auto &column_index : column_indexes) {
+		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn()) {
+			return nullopt;
+		}
+		auto primary_index = column_index.GetPrimaryIndex();
+		if (primary_index >= parquet_data.parquet_types.size() ||
+		    primary_index >= metadata_reader.root_schema->children.size()) {
+			return nullopt;
+		}
+		if (!physical_columns.insert(primary_index).second) {
+			continue;
+		}
+		auto file_column_index = metadata_reader.root_schema->children[primary_index].column_index;
+		for (auto &row_group : row_groups) {
+			if (file_column_index >= row_group.columns.size()) {
+				return nullopt;
+			}
+			auto &column = row_group.columns[file_column_index];
+			if (!column.__isset.meta_data || column.meta_data.total_compressed_size < 0 ||
+			    column.meta_data.total_uncompressed_size < 0 ||
+			    !TryAddOperator::Operation(result.compressed_bytes,
+			                               static_cast<idx_t>(column.meta_data.total_compressed_size),
+			                               result.compressed_bytes) ||
+			    !TryAddOperator::Operation(result.uncompressed_bytes,
+			                               static_cast<idx_t>(column.meta_data.total_uncompressed_size),
+			                               result.uncompressed_bytes)) {
+				return nullopt;
+			}
+		}
+	}
+	return result;
+}
+
+static bool FilterConditionedStatisticsFiltersSupported(const ReadSingleParquetFileData &parquet_data,
+                                                        const TableFunctionFilterConditionedStatisticsInput &input) {
+	// Multi-column filters are not associated with one projected column, so they cannot be forwarded to this reader.
+	if (input.filters.HasMultiColumnFilters()) {
+		return false;
+	}
+	for (auto &entry : input.filters) {
+		// Optional filters are pruning hints and do not define the filtered population represented by the result.
+		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
+			return false;
+		}
+		auto filter_index = entry.GetIndex().GetIndex();
+		if (filter_index >= input.scan_column_indexes.size()) {
+			return false;
+		}
+		auto &column_index = input.scan_column_indexes[filter_index];
+		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn()) {
+			return false;
+		}
+		auto primary_index = column_index.GetPrimaryIndex();
+		if (primary_index >= parquet_data.parquet_types.size() ||
+		    !parquet_data.parquet_types[primary_index].IsIntegral()) {
+			return false;
+		}
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "Parquet filter-conditioned statistics");
+		if (!BoundComparisonExpression::IsComparison(*filter.expr) ||
+		    (filter.expr->GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+		     filter.expr->GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool TryCollectFilterConditionedStatisticsTypes(const ReadSingleParquetFileData &parquet_data,
+                                                       const vector<ColumnIndex> &column_indexes,
+                                                       vector<LogicalType> &types) {
+	types.reserve(column_indexes.size());
+	for (auto &column_index : column_indexes) {
+		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn()) {
+			return false;
+		}
+		auto primary_index = column_index.GetPrimaryIndex();
+		if (primary_index >= parquet_data.parquet_types.size()) {
+			return false;
+		}
+		types.push_back(parquet_data.parquet_types[primary_index]);
+	}
+	return true;
+}
+
+static idx_t FilterConditionedStatisticsMaxCompressedBytes(ClientContext &context) {
+	Value setting;
+	if (!context.TryGetCurrentSetting(Identifier("parquet_filter_conditioned_statistics_max_compressed_bytes"),
+	                                  setting) ||
+	    setting.IsNull()) {
+		return 128ULL * 1024ULL * 1024ULL;
+	}
+	return UBigIntValue::Get(setting);
+}
+
+static bool FilterConditionedStatisticsCostSupported(ClientContext &context,
+                                                     const ReadSingleParquetFileData &parquet_data,
+                                                     const vector<ColumnIndex> &column_indexes) {
+	auto cost = EstimateSingleParquetFileFilterConditionedStatisticsCost(context, parquet_data, column_indexes);
+	return cost && cost->compressed_bytes <= FilterConditionedStatisticsMaxCompressedBytes(context);
+}
+
+static bool FilterConditionedStatisticsSupportsMinMax(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+		return true;
+	default:
+		return false;
+	}
+}
+
+template <class T>
+static void UpdateFilterConditionedMinMax(BaseStatistics &statistics, const Vector &input) {
+	auto values = input.Values<T>();
+	for (auto entry : values) {
+		if (!entry.IsValid()) {
+			statistics.SetHasNullFast();
+			continue;
+		}
+		statistics.SetHasNoNullFast();
+		statistics.UpdateNumericStats(entry.GetValue());
+	}
+}
+
+static void UpdateFilterConditionedMinMax(BaseStatistics &statistics, const Vector &input) {
+	switch (input.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		UpdateFilterConditionedMinMax<bool>(statistics, input);
+		break;
+	case PhysicalType::INT8:
+		UpdateFilterConditionedMinMax<int8_t>(statistics, input);
+		break;
+	case PhysicalType::INT16:
+		UpdateFilterConditionedMinMax<int16_t>(statistics, input);
+		break;
+	case PhysicalType::INT32:
+		UpdateFilterConditionedMinMax<int32_t>(statistics, input);
+		break;
+	case PhysicalType::INT64:
+		UpdateFilterConditionedMinMax<int64_t>(statistics, input);
+		break;
+	case PhysicalType::UINT8:
+		UpdateFilterConditionedMinMax<uint8_t>(statistics, input);
+		break;
+	case PhysicalType::UINT16:
+		UpdateFilterConditionedMinMax<uint16_t>(statistics, input);
+		break;
+	case PhysicalType::UINT32:
+		UpdateFilterConditionedMinMax<uint32_t>(statistics, input);
+		break;
+	case PhysicalType::UINT64:
+		UpdateFilterConditionedMinMax<uint64_t>(statistics, input);
+		break;
+	default:
+		break;
+	}
+}
+
+static unique_ptr<TableFunctionFilterConditionedStatistics>
+CollectSingleParquetFileFilterConditionedStatisticsInternal(ClientContext &context,
+                                                            TableFunctionFilterConditionedStatisticsInput &input) {
+	if (!input.bind_data) {
+		return nullptr;
+	}
+	auto &parquet_data = input.bind_data->Cast<ReadSingleParquetFileData>();
+	if (!parquet_data.metadata || !FilterConditionedStatisticsFiltersSupported(parquet_data, input) ||
+	    !FilterConditionedStatisticsCostSupported(context, parquet_data, input.scan_column_indexes)) {
+		return nullptr;
+	}
+	vector<LogicalType> scan_types;
+	if (!TryCollectFilterConditionedStatisticsTypes(parquet_data, input.scan_column_indexes, scan_types)) {
+		return nullptr;
+	}
+	vector<LogicalType> statistics_types;
+	if (!TryCollectFilterConditionedStatisticsTypes(parquet_data, input.statistics_column_indexes, statistics_types)) {
+		return nullptr;
+	}
+	vector<idx_t> statistics_scan_indexes;
+	statistics_scan_indexes.reserve(input.statistics_column_indexes.size());
+	for (auto &column_index : input.statistics_column_indexes) {
+		auto entry = std::find(input.scan_column_indexes.begin(), input.scan_column_indexes.end(), column_index);
+		if (entry == input.scan_column_indexes.end()) {
+			return nullptr;
+		}
+		statistics_scan_indexes.push_back(NumericCast<idx_t>(entry - input.scan_column_indexes.begin()));
+	}
+
+	auto reader =
+	    make_shared_ptr<ParquetReader>(context, parquet_data.file, parquet_data.options, parquet_data.metadata);
+	for (auto &column_index : input.scan_column_indexes) {
+		reader->column_ids.push_back(MultiFileLocalColumnId(column_index.GetPrimaryIndex()));
+		reader->column_indexes.push_back(column_index);
+	}
+	reader->filters = input.filters.Copy();
+	ParquetReadGlobalState global_state(nullptr);
+	ParquetReadLocalState local_state;
+	DataChunk chunk;
+	chunk.Initialize(Allocator::Get(context), scan_types);
+	vector<unique_ptr<DistinctStatistics>> distinct_statistics;
+	distinct_statistics.reserve(statistics_types.size());
+	vector<BaseStatistics> filtered_statistics;
+	filtered_statistics.reserve(statistics_types.size());
+	for (auto &type : statistics_types) {
+		distinct_statistics.push_back(DistinctStatistics::TypeIsSupported(type) ? make_uniq<DistinctStatistics>()
+		                                                                        : nullptr);
+		filtered_statistics.push_back(FilterConditionedStatisticsSupportsMinMax(type)
+		                                  ? BaseStatistics::CreateEmpty(type)
+		                                  : BaseStatistics::CreateUnknown(type));
+	}
+	Vector hashes(LogicalType::HASH);
+	idx_t filtered_cardinality = 0;
+	while (reader->TryInitializeScan(context, global_state, local_state)) {
+		reader->PrepareScan(context, global_state, local_state);
+		auto io_result = reader->ScheduleIO(context, global_state, local_state);
+		if (io_result.GetResultType() == AsyncResultType::BLOCKED) {
+			io_result.ExecuteTasksSynchronously(context);
+		}
+		bool resuming_blocked_scan = false;
+		while (true) {
+			if (!resuming_blocked_scan) {
+				chunk.Reset();
+			}
+			auto scan_result = reader->Scan(context, global_state, local_state, chunk);
+			resuming_blocked_scan = scan_result.GetResultType() == AsyncResultType::BLOCKED;
+			if (resuming_blocked_scan) {
+				scan_result.ExecuteTasksSynchronously(context);
+				continue;
+			}
+			if (chunk.size() > 0) {
+				filtered_cardinality += chunk.size();
+				for (idx_t column_idx = 0; column_idx < distinct_statistics.size(); column_idx++) {
+					auto &input_vector = chunk.data[statistics_scan_indexes[column_idx]];
+					if (distinct_statistics[column_idx]) {
+						distinct_statistics[column_idx]->Update(input_vector, chunk.size(), hashes);
+					}
+					if (FilterConditionedStatisticsSupportsMinMax(statistics_types[column_idx])) {
+						UpdateFilterConditionedMinMax(filtered_statistics[column_idx], input_vector);
+					}
+				}
+			}
+			if (scan_result.GetResultType() == AsyncResultType::FINISHED) {
+				break;
+			}
+			if (scan_result.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+				throw InternalException("Unexpected result type %s collecting Parquet filter-conditioned statistics",
+				                        EnumUtil::ToChars(scan_result.GetResultType()));
+			}
+		}
+	}
+
+	vector<unique_ptr<BaseStatistics>> result;
+	result.reserve(statistics_types.size());
+	for (idx_t column_idx = 0; column_idx < statistics_types.size(); column_idx++) {
+		if (!distinct_statistics[column_idx]) {
+			result.push_back(nullptr);
+			continue;
+		}
+		auto statistics = std::move(filtered_statistics[column_idx]);
+		statistics.SetDistinctCount(distinct_statistics[column_idx]->GetCount());
+		result.push_back(statistics.ToUnique());
+	}
+	return make_uniq<TableFunctionFilterConditionedStatistics>(filtered_cardinality, std::move(result),
+	                                                           std::move(distinct_statistics));
+}
+
+static unique_ptr<TableFunctionFilterConditionedStatistics>
+CollectSingleParquetFileFilterConditionedStatistics(ClientContext &context,
+                                                    TableFunctionFilterConditionedStatisticsInput &input) {
+	try {
+		return CollectSingleParquetFileFilterConditionedStatisticsInternal(context, input);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		auto type = error.Type();
+		if (type == ExceptionType::INTERNAL || type == ExceptionType::INTERRUPT ||
+		    type == ExceptionType::OUT_OF_MEMORY || Exception::InvalidatesDatabase(type)) {
+			throw;
+		}
+		return nullptr;
+	}
+}
+
 static double ReadSingleParquetFileProgress(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state) {
 	if (!global_state) {
@@ -571,6 +880,8 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;
 	read_parquet.cardinality = ReadSingleParquetFileCardinality;
 	read_parquet.statistics_extended = ReadSingleParquetFileStatistics;
+	read_parquet.collect_filter_conditioned_statistics = CollectSingleParquetFileFilterConditionedStatistics;
+	read_parquet.estimate_filter_conditioned_statistics_cost = EstimateSingleParquetFileFilterConditionedStatisticsCost;
 	read_parquet.get_virtual_columns = ReadSingleParquetFileVirtualColumns;
 	read_parquet.get_partition_stats = ReadSingleParquetFilePartitionStats;
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;

@@ -218,6 +218,36 @@
 			"metric_type": "double",
 			"description": "Time spent in all optimizers combined",
 			"unit": "seconds"
+		},
+		"filter_conditioned_statistics_time": {
+			"metric_type": "double",
+			"description": "Time spent collecting filter-conditioned statistics in query-level batches",
+			"unit": "seconds"
+		},
+		"filter_conditioned_statistics_requests": {
+			"metric_type": "uint64",
+			"description": "Logical scans submitted to filter-conditioned statistics batches",
+			"unit": "requests"
+		},
+		"filter_conditioned_statistics_groups": {
+			"metric_type": "uint64",
+			"description": "Physical provider groups scanned for filter-conditioned statistics",
+			"unit": "groups"
+		},
+		"filter_conditioned_statistics_compressed_bytes": {
+			"metric_type": "uint64",
+			"description": "Projected compressed bytes scanned for filter-conditioned statistics",
+			"unit": "bytes"
+		},
+		"filter_conditioned_statistics_uncompressed_bytes": {
+			"metric_type": "uint64",
+			"description": "Projected uncompressed bytes scanned for filter-conditioned statistics",
+			"unit": "bytes"
+		},
+		"filter_conditioned_statistics_rows_collected": {
+			"metric_type": "uint64",
+			"description": "Filtered rows used to build filter-conditioned statistics",
+			"unit": "rows"
 		}
 	},
 	"parser": {
