@@ -12,6 +12,11 @@ require notmingw
 require allow_unsigned_extensions
 
 # the other extension's function first, then the language
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema.duckdb_extension';
 

@@ -5,6 +5,11 @@
 # Language function tests manage their own storage version (persistent entries need v2.1.0+)
 require noforcestorage
 
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
 statement ok
 CREATE TYPE lossy_t AS ENUM ('l');
 

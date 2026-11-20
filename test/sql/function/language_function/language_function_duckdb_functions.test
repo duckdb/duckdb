@@ -9,6 +9,11 @@ require skip_reload
 
 require allow_unsigned_extensions
 
+# language members need storage v2.1.0: the in-memory database holds them under every test config, including those
+# whose default database is persistent with an older storage version
+statement ok
+USE memory;
+
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/language_function_demo.duckdb_extension';
 
