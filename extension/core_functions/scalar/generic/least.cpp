@@ -194,9 +194,9 @@ public:
 
 struct LeastGreatestCollationState : public FunctionLocalState {
 	LeastGreatestCollationState(Context &context, const LogicalType &input_type, const Expression &collation,
-	                            idx_t column_count, OrderByNullType null_ordering)
+	                            idx_t column_count)
 	    : executor(context, collation), collation_type(collation.GetReturnType()), winner_keys(LogicalType::BLOB),
-	      winners(STANDARD_VECTOR_SIZE), modifiers(OrderType::ASCENDING, null_ordering) {
+	      winners(STANDARD_VECTOR_SIZE), modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST) {
 		collation_input.InitializeEmpty({input_type});
 		vector<LogicalType> types(column_count, LogicalType::BLOB);
 		collation_keys.Initialize(Allocator::DefaultAllocator(), types);
@@ -213,16 +213,16 @@ struct LeastGreatestCollationState : public FunctionLocalState {
 	Vector winner_keys;
 	//! The argument each row takes its result from, INVALID_INDEX if all arguments are NULL
 	vector<idx_t> winners;
+	//! NULL arguments are skipped before comparing, so the NULL ordering is irrelevant
 	OrderModifiers modifiers;
 };
 
-template <class LEAST_GREATER_OP>
 unique_ptr<FunctionLocalState> LeastGreatestCollationInit(ExpressionState &state, const BoundFunctionExpression &expr,
                                                           optional_ptr<const FunctionData> bind_data) {
 	auto &children = expr.GetChildren();
 	auto &collation = *bind_data->Cast<LeastGreatestCollationData>().collation;
 	return make_uniq<LeastGreatestCollationState>(state.GetContext(), children[0]->GetReturnType(), collation,
-	                                              children.size(), LEAST_GREATER_OP::NullOrdering());
+	                                              children.size());
 }
 
 //! Compares the collated arguments, but returns the original argument: a collation can map distinct values to the
@@ -434,7 +434,7 @@ unique_ptr<FunctionData> LeastGreatestBind(BindScalarFunctionInput &input) {
 		return nullptr;
 	}
 	bound_function.SetFunctionCallback(LeastGreatestCollationFunction<typename LEAST_GREATER_OP::OP>);
-	bound_function.SetInitStateCallback(LeastGreatestCollationInit<LEAST_GREATER_OP>);
+	bound_function.SetInitStateCallback(LeastGreatestCollationInit);
 	return make_uniq<LeastGreatestCollationData>(std::move(collation));
 }
 
