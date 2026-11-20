@@ -173,10 +173,38 @@ bool FilterPushdown::OnlyRanksWithoutArguments(const LogicalWindow &window) {
 	return true;
 }
 
+// same as the one in topn_window_elimination.cpp, which no header declares
+static bool BindingsReferenceRowNumber(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
+	for (const auto &binding : bindings) {
+		if (binding.table_index == window.window_index) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
 	FilterPushdown pushdown(optimizer, projection_mode);
+
+	if (window.is_delim_row_number) {
+		// nothing reads the numbers this window gives, so filtering first only leaves fewer rows to number
+		// a filter that reads them is the exception and stays above
+		vector<unique_ptr<Filter>> leftover_filters;
+		for (idx_t i = 0; i < filters.size(); i++) {
+			vector<ColumnBinding> bindings;
+			ExtractFilterBindings(*filters.at(i)->filter, bindings);
+			if (BindingsReferenceRowNumber(bindings, window) || filters.at(i)->filter->IsVolatile()) {
+				leftover_filters.push_back(std::move(filters.at(i)));
+			} else {
+				pushdown.filters.push_back(std::move(filters.at(i)));
+			}
+		}
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		filters = std::move(leftover_filters);
+		return PushFinalFilters(std::move(op));
+	}
 
 	// 1. Loop through the expressions, find the window expressions and investigate the partitions
 	// if a filter applies to a partition in each window expression then you can push the filter

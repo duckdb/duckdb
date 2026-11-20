@@ -28,6 +28,9 @@ public:
 	}
 
 	TableIndex window_index;
+	//! Whether this row_number() is the delim key decorrelation falls back to when the correlated column cannot be
+	//! one. Nothing reads the numbers it gives, so a filter may run before it and leave it fewer rows to number.
+	bool is_delim_row_number = false;
 
 	//! The maximum number of rows to return per partition
 	optional_idx partition_limit;
