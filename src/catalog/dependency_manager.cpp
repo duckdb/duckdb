@@ -408,9 +408,11 @@ catalog_entry_vector_t DependencyManager::GetDependents(CatalogTransaction trans
 	catalog_entry_vector_t result;
 	for (auto &info : dependents) {
 		auto entry = LookupEntry(transaction, info);
-		if (entry) {
-			result.push_back(*entry);
+		if (!entry) {
+			throw InternalException("Catalog entry \"%s\" depends on \"%s\", but does not exist", info.name,
+			                        object.name);
 		}
+		result.push_back(*entry);
 	}
 	return result;
 }

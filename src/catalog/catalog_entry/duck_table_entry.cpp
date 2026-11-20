@@ -1418,13 +1418,10 @@ const vector<shared_ptr<IndexEntry>> &DuckTableEntry::GetConstraintIndexes() con
 
 vector<shared_ptr<IndexEntry>> DuckTableEntry::GetIndexes(CatalogTransaction transaction) const {
 	auto result = GetConstraintIndexes();
-	auto dependency_manager = catalog.GetDependencyManager();
-	if (!dependency_manager) {
-		return result;
-	}
 	// an index catalog entry depends on its table
+	auto &dependency_manager = *catalog.GetDependencyManager();
 	auto &table_info = *storage->GetDataTableInfo();
-	for (auto &entry : dependency_manager->GetDependents(transaction, *this, CatalogType::INDEX_ENTRY)) {
+	for (auto &entry : dependency_manager.GetDependents(transaction, *this, CatalogType::INDEX_ENTRY)) {
 		auto &index = entry.get().Cast<DuckIndexEntry>();
 		if (&index.GetDataTableInfo() != &table_info) {
 			throw InternalException("Index \"%s\" depends on table \"%s\", but is an index of another table",
