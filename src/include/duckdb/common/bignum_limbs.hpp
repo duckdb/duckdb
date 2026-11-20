@@ -10,8 +10,8 @@
 
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/bswap.hpp"
-#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/uint128_arithmetic.hpp"
 
 #include <cstring>
 
@@ -57,18 +57,7 @@ struct BignumLimb {
 
 	//! Returns the low 64 bits of a * b + add, and its high 64 bits in "high"; never overflows 128 bits
 	static inline uint64_t MultiplyAdd(uint64_t a, uint64_t b, uint64_t add, uint64_t &high) {
-		// portable 32-bit split
-		const uint64_t a_low = a & 0xFFFFFFFFULL;
-		const uint64_t a_high = a >> 32;
-		const uint64_t b_low = b & 0xFFFFFFFFULL;
-		const uint64_t b_high = b >> 32;
-		const uint64_t p0 = a_low * b_low;
-		const uint64_t p1 = a_low * b_high;
-		const uint64_t p2 = a_high * b_low;
-		const uint64_t p3 = a_high * b_high;
-		const uint64_t middle = (p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL);
-		uint64_t low = (p0 & 0xFFFFFFFFULL) | (middle << 32);
-		high = p3 + (p1 >> 32) + (p2 >> 32) + (middle >> 32);
+		uint64_t low = Uint64MultiplyFull(a, b, high);
 		low += add;
 		high += low < add ? 1 : 0;
 		return low;
