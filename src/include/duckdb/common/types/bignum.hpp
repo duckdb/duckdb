@@ -223,6 +223,11 @@ struct HugeintCastToBignum {
 	}
 };
 
+template <>
+DUCKDB_API bignum_t HugeintCastToBignum::Operation(hugeint_t input, StringHeap &heap);
+template <>
+DUCKDB_API bignum_t HugeintCastToBignum::Operation(uhugeint_t input, StringHeap &heap);
+
 struct TryCastToBignum {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {

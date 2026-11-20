@@ -312,7 +312,7 @@ static bool IsPruningMap(const vector<ProjectionIndex> &projection_map, idx_t in
 }
 
 PhysicalPlanGenerator::PrunedJoinProjection
-PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalComparisonJoin &op, const PhysicalOperator &left,
+PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalJoin &op, const PhysicalOperator &left,
                                                    const PhysicalOperator &right, bool expand_left, bool expand_right) {
 	PrunedJoinProjection info;
 	const auto left_width = left.GetTypes().size();
@@ -375,7 +375,7 @@ PhysicalPlanGenerator::ExtractPrunedJoinProjection(LogicalComparisonJoin &op, co
 	return info;
 }
 
-PhysicalOperator &PhysicalPlanGenerator::RestorePrunedJoinProjection(LogicalComparisonJoin &op, PhysicalOperator &join,
+PhysicalOperator &PhysicalPlanGenerator::RestorePrunedJoinProjection(LogicalJoin &op, PhysicalOperator &join,
                                                                      PrunedJoinProjection info) {
 	if (!info.active) {
 		return join;

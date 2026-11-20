@@ -19,19 +19,6 @@ TransactionContext::TransactionContext(ClientContext &context)
 }
 
 TransactionContext::~TransactionContext() {
-	if (current_transaction) {
-		try {
-			Rollback(nullptr);
-		} catch (std::exception &ex) {
-			// a destructor cannot throw, and building the error message allocates
-			try {
-				ErrorData data(ex);
-				DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
-			} catch (...) { // NOLINT
-			}
-		} catch (...) { // NOLINT
-		}
-	}
 }
 
 void TransactionContext::BeginTransaction() {
@@ -110,7 +97,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 
 	ErrorData rollback_error;
 	try {
-		transaction->Rollback();
+		transaction->Rollback(context);
 	} catch (std::exception &ex) {
 		rollback_error = ErrorData(ex);
 	}

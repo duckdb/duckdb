@@ -1,4 +1,5 @@
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
@@ -10,6 +11,12 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+
+bool BoundComparisonExpression::EqualityPreservesValueRepresentation(const LogicalType &type) {
+	return !TypeVisitor::Contains(type, [](const LogicalType &child) {
+		return child.IsFloating() || child.id() == LogicalTypeId::INTERVAL || child.id() == LogicalTypeId::VARIANT;
+	});
+}
 
 template <ExpressionType TYPE>
 void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result) {

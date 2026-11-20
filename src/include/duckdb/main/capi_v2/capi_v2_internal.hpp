@@ -895,6 +895,17 @@ inline void InvokeTextSink(duckdb_v2_text_sink_fn sink, std::string_view text, v
 	}
 }
 
+//! Runs a callback taking an error slot, and throws what it reports.
+template <class FUNC>
+void InvokeWithErrorSlot(FUNC &&fn) {
+	CV2ErrorInfo info;
+	auto handle = Convert(&info);
+	fn(&handle);
+	if (info.HasError()) {
+		info.ThrowAsException();
+	}
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Caller-supplied output buffers
 //----------------------------------------------------------------------------------------------------------------------

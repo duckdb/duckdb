@@ -1540,6 +1540,26 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_schema)
 	(duckdb_v2_scalar_function_handle function, const char *schema, idx_t schema_length,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_context_get_object_cache)
+	(duckdb_v2_context_handle context, duckdb_v2_object_cache_handle *cache, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_get_object_cache)
+	(duckdb_v2_instance_handle instance, duckdb_v2_object_cache_handle *cache, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_delete)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_object_cache_entry_destroy)(duckdb_v2_object_cache_entry_handle *entry);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_entry_get_data)
+	(duckdb_v2_object_cache_entry_handle entry, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_get)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_object_cache_entry_handle *entry, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_get_or_create)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_object_cache_create_callback_fn create, void *create_user_data,
+	 duckdb_v2_object_cache_entry_handle *entry, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_object_cache_put)
+	(duckdb_v2_object_cache_handle cache, const char *type, idx_t type_length, const char *key, idx_t key_length,
+	 duckdb_v2_opaque *data, idx_t size_bytes, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_to_string_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_to_string_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -2253,6 +2273,14 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_scalar_function_get_generic_property = duckdb_v2_scalar_function_get_generic_property;
 	result.duckdb_v2_scalar_function_set_generic_property = duckdb_v2_scalar_function_set_generic_property;
 	result.duckdb_v2_scalar_function_set_schema = duckdb_v2_scalar_function_set_schema;
+	result.duckdb_v2_context_get_object_cache = duckdb_v2_context_get_object_cache;
+	result.duckdb_v2_instance_get_object_cache = duckdb_v2_instance_get_object_cache;
+	result.duckdb_v2_object_cache_delete = duckdb_v2_object_cache_delete;
+	result.duckdb_v2_object_cache_entry_destroy = duckdb_v2_object_cache_entry_destroy;
+	result.duckdb_v2_object_cache_entry_get_data = duckdb_v2_object_cache_entry_get_data;
+	result.duckdb_v2_object_cache_get = duckdb_v2_object_cache_get;
+	result.duckdb_v2_object_cache_get_or_create = duckdb_v2_object_cache_get_or_create;
+	result.duckdb_v2_object_cache_put = duckdb_v2_object_cache_put;
 	result.duckdb_v2_table_function_set_to_string_callback = duckdb_v2_table_function_set_to_string_callback;
 	result.duckdb_v2_table_function_to_string_get_bind_data = duckdb_v2_table_function_to_string_get_bind_data;
 	result.duckdb_v2_table_function_to_string_get_user_data = duckdb_v2_table_function_to_string_get_user_data;
