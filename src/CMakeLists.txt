@@ -92,6 +92,20 @@ if(WIN32
   if(NOT Python3_FOUND)
     message(FATAL_ERROR "Removing Windows static exports requires Python3")
   endif()
+  get_filename_component(LLVM_TOOLS_DIRECTORY "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  find_program(
+    LLVM_OBJCOPY_EXECUTABLE
+    NAMES llvm-objcopy
+    HINTS "${LLVM_TOOLS_DIRECTORY}")
+  find_program(
+    LLVM_AR_EXECUTABLE
+    NAMES llvm-ar
+    HINTS "${LLVM_TOOLS_DIRECTORY}")
+  if(NOT LLVM_OBJCOPY_EXECUTABLE OR NOT LLVM_AR_EXECUTABLE)
+    message(
+      FATAL_ERROR
+        "Removing Windows static exports requires llvm-objcopy and llvm-ar")
+  endif()
   # Reuse the core objects while keeping the original archive's host exports.
   add_library(duckdb_static_no_exports STATIC EXCLUDE_FROM_ALL
               ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
@@ -101,9 +115,13 @@ if(WIN32
   add_custom_command(
     TARGET duckdb_static_no_exports
     POST_BUILD
-    COMMAND "${Python3_EXECUTABLE}" "${STRIP_COFF_EXPORTS}"
-            "$<TARGET_FILE:duckdb_static_no_exports>"
-    COMMENT "Removing core DLL exports from the Windows extension archive"
+    COMMAND
+      "${Python3_EXECUTABLE}" "${STRIP_COFF_EXPORTS}"
+      "$<TARGET_FILE:duckdb_static_no_exports>" --objcopy
+      "${LLVM_OBJCOPY_EXECUTABLE}" --ar "${LLVM_AR_EXECUTABLE}" --lib
+      "${CMAKE_AR}"
+    COMMENT
+      "Removing core DLL exports from the Windows extension archive with LLVM"
     VERBATIM)
 endif()
 
