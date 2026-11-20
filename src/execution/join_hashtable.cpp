@@ -276,38 +276,65 @@ static inline void CheckEntry(const ht_entry_t entry, const hash_t hash, bool &h
 	needs_next = occupied & !salt_match;
 }
 
-//! Loads the initial entry of every row into dense_entries. A loop that only loads keeps many cache misses in flight;
-//! large tables also prefetch ahead.
-static void PrefetchAndLoadEntries(const JoinHashTable &ht, const ht_entry_t *entries, const hash_t *hashes_dense,
-                                   const idx_t count, ht_entry_t *dense_entries) {
-	const auto bitmask = ht.bitmask;
-	const auto get_entry = [&](const idx_t dense_index) {
-		return &entries[hashes_dense[dense_index] & bitmask];
-	};
-
-	const bool prefetch = ht.capacity > JoinHashTable::PREFETCH_MIN_CAPACITY;
-	for (idx_t i = 0; i < count; i++) {
-		if (prefetch) {
-			PrefetchHashTableEntry(i, count, get_entry);
-		}
-		dense_entries[i] = *get_entry(i);
-	}
+//! The entry `steps` slots after the initial slot of a densified hash
+static inline const ht_entry_t &GetHTEntry(const ht_entry_t *entries, const hash_t hash_dense, const idx_t steps,
+                                           const idx_t bitmask) {
+	return entries[(hash_dense + steps) & bitmask];
 }
 
-//! Finds the first entry of every row whose salt matches (USE_SALTS) or that is occupied, and returns the number of
-//! rows in keys_to_compare_sel, with their entry pointer in pointers_result_v. Linear probing of all rows at once, one
-//! entry per round, without data-dependent branches; the probe works on dense indices, mapped through row_sel.
+//! Per-row linear probing with branches
 template <bool USE_SALTS, bool HAS_SEL>
-static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht,
-                                      unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
-                                      optional_ptr<const SelectionVector> row_sel, idx_t &count) {
-	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
+static idx_t ProbeForPointersBranching(JoinHashTable::ProbeState &state, JoinHashTable &ht,
+                                       unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
+                                       optional_ptr<const SelectionVector> row_sel, const idx_t count) {
+	const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
+	const auto bitmask = ht.bitmask;
+	const auto pointers_result = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
+	const auto probe_steps = FlatVector::GetDataMutable<idx_t>(state.probe_steps_v);
+
+	idx_t compare_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto hash = hashes_dense[i];
+		idx_t steps = 0;
+		while (true) {
+			const ht_entry_t entry = GetHTEntry(entries.get(), hash, steps, bitmask);
+			if (!entry.IsOccupied()) {
+				break;
+			}
+			if (!USE_SALTS || entry.GetSalt() == ht_entry_t::ExtractSalt(hash)) {
+				const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
+				state.keys_to_compare_sel.set_index(compare_count++, row_index);
+				pointers_result[row_index] = entry.GetPointerOrNull();
+				probe_steps[row_index] += steps;
+				break;
+			}
+			steps++;
+		}
+	}
+	return compare_count;
+}
+
+//! Linear probing of all rows at once, one entry per round, without data-dependent branches; the probe works on dense
+//! indices, mapped through row_sel.
+template <bool USE_SALTS, bool HAS_SEL>
+static idx_t ProbeForPointersBranchless(JoinHashTable::ProbeState &state, JoinHashTable &ht,
+                                        unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
+                                        optional_ptr<const SelectionVector> row_sel, const idx_t count) {
 	const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 	const auto bitmask = ht.bitmask;
 	const auto dense_entries = state.dense_entries.get();
 
-	// the initial entry of every row
-	PrefetchAndLoadEntries(ht, entries.get(), hashes_dense, count, dense_entries);
+	// the initial entry of every row; a loop that only loads keeps many cache misses in flight
+	const auto get_initial_entry = [&](const idx_t dense_index) {
+		return &GetHTEntry(entries.get(), hashes_dense[dense_index], 0, bitmask);
+	};
+	const bool prefetch = ht.capacity > JoinHashTable::PREFETCH_MIN_CAPACITY;
+	for (idx_t i = 0; i < count; i++) {
+		if (prefetch) {
+			PrefetchHashTableEntry(i, count, get_initial_entry);
+		}
+		dense_entries[i] = *get_initial_entry(i);
+	}
 
 	// pointers and probe steps go to their row index, so rows outside the selection keep theirs
 	const auto pointers_result = FlatVector::GetDataMutable<data_ptr_t>(pointers_result_v);
@@ -326,11 +353,10 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	    needs_next, nullptr, count, array_ptr<sel_t>(state.rows_to_probe_sel.data(), STANDARD_VECTOR_SIZE));
 
 	// do another round of probing at the next ht offsets for all probe rows that had a salt mismatch
-	const bool prefetch = ht.capacity > JoinHashTable::PREFETCH_MIN_CAPACITY;
 	for (idx_t probe_round_idx = 1; need_additional_probe_n > 0; probe_round_idx++) {
 		const auto get_entry = [&](const idx_t probe_index) {
 			const auto dense_index = state.rows_to_probe_sel.get_index(probe_index);
-			return &entries.get()[(hashes_dense[dense_index] + probe_round_idx) & bitmask];
+			return &GetHTEntry(entries.get(), hashes_dense[dense_index], probe_round_idx, bitmask);
 		};
 		idx_t found_count = 0;
 		idx_t next_probe_count = 0;
@@ -350,8 +376,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 		for (idx_t i = 0; i < found_count; i++) {
 			const auto dense_index = state.rows_found_sel.get_index(i);
 			const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, dense_index);
-			const auto ht_offset = (hashes_dense[dense_index] + probe_round_idx) & bitmask;
-			pointers_result[row_index] = entries.get()[ht_offset].GetPointerOrNull();
+			const auto entry = GetHTEntry(entries.get(), hashes_dense[dense_index], probe_round_idx, bitmask);
+			pointers_result[row_index] = entry.GetPointerOrNull();
 			probe_steps[row_index] += probe_round_idx;
 			is_match[dense_index] = true;
 		}
@@ -368,6 +394,19 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 		}
 	}
 	return compare_count;
+}
+
+//! Finds the first entry of every row whose salt matches (USE_SALTS) or that is occupied, and returns the number of
+//! rows in keys_to_compare_sel, with their entry pointer in pointers_result_v. Short vectors probe with branches.
+template <bool USE_SALTS, bool HAS_SEL>
+static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht,
+                                      unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
+                                      optional_ptr<const SelectionVector> row_sel, const idx_t count) {
+	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
+	if (count <= JoinHashTable::BRANCHING_PROBE_MAX_COUNT) {
+		return ProbeForPointersBranching<USE_SALTS, HAS_SEL>(state, ht, entries, pointers_result_v, row_sel, count);
+	}
+	return ProbeForPointersBranchless<USE_SALTS, HAS_SEL>(state, ht, entries, pointers_result_v, row_sel, count);
 }
 
 /// for each entry, do linear probing until
@@ -389,13 +428,22 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 template <bool HAS_SEL>
 static void DensifyHashes(Vector &hashes_v, Vector &hashes_dense_v, optional_ptr<const SelectionVector> row_sel,
                           const idx_t count, const idx_t bucket_shift, const idx_t bitmask) {
+	const auto to_dense = [&](const hash_t hash) {
+		return bucket_shift ? (hash & ht_entry_t::SALT_MASK) | ((hash >> bucket_shift) & bitmask) : hash;
+	};
+	const auto hashes_dense = FlatVector::GetDataMutable<hash_t>(hashes_dense_v);
+	if (!HAS_SEL && hashes_v.GetVectorType() == VectorType::FLAT_VECTOR) {
+		// plain arrays: no unified format to set up, which short vectors cannot pay back
+		const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+		for (idx_t i = 0; i < count; i++) {
+			hashes_dense[i] = to_dense(hashes[i]);
+		}
+		return;
+	}
 	auto hashes_unified = hashes_v.Values<hash_t>();
-	auto hashes_dense = FlatVector::Writer<idx_t>(hashes_dense_v, count);
 	for (idx_t i = 0; i < count; i++) {
 		const auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-		const auto hash = hashes_unified[row_index].GetValue();
-		hashes_dense.WriteValue(bucket_shift ? (hash & ht_entry_t::SALT_MASK) | ((hash >> bucket_shift) & bitmask)
-		                                     : hash);
+		hashes_dense[i] = to_dense(hashes_unified[row_index].GetValue());
 	}
 }
 
@@ -412,10 +460,8 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	const auto bitmask = ht.bitmask;
 	if (has_row_sel) {
 		DensifyHashes<true>(hashes_v, state.hashes_dense_v, row_sel, input_count, bucket_shift, bitmask);
-	} else if (bucket_shift) {
-		DensifyHashes<false>(hashes_v, state.hashes_dense_v, row_sel, input_count, bucket_shift, bitmask);
 	} else {
-		VectorOperations::Copy(hashes_v, state.hashes_dense_v, input_count, 0, 0);
+		DensifyHashes<false>(hashes_v, state.hashes_dense_v, row_sel, input_count, bucket_shift, bitmask);
 	}
 
 	// the number of keys that match for all iterations of the following loop

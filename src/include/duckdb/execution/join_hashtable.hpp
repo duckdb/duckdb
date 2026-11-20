@@ -703,6 +703,8 @@ public:
 	static constexpr idx_t MINIMUM_CAPACITY = 16384;
 	//! Pointer tables above this capacity prefetch the entries the probe reads
 	static constexpr idx_t PREFETCH_MIN_CAPACITY = idx_t(1) << 20;
+	//! Vectors of at most this many rows probe row by row with branches; longer vectors probe branch-free
+	static constexpr idx_t BRANCHING_PROBE_MAX_COUNT = 32;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
