@@ -1,0 +1,892 @@
+module: crypto
+#
+# Cryptographic primitives backed by the instance's crypto provider, and the ability to supply a provider of your own.
+#
+# The primitives are what DuckDB itself encrypts and signs with: streaming AES-GCM (with additional authenticated data
+# and an authentication tag) and AES-CTR, hashing (MD5, SHA-1, SHA-256), HMAC and random bytes. They use the provider registered on the
+# instance, e.g. by httpfs, and otherwise DuckDB's built-in provider. The built-in provider is read-only-grade: it
+# decrypts and hashes, but writing (encrypting, random bytes) requires a provider that DuckDB considers secure, and fails
+# otherwise with the same error DuckDB reports for encrypted writes. The `force_mbedtls_unsafe` setting forces the
+# built-in provider.
+#
+# A provider is built with the setters below and registered on an instance once: registration fails when a provider is
+# already registered. Registration is not transactional: a registered provider lives for as long as the instance does.
+# Callbacks the provider does not set (hashing, HMAC, random bytes), and functions a hash or HMAC callback does not declare, fall back to the built-in provider. The AES callbacks
+# are all or nothing.
+#
+# Callbacks must be safe to run concurrently and on any thread. An error a callback reports fails the operation that
+# invoked it.
+
+enums:
+  CRYPTO_CIPHER:
+    description: A cipher, meaning an algorithm together with its mode of operation. New ciphers are new values.
+    # The values match duckdb::EncryptionTypes::CipherType
+    values:
+      CRYPTO_CIPHER_AES_GCM:
+        value: 1
+        description: AES-GCM. 12-byte IV, optional additional authenticated data, 16-byte authentication tag.
+      CRYPTO_CIPHER_AES_CTR:
+        value: 2
+        description: AES-CTR. 16-byte IV (initial counter block), no authentication tag.
+
+  CRYPTO_MODE:
+    description: The direction of a cipher stream.
+    values:
+      CRYPTO_MODE_ENCRYPT:
+        value: 0
+        description: Encrypt plaintext into ciphertext.
+      CRYPTO_MODE_DECRYPT:
+        value: 1
+        description: Decrypt ciphertext into plaintext.
+
+  CRYPTO_HASH_FUNCTION:
+    description: A hash function, for hashing and HMAC.
+    # The values match duckdb::CryptoHashFunction
+    values:
+      CRYPTO_HASH_MD5:
+        value: 0
+        description: MD5, 16-byte digest. Not collision resistant; for legacy formats only.
+      CRYPTO_HASH_SHA1:
+        value: 1
+        description: SHA-1, 20-byte digest. Not collision resistant; for legacy formats only.
+      CRYPTO_HASH_SHA256:
+        value: 2
+        description: SHA-256, 32-byte digest.
+
+handles:
+  crypto_cipher:
+    description: |
+      An owned opaque handle to a streaming cipher (see `CRYPTO_CIPHER`). Created with `[[crypto_cipher_create]]`, initialized with
+      `[[crypto_cipher_init]]`, fed with `[[crypto_cipher_update]]`, completed with `[[crypto_cipher_finalize]]`, and destroyed
+      with `[[crypto_cipher_destroy]]`. Not safe for concurrent use.
+
+  crypto_provider:
+    description: |
+      An owned opaque handle to a crypto provider being built. Created with `[[crypto_provider_create]]`, configured
+      with the setters, registered with `[[instance_register_crypto_provider]]` or
+      `[[extension_register_crypto_provider]]`, and destroyed with `[[crypto_provider_destroy]]`.
+
+callbacks:
+  crypto_provider_cipher_create_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      cipher:
+        type: CRYPTO_CIPHER
+        description: "The cipher."
+      mode:
+        type: CRYPTO_MODE
+        description: "Whether the stream encrypts or decrypts."
+      key:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The key. Borrowed for the duration of the call; copy it if it is needed longer."
+      key_length:
+        type: idx
+        description: "The key length in bytes: 16, 24 or 32."
+      stream:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: "On success, receives the provider's state for the new stream, passed to the other AES callbacks."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_cipher_init_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      stream:
+        type: void
+        indirection: 1
+        description: "The stream state created by the create callback."
+      iv:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The IV, 12 bytes for GCM and 16 for CTR. Borrowed."
+      iv_length:
+        type: idx
+        description: "The IV length in bytes."
+      aad:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "Additional authenticated data (GCM only), or null. Borrowed."
+      aad_length:
+        type: idx
+        description: "The AAD length in bytes, 0 if none."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_cipher_update_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      stream:
+        type: void
+        indirection: 1
+        description: "The stream state created by the create callback."
+      in:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The input bytes. Borrowed."
+      in_length:
+        type: idx
+        description: "The number of input bytes."
+      out:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "The output buffer, of at least `in_length` bytes. May equal `in` (in-place)."
+      out_capacity:
+        type: idx
+        description: "The capacity of `out` in bytes."
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of bytes written to `out`."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_cipher_finalize_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      stream:
+        type: void
+        indirection: 1
+        description: "The stream state created by the create callback."
+      tag:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "GCM only. Encrypting - receives the authentication tag. Decrypting - holds the tag to verify; report an error on mismatch. Null for CTR."
+      tag_length:
+        type: idx
+        description: "The tag length in bytes - 16 for GCM, 0 for CTR."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_cipher_destroy_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      stream:
+        type: void
+        indirection: 1
+        description: "The stream state to release."
+    return_type: void
+
+  crypto_provider_hash_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function, one the provider declared support for."
+      in:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The input bytes. Borrowed."
+      in_length:
+        type: idx
+        description: "The number of input bytes."
+      out:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the digest, whose size is `[[crypto_hash_digest_size]]` of the function."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_hmac_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function, one the provider declared support for."
+      key:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The HMAC key. Borrowed."
+      key_length:
+        type: idx
+        description: "The key length in bytes."
+      in:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The input bytes. Borrowed."
+      in_length:
+        type: idx
+        description: "The number of input bytes."
+      out:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the MAC, whose size is `[[crypto_hash_digest_size]]` of the function."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+  crypto_provider_random_callback:
+    parameters:
+      user_data:
+        type: void
+        indirection: 1
+        description: "The user data set via `[[crypto_provider_set_user_data]]`, or null if none was set."
+      out:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives cryptographically secure random bytes."
+      length:
+        type: idx
+        description: "The number of bytes to produce."
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to report a failure through. A reported error fails the operation that invoked the callback.
+    return_type: void
+
+functions:
+  crypto_hash_digest_size:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves the size in bytes of the digest, and of the HMAC, of a hash function.
+    parameters:
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the size in bytes."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_supports_hash:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves whether the instance's crypto provider supports hashing with the function.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to ask."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      supported:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: "Receives whether hashing is supported."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_supports_hmac:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Retrieves whether the instance's crypto provider supports HMAC with the function.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to ask."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      supported:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: "Receives whether HMAC is supported."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_hash:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Hashes `data` with the instance's crypto provider.
+
+      Fails if the provider does not support the function; see `[[crypto_supports_hash]]`.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to use."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      data:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The bytes to hash. May be null if `length` is 0."
+      length:
+        type: idx
+        description: "The number of bytes."
+      digest:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the digest."
+      digest_capacity:
+        type: idx
+        description: "The capacity of `digest`, at least `[[crypto_hash_digest_size]]`."
+      digest_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of digest bytes written."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_hmac:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Computes the HMAC of `data` under `key` with the instance's crypto provider.
+
+      Fails if the provider does not support the function; see `[[crypto_supports_hmac]]`.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to use."
+      function:
+        type: CRYPTO_HASH_FUNCTION
+        description: "The hash function."
+      key:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The HMAC key."
+      key_length:
+        type: idx
+        description: "The key length in bytes."
+      data:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The bytes to authenticate. May be null if `length` is 0."
+      length:
+        type: idx
+        description: "The number of bytes."
+      mac:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the MAC."
+      mac_capacity:
+        type: idx
+        description: "The capacity of `mac`, at least `[[crypto_hash_digest_size]]`."
+      mac_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of MAC bytes written."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_random_bytes:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Fills `data` with cryptographically secure random bytes from the instance's crypto provider, e.g. for IVs.
+
+      Fails when the instance has no provider DuckDB considers secure for writing; see the module notes.
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to use."
+      data:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the random bytes."
+      length:
+        type: idx
+        description: "The number of bytes to produce."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_cipher_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Creates a streaming cipher.
+
+      The key is copied and wiped when the cipher is destroyed. Encrypting requires a provider DuckDB considers secure for writing; decrypting does not. The cipher must be initialized with `[[crypto_cipher_init]]` before use.
+    role: constructor
+    belongs_to: crypto_cipher
+    parameters:
+      instance:
+        type: instance
+        description: "The instance whose provider to use."
+      cipher:
+        type: CRYPTO_CIPHER
+        description: "The cipher."
+      mode:
+        type: CRYPTO_MODE
+        description: "Whether to encrypt or decrypt."
+      key:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The key. Borrowed and copied."
+      key_length:
+        type: idx
+        description: "The key length in bytes: 16, 24 or 32."
+      stream:
+        type: crypto_cipher
+        indirection: 1
+        kind: OUT
+        description: "On success, receives the new cipher. Owned by the caller."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_cipher_init:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Starts the stream with an IV and, for GCM, additional authenticated data.
+
+      The IV length and AAD support depend on the cipher: AES-GCM takes a 12-byte IV and optional AAD, AES-CTR a 16-byte IV and no AAD. May be called once per cipher.
+    parameters:
+      stream:
+        type: crypto_cipher
+        description: "The cipher."
+      iv:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The IV. Borrowed."
+      iv_length:
+        type: idx
+        description: "The IV length in bytes."
+      aad:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The additional authenticated data, or null. Borrowed."
+      aad_length:
+        type: idx
+        description: "The AAD length in bytes, 0 if none."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_cipher_update:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Processes the next chunk of the stream.
+
+      `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the plaintext must not be trusted before `[[crypto_cipher_finalize]]` succeeds.
+    parameters:
+      stream:
+        type: crypto_cipher
+        description: "The cipher."
+      in:
+        type: u8
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The input bytes."
+      in_length:
+        type: idx
+        description: "The number of input bytes."
+      out:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "Receives the output bytes."
+      out_capacity:
+        type: idx
+        description: "The capacity of `out` in bytes."
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of bytes written."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_cipher_finalize:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Completes the stream.
+
+      GCM encryption: writes the 16-byte authentication tag into `tag`. GCM decryption: verifies the 16-byte `tag`, failing with an input error when it does not match. CTR: `tag` must be null and `tag_length` 0.
+    parameters:
+      stream:
+        type: crypto_cipher
+        description: "The cipher."
+      tag:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: "The tag buffer (GCM), or null."
+      tag_length:
+        type: idx
+        description: "The tag length in bytes - 16 for GCM, 0 for CTR."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_cipher_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Destroys the cipher, wiping its key. Null-safe; the handle is set to null on return.
+    parameters:
+      stream:
+        type: crypto_cipher
+        indirection: 1
+        description: "The cipher to destroy."
+    return_type: ERROR
+
+  crypto_provider_create:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Creates a new, empty crypto provider through a factory.
+
+      The provider can only be registered on the instance the factory belongs to. The caller owns the handle and must destroy it with `[[crypto_provider_destroy]]`, also after registration.
+    role: constructor
+    belongs_to: crypto_provider
+    parameters:
+      factory:
+        type: factory
+        description: "The factory to create the provider through."
+      provider:
+        type: crypto_provider
+        indirection: 1
+        kind: OUT
+        description: "On success, receives the new provider. Owned by the caller."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets user data handed to every callback of the provider, destroyed with the registered provider (or with the handle if never registered).
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      data:
+        type: opaque
+        indirection: 1
+        description: "Opaque handle bundling the user data pointer plus an optional destructor."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_create_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that creates a cipher stream.
+
+      The create, init, update and finalize callbacks are required before registration, and together must support every `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_cipher_create_callback
+        description: "The create callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_init_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that starts a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_cipher_init_callback
+        description: "The init callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_update_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that processes a chunk of a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_cipher_update_callback
+        description: "The update callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_finalize_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the callback that completes a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_cipher_finalize_callback
+        description: "The finalize callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_cipher_destroy_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the optional callback that releases a cipher stream.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_cipher_destroy_callback
+        description: "Optional. The destroy callback to set."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_hash_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the hash callback and the functions it supports. Optional: DuckDB's built-in implementation serves every function the callback does not declare.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_hash_callback
+        description: "The callback."
+      functions:
+        type: CRYPTO_HASH_FUNCTION
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The functions the callback supports. Borrowed and copied."
+      function_count:
+        type: idx
+        description: "The number of functions."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_hmac_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the HMAC callback and the functions it supports. Optional: DuckDB's built-in implementation serves every function the callback does not declare.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_hmac_callback
+        description: "The callback."
+      functions:
+        type: CRYPTO_HASH_FUNCTION
+        indirection: 1
+        const: true
+        kind: IN
+        description: "The functions the callback supports. Borrowed and copied."
+      function_count:
+        type: idx
+        description: "The number of functions."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_set_random_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Sets the random bytes callback. Optional: DuckDB's built-in implementation is used when unset.
+    parameters:
+      provider:
+        type: crypto_provider
+        description: "The provider."
+      callback:
+        type: crypto_provider_random_callback
+        description: "The callback."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  instance_register_crypto_provider:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Registers the provider as the instance's crypto provider, used by encrypted databases, Parquet encryption and the primitives above.
+
+      Requires the cipher callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it. The caller still owns the handle and must destroy it with `[[crypto_provider_destroy]]`.
+    role: method
+    belongs_to: instance
+    parameters:
+      instance:
+        type: instance
+        description: "The instance to register on."
+      provider:
+        type: crypto_provider
+        description: "The provider to register."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  extension_register_crypto_provider:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Registers the provider on the loading extension's instance. Use this from the extension's load callback. Follows the rules of `[[instance_register_crypto_provider]]`.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: "The loading extension."
+      provider:
+        type: crypto_provider
+        description: "The provider to register."
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  crypto_provider_destroy:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-11-17" ]
+    description: |
+      Destroys the provider handle. Null-safe; the handle is set to null on return. Does not affect a registered provider.
+    parameters:
+      provider:
+        type: crypto_provider
+        indirection: 1
+        description: "The provider to destroy."
+    return_type: ERROR
+

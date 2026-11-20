@@ -2034,6 +2034,596 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connect
 /* --- Struct definitions for connection --- */
 
 /* ============================================================================
+ * MODULE: crypto
+ * ============================================================================ */
+
+/* --- Enums for crypto --- */
+
+//! A cipher, meaning an algorithm together with its mode of operation. New ciphers are new values.
+typedef enum DUCKDB_V2_CRYPTO_CIPHER {
+	//! AES-GCM. 12-byte IV, optional additional authenticated data, 16-byte authentication tag.
+	DUCKDB_V2_CRYPTO_CIPHER_AES_GCM = 1,
+
+	//! AES-CTR. 16-byte IV (initial counter block), no authentication tag.
+	DUCKDB_V2_CRYPTO_CIPHER_AES_CTR = 2,
+	DUCKDB_V2_CRYPTO_CIPHER_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_CRYPTO_CIPHER;
+
+//! The direction of a cipher stream.
+typedef enum DUCKDB_V2_CRYPTO_MODE {
+	//! Encrypt plaintext into ciphertext.
+	DUCKDB_V2_CRYPTO_MODE_ENCRYPT = 0,
+
+	//! Decrypt ciphertext into plaintext.
+	DUCKDB_V2_CRYPTO_MODE_DECRYPT = 1,
+	DUCKDB_V2_CRYPTO_MODE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_CRYPTO_MODE;
+
+//! A hash function, for hashing and HMAC.
+typedef enum DUCKDB_V2_CRYPTO_HASH_FUNCTION {
+	//! MD5, 16-byte digest. Not collision resistant; for legacy formats only.
+	DUCKDB_V2_CRYPTO_HASH_MD5 = 0,
+
+	//! SHA-1, 20-byte digest. Not collision resistant; for legacy formats only.
+	DUCKDB_V2_CRYPTO_HASH_SHA1 = 1,
+
+	//! SHA-256, 32-byte digest.
+	DUCKDB_V2_CRYPTO_HASH_SHA256 = 2,
+	DUCKDB_V2_CRYPTO_HASH_FUNCTION_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_CRYPTO_HASH_FUNCTION;
+
+/* --- Struct forward declarations for crypto --- */
+
+/* --- Types for crypto --- */
+
+/*!
+ * An owned opaque handle to a streaming cipher (see `CRYPTO_CIPHER`). Created with `duckdb_v2_crypto_cipher_create()`,
+ * initialized with `duckdb_v2_crypto_cipher_init()`, fed with `duckdb_v2_crypto_cipher_update()`, completed with
+ * `duckdb_v2_crypto_cipher_finalize()`, and destroyed with `duckdb_v2_crypto_cipher_destroy()`. Not safe for concurrent
+ * use.
+ */
+typedef struct _duckdb_v2_crypto_cipher {
+	void *internal_ptr;
+} * duckdb_v2_crypto_cipher_handle;
+
+/*!
+ * An owned opaque handle to a crypto provider being built. Created with `duckdb_v2_crypto_provider_create()`,
+ * configured with the setters, registered with `duckdb_v2_instance_register_crypto_provider()` or
+ * `duckdb_v2_extension_register_crypto_provider()`, and destroyed with `duckdb_v2_crypto_provider_destroy()`.
+ */
+typedef struct _duckdb_v2_crypto_provider {
+	void *internal_ptr;
+} * duckdb_v2_crypto_provider_handle;
+
+/* --- Constants for crypto --- */
+
+/* --- Function pointer typedefs for crypto --- */
+
+typedef void (*duckdb_v2_crypto_provider_cipher_create_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_CIPHER cipher,
+                                                                    DUCKDB_V2_CRYPTO_MODE mode, const uint8_t *key,
+                                                                    idx_t key_length, void **stream,
+                                                                    duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_cipher_init_callback_fn)(void *user_data, void *stream, const uint8_t *iv,
+                                                                  idx_t iv_length, const uint8_t *aad, idx_t aad_length,
+                                                                  duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_cipher_update_callback_fn)(void *user_data, void *stream, const uint8_t *in,
+                                                                    idx_t in_length, uint8_t *out, idx_t out_capacity,
+                                                                    idx_t *out_length,
+                                                                    duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_cipher_finalize_callback_fn)(void *user_data, void *stream, uint8_t *tag,
+                                                                      idx_t tag_length,
+                                                                      duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_cipher_destroy_callback_fn)(void *user_data, void *stream);
+
+typedef void (*duckdb_v2_crypto_provider_hash_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                                           const uint8_t *in, idx_t in_length, uint8_t *out,
+                                                           duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_hmac_callback_fn)(void *user_data, DUCKDB_V2_CRYPTO_HASH_FUNCTION function,
+                                                           const uint8_t *key, idx_t key_length, const uint8_t *in,
+                                                           idx_t in_length, uint8_t *out,
+                                                           duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_crypto_provider_random_callback_fn)(void *user_data, uint8_t *out, idx_t length,
+                                                             duckdb_v2_error_info_handle *err);
+
+/* --- Functions for crypto --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the size in bytes of the digest, and of the HMAC, of a hash function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The hash function.
+ * @param size Receives the size in bytes.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hash_digest_size(DUCKDB_V2_CRYPTO_HASH_FUNCTION function, idx_t *size,
+                                                               duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves whether the instance's crypto provider supports hashing with the function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to ask.
+ * @param function The hash function.
+ * @param supported Receives whether hashing is supported.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hash(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves whether the instance's crypto provider supports HMAC with the function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to ask.
+ * @param function The hash function.
+ * @param supported Receives whether HMAC is supported.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_supports_hmac(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_HASH_FUNCTION function, bool *supported,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Hashes `data` with the instance's crypto provider.
+ *
+ * Fails if the provider does not support the function; see `duckdb_v2_crypto_supports_hash()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to use.
+ * @param function The hash function.
+ * @param data The bytes to hash. May be null if `length` is 0.
+ * @param length The number of bytes.
+ * @param digest Receives the digest.
+ * @param digest_capacity The capacity of `digest`, at least `duckdb_v2_crypto_hash_digest_size()`.
+ * @param digest_length Receives the number of digest bytes written.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hash(duckdb_v2_instance_handle instance,
+                                                   DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *data,
+                                                   idx_t length, uint8_t *digest, idx_t digest_capacity,
+                                                   idx_t *digest_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Computes the HMAC of `data` under `key` with the instance's crypto provider.
+ *
+ * Fails if the provider does not support the function; see `duckdb_v2_crypto_supports_hmac()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to use.
+ * @param function The hash function.
+ * @param key The HMAC key.
+ * @param key_length The key length in bytes.
+ * @param data The bytes to authenticate. May be null if `length` is 0.
+ * @param length The number of bytes.
+ * @param mac Receives the MAC.
+ * @param mac_capacity The capacity of `mac`, at least `duckdb_v2_crypto_hash_digest_size()`.
+ * @param mac_length Receives the number of MAC bytes written.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_hmac(duckdb_v2_instance_handle instance,
+                                                   DUCKDB_V2_CRYPTO_HASH_FUNCTION function, const uint8_t *key,
+                                                   idx_t key_length, const uint8_t *data, idx_t length, uint8_t *mac,
+                                                   idx_t mac_capacity, idx_t *mac_length,
+                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Fills `data` with cryptographically secure random bytes from the instance's crypto provider, e.g. for IVs.
+ *
+ * Fails when the instance has no provider DuckDB considers secure for writing; see the module notes.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to use.
+ * @param data Receives the random bytes.
+ * @param length The number of bytes to produce.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_random_bytes(duckdb_v2_instance_handle instance, uint8_t *data,
+                                                           idx_t length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a streaming cipher.
+ *
+ * The key is copied and wiped when the cipher is destroyed. Encrypting requires a provider DuckDB considers secure for
+ * writing; decrypting does not. The cipher must be initialized with `duckdb_v2_crypto_cipher_init()` before use.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance whose provider to use.
+ * @param cipher The cipher.
+ * @param mode Whether to encrypt or decrypt.
+ * @param key The key. Borrowed and copied.
+ * @param key_length The key length in bytes: 16, 24 or 32.
+ * @param stream On success, receives the new cipher. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_create(duckdb_v2_instance_handle instance,
+                                                            DUCKDB_V2_CRYPTO_CIPHER cipher, DUCKDB_V2_CRYPTO_MODE mode,
+                                                            const uint8_t *key, idx_t key_length,
+                                                            duckdb_v2_crypto_cipher_handle *stream,
+                                                            duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Starts the stream with an IV and, for GCM, additional authenticated data.
+ *
+ * The IV length and AAD support depend on the cipher: AES-GCM takes a 12-byte IV and optional AAD, AES-CTR a 16-byte IV
+ * and no AAD. May be called once per cipher.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param stream The cipher.
+ * @param iv The IV. Borrowed.
+ * @param iv_length The IV length in bytes.
+ * @param aad The additional authenticated data, or null. Borrowed.
+ * @param aad_length The AAD length in bytes, 0 if none.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_init(duckdb_v2_crypto_cipher_handle stream, const uint8_t *iv,
+                                                          idx_t iv_length, const uint8_t *aad, idx_t aad_length,
+                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Processes the next chunk of the stream.
+ *
+ * `out_capacity` must be at least `in_length`. `in` and `out` may be the same buffer. For decryption with GCM, the
+ * plaintext must not be trusted before `duckdb_v2_crypto_cipher_finalize()` succeeds.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param stream The cipher.
+ * @param in The input bytes.
+ * @param in_length The number of input bytes.
+ * @param out Receives the output bytes.
+ * @param out_capacity The capacity of `out` in bytes.
+ * @param out_length Receives the number of bytes written.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_update(duckdb_v2_crypto_cipher_handle stream, const uint8_t *in,
+                                                            idx_t in_length, uint8_t *out, idx_t out_capacity,
+                                                            idx_t *out_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Completes the stream.
+ *
+ * GCM encryption: writes the 16-byte authentication tag into `tag`. GCM decryption: verifies the 16-byte `tag`, failing
+ * with an input error when it does not match. CTR: `tag` must be null and `tag_length` 0.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param stream The cipher.
+ * @param tag The tag buffer (GCM), or null.
+ * @param tag_length The tag length in bytes - 16 for GCM, 0 for CTR.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_finalize(duckdb_v2_crypto_cipher_handle stream, uint8_t *tag,
+                                                              idx_t tag_length, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the cipher, wiping its key. Null-safe; the handle is set to null on return.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param stream The cipher to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_cipher_destroy(duckdb_v2_crypto_cipher_handle *stream);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates a new, empty crypto provider through a factory.
+ *
+ * The provider can only be registered on the instance the factory belongs to. The caller owns the handle and must
+ * destroy it with `duckdb_v2_crypto_provider_destroy()`, also after registration.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to create the provider through.
+ * @param provider On success, receives the new provider. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_create(duckdb_v2_factory_handle factory,
+                                                              duckdb_v2_crypto_provider_handle *provider,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets user data handed to every callback of the provider, destroyed with the registered provider (or with the handle
+ * if never registered).
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_user_data(duckdb_v2_crypto_provider_handle provider,
+                                                                     duckdb_v2_opaque *data,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that creates a cipher stream.
+ *
+ * The create, init, update and finalize callbacks are required before registration, and together must support every
+ * `CRYPTO_CIPHER` value: currently AES-GCM and AES-CTR, with 16-, 24- and 32-byte keys.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The create callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_create_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_create_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that starts a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The init callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_init_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_init_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that processes a chunk of a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The update callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_update_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_update_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the callback that completes a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The finalize callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_finalize_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_finalize_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the optional callback that releases a cipher stream.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback Optional. The destroy callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_cipher_destroy_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_cipher_destroy_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the hash callback and the functions it supports. Optional: DuckDB's built-in implementation serves every
+ * function the callback does not declare.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The callback.
+ * @param functions The functions the callback supports. Borrowed and copied.
+ * @param function_count The number of functions.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hash_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hash_callback_fn callback,
+    const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the HMAC callback and the functions it supports. Optional: DuckDB's built-in implementation serves every
+ * function the callback does not declare.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The callback.
+ * @param functions The functions the callback supports. Borrowed and copied.
+ * @param function_count The number of functions.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_hmac_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_hmac_callback_fn callback,
+    const DUCKDB_V2_CRYPTO_HASH_FUNCTION *functions, idx_t function_count, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Sets the random bytes callback. Optional: DuckDB's built-in implementation is used when unset.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider.
+ * @param callback The callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_set_random_callback(
+    duckdb_v2_crypto_provider_handle provider, duckdb_v2_crypto_provider_random_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Registers the provider as the instance's crypto provider, used by encrypted databases, Parquet encryption and the
+ * primitives above.
+ *
+ * Requires the cipher callbacks. Fails when the instance already has a provider (e.g. httpfs is loaded) or when the
+ * provider was created through a factory of another instance. The `force_mbedtls_unsafe` setting still overrides it.
+ * The caller still owns the handle and must destroy it with `duckdb_v2_crypto_provider_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param instance The instance to register on.
+ * @param provider The provider to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_register_crypto_provider(duckdb_v2_instance_handle instance,
+                                                                         duckdb_v2_crypto_provider_handle provider,
+                                                                         duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Registers the provider on the loading extension's instance. Use this from the extension's load callback. Follows the
+ * rules of `duckdb_v2_instance_register_crypto_provider()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param provider The provider to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_crypto_provider(duckdb_v2_extension_handle extension,
+                                                                          duckdb_v2_crypto_provider_handle provider,
+                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the provider handle. Null-safe; the handle is set to null on return. Does not affect a registered provider.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param provider The provider to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_crypto_provider_destroy(duckdb_v2_crypto_provider_handle *provider);
+#endif
+
+/* --- Struct definitions for crypto --- */
+
+/* ============================================================================
  * MODULE: custom type
  * ============================================================================ */
 
