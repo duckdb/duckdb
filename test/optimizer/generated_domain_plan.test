@@ -247,6 +247,19 @@ SELECT * FROM range(8192) d(k), LATERAL (SELECT d.k * 2 AS v) x;
 ----
 physical_plan	<!REGEX>:[\s\S]*"name": "(CTE|[^"]*JOIN[^"]*|[^"]*GROUP_BY)"[\s\S]*
 
+# A floating-point output can be recomputed from an integer correlation key.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT * FROM range(8192) d(k), LATERAL (SELECT d.k / 2 AS v) x;
+----
+physical_plan	<!REGEX>:[\s\S]*"name": "(CTE|[^"]*JOIN[^"]*|[^"]*GROUP_BY)"[\s\S]*
+
+query II
+SELECT count(*), sum(v)::BIGINT
+FROM range(8192) d(k), LATERAL (SELECT d.k / 2 AS v) x;
+----
+8192	16775168
+
 # The same cleanup applies to a table input.
 query II
 EXPLAIN (FORMAT JSON)

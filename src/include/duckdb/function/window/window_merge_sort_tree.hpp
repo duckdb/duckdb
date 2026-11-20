@@ -29,7 +29,7 @@ public:
 	//! Sort the data
 	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Process sorted leaf data
-	virtual void BuildLeaves() = 0;
+	virtual void BuildLeaves(Context &context) = 0;
 
 	//! The index tree we are building
 	WindowMergeSortTree &window_tree;
@@ -78,6 +78,8 @@ public:
 	vector<idx_t> scan_cols;
 	//! The sort key columns
 	vector<idx_t> key_cols;
+	//! DISTINCT FROM comparison of the sort keys
+	unique_ptr<Expression> key_distinct_from;
 	//! The sort specification
 	unique_ptr<Sort> sort;
 	//! The sorted data

@@ -216,7 +216,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
 					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
 					auto between =
-					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					    BoundBetweenExpression::Create(context, entries[i].get().Copy(), std::move(lower_constant),
 					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
 					callback(std::move(between));
 				}
@@ -289,6 +289,17 @@ static unique_ptr<Expression> CreateComparisonExpression(const Expression &expr,
 static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Expression> child_expr,
                                                                    const LogicalType &col_type) {
 	return make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(child_expr), col_type));
+}
+
+static unique_ptr<ExpressionFilter> CreateAdaptiveInFilter(unique_ptr<Expression> in_expr, const LogicalType &type) {
+	// Keep large lists pruning-only; evaluating them per row is expensive.
+	if (in_expr->Cast<BoundOperatorExpression>().GetChildren().size() >=
+	        InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD ||
+	    !ExpressionFilterExecutor::TryCreate(*in_expr)) {
+		return CreateOptionalExpressionFilter(std::move(in_expr), type);
+	}
+	return ExpressionFilter::CreateSelectivityOptionalFilter(std::move(in_expr), type,
+	                                                         SelectivityOptionalFilterType::IN_FILTER);
 }
 
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
@@ -745,10 +756,10 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
-	// if this is not a dense range we can push an optional filter for zone-map pruning
+	// Keep the residual filter so scans can skip row filtering when it is not selective.
 	auto in_expr =
 	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.GetChildren()[0]), std::move(in_list));
-	table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(in_expr), type));
+	table_filters.PushFilter(proj_index, CreateAdaptiveInFilter(std::move(in_expr), type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -838,7 +849,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		// Push the same filter as for `col IN (...)`, which index scans can use.
 		auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*equality_column),
 		                                                    std::move(equality_values));
-		table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(in_expr), col_type));
+		table_filters.PushFilter(proj_id, CreateAdaptiveInFilter(std::move(in_expr), col_type));
 		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
@@ -855,8 +866,9 @@ static bool IsLessThan(ExpressionType type) {
 
 //! Returns the relaxation margin in native units of the source type for a temporal cast.
 //! Returns -1 if the cast pair is not supported for relaxed pushdown.
-//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+//! Margins: 48h for timestamp casts that read the time zone, 1 day DATE->TIMESTAMPTZ, 24h for time of day, 1s rounding.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
+	static constexpr int64_t TIME_ZONE_MARGIN = 2LL * Interval::MICROS_PER_DAY; // microseconds
 	if (source == target) {
 		switch (source) {
 		case LogicalTypeId::DATE:
@@ -874,12 +886,10 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		// native unit: microseconds
 		switch (target) {
-		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return 2LL * Interval::MICROS_PER_HOUR;
+			return TIME_ZONE_MARGIN;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY;
 		case LogicalTypeId::TIMESTAMP_MS:
@@ -888,8 +898,18 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		default:
 			return -1;
 		}
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return TIME_ZONE_MARGIN;
+		default:
+			return -1;
+		}
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -898,6 +918,19 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return Interval::MICROS_PER_SEC * 1000LL;
 		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		// ICU does not override these, so they only lose precision
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DATE:
+			return TIME_ZONE_MARGIN * 1000LL;
 		default:
 			return -1;
 		}

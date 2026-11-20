@@ -20,9 +20,10 @@ SELECT i AS id, i AS o, 'string_value_' || i AS s, 'category_value_' || (i % 10)
        repeat('x', (i // 2048 * 1024 + least(i % 2048, 2047 - i % 2048)) % 13) AS p
 FROM range(lo, hi) r(i);
 
-foreach version v1.2.0 latest
+# The slow sibling covers every compression and both storage versions.
+foreach version latest
 
-foreach compression uncompressed rle bitpacking alp alprd roaring dictionary fsst dict_fsst zstd auto
+foreach compression auto
 
 statement ok
 ATTACH '{TEST_DIR}/fetch_consecutive_rows_{version}_{compression}.db' AS cdb (STORAGE_VERSION '{version}');

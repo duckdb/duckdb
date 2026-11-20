@@ -212,10 +212,18 @@ EXPLAIN SELECT DISTINCT p.k FROM pk p JOIN (SELECT DISTINCT k FROM r) d ON p.k =
 ----
 logical_opt	<REGEX>:(?s).*─ Aggregate ─.*Join Type: INNER.*─ Aggregate ─.*
 
+# (join_to_semi_join is switched off for this plan: d only filters p below the DISTINCT, so the join would become a
+# SEMI join)
+statement ok
+SET disabled_optimizers = 'join_to_semi_join';
+
 query II
 EXPLAIN SELECT DISTINCT p.k FROM pk p JOIN (SELECT DISTINCT k FROM r) d ON p.k < d.k;
 ----
 logical_opt	<REGEX>:(?s).*─ Aggregate ─.*Join Type: INNER.*─ Aggregate ─.*
+
+statement ok
+RESET disabled_optimizers;
 
 # ... sibling: the plain equality keeps pk's key, only the inner DISTINCT is left
 query II

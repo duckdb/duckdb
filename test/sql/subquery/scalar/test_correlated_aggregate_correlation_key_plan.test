@@ -23,8 +23,9 @@ EXPLAIN SELECT v, (SELECT (SELECT count(p)) FROM (SELECT s.w AS p FROM s WHERE s
 ----
 logical_opt	<REGEX>:.*Join Type: SINGLE.*Conditions:.*count\(p\) (=|IS NOT DISTINCT FROM) count\(p\).*
 
-# single-level correlated aggregates keep their plain outer-column correlation key
+# single-level correlated aggregates keep their plain outer-column correlation key: the outer side joins the
+# aggregate grouped by the correlation column directly
 query II
 EXPLAIN SELECT v, (SELECT count(w) FROM s WHERE s.w = t.v) FROM t;
 ----
-logical_opt	<REGEX>:.*Join Type: SINGLE.*Conditions: v (=|IS NOT DISTINCT FROM) v.*
+logical_opt	<REGEX>:.*Join Type: LEFT.*Conditions: v (=|IS NOT DISTINCT FROM) #0.*

@@ -109,15 +109,17 @@ private:
 			const idx_t next = MinValue(batch_size - target_values_offset,
 			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - unpacked_data_offset);
 			if (next != 0) {
+				auto previous = previous_value;
 				for (idx_t i = 0; i < next; i++) {
 					const auto &unpacked_value = unpacked_data[unpacked_data_offset + i];
-					auto current_value = static_cast<T>(static_cast<uint64_t>(previous_value) +
+					auto current_value = static_cast<T>(static_cast<uint64_t>(previous) +
 					                                    static_cast<uint64_t>(min_delta) + unpacked_value);
 					if (!SKIP_READ) {
 						target_values[target_values_offset + i] = current_value;
 					}
-					previous_value = static_cast<int64_t>(current_value);
+					previous = static_cast<int64_t>(current_value);
 				}
+				previous_value = previous;
 				target_values_offset += next;
 				unpacked_data_offset += next;
 				continue;

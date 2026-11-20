@@ -340,6 +340,8 @@ enum class JoinOrderOperatorType : uint8_t;
 
 enum class JoinRefType : uint8_t;
 
+enum class JoinSimplificationPhase : uint8_t;
+
 enum class JoinType : uint8_t;
 
 enum class KeywordCase : uint8_t;
@@ -533,8 +535,6 @@ enum class RecursiveEpochResult : uint8_t;
 enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RegexMatchOperatorSemantics : uint8_t;
-
-enum class RelationType : uint8_t;
 
 enum class RemoteCapability : uint8_t;
 
@@ -1184,6 +1184,9 @@ template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
+const char* EnumUtil::ToChars<JoinSimplificationPhase>(JoinSimplificationPhase value);
+
+template<>
 const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
@@ -1473,9 +1476,6 @@ const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePr
 
 template<>
 const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
-
-template<>
-const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
 const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
@@ -2217,6 +2217,9 @@ template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
+JoinSimplificationPhase EnumUtil::FromString<JoinSimplificationPhase>(const char *value);
+
+template<>
 JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
@@ -2506,9 +2509,6 @@ RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(
 
 template<>
 RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
-
-template<>
-RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
 RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);

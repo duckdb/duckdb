@@ -1,0 +1,1113 @@
+# name: test/optimizer/setop_all_aggregate.test
+# description: EXCEPT ALL / INTERSECT ALL as one aggregate over the UNION ALL of both inputs, where equal rows are identical, and the filters that move around the set operation
+# group: [optimizer]
+
+statement ok
+CREATE TABLE l(k INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO l VALUES (1, 'a'), (1, 'a'), (1, 'a'), (2, 'b'), (2, 'b'), (NULL, NULL), (NULL, NULL), (3, NULL), (4, 'd');
+
+statement ok
+CREATE TABLE r(k INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO r VALUES (1, 'a'), (2, 'b'), (2, 'b'), (2, 'b'), (NULL, NULL), (5, 'e'), (3, NULL), (3, NULL);
+
+statement ok
+CREATE TABLE empty(k INTEGER, s VARCHAR);
+
+statement ok
+CREATE TABLE ul AS SELECT * FROM (VALUES ('a')) t(s);
+
+statement ok
+CREATE TABLE ub AS SELECT * FROM (VALUES ('b')) t(s);
+
+statement ok
+CREATE TABLE ur AS SELECT * FROM (VALUES ('A')) t(s);
+
+statement ok
+CREATE TABLE nested_l AS SELECT [k, NULL] AS ks, {'k': k, 's': [s]} AS st, [k, k]::INTEGER[2] AS arr FROM l;
+
+statement ok
+CREATE TABLE nested_r AS SELECT [k, NULL] AS ks, {'k': k, 's': [s]} AS st, [k, k]::INTEGER[2] AS arr FROM r;
+
+statement ok
+CREATE TABLE typed_l AS SELECT k::TINYINT AS k, k::DECIMAL(4,1) AS d, DATE '2024-01-01' + k AS dt, s::BLOB AS b FROM l;
+
+statement ok
+CREATE TABLE typed_r AS SELECT k::BIGINT AS k, k::DECIMAL(9,3) AS d, (DATE '2024-01-01' + k)::TIMESTAMP AS dt, s AS b FROM r;
+
+# ---- The plan: one aggregate over the union, no window and no join ---------------------------------------------
+
+query II
+EXPLAIN SELECT * FROM l EXCEPT ALL SELECT * FROM r
+----
+physical_plan	<REGEX>:.*Unnest.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT * FROM l EXCEPT ALL SELECT * FROM r
+----
+physical_plan	<!REGEX>:.*(Window|Join).*
+
+query II
+EXPLAIN SELECT * FROM l INTERSECT ALL SELECT * FROM r
+----
+physical_plan	<REGEX>:.*Unnest.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT * FROM l INTERSECT ALL SELECT * FROM r
+----
+physical_plan	<!REGEX>:.*(Window|Join).*
+
+# nested types whose leaves qualify
+query II
+EXPLAIN SELECT * FROM nested_l EXCEPT ALL SELECT * FROM nested_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+# the casts of the set operation apply below the aggregate
+query II
+EXPLAIN SELECT * FROM typed_l INTERSECT ALL SELECT * FROM typed_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+# both set operations of a chain
+query II
+EXPLAIN (SELECT * FROM l EXCEPT ALL SELECT * FROM r) INTERSECT ALL SELECT * FROM l
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Unnest.*Group By.*Union.*
+
+# ---- Filters move around the set operation before it becomes an aggregate or a join ---------------------------------
+
+statement ok
+CREATE TABLE ints_a AS SELECT range AS i, range % 7 AS j FROM range(100);
+
+statement ok
+CREATE TABLE ints_b AS SELECT range AS i, range % 5 AS j FROM range(50);
+
+# a filter above the set operation reaches both inputs
+query II
+EXPLAIN SELECT * FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b) WHERE i = 7
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT i FROM ints_a INTERSECT ALL SELECT i FROM ints_b) WHERE i = 7
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT i, j FROM ints_a EXCEPT ALL SELECT i, j FROM ints_b) WHERE i BETWEEN 3 AND 5 AND j IN (1, 2)
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: \(i >= 3\) AND \(i <= 5\).*Filters: \(i >= 3\) AND \(i <= 5\).*
+
+# a filter inside the left input reaches the right input
+query II
+EXPLAIN SELECT i FROM ints_a WHERE i = 7 EXCEPT ALL SELECT i FROM ints_b
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+query II
+EXPLAIN SELECT i FROM ints_a WHERE i = 7 INTERSECT ALL SELECT i FROM ints_b
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+# a filter inside the right input reaches the left input of INTERSECT ALL, whose rows all have an equal row there ..
+query II
+EXPLAIN SELECT i FROM ints_a INTERSECT ALL SELECT i FROM ints_b WHERE i = 7
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*Filters: i = 7.*Filters: i = 7.*
+
+# .. but not the left input of EXCEPT ALL, which keeps the rows without an equal row
+query II
+EXPLAIN SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b WHERE i = 7
+----
+physical_plan	<!REGEX>:.*Filters: i = 7.*Filters: i = 7.*
+
+# the same for a set operation that becomes the join: a DOUBLE column
+statement ok
+CREATE TABLE dbl_a AS SELECT range::DOUBLE AS d FROM range(100);
+
+statement ok
+CREATE TABLE dbl_b AS SELECT range::DOUBLE AS d FROM range(50);
+
+query II
+EXPLAIN SELECT * FROM (SELECT d FROM dbl_a EXCEPT ALL SELECT d FROM dbl_b) WHERE d = 7
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a WHERE d = 7 INTERSECT ALL SELECT d FROM dbl_b
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a INTERSECT ALL SELECT d FROM dbl_b WHERE d = 7
+----
+physical_plan	<REGEX>:.*Join.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+query II
+EXPLAIN SELECT d FROM dbl_a EXCEPT ALL SELECT d FROM dbl_b WHERE d = 7
+----
+physical_plan	<!REGEX>:.*Filters: d = 7.0.*Filters: d = 7.0.*
+
+# ---- Few distinct rows with many copies keep the join ---------------------------------------------------------------
+
+# the few groups of the aggregate could not feed all threads with the rows they expand to
+statement ok
+CREATE TABLE few_groups AS SELECT (range % 3)::INTEGER AS g, range AS u FROM range(100000);
+
+statement ok
+SET threads = 4;
+
+query II
+EXPLAIN SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT g, g + 1, 'x' FROM few_groups INTERSECT ALL SELECT g, g + 1, 'x' FROM few_groups WHERE u < 10
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# many groups, or one thread: the aggregate
+query II
+EXPLAIN SELECT u FROM few_groups EXCEPT ALL SELECT u FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT g, u FROM few_groups EXCEPT ALL SELECT g, u FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+statement ok
+SET threads = 1;
+
+query II
+EXPLAIN SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT g, count(*) FROM (SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10) GROUP BY g ORDER BY g
+----
+0	33330
+1	33330
+2	33330
+
+statement ok
+RESET threads;
+
+query II
+SELECT g, count(*) FROM (SELECT g FROM few_groups EXCEPT ALL SELECT g FROM few_groups WHERE u < 10) GROUP BY g ORDER BY g
+----
+0	33330
+1	33330
+2	33330
+
+# ---- Without an estimate of the distinct rows, enough rows for many copies of one group keep the join ---------------
+
+statement ok
+SET threads = 4;
+
+# range() has no statistics
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(2000) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(2000) t(i) INTERSECT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query I
+SELECT sum(length(sha256(x::VARCHAR || random()::VARCHAR))) FROM (SELECT i % 10 AS x FROM range(2000) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+127808
+
+# too few rows for many copies of a group
+query II
+EXPLAIN SELECT x FROM (SELECT i % 10 AS x FROM range(100) t(i) EXCEPT ALL SELECT 1 FROM range(3))
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+statement ok
+RESET threads;
+
+# ---- Many distinct rows: the estimate of the groups saturates and counts as many ---------------------------------------
+
+# four columns whose distinct counts multiply to more than the estimate holds
+statement ok
+CREATE TABLE four_l AS SELECT i::BIGINT AS k, (i % 7)::INTEGER AS a, CASE WHEN i % 11 = 0 THEN NULL ELSE 'v' || (i % 10000) END AS s, DATE '2020-01-01' + (i % 365)::INTEGER AS d FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE four_r AS SELECT * FROM four_l WHERE k % 3 <> 0;
+
+statement ok
+SET threads = 4;
+
+query II
+EXPLAIN SELECT * FROM four_l EXCEPT ALL SELECT * FROM four_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+EXPLAIN SELECT * FROM four_l INTERSECT ALL SELECT * FROM four_r
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT count(*), sum(k) FROM (SELECT * FROM four_l EXCEPT ALL SELECT * FROM four_r)
+----
+33334	1666683333
+
+query II
+SELECT count(*), sum(k) FROM (SELECT * FROM four_l INTERSECT ALL SELECT * FROM four_r)
+----
+66666	3333266667
+
+statement ok
+RESET threads;
+
+# ---- A much smaller side the join can build on keeps the join ----------------------------------------------------------
+
+# the join prunes the scan of the larger side to the rows with a match in the smaller one, the aggregate hashes all of them
+statement ok
+CREATE TABLE side_small AS SELECT range::BIGINT AS k FROM range(1000);
+
+statement ok
+CREATE TABLE side_large AS SELECT range::BIGINT AS k FROM range(100000);
+
+query II
+EXPLAIN SELECT k FROM side_small EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT k FROM side_small INTERSECT ALL SELECT k FROM side_large
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT k FROM side_large INTERSECT ALL SELECT k FROM side_small
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# an EXCEPT ALL over a small right side has to see every left row: the aggregate
+query II
+EXPLAIN SELECT k FROM side_large EXCEPT ALL SELECT k FROM side_small
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+# the ratio: eight times as many rows keep the join, fewer do not
+statement ok
+CREATE TABLE side_eighth AS SELECT range::BIGINT AS k FROM range(12500);
+
+statement ok
+CREATE TABLE side_seventh AS SELECT range::BIGINT AS k FROM range(12501);
+
+query II
+EXPLAIN SELECT k FROM side_eighth EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT k FROM side_seventh EXCEPT ALL SELECT k FROM side_large
+----
+physical_plan	<REGEX>:.*Unnest.*Group By.*Union.*
+
+query II
+SELECT count(*), sum(k) FROM (SELECT k FROM side_small INTERSECT ALL SELECT k FROM side_large)
+----
+1000	499500
+
+query II
+SELECT count(*), sum(k) FROM (SELECT k FROM side_large EXCEPT ALL SELECT k FROM side_small)
+----
+99000	4999450500
+
+query I
+SELECT count(*) FROM (SELECT k FROM side_small EXCEPT ALL SELECT k FROM side_large)
+----
+0
+
+# ---- Set operations that become the join -------------------------------------------------------------------------
+
+# without ALL
+query II
+EXPLAIN SELECT * FROM l EXCEPT SELECT * FROM r
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT * FROM l INTERSECT SELECT * FROM r
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# a collated column compares equal strings that differ, and the set operation returns the left rows
+statement ok
+CREATE TABLE lc(s VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO lc VALUES ('a'), ('A'), ('b');
+
+statement ok
+CREATE TABLE rc(s VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO rc VALUES ('B');
+
+query II
+EXPLAIN SELECT * FROM lc EXCEPT ALL SELECT * FROM rc
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT * FROM lc EXCEPT ALL SELECT * FROM rc
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT s COLLATE NOCASE FROM l INTERSECT ALL SELECT s FROM r
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# a filter that compares the collated column reaches both inputs, in either direction for INTERSECT ALL
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM lc EXCEPT ALL SELECT * FROM rc) WHERE s = 'b'
+----
+physical_plan	<REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
+
+query II
+EXPLAIN SELECT * FROM lc INTERSECT ALL SELECT * FROM rc WHERE s = 'b'
+----
+physical_plan	<REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
+
+query II
+EXPLAIN SELECT * FROM lc EXCEPT ALL SELECT * FROM rc WHERE s = 'b'
+----
+physical_plan	<!REGEX>:.*Filters: nocase\(s\) = 'b'.*Filters: nocase\(s\) = 'b'.*
+
+# a filter that tells 'a' and 'A' apart, which the set operation treats as equal, runs after it has chosen its rows
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM lc INTERSECT ALL SELECT * FROM rc) WHERE ascii(s) = 97
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+# floating point columns: 0.0 = -0.0
+statement ok
+CREATE TABLE ld(d DOUBLE, f FLOAT);
+
+statement ok
+INSERT INTO ld VALUES (0.0, 1.5), (-0.0, 1.5), (1.0, 2.5), ('nan', 'nan');
+
+statement ok
+CREATE TABLE rd(d DOUBLE, f FLOAT);
+
+statement ok
+INSERT INTO rd VALUES (1.0, 2.5);
+
+query II
+EXPLAIN SELECT d FROM ld EXCEPT ALL SELECT d FROM rd
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT f FROM ld INTERSECT ALL SELECT f FROM rd
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT [d] FROM ld EXCEPT ALL SELECT [d] FROM rd
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT {'k': 1, 'f': f} FROM ld EXCEPT ALL SELECT {'k': 1, 'f': f} FROM rd
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# an integer column compared with a floating point column is compared as floating point
+query II
+EXPLAIN SELECT k FROM l EXCEPT ALL SELECT d FROM rd
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# types whose comparison normalizes: intervals (1 month = 30 days), times with a time zone
+query II
+EXPLAIN SELECT INTERVAL 1 MONTH EXCEPT ALL SELECT INTERVAL 30 DAY
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT x::TIMETZ FROM (VALUES ('12:00:00+01')) t(x) EXCEPT ALL SELECT x::TIMETZ FROM (VALUES ('11:00:00+00')) t(x)
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# maps
+query II
+EXPLAIN SELECT MAP {k: s} FROM l EXCEPT ALL SELECT MAP {k: s} FROM r
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# hand-written queries of the form of the join plan (numbered rows, SEMI / ANTI join on the columns and the number)
+# are not set operations: no plan is recognized, and they keep theirs
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE NOT EXISTS (SELECT 1 FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+query II
+EXPLAIN WITH l2 AS (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l), r2 AS (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) SELECT l2.k, l2.s FROM l2 WHERE EXISTS (SELECT 1 FROM r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+physical_plan	<!REGEX>:.*Unnest.*
+
+# ---- The answers are the same for every way the set operation is planned -----------------------------------------
+
+# 0: the join plan, 1: the aggregate plan, 2 / 3: without the filters moving around the set operation,
+# 4: without the optimizer, where the physical planner runs the set operation
+loop i 0 5
+
+statement ok
+SET disabled_optimizers = CASE {i} WHEN 0 THEN 'set_operation_aggregate' WHEN 2 THEN 'filter_pushdown' WHEN 3 THEN 'filter_pullup' ELSE '' END;
+
+statement ok
+SET enable_optimizer = ({i} <> 4);
+
+# a row that occurs n times on the left and m times on the right: n - m times (EXCEPT ALL), min(n, m) times
+# (INTERSECT ALL); NULLs are equal to each other
+query IT rowsort
+SELECT * FROM l EXCEPT ALL SELECT * FROM r
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+query IT rowsort
+SELECT * FROM r EXCEPT ALL SELECT * FROM l
+----
+2	b
+3	NULL
+5	e
+
+query IT rowsort
+SELECT * FROM l INTERSECT ALL SELECT * FROM r
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT * FROM r INTERSECT ALL SELECT * FROM l
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# the same rows on both sides
+query IT rowsort
+SELECT * FROM l EXCEPT ALL SELECT * FROM l
+----
+
+query I
+SELECT count(*) FROM (SELECT * FROM l INTERSECT ALL SELECT * FROM l)
+----
+9
+
+# a column that is NULL in every row
+query II rowsort
+SELECT NULL::INTEGER, k FROM l EXCEPT ALL SELECT NULL, k FROM r
+----
+NULL	1
+NULL	1
+NULL	4
+NULL	NULL
+
+query I
+SELECT count(*) FROM (SELECT NULL FROM l INTERSECT ALL SELECT NULL FROM r)
+----
+8
+
+# empty inputs
+query IT rowsort
+SELECT * FROM l EXCEPT ALL SELECT * FROM empty
+----
+1	a
+1	a
+1	a
+2	b
+2	b
+3	NULL
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT * FROM empty EXCEPT ALL SELECT * FROM l
+----
+
+query IT rowsort
+SELECT * FROM l INTERSECT ALL SELECT * FROM empty
+----
+
+query IT rowsort
+SELECT * FROM empty INTERSECT ALL SELECT * FROM l
+----
+
+query IT rowsort
+SELECT * FROM empty EXCEPT ALL SELECT * FROM empty
+----
+
+query IT rowsort
+SELECT * FROM l WHERE k > 100 EXCEPT ALL SELECT * FROM r
+----
+
+query IT rowsort
+SELECT * FROM l INTERSECT ALL SELECT * FROM r WHERE s = 'zzz'
+----
+
+# no columns of the result are read, only some are read, a column is read twice
+query I
+SELECT count(*) FROM (SELECT * FROM l EXCEPT ALL SELECT * FROM r)
+----
+4
+
+query T rowsort
+SELECT s FROM (SELECT * FROM l INTERSECT ALL SELECT * FROM r)
+----
+NULL
+NULL
+a
+b
+b
+
+query III rowsort
+SELECT k, k, s FROM l EXCEPT ALL SELECT k, k, s FROM r
+----
+1	1	a
+1	1	a
+4	4	d
+NULL	NULL	NULL
+
+# many copies of few groups, a filter above the set operation
+query III rowsort
+SELECT k, count(*), sum(i) FROM (SELECT i % 3 AS k, i % 2 AS i FROM range(1000) t(i) EXCEPT ALL SELECT i % 3, i % 2 FROM range(400) t(i)) GROUP BY k
+----
+0	200	100
+1	200	100
+2	200	100
+
+query II rowsort
+SELECT k, count(*) FROM (SELECT i % 3 AS k FROM range(1000) t(i) INTERSECT ALL SELECT i % 4 FROM range(400) t(i)) WHERE k > 0 GROUP BY k
+----
+1	100
+2	100
+
+# nested and chained set operations
+query IT rowsort
+(SELECT * FROM l EXCEPT ALL SELECT * FROM r) INTERSECT ALL SELECT * FROM l WHERE k = 1
+----
+1	a
+1	a
+
+query IT rowsort
+SELECT * FROM l EXCEPT ALL (SELECT * FROM r INTERSECT ALL SELECT * FROM l WHERE k <> 2)
+----
+1	a
+1	a
+2	b
+2	b
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT * FROM l EXCEPT ALL SELECT * FROM r EXCEPT ALL SELECT * FROM l WHERE k = 1
+----
+4	d
+NULL	NULL
+
+query IT rowsort
+(SELECT * FROM l UNION ALL SELECT * FROM r) EXCEPT ALL (SELECT * FROM l EXCEPT SELECT * FROM r)
+----
+1	a
+1	a
+1	a
+1	a
+2	b
+2	b
+2	b
+2	b
+2	b
+3	NULL
+3	NULL
+3	NULL
+5	e
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT DISTINCT * FROM (SELECT * FROM l INTERSECT ALL SELECT * FROM r) UNION SELECT * FROM (SELECT * FROM r EXCEPT ALL SELECT * FROM l)
+----
+1	a
+2	b
+3	NULL
+5	e
+NULL	NULL
+
+# under ORDER BY and LIMIT
+query IT
+SELECT * FROM l EXCEPT ALL SELECT * FROM r ORDER BY k NULLS FIRST, s
+----
+NULL	NULL
+1	a
+1	a
+4	d
+
+query IT
+SELECT * FROM l INTERSECT ALL SELECT * FROM r ORDER BY k DESC NULLS LAST, s LIMIT 3
+----
+3	NULL
+2	b
+2	b
+
+query IT
+SELECT * FROM (SELECT * FROM l EXCEPT ALL SELECT * FROM r ORDER BY k NULLS LAST LIMIT 2 OFFSET 1) ORDER BY k
+----
+1	a
+4	d
+
+query I
+SELECT count(*) FROM (SELECT * FROM l INTERSECT ALL SELECT * FROM r LIMIT 3)
+----
+3
+
+# in a CTE that is read twice, in a correlated subquery, as a join input
+query II
+WITH e AS MATERIALIZED (SELECT * FROM l EXCEPT ALL SELECT * FROM r)
+SELECT (SELECT count(*) FROM e), (SELECT count(*) FROM e a JOIN e b ON a.k = b.k)
+----
+4	5
+
+query II rowsort
+SELECT k, (SELECT count(*) FROM (SELECT s FROM l WHERE l.k = o.k EXCEPT ALL SELECT s FROM r WHERE r.k = o.k)) FROM (SELECT DISTINCT k FROM l) o
+----
+1	2
+2	0
+3	0
+4	1
+NULL	0
+
+query III rowsort
+SELECT e.k, e.s, i.k FROM (SELECT * FROM l EXCEPT ALL SELECT * FROM r) e LEFT JOIN (SELECT * FROM l INTERSECT ALL SELECT * FROM r) i ON e.k = i.k
+----
+1	a	1
+1	a	1
+4	d	NULL
+NULL	NULL	NULL
+
+# more copies of a group than one block of generated copies holds
+query IIII
+SELECT count(*), min(x), max(x), count(DISTINCT x) FROM (SELECT 1 AS x FROM range(10000) EXCEPT ALL SELECT 1 FROM range(3))
+----
+9997	1	1	1
+
+query II rowsort
+SELECT x, count(*) FROM (SELECT i % 3 AS x FROM range(12288) t(i) EXCEPT ALL SELECT i % 3 FROM range(3, 5) t(i)) GROUP BY x
+----
+0	4095
+1	4095
+2	4096
+
+query II rowsort
+SELECT x, count(*) FROM (SELECT i % 2 AS x FROM range(4097) t(i) INTERSECT ALL SELECT i % 2 FROM range(100000) t(i)) GROUP BY x
+----
+0	2049
+1	2048
+
+query II rowsort
+SELECT x, count(*) FROM (SELECT i % 5 AS x FROM range(30000) t(i) EXCEPT ALL SELECT i % 5 FROM range(1, 9762) t(i)) GROUP BY x
+----
+0	4048
+1	4047
+2	4048
+3	4048
+4	4048
+
+# the casts of the set operation apply before the rows are compared
+query I rowsort
+SELECT k FROM l EXCEPT ALL SELECT k::BIGINT FROM r
+----
+1
+1
+4
+NULL
+
+query IIIT rowsort
+SELECT * FROM typed_l INTERSECT ALL SELECT * FROM typed_r
+----
+1	1.000	2024-01-02 00:00:00	a
+2	2.000	2024-01-03 00:00:00	b
+2	2.000	2024-01-03 00:00:00	b
+3	3.000	2024-01-04 00:00:00	NULL
+NULL	NULL	NULL	NULL
+
+query IIIT rowsort
+SELECT * FROM typed_r EXCEPT ALL SELECT * FROM typed_l
+----
+2	2.000	2024-01-03 00:00:00	b
+3	3.000	2024-01-04 00:00:00	NULL
+5	5.000	2024-01-06 00:00:00	e
+
+query I rowsort
+SELECT k FROM l EXCEPT ALL SELECT k::VARCHAR FROM r WHERE k <> 2
+----
+1
+1
+2
+2
+4
+NULL
+NULL
+
+# struct, list and array columns, with NULLs inside
+query TTT rowsort
+SELECT * FROM nested_l EXCEPT ALL SELECT * FROM nested_r
+----
+[1, NULL]	{'k': 1, 's': [a]}	[1, 1]
+[1, NULL]	{'k': 1, 's': [a]}	[1, 1]
+[4, NULL]	{'k': 4, 's': [d]}	[4, 4]
+[NULL, NULL]	{'k': NULL, 's': [NULL]}	[NULL, NULL]
+
+query TTT rowsort
+SELECT * FROM nested_l INTERSECT ALL SELECT * FROM nested_r
+----
+[1, NULL]	{'k': 1, 's': [a]}	[1, 1]
+[2, NULL]	{'k': 2, 's': [b]}	[2, 2]
+[2, NULL]	{'k': 2, 's': [b]}	[2, 2]
+[3, NULL]	{'k': 3, 's': [NULL]}	[3, 3]
+[NULL, NULL]	{'k': NULL, 's': [NULL]}	[NULL, NULL]
+
+query T rowsort
+SELECT CASE WHEN k = 1 THEN NULL ELSE [k] END FROM l EXCEPT ALL SELECT CASE WHEN k = 2 THEN NULL ELSE [k] END FROM r
+----
+[2]
+[2]
+[4]
+[NULL]
+
+query T rowsort
+SELECT {'a': k, 'b': s} FROM l INTERSECT ALL SELECT {'a': k::BIGINT, 'b': s} FROM r
+----
+{'a': 1, 'b': a}
+{'a': 2, 'b': b}
+{'a': 2, 'b': b}
+{'a': 3, 'b': NULL}
+{'a': NULL, 'b': NULL}
+
+# the shapes that keep the join: collations, floating point, intervals
+query T rowsort
+SELECT * FROM lc EXCEPT ALL SELECT * FROM rc
+----
+A
+a
+
+query T rowsort
+SELECT * FROM lc INTERSECT ALL SELECT * FROM rc
+----
+b
+
+query T rowsort
+SELECT * FROM (SELECT * FROM lc INTERSECT ALL SELECT s FROM (VALUES ('A'), ('a'), ('A')) t(s)) WHERE ascii(s) = 97
+----
+a
+
+query T rowsort
+SELECT * FROM (SELECT * FROM lc EXCEPT ALL SELECT * FROM rc) WHERE s = 'A'
+----
+A
+a
+
+query RR rowsort
+SELECT * FROM ld EXCEPT ALL SELECT * FROM rd
+----
+-0.0	1.5
+0.0	1.5
+nan	nan
+
+query I
+SELECT count(*) FROM (SELECT * FROM (SELECT INTERVAL 1 MONTH AS i UNION ALL SELECT INTERVAL 30 DAY) EXCEPT ALL SELECT INTERVAL 30 DAY)
+----
+1
+
+# a filter on a compared column, on either side and above
+query I
+SELECT * FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b) WHERE i = 70
+----
+70
+
+query I
+SELECT count(*) FROM (SELECT i FROM ints_a WHERE i = 7 EXCEPT ALL SELECT i FROM ints_b)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT i FROM ints_a EXCEPT ALL SELECT i FROM ints_b WHERE i = 7)
+----
+99
+
+# hand-written queries of the form of the join plan, and variants that differ from it in one property each
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE EXISTS (SELECT 1 FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn)
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# = instead of IS NOT DISTINCT FROM: rows with a NULL never match
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k = r2.k AND l2.s = r2.s AND l2.rn = r2.rn
+----
+1	a
+1	a
+3	NULL
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s = r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+
+# the rows are numbered within some of the columns only, in a fixed order
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY s ORDER BY k) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY s ORDER BY k) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+# rank() numbers every copy of a row alike
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, rank() OVER (PARTITION BY k, s ORDER BY k) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, rank() OVER (PARTITION BY k, s ORDER BY k) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+4	d
+
+# the join compares some of the columns only
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+4	d
+NULL	NULL
+
+# the join does not compare the numbers
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s
+----
+4	d
+
+# one more join condition
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn AND l2.k < 2
+----
+1	a
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn AND r2.s <> 'a'
+----
+1	a
+1	a
+1	a
+3	NULL
+4	d
+NULL	NULL
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn <= r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# the number is read above the join
+query II rowsort
+SELECT l2.k, l2.rn FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	2
+1	3
+4	1
+NULL	2
+
+# a filter between the numbering and the join
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l QUALIFY rn > 1) l2 ANTI JOIN (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+1	a
+NULL	NULL
+
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT * FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2 WHERE rn = 2) r3 ON l2.k IS NOT DISTINCT FROM r3.k AND l2.s IS NOT DISTINCT FROM r3.s AND l2.rn IS NOT DISTINCT FROM r3.rn
+----
+2	b
+
+# the two sides number different expressions
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 SEMI JOIN (SELECT k::BIGINT AS k, lower(s) AS s, row_number() OVER (PARTITION BY k % 2, s) AS rn FROM r) r2 ON l2.k IS NOT DISTINCT FROM r2.k AND l2.s IS NOT DISTINCT FROM r2.s AND l2.rn IS NOT DISTINCT FROM r2.rn
+----
+1	a
+2	b
+2	b
+3	NULL
+NULL	NULL
+
+# IN compares with =
+query IT rowsort
+SELECT l2.k, l2.s FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM l) l2 WHERE (k, s, rn) IN (SELECT k, s, rn FROM (SELECT k, s, row_number() OVER (PARTITION BY k, s) AS rn FROM r) r2)
+----
+1	a
+2	b
+2	b
+
+# an input with a LIMIT, the same input on both sides, an input with a volatile filter
+query IT rowsort
+(SELECT * FROM l ORDER BY ALL LIMIT 5) EXCEPT ALL SELECT * FROM r
+----
+1	a
+1	a
+
+query IT rowsort
+WITH x AS (SELECT * FROM l WHERE k IS NOT NULL) (SELECT * FROM x UNION ALL SELECT * FROM x) EXCEPT ALL SELECT * FROM x
+----
+1	a
+1	a
+1	a
+2	b
+2	b
+3	NULL
+4	d
+
+query I
+SELECT count(*) FROM (SELECT k FROM l WHERE random() >= 0 INTERSECT ALL SELECT k FROM r WHERE random() >= 0)
+----
+5
+
+# prepared, with a parameter inside and above the set operation
+statement ok
+PREPARE p AS SELECT count(*) FROM (SELECT * FROM l WHERE k <> $1 EXCEPT ALL SELECT * FROM r) WHERE k < $2
+
+query I
+EXECUTE p(4, 10)
+----
+2
+
+query I
+EXECUTE p(1, 10)
+----
+1
+
+# the columns are compared under the collations the binder resolved, which a UNION child does not show (it has the
+# types of its first branch) and a cast to VARCHAR does not carry
+query T
+SELECT * FROM ((SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT 'A'::VARCHAR);
+----
+a
+
+query T
+SELECT * FROM ((SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub) EXCEPT ALL SELECT 'A'::VARCHAR) ORDER BY ALL;
+----
+b
+
+query T
+SELECT * FROM ((SELECT s FROM ul EXCEPT ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT s FROM ur) q WHERE s COLLATE "binary" = 'a';
+----
+a
+
+# the collation of the right side only, of a nested set operation, below a cast, in a correlated subquery
+query T
+SELECT * FROM (SELECT s FROM ul INTERSECT ALL (SELECT s FROM ub UNION ALL SELECT s COLLATE nocase FROM ur))
+----
+a
+
+query T
+SELECT * FROM (SELECT s FROM ul EXCEPT ALL (SELECT s FROM ur INTERSECT ALL SELECT s COLLATE nocase FROM ul))
+----
+
+query T
+SELECT * FROM (SELECT 1::VARCHAR EXCEPT ALL (SELECT s FROM ul UNION ALL SELECT s COLLATE nocase FROM ub)) t(s)
+----
+1
+
+query TI rowsort
+SELECT o.s, (SELECT count(*) FROM ((SELECT s FROM ul WHERE o.s IS NOT NULL UNION ALL SELECT s COLLATE nocase FROM ub) INTERSECT ALL SELECT upper(o.s))) FROM (SELECT * FROM ul UNION ALL SELECT * FROM ub UNION ALL SELECT * FROM ur) o
+----
+A	1
+a	1
+b	1
+
+statement ok
+SET enable_optimizer = true;
+
+endloop
+
+# ---- The switch ----------------------------------------------------------------------------------------------------
+
+statement ok
+SET disabled_optimizers = 'set_operation_aggregate';
+
+query II
+EXPLAIN SELECT * FROM l EXCEPT ALL SELECT * FROM r
+----
+physical_plan	<REGEX>:.*Join.*Window.*
+
+query II
+EXPLAIN SELECT * FROM l EXCEPT ALL SELECT * FROM r
+----
+physical_plan	<!REGEX>:.*Unnest.*

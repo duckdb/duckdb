@@ -18,12 +18,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::NESTED_LOOP_JOIN;
 
 public:
-	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-	                       idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
-	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-	                       idx_t estimated_cardinality);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+	                       PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+	                       JoinType join_type, idx_t estimated_cardinality,
+	                       unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, ClientContext &context, LogicalComparisonJoin &op,
+	                       PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+	                       JoinType join_type, idx_t estimated_cardinality);
 
 public:
 	// Operator Interface
@@ -76,6 +77,9 @@ public:
 	//! Returns a list of the types of the join conditions
 	vector<LogicalType> GetJoinTypes() const;
 
+	//! The condition "#0 <op> #1" of SEMI/ANTI joins with a predicate (can be nullptr)
+	unique_ptr<Expression> condition_comparison;
+
 private:
 	vector<idx_t> mark_projection_map;
 	bool track_unknown;
@@ -83,6 +87,8 @@ private:
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	// mark the build rows a probe chunk matches (RIGHT SEMI); the source phase emits them
+	void ResolveRightSemiJoin(ExecutionContext &context, DataChunk &input, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                      OperatorState &state) const;

@@ -38,7 +38,7 @@ COPY (SELECT from_hex('fffe760061006c00750065000a00610062003dd863000a00')) TO '{
 statement error
 FROM read_csv('{TEST_DIR}/utf16_lone_high.csv', encoding = 'utf-16')
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 statement ok
 COPY (SELECT from_hex('fffe760061006c00750065000a006100620000de63000a00')) TO '{TEST_DIR}/utf16_lone_low.csv' (FORMAT BLOB)
@@ -46,7 +46,7 @@ COPY (SELECT from_hex('fffe760061006c00750065000a006100620000de63000a00')) TO '{
 statement error
 FROM read_csv('{TEST_DIR}/utf16_lone_low.csv', encoding = 'utf-16')
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16
 
 statement ok
 COPY (SELECT from_hex('fffe760061006c00750065000a00610062003dd8')) TO '{TEST_DIR}/utf16_truncated.csv' (FORMAT BLOB)
@@ -54,4 +54,4 @@ COPY (SELECT from_hex('fffe760061006c00750065000a00610062003dd8')) TO '{TEST_DIR
 statement error
 FROM read_csv('{TEST_DIR}/utf16_truncated.csv', encoding = 'utf-16')
 ----
-File is not utf-16 encoded
+Input is not valid UTF-16

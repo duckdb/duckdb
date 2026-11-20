@@ -126,6 +126,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
     DUCKDB_SETTING(DebugFileDescriptorLimitSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    DUCKDB_SETTING(DebugForceBloomFilterReplicationSetting),
     DUCKDB_SETTING(DebugForceCheckpointSetting),
     DUCKDB_SETTING(DebugForceCommitFailureSetting),
     DUCKDB_SETTING(DebugForceCommitRevertFailureSetting),
@@ -697,7 +698,7 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 	if (default_memory != 0) {
 		return default_memory;
 	}
-	auto memory = GetSystemAvailableMemory(file_system ? *file_system : *FileSystem::CreateLocal());
+	auto memory = GetSystemAvailableMemory(*file_system);
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
 		default_memory = memory;
@@ -705,8 +706,8 @@ idx_t DBConfig::GetDefaultMaxMemory() const {
 		// Otherwise, use 80% of the available memory
 		default_memory = memory * 8 / 10;
 	}
-	// not started yet: do not cache, the database may still install another file system
-	if (file_system) {
+	// a user config does not have its final file system yet
+	if (!is_user_config) {
 		default_max_memory = default_memory;
 	}
 	return default_memory;
@@ -785,12 +786,11 @@ idx_t DBConfig::GetDefaultThreads() const {
 	if (threads != 0) {
 		return threads;
 	}
-	if (!file_system) {
-		// not started yet: do not cache, the database may still install another file system
-		return GetSystemMaxThreads(*FileSystem::CreateLocal());
-	}
 	threads = GetSystemMaxThreads(*file_system);
-	default_threads = threads;
+	// a user config does not have its final file system yet
+	if (!is_user_config) {
+		default_threads = threads;
+	}
 	return threads;
 }
 
