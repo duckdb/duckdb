@@ -77,9 +77,8 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
-Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
+Transaction &DuckTransactionManager::StartTransaction(Context &context, MetaTransaction &meta_transaction) {
 	// obtain the transaction lock during this function
-	auto &meta_transaction = MetaTransaction::Get(context);
 	unique_lock<mutex> start_lock(start_transaction_lock, std::defer_lock);
 	if (!meta_transaction.IsReadOnly()) {
 		start_lock.lock();
@@ -248,7 +247,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 
-	storage_manager.CreateCheckpoint(context, options);
+	storage_manager.CreateCheckpoint(context, options, &context);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -339,7 +338,7 @@ void DuckTransactionManager::CleanupTransactions() {
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// flush the transaction-local blocks of bulk appends before taking any commit locks (see PreFlushOptimisticBlocks)
-	ErrorData error = transaction.PreFlushOptimisticBlocks(db);
+	ErrorData error = transaction.PreFlushOptimisticBlocks(context, db);
 	unique_lock<mutex> t_lock(transaction_lock);
 	if (!db.IsSystem() && !db.IsTemporary()) {
 		if (transaction.ChangesMade()) {
@@ -369,7 +368,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined state, as those commits were made assuming this one was already committed
-		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
+		// we must write the WAL if an unbound index has buffered replays: the checkpoint may be skipped
+		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context) &&
+		    !db.GetStorageManager().HasBufferedIndexReplays()) {
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}
@@ -382,8 +383,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		t_lock.unlock();
 		// grab the commit lock and hold it until the entire commit is finished
 		held_commit_lock = db.GetStorageManager().GetCommitLock();
+		// a commit that failed while we waited for the commit lock may have invalidated the database
+		error = db.InvalidationError("commit");
 
-		if (!skip_wal_write_due_to_checkpoint) {
+		if (!error.HasError() && !skip_wal_write_due_to_checkpoint) {
 			error = transaction.AppendLocalStorage(context, db, commit_state);
 			if (!error.HasError() && should_write_to_wal) {
 				// Commit the changes to the WAL.
@@ -432,7 +435,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		} else {
 			info.active_transactions = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 		}
-		error = transaction.Commit(db, info, std::move(commit_state));
+		error = transaction.Commit(context, db, info, std::move(commit_state));
 	}
 
 	if (error.HasError()) {
@@ -507,7 +510,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// published and no longer revertable, but not durable: invalidate. The WAL keeps the
 			// bytes; whether a restart replays them is in doubt
 			error = ErrorData(ex);
-			ValidChecker::Invalidate(db, "Failed to sync the WAL after committing: " + error.Message());
+			db.Invalidate("syncing the WAL after a commit failed", error.RawMessage());
 			// no checkpoint after a failed commit, as on the rollback path above
 			checkpoint_decision = CheckpointDecision(error.Message());
 			lock.reset();
@@ -575,7 +578,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+void DuckTransactionManager::RollbackTransaction(ClientContext &, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Rollback", transaction.GetTransactionId());

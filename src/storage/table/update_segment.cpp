@@ -24,8 +24,7 @@ static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(Ph
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
     : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
-      newest_uncheckpointed_update_commit(0), stats(column_data.type),
-      heap(make_shared_ptr<StringHeap>(BufferAllocator::Get(column_data.GetDatabase()))) {
+      newest_uncheckpointed_update_commit(0), stats(column_data.type) {
 	auto physical_type = type.InternalType();
 
 	// the WAL writer describes the updated column through the segment
@@ -377,22 +376,6 @@ UndoBufferPointer UpdateSegment::GetUpdateNode(StorageLockKey &, idx_t vector_id
 	return root->info[vector_idx];
 }
 
-//! Keeps the string heap of an update segment alive for a vector holding strings from it
-class UpdateStringHeapHolder : public AuxiliaryDataHolder {
-public:
-	explicit UpdateStringHeapHolder(shared_ptr<StringHeap> heap_p) : heap(std::move(heap_p)) {
-	}
-
-private:
-	shared_ptr<StringHeap> heap;
-};
-
-void UpdateSegment::AddHeapReference(Vector &result) {
-	if (type.InternalType() == PhysicalType::VARCHAR) {
-		result.AddAuxiliaryData(make_uniq<UpdateStringHeapHolder>(heap));
-	}
-}
-
 void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
 	auto node = GetUpdateNode(*lock_handle, vector_index);
@@ -403,13 +386,108 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
 	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
-	AddHeapReference(result);
+	AddStringHeapReference(*lock_handle, vector_index, result);
 }
 
 UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager, false) {
 }
 
 UpdateNode::~UpdateNode() {
+}
+
+//===--------------------------------------------------------------------===//
+// String Heap
+//===--------------------------------------------------------------------===//
+UpdateStringHeap::UpdateStringHeap(Allocator &allocator, idx_t initial_capacity)
+    : allocator(allocator, initial_capacity) {
+}
+
+string_t UpdateStringHeap::AddString(const string_t &str) {
+	if (str.IsInlined()) {
+		return str;
+	}
+	auto length = str.GetSize();
+	auto data = allocator.Allocate(length);
+	memcpy(data, str.GetData(), length);
+	size += length;
+	return string_t(char_ptr_cast(data), UnsafeNumericCast<uint32_t>(length));
+}
+
+//! Keeps the string heap of a vector alive while the strings are referenced by a scanned vector
+struct UpdateStringHeapHolder : public AuxiliaryDataHolder {
+	explicit UpdateStringHeapHolder(shared_ptr<UpdateStringHeap> heap_p) : heap(std::move(heap_p)) {
+	}
+
+	shared_ptr<UpdateStringHeap> heap;
+};
+
+//! Strings are only compacted once the heap has grown by at least this amount since the last compaction
+static constexpr idx_t MINIMUM_STRING_HEAP_COMPACTION_SIZE = 16384;
+
+void UpdateSegment::AddStringHeapReference(const StorageLockKey &, idx_t vector_index, Vector &result) const {
+	if (vector_index >= root->string_heaps.size()) {
+		return;
+	}
+	auto &string_heap = root->string_heaps[vector_index];
+	if (!string_heap || string_heap->size == 0) {
+		return;
+	}
+	result.AddAuxiliaryData(make_uniq<UpdateStringHeapHolder>(string_heap));
+}
+
+//! Call the callback for every string stored in the root, and in the (pinned) update infos of its chain
+template <class FUNC>
+static void ForEachUpdateString(UpdateInfo &root_info, vector<UndoBufferReference> &chain, FUNC &&callback) {
+	auto root_data = root_info.GetData<string_t>();
+	for (idx_t i = 0; i < root_info.N; i++) {
+		callback(root_data[i]);
+	}
+	for (auto &pin : chain) {
+		auto &info = UpdateInfo::Get(pin);
+		auto info_data = info.GetData<string_t>();
+		auto value_count = info.GetValueMask().CountValid(info.N);
+		for (idx_t i = 0; i < value_count; i++) {
+			callback(info_data[i]);
+		}
+	}
+}
+
+void UpdateSegment::CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vector_index, idx_t new_size) {
+	auto &string_heap = root->string_heaps[vector_index];
+	if (string_heap->size + new_size < 2 * string_heap->compacted_size + MINIMUM_STRING_HEAP_COMPACTION_SIZE) {
+		return;
+	}
+	// the strings in the heap are referenced by the root and by the update infos in its chain
+	vector<UndoBufferReference> chain;
+	auto next = root_info.next;
+	while (next.IsSet()) {
+		chain.push_back(next.Pin());
+		next = UpdateInfo::Get(chain.back()).next;
+	}
+	idx_t live_size = 0;
+	ForEachUpdateString(root_info, chain, [&](string_t &str) {
+		if (!str.IsInlined()) {
+			live_size += str.GetSize();
+		}
+	});
+	// allocate everything up front, so nothing is modified if this fails
+	// the first block of the arena is twice its initial capacity: it fits all strings until the next compaction
+	auto capacity = MaxValue<idx_t>(2 * live_size + MINIMUM_STRING_HEAP_COMPACTION_SIZE, live_size + new_size);
+	auto new_heap = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator(), capacity / 2);
+	auto target = live_size == 0 ? nullptr : new_heap->allocator.Allocate(live_size);
+	ForEachUpdateString(root_info, chain, [&](string_t &str) {
+		if (str.IsInlined()) {
+			return;
+		}
+		auto length = str.GetSize();
+		memcpy(target, str.GetData(), length);
+		str = string_t(char_ptr_cast(target), UnsafeNumericCast<uint32_t>(length));
+		target += length;
+	});
+	new_heap->size = live_size;
+	new_heap->compacted_size = live_size;
+	// scans that still reference strings in the old heap keep it alive
+	string_heap = std::move(new_heap);
 }
 
 //===--------------------------------------------------------------------===//
@@ -474,6 +552,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
 	fetch_committed_function(UpdateInfo::Get(pin), result);
+	AddStringHeapReference(*lock_handle, vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -615,7 +694,6 @@ void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_ro
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
-	bool fetched = false;
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
@@ -629,10 +707,7 @@ void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_ro
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
 		fetch_committed_range(view, UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
-		fetched = true;
-	}
-	if (fetched) {
-		AddHeapReference(result);
+		AddStringHeapReference(*lock_handle, vector_idx, result);
 	}
 }
 
@@ -756,7 +831,6 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 	if (!root) {
 		return;
 	}
-	bool fetched = false;
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
 		const idx_t vector_index = offset / STANDARD_VECTOR_SIZE;
@@ -775,12 +849,9 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 			auto pin = entry.Pin();
 			fetch_rows_function(transaction.view, UpdateInfo::Get(pin), offsets, sel, idx, vector_count, vector_offset,
 			                    result, result_offset);
-			fetched = true;
+			AddStringHeapReference(*lock_handle, vector_index, result);
 		}
 		idx += vector_count;
-	}
-	if (fetched) {
-		AddHeapReference(result);
 	}
 }
 
@@ -1345,9 +1416,10 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 //===--------------------------------------------------------------------===//
 // Get Effective Updates
 //===--------------------------------------------------------------------===//
-idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t count, SelectionVector &sel,
-                                  Vector &base_data, idx_t id_offset) {
-	auto &original_validity = FlatVector::ValidityMutable(base_data);
+// base_data is dense and aligned with the update vector: index i is update row i
+idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, idx_t count, SelectionVector &sel,
+                                  const Vector &base_data) {
+	auto &original_validity = FlatVector::Validity(base_data);
 
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -1356,8 +1428,7 @@ idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t
 	for (idx_t i = 0; i < count; i++) {
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
-		auto original_idx = UnsafeNumericCast<idx_t>(ids[sel_idx]) - id_offset;
-		if (original_validity.RowIsValid(original_idx) == update.validity.RowIsValid(update_idx)) {
+		if (original_validity.RowIsValid(sel_idx) == update.validity.RowIsValid(update_idx)) {
 			continue;
 		}
 		new_sel.set_index(effective_count++, sel_idx);
@@ -1367,12 +1438,12 @@ idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t
 }
 
 template <class T>
-idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_t count, SelectionVector &sel,
-                                   Vector &base_data, idx_t id_offset) {
+idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, idx_t count, SelectionVector &sel,
+                                   const Vector &base_data) {
 	auto data = UnifiedVectorFormat::GetData<T>(update);
 
 	auto original_data = FlatVector::GetData<T>(base_data);
-	auto &original_validity = FlatVector::ValidityMutable(base_data);
+	auto &original_validity = FlatVector::Validity(base_data);
 
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -1381,14 +1452,13 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_
 	for (idx_t i = 0; i < count; i++) {
 		auto sel_idx = sel.get_index(i);
 		auto update_idx = update.sel->get_index(sel_idx);
-		auto original_idx = UnsafeNumericCast<idx_t>(ids[sel_idx]) - id_offset;
 		if (!update.validity.RowIsValid(update_idx)) {
 			// a row updated to NULL keeps its current value: a rewrite drops the values below NULLs
-			if (!original_validity.RowIsValid(original_idx)) {
+			if (!original_validity.RowIsValid(sel_idx)) {
 				// already NULL: there is no value to keep
 				continue;
 			}
-		} else if (original_validity.RowIsValid(original_idx) && data[update_idx] == original_data[original_idx]) {
+		} else if (original_validity.RowIsValid(sel_idx) && data[update_idx] == original_data[sel_idx]) {
 			// data is equivalent - skip
 			continue;
 		}
@@ -1452,7 +1522,7 @@ string_t GetUpdateNullPadding() {
 //! A row updated to NULL keeps its current value: a rewrite drops the values below NULLs
 template <class T>
 static void TemplatedKeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
-                                       const SelectionVector &sel, Vector &base_data, idx_t vector_offset) {
+                                       const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
 	auto update_data = FlatVector::GetDataMutable<T>(update);
 	auto &update_validity = FlatVector::Validity(update);
 	auto base_values = FlatVector::GetData<T>(base_data);
@@ -1474,12 +1544,12 @@ static void TemplatedKeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vecto
 				continue;
 			}
 		}
-		update_data[idx] = base_validity.RowIsValid(id) ? base_values[id] : GetUpdateNullPadding<T>();
+		update_data[idx] = base_validity.RowIsValid(idx) ? base_values[idx] : GetUpdateNullPadding<T>();
 	}
 }
 
 static void KeepCurrentValues(optional_ptr<UpdateInfo> root_info, Vector &update, row_t *ids, idx_t count,
-                              const SelectionVector &sel, Vector &base_data, idx_t vector_offset) {
+                              const SelectionVector &sel, const Vector &base_data, idx_t vector_offset) {
 	switch (update.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -1613,12 +1683,13 @@ void UpdateSegment::ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t u
 }
 
 void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
-                           Vector &update_p, row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
+                           Vector &update_p, row_t *ids, idx_t count, const Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
 	UnifiedVectorFormat update_format;
 	update_p.ToUnifiedFormat(update_format);
+	const idx_t input_count = count;
 
 	// the statistics of this update join those of the segment only once it cannot fail anymore, as RowGroup::Update
 	// publishes them after the next update of the column, which must not see the values of a failed update
@@ -1645,7 +1716,8 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		// if updates have the same value as the base row we can skip them
 		// we only do that if we have no updates for this vector
 		// we could do it otherwise - but that would require merging updates in order to find the current values
-		count = get_effective_updates(update_format, ids, count, sel, base_data, vector_offset);
+		D_ASSERT(base_data.GetVectorType() == VectorType::FLAT_VECTOR);
+		count = get_effective_updates(update_format, count, sel, base_data);
 		if (count == 0) {
 			MergeStatistics(update_stats.statistics);
 			return;
@@ -1658,21 +1730,12 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		if (root && vector_index < root->info.size() && root->info[vector_index].IsSet()) {
 			root_pin = root->info[vector_index].Pin();
 			root_info = &UpdateInfo::Get(root_pin);
+			// the kept values can point into the string heap of the vector, which a compaction below replaces
+			AddStringHeapReference(*write_lock, vector_index, update_p);
 		}
 		KeepCurrentValues(root_info, update_p, ids, count, sel, base_data, vector_offset);
 		update_p.ToUnifiedFormat(update_format);
 	}
-	if (statistics_update_function == UpdateStringStatistics) {
-		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten();
-		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			update_data[idx] = heap->AddBlob(update_data[idx]);
-		}
-		update_p.ToUnifiedFormat(update_format);
-	}
-
 	InitializeUpdateInfo(vector_index);
 
 	D_ASSERT(idx_t(first_id) >= row_group_start);
@@ -1688,7 +1751,6 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		root_info.column_index = column_index;
 		root->info[vector_index] = handle.GetBufferPointer();
 	}
-
 	// make room in the root before modifying anything
 	{
 		auto root_pin = root->info[vector_index].Pin();
@@ -1697,6 +1759,41 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	auto root_pointer = root->info[vector_index];
 	auto root_pin = root_pointer.Pin();
 	auto &root_info = UpdateInfo::Get(root_pin);
+	// for strings - copy the new strings into the string heap of the vector before modifying anything
+	unique_ptr<Vector> heap_strings;
+	idx_t new_size = 0;
+	if (statistics_update_function == UpdateStringStatistics) {
+		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
+		for (idx_t i = 0; i < count; i++) {
+			auto &str = update_data[update_format.sel->get_index(sel.get_index(i))];
+			if (!str.IsInlined()) {
+				new_size += str.GetSize();
+			}
+		}
+	}
+	if (new_size > 0) {
+		if (root->string_heaps.size() <= vector_index) {
+			root->string_heaps.resize(vector_index + 1);
+		}
+		auto &heap_entry = root->string_heaps[vector_index];
+		if (!heap_entry) {
+			// the first block of the arena is twice its initial capacity: it fits exactly these strings
+			heap_entry = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator(), (new_size + 1) / 2);
+			heap_entry->compacted_size = new_size;
+		} else {
+			CompactStringHeapIfNeeded(root_info, vector_index, new_size);
+		}
+		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
+		auto &string_heap = *heap_entry;
+		heap_strings = make_uniq<Vector>(update_p.GetType(), input_count);
+		auto heap_data = FlatVector::GetDataMutable<string_t>(*heap_strings);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			heap_data[idx] = string_heap.AddString(update_data[update_format.sel->get_index(idx)]);
+		}
+		FlatVector::SetSize(*heap_strings, input_count);
+		heap_strings->ToUnifiedFormat(update_format);
+	}
 	if (transaction.transaction) {
 		// search for the update info that belongs to this transaction
 		auto node_ref = GetTransactionUpdate(root_info.next, transaction);
@@ -1848,23 +1945,25 @@ static void CopyWithBaseValues(UpdateInfo &source, UpdateInfo &target, GET_BASE 
 }
 
 template <class T>
-static T CopyBaseValue(StringHeap &heap, T value) {
+static T CopyBaseValue(optional_ptr<UpdateStringHeap> heap, T value) {
 	return value;
 }
 
 template <>
-string_t CopyBaseValue(StringHeap &heap, string_t value) {
+string_t CopyBaseValue(optional_ptr<UpdateStringHeap> heap, string_t value) {
 	// the string lives in the blocks of the column that the rewrite replaces
-	return heap.AddBlob(value);
+	return heap->AddString(value);
 }
 
-static void StoreBaseValidity(UpdateInfo &source, Vector &base_data, StringHeap &heap, UpdateInfo &target) {
+static void StoreBaseValidity(UpdateInfo &source, Vector &base_data, optional_ptr<UpdateStringHeap> heap,
+                              UpdateInfo &target) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	CopyWithBaseValues<bool>(source, target, [&](sel_t tuple) { return base_validity.RowIsValid(tuple); });
 }
 
 template <class T>
-static void TemplatedStoreBaseValues(UpdateInfo &source, Vector &base_data, StringHeap &heap, UpdateInfo &target) {
+static void TemplatedStoreBaseValues(UpdateInfo &source, Vector &base_data, optional_ptr<UpdateStringHeap> heap,
+                                     UpdateInfo &target) {
 	auto base_values = FlatVector::GetData<T>(base_data);
 	auto &base_validity = FlatVector::Validity(base_data);
 	CopyWithBaseValues<T>(source, target, [&](sel_t tuple) {
@@ -1947,6 +2046,17 @@ void UpdateSegment::StoreBaseValues(VisibilityBound visibility_bound, idx_t vect
 	if (!entry.IsSet()) {
 		return;
 	}
+	optional_ptr<UpdateStringHeap> string_heap;
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		if (root->string_heaps.size() <= vector_index) {
+			root->string_heaps.resize(vector_index + 1);
+		}
+		auto &heap_entry = root->string_heaps[vector_index];
+		if (!heap_entry) {
+			heap_entry = make_shared_ptr<UpdateStringHeap>(buffer_manager.GetBufferAllocator());
+		}
+		string_heap = heap_entry.get();
+	}
 	auto root_pin = entry.Pin();
 	auto next = UpdateInfo::Get(root_pin).next;
 	while (next.IsSet()) {
@@ -1963,7 +2073,7 @@ void UpdateSegment::StoreBaseValues(VisibilityBound visibility_bound, idx_t vect
 		copy.segment = this;
 		copy.vector_index = info.vector_index;
 		copy.column_index = info.column_index;
-		store_base_values_function(info, base_data, *heap, copy);
+		store_base_values_function(info, base_data, string_heap, copy);
 		copy.Verify();
 
 		// replace the original in the chain - pin both neighbours before modifying either, as Pin can throw
@@ -2045,9 +2155,8 @@ void UpdateSegment::ClearIfUnused() {
 	if (!IsUnused(*write_lock)) {
 		return;
 	}
+	// results that scans filled from the string heaps keep them alive for as long as they need them
 	root.reset();
-	// results that scans filled from the old heap keep it alive for as long as they need it
-	heap = make_shared_ptr<StringHeap>(buffer_manager.GetBufferAllocator());
 	lock_guard<mutex> stats_guard(stats_lock);
 	stats.statistics = BaseStatistics::CreateEmpty(type);
 }

@@ -89,12 +89,16 @@ static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filt
 }
 
 static void NormalizeLegacyExpression(unique_ptr<Expression> &expr) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expr, [](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &owned_expr) {
-		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
-	    });
-	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.IndexMutable() = 0; });
+	expr = ExpressionIterator::PreorderReplace(std::move(expr), [](const Expression &child) -> unique_ptr<Expression> {
+		switch (child.GetExpressionClass()) {
+		case ExpressionClass::BOUND_COLUMN_REF:
+			return make_uniq<BoundReferenceExpression>(child.GetAlias(), child.GetReturnType(), 0ULL);
+		case ExpressionClass::BOUND_REF:
+			return child.Cast<BoundReferenceExpression>().WithIndex(0);
+		default:
+			return nullptr;
+		}
+	});
 }
 
 static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundFunctionExpression &comparison) {
@@ -418,9 +422,8 @@ void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter>
 	} else {
 		// there is already a filter: AND it together
 		auto &existing = ExpressionFilter::GetExpressionFilter(*entry->second, "TableFilterSet::PushFilter");
-		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-		and_expr->GetChildrenMutable().push_back(std::move(existing.expr));
-		and_expr->GetChildrenMutable().push_back(std::move(new_filter.expr));
+		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(existing.expr),
+		                                                      std::move(new_filter.expr));
 		filters[col_idx] = make_uniq<ExpressionFilter>(std::move(and_expr));
 	}
 }

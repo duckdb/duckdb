@@ -3,7 +3,6 @@
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include <iostream>
 
 namespace duckdb {
@@ -12,8 +11,11 @@ static string GetSeparator(const string_t &input) {
 	string option = input.GetString();
 
 	// system's path separator
-	auto fs = FileSystem::CreateLocal();
-	auto system_sep = fs->PathSeparator(option);
+#ifdef _WIN32
+	string system_sep = "\\";
+#else
+	string system_sep = "/";
+#endif
 
 	string separator;
 	if (option == "system") {

@@ -1,0 +1,282 @@
+# name: test/sql/extensions/extension_repository_from_host.test
+# description: CREATE EXTENSION REPOSITORY <host> without a prefix: what can be checked without reaching a host
+# group: [extensions]
+
+# The host form reads https://<host>/.well-known/duckdb-extension-repo.json, which needs httpfs and a live host; the
+# resolution itself is therefore not exercised here. Everything that is decided before that fetch is.
+# TODO: exercise the resolution itself once duckdb.org serves a .well-known/duckdb-extension-repo.json, in a test that
+# requires httpfs.
+
+statement ok
+SET extension_repository_directory='{TEST_DIR}/extension_repositories'
+
+# A repository name may be a host, spelled as dotted words or as a string, wherever a repository is named.
+statement ok
+CREATE EXTENSION REPOSITORY pointing.example WITH PREFIX '{TEST_DIR}/repo' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+# Added by prefix, it has no host.
+query III
+SELECT repository_name, prefix, host FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+pointing.example	{TEST_DIR}/repo	NULL
+
+# INSTALL and LOAD take the dotted name as well as the string; an extension that is not served fails on the download,
+# not on the name.
+statement error
+INSTALL nonexistent_extension FROM pointing.example
+----
+<REGEX>:IO Error.*
+
+statement error
+INSTALL nonexistent_extension FROM 'pointing.example'
+----
+<REGEX>:IO Error.*
+
+statement error
+LOAD nonexistent_extension FROM pointing.example
+----
+<REGEX>:IO Error.*
+
+statement error
+INSTALL nonexistent_extension FROM unknown.example
+----
+<REGEX>:Binder Error.*not a known repository name.*
+
+# The conflict is decided before any host is contacted: IF NOT EXISTS returns the stored definition, and a plain CREATE
+# of the host form reports that the stored repository was added with a prefix instead, neither reaching for
+# 'https://pointing.example'.
+statement ok
+CREATE EXTENSION REPOSITORY IF NOT EXISTS pointing.example
+
+statement ok
+CREATE EXTENSION REPOSITORY IF NOT EXISTS 'POINTING.example'
+
+statement error
+CREATE EXTENSION REPOSITORY pointing.example
+----
+<REGEX>:Catalog Error.*already exists, added with prefix '.*' rather than resolved from its host.*
+
+# the other way round: naming the stored prefix does not make it the same repository as one resolved from its host
+# (see the api tests for a stored host); here a plain CREATE with the same prefix is simply the same repository
+statement ok
+CREATE EXTENSION REPOSITORY pointing.example WITH PREFIX '{TEST_DIR}/repo'
+
+# OR REPLACE does resolve; here that fails (no httpfs to reach the host, or no such host), and the old definition stays.
+statement error
+CREATE OR REPLACE EXTENSION REPOSITORY pointing.example
+----
+<REGEX>:.*
+
+query II
+SELECT prefix, host FROM duckdb_extension_repositories() WHERE repository_name = 'pointing.example'
+----
+{TEST_DIR}/repo	NULL
+
+# An empty prefix is not "no prefix": it is refused, with or without keys, so the host form can never be reached with
+# keys of the caller's choosing.
+statement error
+CREATE OR REPLACE EXTENSION REPOSITORY pointing.example WITH PREFIX ''
+----
+<REGEX>:Parser Error.*prefix cannot be empty.*
+
+statement error
+CREATE OR REPLACE EXTENSION REPOSITORY pointing.example WITH PREFIX '' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyjug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoNPjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpAbYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9ZQIDAQAB'
+----
+<REGEX>:Parser Error.*prefix cannot be empty.*
+
+statement ok
+DROP EXTENSION REPOSITORY 'pointing.example'
+
+# A host with '-' in it is spelled without quotes too, wherever a repository is named; case does not matter.
+statement ok
+CREATE EXTENSION REPOSITORY my-pointing.example WITH PREFIX '{TEST_DIR}/repo' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+query I
+SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+my-pointing.example
+
+statement error
+INSTALL nonexistent_extension FROM my-pointing.example
+----
+<REGEX>:IO Error.*
+
+statement ok
+CREATE EXTENSION REPOSITORY IF NOT EXISTS My-Pointing.EXAMPLE
+
+# the whole dashed, dotted name reaches the manager as one name: it fails on the fetch, naming the host it reached for.
+# The hosts DuckDB's own repositories live on are spelled this way (community-extensions.duckdb.org); a misspelling of
+# it here, so that the statement keeps failing once that host serves its metadata file and httpfs is at hand
+statement error
+CREATE EXTENSION REPOSITORY community-extensionz.duckdb.org
+----
+<REGEX>:(Missing Extension|IO) Error.*community-extensionz\.duckdb\.org.*
+
+statement error
+CREATE EXTENSION REPOSITORY s3-like.my-pointing.example
+----
+<REGEX>:(Missing Extension|IO) Error.*s3-like\.my-pointing\.example.*
+
+# two dashes in a row start a comment: unquoted, 'xn--bcher-kva.example' reads as the single word 'xn', which is not a
+# host (as 'xn.com--anything' reads as 'xn.com': a comment ends the statement, as anywhere in SQL). Quoted, the name is
+# whole, and a punycode label ('xn--...') is a host label: this one reaches for the host
+statement error
+CREATE EXTENSION REPOSITORY xn--bcher-kva.example
+----
+<REGEX>:Invalid Input Error.*'xn' is not a host name.*
+
+statement error
+CREATE EXTENSION REPOSITORY 'xn--bcher-kva.example'
+----
+<REGEX>:(Missing Extension|IO) Error.*xn--bcher-kva\.example.*
+
+# two dashes anywhere else are not a host label
+statement error
+CREATE EXTENSION REPOSITORY 'my--site.example'
+----
+<REGEX>:Invalid Input Error.*'my--site.example' is not a host name.*
+
+# a dotted name is ASCII words: a name with other letters reaches the manager, which refuses it as a name and points at
+# the punycode spelling
+statement error
+CREATE EXTENSION REPOSITORY münchen.de
+----
+<REGEX>:Invalid Input Error.*Invalid extension repository name 'münchen.de'.*punycode form, 'xn--...', in quotes.*
+
+# quoted parts are not a dotted name; a name with such parts goes in quotes as a whole
+statement error
+CREATE EXTENSION REPOSITORY "my-site".com
+----
+<REGEX>:Parser Error.*
+
+# the parts of an unquoted host must touch: with a space in between it is not a host
+statement error
+CREATE EXTENSION REPOSITORY my - pointing.example
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE EXTENSION REPOSITORY my-pointing .example
+----
+<REGEX>:Parser Error.*
+
+# and no label may start or end with '-'
+statement error
+CREATE EXTENSION REPOSITORY -my.example
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE EXTENSION REPOSITORY my-.example
+----
+<REGEX>:Parser Error.*
+
+statement ok
+DROP EXTENSION REPOSITORY my-pointing.example
+
+# A host reached over https needs httpfs: the error when it is not there is checked in
+# extension_repository_from_host_no_httpfs.test, which only runs where httpfs is neither loaded nor autoloadable.
+
+# Without a prefix the name must be a host on the public internet: two or more labels, letters-only last label, not
+# localhost. Anything else is refused before any network is touched; it can still be a repository WITH PREFIX.
+statement error
+CREATE EXTENSION REPOSITORY myrepo
+----
+<REGEX>:Invalid Input Error.*'myrepo' is not a host name.*WITH PREFIX.*
+
+statement error
+CREATE EXTENSION REPOSITORY '10.0.0.5'
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+# an IP literal is a dotted name to the parser, quoted or not, and still not a host to the manager
+statement error
+CREATE EXTENSION REPOSITORY 127.0.0.1
+----
+<REGEX>:Invalid Input Error.*'127.0.0.1' is not a host name.*
+
+statement error
+INSTALL nonexistent_extension FROM 127.0.0.1
+----
+<REGEX>:Binder Error.*'127.0.0.1' is not a known repository name.*
+
+statement error
+CREATE EXTENSION REPOSITORY localhost
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+statement error
+CREATE EXTENSION REPOSITORY repo.localhost
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+statement error
+CREATE EXTENSION REPOSITORY under_score.example
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+statement error
+CREATE EXTENSION REPOSITORY 'bad-.example'
+----
+<REGEX>:Invalid Input Error.*is not a host name.*
+
+statement ok
+CREATE EXTENSION REPOSITORY myrepo WITH PREFIX '{TEST_DIR}/repo' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+statement ok
+DROP EXTENSION REPOSITORY myrepo
+
+# The built-in names stay reserved, before anything is fetched.
+statement error
+CREATE EXTENSION REPOSITORY core_nightly
+----
+<REGEX>:Invalid Input Error.*built-in repository name.*
+
+# Names: dots are allowed, but not at the ends or doubled.
+statement error
+CREATE EXTENSION REPOSITORY 'bad..name' WITH PREFIX '{TEST_DIR}/repo'
+----
+<REGEX>:Invalid Input Error.*Invalid extension repository name.*
+
+statement error
+CREATE EXTENSION REPOSITORY '.hidden' WITH PREFIX '{TEST_DIR}/repo'
+----
+<REGEX>:Invalid Input Error.*Invalid extension repository name.*
+
+# 'hosts_only': only repositories resolved from their host can be added, and only those are trusted. The runner starts
+# in 'allowed'; the setting can only be tightened.
+statement ok
+CREATE EXTENSION REPOSITORY byprefix WITH PREFIX '{TEST_DIR}/repo' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+statement ok
+SET allow_extension_repositories='hosts_only'
+
+statement error
+CREATE EXTENSION REPOSITORY other WITH PREFIX '{TEST_DIR}/repo'
+----
+<REGEX>:Permission Error.*Cannot create extension repository 'other'.*allow_extension_repositories is 'hosts_only'.*Consider creating the repository by its host.*Check the docs: https://duckdb.org/docs/stable/extensions/extension_repositories.*
+
+# the repository added by prefix is distrusted: installing from it is refused before anything is fetched
+statement error
+INSTALL nonexistent_extension FROM byprefix
+----
+<REGEX>:Permission Error.*'byprefix' is not permitted while allow_extension_repositories='hosts_only'.*
+
+# a plain CREATE that asks for the stored repository adds nothing, so it passes under 'hosts_only' too; one that asks
+# for something else reports the difference, not the opt-in
+statement ok
+CREATE EXTENSION REPOSITORY byprefix WITH PREFIX '{TEST_DIR}/repo'
+
+statement error
+CREATE EXTENSION REPOSITORY byprefix WITH PREFIX '{TEST_DIR}/other'
+----
+<REGEX>:Catalog Error.*already exists, with prefix.*
+
+# the ratchet only tightens
+statement error
+SET allow_extension_repositories='allowed'
+----
+<REGEX>:Invalid Input Error.*can only be tightened.*
+
+statement ok
+DROP EXTENSION REPOSITORY byprefix

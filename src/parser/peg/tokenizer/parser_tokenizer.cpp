@@ -3,15 +3,14 @@
 
 namespace duckdb {
 
-static bool IsEmptyQuotedIdentifier(const string &sql, idx_t start, idx_t end, TokenType type) {
+bool ParserTokenizerBehavior::IsEmptyQuotedIdentifier(const string &sql, idx_t start, idx_t end, TokenType type) {
 	if (type != TokenType::IDENTIFIER || end != start + 2) {
 		return false;
 	}
 	return (sql[start] == '"' && sql[start + 1] == '"') || (sql[start] == '`' && sql[start + 1] == '`');
 }
 
-ParserTokenizerBehavior::ParserTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens)
-    : TokenizerBehavior(sql, tokens) {
+ParserTokenizerBehavior::ParserTokenizerBehavior(const string &sql) : TokenizerBehavior(sql) {
 }
 
 void ParserTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
@@ -24,6 +23,13 @@ void ParserTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, 
 		throw ParserException::SyntaxError(sql, "zero-length delimited identifier", optional_idx(start));
 	}
 	TokenizerBehavior::PushToken(start, end, type, unterminated);
+}
+
+void ParserTokenizerBehavior::PushWordToken(idx_t start, idx_t end, TokenType type, const GrammarLiteralTable &table,
+                                            LiteralInfo info) {
+	// a word is neither a comment nor a quoted identifier, so none of the PushToken checks apply
+	D_ASSERT(start < end && (type == TokenType::KEYWORD || type == TokenType::IDENTIFIER));
+	EmplaceToken(start, end, type).SetLiteralInfo(table, info);
 }
 
 void ParserTokenizerBehavior::OnStatementEnd(idx_t pos) {

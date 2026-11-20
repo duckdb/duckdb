@@ -1,0 +1,13 @@
+# name: test/sql/copy/partitioned/hive_partition_escaped_types.test
+# description: Detect hive partition types from escaped values
+# group: [partitioned]
+
+require parquet
+
+statement ok
+COPY (SELECT TIMESTAMP '2024-01-01 12:30:00' AS ts, TIME '12:30:00' AS t, 1 AS v) TO '{TEST_DIR}/escaped_types' (FORMAT parquet, PARTITION_BY (ts, t));
+
+query II
+SELECT typeof(ts), typeof(t) FROM read_parquet('{TEST_DIR}/escaped_types/**/*.parquet', hive_partitioning = true);
+----
+TIMESTAMP	TIME

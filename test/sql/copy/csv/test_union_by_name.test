@@ -235,3 +235,25 @@ from read_csv('{DATA_DIR}/csv/union_by_name_2/*.csv', union_by_name=True, parall
 ----
 1	1	1	NULL
 
+# Test union by name over files whose header starts with a byte order mark
+query TTI
+SELECT trade_day, typeof(trade_day), count(*)
+FROM read_csv(['{DATA_DIR}/csv/sample-0.csv', '{DATA_DIR}/csv/sample-0.csv'], union_by_name = true)
+GROUP BY ALL
+----
+2024-01-02	DATE	6
+
+# Union by name sniffs every file even when auto detection is off
+query IITT
+SELECT b, c, typeof(b), typeof(c)
+FROM read_csv(['{DATA_DIR}/csv/union-by-name/ubn2.csv', '{DATA_DIR}/csv/union-by-name/ubn3.csv'], union_by_name = true, auto_detect = false)
+ORDER BY ALL
+----
+NULL	3	BIGINT	BIGINT
+NULL	5	BIGINT	BIGINT
+NULL	6	BIGINT	BIGINT
+88	NULL	BIGINT	BIGINT
+90	NULL	BIGINT	BIGINT
+91	NULL	BIGINT	BIGINT
+92	NULL	BIGINT	BIGINT
+

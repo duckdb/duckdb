@@ -408,7 +408,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	arguments = std::move(expr->GetChildrenMutable());
 
 	function.ReplaceImplementation(expr->Function());
-	return std::move(expr->BindInfoMutable());
+	return expr->BindInfo() ? expr->BindInfo()->Copy() : nullptr;
 }
 
 //! BindMinMax replaces a collated min/max with arg_min/arg_max over the collation key, so the bound call has one
@@ -549,6 +549,10 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &fu
 	case PhysicalType::DOUBLE:
 		SpecializeMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(function);
 		break;
+	case PhysicalType::INTERVAL:
+		// sort keys do not normalize intervals, so compare them as interval_t
+		SpecializeMinMaxNFunction<MinMaxFixedValue<interval_t>, COMPARATOR>(function);
+		break;
 	default:
 		SpecializeMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(function);
 		break;
@@ -581,7 +585,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			auto expr = function_binder.BindAggregateFunction(collated_function, std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
 			function.ReplaceImplementation(expr->Function());
-			return std::move(expr->BindInfoMutable());
+			return expr->BindInfo() ? expr->BindInfo()->Copy() : nullptr;
 		}
 	}
 

@@ -76,8 +76,8 @@ void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                    FunctionData *bind_data) {
-	auto &random_engine = RandomEngine::Get(state.GetContext());
+                                                    optional_ptr<const FunctionData> bind_data) {
+	auto &random_engine = RandomEngine::Get(state.GetClientContext());
 	lock_guard<mutex> guard(random_engine.lock);
 	return make_uniq<RandomLocalState>(random_engine.NextSeed());
 }

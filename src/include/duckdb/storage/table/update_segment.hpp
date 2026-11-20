@@ -10,7 +10,7 @@
 
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
@@ -23,6 +23,7 @@ struct SelectionVector;
 class Vector;
 struct UpdateInfo;
 struct UpdateNode;
+struct UpdateStringHeap;
 struct UndoBufferAllocator;
 
 class UpdateSegment;
@@ -73,7 +74,7 @@ public:
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update,
-	            row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start);
+	            row_t *ids, idx_t count, const Vector &base_data, idx_t row_group_start);
 	void FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel, idx_t count,
 	               Vector &result, idx_t result_offset);
 
@@ -104,8 +105,6 @@ private:
 	mutex stats_lock;
 	//! Internal type size
 	idx_t type_size;
-	//! String heap, only used for strings; a clear replaces it, scan results holding its strings keep the old one alive
-	shared_ptr<StringHeap> heap;
 
 public:
 	typedef void (*merge_update_function_t)(UpdateInfo &info, UnifiedVectorFormat &update, row_t *ids, idx_t count,
@@ -122,10 +121,10 @@ public:
 	                                      idx_t vector_offset, Vector &result, idx_t result_offset);
 	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
 	                                             UnifiedVectorFormat &update, idx_t count);
-	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
-	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
-	typedef void (*store_base_values_function_t)(UpdateInfo &source, Vector &base_data, StringHeap &heap,
-	                                             UpdateInfo &target);
+	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, idx_t count, SelectionVector &sel,
+	                                         const Vector &base_data);
+	typedef void (*store_base_values_function_t)(UpdateInfo &source, Vector &base_data,
+	                                             optional_ptr<UpdateStringHeap> heap, UpdateInfo &target);
 
 private:
 	merge_update_function_t merge_update_function;
@@ -142,10 +141,25 @@ private:
 private:
 	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;
 	bool IsUnused(StorageLockKey &lock) const;
-	//! Keeps the string heap alive for as long as the result holds strings from it
-	void AddHeapReference(Vector &result);
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index);
+	void CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vector_index, idx_t new_size);
+	void AddStringHeapReference(const StorageLockKey &lock, idx_t vector_index, Vector &result) const;
+};
+
+//! Holds the non-inlined strings of the update infos of a single vector
+struct UpdateStringHeap {
+	explicit UpdateStringHeap(Allocator &allocator,
+	                          idx_t initial_capacity = ArenaAllocator::ARENA_ALLOCATOR_INITIAL_CAPACITY);
+
+	ArenaAllocator allocator;
+	//! The total size of the strings added to the heap
+	idx_t size = 0;
+	//! The size of the strings in the heap when it was created, or last compacted
+	idx_t compacted_size = 0;
+
+public:
+	string_t AddString(const string_t &str);
 };
 
 struct UpdateNode {
@@ -154,6 +168,8 @@ struct UpdateNode {
 
 	UndoBufferAllocator allocator;
 	vector<UndoBufferPointer> info;
+	//! For strings - the heap of each vector. Scans hold a reference, so a heap can be replaced when compacting it
+	vector<shared_ptr<UpdateStringHeap>> string_heaps;
 };
 
 } // namespace duckdb

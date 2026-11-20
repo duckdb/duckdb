@@ -13,14 +13,14 @@ idx_t RowNumberColumnData::GetRowNumberBase(ColumnScanState &state) {
 	return state.parent->row_number_base.GetIndex();
 }
 
-FilterPropagateResult RowNumberColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
-                                                        optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+FilterPropagateResult RowNumberColumnData::CheckZonemap(ColumnScanState &state, const ScanFilter &filter,
+                                                        optional_idx &checked_end) {
 	// row_number columns don't have zonemaps - we cannot prune based on row number
-	checked_segment = nullptr;
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-void RowNumberColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void RowNumberColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state,
+                                             idx_t start_row, idx_t end_row) {
 }
 
 void RowNumberColumnData::InitializeScan(ColumnScanState &state) {
@@ -70,10 +70,6 @@ void RowNumberColumnData::Select(TransactionData transaction, idx_t vector_index
 	state.offset_in_column += count;
 }
 
-idx_t RowNumberColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw InternalException("Fetch is not supported for row number columns");
-}
-
 void RowNumberColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                     const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                     idx_t fetch_count, Vector &result, idx_t result_offset) {
@@ -117,7 +113,8 @@ void RowNumberColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 }
 
 unique_ptr<ColumnCheckpointState>
-RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
+                                           PartialBlockManager &partial_block_manager) {
 	throw InternalException("RowNumberColumnData cannot be checkpointed");
 }
 

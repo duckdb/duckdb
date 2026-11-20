@@ -3,6 +3,9 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 
 using namespace duckdb;
@@ -28,10 +31,15 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 // Helper: get the EXPLAIN output for an arrow_scan with a filter
 static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, const string &filter_expr) {
 	const auto params = ArrowTestHelper::ConstructArrowScan(factory);
-	const auto rel = con.TableFunction("arrow_scan", {}, {}, params)->Filter(filter_expr);
+	auto select = ArrowTestHelper::ArrowScanSelect(params);
+	auto conditions = Parser(*con.context).ParseExpressionList(filter_expr);
+	if (conditions.size() != 1) {
+		throw ParserException("Expected a single expression as filter condition");
+	}
+	select->node->Cast<SelectNode>().where_clause = std::move(conditions[0]);
 	// render operator names raw/upper-case so the string checks below (ARROW_SCAN, FILTER) match
 	REQUIRE(!con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'upper'}")->HasError());
-	const auto explain_result = rel->Explain();
+	const auto explain_result = con.Query(make_uniq<ExplainStatement>(std::move(select)));
 	REQUIRE(!explain_result->HasError());
 	auto &mat = *explain_result;
 	return mat.Collection().GetValue(1, 0).ToString();
@@ -131,8 +139,8 @@ TEST_CASE("Arrow filter pushdown - filters kept above the scan next to an IN lis
 		for (auto &query : queries) {
 			INFO(query << " without " << disabled_optimizers);
 			auto factory = MakeArrowFactory(con, "SELECT * FROM src", true);
-			con.TableFunction("arrow_scan", {}, {}, ArrowTestHelper::ConstructArrowScan(*factory))
-			    ->CreateView("data", true, true);
+			ArrowTestHelper::CreateArrowScanView(con, ArrowTestHelper::ConstructArrowScan(*factory), "data", true,
+			                                     true);
 			auto result = con.Query(StringUtil::Format(query, "data"));
 			REQUIRE(!result->HasError());
 			auto expected = con.Query(StringUtil::Format(query, "src"));
@@ -344,7 +352,7 @@ private:
 // A database with the batch registered as view "t" through the recording factory.
 struct Scan {
 	explicit Scan(Batch &batch) : db(nullptr), con(db), factory(make_shared_ptr<RecordingFactory>(batch)) {
-		con.TableFunction("arrow_scan", {}, {}, factory)->CreateView("t", true, true);
+		ArrowTestHelper::CreateArrowScanView(con, factory, "t", true, true);
 	}
 	vector<int32_t> Rows(const string &sql) {
 		auto result = con.Query(sql);

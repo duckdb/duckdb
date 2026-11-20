@@ -3,7 +3,7 @@ module: log sink
 # Receiving DuckDB's log entries in code of your own. A log sink is built with the setters below and registered on an
 # instance under a name, which makes it available to DuckDB's logging configuration: once the configuration directs
 # entries to it, by its name, its write callback receives them. Currently a sink is selected with
-# `SET logging_storage = '<name>'`.
+# `SET logging_sink = '<name>'`.
 #
 # A log sink only receives entries: they cannot be read back through `duckdb_logs`.
 #
@@ -77,17 +77,23 @@ callbacks:
         type: LOG_SCOPE
         description: The scope the entry was written in, which decides which of its ids are present.
       type:
-        type: str
+        type: char
         indirection: 1
         const: true
         kind: IN
         description: The log type the entry was written under, e.g. `QueryLog`. Borrowed for the duration of the call.
+      type_length:
+        type: idx
+        description: The length of `type` in bytes. `type` is not guaranteed to be null-terminated.
       message:
-        type: str
+        type: char
         indirection: 1
         const: true
         kind: IN
         description: The message of the entry. Borrowed for the duration of the call.
+      message_length:
+        type: idx
+        description: The length of `message` in bytes. `message` is not guaranteed to be null-terminated.
       err:
         type: error_info
         indirection: 1
@@ -164,11 +170,14 @@ functions:
         type: log_sink
         description: The log sink to set the name of.
       name:
-        type: identifier
+        type: char
         indirection: 1
         const: true
         kind: IN
         description: The name to set. Borrowed and copied.
+      name_length:
+        type: idx
+        description: The length of `name` in bytes. `name` must be valid UTF-8, need not be null-terminated, and may be NULL only when this is 0.
       err:
         type: error_info
         indirection: 1

@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,24 @@ static optional_ptr<PhysicalComparisonJoin> RuntimeFilterProducer(Pipeline &pipe
 	default:
 		return nullptr;
 	}
+}
+
+static bool IsSmallBuild(const PhysicalOperator &op) {
+	// Membership joins do not expand the probe side.
+	bool membership_join = false;
+	if (op.type == PhysicalOperatorType::HASH_JOIN) {
+		const auto join_type = op.Cast<PhysicalComparisonJoin>().join_type;
+		membership_join = join_type == JoinType::MARK || join_type == JoinType::SEMI || join_type == JoinType::ANTI;
+	}
+	if (op.estimated_cardinality > DEFAULT_ROW_GROUP_SIZE || (op.IsSink() && !membership_join)) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!IsSmallBuild(child.get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static bool HasJoinSink(Pipeline &pipeline) {
@@ -96,7 +115,11 @@ static PipelineSchedule RuntimeFilterDependencyCheck(const PipelineSchedule &sch
 	return result;
 }
 
-void ScheduleRuntimeFilters(PipelineSchedule &schedule) {
+// The dependency check above refuses edges that would cycle through streaming EOF waits. Edges that pass it can
+// still gate a buffered exchange consumer through producer backpressure, which is not a cycle in the augmented
+// graph; the exchange liveness analysis in ResolveExternalInputs handles those. Both edge-adding call paths go
+// through this one function, so the analysis always sees the edge set the executor runs.
+static void ScheduleRuntimeFiltersInternal(PipelineSchedule &schedule, bool clear_filters, bool add_edges) {
 	reference_map_t<PhysicalComparisonJoin, vector<idx_t>> publications;
 	vector<reference<PhysicalComparisonJoin>> producers;
 	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
@@ -117,10 +140,19 @@ void ScheduleRuntimeFilters(PipelineSchedule &schedule) {
 		return;
 	}
 
-	auto dependency_check = RuntimeFilterDependencyCheck(schedule);
-	auto join_build_stages = CollectJoinBuildStages(schedule);
-	reference_map_t<DynamicTableFilterSet, vector<idx_t>> sources;
-	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
+	// The clear-only path never adds edges, so the admission state is not needed there.
+	PipelineSchedule dependency_check;
+	vector<bool> join_build_stages;
+	if (add_edges) {
+		dependency_check = RuntimeFilterDependencyCheck(schedule);
+		join_build_stages = CollectJoinBuildStages(schedule);
+	}
+	struct FilterSource {
+		idx_t stage_idx;
+		bool small_build_only;
+	};
+	reference_map_t<DynamicTableFilterSet, vector<FilterSource>> sources;
+	for (idx_t stage_idx = 0; add_edges && stage_idx < schedule.stages.size(); stage_idx++) {
 		auto &stage = schedule.stages[stage_idx];
 		auto &pipeline = *stage.pipeline;
 		auto source = pipeline.GetSource();
@@ -134,12 +166,12 @@ void ScheduleRuntimeFilters(PipelineSchedule &schedule) {
 		    scan.function.global_initialization == TableFunctionInitialization::INITIALIZE_ON_SCHEDULE) {
 			continue;
 		}
-		if (!join_build_stages[stage_idx] && (!scan.table_filters || (!scan.table_filters->HasFilters() &&
-		                                                              !scan.table_filters->HasMultiColumnFilters()))) {
-			sources[*scan.dynamic_filters].push_back(stage_idx);
-		}
+		const auto small_build_only =
+		    join_build_stages[stage_idx] ||
+		    (scan.table_filters && (scan.table_filters->HasFilters() || scan.table_filters->HasMultiColumnFilters()));
+		sources[*scan.dynamic_filters].push_back({stage_idx, small_build_only});
 		for (auto &filters : scan.dynamic_filters->GetDisjunctionFilters()) {
-			sources[filters.get()].push_back(stage_idx);
+			sources[filters.get()].push_back({stage_idx, false});
 		}
 	}
 
@@ -148,21 +180,50 @@ void ScheduleRuntimeFilters(PipelineSchedule &schedule) {
 		auto &publication = publications[producer];
 		auto build_estimate = producer.children[1].get().estimated_cardinality;
 		auto probe_estimate = producer.children[0].get().estimated_cardinality;
+		const auto small_build = add_edges && IsSmallBuild(producer.children[1].get());
 		for (auto &target : producer.filter_pushdown->probe_info) {
-			// Clear previous executions before any scan can take its filter snapshot.
-			target.dynamic_filters->ClearFilters(producer);
+			if (clear_filters) {
+				// Clear previous executions before any scan can take its filter snapshot.
+				target.dynamic_filters->ClearFilters(producer);
+			}
+			if (!add_edges) {
+				continue;
+			}
 			auto source = sources.find(*target.dynamic_filters);
 			if (publication.size() != 1 || source == sources.end() ||
 			    build_estimate >= MaxValue(probe_estimate, target.estimated_scan_cardinality)) {
 				continue;
 			}
-			for (auto execution : source->second) {
+			for (auto &filter_source : source->second) {
+				// A small aggregate or join result can still require expensive inputs.
+				if (filter_source.small_build_only && !small_build) {
+					continue;
+				}
+				auto execution = filter_source.stage_idx;
 				if (dependency_check.TryAddDependency(execution, publication[0])) {
 					schedule.TryAddDependency(execution, publication[0]);
 				}
 			}
 		}
 	}
+}
+
+void ScheduleRuntimeFilters(PipelineSchedule &schedule) {
+	// Executor entry point when no resolved schedule was handed over: adds the ordering edges and clears stale
+	// filters before any scan snapshot (clearing is idempotent and sink initialization clears again).
+	ScheduleRuntimeFiltersInternal(schedule, true, true);
+}
+
+void ClearRuntimeFilters(PipelineSchedule &schedule) {
+	// Executor entry point for a schedule reused from ResolveExternalInputs: the ordering edges are already in
+	// the graph the analysis validated, so only the stale filters need clearing.
+	ScheduleRuntimeFiltersInternal(schedule, true, false);
+}
+
+void AddRuntimeFilterScheduleDependencies(PipelineSchedule &schedule) {
+	// Pure edge addition for the schedules ResolveExternalInputs analyzes: no filter clearing, which belongs to
+	// the executor pass on the final schedule.
+	ScheduleRuntimeFiltersInternal(schedule, false, true);
 }
 
 } // namespace duckdb

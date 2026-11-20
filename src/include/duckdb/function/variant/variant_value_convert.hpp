@@ -86,6 +86,9 @@ struct ValueConverter {
 	static Value VisitGeometry(const string_t &str) {
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
+	static Value VisitGeography(const string_t &str) {
+		return Value::GEOGRAPHY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
 	static Value VisitBitstring(const string_t &str) {
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
@@ -93,13 +96,15 @@ struct ValueConverter {
 	template <typename T>
 	static Value VisitDecimal(T val, uint32_t width, uint32_t scale) {
 		if (std::is_same<T, int16_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+			return Value::DECIMAL(val, width, scale);
 		} else if (std::is_same<T, int32_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+			return Value::DECIMAL(val, width, scale);
 		} else if (std::is_same<T, int64_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+			return Value::DECIMAL(val, width, scale);
 		} else if (std::is_same<T, hugeint_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+			return Value::DECIMAL(val, width, scale);
+		} else if (std::is_same<T, bignum_t>::value) {
+			return Value::DECIMAL(val, width, scale);
 		} else {
 			throw InternalException("Unhandled decimal type");
 		}

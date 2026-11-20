@@ -15,7 +15,6 @@ ScalarFunction InternalCompressedMaterializationCastFun::GetFunction() {
 
 void CMUtils::MarkCast(BoundFunctionExpression &expression) {
 	D_ASSERT(BoundCastExpression::IsCast(expression));
-	D_ASSERT(BoundCastExpression::IsDefaultCast(expression));
 	auto definition = make_shared_ptr<ScalarFunction>(InternalCompressedMaterializationCastFun::GetFunction());
 	auto &function = expression.FunctionMutable();
 	function.SetName(definition->GetName());
@@ -51,6 +50,23 @@ optional_ptr<const Expression> CMUtils::GetWrappedInput(const Expression &expres
 		return nullptr;
 	}
 	return function.GetChildren()[0].get();
+}
+
+bool CMUtils::CompressesInput(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expression.Cast<BoundFunctionExpression>();
+	switch (GetExpressionType(function)) {
+	case CMExpressionType::COMPRESS:
+		return true;
+	case CMExpressionType::CAST:
+		// the cast narrows the type when it compresses and widens it back when it decompresses
+		return GetTypeIdSize(function.GetReturnType().InternalType()) <
+		       GetTypeIdSize(function.GetChildren()[0]->GetReturnType().InternalType());
+	default:
+		return false;
+	}
 }
 
 const vector<LogicalType> CMUtils::IntegralTypes() {

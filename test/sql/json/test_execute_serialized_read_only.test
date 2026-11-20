@@ -1,0 +1,26 @@
+# name: test/sql/json/test_execute_serialized_read_only.test
+# description: json_execute_serialized_sql refuses a statement that would modify a database attached read-only
+# group: [json]
+
+require json
+
+statement ok
+ATTACH '{TEST_DIR}/json_execute_read_only.db' AS ro;
+
+statement ok
+CREATE SEQUENCE ro.seq;
+
+statement ok
+DETACH ro;
+
+statement ok
+ATTACH '{TEST_DIR}/json_execute_read_only.db' AS ro (READ_ONLY);
+
+# the statement is refused when the scan starts, not when the outer query binds
+statement ok
+EXPLAIN SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT nextval(''ro.seq'')'));
+
+statement error
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT nextval(''ro.seq'')'));
+----
+Cannot execute statement of type "SELECT" on database "ro" which is attached in read-only mode!

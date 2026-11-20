@@ -1,0 +1,34 @@
+# name: test/sql/storage/corrupt/segment_compression_invalid_for_type.test
+# description: Reject a column segment with a compression type that does not exist for the type of the column
+# group: [corrupt]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/segment_compression_invalid_for_type.db.gz {TEST_DIR}/segment_compression_invalid_for_type.db
+
+statement ok
+ATTACH '{TEST_DIR}/segment_compression_invalid_for_type.db' AS corrupt_db (READ_ONLY)
+
+statement error
+SELECT * FROM corrupt_db.x.t1
+----
+Data Corruption Error: Persistent segment has compression type 0, which does not exist for physical type INT128
+
+statement ok
+DETACH corrupt_db
+
+# the same file with a compression type that is not a valid compression type at all
+unzip data/storage/corrupt/segment_compression_unknown.db.gz {TEST_DIR}/segment_compression_unknown.db
+
+statement ok
+ATTACH '{TEST_DIR}/segment_compression_unknown.db' AS corrupt_db (READ_ONLY)
+
+statement error
+SELECT * FROM corrupt_db.x.t1
+----
+Data Corruption Error: Persistent segment has compression type 100, which does not exist for physical type INT128
+
+query I
+SELECT 42
+----
+42

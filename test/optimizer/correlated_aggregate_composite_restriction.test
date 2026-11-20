@@ -1,0 +1,349 @@
+# name: test/optimizer/correlated_aggregate_composite_restriction.test
+# description: Cost composite correlation restrictions as tuples and preserve per-key NULL semantics
+# group: [optimizer]
+
+statement ok
+CREATE TABLE composite_outer AS
+SELECT i AS id, i%10000 AS k, i//10000 AS k2, i%100 AS sel FROM range(60000) t(i);
+
+statement ok
+CREATE TABLE composite_inner AS
+SELECT i%10000 AS k, i//10000 AS k2 FROM range(60000) t(i);
+
+# Nearly complete tuple coverage releases the restriction and its key producer.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM composite_outer o WHERE o.sel<>7;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2) c
+    FROM composite_outer o WHERE o.sel<>7
+);
+----
+59400	59400
+
+# Rejecting expensive recovery also retains its otherwise removable restriction.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM (FROM composite_outer UNION ALL FROM composite_outer) o WHERE o.sel<>7;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*"Join Type": "SINGLE"[\s\S]*
+
+query II
+SELECT count(*),sum(length(c)) FROM (
+    SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2) c
+    FROM (FROM composite_outer UNION ALL FROM composite_outer) o WHERE o.sel<>7
+);
+----
+118800	7603200
+
+# Releasing the source can pay for cheap recovery even without distinct-count statistics.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k)
+FROM (FROM composite_outer UNION ALL FROM composite_outer) o WHERE o.sel<>7;
+----
+physical_plan	<!REGEX>:[\s\S]*__duckdb_delim[\s\S]*
+
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k) c
+    FROM (FROM composite_outer UNION ALL FROM composite_outer) o WHERE o.sel<>7
+);
+----
+118800	712800
+
+# Selective demand keeps the useful restriction.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM composite_outer o WHERE o.id=1234;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query I
+SELECT (SELECT count(*) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM composite_outer o WHERE o.id=1234;
+----
+1
+
+# Projection and grouping orders need not agree with the join condition order.
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT count(*) FROM (SELECT k2 AS b,k AS a FROM composite_inner) r
+            WHERE r.b=o.k2 AND r.a=o.k) c
+    FROM composite_outer o WHERE o.sel<>7
+);
+----
+59400	59400
+
+statement ok
+PREPARE composite_lookup AS
+SELECT o.id,(SELECT count(*) FROM composite_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM composite_outer o WHERE o.id=$1;
+
+query II
+EXECUTE composite_lookup(1234);
+----
+1234	1
+
+query II
+EXECUTE composite_lookup(11234);
+----
+11234	1
+
+# Matching individual domains does not imply coverage of their Cartesian product.
+statement ok
+CREATE TABLE diagonal_outer AS SELECT i AS id,i%500 AS k,i%500 AS k2 FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE square_inner AS SELECT i%500 AS k,i//500 AS k2 FROM range(250000) t(i);
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM square_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM diagonal_outer o WHERE id<>7;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT count(*) FROM square_inner r WHERE r.k=o.k AND r.k2=o.k2) c
+    FROM diagonal_outer o WHERE id<>7
+);
+----
+9999	9999
+
+# Correlated key domains must not underprice repeated expensive recovery.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM square_inner r WHERE r.k=o.k AND r.k2=o.k2)
+FROM diagonal_outer o WHERE id<>7;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "SINGLE"[\s\S]*
+
+query II
+SELECT count(*),sum(length(c)) FROM (
+    SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM square_inner r WHERE r.k=o.k AND r.k2=o.k2) c
+    FROM diagonal_outer o WHERE id<>7
+);
+----
+9999	639936
+
+# The complete tuple domain must not shrink to the row count after filtering.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT count(*) FROM square_inner r WHERE r.k<250 AND r.k=o.k AND r.k2=o.k2)
+FROM diagonal_outer o WHERE id<>7;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT count(*) FROM square_inner r WHERE r.k<250 AND r.k=o.k AND r.k2=o.k2) c
+    FROM diagonal_outer o WHERE id<>7
+);
+----
+9999	4999
+
+statement ok
+CREATE TABLE nullable_outer AS
+SELECT i AS id, CASE WHEN i%17=0 THEN NULL ELSE i%2000 END AS k,
+CASE WHEN i%23=0 THEN NULL ELSE (i//2000)%3 END AS k2 FROM range(120000) t(i);
+
+statement ok
+CREATE TABLE nullable_inner AS
+SELECT CASE WHEN i%19=0 THEN NULL ELSE i%4000 END AS k,
+CASE WHEN i%29=0 THEN NULL ELSE (i//4000)%3 END AS k2 FROM range(12000) t(i);
+
+# Removing an equality restriction must still exclude NULLs that recovery could match.
+query II
+EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k = keys.k AND r.k2 = keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k = keys.k AND r.k2 = keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+119999	98815
+
+query II
+EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k = keys.k AND r.k2 IS NOT DISTINCT FROM keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k = keys.k AND r.k2 IS NOT DISTINCT FROM keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+119999	99301
+
+query II
+EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k IS NOT DISTINCT FROM keys.k AND r.k2 = keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k IS NOT DISTINCT FROM keys.k AND r.k2 = keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+119999	1471722
+
+query II
+EXPLAIN (FORMAT JSON)
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k IS NOT DISTINCT FROM keys.k AND r.k2 IS NOT DISTINCT FROM keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+query II
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r SEMI JOIN domain keys
+        ON r.k IS NOT DISTINCT FROM keys.k AND r.k2 IS NOT DISTINCT FROM keys.k2 GROUP BY r.k2,r.k
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+119999	1478962
+
+# Tuple containment cannot be established from independent sets of column bindings.
+query II
+WITH source AS MATERIALIZED (SELECT * FROM nullable_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*),sum(coalesce(p.c,0)) FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM nullable_inner r
+        SEMI JOIN (SELECT DISTINCT k2 AS a,k AS b FROM source) keys
+        ON r.k IS NOT DISTINCT FROM keys.a AND r.k2 IS NOT DISTINCT FROM keys.b GROUP BY r.k,r.k2
+    ) a ON d.k IS NOT DISTINCT FROM a.k AND d.k2 IS NOT DISTINCT FROM a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+----
+119999	1379788
+
+# Empty input values are recovered for every outer row.
+query II
+SELECT count(*),sum(c) FROM (
+    SELECT (SELECT coalesce(sum(k),0) FROM nullable_inner r WHERE false AND r.k=o.k AND r.k2=o.k2) c
+    FROM nullable_outer o
+);
+----
+120000	0
+
+# An additional reader keeps the key-domain producer live and makes its restriction worth retaining.
+statement ok
+CREATE TABLE reader_outer AS SELECT i AS id, i%500 AS k, (i//500)%3 AS k2 FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE reader_inner AS SELECT i%4000 AS k, (i//4000)%3 AS k2 FROM range(12000) t(i);
+
+statement ok
+CREATE VIEW reader_released AS
+WITH source AS MATERIALIZED (SELECT * FROM reader_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*) AS n, sum(coalesce(p.c,0)) AS total
+FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM reader_inner r SEMI JOIN domain keys
+        ON r.k=keys.k AND r.k2=keys.k2 GROUP BY r.k,r.k2
+    ) a ON d.k=a.k AND d.k2=a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+
+query II
+SELECT * FROM reader_released;
+----
+19999	19999
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM reader_released;
+----
+physical_plan	<!REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+statement ok
+CREATE VIEW reader_shared AS
+WITH source AS MATERIALIZED (SELECT * FROM reader_outer WHERE id<>7),
+domain AS MATERIALIZED (SELECT DISTINCT k,k2 FROM source)
+SELECT count(*) AS n, sum(coalesce(p.c,0)) AS total, (SELECT count(*) FROM domain) AS domain_rows
+FROM source o JOIN (
+    SELECT d.k,d.k2,a.c FROM domain d LEFT JOIN (
+        SELECT r.k,r.k2,count(*) c FROM reader_inner r SEMI JOIN domain keys
+        ON r.k=keys.k AND r.k2=keys.k2 GROUP BY r.k,r.k2
+    ) a ON d.k=a.k AND d.k2=a.k2
+) p ON o.k IS NOT DISTINCT FROM p.k AND o.k2 IS NOT DISTINCT FROM p.k2;
+
+query III
+SELECT * FROM reader_shared;
+----
+19999	19999	1500
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM reader_shared;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "(RIGHT_)?SEMI"[\s\S]*
+
+statement ok
+DROP VIEW reader_released;
+
+statement ok
+DROP VIEW reader_shared;
+
+statement ok
+DROP TABLE reader_outer;
+
+statement ok
+DROP TABLE reader_inner;

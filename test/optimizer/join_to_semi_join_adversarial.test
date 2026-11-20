@@ -1,0 +1,994 @@
+# name: test/optimizer/join_to_semi_join_adversarial.test
+# description: Shapes that match the join_to_semi_join pattern while breaking one of its preconditions: same result with the optimizer on and off
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+create table a as select * from (values (0, 0), (1, 10), (2, 20), (2, 20), (3, 30), (4, NULL), (NULL, 50), (6, 60), (7, 70), (7, 75)) t(x, y);
+
+statement ok
+create table b as select * from (values (0, 0), (1, 1), (2, 2), (2, 0), (3, NULL), (NULL, 1), (5, 2), (7, 0), (7, 0), (9, 1)) t(x, z);
+
+statement ok
+create table p as select * from (values (15, 35), (25, 45), (25, 45), (200, 300), (NULL, 50), (60, NULL), (0, 0)) t(lo, hi);
+
+statement ok
+create table q as select * from (values (5, 25), (NULL, NULL)) t(lo, hi);
+
+statement ok
+create table e (lo integer, hi integer);
+
+statement ok
+create table s as select * from (values ('1'), ('20'), ('x'), (NULL)) t(v);
+
+statement ok
+create sequence seq;
+
+# an empty relation: no row either way
+query II
+explain select distinct a.x from a, e where a.y > e.lo;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# an empty relation, no predicate: stays a cross product
+query II
+explain select distinct a.x from a, e;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# an empty relation below min / max
+query II
+explain select min(a.x), max(a.y) from a, e where a.y > e.lo or a.x < e.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# NULL bounds only
+query II
+explain select distinct a.x from a, (select * from q where lo is null) r where a.y > r.lo or a.y < r.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a one-row constant: exactly one row, count(*) may see it
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a one-row constant with a NULL
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select NULL::integer as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# not one row: a constant behind a filter that drops it
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi where 1 = 0) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: a constant behind a filter that keeps it
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi where (select count(*) from e) = 0) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: a constant built from scalar subqueries, one of them over an empty table
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select (select max(lo) from e) as lo, (select max(hi) from p) as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: VALUES with one row
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (values (15, 35)) r(lo, hi) where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: VALUES with duplicates
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (values (15, 35), (15, 35)) r(lo, hi) where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: an ungrouped aggregate over an empty table (one row of NULLs)
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select min(lo) as lo, max(hi) as hi from e) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: an ungrouped aggregate with a HAVING that drops its row
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select min(lo) as lo, max(hi) as hi from p having count(*) > 100) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# not one row: a scan with a filter on a unique value
+query II
+explain select b.z, count(*) from a join b on a.x = b.x, (select lo, hi from p where lo = 15) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a one-row constant and no third relation
+query II
+explain select a.x, count(*) from a, (select 15 as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# predicates that are NULL
+query II
+explain select distinct a.x from a, p where a.y is distinct from p.lo;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# predicates that are NULL: IS NOT TRUE keeps them
+query II
+explain select distinct a.x from a, p where (a.y > p.lo) is not true;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# predicates that are NULL: NOT
+query II
+explain select distinct a.x from a, p where not (a.y <= p.hi);
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# predicates that are NULL: CASE
+query II
+explain select distinct a.x from a, p where case when p.lo is null then a.y > 20 else a.y > p.lo end;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a predicate on the relation alone goes with it
+query II
+explain select distinct a.x from a, p where a.y > p.lo and p.hi < 50;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a predicate that can throw is not moved: a cast of a string
+query II
+explain select distinct a.x from a, s where a.y > try_cast(s.v as integer) and a.x < cast(s.v as integer) and s.v <> 'x';
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a predicate that can throw is not moved: arithmetic
+query II
+explain select distinct a.x from a, p where a.y > p.lo + 5;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a volatile predicate anywhere in the region
+query II
+explain select distinct a.x from a, p where a.y > p.lo and random() < 2;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the relation inside an OR with a third relation
+query II
+explain select distinct a.x from a, b, p where a.x = b.x and (a.y > p.lo or b.z > p.hi);
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the relation compared with two relations
+query II
+explain select distinct a.x from a, b, p where a.x = b.x and a.y > p.lo and b.z < p.hi;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by the condition of an outer join above
+query II
+explain select distinct a.x from (a cross join p) left join b on b.x = p.lo where a.y > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by the condition of an outer join in the region's place
+query II
+explain select distinct a.x from a left join p on a.y > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by a filter above a subquery
+query II
+explain select distinct x from (select a.x, p.hi from a, p where a.y > p.lo) t where hi > 40;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by an aggregate
+query II
+explain select a.x, max(p.hi) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by the FILTER of an aggregate
+query II
+explain select a.x, max(a.y) filter (where p.hi > 40) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by a group
+query II
+explain select p.hi, max(a.y) from a, p where a.y > p.lo group by p.hi;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# min / max with a FILTER ignore duplicates
+query II
+explain select a.x, max(a.y) filter (where a.y > 10), min(a.y) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# count(DISTINCT) ignores duplicates
+query II
+explain select a.x, count(distinct a.y) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# count(DISTINCT) next to count(*)
+query II
+explain select a.x, count(distinct a.y), count(*) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# sum sees the repeated rows
+query II
+explain select a.x, sum(a.y) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# an ordered aggregate sees the repeated rows
+query II
+explain select a.x, string_agg(a.y::varchar, '|' order by a.y) from a, p where a.y > p.lo group by a.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# grouping sets of min / max
+query II
+explain select a.x, a.y, max(a.y) from a, p where a.y > p.lo group by rollup (a.x, a.y);
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# HAVING on count(*)
+query II
+explain select a.x from a, p where a.y > p.lo group by a.x having count(*) > 2;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# HAVING on max
+query II
+explain select a.x from a, p where a.y > p.lo group by a.x having max(a.y) > 20;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a window between the region and the DISTINCT
+query II
+explain select distinct x, rn from (select a.x, row_number() over (partition by a.x order by a.y) as rn from a, p where a.y > p.lo) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a LIMIT between the region and the DISTINCT
+query II
+explain select distinct x from (select a.x from a, p where a.y > p.lo order by all limit 7) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# UNION ALL above
+query II
+explain select count(*) from (select a.x from a, p where a.y > p.lo union all select x from b) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# the right side of NOT IN, with NULLs
+query II
+explain select * from b where b.x not in (select a.x from a, p where a.y > p.hi);
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# the right side of IN
+query II
+explain select * from b where b.x in (select a.x from a, p where a.y > p.hi);
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a scalar subquery that counts
+query II
+explain select b.x, (select count(*) from a, p where a.y > p.lo and a.x = b.x) from b;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# read by a correlated subquery: the join of a and p stays an INNER join (the EXISTS is a SEMI join of its own)
+query II
+explain select distinct a.x from a, p where a.y > p.lo and exists (select 1 from b where b.x = p.hi - 34);
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Join Type: INNER.*
+
+# read by a lateral join
+query II
+explain select distinct a.x from a, p, lateral (select b.z from b where b.x < p.lo) l where a.y > p.lo;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# two unread relations filter the same one
+query II
+explain select distinct a.x from a, p, q where a.y > p.lo and a.y < q.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# an unread relation filters another unread one
+query II
+explain select distinct a.x from a, p, q where a.y > p.lo and p.hi > q.lo;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# two unread relations and an empty one
+query II
+explain select distinct a.x from a, p, e where a.y > p.lo and a.y < e.hi;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# the filtered relation has duplicates and NULLs: count(*) above a DISTINCT subquery
+query II
+explain select count(*) from (select distinct a.x, a.y from a, p where a.y > p.lo) t;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# a materialized CTE read twice
+query II
+explain with m as materialized (select a.x from a, p where a.y > p.lo) select count(*) from m m1, m m2 where m1.x = m2.x;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a sample between the region and the DISTINCT
+query II
+explain select distinct x from (select a.x from a, p where a.y > p.lo) t using sample 1000 rows;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a count in a subquery between the region and the DISTINCT
+query II
+explain select distinct x from (select a.x, count(*) as n from a, p where a.y > p.lo group by a.x) t where n > 2;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a window count between the region and the DISTINCT
+query II
+explain select distinct x, n from (select a.x, count(*) over (partition by a.x) as n from a, p where a.y > p.lo) t;
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+# a join above that multiplies the rows again: still a set
+query II
+explain select distinct t.x from (select a.x from a, p where a.y > p.lo) t, b where t.x = b.x;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# an expression above the region that can throw sees the same rows as a set
+query II
+explain select distinct x::utinyint from (select a.x from a, p where a.y > p.lo) t;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# the results, with the optimizer on and off
+# ('extension' disables nothing that is used here: that is the run with the optimizer on)
+foreach disabled extension join_to_semi_join
+
+statement ok
+SET disabled_optimizers = '{disabled}';
+
+# an empty relation: no row either way
+query I rowsort
+select distinct a.x from a, e where a.y > e.lo;
+----
+
+# an empty relation, no predicate: stays a cross product
+query I rowsort
+select distinct a.x from a, e;
+----
+
+# an empty relation below min / max
+query II rowsort
+select min(a.x), max(a.y) from a, e where a.y > e.lo or a.x < e.hi;
+----
+NULL	NULL
+
+# NULL bounds only
+query I rowsort
+select distinct a.x from a, (select * from q where lo is null) r where a.y > r.lo or a.y < r.hi;
+----
+
+# a one-row constant: exactly one row, count(*) may see it
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	5
+1	1
+
+# a one-row constant with a NULL
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select NULL::integer as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	4
+
+# not one row: a constant behind a filter that drops it
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi where 1 = 0) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+
+# not one row: a constant behind a filter that keeps it
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select 15 as lo, 35 as hi where (select count(*) from e) = 0) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	5
+1	1
+
+# not one row: a constant built from scalar subqueries, one of them over an empty table
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select (select max(lo) from e) as lo, (select max(hi) from p) as hi) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+
+# not one row: VALUES with one row
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (values (15, 35)) r(lo, hi) where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	5
+1	1
+
+# not one row: VALUES with duplicates
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (values (15, 35), (15, 35)) r(lo, hi) where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	10
+1	2
+
+# not one row: LIMIT 1 over an empty table
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select lo, hi from e order by lo limit 1) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+
+# not one row: LIMIT 1
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select lo, hi from p order by lo, hi limit 1) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	6
+1	1
+2	2
+NULL	1
+
+# not one row: an ungrouped aggregate over an empty table (one row of NULLs)
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select min(lo) as lo, max(hi) as hi from e) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+
+# not one row: an ungrouped aggregate with a HAVING that drops its row
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select min(lo) as lo, max(hi) as hi from p having count(*) > 100) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+
+# not one row: a scan with a filter on a unique value
+query II rowsort
+select b.z, count(*) from a join b on a.x = b.x, (select lo, hi from p where lo = 15) r where a.y < r.lo or a.y > r.hi group by b.z;
+----
+0	5
+1	1
+
+# a one-row constant and no third relation
+query II rowsort
+select a.x, count(*) from a, (select 15 as lo, 35 as hi) r where a.y < r.lo or a.y > r.hi group by a.x;
+----
+0	1
+1	1
+6	1
+7	2
+NULL	1
+
+# predicates that are NULL
+query I rowsort
+select distinct a.x from a, p where a.y is distinct from p.lo;
+----
+0
+1
+2
+3
+4
+6
+7
+NULL
+
+# predicates that are NULL: IS NOT TRUE keeps them
+query I rowsort
+select distinct a.x from a, p where (a.y > p.lo) is not true;
+----
+0
+1
+2
+3
+4
+6
+7
+NULL
+
+# predicates that are NULL: NOT
+query I rowsort
+select distinct a.x from a, p where not (a.y <= p.hi);
+----
+1
+2
+3
+6
+7
+NULL
+
+# predicates that are NULL: CASE
+query I rowsort
+select distinct a.x from a, p where case when p.lo is null then a.y > 20 else a.y > p.lo end;
+----
+1
+2
+3
+6
+7
+NULL
+
+# a predicate on the relation alone goes with it
+query I rowsort
+select distinct a.x from a, p where a.y > p.lo and p.hi < 50;
+----
+1
+2
+3
+6
+7
+NULL
+
+# a predicate that can throw is not moved: a cast of a string
+query I rowsort
+select distinct a.x from a, s where a.y > try_cast(s.v as integer) and a.x < cast(s.v as integer) and s.v <> 'x';
+----
+3
+6
+7
+
+# a predicate that can throw is not moved: arithmetic
+query I rowsort
+select distinct a.x from a, p where a.y > p.lo + 5;
+----
+1
+2
+3
+6
+7
+NULL
+
+# a volatile predicate anywhere in the region
+query I rowsort
+select distinct a.x from a, p where a.y > p.lo and random() < 2;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the relation inside an OR with a third relation
+query I rowsort
+select distinct a.x from a, b, p where a.x = b.x and (a.y > p.lo or b.z > p.hi);
+----
+1
+2
+3
+7
+
+# the relation compared with two relations
+query I rowsort
+select distinct a.x from a, b, p where a.x = b.x and a.y > p.lo and b.z < p.hi;
+----
+2
+7
+
+# read by the condition of an outer join above
+query I rowsort
+select distinct a.x from (a cross join p) left join b on b.x = p.lo where a.y > p.lo;
+----
+1
+2
+3
+6
+7
+NULL
+
+# read by the condition of an outer join in the region's place
+query I rowsort
+select distinct a.x from a left join p on a.y > p.lo;
+----
+0
+1
+2
+3
+4
+6
+7
+NULL
+
+# read by a filter above a subquery
+query I rowsort
+select distinct x from (select a.x, p.hi from a, p where a.y > p.lo) t where hi > 40;
+----
+3
+6
+7
+NULL
+
+# read by an aggregate
+query II rowsort
+select a.x, max(p.hi) from a, p where a.y > p.lo group by a.x;
+----
+1	0
+2	35
+3	45
+6	45
+7	45
+NULL	45
+
+# read by the FILTER of an aggregate
+query II rowsort
+select a.x, max(a.y) filter (where p.hi > 40) from a, p where a.y > p.lo group by a.x;
+----
+1	NULL
+2	NULL
+3	30
+6	60
+7	75
+NULL	50
+
+# read by a group
+query II rowsort
+select p.hi, max(a.y) from a, p where a.y > p.lo group by p.hi;
+----
+0	75
+35	75
+45	75
+NULL	75
+
+# min / max with a FILTER ignore duplicates
+query III rowsort
+select a.x, max(a.y) filter (where a.y > 10), min(a.y) from a, p where a.y > p.lo group by a.x;
+----
+1	NULL	10
+2	20	20
+3	30	30
+6	60	60
+7	75	70
+NULL	50	50
+
+# count(DISTINCT) ignores duplicates
+query II rowsort
+select a.x, count(distinct a.y) from a, p where a.y > p.lo group by a.x;
+----
+1	1
+2	1
+3	1
+6	1
+7	2
+NULL	1
+
+# count(DISTINCT) next to count(*)
+query III rowsort
+select a.x, count(distinct a.y), count(*) from a, p where a.y > p.lo group by a.x;
+----
+1	1	1
+2	1	4
+3	1	4
+6	1	4
+7	2	10
+NULL	1	4
+
+# sum sees the repeated rows
+query II rowsort
+select a.x, sum(a.y) from a, p where a.y > p.lo group by a.x;
+----
+1	10
+2	80
+3	120
+6	240
+7	725
+NULL	200
+
+# an ordered aggregate sees the repeated rows
+query II rowsort
+select a.x, string_agg(a.y::varchar, '|' order by a.y) from a, p where a.y > p.lo group by a.x;
+----
+1	10
+2	20|20|20|20
+3	30|30|30|30
+6	60|60|60|60
+7	70|70|70|70|70|75|75|75|75|75
+NULL	50|50|50|50
+
+# grouping sets of min / max
+query III rowsort
+select a.x, a.y, max(a.y) from a, p where a.y > p.lo group by rollup (a.x, a.y);
+----
+1	10	10
+1	NULL	10
+2	20	20
+2	NULL	20
+3	30	30
+3	NULL	30
+6	60	60
+6	NULL	60
+7	70	70
+7	75	75
+7	NULL	75
+NULL	50	50
+NULL	NULL	50
+NULL	NULL	75
+
+# HAVING on count(*)
+query I rowsort
+select a.x from a, p where a.y > p.lo group by a.x having count(*) > 2;
+----
+2
+3
+6
+7
+NULL
+
+# HAVING on max
+query I rowsort
+select a.x from a, p where a.y > p.lo group by a.x having max(a.y) > 20;
+----
+3
+6
+7
+NULL
+
+# a window between the region and the DISTINCT
+query II rowsort
+select distinct x, rn from (select a.x, row_number() over (partition by a.x order by a.y) as rn from a, p where a.y > p.lo) t;
+----
+1	1
+2	1
+2	2
+2	3
+2	4
+3	1
+3	2
+3	3
+3	4
+6	1
+6	2
+6	3
+6	4
+7	1
+7	10
+7	2
+7	3
+7	4
+7	5
+7	6
+7	7
+7	8
+7	9
+NULL	1
+NULL	2
+NULL	3
+NULL	4
+
+# a LIMIT between the region and the DISTINCT
+query I rowsort
+select distinct x from (select a.x from a, p where a.y > p.lo order by all limit 7) t;
+----
+1
+2
+3
+
+# DISTINCT ON
+query II rowsort
+select distinct on (x) x, y from (select a.x, a.y from a, p where a.y > p.lo) t order by x, y;
+----
+1	10
+2	20
+3	30
+6	60
+7	70
+NULL	50
+
+# UNION ALL above
+query I rowsort
+select count(*) from (select a.x from a, p where a.y > p.lo union all select x from b) t;
+----
+37
+
+# UNION above
+query I rowsort
+select a.x from a, p where a.y > p.lo union select x from b where x > 100;
+----
+1
+2
+3
+6
+7
+NULL
+
+# the right side of NOT IN, with NULLs
+query II rowsort
+select * from b where b.x not in (select a.x from a, p where a.y > p.hi);
+----
+
+# the right side of IN
+query II rowsort
+select * from b where b.x in (select a.x from a, p where a.y > p.hi);
+----
+1	1
+2	0
+2	2
+3	NULL
+7	0
+7	0
+
+# a correlated EXISTS
+query II rowsort
+select * from b where exists (select 1 from a, p where a.y > p.hi and a.x = b.x);
+----
+1	1
+2	0
+2	2
+3	NULL
+7	0
+7	0
+
+# a scalar subquery of max
+query II rowsort
+select b.x, (select max(a.y) from a, p where a.y > p.lo and a.x = b.x) from b;
+----
+0	NULL
+1	10
+2	20
+2	20
+3	30
+5	NULL
+7	75
+7	75
+9	NULL
+NULL	NULL
+
+# a scalar subquery that counts
+query II rowsort
+select b.x, (select count(*) from a, p where a.y > p.lo and a.x = b.x) from b;
+----
+0	0
+1	1
+2	4
+2	4
+3	4
+5	0
+7	10
+7	10
+9	0
+NULL	0
+
+# read by a correlated subquery: the join of a and p stays an INNER join (the EXISTS is a SEMI join of its own)
+query I rowsort
+select distinct a.x from a, p where a.y > p.lo and exists (select 1 from b where b.x = p.hi - 34);
+----
+2
+3
+6
+7
+NULL
+
+# read by a lateral join
+query I rowsort
+select distinct a.x from a, p, lateral (select b.z from b where b.x < p.lo) l where a.y > p.lo;
+----
+2
+3
+6
+7
+NULL
+
+# two unread relations filter the same one
+query I rowsort
+select distinct a.x from a, p, q where a.y > p.lo and a.y < q.hi;
+----
+1
+2
+
+# an unread relation filters another unread one
+query I rowsort
+select distinct a.x from a, p, q where a.y > p.lo and p.hi > q.lo;
+----
+2
+3
+6
+7
+NULL
+
+# two unread relations and an empty one
+query I rowsort
+select distinct a.x from a, p, e where a.y > p.lo and a.y < e.hi;
+----
+
+# the filtered relation has duplicates and NULLs: count(*) above a DISTINCT subquery
+query I rowsort
+select count(*) from (select distinct a.x, a.y from a, p where a.y > p.lo) t;
+----
+7
+
+# a materialized CTE read twice
+query I rowsort
+with m as materialized (select a.x from a, p where a.y > p.lo) select count(*) from m m1, m m2 where m1.x = m2.x;
+----
+149
+
+# a FULL join above
+query II rowsort
+select distinct t.x, b.x from (select a.x from a, p where a.y > p.lo) t full join b on t.x = b.x;
+----
+1	1
+2	2
+3	3
+6	NULL
+7	7
+NULL	0
+NULL	5
+NULL	9
+NULL	NULL
+
+# a sample between the region and the DISTINCT
+query I rowsort
+select distinct x from (select a.x from a, p where a.y > p.lo) t using sample 1000 rows;
+----
+1
+2
+3
+6
+7
+NULL
+
+# a count in a subquery between the region and the DISTINCT
+query I rowsort
+select distinct x from (select a.x, count(*) as n from a, p where a.y > p.lo group by a.x) t where n > 2;
+----
+2
+3
+6
+7
+NULL
+
+# a window count between the region and the DISTINCT
+query II rowsort
+select distinct x, n from (select a.x, count(*) over (partition by a.x) as n from a, p where a.y > p.lo) t;
+----
+1	1
+2	4
+3	4
+6	4
+7	10
+NULL	4
+
+# a join above that multiplies the rows again: still a set
+query I rowsort
+select distinct t.x from (select a.x from a, p where a.y > p.lo) t, b where t.x = b.x;
+----
+1
+2
+3
+7
+
+# an expression above the region that can throw sees the same rows as a set
+query I rowsort
+select distinct x::utinyint from (select a.x from a, p where a.y > p.lo) t;
+----
+1
+2
+3
+6
+7
+NULL
+
+endloop
+
+statement ok
+RESET disabled_optimizers;

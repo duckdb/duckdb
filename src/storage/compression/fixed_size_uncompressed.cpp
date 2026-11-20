@@ -71,9 +71,11 @@ void UncompressedCompressState::CreateEmptySegment() {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();
 		if (!storage_manager.InMemory()) {
-			auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
+			auto &checkpoint_state = checkpoint_data.GetCheckpointState();
+			auto &partial_block_manager = checkpoint_state.GetPartialBlockManager();
 			state.block_manager = partial_block_manager.GetBlockManager();
-			state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(partial_block_manager);
+			state.overflow_writer =
+			    make_uniq<WriteOverflowStringsToDisk>(checkpoint_state.GetContext(), partial_block_manager);
 		}
 	}
 	current_segment = std::move(compressed_segment);
@@ -187,6 +189,24 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+template <class T>
+void FixedSizeSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                     const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
+	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
+	auto start = state.GetPositionInSegment();
+
+	auto source_data = scan_state.reader.GetArraySlice<T>(0, start, vector_count);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetDataMutable<T>(result) + result_offset;
+	for (idx_t i = 0; i < sel_count; i++) {
+		result_data[i] = source_data[sel.get_index(i)];
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
@@ -265,12 +285,15 @@ idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 //===--------------------------------------------------------------------===//
 template <class T, class APPENDER = StandardFixedSizeAppend>
 CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
-	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
-	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>,
-	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeInitAppend,
-	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
+	auto function =
+	    CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
+	                        FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
+	                        UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress, FixedSizeInitScan,
+	                        FixedSizeScan<T>, FixedSizeScanPartial<T>, UncompressedFunctions::EmptySkip, nullptr,
+	                        FixedSizeInitAppend, FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
+	function.select = FixedSizeSelect<T>;
+	function.zero_initialize_segments = false;
+	return function;
 }
 
 CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {

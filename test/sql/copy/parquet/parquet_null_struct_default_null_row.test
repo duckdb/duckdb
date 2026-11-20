@@ -1,0 +1,60 @@
+# name: test/sql/copy/parquet/parquet_null_struct_default_null_row.test
+# description: A struct column with NULL rows read from a file that lacks a nested struct field of the global schema
+# group: [parquet]
+
+require parquet
+
+# the older file lacks the nested struct field s.n and has a row whose struct is NULL
+statement ok
+COPY (SELECT * FROM (VALUES (1, {'x': 1}), (2, NULL)) t(id, s)) TO '{TEST_DIR}/null_struct_default_old.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT 3 AS id, {'x': 3, 'n': {'z': 30}} AS s) TO '{TEST_DIR}/null_struct_default_new.parquet' (FORMAT parquet);
+
+query II
+SELECT id, s FROM read_parquet(['{TEST_DIR}/null_struct_default_old.parquet', '{TEST_DIR}/null_struct_default_new.parquet'], union_by_name = true) ORDER BY id;
+----
+1	{'x': 1, 'n': NULL}
+2	NULL
+3	{'x': 3, 'n': {'z': 30}}
+
+# the first file defines the schema
+query II
+SELECT id, s FROM read_parquet(['{TEST_DIR}/null_struct_default_new.parquet', '{TEST_DIR}/null_struct_default_old.parquet']) ORDER BY id;
+----
+1	{'x': 1, 'n': NULL}
+2	NULL
+3	{'x': 3, 'n': {'z': 30}}
+
+query IIII
+SELECT id, s IS NULL, s.n IS NULL, s.n.z FROM read_parquet(['{TEST_DIR}/null_struct_default_old.parquet', '{TEST_DIR}/null_struct_default_new.parquet'], union_by_name = true) ORDER BY id;
+----
+1	false	true	NULL
+2	true	true	NULL
+3	false	false	30
+
+# a filter on the whole struct is evaluated on the remapped value
+query I
+SELECT id FROM read_parquet(['{TEST_DIR}/null_struct_default_old.parquet', '{TEST_DIR}/null_struct_default_new.parquet'], union_by_name = true) WHERE s::VARCHAR = '{''x'': 1, ''n'': NULL}' OR s IS NULL ORDER BY id;
+----
+1
+2
+
+# without a NULL row the file was read correctly before as well
+statement ok
+COPY (SELECT 1 AS id, {'x': 1} AS s) TO '{TEST_DIR}/null_struct_default_old.parquet' (FORMAT parquet);
+
+query II
+SELECT id, s FROM read_parquet(['{TEST_DIR}/null_struct_default_old.parquet', '{TEST_DIR}/null_struct_default_new.parquet'], union_by_name = true) ORDER BY id;
+----
+1	{'x': 1, 'n': NULL}
+3	{'x': 3, 'n': {'z': 30}}
+
+# several row groups and vectors, every third struct of the older file is NULL
+statement ok
+COPY (SELECT i AS id, CASE WHEN i % 3 = 0 THEN NULL ELSE {'x': i} END AS s FROM range(10000) t(i)) TO '{TEST_DIR}/null_struct_default_old.parquet' (FORMAT parquet, ROW_GROUP_SIZE 3000);
+
+query IIIIII
+SELECT count(*), count(s), count(s.x), count(s.n), count(s.n.z), sum(s.x) FROM read_parquet(['{TEST_DIR}/null_struct_default_old.parquet', '{TEST_DIR}/null_struct_default_new.parquet'], union_by_name = true);
+----
+10001	6667	6667	1	1	33326670

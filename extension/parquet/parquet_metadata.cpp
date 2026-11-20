@@ -25,6 +25,7 @@
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
@@ -489,6 +490,10 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	idx_t row_group_idx = row_idx / column_schemas.size();
 
 	auto &row_group = meta_data->row_groups[row_group_idx];
+	if (row_group.columns.size() != column_schemas.size()) {
+		throw DataCorruptionException("Parquet row group %llu column count mismatch (expected %llu, found %llu)",
+		                              row_group_idx, column_schemas.size(), row_group.columns.size());
+	}
 
 	auto &column = row_group.columns[col_idx];
 	auto &column_schema = column_schemas[col_idx];
@@ -894,7 +899,6 @@ private:
 	optional_idx probe_column_idx;
 
 	unique_ptr<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>> protocol;
-	optional_ptr<Allocator> allocator;
 	unique_ptr<ExpressionFilter> filter;
 	optional<ParquetBloomFilterHashStrategy> hash_strategy;
 };
@@ -932,7 +936,6 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(context, reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
-	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
 	filter = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL,
 	                                                  probe_constant.CastAs(context, column_type));
@@ -954,8 +957,8 @@ void ParquetBloomProbeProcessor::ReadRow(vector<reference<Vector>> &output, idx_
 
 	auto &column_schema = reader.root_schema->children[probe_column_idx.GetIndex()];
 	auto bloom_excludes =
-	    hash_strategy && ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator,
-	                                                                 column_schema, *hash_strategy);
+	    hash_strategy && ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol,
+	                                                                 reader.allocator, column_schema, *hash_strategy);
 
 	output[0].get().Append(Value(reader.file.path));
 	output[1].get().Append(Value::BIGINT(NumericCast<int64_t>(row_idx)));
@@ -1164,7 +1167,12 @@ void ParquetPageIndexProcessor::ReadRow(vector<reference<Vector>> &output, idx_t
 		first_row_index = Value::BIGINT(location.first_row_index);
 		const auto next_row =
 		    page_idx + 1 < locations.size() ? locations[page_idx + 1].first_row_index : row_group.num_rows;
-		num_rows = Value::BIGINT(next_row - location.first_row_index);
+		int64_t page_row_count;
+		if (!TrySubtractOperator::Operation(next_row, location.first_row_index, page_row_count)) {
+			throw DataCorruptionException("Failed to read file \"%s\": metadata is corrupt. Page row count overflows",
+			                              reader.file.path);
+		}
+		num_rows = Value::BIGINT(page_row_count);
 	}
 	// page_offset
 	output[5].get().Append(offset);

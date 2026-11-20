@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -49,14 +50,12 @@ bool ColumnData::IsDirectNullCheckFilter(const TableFilter &filter) {
 	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
-FilterPropagateResult ColumnData::CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
-                                                       optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
-                                                       ColumnData &validity_column) {
-	if (!IsDirectNullCheckFilter(filter) || state.child_states.empty()) {
-		checked_segment = nullptr;
+FilterPropagateResult ColumnData::CheckValidityZonemap(ColumnScanState &state, const ScanFilter &filter,
+                                                       optional_idx &checked_end, ColumnData &validity_column) {
+	if (!IsDirectNullCheckFilter(filter.filter) || state.child_states.empty()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return validity_column.CheckZonemap(state.child_states[0], filter, checked_segment);
+	return validity_column.CheckZonemap(state.child_states[0], filter, checked_end);
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -117,9 +116,14 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 	if (update_segment && &target != this) {
 		// the target's base data has newer values: updates that read their old values from the base keep this column's
 		for (auto vector_index : update_segment->GetVectorsReadingBase(visibility_bound)) {
+			auto vector_start = vector_index * STANDARD_VECTOR_SIZE;
+			vector<idx_t> offsets(MinValue<idx_t>(STANDARD_VECTOR_SIZE, count.load() - vector_start));
+			for (idx_t i = 0; i < offsets.size(); i++) {
+				offsets[i] = vector_start + i;
+			}
 			Vector base_data(type);
-			ColumnScanState state(nullptr);
-			Fetch(state, UnsafeNumericCast<row_t>(vector_index * STANDARD_VECTOR_SIZE), base_data);
+			FetchBaseRows(QueryContext(), offsets.data(), *FlatVector::IncrementalSelectionVector(), offsets.size(),
+			              base_data, 0);
 			update_segment->StoreBaseValues(visibility_bound, vector_index, base_data);
 		}
 	}
@@ -240,29 +244,19 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 	return ScanVectorType::SCAN_ENTIRE_VECTOR;
 }
 
-void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t remaining) {
-	auto current_segment = scan_state.current;
-	if (!current_segment) {
+void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t start_row,
+                                    idx_t end_row) {
+	if (!scan_state.current || start_row >= MinValue<idx_t>(end_row, count)) {
+		// columns without segments have no blocks to prefetch, and the estimated rows of a child can lie past its end
 		return;
 	}
-	if (!scan_state.initialized) {
-		// need to prefetch for the current segment if we have not yet initialized the scan for this segment
-		current_segment->GetNode().InitializePrefetch(prefetch_state, scan_state);
-	}
-	idx_t row_index = scan_state.offset_in_column;
-	while (remaining > 0) {
-		auto &current = current_segment->GetNode();
-		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->GetRowStart() + current.count - row_index);
-		remaining -= scan_count;
-		row_index += scan_count;
-		if (remaining > 0) {
-			auto next = data.GetNextSegment(*current_segment);
-			if (!next) {
-				break;
-			}
-			next->GetNode().InitializePrefetch(prefetch_state, scan_state);
-			current_segment = next;
+	for (auto segment = data.GetSegment(start_row); segment && segment->GetRowStart() < end_row;
+	     segment = data.GetNextSegment(*segment)) {
+		if (scan_state.initialized && segment == scan_state.current) {
+			// the scan has initialized this segment and pinned its block
+			continue;
 		}
+		segment->GetNode().InitializePrefetch(prefetch_state, scan_state);
 	}
 }
 
@@ -434,7 +428,7 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
-                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, const Vector &base_vector,
                                 idx_t row_group_start) {
 	optional_ptr<UpdateSegment> segment;
 	{
@@ -554,9 +548,12 @@ void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_st
 	FinalizeAppend(finalize_state, state);
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
-                                               optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
-	checked_segment = nullptr;
+FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, const ScanFilter &filter,
+                                               optional_idx &checked_end) {
+	if (filter.IsAlwaysTrue()) {
+		// the filter does not need to be checked in this row group
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	if (state.segment_checked) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -564,70 +561,56 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
 	state.segment_checked = !is_dynamic;
-	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-	                      ? state.child_states[0].current
-	                      : state.current;
-	auto prune_result = CheckSegmentStatistics(state.context.GetClientContext(), *checked_segment, expr_filter);
+	auto &checked_segment =
+	    IsDirectNullCheckFilter(filter.filter) && !state.child_states.empty() && state.child_states[0].current
+	        ? *state.child_states[0].current
+	        : *state.current;
+	// segment rows are relative to the row group
+	checked_end = checked_segment.GetRowStart() + checked_segment.GetNode().count;
+	return CheckSegmentStatistics(state.context.GetClientContext(), checked_segment, expr_filter);
+}
+
+FilterPropagateResult ColumnData::CheckZonemapAt(ColumnScanState &state, const ScanFilter &filter, idx_t row,
+                                                 optional_idx &checked_end) {
+	if (filter.IsAlwaysTrue() || !data.GetRootSegment() || IsDirectNullCheckFilter(filter.filter)) {
+		// the filter needs no check in this row group, the column has no segments, or the scan judges the null check
+		// on the validity child
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.filter, "ColumnData::CheckZonemapAt");
+	auto segment = data.GetSegment(row);
+	checked_end = segment->GetRowStart() + segment->GetNode().count;
+	return CheckSegmentStatistics(state.context.GetClientContext(), *segment, expr_filter);
+}
+
+FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
+                                                         SegmentNode<ColumnSegment> &segment,
+                                                         ExpressionFilter &expr_filter) {
+	FilterPropagateResult prune_result;
+	{
+		lock_guard<mutex> l(stats_lock);
+		auto &segment_stats = segment.GetNode().GetStatsMutable();
+		prune_result =
+		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
+	}
 	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto update_stats = GetUpdateStatistics();
 	if (!update_stats) {
-		// no updates - return original result
+		// without updates the result of the segment holds
 		return prune_result;
 	}
 	// combine the update and original prune result
-	auto context = state.context.GetClientContext();
 	FilterPropagateResult update_result =
 	    context ? expr_filter.CheckStatistics(*context, *update_stats) : expr_filter.CheckStatistics(*update_stats);
 	if (prune_result == update_result) {
 		return prune_result;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-}
-
-FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
-                                                         SegmentNode<ColumnSegment> &segment,
-                                                         ExpressionFilter &expr_filter) {
-	lock_guard<mutex> l(stats_lock);
-	auto &segment_stats = segment.GetNode().GetStatsMutable();
-	return context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
-}
-
-idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row,
-                                 TableFilter &filter) {
-	if (!data.GetRootSegment() || IsDirectNullCheckFilter(filter)) {
-		// columns without segments of their own have no zonemaps, null checks are judged on the validity child
-		return end_row;
-	}
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::ZonemapScanEnd");
-	auto update_stats = GetUpdateStatistics();
-	if (update_stats) {
-		auto update_result =
-		    context ? expr_filter.CheckStatistics(*context, *update_stats) : expr_filter.CheckStatistics(*update_stats);
-		if (update_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			// updated rows can pass the filter anywhere in the column
-			return end_row;
-		}
-	}
-	// a vector is only skipped when it lies entirely inside a rejected segment
-	idx_t scan_end = start_row;
-	for (auto segment = data.GetSegment(start_row); segment; segment = data.GetNextSegment(*segment)) {
-		const idx_t segment_start = segment->GetRowStart();
-		if (segment_start >= end_row) {
-			break;
-		}
-		const idx_t segment_end = MinValue<idx_t>(segment_start + segment->GetNode().count, end_row);
-		const auto prune_result = CheckSegmentStatistics(context, *segment, expr_filter);
-		const bool straddles_vector = segment_end < end_row && segment_end % STANDARD_VECTOR_SIZE != 0;
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE || straddles_vector) {
-			scan_end = AlignValue<idx_t, STANDARD_VECTOR_SIZE>(segment_end);
-		}
-	}
-	return MinValue<idx_t>(scan_end, end_row);
 }
 
 FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
@@ -853,18 +836,6 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 	this->count = new_count;
 }
 
-idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
-		throw InternalException("ColumnData::Fetch - row_id out of range");
-	}
-	D_ASSERT(row_id >= 0);
-	// perform the fetch within the segment
-	state.offset_in_column = UnsafeNumericCast<idx_t>(row_id) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
-	state.current = data.GetSegment(state.offset_in_column);
-	state.internal_index = state.current->GetRowStart();
-	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
-}
-
 void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                            const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
                            idx_t result_offset) {
@@ -989,20 +960,22 @@ void ColumnData::FetchBaseRows(const QueryContext &context, const idx_t *offsets
 	}
 }
 
-idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start) {
-	if (row_ids[0] < UnsafeNumericCast<row_t>(row_group_start)) {
-		throw InternalException("ColumnData::FetchUpdateData out of range");
+void ColumnData::FetchBaseRows(const row_t *row_ids, idx_t count, Vector &result, idx_t row_group_start) {
+	D_ASSERT(count > 0 && count <= STANDARD_VECTOR_SIZE);
+	vector<idx_t> offsets(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (row_ids[i] < UnsafeNumericCast<row_t>(row_group_start)) {
+			throw InternalException("ColumnData::FetchBaseRows - row id out of range");
+		}
+		offsets[i] = UnsafeNumericCast<idx_t>(row_ids[i]) - row_group_start;
 	}
-	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-	base_vector.Flatten();
-	return fetch_count;
+	FetchBaseRows(QueryContext(), offsets.data(), *FlatVector::IncrementalSelectionVector(), count, result, 0);
 }
 
 void ColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                         Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	Vector base_vector(type);
-	ColumnScanState state(nullptr);
-	FetchUpdateData(state, row_ids, base_vector, row_group_start);
+	Vector base_vector(type, update_count);
+	FetchBaseRows(row_ids, update_count, base_vector, row_group_start);
 
 	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
@@ -1022,8 +995,10 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, optional_ptr<Suballocati
 	auto &config = DBConfig::GetConfig(db);
 	const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 
+	const bool first_transient_segment =
+	    !prev_segment || prev_segment->GetSegmentType() == ColumnSegmentType::PERSISTENT;
 	idx_t segment_size;
-	if (!prev_segment || prev_segment->GetSegmentType() == ColumnSegmentType::PERSISTENT) {
+	if (first_transient_segment) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
 	} else {
@@ -1052,7 +1027,8 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, optional_ptr<Suballocati
 
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	unique_ptr<ColumnSegment> new_segment;
-	if (transient && segment_size < block_size && initial_bytes < segment_size) {
+	// first segments stay tiny until a column grows and creates the shared block, so small tables never allocate one
+	if (transient && segment_size < block_size && (!first_transient_segment || transient->block)) {
 		new_segment = transient->CreateTransientSegment(db, function, type, segment_size, block_manager);
 	} else {
 		new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
@@ -1087,9 +1063,9 @@ void ColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGroup &row_group, Context &context,
                                                                     PartialBlockManager &partial_block_manager) {
-	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<ColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
@@ -1119,7 +1095,8 @@ ColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &checkpoi
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto &context = checkpoint_info.GetContext();
+	auto checkpoint_state = CreateCheckpointState(row_group, context, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	if (!data.GetRootSegment()) {
@@ -1203,7 +1180,9 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 
 	// Serialize the extra data
-	serializer.WritePropertyWithDefault(99, "extra_data", extra_data);
+	if (!extra_data || extra_data->IsSupported(serializer)) {
+		serializer.WritePropertyWithDefault(99, "extra_data", extra_data);
+	}
 
 	// TODO: Dont special-case this
 	if (logical_type.id() == LogicalTypeId::VARIANT) {
@@ -1270,7 +1249,7 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 		return result;
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
-		if (column_type.id() != LogicalTypeId::GEOMETRY) {
+		if (column_type.id() != LogicalTypeId::GEOMETRY && column_type.id() != LogicalTypeId::GEOGRAPHY) {
 			throw DataCorruptionException("GEOMETRY column data found for a column of type %s", column_type);
 		}
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
@@ -1278,6 +1257,14 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB
 		                                ? deserializer.Get<const LogicalType &>()
 		                                : Geometry::GetVectorizedType(geometry_data.storage_type));
+		result.extra_data = std::move(extra_data);
+		return result;
+	}
+	case ExtraPersistentColumnDataType::LIST: {
+		if (column_type.InternalType() != PhysicalType::LIST) {
+			throw DataCorruptionException("LIST column data found for a column of type %s", column_type);
+		}
+		PersistentColumnData result(column_type);
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -1477,6 +1464,9 @@ void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 		const auto &geometry_data = Cast<GeometryPersistentColumnData>();
 		serializer.WritePropertyWithDefault(101, "storage_type", geometry_data.storage_type, GeometryStorageType::WKB);
 	} break;
+	case ExtraPersistentColumnDataType::LIST:
+		Cast<ListPersistentColumnData>().SerializeFields(serializer);
+		break;
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
 	}
@@ -1495,8 +1485,10 @@ unique_ptr<ExtraPersistentColumnData> ExtraPersistentColumnData::Deserialize(Des
 		    101, "storage_type", GeometryStorageType::WKB);
 		return make_uniq<GeometryPersistentColumnData>(storage_type);
 	}
+	case ExtraPersistentColumnDataType::LIST:
+		return ListPersistentColumnData::Deserialize(deserializer);
 	default:
-		throw InternalException("Unknown PersistentColumnData type");
+		throw DataCorruptionException("Column data with extra data of an unknown type");
 	}
 }
 
@@ -1620,14 +1612,17 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	data.Verify();
 
+	const auto is_geo_type = [](LogicalTypeId id) {
+		return id == LogicalTypeId::GEOMETRY || id == LogicalTypeId::GEOGRAPHY;
+	};
 	bool is_geometry_child_column = false;
-	if (type.id() == LogicalTypeId::GEOMETRY && this->parent && this->parent->type.id() == LogicalTypeId::GEOMETRY) {
-		// Geometry child column
+	if (is_geo_type(type.id()) && this->parent && is_geo_type(this->parent->type.id())) {
+		// Geometry/geography child column
 		is_geometry_child_column = true;
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY ||
-	    (type.id() == LogicalTypeId::GEOMETRY && !is_geometry_child_column)) {
+	    (is_geo_type(type.id()) && !is_geometry_child_column)) {
 		// structs and fixed size lists don't have segments
 		D_ASSERT(!data.GetRootSegment());
 		return;
@@ -1650,7 +1645,7 @@ void ColumnData::Verify(RowGroup &parent) {
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
-	if (type.id() == LogicalTypeId::GEOMETRY) {
+	if (type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY) {
 		return make_shared_ptr<GeoColumnData>(block_manager, info, column_index, type, data_type, parent);
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {

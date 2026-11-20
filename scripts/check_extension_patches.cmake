@@ -21,10 +21,13 @@ endif()
 # patch directory exists unconditionally.
 set(WASM_ENABLED 0)
 set(MUSL_ENABLED 0)
+# Script mode leaves CMAKE_SYSTEM_NAME empty, which makes Linux-only configs return early
+set(CMAKE_SYSTEM_NAME "Linux")
 set(MINGW OFF)
 set(WIN32 OFF)
 set(BUILD_COMPLETE_EXTENSION_SET 1)
 set(VORTEX_ENABLED ON)
+set(LANCE_ENABLED ON)
 set(MYSQL_SCANNER_ENABLED ON)
 
 set(EXTENSION_CONFIG_BASE_DIR "${CONFIG_DIR}/extensions")
