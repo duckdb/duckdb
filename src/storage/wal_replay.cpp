@@ -1325,11 +1325,12 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 		return;
 	}
 
-	// Remove the replay index, if any. Match on the index entry's oid.
-	auto &index_entry = catalog.GetEntry<IndexCatalogEntry>(context, info.GetQualifiedName());
+	// Remove the replay index, if any.
+	auto &catalog_entry = catalog.GetEntry<IndexCatalogEntry>(context, info.GetQualifiedName());
+	auto index_entry = catalog_entry.Cast<DuckIndexEntry>().GetIndexEntry();
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&index_entry](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.index_entry->GetIndexOid() == index_entry.oid;
+		                                              return replay_info.index_entry == index_entry;
 	                                              }),
 	                               state.replay_index_infos.end());
 

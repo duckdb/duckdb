@@ -1,6 +1,7 @@
 #include "core_functions/scalar/debug_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -117,20 +118,28 @@ IndexKeyPath EvaluateIndexKeyPath(const Value &input_struct) {
 }
 
 //! User-defined indexes are catalog entries and constraint indexes are not, so their names cannot clash.
-idx_t FindUserIndexOid(ClientContext &context, TableCatalogEntry &table_entry, const Identifier &index_name,
-                       const string &qualified_table) {
+shared_ptr<IndexEntry> FindUserIndex(ClientContext &context, TableCatalogEntry &table_entry,
+                                     const Identifier &index_name, const string &qualified_table) {
 	auto &schema = table_entry.schema;
 	auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, index_name);
 	if (!entry || entry->Cast<IndexCatalogEntry>().GetTableName() != table_entry.name) {
 		throw CatalogException("index_key: index %s was not found on table %s", index_name, qualified_table);
 	}
-	return entry->oid;
+	return entry->Cast<DuckIndexEntry>().GetIndexEntry();
 }
 
-idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath &path, const string &qualified_table) {
+shared_ptr<IndexEntry> FindConstraintIndex(DuckTableEntry &table_entry, const IndexKeyPath &path,
+                                           const string &qualified_table) {
 	auto &table_columns = table_entry.GetColumns();
-	vector<idx_t> index_oids;
+	// the table entry holds the indexes of its constraints in constraint order
+	auto &constraint_indexes = table_entry.GetConstraintIndexes();
+	idx_t constraint_index_count = 0;
+	vector<shared_ptr<IndexEntry>> indexes;
 	for (auto &constraint : table_entry.GetConstraints()) {
+		if (!constraint->NeedsBackingIndex()) {
+			continue;
+		}
+		auto &constraint_index = constraint_indexes[constraint_index_count++];
 		IndexConstraintType constraint_type;
 		vector<Identifier> constraint_columns;
 		if (constraint->type == ConstraintType::UNIQUE) {
@@ -141,10 +150,6 @@ idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath 
 			}
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			auto &foreign_key = constraint->Cast<ForeignKeyConstraint>();
-			// The referenced side of a foreign key uses the referenced key's index.
-			if (!foreign_key.info.IsAppendConstraint()) {
-				continue;
-			}
 			constraint_type = IndexConstraintType::FOREIGN;
 			for (auto &physical_index : foreign_key.info.fk_keys) {
 				constraint_columns.push_back(table_columns.GetColumn(physical_index).Name());
@@ -154,18 +159,18 @@ idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath 
 		}
 
 		if (constraint_type == path.constraint_type && (path.columns.empty() || path.columns == constraint_columns)) {
-			index_oids.push_back(constraint->GetBackingIndexOid());
+			indexes.push_back(constraint_index);
 		}
 	}
-	if (index_oids.empty()) {
+	if (indexes.empty()) {
 		throw CatalogException("index_key: %s constraint was not found on table %s",
 		                       EnumUtil::ToString(path.constraint_type), qualified_table);
 	}
-	if (index_oids.size() > 1) {
+	if (indexes.size() > 1) {
 		throw BinderException("index_key: table %s has multiple %s constraints, specify 'columns' to select one",
 		                      qualified_table, EnumUtil::ToString(path.constraint_type));
 	}
-	return index_oids[0];
+	return indexes[0];
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -227,20 +232,9 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 	// option to this function to bind or not.
 	data_table_info.BindIndexes(context);
 
-	auto index_oid = path.constraint_type == IndexConstraintType::NONE
-	                     ? FindUserIndexOid(context, table_entry, path.index_name, qualified_table)
-	                     : FindConstraintIndexOid(table_entry, path, qualified_table);
-	shared_ptr<IndexEntry> index_entry;
-	for (auto &entry : duck_table->GetIndexes(table_entry.schema.GetCatalogTransaction(context))) {
-		if (entry->GetIndexOid() == index_oid) {
-			index_entry = entry;
-			break;
-		}
-	}
-	if (!index_entry) {
-		throw CatalogException("index_key: no index found in storage for index oid %llu on table %s", index_oid,
-		                       qualified_table);
-	}
+	const auto index_entry = path.constraint_type == IndexConstraintType::NONE
+	                             ? FindUserIndex(context, table_entry, path.index_name, qualified_table)
+	                             : FindConstraintIndex(*duck_table, path, qualified_table);
 	const auto index = index_entry->GetReadHandle<BoundIndex>();
 
 	const auto &index_type = index->GetIndexType();
