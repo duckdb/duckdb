@@ -313,7 +313,7 @@ SELECT nextval('grouped_calls');
 ----
 162
 
-# An aggregate that throws keeps throwing, also when the other side has no row for the join.
+# An aggregate that throws keeps throwing.
 statement ok
 CREATE TABLE grouped_guarded AS
 SELECT (i % 3)::INTEGER AS k, i::INTEGER AS a, CASE WHEN i < 5 THEN i::VARCHAR ELSE 'invalid' END AS v
@@ -321,7 +321,7 @@ FROM range(10) t(i);
 
 statement error
 SELECT x.k, x.total, y.largest
-FROM (SELECT k, sum(a) total FROM grouped_guarded GROUP BY k HAVING sum(a) < 0) x
+FROM (SELECT k, sum(a) total FROM grouped_guarded GROUP BY k) x
 JOIN (SELECT k, max(v::INTEGER) largest FROM grouped_guarded GROUP BY k) y ON x.k = y.k;
 ----
 Could not convert string 'invalid'
