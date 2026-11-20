@@ -88,7 +88,7 @@ public:
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
 	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), rows_copied(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
@@ -125,8 +125,9 @@ public:
 	atomic<idx_t> flushed_batch_index;
 	//! Whether or not any thread is flushing
 	atomic<bool> any_flushing;
-	//! Whether or not any threads are finished
-	atomic<bool> any_finished;
+	//! The pipeline (batch index / BATCH_INCREMENT) in which a thread has finished. A UNION ALL source sinks one
+	//! pipeline per child, one after another, so finishing is tracked per pipeline. Guarded by lock
+	optional_idx finished_pipeline;
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
 	//! Written file info (for RETURN_STATS)
@@ -294,10 +295,10 @@ SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context
 	// add any final remaining local batches
 	AddLocalBatch(context.client, gstate, state);
 
-	if (!gstate.any_finished) {
-		// signal that this thread is finished processing batches and that we should move on to Finalize
+	if (state.batch_index.IsValid()) {
+		// signal that this thread is finished processing the batches of its pipeline
 		lock_guard<mutex> l(gstate.lock);
-		gstate.any_finished = true;
+		gstate.finished_pipeline = state.batch_index.GetIndex() / PipelineBuildState::BATCH_INCREMENT;
 	}
 	memory_manager.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	ExecuteTasks(context.client, gstate);
@@ -508,7 +509,8 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		return;
 	}
 	if (!final) {
-		if (gstate.any_finished) {
+		if (gstate.finished_pipeline.IsValid() &&
+		    gstate.finished_pipeline.GetIndex() == min_index / PipelineBuildState::BATCH_INCREMENT) {
 			// we only repartition in ::NextBatch if all threads are still busy processing batches
 			// otherwise we might end up repartitioning a lot of data with only a few threads remaining
 			// which causes erratic performance
@@ -534,20 +536,30 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 	// gather all collections we can repartition
 	idx_t max_batch_index = 0;
-	vector<unique_ptr<FixedRawBatchData>> raw_batches;
+	vector<pair<idx_t, unique_ptr<FixedRawBatchData>>> raw_batches;
 	for (auto entry = gstate.raw_batches.begin(); entry != gstate.raw_batches.end();) {
 		if (entry->first >= min_index) {
 			break;
 		}
 		max_batch_index = entry->first;
-		raw_batches.push_back(std::move(entry->second));
+		raw_batches.emplace_back(entry->first, std::move(entry->second));
 		entry = gstate.raw_batches.erase(entry);
 	}
 	unique_ptr<FixedRawBatchData> append_batch;
+	idx_t append_pipeline = 0;
 	ColumnDataAppendState append_state;
 	CopyBatchSlicer batch_slicer(children[0].get().GetTypes(), batch_size_bytes);
 	// now perform the actual repartitioning
-	for (auto &current_batch : raw_batches) {
+	for (auto &raw_batch : raw_batches) {
+		auto &current_batch = raw_batch.second;
+		auto pipeline = raw_batch.first / PipelineBuildState::BATCH_INCREMENT;
+		if (append_batch && append_batch->collection->Count() > 0 && pipeline != append_pipeline &&
+		    CopyFunctionBatchAnalyzer(*current_batch->collection, batch_size, batch_size_bytes).MeetsFlushCriteria()) {
+			// end the partial batch of the previous pipeline (e.g. UNION ALL child) instead of shifting every full
+			// batch of the next one
+			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
+		}
+		append_pipeline = pipeline;
 		if (!append_batch) {
 			const CopyFunctionBatchAnalyzer batch_analyzer(*current_batch->collection, batch_size, batch_size_bytes);
 			if (batch_analyzer.IsAcceptable()) {
