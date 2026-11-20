@@ -150,3 +150,30 @@ statement error
 SELECT decode('a'::BLOB, 'no-such-encoding')
 ----
 Unknown encoding "no-such-encoding"
+
+# the encoding can be a prepared statement parameter
+statement ok
+PREPARE encode_with AS SELECT encode('café', $1)
+
+query I
+EXECUTE encode_with('latin-1')
+----
+caf\xE9
+
+statement ok
+PREPARE decode_with AS SELECT decode('caf\xe9'::BLOB, $1)
+
+query I
+EXECUTE decode_with('latin-1')
+----
+café
+
+query I
+SELECT encode('a', NULL) IS NULL
+----
+true
+
+statement error
+SELECT encode('a', e) FROM (VALUES ('latin-1')) t(e)
+----
+the encoding must be a constant

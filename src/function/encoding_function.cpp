@@ -11,6 +11,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -110,6 +111,7 @@ ScalarFunctionSet EncodingFunction::Create(const string &encoding_name, decode_t
 				                          output.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(written), capacity);
 			                          }
 		                          });
+		encode_all.GetSignature().GetParameter(0).SetName(Identifier("string"));
 		encode_all.SetFallible();
 		encode_all.GetProperties().SetProperty(MINIMUM_INPUT_WINDOW_PROPERTY,
 		                                       Value::BIGINT(NumericCast<int64_t>(minimum_input_window)));
@@ -152,11 +154,20 @@ vector<string> EncodingFunction::GetEncodings(ClientContext &context) {
 unique_ptr<Expression> EncodingFunction::BindCall(ClientContext &context, vector<unique_ptr<Expression>> &children,
                                                   bool is_encode) {
 	D_ASSERT(children.size() == 2);
+	if (children[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!children[1]->IsFoldable()) {
+		if (is_encode) {
+			throw BinderException("encode: the encoding must be a constant");
+		}
 		return nullptr;
 	}
 	auto value = ExpressionExecutor::EvaluateScalar(context, *children[1]);
 	if (value.IsNull()) {
+		if (is_encode) {
+			return make_uniq<BoundConstantExpression>(Value(LogicalType::BLOB));
+		}
 		return nullptr;
 	}
 	auto encoding_name = StringUtil::Lower(value.ToString());
