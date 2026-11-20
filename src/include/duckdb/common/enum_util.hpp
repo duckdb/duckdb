@@ -118,8 +118,6 @@ enum class BufferedIndexReplay : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
-enum class CSVDialect : uint8_t;
-
 enum class CSVEmbeddedQuote : uint8_t;
 
 enum class CSVEscapeMode : uint8_t;
@@ -857,9 +855,6 @@ const char* EnumUtil::ToChars<BufferedIndexReplay>(BufferedIndexReplay value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
-
-template<>
-const char* EnumUtil::ToChars<CSVDialect>(CSVDialect value);
 
 template<>
 const char* EnumUtil::ToChars<CSVEmbeddedQuote>(CSVEmbeddedQuote value);
@@ -1902,9 +1897,6 @@ BufferedIndexReplay EnumUtil::FromString<BufferedIndexReplay>(const char *value)
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
-
-template<>
-CSVDialect EnumUtil::FromString<CSVDialect>(const char *value);
 
 template<>
 CSVEmbeddedQuote EnumUtil::FromString<CSVEmbeddedQuote>(const char *value);

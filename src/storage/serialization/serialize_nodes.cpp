@@ -737,9 +737,6 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
-		serializer.WritePropertyWithDefault<CSVOption<CSVDialect>>(147, "dialect", options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
-	}
-	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
 		serializer.WritePropertyWithDefault<CSVOption<bool>>(148, "doubled_quotes", options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
@@ -845,7 +842,6 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEscapeMode>>(145, "escape_mode", result.options.dialect_options.state_machine_options.escape_mode, CSVOption<CSVEscapeMode>(CSVEscapeMode::ALL));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVQuoteMode>>(146, "quote_mode", result.options.dialect_options.state_machine_options.quote_mode, CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD));
-	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVDialect>>(147, "dialect", result.options.dialect, CSVOption<CSVDialect>(CSVDialect::STANDARD));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(148, "doubled_quotes", result.options.dialect_options.state_machine_options.doubled_quotes, CSVOption<bool>(false));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<CSVEmbeddedQuote>>(149, "embedded_quote", result.options.dialect_options.state_machine_options.embedded_quote, CSVOption<CSVEmbeddedQuote>(CSVEmbeddedQuote::DATA));
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<bool>>(150, "mixed_line_breaks", result.options.dialect_options.state_machine_options.mixed_line_breaks, CSVOption<bool>(false));

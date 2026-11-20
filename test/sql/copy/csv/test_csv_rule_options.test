@@ -79,15 +79,6 @@ SELECT * FROM read_csv('{TEST_DIR}/rule_embedded.csv', quote='"', escape='"', em
 ----
 EMBEDDED_QUOTE 'toggle' requires a QUOTE character other than the ESCAPE character
 
-# under the dialect a directly set rule wins over the dialect's own value
-statement ok
-COPY (SELECT '1,a"b,2' AS line) TO '{TEST_DIR}/rule_override.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');
-
-query TTT
-SELECT * FROM read_csv('{TEST_DIR}/rule_override.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR'}, delim=',', quote='"', escape='\', header=false, auto_detect=false, dialect='opencsv', embedded_quote='data');
-----
-1	a"b	2
-
 # mixed_line_breaks reads any line break as a record boundary, also in strict mode
 statement ok
 COPY (SELECT 'a,b' || chr(13) || chr(10) || '1,2' || chr(10) || '3,4' || chr(13) || '5,6' || chr(13) || chr(10) AS line) TO '{TEST_DIR}/rule_mixed.csv' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '');

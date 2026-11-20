@@ -46,14 +46,6 @@ enum class CSVEmbeddedQuote : uint8_t {
 	TOGGLE = 1
 };
 
-//! A named CSV dialect, a preset over the internal parsing options
-enum class CSVDialect : uint8_t {
-	//! DuckDB's own CSV reading, governed by the individual options
-	STANDARD = 0,
-	//! The CSV reading of Hive and Athena's OpenCSVSerde
-	OPENCSV = 1
-};
-
 class Serializer;
 class Deserializer;
 
@@ -212,17 +204,6 @@ private:
 			return "toggle";
 		default:
 			throw InternalException("Invalid CSV Embedded Quote Detected.");
-		}
-	}
-
-	std::string FormatValueInternal(const CSVDialect &val) const {
-		switch (val) {
-		case CSVDialect::STANDARD:
-			return "standard";
-		case CSVDialect::OPENCSV:
-			return "opencsv";
-		default:
-			throw InternalException("Invalid CSV Dialect Detected.");
 		}
 	}
 

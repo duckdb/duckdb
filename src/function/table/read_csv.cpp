@@ -104,7 +104,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 		    .Add("comment", LogicalType::VARCHAR)
 		    .Add("encoding", LogicalType::VARCHAR)
 		    .Add("strict_mode", LogicalType::BOOLEAN)
-		    .Add("dialect", LogicalType::VARCHAR)
 		    .Add("escape_mode", LogicalType::VARCHAR)
 		    .Add("quote_mode", LogicalType::VARCHAR)
 		    .Add("embedded_quote", LogicalType::VARCHAR)

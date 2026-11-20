@@ -1249,14 +1249,6 @@
         "default": "CSVOption<CSVQuoteMode>(CSVQuoteMode::STANDARD)"
       },
       {
-        "id": 147,
-        "version": "v2.1.0",
-        "name": "dialect",
-        "property": "options.dialect",
-        "type": "CSVOption<CSVDialect>",
-        "default": "CSVOption<CSVDialect>(CSVDialect::STANDARD)"
-      },
-      {
         "id": 148,
         "version": "v2.1.0",
         "name": "doubled_quotes",
