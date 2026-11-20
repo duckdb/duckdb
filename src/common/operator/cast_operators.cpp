@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/wide_decimal_cast.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
@@ -3453,37 +3454,40 @@ bool TryCastFromDecimal::Operation(hugeint_t input, double &result, CastParamete
 // Decimal Casts of the bignum_t tier (width > 38), and BIGNUM as a decimal with scale 0
 //===--------------------------------------------------------------------===//
 //! The BIGNUM blob of an integer
-static string IntegerToBignumBlob(hugeint_t value) {
-	return DecimalHelper<bignum_t>::FromInteger(value);
+static void IntegerToBignumBlob(hugeint_t value, string &result) {
+	DecimalHelper<bignum_t>::FromInteger(value, result);
 }
 
-static string IntegerToBignumBlob(uhugeint_t value) {
-	return DecimalHelper<bignum_t>::FromInteger(value);
+static void IntegerToBignumBlob(uhugeint_t value, string &result) {
+	DecimalHelper<bignum_t>::FromInteger(value, result);
 }
 
-static string IntegerToBignumBlob(bool value) {
-	return DecimalHelper<bignum_t>::FromInteger(hugeint_t(value ? 1 : 0));
+static void IntegerToBignumBlob(bool value, string &result) {
+	DecimalHelper<bignum_t>::FromInteger(hugeint_t(value ? 1 : 0), result);
 }
 
 template <class SRC>
-static string IntegerToBignumBlob(SRC value) {
-	return DecimalHelper<bignum_t>::FromInteger(Hugeint::Convert(value));
+static void IntegerToBignumBlob(SRC value, string &result) {
+	DecimalHelper<bignum_t>::FromInteger(Hugeint::Convert(value), result);
 }
 
 //! Scales an integer to the bignum_t tier, false if it does not fit the width
 template <class SRC>
 static bool TryCastIntegerToBignumDecimal(SRC input, bignum_t &result, Vector &result_vector,
                                           CastParameters &parameters, uint32_t width, uint32_t scale) {
-	auto unscaled = IntegerToBignumBlob(input);
-	string blob;
-	if (!DecimalHelper<bignum_t>::TryRescale(bignum_t(string_t(unscaled)), 0, width, scale, blob,
-	                                         DefaultCasts::WideDecimalCastContext(parameters))) {
+	WideDecimalCastState fallback(DefaultCasts::WideDecimalCastContext(parameters));
+	auto &state = parameters.local_state ? parameters.local_state->Cast<WideDecimalCastState>() : fallback;
+	IntegerToBignumBlob(input, state.unscaled_blob);
+	auto &rescale_state = state.GetRescaleState();
+	rescale_state.Reset();
+	auto rescaled = DecimalHelper<bignum_t>::Rescale(rescale_state, bignum_t(string_t(state.unscaled_blob)), 0, scale);
+	if (!DecimalHelper<bignum_t>::FitsWidth(rescaled, width)) {
 		string error = StringUtil::Format("Could not cast value %s to DECIMAL(%d,%d)",
 		                                  ConvertToString::Operation(input), width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = DecimalHelper<bignum_t>::Store(result_vector, blob);
+	result = bignum_t(StringVector::AddStringOrBlob(result_vector, rescaled.data));
 	return true;
 }
 
@@ -3557,7 +3561,11 @@ template <class DST>
 static bool TryCastBignumDecimalToFloatingPoint(bignum_t input, DST &result, CastParameters &parameters, uint32_t width,
                                                 uint32_t scale) {
 	auto context = DefaultCasts::WideDecimalCastContext(parameters);
-	if (!DecimalHelper<bignum_t>::TryToFloating(input, scale, result, context)) {
+	auto state = parameters.local_state ? &parameters.local_state->Cast<WideDecimalCastState>() : nullptr;
+	const bool success = state ? DecimalHelper<bignum_t>::TryToFloating(state->GetFormattingState(), state->formatted,
+	                                                                    input, scale, result)
+	                           : DecimalHelper<bignum_t>::TryToFloating(input, scale, result, context);
+	if (!success) {
 		string error =
 		    StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 		                       DecimalHelper<bignum_t>::ToString(input, width, scale, context), GetTypeId<DST>());
@@ -3570,7 +3578,8 @@ static bool TryCastBignumDecimalToFloatingPoint(bignum_t input, DST &result, Cas
 //! A fixed-size decimal rounds to an integer BIGNUM
 template <class SRC>
 static bool CastDecimalToBignum(SRC input, bignum_t &result, Vector &result_vector, uint32_t scale) {
-	auto unscaled = IntegerToBignumBlob(hugeint_t(input));
+	string unscaled;
+	IntegerToBignumBlob(hugeint_t(input), unscaled);
 	result = DecimalHelper<bignum_t>::Store(result_vector, RoundBignumDecimal(bignum_t(string_t(unscaled)), scale));
 	return true;
 }

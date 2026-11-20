@@ -95,6 +95,8 @@ public:
 	DUCKDB_API static string FromByteArray(uint8_t *data, idx_t size, bool is_negative);
 	//! Function to convert BIGNUM blob to a VARCHAR, a long conversion checks for interrupts through the context
 	DUCKDB_API static string BignumToVarchar(const bignum_t &blob, optional_ptr<ClientContext> context = nullptr);
+	//! Writes decimal text using reusable conversion buffers
+	DUCKDB_API static void BignumToVarchar(BignumCastScratch &state, const bignum_t &blob, string &result);
 	//! Writes the decimal representation of a BIGNUM into the string heap of the result vector
 	DUCKDB_API static string_t BignumToVarchar(const bignum_t &blob, Vector &result, BignumCastScratch &scratch);
 	//! The BIGNUM -> VARCHAR cast function
