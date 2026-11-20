@@ -211,10 +211,6 @@ struct DuckDBTablesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DuckDBTableStorageFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct DuckDBTableSample {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

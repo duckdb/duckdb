@@ -1716,6 +1716,16 @@
         "is_deprecated": true
     },
     {
+        "name": "table_size_sample_row_groups",
+        "description": "The maximum number of row groups to sample per table for the estimated_data_bytes column in duckdb_tables().",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "4",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "temp_directory",
         "description": "Set the directory to which temporary files are written.",
         "type": "VARCHAR",

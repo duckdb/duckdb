@@ -1642,6 +1642,15 @@ void MaxStreamingBufferSizeSetting::OnSet(SettingCallbackInfo &info, Value &inpu
 }
 
 //===----------------------------------------------------------------------===//
+// Table Size Sample Row Groups
+//===----------------------------------------------------------------------===//
+void TableSizeSampleRowGroupsSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull() || UBigIntValue::Get(input) == 0) {
+		throw InvalidInputException("%s must be a positive integer", Name);
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

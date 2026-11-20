@@ -1,20 +1,35 @@
-# name: test/sql/table_function/duckdb_table_storage.test
+# name: test/sql/table_function/duckdb_tables_estimated_data_bytes.test
 # description: Estimate checkpointed table data size using cached, stratified metadata samples
 # group: [table_function]
 
 require noforcestorage
 
-foreach budget 0 -1 NULL
+query TT
+SELECT value, scope FROM duckdb_settings() WHERE name='table_size_sample_row_groups';
+----
+4	GLOBAL
+
+foreach budget 0 NULL
 
 statement error
-SELECT * FROM duckdb_table_storage(sample_row_groups := {budget});
+SET GLOBAL table_size_sample_row_groups = {budget};
 ----
-sample_row_groups must be a positive integer
+table_size_sample_row_groups must be a positive integer
 
 endloop
 
+statement error
+SET GLOBAL table_size_sample_row_groups = -1;
+----
+out of range
+
+statement error
+SET SESSION table_size_sample_row_groups = 8;
+----
+can only be set globally
+
 statement ok
-CREATE TABLE memory_table(i INTEGER);
+CREATE TABLE memory.main.memory_table(i INTEGER);
 
 statement ok
 CREATE TEMP TABLE temporary_table(i INTEGER);
@@ -23,7 +38,7 @@ statement ok
 CREATE VIEW ignored_view AS SELECT 1;
 
 query TI rowsort
-SELECT table_name, estimated_data_bytes IS NULL FROM duckdb_table_storage();
+SELECT table_name, estimated_data_bytes IS NULL FROM duckdb_tables();
 ----
 memory_table	true
 temporary_table	true
@@ -36,7 +51,7 @@ USE sizes;
 
 statement ok
 CREATE TEMP VIEW sizes_at_checkpoint AS
-SELECT table_name, estimated_data_bytes AS bytes FROM duckdb_table_storage() WHERE database_name='sizes';
+SELECT table_name, estimated_data_bytes AS bytes FROM duckdb_tables() WHERE database_name='sizes';
 
 statement ok
 SET threads=1;
@@ -67,26 +82,33 @@ SELECT bytes FROM sizes_at_checkpoint WHERE table_name='empty_table';
 0
 
 query TTT
-SELECT table_name, database_name, schema_name FROM duckdb_table_storage() WHERE table_name='numbers';
+SELECT table_name, database_name, schema_name FROM duckdb_tables() WHERE table_name='numbers';
 ----
 numbers	sizes	main
 
 # Catalog-only queries do not need a storage sample.
 query II
-EXPLAIN SELECT table_name FROM duckdb_table_storage();
+EXPLAIN SELECT table_name FROM duckdb_tables();
 ----
-physical_plan	<REGEX>:.*Function: DUCKDB_TABLE_STORAGE.*Projections: table_name.*
+physical_plan	<REGEX>:.*Function: DUCKDB_TABLES.*Projections: table_name.*
 
-query I
-SELECT bytes BETWEEN 8192 AND 16384 FROM sizes_at_checkpoint WHERE table_name='numbers';
+query ITII
+SELECT estimated_data_bytes BETWEEN 8192 AND 16384, table_name, estimated_size, index_count
+FROM duckdb_tables() WHERE database_name='sizes' AND table_name='numbers';
 ----
-true
+true	numbers	1024	0
 
 # Large budgets are capped by the actual row group count.
+statement ok
+SET GLOBAL table_size_sample_row_groups = 9223372036854775807;
+
 query I nosort first_numbers_size
-SELECT estimated_data_bytes FROM duckdb_table_storage(sample_row_groups := 9223372036854775807)
+SELECT estimated_data_bytes FROM duckdb_tables()
 WHERE database_name='sizes' AND table_name='numbers';
 ----
+
+statement ok
+RESET GLOBAL table_size_sample_row_groups;
 
 # Appends in the WAL do not change the checkpointed estimate.
 statement ok
@@ -150,30 +172,36 @@ SELECT bytes BETWEEN 200000 AND 400000 FROM sizes_at_checkpoint WHERE table_name
 ----
 true
 
-# Changing the prepared sample budget must select the corresponding estimate.
+# A prepared scan picks up global setting changes from another connection at execution time.
 statement ok
 PREPARE storage_sample AS
-SELECT (estimated_data_bytes BETWEEN 200000 AND 400000) = $2
-FROM duckdb_table_storage(sample_row_groups := $1) WHERE database_name='sizes' AND table_name='stratified';
+SELECT estimated_data_bytes BETWEEN 200000 AND 400000
+FROM duckdb_tables() WHERE database_name='sizes' AND table_name='stratified';
 
-foreach budget,in_range 1,false 16,true 1,false
+statement ok con_setting
+SET GLOBAL table_size_sample_row_groups = 1;
 
 query I
-EXECUTE storage_sample({budget}, {in_range});
+EXECUTE storage_sample;
+----
+false
+
+statement ok con_setting
+SET GLOBAL table_size_sample_row_groups = 16;
+
+query I
+EXECUTE storage_sample;
 ----
 true
 
-endloop
+statement ok con_setting
+RESET GLOBAL table_size_sample_row_groups;
 
 statement ok
 DEALLOCATE storage_sample;
 
 query I nosort four_group_size
 SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
-----
-
-query I nosort four_group_size
-SELECT estimated_data_bytes FROM duckdb_table_storage(sample_row_groups := 4) WHERE database_name='sizes' AND table_name='stratified';
 ----
 
 statement ok
@@ -193,6 +221,9 @@ SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
 
 # Request a different budget so a reader has to sample while competing with the checkpoint.
 statement ok
+SET GLOBAL table_size_sample_row_groups = 2;
+
+statement ok
 INSERT INTO weighted VALUES (42);
 
 concurrentloop connection 0 4
@@ -203,11 +234,14 @@ FORCE CHECKPOINT sizes;
 
 onlyif connection<>0
 query I
-SELECT estimated_data_bytes > 0 FROM duckdb_table_storage(sample_row_groups := 2) WHERE database_name='sizes' AND table_name='weighted';
+SELECT estimated_data_bytes > 0 FROM duckdb_tables() WHERE database_name='sizes' AND table_name='weighted';
 ----
 true
 
 endloop
+
+statement ok
+RESET GLOBAL table_size_sample_row_groups;
 
 statement ok
 ALTER TABLE weighted RENAME TO renamed_weighted;
@@ -266,7 +300,7 @@ SELECT bytes FROM sizes_at_checkpoint WHERE table_name='stratified';
 0
 
 query I
-SELECT count(*) FROM duckdb_table_storage() WHERE database_name='sizes' AND schema_name='missing';
+SELECT count(*) FROM duckdb_tables() WHERE database_name='sizes' AND schema_name='missing';
 ----
 0
 
@@ -347,7 +381,7 @@ statement ok
 CHECKPOINT legacy;
 
 query I
-SELECT estimated_data_bytes IS NULL FROM duckdb_table_storage() WHERE database_name='legacy' AND table_name='numbers';
+SELECT estimated_data_bytes IS NULL FROM duckdb_tables() WHERE database_name='legacy' AND table_name='numbers';
 ----
 true
 
