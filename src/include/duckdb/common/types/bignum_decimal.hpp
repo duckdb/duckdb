@@ -20,6 +20,7 @@ class ClientContext;
 class Context;
 class StringHeap;
 class Vector;
+struct BignumCastScratch;
 
 //! The operations on the unscaled value of a DECIMAL wider than 38 digits, a bignum_t (the BIGNUM blob): the interface
 //! of the fixed-size tiers (see decimal_helper.hpp), whose results are owned blobs here as the values have no fixed
@@ -79,6 +80,8 @@ struct DecimalHelper<bignum_t> {
 	//! The BIGNUM blob of an integer
 	DUCKDB_API static string FromInteger(hugeint_t value);
 	DUCKDB_API static string FromInteger(uhugeint_t value);
+	DUCKDB_API static void FromInteger(hugeint_t value, string &result);
+	DUCKDB_API static void FromInteger(uhugeint_t value, string &result);
 	//! Converts an unscaled value to a hugeint, returns false if it does not fit
 	DUCKDB_API static bool TryToHugeint(const bignum_t &value, hugeint_t &result);
 	DUCKDB_API static bool TryToUhugeint(const bignum_t &value, uhugeint_t &result);
@@ -123,6 +126,10 @@ struct DecimalHelper<bignum_t> {
 	                                     optional_ptr<ClientContext> context = nullptr);
 	DUCKDB_API static bool TryToFloating(const bignum_t &value, uint32_t scale, double &result,
 	                                     optional_ptr<ClientContext> context = nullptr);
+	DUCKDB_API static bool TryToFloating(BignumCastScratch &state, string &text, const bignum_t &value, uint32_t scale,
+	                                     float &result);
+	DUCKDB_API static bool TryToFloating(BignumCastScratch &state, string &text, const bignum_t &value, uint32_t scale,
+	                                     double &result);
 	//! Converts an unscaled value with the given scale to a double, infinite when the value is out of range
 	DUCKDB_API static double ToDouble(const bignum_t &value, uint32_t scale,
 	                                  optional_ptr<ClientContext> context = nullptr);

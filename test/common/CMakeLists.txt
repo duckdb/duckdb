@@ -70,6 +70,7 @@ add_library_unity(
   test_variant_cast.cpp
   test_variant_size.cpp
   test_vector_buffer_validity.cpp
+  test_wide_decimal_cast.cpp
   test_lazy_vector.cpp
   test_musl_stack_size.cpp)
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array_ptr.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -685,14 +686,30 @@ public:
 	void ScanPartial(idx_t start_idx, ValidityMask &result, idx_t offset, idx_t count);
 	void Skip(ContainerScanState &scan_state, idx_t skip_count);
 
+private:
+	template <class T, class... ARGS>
+	void InitializeContainer(optional<T> &state, ARGS &&...args) {
+		current_container = nullptr;
+		current_container = &state.emplace(std::forward<ARGS>(args)...);
+	}
+
 public:
 	BufferHandle handle;
 	ColumnSegment &segment;
-	unique_ptr<ContainerScanState> current_container;
+	optional_ptr<ContainerScanState> current_container;
 	SegmentLayout layout;
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> container_metadata;
 	vector<idx_t> data_start_position;
+
+private:
+	optional<BitsetContainerScanState> bitset_state;
+	optional<CompressedRunContainerScanState> compressed_run_state;
+	optional<UncompressedRunContainerScanState> uncompressed_run_state;
+	optional<CompressedArrayContainerScanState<NULLS>> compressed_null_state;
+	optional<CompressedArrayContainerScanState<NON_NULLS>> compressed_non_null_state;
+	optional<UncompressedArrayContainerScanState<NULLS>> uncompressed_null_state;
+	optional<UncompressedArrayContainerScanState<NON_NULLS>> uncompressed_non_null_state;
 };
 
 //! Boolean BitPacking
