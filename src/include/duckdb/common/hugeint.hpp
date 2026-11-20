@@ -317,17 +317,22 @@ constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint
 	return Uint128DivModResult {0, quotient, remainder_upper, remainder_lower};
 }
 
+//! Unsigned division of a 128-bit dividend by a non-zero 64-bit divisor, for compilers without 128-bit division
+constexpr Uint128DivModResult Uint128DivModSmallDivisor(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t divisor) {
+	// the high step leaves a remainder below the divisor, as the low step requires
+	const uint64_t quotient_upper = lhs_upper / divisor;
+	uint64_t remainder = 0;
+	const uint64_t quotient_lower = Uint128DivRem64Portable(lhs_upper % divisor, lhs_lower, divisor, remainder);
+	return Uint128DivModResult {quotient_upper, quotient_lower, 0, remainder};
+}
+
 //! Unsigned 128-bit division for compilers without 128-bit division. Precondition: the divisor is not zero.
 constexpr Uint128DivModResult Uint128DivModPortable(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
                                                     uint64_t rhs_lower) {
 	if (rhs_upper != 0) {
 		return Uint128DivModLargeDivisor(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
 	}
-	// the high step leaves a remainder below the divisor, as the low step requires
-	const uint64_t quotient_upper = lhs_upper / rhs_lower;
-	uint64_t remainder = 0;
-	const uint64_t quotient_lower = Uint128DivRem64Portable(lhs_upper % rhs_lower, lhs_lower, rhs_lower, remainder);
-	return Uint128DivModResult {quotient_upper, quotient_lower, 0, remainder};
+	return Uint128DivModSmallDivisor(lhs_upper, lhs_lower, rhs_lower);
 }
 
 //! Unsigned 128-bit division. Precondition: the divisor is not zero.
@@ -346,7 +351,7 @@ constexpr Uint128DivModResult Uint128DivMod(uint64_t lhs_upper, uint64_t lhs_low
 	const auto remainder = static_cast<uint64_t>(lhs - quotient * rhs_lower);
 	return Uint128DivModResult {static_cast<uint64_t>(quotient >> 64), static_cast<uint64_t>(quotient), 0, remainder};
 #else
-	return Uint128DivModPortable(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
+	return Uint128DivModSmallDivisor(lhs_upper, lhs_lower, rhs_lower);
 #endif
 }
 
