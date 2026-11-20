@@ -127,7 +127,7 @@ TEST_CASE("Extracting statements does not start the query profiler", "[api]") {
 	REQUIRE(output.find("SELECT 44;") != std::string::npos);
 }
 
-TEST_CASE("Calls that run no statement do not leave the query profiler running", "[api]") {
+static void CheckNonExecutingProfilerCalls(bool check_idle_latency) {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableProfiling();
@@ -135,12 +135,16 @@ TEST_CASE("Calls that run no statement do not leave the query profiler running",
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT 1 AS i"));
 
 	auto check_next_query = [&]() {
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		if (check_idle_latency) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
 		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 		auto &profiler = QueryProfiler::Get(*con.context);
 		REQUIRE(profiler.GetQuerySQL() == "SELECT 42");
 		// the idle time before the query is not counted towards its latency
-		REQUIRE(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") < 0.4);
+		if (check_idle_latency) {
+			REQUIRE(profiler.GetQueryMetrics().GetStringMetricInSeconds("query.total_time") < 0.4);
+		}
 	};
 
 	SECTION("GetTableNames fails") {
@@ -175,6 +179,14 @@ TEST_CASE("Calls that run no statement do not leave the query profiler running",
 		REQUIRE_NO_FAIL(con.Query(""));
 		check_next_query();
 	}
+}
+
+TEST_CASE("Calls that run no statement do not leave the query profiler running", "[api]") {
+	CheckNonExecutingProfilerCalls(false);
+}
+
+TEST_CASE("Calls that run no statement do not count idle time in the next query", "[api][.]") {
+	CheckNonExecutingProfilerCalls(true);
 }
 
 TEST_CASE("Test latency when interrupting query", "[api]") {

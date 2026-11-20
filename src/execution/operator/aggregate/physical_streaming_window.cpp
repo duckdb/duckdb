@@ -288,12 +288,13 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s, 1);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	// This doesn't work for STRUCTs because the SV
-	// is not copied to the children when you slice
+	// This doesn't work for STRUCTs and ARRAYs because
+	// slicing them does not keep a reference to the SV
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		const auto &col_vec = arg_cursor.data[col_idx];
-		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
+		const auto internal_type = col_vec.GetType().InternalType();
+		if (internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY) {
 			structs.emplace_back(col_idx);
 		} else {
 			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
@@ -305,10 +306,10 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	                                           aggr_state.arena_allocator);
 	for (idx_t i = 0; i < count; ++i) {
 		sel.set_index(0, i);
-		for (const auto struct_idx : structs) {
-			arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
-		}
 		if (filter_mask.RowIsValid(i) && distinct_mask.RowIsValid(i)) {
+			for (const auto struct_idx : structs) {
+				arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
+			}
 			aggregate.GetStateUpdateCallback()(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(),
 			                                   statev, 1);
 		}

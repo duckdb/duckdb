@@ -108,14 +108,6 @@ struct CastLocalStateParameters {
 	optional_ptr<BoundCastData> cast_data;
 };
 
-//! The local state of a cast to or from a wide DECIMAL: the context lets long BIGNUM conversions check for interrupts
-struct WideDecimalCastState : public FunctionLocalState {
-	explicit WideDecimalCastState(optional_ptr<ClientContext> context_p) : context(context_p) {
-	}
-
-	optional_ptr<ClientContext> context;
-};
-
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalStateParameters &parameters);
 

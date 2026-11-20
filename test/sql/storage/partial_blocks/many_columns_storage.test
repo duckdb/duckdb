@@ -31,7 +31,13 @@ SELECT total_blocks FROM pragma_database_size()
 ----
 
 
-loop i 0 100
+query I
+SELECT [*COLUMNS(*)] = range(i0, i0 + 100) FROM integers
+----
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers
@@ -49,7 +55,13 @@ endloop
 
 restart
 
-loop i 0 100
+query I
+SELECT [*COLUMNS(*)] = range(i0, i0 + 100) FROM integers
+----
+true
+true
+
+foreach i 0 1 50 99
 
 query I
 SELECT i{i}={i} FROM integers

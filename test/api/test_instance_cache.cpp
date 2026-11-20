@@ -302,7 +302,7 @@ TEST_CASE("Test automatic DB instance caching", "[api][.]") {
 	}
 }
 
-TEST_CASE("Test the instance cache hands out a database that is still open after its last handle", "[api]") {
+static void TestInstanceCacheLastHandle(idx_t reopen_iterations) {
 	DBInstanceCache instance_cache;
 	DBConfig config;
 	auto path = TestCreatePath("instance_cache_in_use.db");
@@ -366,7 +366,7 @@ TEST_CASE("Test the instance cache hands out a database that is still open after
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 	SECTION("A reopen races with closing the last connection") {
-		for (idx_t i = 0; i < 50; i++) {
+		for (idx_t i = 0; i < reopen_iterations; i++) {
 			auto db = instance_cache.GetOrCreateInstance(path, config, true);
 			auto con = make_uniq<Connection>(*db);
 			db.reset();
@@ -389,6 +389,14 @@ TEST_CASE("Test the instance cache hands out a database that is still open after
 		}
 	}
 	TestDeleteFile(path);
+}
+
+TEST_CASE("Test the instance cache hands out a database that is still open after its last handle", "[api]") {
+	TestInstanceCacheLastHandle(2);
+}
+
+TEST_CASE("Stress the instance cache reopening while its last handle closes", "[api][.]") {
+	TestInstanceCacheLastHandle(50);
 }
 
 struct SlowShutdownCatalog : public DuckCatalog {

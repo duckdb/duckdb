@@ -19,6 +19,9 @@ struct BoundComparisonExpression {
 	static bool IsComparison(ExpressionType type);
 	static bool IsComparison(const Expression &expr);
 
+	//! Whether equal, already-bound operands of this type have interchangeable value representations.
+	static bool EqualityPreservesValueRepresentation(const LogicalType &type);
+
 	static const Expression &Left(const BoundFunctionExpression &comparison_expr);
 	static const Expression &Right(const BoundFunctionExpression &comparison_expr);
 
