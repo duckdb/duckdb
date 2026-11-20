@@ -1,0 +1,108 @@
+# name: test/sql/function/variant/variant_contains_object_order.test
+# description: Test variant_contains on objects whose keys are in the same, another, or no common order
+# group: [variant]
+
+require json
+
+# The keys of the needle in the order of the haystack, reversed, rotated and with keys left out; a key that the
+# haystack does not have and a value that differs after keys that match; and nested objects, which each keep their own
+# position, also when an array tries another object. No case may give another result than expected.
+query III
+SELECT haystack, needle, expected
+FROM (VALUES
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"a": 1, "b": 2, "c": 3, "d": 4}', true),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"d": 4, "c": 3, "b": 2, "a": 1}', true),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"c": 3, "d": 4, "a": 1}', true),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"d": 4, "a": 1}', true),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"b": 2, "x": 0, "c": 3}', false),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"b": 2, "c": 3, "d": 5}', false),
+	('{"a": 1, "b": 2, "c": 3, "d": 4}', '{"d": 4, "a": 2}', false),
+	('{"a": 1}', '{"a": 1, "b": 2}', false),
+	('{"a": {"x": 1, "y": 2}, "b": {"x": 3, "y": 4}}', '{"b": {"y": 4, "x": 3}, "a": {"y": 2}}', true),
+	('{"a": {"x": 1, "y": 2}, "b": {"x": 3, "y": 4}}', '{"b": {"y": 4, "x": 3}, "a": {"y": 3}}', false),
+	('[{"a": 1, "b": 2, "c": 0}, {"a": 1, "b": 2, "c": 3}]', '[{"c": 3, "a": 1}]', true),
+	('[{"a": 1, "b": 2, "c": 0}, {"a": 1, "b": 2, "c": 3}]', '[{"c": 3, "a": 1}, {"b": 2, "c": 0}]', true),
+	('[{"a": 1, "b": 2, "c": 0}, {"a": 1, "b": 2, "c": 3}]', '[{"c": 3, "a": 1, "b": 0}]', false)
+) cases(haystack, needle, expected)
+WHERE variant_contains(haystack::JSON::VARIANT, needle::JSON::VARIANT) IS DISTINCT FROM expected;
+----
+
+# Wide objects: the same keys in the same and in the reverse order, one value that differs, one key too many, an empty
+# needle and a key that the haystack does not have.
+statement ok
+CREATE TABLE wide AS
+SELECT ('{' || string_agg(format('"{}": {}', i, i), ', ' ORDER BY i) || '}')::JSON::VARIANT AS ascending,
+       ('{' || string_agg(format('"{}": {}', i, i), ', ' ORDER BY i DESC) || '}')::JSON::VARIANT AS descending,
+       ('{' || string_agg(format('"{}": {}', i, CASE WHEN i = 1999 THEN -1 ELSE i END), ', ' ORDER BY i) ||
+        '}')::JSON::VARIANT AS last_differs,
+       ('{' || string_agg(format('"{}": {}', i, i), ', ' ORDER BY i) FILTER (i % 2 = 0) || '}')::JSON::VARIANT AS even_keys
+FROM range(2000) t(i);
+
+query IIIIIIII
+SELECT variant_contains(ascending, ascending),
+       variant_contains(ascending, descending),
+       variant_contains(descending, ascending),
+       variant_contains(ascending, last_differs),
+       variant_contains(ascending, even_keys),
+       variant_contains(even_keys, ascending),
+       variant_contains(ascending, '{}'::JSON::VARIANT),
+       variant_contains(ascending, '{"missing": 0}'::JSON::VARIANT)
+FROM wide;
+----
+true	true	true	false	true	false	true	false
+
+# Shredded objects: the fields that are missing in a row are skipped on both sides.
+load {TEST_DIR}/variant_contains_object_order.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(c INTEGER, a INTEGER, b INTEGER)';
+
+statement ok
+CREATE TABLE shredded(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO shredded VALUES
+	(1, {'a': 1, 'b': 2, 'c': 3, 'z': 9}::VARIANT),
+	(2, {'z': 9, 'b': 2}::VARIANT),
+	(3, {'c': 3, 'a': 1}::VARIANT),
+	(4, {'y': 8, 'z': 9}::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query T
+SELECT DISTINCT vector_type(v) FROM shredded;
+----
+SHREDDED_VECTOR
+
+query IIIII
+SELECT id,
+       variant_contains(v, {'z': 9, 'b': 2}::VARIANT),
+       variant_contains(v, {'a': 1, 'c': 3}::VARIANT),
+       variant_contains(v, {'b': 2, 'z': 9, 'a': 1}::VARIANT),
+       variant_contains(v, {'z': 9, 'y': 8}::VARIANT)
+FROM shredded
+ORDER BY id;
+----
+1	true	true	true	false
+2	true	false	false	false
+3	false	true	false	false
+4	false	false	false	true
+
+# Both sides shredded, each row against every row.
+query II
+SELECT haystack.id, list(needle.id ORDER BY needle.id)
+FROM shredded haystack, shredded needle
+WHERE variant_contains(haystack.v, needle.v)
+GROUP BY haystack.id
+ORDER BY haystack.id;
+----
+1	[1, 2, 3]
+2	[2]
+3	[3]
+4	[4]
