@@ -298,11 +298,8 @@ static unique_ptr<ExpressionFilter> CreateAdaptiveInFilter(unique_ptr<Expression
 	    !ExpressionFilterExecutor::TryCreate(*in_expr)) {
 		return CreateOptionalExpressionFilter(std::move(in_expr), type);
 	}
-	float selectivity_threshold;
-	idx_t n_vectors_to_check;
-	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::IN_FILTER, selectivity_threshold, n_vectors_to_check);
-	return make_uniq<ExpressionFilter>(
-	    CreateSelectivityOptionalFilterExpression(std::move(in_expr), type, selectivity_threshold, n_vectors_to_check));
+	return ExpressionFilter::CreateSelectivityOptionalFilter(std::move(in_expr), type,
+	                                                         SelectivityOptionalFilterType::IN_FILTER);
 }
 
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {

@@ -15,11 +15,16 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/selection_data.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class VectorBuffer;
+
+struct SelectionData {
+	DUCKDB_API explicit SelectionData(idx_t count);
+
+	AllocatedData owned_data;
+};
 
 struct SelectionVector {
 	SelectionVector() : sel_vector(nullptr), capacity(0) {
