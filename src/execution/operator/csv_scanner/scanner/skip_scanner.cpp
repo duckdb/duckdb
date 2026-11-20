@@ -20,7 +20,8 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 }
 
 void SkipResult::SetComment(SkipResult &result, idx_t buffer_pos) {
-	if (!result.states.WasStandard()) {
+	// The rule of the sniffer, which counts the lines to skip: a comment behind a delimiter does not start the line
+	if (!result.states.WasStandard() && !result.states.WasState(CSVState::DELIMITER)) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;

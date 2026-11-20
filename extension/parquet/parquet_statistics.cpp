@@ -878,13 +878,28 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	bool child_has_constant = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child, hash_strategy);
-		}
-	});
-	return child_has_constant;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_child_has_constant = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (!any_child_has_constant) {
+				any_child_has_constant = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return any_child_has_constant;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_have_constants = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (all_children_have_constants) {
+				all_children_have_constants = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return all_children_have_constants;
+	}
+	default:
+		return false;
+	}
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter, ParquetBloomFilterHashStrategy hash_strategy) {

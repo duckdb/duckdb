@@ -306,19 +306,17 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 		auto word_count =
 		    container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0);
 		auto bitset = reader.GetArray<validity_t>(0, word_count);
-		current_container = make_uniq<BitsetContainerScanState>(container_index, container_size, bitset);
+		InitializeContainer(bitset_state, container_index, container_size, bitset);
 	} else if (metadata.IsRun()) {
 		D_ASSERT(metadata.IsInverted());
 		auto number_of_runs = metadata.NumberOfRuns();
 		if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
 			auto segments = reader.ReadBytes(COMPRESSED_SEGMENT_COUNT);
 			auto data = reader.ReadBytes(number_of_runs * 2);
-			current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
-			                                                               number_of_runs, segments, data);
+			InitializeContainer(compressed_run_state, container_index, container_size, number_of_runs, segments, data);
 		} else {
 			auto data = reader.GetArray<RunContainerRLEPair>(0, number_of_runs);
-			current_container =
-			    make_uniq<UncompressedRunContainerScanState>(container_index, container_size, number_of_runs, data);
+			InitializeContainer(uncompressed_run_state, container_index, container_size, number_of_runs, data);
 		}
 	} else {
 		auto cardinality = metadata.Cardinality();
@@ -326,20 +324,18 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 			auto segments = reader.ReadBytes(COMPRESSED_SEGMENT_COUNT);
 			auto data = reader.ReadBytes(cardinality);
 			if (metadata.IsInverted()) {
-				current_container = make_uniq<CompressedArrayContainerScanState<NULLS>>(container_index, container_size,
-				                                                                        cardinality, segments, data);
+				InitializeContainer(compressed_null_state, container_index, container_size, cardinality, segments,
+				                    data);
 			} else {
-				current_container = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
-				    container_index, container_size, cardinality, segments, data);
+				InitializeContainer(compressed_non_null_state, container_index, container_size, cardinality, segments,
+				                    data);
 			}
 		} else {
 			auto data = reader.GetArray<uint16_t>(0, cardinality);
 			if (metadata.IsInverted()) {
-				current_container = make_uniq<UncompressedArrayContainerScanState<NULLS>>(
-				    container_index, container_size, cardinality, data);
+				InitializeContainer(uncompressed_null_state, container_index, container_size, cardinality, data);
 			} else {
-				current_container = make_uniq<UncompressedArrayContainerScanState<NON_NULLS>>(
-				    container_index, container_size, cardinality, data);
+				InitializeContainer(uncompressed_non_null_state, container_index, container_size, cardinality, data);
 			}
 		}
 	}
