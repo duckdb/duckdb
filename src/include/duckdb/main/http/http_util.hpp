@@ -143,7 +143,9 @@ public:
 	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
 	DUCKDB_API ~HTTPHeaders();
 
-	void Insert(string key, string value);
+	//! Insert only if the name is absent.
+	void InsertIfAbsent(string key, string value);
+	[[deprecated("Use InsertIfAbsent instead")]] void Insert(string key, string value);
 	//! Append another field line without combining its value.
 	void Append(string key, string value);
 	bool HasHeader(const string &key) const;
@@ -250,7 +252,7 @@ struct BaseRequest {
 	static HTTPHeaders MergeHeaders(const HTTPHeaders &headers, HTTPParams &params) {
 		HTTPHeaders result = headers;
 		for (const auto &header : params.extra_headers) {
-			result.Insert(header.first, header.second);
+			result.InsertIfAbsent(header.first, header.second);
 		}
 		return result;
 	}

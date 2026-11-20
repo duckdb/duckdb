@@ -225,7 +225,7 @@ public:
 		case MockResponseMode::SUCCESS: {
 			auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
 			response->body = state->response_body;
-			response->headers.Insert("ETag", "mock-etag");
+			response->headers.InsertIfAbsent("ETag", "mock-etag");
 			return response;
 		}
 		case MockResponseMode::REQUEST_ERROR: {
@@ -1333,7 +1333,7 @@ TEST_CASE("HTTP retries classify serialized errors without exception RTTI", "[ht
 	SECTION("non-retryable HTTP errors retain their response details") {
 		HTTPResponse response(HTTPStatusCode::NotFound_404);
 		response.body = "missing object";
-		response.headers.Insert("test-header", "test-value");
+		response.headers.InsertIfAbsent("test-header", "test-value");
 		message = HTTPException(response, "serialized HTTP failure").what();
 	}
 	SECTION("permission errors are not retried") {

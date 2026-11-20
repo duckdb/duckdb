@@ -45,6 +45,10 @@ HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
 HTTPHeaders::~HTTPHeaders() = default;
 
 void HTTPHeaders::Insert(string key, string value) {
+	InsertIfAbsent(std::move(key), std::move(value));
+}
+
+void HTTPHeaders::InsertIfAbsent(string key, string value) {
 	headers.insert(make_pair(std::move(key), std::move(value)));
 }
 
@@ -437,7 +441,7 @@ static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
 		} else if (entry.first == "reason") {
 			response->reason = entry.second;
 		} else if (StringUtil::StartsWith(entry.first, "header_")) {
-			response->headers.Insert(entry.first.substr(7), entry.second);
+			response->headers.InsertIfAbsent(entry.first.substr(7), entry.second);
 		}
 	}
 	return response;
