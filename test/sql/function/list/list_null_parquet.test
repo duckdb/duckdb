@@ -1,0 +1,50 @@
+# name: test/sql/function/list/list_null_parquet.test
+# group: [list]
+
+require parquet
+
+# A fully-NULL list read back from Parquet must not be rejected by the list element-NULL
+# pre-check. The NULL list entry occupies a child slot but no elements, so the row yields a
+# NULL result instead of "left argument can not contain NULL values". Regression test for #29130.
+
+statement ok
+COPY (SELECT [1, 2, 3]::FLOAT[] AS l UNION ALL SELECT NULL::FLOAT[]) TO '{TEST_DIR}/list_null.parquet' (FORMAT PARQUET);
+
+query R
+SELECT list_inner_product(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_null.parquet') ORDER BY (l IS NOT NULL) DESC;
+----
+14.0
+NULL
+
+query R
+SELECT list_negative_inner_product(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_null.parquet') ORDER BY (l IS NOT NULL) DESC;
+----
+-14.0
+NULL
+
+query R
+SELECT list_distance(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_null.parquet') ORDER BY (l IS NOT NULL) DESC;
+----
+0.0
+NULL
+
+query R
+SELECT list_cosine_similarity(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_null.parquet') ORDER BY (l IS NOT NULL) DESC;
+----
+1.0
+NULL
+
+query R
+SELECT list_cosine_distance(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_null.parquet') ORDER BY (l IS NOT NULL) DESC;
+----
+0.0
+NULL
+
+# a NULL *element* inside an otherwise non-NULL list must still be rejected, even from Parquet
+statement ok
+COPY (SELECT [1, NULL, 3]::FLOAT[] AS l) TO '{TEST_DIR}/list_elem_null.parquet' (FORMAT PARQUET);
+
+statement error
+SELECT list_inner_product(l, [1, 2, 3]) FROM read_parquet('{TEST_DIR}/list_elem_null.parquet');
+----
+left argument can not contain NULL values
