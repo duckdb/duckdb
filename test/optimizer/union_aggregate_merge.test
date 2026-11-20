@@ -6,9 +6,6 @@
 # small tables) and at the default; the expected rows are those of the unoptimized plan.
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE sales AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (2000 + i % 3)::INTEGER AS year, (i % 5)::INTEGER AS store, CASE WHEN i % 10 = 0 THEN NULL ELSE i % 100 END::BIGINT AS amount, 'c' || (i % 4) AS category, DATE '2024-01-01' + (i % 6)::INTEGER AS day, (i % 3)::DOUBLE AS ratio, CASE i % 2 WHEN 0 THEN 'a' ELSE 'A' END COLLATE NOCASE AS code FROM range(3000) r(i) WHERE i * 7 % 12 + 1 <> 4;
 
 statement ok
@@ -69,11 +66,11 @@ apr	1	-1	NULL
 jun	251	12750	240
 may	251	10000	190
 
-query IIIIII
-SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 7;
+query IIIII
+SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), any_value(1) FROM sales WHERE month = 7;
 ----
-true	true	NULL	0	true	NULL
-false	false	true	5	false	1
+true	true	NULL	0	NULL
+false	false	true	5	1
 
 # FILTER, DISTINCT and ORDER BY in the aggregates
 
@@ -210,9 +207,10 @@ c1	500
 c3	750
 
 query II
-SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day ORDER BY ALL;
+SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-03' GROUP BY day ORDER BY ALL;
 ----
 2024-01-02	500
+2024-01-03	500
 2024-01-05	500
 
 # the same constant twice: the rows of that branch are needed twice

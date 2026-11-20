@@ -74,7 +74,8 @@
         "test/sql/sql_export/function_result_types.test",
         "test/sql/sql_export/aggregate_results.test",
         "test/sql/sql_export/aggregate_topn_rewrites.test",
-        "test/sql/sql_export/rewrite_qualification.test"
+        "test/sql/sql_export/rewrite_qualification.test",
+        "test/optimizer/union_aggregate_merge_plan.test"
       ]
     },
     {

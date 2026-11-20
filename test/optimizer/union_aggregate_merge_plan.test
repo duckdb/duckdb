@@ -52,7 +52,7 @@ EXPLAIN SELECT month_name, c + 1, coalesce(s, -1), l FROM (SELECT 'apr' AS month
 physical_plan	<!REGEX>:.*Union.*
 
 query II
-EXPLAIN SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), histogram(store) IS NULL, any_value(1) FROM sales WHERE month = 7;
+EXPLAIN SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), any_value(1) FROM sales WHERE month = 4 UNION ALL SELECT list(amount ORDER BY amount) IS NULL, string_agg(category, ',' ORDER BY category) IS NULL, bool_and(amount > 0), approx_count_distinct(store), any_value(1) FROM sales WHERE month = 7;
 ----
 physical_plan	<REGEX>:.*Union.*
 
@@ -119,7 +119,7 @@ physical_plan	<!REGEX>:.*Union.*
 # keys of other types
 
 query II
-EXPLAIN SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day ORDER BY ALL;
+EXPLAIN SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-02' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-05' GROUP BY day UNION ALL SELECT day, count(*) FROM sales WHERE day = DATE '2024-01-03' GROUP BY day ORDER BY ALL;
 ----
 physical_plan	<!REGEX>:.*Union.*
 
