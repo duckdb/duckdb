@@ -145,6 +145,8 @@
         "test/sql/copy/parquet/bloom_filter_coalesced_reads.test",
         "test/sql/copy/parquet/bloom_filter_fallback.test",
         "test/sql/copy/parquet/bloom_filter_fallback_types.test",
+        "test/sql/copy/parquet/bloom_filter_fallback_types.test_slow",
+        "test/sql/copy/parquet/bloom_filter_fallback_numeric.test",
         "test/sql/copy/partitioned/integer_partitioned_write.test",
         "test/sql/copy/partitioned/integer_partitioned_write.test_slow",
         "test/sql/storage/compression/dict_fsst/dict_fsst_boolean_selection.test",
