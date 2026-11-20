@@ -1904,9 +1904,13 @@ class UnionAggregateMerge {
 	//! Constants of the select list are joined to the groups if the aggregate is estimated to return at most one
 	//! row for this many rows of its input
 	static constexpr double MIN_GROUP_REDUCTION = 16;
-	//! The row groups of the varying scan are checked against the constants of the branches up to this many checks,
-	//! and for a numeric column, where a row group takes one lookup, up to this many row groups (2 billion rows at
-	//! the default row group size). Above them the scan counts as one without statistics
+	//! The row group statistics of the varying scan are checked against the constants of the branches for at most
+	//! this many row groups, spread evenly over the table, and with at most this many checks in total (a numeric
+	//! column takes one lookup per row group, other columns one check per branch). With fewer row groups than the
+	//! minimum within that limit, and for a table with more row groups than the last limit (2 billion rows at the
+	//! default row group size), which are all listed first, the scan counts as one without statistics
+	static constexpr idx_t MAX_SAMPLED_ROW_GROUPS = 128;
+	static constexpr idx_t MIN_SAMPLED_ROW_GROUPS = 8;
 	static constexpr idx_t MAX_ZONEMAP_CHECKS = 100000;
 	static constexpr idx_t MAX_ZONEMAP_ROW_GROUPS = 16384;
 
@@ -2320,9 +2324,9 @@ private:
 		return result;
 	}
 
-	//! The rows of the row groups that the varying scan reads, as far as the zonemaps tell: in all branches together
-	//! (a row group counts for every branch whose constants it can hold), and in the merged plan (it counts once if
-	//! it can hold the constants of any branch). False if that is not known
+	//! The rows of the row groups that the varying scan reads, as far as the zonemaps of a sample of its row groups
+	//! tell: in all branches together (a row group counts for every branch whose constants it can hold), and in the
+	//! merged plan (it counts once if it can hold the constants of any branch). False if that is not known
 	bool VaryingScanRows(LogicalGet &get, const vector<reference<Branch>> &merged, const vector<idx_t> &key_columns,
 	                     double &branch_rows, double &merged_rows) {
 		auto &context = optimizer.context;
@@ -2346,16 +2350,24 @@ private:
 		    key_columns.size() == 1 && BaseStatistics::GetStatsType(key_types[0]) == StatisticsType::NUMERIC_STATS;
 		// the limit is checked before any row group is loaded
 		auto &storage = table->Cast<DuckTableEntry>().GetStorage();
-		const auto max_row_groups =
-		    sorted_keys ? MAX_ZONEMAP_ROW_GROUPS : MAX_ZONEMAP_CHECKS / (merged.size() * key_columns.size());
-		if (storage.GetRowGroupCountWithoutLoading(context) > max_row_groups) {
+		if (storage.GetRowGroupCountWithoutLoading(context) > MAX_ZONEMAP_ROW_GROUPS) {
 			return false;
 		}
 		GetPartitionStatsInput input(get.function, get.bind_data.get());
 		auto partitions = get.function.get_partition_stats(context, input);
-		if (partitions.empty() || partitions.size() > max_row_groups) {
+		if (partitions.empty() || partitions.size() > MAX_ZONEMAP_ROW_GROUPS) {
 			return false;
 		}
+		// only so many row groups are looked at, evenly spread over the table: whether the rows are clustered by
+		// the compared columns shows in any part of it, and the work stays the same for a table of any size
+		idx_t sample_size = MAX_SAMPLED_ROW_GROUPS;
+		if (!sorted_keys) {
+			sample_size = MinValue(sample_size, MAX_ZONEMAP_CHECKS / (merged.size() * key_columns.size()));
+		}
+		if (sample_size < MIN_SAMPLED_ROW_GROUPS && sample_size < partitions.size()) {
+			return false;
+		}
+		const auto stride = (partitions.size() + sample_size - 1) / sample_size;
 		vector<Value> keys;
 		if (sorted_keys) {
 			for (auto &branch : merged) {
@@ -2374,8 +2386,15 @@ private:
 		}
 		branch_rows = 0;
 		merged_rows = 0;
-		vector<unique_ptr<BaseStatistics>> statistics(key_columns.size());
+		double table_rows = 0;
 		for (auto &partition : partitions) {
+			table_rows += double(partition.count);
+		}
+		double sampled_rows = 0;
+		vector<unique_ptr<BaseStatistics>> statistics(key_columns.size());
+		for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx += stride) {
+			auto &partition = partitions[partition_idx];
+			sampled_rows += double(partition.count);
 			idx_t readers = merged.size();
 			if (partition.partition_row_group) {
 				for (idx_t k = 0; k < key_columns.size(); k++) {
@@ -2413,6 +2432,12 @@ private:
 			branch_rows += double(readers) * double(partition.count);
 			merged_rows += readers > 0 ? double(partition.count) : 0;
 		}
+		if (sampled_rows <= 0) {
+			return false;
+		}
+		// what the sample says, for the whole table
+		branch_rows *= table_rows / sampled_rows;
+		merged_rows *= table_rows / sampled_rows;
 		return true;
 	}
 
@@ -2462,6 +2487,21 @@ private:
 			branch_rows = merged_rows = double(get.EstimateCardinality(context));
 		}
 		largest_scan = MaxValue(largest_scan, merged_rows);
+		const auto threads = double(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto scan_tasks = std::ceil(MaxValue<double>(largest_scan, 1) / ROWS_PER_SCAN_TASK);
+		const auto branch_threads = MinValue(threads, branch_count * scan_tasks);
+		const auto merged_threads = MinValue(threads, scan_tasks);
+		//! Whether the merged plan is ahead if this many rows reach the aggregates of all branches together
+		const auto is_ahead = [&](double input_rows) {
+			const auto branch_work = branch_count * other_rows + branch_rows + input_rows;
+			const auto merged_work = other_rows + merged_rows + MERGED_AGGREGATE_COST * input_rows;
+			return branch_work / branch_threads >= MIN_GAIN * merged_work / merged_threads;
+		};
+		if (branch_count * other_rows + branch_rows <= other_rows + merged_rows || !is_ahead(0)) {
+			// the scans alone decide against it: the merged plan reads no less, or not enough less - the rows that
+			// reach the aggregates only add to the merged plan
+			return false;
+		}
 
 		// the rows that reach the aggregates
 		RelationStatsExtractor extractor(context);
@@ -2470,15 +2510,7 @@ private:
 			return false;
 		}
 		const auto branch_input_rows = double(input_stats->cardinality);
-		const auto input_rows = branch_count * branch_input_rows;
-
-		const auto branch_work = branch_count * other_rows + branch_rows + input_rows;
-		const auto merged_work = other_rows + merged_rows + MERGED_AGGREGATE_COST * input_rows;
-		const auto threads = double(TaskScheduler::GetScheduler(context).NumberOfThreads());
-		const auto scan_tasks = std::ceil(MaxValue<double>(largest_scan, 1) / ROWS_PER_SCAN_TASK);
-		const auto branch_threads = MinValue(threads, branch_count * scan_tasks);
-		const auto merged_threads = MinValue(threads, scan_tasks);
-		if (branch_work / branch_threads < MIN_GAIN * merged_work / merged_threads) {
+		if (!is_ahead(branch_count * branch_input_rows)) {
 			return false;
 		}
 		if (IsUngrouped(aggregate) || DifferingConstants(merged).empty()) {
