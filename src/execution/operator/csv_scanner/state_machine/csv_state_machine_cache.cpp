@@ -572,8 +572,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	// 12.3) Field Quote State, where doubled_quotes reads a doubled quote in an unquoted field as one literal quote
-	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+	// 12.3) Field Quote State, where doubled_quotes reads a doubled quote in an unquoted field as one literal
+	// quote; the embedded quote toggle enters through the same state and reads doubled quotes the same way
+	const bool quote_in_field = (state_machine_options.doubled_quotes.GetValue() ||
+	                             state_machine_options.embedded_quote.GetValue() == CSVEmbeddedQuote::TOGGLE) &&
+	                            quote != '\0' && quote != escape;
+	if (quote_in_field) {
 		const auto field_quote = static_cast<uint8_t>(CSVState::FIELD_QUOTE);
 		// a space is field content, as in opencsv, so a quote after it is a quote in a field
 		const vector<uint8_t> space_states {
@@ -705,7 +709,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (enable_unquoted_escape) {
 		transition_array.skip_standard[escape] = false;
 	}
-	if (state_machine_options.doubled_quotes.GetValue() && quote != '\0' && quote != escape) {
+	if (quote_in_field) {
 		// a quote in the middle of a field changes the state
 		transition_array.skip_standard[quote] = false;
 	}
