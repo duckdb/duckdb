@@ -35,11 +35,12 @@ select count(*) from
 ----
 142858
 
-# a filter above the aggregate keeps the key
+# a filter above the aggregate keeps the key (the aggregates read different rows of t: over the same rows they
+# are computed as one aggregate and there is no join left to estimate)
 query II
 explain select * from
 	(select x, y, sum(a) s from t group by x, y having sum(a) >= 0) g1
-	join (select x, y, max(b) m from t group by x, y) g2 on g1.x = g2.x and g1.y = g2.y;
+	join (select x, y, max(b) m from t where b < 11 group by x, y) g2 on g1.x = g2.x and g1.y = g2.y;
 ----
 physical_plan	<REGEX>:.*HASH_JOIN[^~]*~[0-9]{2},[0-9]{3} rows.*
 

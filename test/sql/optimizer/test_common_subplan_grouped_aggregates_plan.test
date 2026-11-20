@@ -57,13 +57,13 @@ JOIN (SELECT k, count(*) rows FROM grouped_plan GROUP BY k) z ON y.k = z.k;
 ----
 logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|JOIN|CTE).*
 
-# Ungrouped aggregates in a cross product.
+# Ungrouped aggregates keep reading one shared aggregate.
 query II
 EXPLAIN (FORMAT JSON)
 SELECT * FROM (SELECT sum(a) total FROM grouped_plan WHERE g = 1) x,
               (SELECT max(b) largest FROM grouped_plan WHERE g = 1) y;
 ----
-logical_opt	<!REGEX>:.*("AGGREGATE".*"AGGREGATE"|CROSS_PRODUCT|CTE).*
+logical_opt	<REGEX>:.*"CTE".*"AGGREGATE".*CROSS_PRODUCT.*CTE_SCAN.*CTE_SCAN.*__common_subplan_.*
 
 # Other joins read one shared aggregate: an outer join, a join on some of the groups, groups compared crosswise.
 query II
