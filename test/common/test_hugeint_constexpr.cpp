@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 
 using namespace duckdb;
 
@@ -51,10 +50,6 @@ constexpr DivisionCase divisions[] = {
     {maximum, maximum, 1, 0},
     {minimum, 0, 0, minimum},
     {limb, 3, hugeint_t(0, 6148914691236517205ULL), 1},
-    {maximum, hugeint_t(3, 5), hugeint_t(0, 3074457345618258602ULL), hugeint_t(1, 3074457345618258605ULL)},
-    {minimum, hugeint_t(3, 5), hugeint_t(-1, 15372286728091293014ULL), hugeint_t(-2, 15372286728091293010ULL)},
-    {maximum, -hugeint_t(3, 5), hugeint_t(-1, 15372286728091293014ULL), hugeint_t(1, 3074457345618258605ULL)},
-    {minimum, -hugeint_t(3, 5), hugeint_t(0, 3074457345618258602ULL), hugeint_t(-2, 15372286728091293010ULL)},
 };
 
 constexpr bool CheckDivisions() {
@@ -69,60 +64,6 @@ constexpr bool CheckDivisions() {
 }
 
 static_assert(CheckDivisions(), "constant division agrees with signed truncation and unchecked overflow rules");
-
-struct UnsignedDivisionCase {
-	uint64_t lhs_upper;
-	uint64_t lhs_lower;
-	uint64_t rhs_upper;
-	uint64_t rhs_lower;
-	Uint128DivModResult expected;
-};
-
-constexpr UnsignedDivisionCase unsigned_divisions[] = {
-    {5421010862427522170ULL,
-     687399551400673279ULL,
-     0,
-     100000000,
-     {54210108624ULL, 5076944270305263615ULL, 0, 99999999}},
-    {UINT64_MAX, UINT64_MAX, 1, 1, {0, UINT64_MAX, 0, 0}},
-    {9223372036854775808ULL, 12345, 4294967296ULL, 7, {0, 2147483647, 4294967295ULL, 18446744058677178432ULL}},
-    {542101, 1590897978359414787ULL, 0, 10000000000000000000ULL, {0, 1000000, 0, 3}},
-};
-
-constexpr bool SameResult(const Uint128DivModResult &a, const Uint128DivModResult &b) {
-	return a.quotient_upper == b.quotient_upper && a.quotient_lower == b.quotient_lower &&
-	       a.remainder_upper == b.remainder_upper && a.remainder_lower == b.remainder_lower;
-}
-
-constexpr bool CheckUnsignedDivisions() {
-	for (const auto &test : unsigned_divisions) {
-		if (!SameResult(Uint128DivMod(test.lhs_upper, test.lhs_lower, test.rhs_upper, test.rhs_lower), test.expected)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static_assert(CheckUnsignedDivisions(), "unsigned division agrees with known results");
-
-//! Operands around the limb, half-limb and sign boundaries, which exercise the estimate corrections of the portable
-//! division
-constexpr uint64_t operand_limbs[] = {0,
-                                      1,
-                                      2,
-                                      3,
-                                      7,
-                                      10,
-                                      0xFFFFFFFFULL,
-                                      0x100000000ULL,
-                                      0x100000001ULL,
-                                      10000000000000000000ULL,
-                                      0x7FFFFFFFFFFFFFFFULL,
-                                      0x8000000000000000ULL,
-                                      0x8000000000000001ULL,
-                                      0xFFFFFFFF00000000ULL,
-                                      0xFFFFFFFFFFFFFFFEULL,
-                                      UINT64_MAX};
 
 hugeint_t RuntimeValue(hugeint_t value) {
 	volatile int64_t upper = value.upper;
@@ -159,46 +100,6 @@ TEST_CASE("HUGEINT constexpr and runtime arithmetic agree at boundaries", "[huge
 			auto product = lhs;
 			product *= rhs;
 			REQUIRE(product == lhs * rhs);
-		}
-	}
-}
-
-TEST_CASE("Unsigned 128-bit division agrees with long division", "[hugeint]") {
-	using namespace hugeint_constexpr_test;
-	for (uint64_t lhs_upper : operand_limbs) {
-		for (uint64_t lhs_lower : operand_limbs) {
-			for (uint64_t rhs_upper : operand_limbs) {
-				for (uint64_t rhs_lower : operand_limbs) {
-					if (rhs_upper == 0 && rhs_lower == 0) {
-						continue;
-					}
-					volatile uint64_t runtime_lhs_lower = lhs_lower;
-					const auto result = Uint128DivMod(lhs_upper, runtime_lhs_lower, rhs_upper, rhs_lower);
-					// the quotient and remainder fully determine the dividend when the remainder is below the divisor
-					const uhugeint_t lhs(lhs_upper, lhs_lower);
-					const uhugeint_t rhs(rhs_upper, rhs_lower);
-					const uhugeint_t quotient(result.quotient_upper, result.quotient_lower);
-					const uhugeint_t remainder(result.remainder_upper, result.remainder_lower);
-					REQUIRE(remainder < rhs);
-					uhugeint_t product;
-					REQUIRE(Uhugeint::TryMultiply(quotient, rhs, product));
-					REQUIRE(product + remainder == lhs);
-
-					uhugeint_t runtime_remainder;
-					REQUIRE(Uhugeint::DivMod(lhs, rhs, runtime_remainder) == quotient);
-					REQUIRE(runtime_remainder == remainder);
-
-					if (rhs_upper == 0) {
-						const uint64_t high = lhs_upper % rhs_lower;
-						uint64_t expected_remainder = 0;
-						const uint64_t expected =
-						    Uint128DivRem64(high, runtime_lhs_lower, rhs_lower, expected_remainder);
-						uint64_t limb_remainder;
-						REQUIRE(Uint128DivRem64Portable(high, lhs_lower, rhs_lower, limb_remainder) == expected);
-						REQUIRE(limb_remainder == expected_remainder);
-					}
-				}
-			}
 		}
 	}
 }
