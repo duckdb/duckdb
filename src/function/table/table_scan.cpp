@@ -355,6 +355,8 @@ public:
 	      duck_table(bind_data.table.Cast<DuckTableEntry>()), tx(DuckTransaction::Get(context, duck_table.catalog)),
 	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()),
 	      progress(MaxValue<idx_t>(1, context.db->NumberOfThreads())) {
+		// Persisted row groups can be smaller than the configured target size.
+		max_threads = MaxValue(max_threads, total_row_groups_to_scan);
 		for (auto &counter : progress) {
 			counter.store(0, std::memory_order_relaxed);
 		}
