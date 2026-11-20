@@ -610,14 +610,13 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		}
 		// OpenCSVSerde defines its quote, escape and comment characters, so the sniffer detects only the rest
 		if (!state_machine_options.quote.IsSetByUser()) {
-			state_machine_options.quote.ChangeSetByUserTrue();
+			state_machine_options.quote.Set(state_machine_options.quote.GetValue(), true);
 		}
 		if (!state_machine_options.escape.IsSetByUser()) {
-			state_machine_options.escape.Set('\\', false);
-			state_machine_options.escape.ChangeSetByUserTrue();
+			state_machine_options.escape.Set('\\', true);
 		}
 		if (!state_machine_options.comment.IsSetByUser()) {
-			state_machine_options.comment.ChangeSetByUserTrue();
+			state_machine_options.comment.Set(state_machine_options.comment.GetValue(), true);
 		}
 		const auto &delimiter = state_machine_options.delimiter.GetValue();
 		const auto quote = state_machine_options.quote.GetValue();
@@ -644,9 +643,10 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 		// the internal parsing options the dialect is made of
 		state_machine_options.escape_mode.Set(CSVEscapeMode::QUOTE_AND_ESCAPE, false);
 		state_machine_options.quote_mode.Set(CSVQuoteMode::LINES, false);
-		state_machine_options.strict_mode.Set(false, false);
-		// pinned, so parallel boundary detection searches with the dialect's own rules rather than a strict table
-		state_machine_options.strict_mode.ChangeSetByUserTrue();
+		// pinned as set, so parallel boundary detection searches with the dialect's rules rather than a strict table
+		if (!state_machine_options.strict_mode.IsSetByUser()) {
+			state_machine_options.strict_mode.Set(false, true);
+		}
 		state_machine_options.doubled_quotes.Set(true, false);
 		state_machine_options.embedded_quote.Set(CSVEmbeddedQuote::TOGGLE, false);
 	}
