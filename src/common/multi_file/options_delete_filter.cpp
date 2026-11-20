@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -14,6 +15,7 @@ namespace duckdb {
 static const char *DELETED_ROWS_OPTION = "deleted_rows";
 static const char *SCAN_ROWS_OPTION = "scan_rows";
 static const char *DELETE_FILE_OPTION = "delete_file";
+static const char *DELETE_FILE_FUNCTION_OPTION = "delete_file_function";
 static const char *SNAPSHOT_FILTER_OPTION = "delete_snapshot_filter";
 static const char *MAX_ROW_COUNT_OPTION = "max_row_count";
 static const char *SNAPSHOT_COLUMN = "_ducklake_internal_snapshot_id";
@@ -58,7 +60,14 @@ unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, 
 		sort(result->scan_rows.begin(), result->scan_rows.end());
 	}
 	if (has_delete_file) {
-		result->AddDeleteFile(context, delete_file_entry->second);
+		string function_name = "read_parquet";
+		file.extended_info->TryGetOption(DELETE_FILE_FUNCTION_OPTION, function_name);
+		for (auto c : function_name) {
+			if (!StringUtil::CharacterIsAlphaNumeric(c) && c != '_') {
+				throw InvalidInputException("Invalid delete file function \"%s\"", function_name);
+			}
+		}
+		result->AddDeleteFile(context, delete_file_entry->second, function_name);
 	}
 	if (result->snapshot_ids.empty() && !std::is_sorted(result->deleted_rows.begin(), result->deleted_rows.end())) {
 		sort(result->deleted_rows.begin(), result->deleted_rows.end());
@@ -66,12 +75,12 @@ unique_ptr<DeleteFilter> OptionsDeleteFilter::TryCreate(ClientContext &context, 
 	return std::move(result);
 }
 
-void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &delete_file) {
+void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &delete_file, const string &function_name) {
 	// read the delete file on a connection of its own - this runs while the scan holds the lock of its context
 	Connection connection(DatabaseInstance::GetDatabase(context));
 	auto file = OpenFileInfo::FromValue(delete_file, Identifier("delete_file"));
 	auto file_value = file.ToValue();
-	auto result = connection.Query("SELECT * FROM read_parquet([?])", file_value);
+	auto result = connection.Query("SELECT * FROM " + function_name + "([?])", file_value);
 	if (result->HasError()) {
 		result->GetErrorObject().Throw("Failed to read delete file " + file.path + ": ");
 	}
@@ -110,12 +119,16 @@ void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &del
 			entries.emplace_back(UBigIntValue::Get(position.DefaultCastAs(LogicalType::UBIGINT)), snapshot_id);
 		}
 	}
-	sort(entries.begin(), entries.end());
+	// positions that were listed without a snapshot are deleted in every snapshot
+	bool keep_snapshots = snapshot_column.IsValid() && deleted_rows.empty();
 	for (auto &entry : entries) {
 		deleted_rows.push_back(entry.first);
-		if (snapshot_column.IsValid()) {
+		if (keep_snapshots) {
 			snapshot_ids.push_back(entry.second);
 		}
+	}
+	if (!keep_snapshots) {
+		sort(deleted_rows.begin(), deleted_rows.end());
 	}
 }
 

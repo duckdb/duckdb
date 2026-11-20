@@ -18,6 +18,7 @@ class ClientContext;
 //!  deleted_rows           LIST of row positions that are deleted from the file
 //!  delete_file            file (path or file struct) of a parquet file with a "pos" column (and optionally a
 //!                         "_ducklake_internal_snapshot_id" column) that lists more deleted positions
+//!  delete_file_function   table function that reads the delete file (default read_parquet): (pos, snapshot id)
 //!  delete_snapshot_filter only deletions with a snapshot id <= this value apply (delete_file with snapshot ids)
 //!  scan_rows              LIST of row positions - only these rows are produced (the inverse of deleted_rows)
 //!  max_row_count          rows at or past this position are not part of the file
@@ -31,7 +32,7 @@ public:
 	idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) override;
 
 private:
-	void AddDeleteFile(ClientContext &context, const Value &delete_file);
+	void AddDeleteFile(ClientContext &context, const Value &delete_file, const string &function_name);
 
 private:
 	//! Sorted positions of the deleted rows, and (optionally) the snapshot that deleted each of them
