@@ -195,9 +195,10 @@ public:
 struct LeastGreatestCollationState : public FunctionLocalState {
 	LeastGreatestCollationState(Context &context, const LogicalType &input_type, const Expression &collation,
 	                            idx_t column_count)
-	    : executor(context, collation), collation_type(collation.GetReturnType()), winner_keys(LogicalType::BLOB),
-	      winners(STANDARD_VECTOR_SIZE), modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST) {
+	    : executor(context, collation), winner_keys(LogicalType::BLOB), winners(STANDARD_VECTOR_SIZE),
+	      modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST) {
 		collation_input.InitializeEmpty({input_type});
+		collated.Initialize(Allocator::DefaultAllocator(), {collation.GetReturnType()});
 		vector<LogicalType> types(column_count, LogicalType::BLOB);
 		collation_keys.Initialize(Allocator::DefaultAllocator(), types);
 		value_keys.Initialize(Allocator::DefaultAllocator(), types);
@@ -205,7 +206,7 @@ struct LeastGreatestCollationState : public FunctionLocalState {
 
 	ExpressionExecutor executor;
 	DataChunk collation_input;
-	LogicalType collation_type;
+	DataChunk collated;
 	//! Sort keys of the collated arguments, which decide the result
 	DataChunk collation_keys;
 	//! Sort keys of the arguments, from which the result is decoded
@@ -247,7 +248,8 @@ void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vec
 		lstate.collation_input.Reset();
 		lstate.collation_input.data[0].Reference(input);
 		lstate.collation_input.CheckCardinality(count);
-		Vector collated(lstate.collation_type);
+		lstate.collated.Reset();
+		auto &collated = lstate.collated.data[0];
 		lstate.executor.ExecuteExpression(lstate.collation_input, collated);
 		CreateSortKeyHelpers::CreateSortKey(collated, lstate.modifiers, lstate.collation_keys.data[col_idx]);
 		CreateSortKeyHelpers::CreateSortKey(input, lstate.modifiers, lstate.value_keys.data[col_idx]);
