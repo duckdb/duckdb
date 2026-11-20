@@ -575,6 +575,17 @@ SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, su
 ----
 126	9
 
+# with IS NOT DISTINCT FROM the NULL group and the grand total of the ROLLUP both match an outer NULL key
+query II
+EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+physical_plan	<REGEX>:.*LEFT.*
+
+query II
+SELECT sum(f.x), count(*) FROM f LEFT JOIN (SELECT k, count(DISTINCT v) AS c, sum(v) AS s FROM d GROUP BY ROLLUP (k)) g ON f.k IS NOT DISTINCT FROM g.k;
+----
+157	11
+
 # the same for a materialized CTE that is defined on the inner side: the output is the output of the query that reads it
 query II
 EXPLAIN SELECT sum(f.x), count(*) FROM f LEFT JOIN (WITH c AS MATERIALIZED (SELECT k, v FROM d WHERE v > 2) SELECT a.k FROM (SELECT k FROM c GROUP BY k) a JOIN (SELECT k FROM c GROUP BY k) b ON a.k = b.k) g ON f.k = g.k;

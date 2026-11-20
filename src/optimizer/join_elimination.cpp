@@ -112,8 +112,7 @@ void JoinElimination::OptimizeChild(LogicalOperator &op, idx_t child_idx, JoinEl
 void JoinElimination::OptimizeJoin(unique_ptr<LogicalOperator> &op) {
 	while (true) {
 		auto &join = *op;
-		// the pipelines of the two sides inherit the references of the operators above; whatever they find below (table
-		// filters) stays theirs
+		// the pipelines of the two sides inherit the references of the operators above
 		auto left_child = CreateChildren();
 		auto right_child = CreateChildren();
 		// the joins below must keep the columns this join's conditions read
