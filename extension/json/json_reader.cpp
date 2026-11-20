@@ -1,5 +1,4 @@
 #include "json_reader.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 

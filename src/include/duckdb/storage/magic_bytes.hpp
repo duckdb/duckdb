@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 

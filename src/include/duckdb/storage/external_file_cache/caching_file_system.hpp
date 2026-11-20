@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_opener.hpp"

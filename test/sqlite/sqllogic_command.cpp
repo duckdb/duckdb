@@ -1053,14 +1053,14 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 	// input
 	FileOpenFlags in_flags(FileFlags::FILE_FLAGS_READ);
 	in_flags.SetCompression(FileCompressionType::GZIP);
-	auto compressed_file_handle = vfs.OpenFile(input_path, in_flags);
+	auto compressed_file_handle = vfs.OpenFile(input_path, in_flags, nullptr);
 	if (compressed_file_handle == nullptr) {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
-	auto output_file = vfs.OpenFile(extraction_path, out_flags);
+	auto output_file = vfs.OpenFile(extraction_path, out_flags, nullptr);
 	if (!output_file) {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}

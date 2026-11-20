@@ -1,6 +1,6 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 #include "miniz.hpp"

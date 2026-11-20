@@ -9,7 +9,6 @@
 #pragma once
 
 // DuckDB C++ internals (also pulls in duckdb.h which defines idx_t, etc.)
-#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -34,6 +33,7 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/query_context.hpp"
+#include "duckdb/common/file_system.hpp"
 
 // The engine implements the whole V2 C API, including the unstable surface
 #ifndef DUCKDB_V2_API_ALLOW_UNSTABLE

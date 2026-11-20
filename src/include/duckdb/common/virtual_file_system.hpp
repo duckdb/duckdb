@@ -29,16 +29,14 @@ public:
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                           const MMapOptions &options,
-	                                           optional_ptr<FileOpener> opener = nullptr) override;
+	                                           const MMapOptions &options, optional_ptr<FileOpener> opener) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
 	FileMetadata Stats(FileHandle &handle) override;
-	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
-	                                        optional_ptr<FileOpener> opener = nullptr) override;
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override;
 
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
@@ -48,12 +46,12 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
-	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) override;
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
-	                             optional_ptr<FileOpener> opener = nullptr) override;
+	                             optional_ptr<FileOpener> opener) override;
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 

@@ -286,7 +286,7 @@ TEST_CASE("Test directory cleanup preserves a concurrently created sibling", "[f
 			if (directory == root && !created_sibling) {
 				created_sibling = true;
 				auto sibling = JoinPath(root, "active_run");
-				CreateDirectory(sibling);
+				CreateDirectory(sibling, nullptr);
 				CreateDummyFile(JoinPath(sibling, "database.wal"));
 			}
 			return result;
@@ -299,20 +299,22 @@ TEST_CASE("Test directory cleanup preserves a concurrently created sibling", "[f
 	auto root = TestCreatePath("cleanup_ancestor");
 	ConcurrentDirectoryFileSystem fs(root);
 	auto leaf = fs.JoinPath(root, "finished_run");
-	fs.CreateDirectoriesRecursive(leaf);
+	fs.CreateDirectoriesRecursive(leaf, nullptr);
 	BoundFileSystem bound_fs(fs, nullptr);
 	ReclaimTestDirectoryLevels(bound_fs, leaf, {root, leaf});
 	REQUIRE(fs.created_sibling);
-	REQUIRE(!fs.DirectoryExists(leaf));
-	REQUIRE(fs.FileExists(fs.JoinPath(root, "active_run/database.wal")));
-	fs.RemoveDirectory(root);
+	REQUIRE(!fs.DirectoryExists(leaf, nullptr));
+	REQUIRE(fs.FileExists(fs.JoinPath(root, "active_run/database.wal"), nullptr));
+	fs.RemoveDirectory(root, nullptr);
 }
 
 TEST_CASE("Extended directory operations report target ownership", "[file_system]") {
 	ExistingDirectoryFileSystem existing_directory_fs;
-	REQUIRE(!existing_directory_fs.CreateDirectoryExtended("virtual_directory", {CreateDirectoryMode::SINGLE}));
+	REQUIRE(
+	    !existing_directory_fs.CreateDirectoryExtended("virtual_directory", {CreateDirectoryMode::SINGLE}, nullptr));
 	REQUIRE(!existing_directory_fs.create_called);
-	REQUIRE(!existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}));
+	REQUIRE(
+	    !existing_directory_fs.RemoveDirectoryExtended("virtual_directory", {RemoveDirectoryMode::SINGLE}, nullptr));
 
 	auto &fs = TestLocalFileSystem();
 	auto directory = TestCreatePath("try_create_directory");
@@ -373,10 +375,10 @@ TEST_CASE("Extended directory operations forward the file opener", "[file_system
 	ClientContextFileOpener opener(con.context->GetContext());
 	LocalFileSystem fs;
 	auto home_directory = TestCreatePath("extended_directory_opener");
-	if (fs.DirectoryExists(home_directory)) {
-		fs.RemoveDirectory(home_directory);
+	if (fs.DirectoryExists(home_directory, nullptr)) {
+		fs.RemoveDirectory(home_directory, nullptr);
 	}
-	fs.CreateDirectory(home_directory);
+	fs.CreateDirectory(home_directory, nullptr);
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET home_directory = '%s'", home_directory)));
 
 	auto directory = "~/parent/child";
@@ -385,8 +387,8 @@ TEST_CASE("Extended directory operations forward the file opener", "[file_system
 	auto file = fs.JoinPath(fs.JoinPath(absolute_parent, "child"), "file");
 	CreateDummyFile(file);
 	REQUIRE(fs.RemoveDirectoryExtended("~/parent", {RemoveDirectoryMode::RECURSIVE}, &opener));
-	REQUIRE(!fs.DirectoryExists(absolute_parent));
-	fs.RemoveDirectory(home_directory);
+	REQUIRE(!fs.DirectoryExists(absolute_parent, nullptr));
+	fs.RemoveDirectory(home_directory, nullptr);
 }
 
 TEST_CASE("Recursive directory creation checks access for every ancestor", "[file_system]") {
@@ -755,7 +757,8 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 	// create symlink from fake_dir -> real_dir
 	TestCreateSymlink(fake_dir, fs.JoinPath(FileSystem::GetWorkingDirectory(), real_dir), true);
 	// create symlink from fake_file -> real_file
-	TestCreateSymlink(fs.JoinPath(fake_dir, "fake_file"), fs.JoinPath(FileSystem::GetWorkingDirectory(), real_file), false);
+	TestCreateSymlink(fs.JoinPath(fake_dir, "fake_file"), fs.JoinPath(FileSystem::GetWorkingDirectory(), real_file),
+	                  false);
 
 	// all of these tests are in the test dir
 	std::vector<CanonicalizationTest> test_cases;

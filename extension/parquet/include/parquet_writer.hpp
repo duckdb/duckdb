@@ -15,7 +15,6 @@
 #include <string>
 #include <utility>
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"

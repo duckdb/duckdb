@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"

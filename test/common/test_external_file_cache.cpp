@@ -361,7 +361,7 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 	GZipFileSystem gzip_fs;
 	SimpleTrackingFileSystem tracking_fs;
 	auto open_compressed = [&](const string &path) {
-		auto child = tracking_fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+		auto child = tracking_fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, nullptr);
 		return gzip_fs.OpenCompressedFile(*con.context, std::move(child), false);
 	};
 	auto read_all = [](FileHandle &handle) {

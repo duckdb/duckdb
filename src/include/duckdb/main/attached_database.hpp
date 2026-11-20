@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"

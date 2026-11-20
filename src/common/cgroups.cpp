@@ -43,11 +43,11 @@ public:
 
 static vector<CGroupEntry> ParseGroupEntries(BaseFileSystem &fs) {
 	vector<CGroupEntry> result;
-	if (!fs.FileExists(CGROUP_PATH)) {
+	if (!fs.FileExists(CGROUP_PATH, nullptr)) {
 		return result;
 	}
 
-	auto handle = fs.OpenFile(CGROUP_PATH, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(CGROUP_PATH, FileFlags::FILE_FLAGS_READ, nullptr);
 
 	char buffer[DEFAULT_CGROUP_FILE_BUFFER_SIZE];
 	int64_t bytes_read;
@@ -98,13 +98,13 @@ static optional_idx GetCPUCountV2(const string &cgroup_path, BaseFileSystem &fs)
 	//! the length of a period (in microseconds)
 	int64_t period;
 
-	if (!fs.FileExists(cpu_max)) {
+	if (!fs.FileExists(cpu_max, nullptr)) {
 		return optional_idx();
 	}
 
 	// cgroup v2
 	char byte_buffer[1000];
-	auto handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ, nullptr);
 	int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 	byte_buffer[read_bytes] = '\0';
 	if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
@@ -124,7 +124,7 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs)
 	auto cfs_quota = StringUtil::Format(CFS_QUOTA, cgroup_path);
 	auto cfs_period = StringUtil::Format(CFS_PERIOD, cgroup_path);
 
-	if (!fs.FileExists(cfs_quota) || !fs.FileExists(cfs_period)) {
+	if (!fs.FileExists(cfs_quota, nullptr) || !fs.FileExists(cfs_period, nullptr)) {
 		return optional_idx();
 	}
 
@@ -137,7 +137,7 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs)
 	// cgroup v1
 	char byte_buffer[1000];
 	{
-		auto handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ, nullptr);
 		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
@@ -145,7 +145,7 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs)
 		}
 	}
 	{
-		auto handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ, nullptr);
 		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
@@ -160,11 +160,11 @@ static optional_idx GetCPUCountV1(const string &cgroup_path, BaseFileSystem &fs)
 }
 
 static optional_idx ReadMemoryLimit(BaseFileSystem &fs, const string &file_path) {
-	if (!fs.FileExists(file_path)) {
+	if (!fs.FileExists(file_path, nullptr)) {
 		return optional_idx();
 	}
 
-	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, nullptr);
 	char buffer[100];
 	auto bytes_read = fs.Read(*handle, buffer, 99);
 	buffer[bytes_read] = '\0';

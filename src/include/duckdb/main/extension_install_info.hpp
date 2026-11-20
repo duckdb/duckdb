@@ -6,7 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/config.hpp"
 

@@ -770,7 +770,7 @@ bool BaseFileSystem::CanHandleFile(const string &fpath) {
 }
 
 unique_ptr<MultiFileList> BaseFileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
-	auto result = GlobFilesExtended(pattern, input);
+	auto result = GlobFilesExtended(pattern, input, nullptr);
 	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !FileSystem::HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
@@ -943,7 +943,7 @@ FileCompressionType FileHandle::GetFileCompressionType() {
 }
 
 bool FileHandle::IsPipe() {
-	return file_system.IsPipe(path);
+	return file_system.IsPipe(path, nullptr);
 }
 
 string FileHandle::ReadLine() {

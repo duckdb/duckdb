@@ -1081,7 +1081,7 @@ TEST_CASE("HTTP transport manager synchronous session API", "[http_transport_man
 
 static string ReadExtensionBinary(const string &path) {
 	LocalFileSystem fs;
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, nullptr);
 	auto size = NumericCast<idx_t>(handle->GetFileSize());
 	string result(size, '\0');
 	handle->Read(data_ptr_cast(result.data()), size, 0);

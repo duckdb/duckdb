@@ -1,5 +1,4 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
@@ -8,6 +7,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"

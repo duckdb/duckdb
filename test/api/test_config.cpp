@@ -15,8 +15,8 @@ public:
 	}
 
 	~FileCleaner() {
-		if (fs.FileExists(file)) {
-			fs.RemoveFile(file);
+		if (fs.FileExists(file, nullptr)) {
+			fs.RemoveFile(file, nullptr);
 		}
 	}
 
@@ -201,7 +201,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration update", "[api]") {
@@ -235,7 +235,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_other_secret_file));
+	REQUIRE(fs.FileExists(my_other_secret_file, nullptr));
 }
 
 TEST_CASE("Test secret_directory configuration update after secret creation", "[api]") {
@@ -261,7 +261,7 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
 	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
-	REQUIRE(fs.FileExists(my_secret_file));
+	REQUIRE(fs.FileExists(my_secret_file, nullptr));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");

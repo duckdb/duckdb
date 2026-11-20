@@ -9,7 +9,6 @@
 #pragma once
 
 #include <string>
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 

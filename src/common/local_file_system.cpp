@@ -2021,7 +2021,7 @@ void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
 	auto path = handle.GetPath();
 	handle.Close();
 	if (remove_path) {
-		TryRemoveFile(path);
+		TryRemoveFile(path, nullptr);
 	}
 }
 
@@ -2068,7 +2068,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 			// this is a drive only (e.g. C:\)
 			// if we reach this, this is an unknown drive letter
 			// use fallback canonicalize for the remainder
-			return current + BaseFileSystem::CanonicalizePath(remainder);
+			return current + BaseFileSystem::CanonicalizePath(remainder, nullptr);
 		}
 		// move up one directory
 		optional_idx sep_idx;
@@ -2115,7 +2115,7 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 		}
 	}
 	// failed to canonicalize path - fallback to generic canonicalization
-	return BaseFileSystem::CanonicalizePath(path);
+	return BaseFileSystem::CanonicalizePath(path, nullptr);
 }
 
 string LocalFileSystem::VersionTagFromMetadata(const FileMetadata &stats) {

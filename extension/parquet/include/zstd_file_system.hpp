@@ -13,7 +13,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
-#include "duckdb/common/base_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 

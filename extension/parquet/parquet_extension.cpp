@@ -1,5 +1,4 @@
 #include "parquet_extension.hpp"
-#include "duckdb/common/file_system.hpp"
 
 #include <stdint.h>
 #include <string>
@@ -30,6 +29,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
