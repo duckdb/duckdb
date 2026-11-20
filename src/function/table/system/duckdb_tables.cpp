@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table/system_catalog_scanner.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -20,7 +21,7 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 
 	vector<reference<CatalogEntry>> entries;
 	vector<ColumnIndex> column_ids;
-	idx_t offset;
+	atomic<idx_t> offset;
 	bool needs_storage_info;
 	SystemCatalogScannerStats stats;
 };
@@ -105,7 +106,8 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 
 void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBTablesData>();
-	if (data.offset >= data.entries.size()) {
+	auto next = data.offset.load(std::memory_order_relaxed);
+	if (next >= data.entries.size()) {
 		// finished returning values
 		return;
 	}
@@ -113,8 +115,8 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 
-	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++].get();
+	while (next < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = data.entries[next++].get();
 
 		if (entry.type != CatalogType::TABLE_ENTRY) {
 			continue;
@@ -205,6 +207,17 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		}
 		count++;
 	}
+	data.offset.store(next, std::memory_order_relaxed);
+}
+
+static double DuckDBTablesProgress(ClientContext &context, const FunctionData *bind_data,
+                                   const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBTablesData>();
+	if (data.entries.empty()) {
+		return 100.0;
+	}
+	auto offset = data.offset.load(std::memory_order_relaxed);
+	return 100.0 * static_cast<double>(offset) / static_cast<double>(data.entries.size());
 }
 
 static void DuckDBTablesGetMetrics(TableFunctionGetMetricsInput &input) {
@@ -216,6 +229,7 @@ void DuckDBTablesFun::RegisterFunction(BuiltinFunctions &set) {
 	function.projection_pushdown = true;
 	SystemCatalogScanner::RegisterPushdown(function);
 	function.get_metrics = DuckDBTablesGetMetrics;
+	function.table_scan_progress = DuckDBTablesProgress;
 	set.AddFunction(std::move(function));
 }
 
