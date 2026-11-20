@@ -1242,10 +1242,6 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
 	}
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, column_ids, context,
 	             gstate.multi_file_reader_state.get());
-	if (!reader_data.reader->deletion_filter) {
-		// the file list can describe deleted rows with the options of a file
-		reader_data.reader->deletion_filter = OptionsDeleteFilter::TryCreate(context, reader_data.reader->file);
-	}
 	return CreateMapping(context, reader_data, global_columns, column_ids, table_filters, gstate.file_list,
 	                     bind_data.reader_bind, bind_data.virtual_columns);
 }

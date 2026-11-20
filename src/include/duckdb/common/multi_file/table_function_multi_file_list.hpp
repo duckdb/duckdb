@@ -36,8 +36,6 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
-	//! The function re-runs on a copy, from the first file
-	unique_ptr<MultiFileList> Copy() const override;
 
 	//! Displays the files the function was called with (e.g. the globs), rather than the files they expand to
 	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;

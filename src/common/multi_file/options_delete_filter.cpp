@@ -116,17 +116,33 @@ void OptionsDeleteFilter::AddDeleteFile(ClientContext &context, const Value &del
 			entries.emplace_back(UBigIntValue::Get(position.DefaultCastAs(LogicalType::UBIGINT)), snapshot_id);
 		}
 	}
-	// positions that were listed without a snapshot are deleted in every snapshot
-	bool keep_snapshots = snapshot_column.IsValid() && deleted_rows.empty();
-	for (auto &entry : entries) {
-		deleted_rows.push_back(entry.first);
-		if (keep_snapshots) {
-			snapshot_ids.push_back(entry.second);
+	if (snapshot_column.IsValid()) {
+		// positions listed in the options are deleted in every snapshot - they replace the same row of the file
+		for (auto position : deleted_rows) {
+			entries.emplace_back(position, 0);
 		}
 	}
-	if (!keep_snapshots) {
-		sort(deleted_rows.begin(), deleted_rows.end());
+	sort(entries.begin(), entries.end());
+	vector<idx_t> merged_rows;
+	vector<idx_t> merged_snapshots;
+	if (snapshot_column.IsValid()) {
+		for (auto &entry : entries) {
+			if (!merged_rows.empty() && merged_rows.back() == entry.first) {
+				// the entry with the lowest snapshot wins
+				continue;
+			}
+			merged_rows.push_back(entry.first);
+			merged_snapshots.push_back(entry.second);
+		}
+		deleted_rows = std::move(merged_rows);
+		snapshot_ids = std::move(merged_snapshots);
+		return;
 	}
+	for (auto &entry : entries) {
+		deleted_rows.push_back(entry.first);
+	}
+	sort(deleted_rows.begin(), deleted_rows.end());
+	deleted_rows.erase(std::unique(deleted_rows.begin(), deleted_rows.end()), deleted_rows.end());
 }
 
 idx_t OptionsDeleteFilter::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {

@@ -123,7 +123,7 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 ----
 Invalid delete file function
 
-# inline deletes apply in every snapshot, even next to a delete file that has snapshot ids
+# listed deletes apply in every snapshot - the rows of the delete file keep their own snapshots
 query I
 SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet', 'delete_file': '{TEST_DIR}/delete_options_del_snap.parquet', 'delete_snapshot_filter': 3, 'deleted_rows': [9]}])
 ----
@@ -132,4 +132,5 @@ SELECT a FROM read_parquet([{'filename': '{TEST_DIR}/delete_options_data.parquet
 3
 5
 6
+7
 8

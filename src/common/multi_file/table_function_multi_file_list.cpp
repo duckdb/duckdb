@@ -94,13 +94,6 @@ TableFunctionMultiFileList::TableFunctionMultiFileList(ClientContext &context_p,
 TableFunctionMultiFileList::~TableFunctionMultiFileList() {
 }
 
-unique_ptr<MultiFileList> TableFunctionMultiFileList::Copy() const {
-	auto result =
-	    make_uniq<TableFunctionMultiFileList>(context, function, bind_data ? bind_data->Copy() : nullptr, return_types);
-	result->input_files = input_files;
-	return std::move(result);
-}
-
 vector<OpenFileInfo> TableFunctionMultiFileList::GetDisplayFileList(optional_idx max_files) const {
 	if (input_files.empty()) {
 		return LazyMultiFileList::GetDisplayFileList(max_files);
