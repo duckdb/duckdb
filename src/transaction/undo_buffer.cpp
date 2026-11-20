@@ -21,8 +21,8 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
-    : transaction(transaction_p), allocator(DatabaseInstance::GetDatabase(context_p).GetBufferManager(), true) {
+UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, DatabaseInstance &db)
+    : transaction(transaction_p), allocator(db.GetBufferManager(), true) {
 }
 
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {

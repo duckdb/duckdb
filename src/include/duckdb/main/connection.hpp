@@ -13,25 +13,22 @@
 #include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/query_result_stream.hpp"
-#include "duckdb/main/relation.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
 class ColumnDataCollection;
-class ClientContext;
 
 class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
 class ResultFormat;
-class SelectStatement;
 struct CSVReaderOptions;
-struct TableFunctionInfo;
 
 typedef void (*warning_callback_t)(std::string);
 
@@ -145,46 +142,6 @@ public:
 
 	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
-
-	//! Returns a relation that produces a table from this connection
-	DUCKDB_API shared_ptr<Relation> Table(const Identifier &tname);
-	DUCKDB_API shared_ptr<Relation> Table(const Identifier &schema_name, const Identifier &table_name);
-	DUCKDB_API shared_ptr<Relation> Table(const Identifier &catalog_name, const Identifier &schema_name,
-	                                      const Identifier &table_name);
-	//! Returns a relation that produces a view from this connection
-	DUCKDB_API shared_ptr<Relation> View(const Identifier &tname);
-	DUCKDB_API shared_ptr<Relation> View(const Identifier &schema_name, const Identifier &table_name);
-	//! Returns a relation that calls a specified table function
-	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
-	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,
-	                                              const named_parameter_map_t &named_parameters);
-	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
-	//! Calls a table function with process-local input for this invocation
-	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,
-	                                              const named_parameter_map_t &named_parameters,
-	                                              shared_ptr<TableFunctionInfo> bind_info);
-	//! Returns a relation that produces values
-	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
-	DUCKDB_API shared_ptr<Relation> Values(vector<vector<unique_ptr<ParsedExpression>>> &&values);
-	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
-	                                       const string &alias = "values");
-	DUCKDB_API shared_ptr<Relation> Values(const string &values);
-	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names,
-	                                       const string &alias = "values");
-
-	//! Reads CSV file
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const vector<string> &csv_input, named_parameter_map_t &&options);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_input, named_parameter_map_t &&options);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
-
-	//! Reads Parquet file
-	DUCKDB_API shared_ptr<Relation> ReadParquet(const string &parquet_file, bool binary_as_string);
-	//! Returns a relation from a query
-	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
-	                                                  const string &error = "Expected a single SELECT statement");
-	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
-	                                                  const string &alias = "queryrelation", const string &query = "");
 
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();

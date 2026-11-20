@@ -20,6 +20,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
@@ -49,14 +50,14 @@
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
+#include "duckdb/main/settings.hpp"
 #endif
 
 namespace duckdb {
 
 DBConfig::DBConfig() {
+	file_system = make_uniq<VirtualFileSystem>();
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	encoding_functions = make_uniq<EncodingFunctionSet>();
-	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
 	type_manager = make_uniq<TypeManager>(*this);
@@ -87,6 +88,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
+	services = make_uniq<Context>(*this);
 }
 
 ParserCache &DatabaseInstance::GetParserCache() {
@@ -332,8 +334,9 @@ void DatabaseInstance::InitializeEmpty(DBConfig *user_config) {
 }
 
 void DatabaseInstance::StartScheduler() {
-	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
-	scheduler->SetAsyncThreads(config.options.async_threads);
+	scheduler->SetThreads(NumericCast<idx_t>(Settings::Get<ThreadsSetting>(config)),
+	                      Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(NumericCast<idx_t>(Settings::Get<AsyncThreadsSetting>(config)));
 	scheduler->RelaunchThreads();
 }
 
@@ -394,9 +397,6 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
-		if (!config.file_system) {
-			throw InternalException("No file system!?");
-		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
 			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
@@ -473,18 +473,12 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
-static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	auto &default_fs = vfs.GetDefaultFileSystem();
-	if (default_fs.IsLocalFileSystem()) {
-		return default_fs;
-	}
-	owned = make_uniq<LocalFileSystem>();
-	return *owned;
+static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db) {
+	return static_cast<VirtualFileSystem &>(*db.config.file_system).GetLocalFileSystem();
 }
 
 LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p)), database_opener(db_p) {
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
@@ -527,6 +521,8 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
+	config.file_system = std::move(new_config.file_system);
+	new_config.file_system = make_uniq<VirtualFileSystem>();
 	config.options = new_config.options;
 	config.SetDisabledOptimizers(config.options.disabled_optimizers);
 	config.user_settings = new_config.user_settings;
@@ -549,17 +545,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetDefaultTempDirectory();
 	}
 
-	if (new_config.options.http_proxy.empty()) {
-		HTTPProxySetting::ResetGlobal(this, config);
-	}
-
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
-	}
-	if (new_config.file_system) {
-		config.file_system = std::move(new_config.file_system);
-	} else {
-		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
 	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
@@ -573,12 +560,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
-	}
-	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
-		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
-	}
-	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
-		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
@@ -609,9 +590,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
-		                                                 config.options.buffer_manager_track_eviction_timestamps,
-		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
+		config.buffer_pool = make_shared_ptr<BufferPool>(
+		    *config.block_allocator, config.options.maximum_memory,
+		    Settings::Get<BufferManagerTrackEvictionTimestampsSetting>(config),
+		    DBConfig::ParseMemoryLimitOrMaximum(Settings::Get<AllocatorBulkDeallocationFlushThresholdSetting>(config)));
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);
@@ -658,7 +640,7 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil(bool force_mbedtls) 
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
-	auto force_mbedtls = config.options.force_mbedtls;
+	auto force_mbedtls = Settings::Get<ForceMbedtlsUnsafeSetting>(config);
 
 	if (force_mbedtls) {
 		// return mbedtls if setting is enabled

@@ -19,6 +19,7 @@ namespace duckdb {
 
 struct ICUDateFunc {
 	struct BindData : public FunctionData {
+		explicit BindData(Context &context);
 		explicit BindData(ClientContext &context);
 		BindData(const string &tz_setting, const string &cal_setting);
 		BindData(const BindData &other);
@@ -103,8 +104,9 @@ struct ICUDateFunc {
 	//! Binds the calendar of the TimeZone and Calendar settings for a cast, whose result then depends on them
 	static duckdb::unique_ptr<CastData> BindCastData(BindCastInput &input);
 	//! Initializes a CalendarCacheState from the function's BindData
-	static duckdb::unique_ptr<FunctionLocalState>
-	InitCalendarCache(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data);
+	static duckdb::unique_ptr<FunctionLocalState> InitCalendarCache(ExpressionState &state,
+	                                                                const BoundFunctionExpression &expr,
+	                                                                optional_ptr<const FunctionData> bind_data);
 	//! Initializes a CalendarCacheState from a cast's CastData
 	static duckdb::unique_ptr<FunctionLocalState> InitCastCalendarCache(CastLocalStateParameters &parameters);
 

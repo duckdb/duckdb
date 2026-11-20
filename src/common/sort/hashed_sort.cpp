@@ -1,4 +1,6 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/sorting/partition_key_tracker.hpp"
@@ -104,7 +106,8 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
     : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
 	if (hashed_sort.track_single_keys) {
-		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, hashed_sort.partition_key_types);
+		single_key_tracker = make_uniq<PartitionKeyTracker>(
+		    client.GetContext(), allocator, hashed_sort.partition_key_types, *hashed_sort.partition_key_mismatch);
 	}
 
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
@@ -410,7 +413,8 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	payload_chunk.Initialize(allocator, hash_types);
 
 	if (hashed_sort.track_single_keys) {
-		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, group_types);
+		single_key_tracker = make_uniq<PartitionKeyTracker>(context.client.GetContext(), allocator, group_types,
+		                                                    *hashed_sort.partition_key_mismatch);
 	}
 }
 
@@ -653,6 +657,16 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 	partition_key_types.reserve(partition_key_count);
 	for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
 		partition_key_types.push_back(partitions[key_idx].expression->GetReturnType());
+	}
+	if (partition_key_count > 0) {
+		vector<unique_ptr<Expression>> key_mismatches;
+		for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
+			auto &type = partition_key_types[key_idx];
+			key_mismatches.push_back(BoundComparisonExpression::CreateOnColumns(
+			    client, ExpressionType::COMPARE_DISTINCT_FROM, type, key_idx, type, partition_key_count + key_idx));
+		}
+		partition_key_mismatch =
+		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(key_mismatches));
 	}
 
 	//	We have to compute ordering expressions ourselves and materialise them.

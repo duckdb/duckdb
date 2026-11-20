@@ -1,0 +1,489 @@
+# name: test/sql/join/semianti/right_semi_range_join.test
+# description: A SEMI join on a single range condition builds its smaller side as a RIGHT SEMI join: a piecewise merge join above nested_loop_join_threshold, a nested loop join below it
+# group: [semianti]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output = 'PHYSICAL_ONLY';
+
+# the smaller relation becomes the build side
+statement ok
+CREATE TABLE small(k INTEGER);
+
+statement ok
+INSERT INTO small VALUES (9), (10), (10), (11), (500), (1009), (1010), (NULL);
+
+statement ok
+CREATE TABLE big AS SELECT i::INTEGER AS k FROM range(10, 1010) t(i) UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE big_null_chunk AS SELECT NULL::INTEGER AS k FROM range(3000) UNION ALL SELECT 11;
+
+statement ok
+CREATE TABLE small_varchar AS SELECT lpad(k::VARCHAR, 4, '0') AS k FROM small;
+
+statement ok
+CREATE TABLE big_varchar AS SELECT lpad(k::VARCHAR, 4, '0') AS k FROM big;
+
+statement ok
+CREATE TABLE small_date AS SELECT DATE '2000-01-01' + k AS k FROM small;
+
+statement ok
+CREATE TABLE big_date AS SELECT DATE '2000-01-01' + k AS k FROM big;
+
+statement ok
+CREATE TABLE many AS SELECT i::INTEGER AS k FROM range(1000000) t(i);
+
+# nested keys that order like the integers they are built from
+statement ok
+CREATE TABLE small_list AS SELECT [k // 100, k % 100] AS k FROM small WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE big_list AS SELECT [k // 100, k % 100] AS k FROM big WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE small_struct AS SELECT {'a': k // 100, 'b': k % 100} AS k FROM small WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE big_struct AS SELECT {'a': k // 100, 'b': k % 100} AS k FROM big WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE small_array AS SELECT array_value(k // 100, k % 100) AS k FROM small WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+statement ok
+CREATE TABLE big_array AS SELECT array_value(k // 100, k % 100) AS k FROM big WHERE k IS NOT NULL UNION ALL SELECT NULL;
+
+# above the nested-loop threshold a piecewise merge join, below it a nested loop join
+statement ok
+SET nested_loop_join_threshold = 0;
+
+query II
+EXPLAIN SELECT k FROM small s SEMI JOIN big b ON s.k < b.k;
+----
+physical_plan	<REGEX>:(?s).*PIECEWISE_MERGE_JOIN.*RIGHT_SEMI.*
+
+statement ok
+SET nested_loop_join_threshold = 100;
+
+query II
+EXPLAIN SELECT k FROM small s SEMI JOIN big b ON s.k < b.k;
+----
+physical_plan	<REGEX>:(?s).*NESTED_LOOP_JOIN.*RIGHT_SEMI.*
+
+# nested keys as well: the nested loop join compares them with its mark kernel
+foreach nested list struct array
+
+query II
+EXPLAIN SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k < b.k;
+----
+physical_plan	<REGEX>:(?s).*NESTED_LOOP_JOIN.*RIGHT_SEMI.*
+
+endloop
+
+statement ok
+SET nested_loop_join_threshold = 0;
+
+foreach nested list struct array
+
+query II
+EXPLAIN SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k < b.k;
+----
+physical_plan	<REGEX>:(?s).*PIECEWISE_MERGE_JOIN.*RIGHT_SEMI.*
+
+endloop
+
+foreach threshold 0 100
+
+statement ok
+SET nested_loop_join_threshold = {threshold};
+
+# strict and inclusive boundaries, duplicates preserved, NULLs on both sides excluded
+query I
+SELECT k FROM small s SEMI JOIN big b ON s.k < b.k ORDER BY k;
+----
+9
+10
+10
+11
+500
+
+query I
+SELECT k FROM small s SEMI JOIN big b ON s.k <= b.k ORDER BY k;
+----
+9
+10
+10
+11
+500
+1009
+
+query I
+SELECT k FROM small s SEMI JOIN big b ON s.k > b.k ORDER BY k;
+----
+11
+500
+1009
+1010
+
+query I
+SELECT k FROM small s SEMI JOIN big b ON s.k >= b.k ORDER BY k;
+----
+10
+10
+11
+500
+1009
+1010
+
+# the same through a WHERE EXISTS
+query I
+SELECT k FROM small s WHERE EXISTS (SELECT 1 FROM big b WHERE b.k > s.k) ORDER BY k;
+----
+9
+10
+10
+11
+500
+
+# an empty probe side: a filter that statistics cannot decide
+query II
+EXPLAIN SELECT k FROM small s SEMI JOIN (SELECT k FROM big WHERE (k * 2) % 1000 = 999) b ON s.k < b.k;
+----
+physical_plan	<REGEX>:(?s).*RIGHT_SEMI.*
+
+query I
+SELECT k FROM small s SEMI JOIN (SELECT k FROM big WHERE (k * 2) % 1000 = 999) b ON s.k < b.k;
+----
+
+# an empty build side
+query I
+SELECT k FROM (SELECT k FROM small WHERE (k * 2) % 1000 = 999) s SEMI JOIN big b ON s.k < b.k;
+----
+
+# an all-NULL probe side
+query I
+SELECT k FROM small s SEMI JOIN (SELECT nullif(k, k) AS k FROM big) b ON s.k < b.k;
+----
+
+# an all-NULL build side
+query I
+SELECT k FROM (SELECT nullif(k, k) AS k FROM small) s SEMI JOIN big b ON s.k < b.k;
+----
+
+# a probe chunk of NULLs only, before the values
+query I
+SELECT k FROM small s SEMI JOIN big_null_chunk b ON s.k < b.k ORDER BY k;
+----
+9
+10
+10
+
+query I
+SELECT k FROM small s SEMI JOIN big_null_chunk b ON s.k >= b.k ORDER BY k;
+----
+11
+500
+1009
+1010
+
+# every build row matches
+query I
+SELECT count(*) FROM (SELECT k FROM small WHERE k < 100) s SEMI JOIN big b ON s.k < b.k;
+----
+4
+
+# other key types
+foreach type BIGINT DOUBLE DECIMAL(18,3) HUGEINT
+
+query I
+SELECT k FROM (SELECT k::{type} AS k FROM small) s SEMI JOIN (SELECT k::{type} AS k FROM big) b ON s.k < b.k ORDER BY k;
+----
+9
+10
+10
+11
+500
+
+query I
+SELECT k FROM (SELECT k::{type} AS k FROM small) s SEMI JOIN (SELECT k::{type} AS k FROM big) b ON s.k >= b.k ORDER BY k;
+----
+10
+10
+11
+500
+1009
+1010
+
+endloop
+
+query II
+EXPLAIN SELECT k FROM small_varchar s SEMI JOIN big_varchar b ON s.k <= b.k;
+----
+physical_plan	<REGEX>:(?s).*RIGHT_SEMI.*
+
+query I
+SELECT k FROM small_varchar s SEMI JOIN big_varchar b ON s.k <= b.k ORDER BY k;
+----
+0009
+0010
+0010
+0011
+0500
+1009
+
+query I
+SELECT k FROM small_varchar s SEMI JOIN big_varchar b ON s.k > b.k ORDER BY k;
+----
+0011
+0500
+1009
+1010
+
+query I
+SELECT k FROM small_date s SEMI JOIN big_date b ON s.k < b.k ORDER BY k;
+----
+2000-01-10
+2000-01-11
+2000-01-11
+2000-01-12
+2001-05-15
+
+# nested keys
+foreach nested list array
+
+query I
+SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k < b.k ORDER BY k;
+----
+[0, 9]
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+
+query I
+SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k >= b.k ORDER BY k;
+----
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+[10, 9]
+[10, 10]
+
+query I
+SELECT k FROM small_{nested} s WHERE EXISTS (SELECT 1 FROM big_{nested} b WHERE b.k > s.k) ORDER BY k;
+----
+[0, 9]
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+
+endloop
+
+query I
+SELECT k FROM small_struct s SEMI JOIN big_struct b ON s.k < b.k ORDER BY k;
+----
+{'a': 0, 'b': 9}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+
+query I
+SELECT k FROM small_struct s SEMI JOIN big_struct b ON s.k >= b.k ORDER BY k;
+----
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+{'a': 10, 'b': 9}
+{'a': 10, 'b': 10}
+
+query I
+SELECT k FROM small_struct s WHERE EXISTS (SELECT 1 FROM big_struct b WHERE b.k > s.k) ORDER BY k;
+----
+{'a': 0, 'b': 9}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+
+# the same rows without the swap
+statement ok
+SET disabled_optimizers = 'build_side_probe_side';
+
+foreach nested list array
+
+query I
+SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k < b.k ORDER BY k;
+----
+[0, 9]
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+
+query I
+SELECT k FROM small_{nested} s SEMI JOIN big_{nested} b ON s.k >= b.k ORDER BY k;
+----
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+[10, 9]
+[10, 10]
+
+query I
+SELECT k FROM small_{nested} s WHERE EXISTS (SELECT 1 FROM big_{nested} b WHERE b.k > s.k) ORDER BY k;
+----
+[0, 9]
+[0, 10]
+[0, 10]
+[0, 11]
+[5, 0]
+
+endloop
+
+query I
+SELECT k FROM small_struct s SEMI JOIN big_struct b ON s.k < b.k ORDER BY k;
+----
+{'a': 0, 'b': 9}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+
+query I
+SELECT k FROM small_struct s SEMI JOIN big_struct b ON s.k >= b.k ORDER BY k;
+----
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+{'a': 10, 'b': 9}
+{'a': 10, 'b': 10}
+
+query I
+SELECT k FROM small_struct s WHERE EXISTS (SELECT 1 FROM big_struct b WHERE b.k > s.k) ORDER BY k;
+----
+{'a': 0, 'b': 9}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 10}
+{'a': 0, 'b': 11}
+{'a': 5, 'b': 0}
+
+
+statement ok
+SET disabled_optimizers = '';
+
+# a probe over many row groups, with and without a runtime filter on its scan
+foreach threads 1 8
+
+statement ok
+SET threads = {threads};
+
+query I
+SELECT k FROM small s SEMI JOIN many b ON s.k < b.k ORDER BY k;
+----
+9
+10
+10
+11
+500
+1009
+1010
+
+query I
+SELECT k FROM small s SEMI JOIN many b ON s.k >= b.k ORDER BY k;
+----
+9
+10
+10
+11
+500
+1009
+1010
+
+query I
+SELECT k FROM (SELECT k FROM small WHERE k < 11) s SEMI JOIN many b ON s.k > b.k ORDER BY k;
+----
+9
+10
+10
+
+query I
+SELECT k FROM (SELECT k + 998990 AS k FROM small) s SEMI JOIN many b ON s.k < b.k ORDER BY k;
+----
+998999
+999000
+999000
+999001
+999490
+
+endloop
+
+statement ok
+RESET threads;
+
+# a prepared statement plans the join once and runs it with fresh states
+statement ok
+PREPARE q AS SELECT k FROM small s SEMI JOIN big b ON s.k < b.k WHERE s.k > ? ORDER BY k;
+
+query I
+EXECUTE q(10);
+----
+11
+500
+
+query I
+EXECUTE q(8);
+----
+9
+10
+10
+11
+500
+
+query I
+EXECUTE q(1000);
+----
+
+statement ok
+DEALLOCATE q;
+
+# a recursive CTE runs the join once per iteration, with the states of the previous one reset
+query II
+EXPLAIN WITH RECURSIVE t(i) AS (
+	SELECT 0::INTEGER
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t)
+	 SELECT i + 101 FROM tmp SEMI JOIN big b ON tmp.i + 100 < b.k)
+) SELECT count(*), max(i) FROM t;
+----
+physical_plan	<REGEX>:(?s).*RIGHT_SEMI.*
+
+query II
+WITH RECURSIVE t(i) AS (
+	SELECT 0::INTEGER
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t)
+	 SELECT i + 101 FROM tmp SEMI JOIN big b ON tmp.i + 100 < b.k)
+) SELECT count(*), max(i) FROM t;
+----
+10	909
+
+query II
+WITH RECURSIVE t(i) AS (
+	SELECT 1005::INTEGER
+	UNION ALL
+	(WITH tmp AS (SELECT * FROM t),
+	      above AS (SELECT count(*) AS c FROM small s SEMI JOIN big b ON s.k > b.k)
+	 SELECT i + c::INTEGER FROM tmp, above WHERE i < 1013)
+) SELECT count(*), max(i) FROM t;
+----
+3	1013
+
+endloop

@@ -164,10 +164,17 @@ static bool IsNullOnlyForNullColumn(Expression &expr) {
 	}
 }
 
+unique_ptr<BaseStatistics> StatisticsPropagator::GetColumnStatistics(ClientContext &context, LogicalGet &get,
+                                                                     const ColumnIndex &column_index) {
+	return get.GetColumnStatistics(context, column_index);
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
+	} else {
+		node_stats.reset();
 	}
 	if (!get.HasColumnStatistics()) {
 		// no column statistics to get

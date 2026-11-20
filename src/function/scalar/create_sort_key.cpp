@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/swar.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -1026,6 +1027,16 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 #endif
 }
 
+bool CreateSortKeyHelpers::IsNonNullSortKey(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expression.Cast<BoundFunctionExpression>().Function();
+	return function.GetBindCallback() == CreateSortKeyBind &&
+	       function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING &&
+	       function.GetProperties().GetBooleanProperty(NON_NULL_RESULT_PROPERTY);
+}
+
 //===--------------------------------------------------------------------===//
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
@@ -1044,6 +1055,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	idx_t constant_size = 0;
 	child_list_t<LogicalType> children;
 	auto result = make_uniq<SortKeyBindData>();
+	const auto decimal_width_limit = input.GetDecimalWidthLimit();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
 		Value col = input.GetConstant(i);
@@ -1055,8 +1067,8 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		const auto &col_name = col_def.GetName();
 		auto col_type = col_def.GetType();
 		if (col_type.IsUnbound()) {
-			// Resolve the parsed type against the catalog.
-			col_type = TransformStringToLogicalType(col_type.ToString(), context);
+			// Resolve the parsed type against the catalog, within the decimal width limit of the bind
+			col_type = TransformStringToLogicalType(col_type.ToString(), context, &decimal_width_limit);
 		}
 
 		// Keep track of this to validate the arguments
@@ -1492,6 +1504,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	sort_key_function.GetSignature().GetParameter(0).SetName("key1");
 	sort_key_function.GetSignature().AddArgs("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	sort_key_function.GetProperties().SetProperty(CreateSortKeyHelpers::NON_NULL_RESULT_PROPERTY, Value::BOOLEAN(true));
 	return sort_key_function;
 }
 

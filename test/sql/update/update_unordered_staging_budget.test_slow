@@ -1,0 +1,29 @@
+# name: test/sql/update/update_unordered_staging_budget.test_slow
+# description: Out-of-order updates whose staged sort goes external stay within the temporary directory limit
+# group: [update]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET memory_limit='64MB';
+
+statement ok
+SET max_temp_directory_size='16MB';
+
+statement ok
+CREATE TABLE tgt AS SELECT i AS id, 0::BIGINT AS v FROM range(2) t(i);
+
+statement ok
+SET operator_memory_limit='1MB';
+
+query I
+UPDATE tgt SET v=src.id FROM (SELECT i%2 AS id FROM range(10000000) t(i)) src WHERE tgt.id=src.id;
+----
+10000000
+
+query II
+SELECT id, v FROM tgt ORDER BY id;
+----
+0	0
+1	1

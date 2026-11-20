@@ -121,33 +121,12 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	return result;
 }
 
-void ArenaAllocator::AlignNext() {
-	if (head && !ValueIsAligned<idx_t>(head->current_position)) {
-		// move the current position forward so that the next allocation is aligned
-		head->current_position = AlignValue<idx_t>(head->current_position);
-	}
-}
-
-data_ptr_t ArenaAllocator::AllocateAligned(idx_t size) {
-	AlignNext();
-	return Allocate(AlignValue<idx_t>(size));
-}
-
 data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size) {
 	AlignNext();
 	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
-ArenaAllocator::Position ArenaAllocator::GetPosition() const {
-	Position result;
-	if (head) {
-		result.chunk = head.get();
-		result.current_position = head->current_position;
-	}
-	return result;
-}
-
-void ArenaAllocator::Rewind(const Position &position) {
+void ArenaAllocator::RewindSlow(const Position &position) {
 	if (!position.chunk) {
 		// nothing was allocated when the position was taken
 		FreeAll();

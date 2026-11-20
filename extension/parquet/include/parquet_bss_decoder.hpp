@@ -30,10 +30,19 @@ public:
 public:
 	/// Writes batch_size values in the PLAIN layout (consecutive type_size-byte values) to values_target_ptr
 	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
-		buffer_.available((value_offset_ + batch_size) * type_size_);
-
+		buffer_.Available((value_offset_ + batch_size) * type_size_);
+		if (type_size_ == 4) {
+			GetBatchFixed<4>(values_target_ptr, batch_size);
+			value_offset_ += batch_size;
+			return;
+		}
+		if (type_size_ == 8) {
+			GetBatchFixed<8>(values_target_ptr, batch_size);
+			value_offset_ += batch_size;
+			return;
+		}
 		for (idx_t byte_offset = 0; byte_offset < type_size_; ++byte_offset) {
-			data_ptr_t input_bytes = buffer_.ptr + byte_offset * num_buffer_values_ + value_offset_;
+			data_ptr_t input_bytes = buffer_.GetCurrentLoc() + byte_offset * num_buffer_values_ + value_offset_;
 			for (uint32_t i = 0; i < batch_size; ++i) {
 				values_target_ptr[byte_offset + i * type_size_] = *(input_bytes + i);
 			}
@@ -42,11 +51,25 @@ public:
 	}
 
 	void Skip(uint32_t batch_size) {
-		buffer_.available((value_offset_ + batch_size) * type_size_);
+		buffer_.Available((value_offset_ + batch_size) * type_size_);
 		value_offset_ += batch_size;
 	}
 
+	void Rebase(data_ptr_t new_ptr) {
+		buffer_.Rebase(new_ptr);
+	}
+
 private:
+	template <idx_t BYTE_COUNT>
+	void GetBatchFixed(data_ptr_t __restrict target, idx_t count) {
+		const auto source = buffer_.GetCurrentLoc() + value_offset_;
+		for (idx_t i = 0; i < count; i++) {
+			for (idx_t byte = 0; byte < BYTE_COUNT; byte++) {
+				target[i * BYTE_COUNT + byte] = source[byte * num_buffer_values_ + i];
+			}
+		}
+	}
+
 	ByteBuffer buffer_;
 	idx_t type_size_;
 	uint32_t num_buffer_values_;

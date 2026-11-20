@@ -133,9 +133,8 @@ functions:
         type: prepared_statement
         description: The prepared statement to execute. Borrowed; not consumed.
       parameter_names:
-        type: char
-        indirection: 2
-        const: true
+        type: readonly_char_ptr
+        indirection: 1
         kind: IN
         description: |
           Optional. An array of `parameter_count` parameter names; a non-empty entry binds its value to the named

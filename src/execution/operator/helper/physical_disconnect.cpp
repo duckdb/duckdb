@@ -18,7 +18,10 @@ SourceResultType PhysicalDisconnect::GetDataInternal(ExecutionContext &context, 
 	client.DisconnectFromCatalog();
 	if (target && target->IsEphemeral()) {
 		// `CONNECT '<uri>'` attached this hidden catalog implicitly; detach it now.
-		DatabaseManager::Get(client).DetachDatabase(client, target->GetName(), OnEntryNotFound::RETURN_NULL);
+		auto name = target->GetName();
+		// release our reference first so that the detach closes the database
+		AttachedDatabase::InvokeCloseIfLastReference(target, client);
+		DatabaseManager::Get(client).DetachDatabase(client, name, OnEntryNotFound::RETURN_NULL);
 	}
 	return SourceResultType::FINISHED;
 }

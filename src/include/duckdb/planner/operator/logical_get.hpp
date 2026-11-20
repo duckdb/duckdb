@@ -33,7 +33,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
+	LogicalGet(TableIndex table_index, BoundTableFunction function, cow_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 	~LogicalGet() override;
@@ -43,7 +43,7 @@ public:
 	//! The function that is called, together with the argument types this call was bound with
 	BoundTableFunction function;
 	//! The bind data of the function
-	unique_ptr<FunctionData> bind_data;
+	cow_ptr<FunctionData> bind_data;
 	//! Process-local input that cannot be reconstructed from SQL parameters
 	shared_ptr<TableFunctionInfo> bind_info;
 	//! The types of ALL columns that can be returned by the table function

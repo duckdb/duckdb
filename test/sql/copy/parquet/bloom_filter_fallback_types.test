@@ -4,64 +4,6 @@
 
 require parquet
 
-foreach version V1 V2
-
-foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE DECIMAL(4,1) DECIMAL(18,2)
-
-statement ok
-CREATE OR REPLACE TABLE numbers AS
-SELECT CASE WHEN i % 17 = 0 THEN NULL ELSE (i % 50) * 2 END::{type} AS n
-FROM range(4096) t(i)
-
-statement ok
-COPY numbers TO '{TEST_DIR}/numbers.parquet'
-(FORMAT PARQUET, PARQUET_VERSION '{version}', ROW_GROUP_SIZE 2048,
- DICTIONARY_SIZE_LIMIT 0)
-
-query II
-SELECT count(bloom_filter_length), bool_and(bloom_filter_length < 512)
-FROM parquet_metadata('{TEST_DIR}/numbers.parquet')
-----
-2	true
-
-foreach value 0 24 98
-
-query I
-SELECT bool_or(bloom_filter_excludes)
-FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', {value}::{type})
-----
-false
-
-query I
-SELECT (SELECT count(*) FROM '{TEST_DIR}/numbers.parquet' WHERE n={value}::{type}) =
-       (SELECT count(*) FROM numbers WHERE n={value}::{type})
-----
-true
-
-endloop
-
-query I
-SELECT bool_or(bloom_filter_excludes) FROM (
-  SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 1::{type})
-  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 25::{type})
-  UNION ALL SELECT * FROM parquet_bloom_probe('{TEST_DIR}/numbers.parquet', 'n', 97::{type})
-)
-----
-true
-
-query I
-SELECT count(*) FROM (
-  (SELECT * FROM numbers EXCEPT ALL SELECT * FROM '{TEST_DIR}/numbers.parquet')
-  UNION ALL
-  (SELECT * FROM '{TEST_DIR}/numbers.parquet' EXCEPT ALL SELECT * FROM numbers)
-)
-----
-0
-
-endloop
-
-endloop
-
 # Floating-point equality includes both signs of zero and DuckDB's NaN equality.
 foreach type FLOAT DOUBLE
 

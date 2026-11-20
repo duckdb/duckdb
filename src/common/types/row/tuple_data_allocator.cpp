@@ -137,7 +137,7 @@ idx_t TupleDataAllocator::GetPartitionIndex() const {
 bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                        TupleDataChunkState &chunk_state, const idx_t append_offset,
                                        const idx_t append_count) {
-	if (!layout.AllConstant() || layout.HasDestructor()) {
+	if (layout.HasDestructor()) {
 		return false;
 	}
 
@@ -160,9 +160,41 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 		return false;
 	}
 
-	// We can do the fast path append!
-	auto row_locations = FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_count, append_offset);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
+	if (!layout.AllConstant()) {
+		if (part.total_heap_size == 0) {
+			return false;
+		}
+
+		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+		idx_t added_heap_size = 0;
+		for (idx_t i = 0; i < append_count; i++) {
+			added_heap_size += heap_sizes[append_offset + i];
+		}
+		auto &heap_block = heap_blocks[part.heap_block_index];
+		if (added_heap_size > heap_block.RemainingCapacity()) {
+			return false;
+		}
+
+		const auto base_heap_ptr = GetBaseHeapPointer(pin_state, part);
+		if (base_heap_ptr != part.base_heap_ptr) {
+			// Keep relocated heaps in a separate part until the existing rows have been recomputed.
+			return false;
+		}
+		D_ASSERT(part.heap_block_offset + part.total_heap_size == heap_block.size);
+		auto heap_ptr = base_heap_ptr + heap_block.size;
+		auto heap_locations = FlatVector::Writer<data_ptr_t>(chunk_state.heap_locations, append_count, append_offset);
+		for (idx_t i = 0; i < append_count; i++) {
+			heap_locations.WriteValue(heap_ptr);
+			heap_ptr += heap_sizes[append_offset + i];
+		}
+
+		part.total_heap_size += added_heap_size;
+		heap_block.size += added_heap_size;
+		segment.data_size += added_heap_size;
+	}
+
+	auto row_locations = FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_count, append_offset);
 	for (idx_t i = 0; i < append_count; i++) {
 		row_locations.WriteValue(base_row_ptr + i * row_width);
 	}
@@ -190,25 +222,21 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		chunk_state.chunk_part_indices.clear();
 		idx_t offset = 0;
 		while (offset != append_count) {
+			unsafe_arena_ptr<TupleDataChunk> new_chunk;
 			if (chunks.empty() || chunks.back()->count == STANDARD_VECTOR_SIZE) {
-				chunks.push_back(stl_allocator->MakeUnsafePtr<TupleDataChunk>(*stl_allocator->Make<mutex>()));
+				new_chunk = stl_allocator->MakeUnsafePtr<TupleDataChunk>(*stl_allocator->Make<mutex>());
 			}
-			auto &chunk = *chunks.back();
+			auto &chunk = new_chunk ? *new_chunk : *chunks.back();
 
 			// Build the next part
 			auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-			auto &chunk_part = chunk.AddPart(
-			    segment, BuildChunkPart(segment, pin_state, chunk_state, append_offset + offset, next, chunk));
-			next = chunk_part.count;
+			auto part_ptr = BuildChunkPart(segment, pin_state, chunk_state, append_offset + offset, next, chunk);
+			next = part_ptr->count;
 
-			segment.count += next;
-			segment.data_size += chunk_part.count * layout.GetRowWidth();
-			if (!layout.AllConstant()) {
-				segment.data_size += chunk_part.total_heap_size;
-			}
-
+			// Zero the states before adding the chunk and counting the part, as counted rows are destroyed if a pin
+			// throws
 			if (layout.HasDestructor()) {
-				const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
+				const auto base_row_ptr = GetRowPointer(pin_state, *part_ptr);
 				for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
 					const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
 					auto &aggr_fun = layout.GetAggregates()[aggr_idx];
@@ -216,6 +244,16 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 						memset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0', aggr_fun.payload_size);
 					}
 				}
+			}
+
+			if (new_chunk) {
+				chunks.push_back(std::move(new_chunk));
+			}
+			auto &chunk_part = chunk.AddPart(segment, std::move(part_ptr));
+			segment.count += next;
+			segment.data_size += chunk_part.count * layout.GetRowWidth();
+			if (!layout.AllConstant()) {
+				segment.data_size += chunk_part.total_heap_size;
 			}
 
 			offset += next;

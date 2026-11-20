@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -105,6 +106,7 @@ static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const Bo
 	const auto aggr_ordered = (agg_func.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT);
 	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
 	                                                  std::move(bind_info), aggr_type);
+	result->SetReturnType(w_expr.GetReturnType());
 
 	if (!aggr_ordered) {
 		//	ORDER BY is a NOP, so drop it.
@@ -191,6 +193,13 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 }
 
 bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		// the copy binds the function again, which brings back the files a filter pruned
+		if (!get.function.HasSerializationCallbacks() && !get.extra_info.file_filters.empty()) {
+			return false;
+		}
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
