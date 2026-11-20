@@ -22,6 +22,7 @@ class StringHeap;
 class ArenaAllocator;
 class ClientContext;
 class Context;
+struct hugeint_t;
 
 struct bignum_t {
 	string_t data;
@@ -112,6 +113,8 @@ struct BignumIntermediate {
 	//! Multiplies two BignumIntermediates and returns a string_t result, equivalent of a *
 	static string_t Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                         const BignumIntermediate &rhs);
+	//! The exact product of two integers, including products wider than a HUGEINT
+	static string_t Multiply(StringHeap &heap, hugeint_t lhs, hugeint_t rhs);
 	//! Multiplies two magnitudes given as little-endian bignum_digit_t digits, result = lhs * rhs without leading zeros
 	DUCKDB_API static void MultiplyMagnitudes(BignumArithmeticState &state, const unsafe_vector<bignum_digit_t> &lhs,
 	                                          const unsafe_vector<bignum_digit_t> &rhs,

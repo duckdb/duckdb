@@ -197,11 +197,10 @@ protected:
 		vector<ProjectionIndex> right_map;
 		vector<LogicalType> original_types;
 	};
-	PrunedJoinProjection ExtractPrunedJoinProjection(LogicalComparisonJoin &op, const PhysicalOperator &left,
+	PrunedJoinProjection ExtractPrunedJoinProjection(LogicalJoin &op, const PhysicalOperator &left,
 	                                                 const PhysicalOperator &right, bool expand_left,
 	                                                 bool expand_right);
-	PhysicalOperator &RestorePrunedJoinProjection(LogicalComparisonJoin &op, PhysicalOperator &join,
-	                                              PrunedJoinProjection info);
+	PhysicalOperator &RestorePrunedJoinProjection(LogicalJoin &op, PhysicalOperator &join, PrunedJoinProjection info);
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
 	                                              vector<unique_ptr<Expression>> &groups,

@@ -803,7 +803,7 @@ TEST_CASE("COPY cleans a finalized temporary file when its move fails", "[api][c
 	}
 }
 
-TEST_CASE("Abandoning multi-chunk COPY statistics preserves finalized files", "[api][copy]") {
+TEST_CASE("Abandoning multi-chunk COPY statistics preserves finalized files", "[api][copy][.]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));

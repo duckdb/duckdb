@@ -1,0 +1,23 @@
+# name: benchmark/micro/optimizer/correlated_exists_key_predicate.benchmark
+# description: Eliminate the domain of an EXISTS with a predicate on its correlated key
+# group: [optimizer]
+
+name Correlated Exists Key Predicate
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE orders AS
+SELECT i AS order_id, (i * 7919) % 20000 AS customer_id
+FROM range(3000000) t(i);
+CREATE TABLE customers AS SELECT i AS customer_id FROM range(18000) t(i);
+
+run
+SELECT count(*), sum(order_id) FROM orders o
+WHERE EXISTS (
+    SELECT 1 FROM customers c
+    WHERE c.customer_id=o.customer_id AND o.customer_id>17000
+);
+
+result II
+149850	224776125000
