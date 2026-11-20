@@ -1,0 +1,10 @@
+# name: test/sql/function/generic/least_greatest_icu_collation.test
+# description: Test LEAST/GREATEST follow ICU collations
+# group: [generic]
+
+require icu
+
+query III
+SELECT least('ä' COLLATE de, 'b'), greatest('ä' COLLATE de, 'b'), least('b', 'ä')
+----
+ä	b	b

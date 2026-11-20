@@ -2,8 +2,10 @@
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -172,15 +174,131 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	result.SetVectorType(result_type);
 }
 
+struct LeastGreatestCollationData : public FunctionData {
+	explicit LeastGreatestCollationData(unique_ptr<Expression> collation_p) : collation(std::move(collation_p)) {
+	}
+
+	//! The collation of the argument type, applied to a reference to column 0
+	unique_ptr<Expression> collation;
+
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<LeastGreatestCollationData>(collation->Copy());
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<LeastGreatestCollationData>();
+		return collation->Equals(*other.collation);
+	}
+};
+
+struct LeastGreatestCollationState : public FunctionLocalState {
+	LeastGreatestCollationState(Context &context, const LogicalType &input_type, const Expression &collation,
+	                            idx_t column_count, OrderByNullType null_ordering)
+	    : executor(context, collation), collation_type(collation.GetReturnType()), winner_keys(LogicalType::BLOB),
+	      winners(STANDARD_VECTOR_SIZE), modifiers(OrderType::ASCENDING, null_ordering) {
+		collation_input.InitializeEmpty({input_type});
+		vector<LogicalType> types(column_count, LogicalType::BLOB);
+		collation_keys.Initialize(Allocator::DefaultAllocator(), types);
+		value_keys.Initialize(Allocator::DefaultAllocator(), types);
+	}
+
+	ExpressionExecutor executor;
+	DataChunk collation_input;
+	LogicalType collation_type;
+	//! Sort keys of the collated arguments, which decide the result
+	DataChunk collation_keys;
+	//! Sort keys of the arguments, from which the result is decoded
+	DataChunk value_keys;
+	Vector winner_keys;
+	//! The argument each row takes its result from, INVALID_INDEX if all arguments are NULL
+	vector<idx_t> winners;
+	OrderModifiers modifiers;
+};
+
+template <class LEAST_GREATER_OP>
+unique_ptr<FunctionLocalState> LeastGreatestCollationInit(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                          optional_ptr<const FunctionData> bind_data) {
+	auto &children = expr.GetChildren();
+	auto &collation = *bind_data->Cast<LeastGreatestCollationData>().collation;
+	return make_uniq<LeastGreatestCollationState>(state.GetContext(), children[0]->GetReturnType(), collation,
+	                                              children.size(), LEAST_GREATER_OP::NullOrdering());
+}
+
+//! Compares the collated arguments, but returns the original argument: a collation can map distinct values to the
+//! same key (e.g. INTERVAL 1 MONTH and INTERVAL 30 DAY)
+template <class OP>
+void LeastGreatestCollationFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (args.ColumnCount() == 1) {
+		result.Reference(args.data[0]);
+		return;
+	}
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestCollationState>();
+	const auto count = args.size();
+	lstate.collation_keys.Reset();
+	lstate.value_keys.Reset();
+
+	auto result_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+		auto &input = args.data[col_idx];
+		if (input.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result_type = VectorType::FLAT_VECTOR;
+		}
+		lstate.collation_input.Reset();
+		lstate.collation_input.data[0].Reference(input);
+		lstate.collation_input.CheckCardinality(count);
+		Vector collated(lstate.collation_type);
+		lstate.executor.ExecuteExpression(lstate.collation_input, collated);
+		CreateSortKeyHelpers::CreateSortKey(collated, lstate.modifiers, lstate.collation_keys.data[col_idx]);
+		CreateSortKeyHelpers::CreateSortKey(input, lstate.modifiers, lstate.value_keys.data[col_idx]);
+	}
+
+	// NULL arguments are skipped, and on equal keys the first argument wins
+	auto &winners = lstate.winners;
+	auto winner_keys = FlatVector::ScatterWriter<string_t>(lstate.winner_keys);
+	for (idx_t i = 0; i < count; i++) {
+		winners[i] = DConstants::INVALID_INDEX;
+	}
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+		auto validity = args.data[col_idx].Validity();
+		auto keys = lstate.collation_keys.data[col_idx].Values<string_t>();
+		for (idx_t i = 0; i < count; i++) {
+			if (!validity.IsValid(i)) {
+				continue;
+			}
+			auto key = keys[i].GetValue();
+			if (winners[i] == DConstants::INVALID_INDEX || OP::template Operation<string_t>(key, winner_keys[i])) {
+				winners[i] = col_idx;
+				winner_keys[i] = key;
+			}
+		}
+	}
+
+	auto &result_mask = FlatVector::ValidityMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (winners[i] == DConstants::INVALID_INDEX) {
+			result_mask.SetInvalid(i);
+		}
+	}
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+		auto values = lstate.value_keys.data[col_idx].Values<string_t>();
+		for (idx_t i = 0; i < count; i++) {
+			if (winners[i] == col_idx) {
+				CreateSortKeyHelpers::DecodeSortKey(values[i].GetValue(), result, i, lstate.modifiers);
+			}
+		}
+	}
+	result.SetVectorType(result_type);
+}
+
 template <class LEAST_GREATER_OP>
 unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto &return_type = expr.GetReturnType();
-	// TIMETZ min/max stats follow the physical bit order, which differs from the logical order
-	// INTERVAL needs no exception: its stats are normalized the same way as interval_t comparisons
-	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
-	    return_type.InternalType() == PhysicalType::BOOL || return_type.id() == LogicalTypeId::TIME_TZ) {
+	// with a collation (bind data), the child min/max do not follow the order the result is chosen by
+	if (input.bind_data || BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
+	    return_type.InternalType() == PhysicalType::BOOL) {
 		return nullptr;
 	}
 	constexpr bool IS_LEAST = std::is_same_v<LEAST_GREATER_OP, LeastOp>;
@@ -267,24 +385,7 @@ void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	default:
 		break;
 	}
-	for (auto &arg : bound_function.GetArguments()) {
-		arg = child_type;
-	}
-	bound_function.SetReturnType(child_type);
-
 	using OP = typename LEAST_GREATER_OP::OP;
-	// types whose logical order differs from the order of their physical representation
-	switch (child_type.id()) {
-	case LogicalTypeId::TIME_TZ:
-		bound_function.SetFunctionCallback(LeastGreatestFunction<dtime_tz_t, OP>);
-		return;
-	case LogicalTypeId::INTERVAL:
-		bound_function.SetFunctionCallback(LeastGreatestFunction<interval_t, OP>);
-		return;
-	default:
-		break;
-	}
-	// all other types are ordered by their physical representation
 	switch (child_type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(least_greatest_types)
 	case PhysicalType::BOOL:
@@ -316,6 +417,25 @@ void LeastGreatestResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
+	for (auto &arg : bound_function.GetArguments()) {
+		arg = child_type;
+	}
+	bound_function.SetReturnType(child_type);
+}
+
+//! Types whose order differs from their physical representation (e.g. TIMETZ, INTERVAL, collated VARCHAR) are
+//! compared through their collation, like comparisons and ORDER BY
+template <class LEAST_GREATER_OP>
+unique_ptr<FunctionData> LeastGreatestBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto child_type = bound_function.GetReturnType();
+	unique_ptr<Expression> collation = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
+	if (!ExpressionBinder::PushCollation(input.GetClientContext(), collation, child_type)) {
+		return nullptr;
+	}
+	bound_function.SetFunctionCallback(LeastGreatestCollationFunction<typename LEAST_GREATER_OP::OP>);
+	bound_function.SetInitStateCallback(LeastGreatestCollationInit<LEAST_GREATER_OP>);
+	return make_uniq<LeastGreatestCollationData>(std::move(collation));
 }
 
 template <class OP>
@@ -324,6 +444,7 @@ ScalarFunction GetLeastGreatestFunction() {
 	                   PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
 	                   FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetResolveTypesCallback(LeastGreatestResolveTypes<OP>);
+	fun.SetBindCallback(LeastGreatestBind<OP>);
 	return fun;
 }
 
