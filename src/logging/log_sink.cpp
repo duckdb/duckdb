@@ -88,7 +88,7 @@ void LogSink::Truncate() {
 
 void LogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	if (!config.empty()) {
-		throw InvalidInputException("Log sink '%s' does not support passing configuration", GetSinkName());
+		throw InvalidInputException("Log sink '%s' has no config options", GetSinkName());
 	}
 }
 
@@ -149,6 +149,11 @@ void CSVLogSink::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 
 void CSVLogSink::ResetAllBuffers() {
 	BufferingLogSink::ResetAllBuffers();
+	ResetCastChunk();
+}
+
+void CSVLogSink::ResizeBuffers() {
+	BufferingLogSink::ResizeBuffers();
 	ResetCastChunk();
 }
 
@@ -240,13 +245,22 @@ void CSVLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 void BufferingLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	for (const auto &it : config) {
 		if (StringUtil::CIEquals(it.first, "buffer_size")) {
+			// the log entries are kept: the buffered ones are flushed before the buffers get their new size
+			bool has_entries = false;
+			for (auto &buffer : buffers) {
+				has_entries |= IsEnabledInternal(buffer.first) && buffer.second->size() > 0;
+			}
+			if (has_entries) {
+				FlushAllInternal();
+			}
 			buffer_limit = it.second.GetValue<uint64_t>();
-			ResetAllBuffers();
+			ResizeBuffers();
 		} else if (StringUtil::CIEquals(it.first, "only_flush_on_full_buffer")) {
 			// This is a debug option used during testing. It disables the manual
 			only_flush_on_full_buffer = it.second.GetValue<bool>();
 		} else if (StringUtil::CIEquals(it.first, "normalize")) {
-			throw InternalException("'normalize' setting should be handled in child class");
+			// the sinks that can normalize the logs handle this option themselves
+			throw InvalidInputException("Log sink '%s' has no option 'normalize'", GetSinkName());
 		} else {
 			throw InvalidInputException("Unrecognized log sink config option for sink: '%s': '%s'", GetSinkName(),
 			                            it.first);
@@ -551,6 +565,11 @@ BufferingLogSink::BufferingLogSink(DatabaseInstance &db_p, idx_t buffer_size, bo
 }
 
 void BufferingLogSink::ResetLogBuffers() {
+	InitializeLogBuffers();
+	registered_contexts.clear();
+}
+
+void BufferingLogSink::InitializeLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
 	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
 	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
@@ -567,11 +586,14 @@ void BufferingLogSink::ResetLogBuffers() {
 		all_logs->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 		buffers[LoggingTargetTable::ALL_LOGS] = std::move(all_logs);
 	}
-	registered_contexts.clear();
 }
 
 void BufferingLogSink::ResetAllBuffers() {
 	ResetLogBuffers();
+}
+
+void BufferingLogSink::ResizeBuffers() {
+	InitializeLogBuffers();
 }
 
 InMemoryLogSinkScanState::InMemoryLogSinkScanState(LoggingTargetTable table) : LogSinkScanState(table) {

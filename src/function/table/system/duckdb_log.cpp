@@ -52,10 +52,11 @@ void DuckDBLogFun::VerifyNormalizedLogs(ClientContext &context, TableFunctionBin
 	}
 	if (sink_name.empty()) {
 		throw InvalidConfigurationException(
-		    "The default log sink stores the logs denormalized, read them with duckdb_logs()");
+		    "The default log sink stores the logs denormalized, read them with duckdb_logs(denormalized_table=true)");
 	}
-	throw InvalidConfigurationException("Log sink '%s' stores the logs denormalized, read them with duckdb_logs(%s)",
-	                                    sink_name, SQLString(sink_name));
+	throw InvalidConfigurationException(
+	    "Log sink '%s' stores the logs denormalized, read them with duckdb_logs(%s, denormalized_table=true)",
+	    sink_name, SQLString(sink_name));
 }
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -111,8 +112,8 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	auto sink_name = DuckDBLogFun::GetSinkName(input);
 	auto log_sink = LogManager::Get(context).GetLogSink(sink_name);
 
-	// the log entries together with their context, like the duckdb_logs view, unless denormalized_table=false
-	bool denormalized_table = true;
+	// the log entries without their context, as in 2.0.0. The duckdb_logs view adds it with denormalized_table=true
+	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
 	if (denormalized_table_setting != input.named_parameters.end()) {
 		if (denormalized_table_setting->second.IsNull()) {

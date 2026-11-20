@@ -74,7 +74,7 @@ SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message 
 ----
 1
 
-# disable_logging pauses the named sinks as well, enable_logging resumes them
+# disable_logging only turns off the default log sink, the file sink keeps receiving log entries
 statement ok
 CALL disable_logging()
 
@@ -84,19 +84,21 @@ SELECT write_log('while disabled')
 statement ok
 CALL enable_logging()
 
-statement ok
-SELECT write_log('after enable')
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'while disabled'
+----
+0
 
 query I
-SELECT message FROM duckdb_logs('file', denormalized_table=true) WHERE message IN ('while disabled', 'after enable')
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message = 'while disabled'
 ----
-after enable
+1
 
 # a failed enable_logging puts the previous sinks back
 statement error
 CALL enable_logging(sink_config={'path': '{TEST_DIR}/logging_added_file_sink_default.csv', 'bogus': 1})
 ----
-Unrecognized log sink config option
+Log sink 'default' is a 'file' log sink, which has no option 'bogus'
 
 query II
 SELECT name, type FROM duckdb_log_sinks()
@@ -114,9 +116,9 @@ SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message 
 
 # the named file sink is not the default log sink: a default file sink needs a path of its own
 statement error
-SET logging_sink='file'
+CALL enable_logging(type := 'file')
 ----
-Cannot select 'file' log sink via 'SET logging_sink' because it requires a path
+Cannot enable the 'file' log sink without a valid path
 
 statement error
 CALL enable_logging(sink_path='{TEST_DIR}/logging_added_file_sink.csv')
@@ -124,7 +126,7 @@ CALL enable_logging(sink_path='{TEST_DIR}/logging_added_file_sink.csv')
 Log sink 'file' already writes to
 
 query I
-SELECT current_setting('logging_sink')
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default'
 ----
 memory
 
@@ -165,7 +167,7 @@ SELECT name, type FROM duckdb_log_sinks()
 default	memory
 file	file
 
-# disabling the file sink keeps its file, enabling it again needs a path
+# disabling the file sink keeps its file and its config, enabling it again resumes it
 statement ok
 CALL disable_log_sink('file')
 
@@ -174,15 +176,24 @@ SELECT count(*) FROM read_csv('{TEST_DIR}/logging_added_file_sink.csv') WHERE me
 ----
 1
 
-statement error
-CALL enable_log_sink('file')
+query III
+SELECT name, active, config['path'] LIKE '%logging_added_file_sink.csv' FROM duckdb_log_sinks() WHERE name = 'file'
 ----
-The 'file' log sink requires a path
+file	false	true
 
-statement error
-SELECT * FROM duckdb_logs('file')
+statement ok
+SELECT write_log('while the file sink is disabled')
+
+statement ok
+CALL enable_log_sink('file')
+
+statement ok
+SELECT write_log('file sink enabled again')
+
+query I
+SELECT message FROM duckdb_logs('file') WHERE message IN ('while the file sink is disabled', 'file sink enabled again')
 ----
-Log sink 'file' is not enabled
+file sink enabled again
 
 # a new path moves an enabled file sink to that file
 statement ok

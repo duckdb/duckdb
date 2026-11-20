@@ -5,9 +5,6 @@ statement ok
 SET GLOBAL logging_level = 'INFO';
 
 statement ok
-SET GLOBAL logging_sink = 'memory';
-
-statement ok
 SET GLOBAL enable_logging = true;
 
 statement error

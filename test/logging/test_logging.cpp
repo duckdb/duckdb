@@ -8,6 +8,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/log_storage.hpp"
 
 using namespace duckdb;
 
@@ -205,8 +206,7 @@ TEST_CASE("Test pluggable log sink", "[logging][.]") {
 	duckdb::shared_ptr<LogSink> base_ptr = my_log_sink;
 	db.instance->GetLogManager().RegisterLogSink("my_log_sink", base_ptr);
 
-	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='my_log_sink';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(type := 'my_log_sink');"));
 
 	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, BRO');"));
 
@@ -239,9 +239,9 @@ TEST_CASE("Test multiple log sinks", "[logging]") {
 	REQUIRE(log_manager.GetRegisteredLogSink("sink_a").get() == sink_a.get());
 	REQUIRE(!log_manager.GetRegisteredLogSink("sink_c"));
 
-	// enabling a sink enables logging
+	// enabling a sink does not turn the default log sink on
 	log_manager.EnableLogSink(*db.instance, "sink_a");
-	REQUIRE(log_manager.GetConfig().enabled);
+	REQUIRE(!log_manager.GetConfig().enabled);
 	REQUIRE(log_manager.IsLogSinkEnabled("sink_a"));
 	// enable_log_sink uses the sink that is registered under this name
 	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('sink_b');"));
@@ -260,10 +260,20 @@ TEST_CASE("Test multiple log sinks", "[logging]") {
 	REQUIRE_NO_FAIL(con.Query("select write_log('BOTH DISABLED');"));
 	REQUIRE(sink_b->log_store.count("BOTH DISABLED") == 0);
 
-	// a disabled sink stays registered, and can be enabled again
+	// a disabled sink stays registered and listed, disabling it again changes nothing
 	REQUIRE(log_manager.GetRegisteredLogSink("sink_a").get() == sink_a.get());
-	REQUIRE_THROWS_WITH(log_manager.DisableLogSink(*db.instance, "sink_a"),
-	                    Catch::Matchers::Contains("is not enabled"));
+	REQUIRE_NOTHROW(log_manager.DisableLogSink(*db.instance, "sink_a"));
+	auto result = con.Query("select name, active from duckdb_log_sinks() where name like 'sink_%' order by name");
+	REQUIRE(CHECK_COLUMN(result, 0, {"sink_a", "sink_b"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BOOLEAN(false), Value::BOOLEAN(false)}));
+	REQUIRE_THROWS_WITH(log_manager.DisableLogSink(*db.instance, "sink_c"),
+	                    Catch::Matchers::Contains("Log sink 'sink_c' does not exist"));
+
+	// enabling it again resumes it
+	log_manager.EnableLogSink(*db.instance, "sink_a");
+	REQUIRE_NO_FAIL(con.Query("select write_log('ENABLED AGAIN');"));
+	REQUIRE(sink_a->log_store.count("ENABLED AGAIN") == 1);
+	REQUIRE(sink_b->log_store.count("ENABLED AGAIN") == 0);
 	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "sink_c"),
 	                    Catch::Matchers::Contains("is not yet registered"));
 	// the name of a registered sink is reserved for it
@@ -296,22 +306,21 @@ TEST_CASE("Test a registered log sink is enabled under one name", "[logging]") {
 	// it exists once, so it cannot be enabled under a second name, nor its own
 	REQUIRE_FAIL(con.Query("call enable_log_sink('collector2', type='counting_sink');"));
 	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "counting_sink"),
-	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already enabled as 'collector'"));
+	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already in use as 'collector'"));
 	REQUIRE_NO_FAIL(con.Query("select write_log('STILL ONCE');"));
 	REQUIRE(counting_sink->message_counts["STILL ONCE"] == 1);
 
-	// as the default log sink it is no longer enabled under its name
-	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='counting_sink';"));
+	// it moves to the default log sink, and no longer has its name
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(type := 'counting_sink');"));
 	REQUIRE(!log_manager.IsLogSinkEnabled("collector"));
 	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE AS DEFAULT');"));
 	REQUIRE(counting_sink->message_counts["ONCE AS DEFAULT"] == 1);
 	REQUIRE_THROWS_WITH(log_manager.EnableLogSink(*db.instance, "counting_sink"),
-	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already enabled as 'default'"));
+	                    Catch::Matchers::Contains("Log sink 'counting_sink' is already in use as 'default'"));
 	REQUIRE_FAIL(con.Query("call disable_log_sink('counting_sink');"));
 
 	// once the default log sink changes, it can be enabled by name again
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='memory';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(type := 'memory');"));
 	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('counting_sink');"));
 	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE BY NAME');"));
 	REQUIRE(counting_sink->message_counts["ONCE BY NAME"] == 1);
@@ -339,30 +348,78 @@ TEST_CASE("Test deprecated logging_storage setting and shell_log_storage sink na
 	REQUIRE(log_manager.RegisterLogSink("warning_sink", warning_ptr));
 	REQUIRE(log_manager.RegisterLogSink("shell_log_sink", shell_ptr));
 
-	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='warning_sink';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(type := 'warning_sink');"));
 	REQUIRE(!ContainsMessage(warning_sink->log_store, "is deprecated"));
 
-	// the deprecated setting reads and writes the same sink, and warns
+	// the deprecated setting reads and writes the type of the default log sink, and warns
 	auto result = con.Query("select current_setting('logging_storage')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"warning_sink"}));
 	REQUIRE_NO_FAIL(con.Query("set logging_storage='warning_sink';"));
-	REQUIRE(ContainsMessage(warning_sink->log_store, "the logging_storage setting is deprecated: use logging_sink"));
+	REQUIRE(ContainsMessage(warning_sink->log_store,
+	                        "the logging_storage setting is deprecated: use CALL enable_logging(type := '...')"));
 
 	// the old name of the shell sink resolves to the new one, and warns
 	REQUIRE(!ContainsMessage(warning_sink->log_store, "has been renamed"));
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='shell_log_storage';"));
+	REQUIRE_NO_FAIL(con.Query("set logging_storage='shell_log_storage';"));
 	REQUIRE(ContainsMessage(warning_sink->log_store, "'shell_log_storage' has been renamed to 'shell_log_sink'"));
 	REQUIRE(log_manager.GetConfig().storage == "shell_log_sink");
+	// the deprecated setting shows the name the shell sink had when it was not deprecated
+	result = con.Query("select current_setting('logging_storage')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"shell_log_storage"}));
 	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, RENAMED SINK');"));
 	REQUIRE(shell_sink->log_store.find("HELLO, RENAMED SINK") != shell_sink->log_store.end());
 
 	// same through enable_logging
-	REQUIRE_NO_FAIL(con.Query("set logging_sink='warning_sink';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(type := 'warning_sink');"));
 	warning_sink->log_store.clear();
 	REQUIRE_NO_FAIL(con.Query("call enable_logging(sink = 'shell_log_storage');"));
 	REQUIRE(ContainsMessage(warning_sink->log_store, "'shell_log_storage' has been renamed to 'shell_log_sink'"));
 	REQUIRE(log_manager.GetConfig().storage == "shell_log_sink");
+}
+
+// A log sink written against the names from before log storages were renamed to log sinks
+class OldStyleLogStorage : public LogStorage {
+public:
+	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+	                   const RegisteredLoggingContext &context) override {
+		log_store.insert(log_message);
+	};
+	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override {};
+	void Flush(LoggingTargetTable table) override {};
+	void FlushAll() override {};
+	bool IsEnabled(LoggingTargetTable table) override {
+		return table == LoggingTargetTable::ALL_LOGS;
+	}
+	const string GetStorageName() override {
+		return "OldStyleLogStorage";
+	}
+
+	unordered_set<string> log_store;
+};
+
+TEST_CASE("Test the deprecated log storage names", "[logging]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &log_manager = db.instance->GetLogManager();
+
+	auto storage = make_shared_ptr<OldStyleLogStorage>();
+	duckdb::shared_ptr<LogStorage> storage_ptr = storage;
+	REQUIRE(log_manager.RegisterLogStorage("old_style_storage", storage_ptr));
+	log_manager.SetLogStorage(*db.instance, "old_style_storage");
+	log_manager.SetEnableLogging(true);
+	REQUIRE(log_manager.GetLogStorage().get() == storage.get());
+	REQUIRE(storage->GetSinkName() == "OldStyleLogStorage");
+
+	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, OLD STORAGE');"));
+	REQUIRE(storage->log_store.count("HELLO, OLD STORAGE") == 1);
+
+	// the default log sink is a memory log storage again
+	log_manager.SetLogStorage(*db.instance, "memory");
+	REQUIRE_NO_FAIL(con.Query("select write_log('IN MEMORY');"));
+	REQUIRE(log_manager.GetLogStorage()->CanScan(LoggingTargetTable::LOG_ENTRIES));
+	REQUIRE_NOTHROW(log_manager.TruncateLogStorage());
+	auto result = con.Query("select count(*) from duckdb_logs where message = 'IN MEMORY'");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
 
 struct CorrectLogType : public LogType {

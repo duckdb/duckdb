@@ -1285,8 +1285,8 @@ static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::L
 	auto *db_instance = db.instance.get();
 	auto &log_manager = db_instance->GetLogManager();
 	log_manager.RegisterLogSink("shell_log_sink", sink_ptr);
-	// the shell's sink prints the warnings, and the default memory sink keeps them queryable with duckdb_logs
-	log_manager.EnableLogSink(*db_instance, "shell_log_sink");
+	// the shell's sink is the default log sink, it prints the warnings to the console
+	log_manager.SetDefaultLogSink(*db_instance, "shell_log_sink");
 	log_manager.SetEnableLogging(true);
 	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
 }

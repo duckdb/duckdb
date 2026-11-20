@@ -9,7 +9,7 @@ statement ok
 CALL enable_logging(sink='memory')
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 memory
 
@@ -23,7 +23,7 @@ Cannot enable the 'file' log sink without a valid path
 
 # The failed call must not have switched the active storage...
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 memory
 
@@ -33,7 +33,7 @@ statement ok
 CALL enable_logging('QueryLog', sink='file', sink_path='{TEST_DIR}/issue9144.csv')
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 file
 
@@ -46,7 +46,7 @@ statement ok
 CALL enable_logging()
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 file
 
@@ -77,32 +77,21 @@ CALL enable_logging(sink_config:={path:''});
 Cannot enable the 'file' log sink without a valid path
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 memory
 
 statement ok
 SELECT 42
 
-# --- SET logging_sink='file' cannot supply a path: clean error, storage unchanged ---
+# --- the logging_sink setting is gone, enable_logging gives the path ---
 statement error
 SET logging_sink='file';
 ----
-Cannot select 'file' log sink
+unrecognized configuration parameter "logging_sink"
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
-----
-memory
-
-# Case-insensitive: an upper-cased value must be caught too (must not bypass the guard)
-statement error
-SET logging_sink='FILE';
-----
-Cannot select 'file' log sink
-
-query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 memory
 

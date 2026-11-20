@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from conftest import ShellTest
@@ -79,20 +81,33 @@ def test_multiple_warnings(shell):
     result.check_stdout("│ [3]     │ [3]     │ [3]     │")
 
 
-def test_changing_the_default_sink_keeps_printing_warnings(shell, tmp_path):
-    # the shell's sink is enabled by name in the CLI, so changing the default log sink does not drop it
+def standalone_lines(result):
+    # the result boxes also show the SQL of the column names, so only lines of their own are printed log entries.
+    # The warnings are printed in colour, without the colour codes the line is the message
+    return [re.sub(r'\x1b\[[0-9;]*m', '', line).strip() for line in result.stdout.splitlines()]
+
+
+def test_changing_the_default_sink_stops_printing_warnings(shell, tmp_path):
+    # the shell's sink is the default log sink in the CLI, another default log sink replaces it
     log_dir = tmp_path / 'log_dir'
     test = (
         ShellTest(shell)
         .statement(
             f"CALL enable_logging(level = 'warning', sink = 'file', sink_config = {{'path': '{log_dir.as_posix()}'}});"
         )
-        .statement("SELECT write_log('still printed', level := 'WARNING') AS x;")
+        .statement("SELECT write_log('not printed', level := 'WARNING') AS x;")
+        .statement("CALL enable_log_sink('shell_log_sink', level := 'warning');")
+        .statement("SELECT write_log('printed again', level := 'WARNING') AS x;")
     )
 
     result = test.run()
-    result.check_not_exist("The logging settings have been changed")
-    result.check_stdout("still printed")
+    result.check_stdout("The logging settings have been changed")
+    result.check_stdout(
+        "To keep printing warnings to the console, also run CALL enable_log_sink('shell_log_sink', level := 'warning')."
+    )
+    lines = standalone_lines(result)
+    assert "not printed" not in lines
+    assert "printed again" in lines
 
 
 def test_deprecated_shell_log_storage(shell):
@@ -117,79 +132,69 @@ def test_keeping_shell_log_sink_does_not_warn(shell):
 
 
 @pytest.mark.parametrize(
-    "statement",
-    ["CALL enable_logging(level = 'error');", "CALL enable_logging('QueryLog');"],
+    "statement, example",
+    [
+        (
+            "CALL enable_logging(level = 'error');",
+            "CALL enable_log_sink('my_logs', type := 'memory', level := 'error').",
+        ),
+        (
+            "CALL enable_logging('QueryLog');",
+            "CALL enable_log_sink('my_logs', type := 'memory', log_types := ['QueryLog']).",
+        ),
+    ],
 )
-def test_dropping_warnings_from_shell_log_sink_warns(shell, statement):
+def test_dropping_warnings_from_shell_log_sink_warns(shell, statement, example):
     test = ShellTest(shell).statement(statement)
 
     result = test.run()
     result.check_stdout("The logging settings have been changed")
-    result.check_stdout("The log level and the log types apply to every log sink")
+    result.check_stdout("The default log sink prints the warnings to the console")
+    result.check_stdout(example)
 
 
-def test_dropping_warnings_from_named_shell_log_sink_warns(shell):
+def test_named_shell_log_sink_keeps_printing_warnings(shell):
+    # a shell sink of its own has its own level, enable_logging changes the default log sink only
     test = (
         ShellTest(shell)
-        .statement("SET logging_sink = 'memory';")
-        .statement("CALL enable_log_sink('shell_log_sink');")
+        .statement("CALL enable_logging(sink = 'memory');")
+        .statement("CALL enable_log_sink('shell_log_sink', level := 'warning');")
         .statement("CALL enable_logging(level = 'error');")
+        .statement("SELECT write_log('still printed', level := 'WARNING') AS x;")
     )
 
     result = test.run()
-    result.check_stdout("The logging settings have been changed")
-
-
-def test_switching_default_sink_with_named_shell_log_sink_does_not_warn(shell):
-    # a shell sink enabled by name keeps printing warnings when the default log sink changes
-    test = (
-        ShellTest(shell)
-        .statement("SET logging_sink = 'memory';")
-        .statement("CALL enable_log_sink('shell_log_sink');")
-        .statement("CALL enable_logging(sink = 'stdout');")
-    )
-
-    result = test.run()
-    result.check_not_exist("The logging settings have been changed")
+    # only leaving the shell's sink as the default log sink warns
+    assert result.stdout.count("The logging settings have been changed") == 1
+    assert "still printed" in standalone_lines(result)
 
 
 def test_enable_shell_log_sink(shell):
-    # by default the CLI prints the warnings, and keeps them in the default memory sink
+    # by default the CLI prints the warnings with its default log sink
     test = (
         ShellTest(shell)
-        .statement("SET logging_storage = 'memory';")
-        .statement(
-            "SELECT 'stored-' || count(*) AS stored FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';"
-        )
+        .statement("SELECT name || ':' || type AS sinks FROM duckdb_log_sinks();")
+        .statement("SELECT write_log('printed', level := 'WARNING') AS x;")
     )
     result = test.run()
-    result.check_stdout("the logging_storage setting is deprecated")
-    result.check_stdout("stored-1")
+    result.check_stdout("default:shell_log_sink")
+    assert "printed" in standalone_lines(result)
 
-    # without the shell's sink, the warnings are no longer printed
+    # without logging, the warnings are no longer printed
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink');")
-        .statement("SET logging_storage = 'memory';")
+        .statement("CALL disable_logging();")
+        .statement("SELECT write_log('not printed', level := 'WARNING') AS x;")
     )
     result = test.run()
-    assert "the logging_storage setting is deprecated" not in result.stdout
+    assert "not printed" not in standalone_lines(result)
 
-    # enabling the shell's sink prints them again
+    # enabling logging prints them again
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink');")
-        .statement("CALL enable_log_sink('shell_log_sink');")
-        .statement("SET logging_storage = 'memory';")
+        .statement("CALL disable_logging();")
+        .statement("CALL enable_logging();")
+        .statement("SELECT write_log('printed again', level := 'WARNING') AS x;")
     )
     result = test.run()
-    result.check_stdout("the logging_storage setting is deprecated")
-
-    # the warning about leaving the shell's sink as the default log sink says how to keep it
-    test = (
-        ShellTest(shell)
-        .statement("CALL enable_logging(level = 'warning', sink = 'shell_log_sink');")
-        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
-    )
-    result = test.run()
-    result.check_stdout("To keep printing warnings to the console, also run CALL enable_log_sink('shell_log_sink').")
+    assert "printed again" in standalone_lines(result)

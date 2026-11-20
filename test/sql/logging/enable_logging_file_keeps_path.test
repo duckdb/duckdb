@@ -24,7 +24,7 @@ statement ok
 SELECT 2;
 
 query I
-SELECT current_setting('logging_sink');
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 file
 
@@ -49,7 +49,7 @@ statement ok
 SELECT 2;
 
 query I
-SELECT current_setting('logging_sink');
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 memory
 
@@ -69,7 +69,7 @@ statement ok
 SELECT 2;
 
 query I
-SELECT current_setting('logging_sink');
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 file
 

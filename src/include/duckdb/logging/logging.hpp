@@ -44,6 +44,8 @@ struct LogConfig {
 	LogConfig();
 
 	DUCKDB_API bool IsConsistent() const;
+	//! Whether a log entry of this type and level passes this config
+	DUCKDB_API bool Accepts(const char *log_type, LogLevel log_level) const;
 	//! Whether this lowercased name is one of the log sinks DuckDB provides
 	DUCKDB_API static bool IsBuiltInLogSink(const string &sink_name);
 

@@ -8,21 +8,16 @@ SET GLOBAL logging_level = 'INFO';
 statement ok
 SET GLOBAL enable_logging = true;
 
-# logging_sink is the listed setting, logging_storage is deprecated and hidden
+# logging_storage is deprecated and hidden, logging_sink is gone: enable_logging(type := ...) sets the type
 query I
-SELECT count(*) FROM duckdb_settings() WHERE name = 'logging_sink';
-----
-1
-
-query I
-SELECT count(*) FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT count(*) FROM duckdb_settings() WHERE name IN ('logging_storage', 'logging_sink');
 ----
 0
 
 query I
-SELECT current_setting('logging_storage') = current_setting('logging_sink');
+SELECT current_setting('logging_storage');
 ----
-true
+memory
 
 # Setting the deprecated name works, and warns
 statement ok
@@ -33,31 +28,20 @@ SELECT count(*) FROM duckdb_logs WHERE starts_with(message, 'the logging_storage
 ----
 1
 
-# Both names change the same sink
+# It sets the type of the default log sink
 statement ok
 SET logging_storage = 'stdout';
 
 query I
-SELECT current_setting('logging_sink');
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default';
 ----
 stdout
-
-statement ok
-SET logging_sink = 'memory';
-
-query I
-SELECT current_setting('logging_storage');
-----
-memory
-
-statement ok
-SET logging_storage = 'stdout';
 
 statement ok
 RESET logging_storage;
 
 query I
-SELECT current_setting('logging_sink');
+SELECT current_setting('logging_storage');
 ----
 memory
 
@@ -68,7 +52,7 @@ SET warnings_as_errors = true;
 statement error
 SET logging_storage = 'stdout';
 ----
-the logging_storage setting is deprecated: use logging_sink instead
+the logging_storage setting is deprecated: use CALL enable_logging(type := '...') instead
 
 statement ok
 RESET logging_storage;
@@ -76,7 +60,7 @@ RESET logging_storage;
 statement ok
 SET warnings_as_errors = false;
 
-# Errors are the same as for logging_sink
+# Errors are the same as for enable_logging
 statement error
 SET logging_storage = 'quack';
 ----
@@ -85,14 +69,14 @@ Invalid Input Error: Log sink 'quack' is not yet registered
 statement error
 SET logging_storage = 'file';
 ----
-Cannot select 'file' log sink
+The 'file' log sink requires a path
 
 # The deprecated storage parameters of enable_logging keep working, and warn
 statement ok
 CALL enable_logging(storage='memory')
 
 query I
-SELECT current_setting('logging_sink');
+SELECT current_setting('logging_storage');
 ----
 memory
 
@@ -105,7 +89,7 @@ statement ok
 CALL enable_logging(storage_path='{TEST_DIR}/logging_deprecated_names.csv', storage_normalize=false)
 
 query I
-SELECT current_setting('logging_sink');
+SELECT current_setting('logging_storage');
 ----
 file
 

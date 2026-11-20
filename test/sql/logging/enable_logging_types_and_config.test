@@ -1,5 +1,5 @@
 # name: test/sql/logging/enable_logging_types_and_config.test
-# description: enable_logging takes the log types as log_types := and the sink config as config :=, like enable_log_sink
+# description: enable_logging takes the log types as log_types := and the sink config as config :=, like enable_log_sink. As in 2.0.0, it sets the whole filter of the default log sink
 # group: [logging]
 
 require noforcestorage
@@ -59,6 +59,23 @@ CALL enable_logging(log_types := ['Bogus'])
 ----
 Unknown log type: 'Bogus'
 
+# as in 2.0.0, the log types are logged at their own level, a level given with them is not used
+statement ok
+CALL enable_logging(log_types := ['FileSystem'])
+
+query I
+SELECT current_setting('logging_level')
+----
+TRACE
+
+statement ok
+CALL enable_logging(log_types := ['QueryLog'], level := 'warning')
+
+query II
+SELECT current_setting('enabled_log_types'), current_setting('logging_level')
+----
+QueryLog	INFO
+
 # a type of log sink given as the log type gets a hint
 statement error
 CALL enable_logging('memory')
@@ -70,9 +87,17 @@ CALL enable_logging(log_types := ['FILE'])
 ----
 Unknown log type: 'FILE'. 'FILE' is a type of log sink, did you mean CALL enable_logging(type := 'file')?
 
-# without log types, every log type is logged again
+# as in 2.0.0, the level and the log types that are not given go back to the default level with every log type
+statement ok
+CALL enable_logging(log_types := ['QueryLog'], level := 'warning')
+
 statement ok
 CALL enable_logging()
+
+query II
+SELECT current_setting('enabled_log_types'), current_setting('logging_level')
+----
+(empty)	INFO
 
 statement ok
 SELECT write_log('kept')
@@ -115,11 +140,6 @@ statement error
 CALL enable_logging(type := 'file')
 ----
 Cannot enable the 'file' log sink without a valid path. Provide one in config, e.g. CALL enable_logging(type := 'file', config := {path: 'mylog.csv'});
-
-statement error
-SET logging_sink = 'file'
-----
-Use CALL enable_logging(type := 'file', config := {path: '...'}) instead.
 
 # a parameter cannot be given twice under different names
 statement error

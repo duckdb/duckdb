@@ -147,12 +147,12 @@ CALL disable_logging();
 statement error
 CALL enable_logging(['FileSystem'], sink='stdout', sink_config={'bla': 'bla'});
 ----
-Invalid Input Error: Unrecognized log sink config option for sink: 'StdOutLogSink': 'bla'
+Invalid Input Error: Log sink 'default' is a 'stdout' log sink, which has no option 'bla'. Its options are buffer_size, delim
 
 statement error
 CALL enable_logging(['FileSystem'], sink='stdout', sink_config={'path': './file.csv'});
 ----
-Invalid Input Error: Unrecognized log sink config option for sink: 'StdOutLogSink': 'path'
+Invalid Input Error: Log sink 'default' is a 'stdout' log sink, which has no option 'path'. Its options are buffer_size, delim
 
 # Switching between normalized and denormalized logs will throw if the log is non-empty
 

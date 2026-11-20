@@ -7,11 +7,9 @@ import os
 from typing import List
 from conftest import ShellTest
 
-# the shell's sink prints the log entries as well, so the tests of the stdout sink turn it off first
 def test_logging(shell):
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout')")
         .statement('SELECT 1 as a')
     )
@@ -24,7 +22,6 @@ def test_logging(shell):
 def test_logging_custom_delim(shell):
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout', sink_config={'delim':','})")
         .statement('SELECT 1 as a')
     )
@@ -93,7 +90,6 @@ def test_logging_error_no_dedup(shell):
 def test_logging_buffering(shell):
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink')")
         .statement("CALL enable_logging('QueryLog', sink='stdout', sink_buffer_size=1000, sink_config={'only_flush_on_full_buffer': true})")
         .statement('SELECT 1 as a')
         .statement('SELECT 2 as b')
@@ -102,37 +98,62 @@ def test_logging_buffering(shell):
     result.check_not_exist("QueryLog")
 
 
-def test_logs_are_queryable_in_the_cli(shell):
-    # the CLI prints the warnings and keeps them in the default memory sink
+def test_logs_are_queryable_in_a_memory_sink_in_the_cli(shell):
+    # the CLI's default log sink prints the warnings, a memory sink of its own keeps them queryable
     test = (
         ShellTest(shell)
+        .statement("CALL enable_log_sink('my_logs', type := 'memory')")
         .statement("SELECT write_log('cli warning', level := 'WARNING')")
-        .statement("SELECT 'stored-' || count(*) AS stored FROM duckdb_logs WHERE message = 'cli warning'")
+        .statement("SELECT 'stored-' || count(*) AS stored FROM duckdb_logs('my_logs') WHERE message = 'cli warning'")
     )
     result = test.run()
     result.check_stdout("stored-1")
 
 
-def test_stdout_sink_in_the_cli_warns_about_printing_twice(shell):
-    test = ShellTest(shell).statement("CALL enable_logging(sink='stdout')")
+def test_default_sink_cannot_be_read_in_the_cli(shell):
+    test = ShellTest(shell).statement("FROM duckdb_logs")
     result = test.run()
-    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+    result.check_stderr("Log sink 'default' is a 'shell_log_sink' log sink, which cannot be read")
+    result.check_stderr("CALL enable_log_sink('my_logs', type := 'memory')")
 
+
+def test_logging_storage_shows_the_old_shell_name(shell):
+    # the deprecated setting shows the name the CLI's sink had in 2.0.0
+    test = ShellTest(shell).statement("SELECT 'storage-' || current_setting('logging_storage') AS storage")
+    result = test.run()
+    result.check_stdout("storage-shell_log_storage")
+
+
+def test_stdout_sink_in_the_cli_warns_about_printing_twice(shell):
+    # a stdout sink next to the CLI's default log sink prints the log entries twice
     test = ShellTest(shell).statement("CALL enable_log_sink('stdout')")
     result = test.run()
-    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+    result.check_stdout("both print the log entries to the console")
+    result.check_stdout("To print them once, run CALL disable_logging().")
 
-    test = ShellTest(shell).statement("SET logging_sink = 'stdout'")
+    # a stdout default log sink replaces the CLI's sink, which stops printing the warnings
+    test = ShellTest(shell).statement("CALL enable_logging(sink='stdout')")
     result = test.run()
-    result.check_stdout("CALL disable_log_sink('shell_log_sink')")
+    result.check_not_exist("both print the log entries to the console")
+    result.check_stdout("CALL enable_log_sink('shell_log_sink', level := 'warning')")
 
-    # without the shell's sink, stdout is the only sink that prints
+    # a shell sink of its own next to a stdout default log sink prints them twice as well
     test = (
         ShellTest(shell)
-        .statement("CALL disable_log_sink('shell_log_sink')")
+        .statement("CALL enable_logging(sink='memory')")
+        .statement("CALL enable_log_sink('shell_log_sink', level := 'warning')")
         .statement("CALL enable_logging(sink='stdout')")
     )
     result = test.run()
-    result.check_not_exist("CALL disable_log_sink('shell_log_sink')")
+    result.check_stdout("To print them once, run CALL disable_log_sink('shell_log_sink').")
+
+    # without the CLI's sink, stdout is the only sink that prints
+    test = (
+        ShellTest(shell)
+        .statement("CALL disable_logging()")
+        .statement("CALL enable_log_sink('stdout')")
+    )
+    result = test.run()
+    result.check_not_exist("both print the log entries to the console")
 
 # fmt: on
