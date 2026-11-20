@@ -133,6 +133,7 @@ void QueryProfiler::Start(const string &query) {
 
 void QueryProfiler::Reset() {
 	tree_map.clear();
+	collapsed_operators.clear();
 	root = nullptr;
 	metrics.reset();
 	tracked_metric_patterns.reset();
@@ -611,8 +612,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	for (auto &node : profiler.operator_metrics) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
-		// all profiled operators should be registered in the tree
-		D_ASSERT(entry != tree_map.end());
+		// all profiled operators are registered in the tree, until a secure view collapses and drops the ones
+		// it hides - a thread still running the view can flush after that
+		D_ASSERT(entry != tree_map.end() || collapsed_operators.find(op) != collapsed_operators.end());
 		if (entry == tree_map.end()) {
 			continue;
 		}
@@ -1155,6 +1157,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		// query does not require profiling: disable profiling for this query
 		running = false;
 		tree_map.clear();
+		collapsed_operators.clear();
 		root = nullptr;
 	} else {
 		metrics = make_uniq<GatheredMetrics>(Settings::Get<TrackedMetricsSetting>(context));
@@ -1210,14 +1213,35 @@ static double SumSubtreeTime(ProfilingNode &node) {
 //! contents of the view - how many rows it processed internally, how much of the table it scanned.
 //! This runs before any profiling output is produced, so every consumer (EXPLAIN ANALYZE in any format, the
 //! profiling output, the query profile result) sees the collapsed tree.
-static void CollapseSecureViews(ProfilingNode &node) {
+static void CollectSubtree(ProfilingNode &node, reference_set_t<ProfilingNode> &nodes) {
+	nodes.insert(node);
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		CollectSubtree(*node.GetChild(i), nodes);
+	}
+}
+
+static void CollapseSecureViews(ProfilingNode &node, QueryProfiler::TreeMap &tree_map,
+                                reference_set_t<const PhysicalOperator> &collapsed_operators) {
 	if (node.GetOperatorMetrics().operator_type == PhysicalOperatorType::SECURE_VIEW) {
 		node.GetOperatorMetrics().time = SumSubtreeTime(node);
+		// the tree map is read after this, so it must not keep pointing at the nodes this frees
+		reference_set_t<ProfilingNode> dropped;
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			CollectSubtree(*node.GetChild(i), dropped);
+		}
+		for (auto it = tree_map.begin(); it != tree_map.end();) {
+			if (dropped.find(it->second) != dropped.end()) {
+				collapsed_operators.insert(it->first);
+				it = tree_map.erase(it);
+			} else {
+				it++;
+			}
+		}
 		node.children.clear();
 		return;
 	}
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-		CollapseSecureViews(*node.GetChild(i));
+		CollapseSecureViews(*node.GetChild(i), tree_map, collapsed_operators);
 	}
 }
 
@@ -1233,7 +1257,7 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		// collapse secure views first - the query-wide totals are sums over the operator tree, so leaving the
 		// operators of the view in would expose how much of the table behind it was scanned. The time of the view
 		// is accumulated onto its boundary node, so the total CPU time still covers the whole query.
-		CollapseSecureViews(*root);
+		CollapseSecureViews(*root, tree_map, collapsed_operators);
 		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
 		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
