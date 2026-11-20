@@ -31,6 +31,8 @@ public:
 private:
 	//! Lowest active transaction
 	VisibilityBound lowest_visibility_bound;
+	//! Bound used for append cleanup (bounded below any uncheckpointed WAL-skipping commit)
+	VisibilityBound append_visibility_bound;
 	ActiveTransactionState transaction_state;
 	//! While cleaning up, we remove data from any delta indexes we added data to during the commit
 	IndexDataRemover index_data_remover;
