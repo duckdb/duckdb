@@ -1,77 +1,97 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/string.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uuid.hpp"
+
+#include <cmath>
 #ifdef __MVS__
 #include <zos-tls.h>
 #endif
 
 namespace duckdb {
 
-static bool IsSimpleUserSettingValue(const Value &value) {
-	const auto &type = value.type();
-	if (type.HasAlias() || type.HasExtensionInfo()) {
+static bool HasUserSettingExtensionType(const LogicalType &type) {
+	if (!type.IsNested()) {
+		return type.HasExtensionInfo();
+	}
+	return TypeVisitor::Contains(type, [](const LogicalType &child) { return child.HasExtensionInfo(); });
+}
+
+static bool UserSettingValuesEqual(const Value &left, const Value &right);
+
+static bool UserSettingChildrenEqual(const vector<Value> &left, const vector<Value> &right) {
+	if (left.size() != right.size()) {
 		return false;
 	}
-	if (type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(type).empty()) {
+	for (idx_t i = 0; i < left.size(); i++) {
+		if (!UserSettingValuesEqual(left[i], right[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool UserSettingValuesEqual(const Value &left, const Value &right) {
+	// A no-op must preserve the type; NotDistinctFrom can cast values or equate differently typed NULLs.
+	if (left.type() != right.type()) {
 		return false;
 	}
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_NS:
-	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::INTERVAL:
-		return true;
+	// Ordinary type equality ignores collations, including those on nested child types.
+	if ((left.type().IsNested() || left.type().id() == LogicalTypeId::VARCHAR) &&
+	    !left.type().EqualsIncludingCollation(right.type())) {
+		return false;
+	}
+	if (left.IsNull() || right.IsNull()) {
+		return Value::NotDistinctFrom(left, right);
+	}
+	switch (left.type().InternalType()) {
+	// NotDistinctFrom equates signed zeros and NaNs; preserve the sign and allow NaNs to miss the no-op.
+	case PhysicalType::FLOAT: {
+		const auto lvalue = left.GetValueUnsafe<float>();
+		const auto rvalue = right.GetValueUnsafe<float>();
+		return lvalue == rvalue && std::signbit(lvalue) == std::signbit(rvalue);
+	}
+	case PhysicalType::DOUBLE: {
+		const auto lvalue = left.GetValueUnsafe<double>();
+		const auto rvalue = right.GetValueUnsafe<double>();
+		return lvalue == rvalue && std::signbit(lvalue) == std::signbit(rvalue);
+	}
+	// NotDistinctFrom equates 1 month with 30 days, but date arithmetic distinguishes them.
+	case PhysicalType::INTERVAL:
+		return left.GetValueUnsafe<interval_t>().SameFields(right.GetValueUnsafe<interval_t>());
+	// SQL nested equality applies those same normalizations to children; recurse with these stricter rules.
+	case PhysicalType::STRUCT:
+		return UserSettingChildrenEqual(StructValue::GetChildren(left), StructValue::GetChildren(right));
+	case PhysicalType::LIST:
+		return UserSettingChildrenEqual(ListValue::GetChildren(left), ListValue::GetChildren(right));
+	case PhysicalType::ARRAY:
+		return UserSettingChildrenEqual(ArrayValue::GetChildren(left), ArrayValue::GetChildren(right));
+	// NotDistinctFrom does not implement comparisons for these internal types.
+	case PhysicalType::INVALID:
+	case PhysicalType::UNKNOWN:
+	case PhysicalType::BIT:
+		return false;
 	default:
-		return false;
+		return Value::NotDistinctFrom(left, right);
 	}
 }
 
-static bool IsNaNUserSettingValue(const Value &value) {
-	if (value.IsNull()) {
-		return false;
-	}
-	switch (value.type().id()) {
-	case LogicalTypeId::FLOAT:
-		return Value::IsNan(value.GetValueUnsafe<float>());
-	case LogicalTypeId::DOUBLE:
-		return Value::IsNan(value.GetValueUnsafe<double>());
-	default:
-		return false;
-	}
-}
-
-void UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
+bool UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
 	if (setting_index >= settings.size()) {
 		settings.resize(setting_index + 1);
 	}
 	auto &generic_setting = settings[setting_index];
+	// Extension type equality can ignore missing modifiers and properties.
+	if (generic_setting.is_set && !HasUserSettingExtensionType(generic_setting.value.type()) &&
+	    !HasUserSettingExtensionType(target_value.type()) &&
+	    UserSettingValuesEqual(generic_setting.value, target_value)) {
+		return false;
+	}
 	generic_setting.is_set = true;
 	generic_setting.value = std::move(target_value);
+	return true;
 }
 
 void UserSettingsMap::ClearSetting(idx_t setting_index) {
@@ -125,15 +145,9 @@ GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &othe
 
 void GlobalUserSettings::SetUserSetting(idx_t setting_index, Value target_value) {
 	lock_guard<mutex> guard(lock);
-	Value current_value;
-	if (IsSimpleUserSettingValue(target_value) && !IsNaNUserSettingValue(target_value) &&
-	    settings_map.TryGetSetting(setting_index, current_value) && IsSimpleUserSettingValue(current_value) &&
-	    current_value.type().EqualsIncludingCollation(target_value.type()) &&
-	    Value::NotDistinctFrom(current_value, target_value)) {
-		return;
+	if (settings_map.SetUserSetting(setting_index, std::move(target_value))) {
+		++settings_version;
 	}
-	settings_map.SetUserSetting(setting_index, std::move(target_value));
-	++settings_version;
 }
 
 void GlobalUserSettings::ClearSetting(idx_t setting_index) {
