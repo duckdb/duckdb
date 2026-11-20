@@ -7,7 +7,7 @@ require quack
 require httpfs
 
 statement ok
-CALL enable_logging('ExternalResource', storage='memory');
+CALL enable_logging('ExternalResource', sink='memory');
 
 # Let the OS choose a port so concurrent test processes cannot share the listener.
 statement ok

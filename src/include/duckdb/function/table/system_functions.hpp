@@ -13,6 +13,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
+class LogSink;
 
 class Context;
 
@@ -153,9 +154,21 @@ struct DuckDBKeywordsFun {
 
 struct DuckDBLogFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+
+	//! The name of the sink to read, or an empty string for the default log sink
+	static string GetSinkName(TableFunctionBindInput &input);
+	//! Adds the optional sink parameter, which can be passed by position or as sink := ...
+	static void AddSinkParameter(TableFunction &function);
+	//! Throws a hint to use denormalized_table=true if the sink only stores the denormalized logs
+	static void VerifyNormalizedLogs(ClientContext &context, TableFunctionBindInput &input, LogSink &log_sink,
+	                                 const string &sink_name);
 };
 
 struct DuckDBLogContextFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBLogSinksFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

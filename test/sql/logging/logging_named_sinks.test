@@ -1,0 +1,278 @@
+# name: test/sql/logging/logging_named_sinks.test
+# description: Enable several log sinks of the same type with enable_log_sink(name, type := ...)
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+statement ok
+CALL enable_logging()
+
+# two memory sinks next to the default memory sink
+statement ok
+CALL enable_log_sink('errors', type='memory')
+
+statement ok
+CALL enable_log_sink('Debug', type := 'MEMORY')
+
+# the default log sink comes first, then the named sinks by name, names are lowercased
+query II
+SELECT name, type FROM duckdb_log_sinks()
+----
+default	memory
+debug	memory
+errors	memory
+
+statement ok
+SELECT write_log('to all three')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to all three'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('errors') WHERE message = 'to all three'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('DEBUG') WHERE message = 'to all three'
+----
+1
+
+# a disabled named sink no longer receives log entries, and keeps the ones it has
+statement ok
+CALL disable_log_sink('debug')
+
+statement ok
+SELECT write_log('after disabling debug')
+
+query I
+SELECT count(*) FROM duckdb_logs('errors') WHERE message = 'after disabling debug'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('debug') WHERE message IN ('to all three', 'after disabling debug')
+----
+1
+
+statement error
+CALL disable_log_sink('nope')
+----
+Log sink 'nope' does not exist
+
+# truncate_duckdb_logs clears the default log sink, or the sink with the given name
+statement ok
+CALL truncate_duckdb_logs('errors')
+
+query I
+SELECT count(*) FROM duckdb_logs('errors') WHERE message = 'to all three'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to all three'
+----
+1
+
+statement ok
+CALL truncate_duckdb_logs('default')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to all three'
+----
+0
+
+# a disabled sink can be truncated as well
+statement ok
+CALL truncate_duckdb_logs('debug')
+
+query I
+SELECT count(*) FROM duckdb_logs('debug')
+----
+0
+
+statement error
+CALL truncate_duckdb_logs('nope')
+----
+Log sink 'nope' does not exist
+
+# a name without a type is the type, a name of your own needs a type
+statement error
+CALL enable_log_sink('audit')
+----
+Log sink 'audit' is not yet registered. To enable a log sink under a name of your own, give its type, e.g. CALL enable_log_sink('audit', type='memory')
+
+statement error
+CALL enable_log_sink('audit', type='bogus')
+----
+Unknown log sink type 'bogus', use 'memory', 'stdout', 'file' or the name of a registered log sink
+
+statement error
+CALL enable_log_sink('audit', type=NULL)
+----
+enable_log_sink: type cannot be NULL or empty
+
+statement error
+CALL enable_log_sink('audit', type='')
+----
+enable_log_sink: type cannot be NULL or empty
+
+# the names of the sink types are reserved for those types
+statement error
+CALL enable_log_sink('stdout', type='memory')
+----
+The log sink name 'stdout' is reserved for the 'stdout' log sink, choose another name
+
+statement error
+CALL enable_log_sink('memory', type='file', config={path: '{TEST_DIR}/logging_named_sinks_memory.csv'})
+----
+The log sink name 'memory' is reserved for the 'memory' log sink, choose another name
+
+# giving a sink named after its type that type is the same as giving no type
+statement ok
+CALL enable_log_sink('memory', type='memory')
+
+query II
+SELECT name, type FROM duckdb_log_sinks() WHERE active
+----
+default	memory
+errors	memory
+memory	memory
+
+statement ok
+CALL disable_log_sink('memory')
+
+# two file sinks, each needs a path of its own
+statement error
+CALL enable_log_sink('audit', type='file')
+----
+The 'file' log sink requires a path, e.g. CALL enable_log_sink('audit', type='file', config={path: 'log.csv'})
+
+statement ok
+CALL enable_log_sink('audit', type='file', config={path: '{TEST_DIR}/logging_named_sinks_audit.csv'})
+
+statement ok
+CALL enable_log_sink('trace', type='file', config={path: '{TEST_DIR}/logging_named_sinks_trace.csv'})
+
+statement error
+CALL enable_log_sink('other', type='file', config={path: '{TEST_DIR}/logging_named_sinks_audit.csv'})
+----
+Log sink 'audit' already writes to
+
+statement error
+CALL enable_log_sink('trace', config={path: '{TEST_DIR}/logging_named_sinks_audit.csv'})
+----
+Log sink 'audit' already writes to
+
+statement ok
+SELECT write_log('to both files')
+
+query I
+SELECT count(*) FROM duckdb_logs('audit', denormalized_table=true) WHERE message = 'to both files'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('trace', denormalized_table=true) WHERE message = 'to both files'
+----
+1
+
+# the log entries of a csv file are read like those of any other sink
+query I
+SELECT count(*) FROM duckdb_logs('audit') WHERE message = 'to both files'
+----
+1
+
+# enabling a named sink again keeps its type and updates its config
+statement ok
+CALL enable_log_sink('trace', config={path: '{TEST_DIR}/logging_named_sinks_trace2.csv'})
+
+statement ok
+SELECT write_log('in trace2')
+
+query I
+SELECT message FROM duckdb_logs('trace', denormalized_table=true) WHERE message IN ('to both files', 'in trace2')
+----
+in trace2
+
+query I
+SELECT config['path'] LIKE '%logging_named_sinks_trace2.csv' FROM duckdb_log_sinks() WHERE name = 'trace'
+----
+true
+
+statement error
+CALL enable_log_sink('trace', type='memory')
+----
+Log sink 'trace' is a 'file' log sink, disable it before enabling a 'memory' log sink with this name
+
+query III
+SELECT name, type, active FROM duckdb_log_sinks()
+----
+default	memory	true
+audit	file	true
+debug	memory	false
+errors	memory	true
+memory	memory	false
+trace	file	true
+
+# the default log sink cannot write to the file of a named sink
+statement error
+CALL enable_logging(sink_path='{TEST_DIR}/logging_named_sinks_trace2.csv')
+----
+Log sink 'trace' already writes to
+
+# a named sink cannot become the default log sink, the type of the default log sink is a type of sink
+statement error
+CALL enable_logging(type := 'errors')
+----
+Log sink 'errors' is not yet registered
+
+query I
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default'
+----
+memory
+
+# changing the default log sink keeps the named sinks and their entries
+statement ok
+CALL enable_logging(sink_path='{TEST_DIR}/logging_named_sinks_default.csv')
+
+query II
+SELECT name, type FROM duckdb_log_sinks() WHERE active
+----
+default	file
+audit	file
+errors	memory
+trace	file
+
+query I
+SELECT count(*) FROM duckdb_logs('errors') WHERE message = 'to both files'
+----
+1
+
+query I
+SELECT config['path'] LIKE '%logging_named_sinks_default.csv' FROM duckdb_log_sinks() WHERE name = 'default'
+----
+true
+
+# a named sink cannot write to the file of the default log sink
+statement error
+CALL enable_log_sink('audit', config={path: '{TEST_DIR}/logging_named_sinks_default.csv'})
+----
+Log sink 'default' already writes to
+
+# duckdb_logs_parsed reads a named sink too, which receives the log types of its own filter
+statement ok
+CALL enable_log_sink('errors', log_types := ['FileSystem'])
+
+statement ok
+SELECT count(*) FROM read_csv('{TEST_DIR}/logging_named_sinks_audit.csv')
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs_parsed('FileSystem', sink := 'errors') WHERE path LIKE '%logging_named_sinks_audit.csv'
+----
+true

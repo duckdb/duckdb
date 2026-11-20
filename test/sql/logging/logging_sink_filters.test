@@ -1,0 +1,223 @@
+# name: test/sql/logging/logging_sink_filters.test
+# description: Each log sink has its own level and log types, set with enable_log_sink(name, level := ..., log_types := ...)
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+statement ok
+CALL enable_logging(level := 'info')
+
+# a sink for the errors only, and one for the queries only
+statement ok
+CALL enable_log_sink('errors', type := 'memory', level := 'error')
+
+statement ok
+CALL enable_log_sink('queries', type := 'memory', log_types := ['QueryLog'])
+
+query IIII
+SELECT name, active, level, log_types FROM duckdb_log_sinks()
+----
+default	true	INFO	NULL
+errors	true	ERROR	NULL
+queries	true	INFO	[QueryLog]
+
+statement ok
+SELECT write_log('an info entry')
+
+statement ok
+SELECT write_log('an error entry', level := 'error')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message IN ('an info entry', 'an error entry')
+----
+2
+
+query I
+SELECT message FROM duckdb_logs('errors') WHERE message IN ('an info entry', 'an error entry')
+----
+an error entry
+
+query I
+SELECT count(*) FROM duckdb_logs('queries') WHERE type <> 'QueryLog'
+----
+0
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs('queries') WHERE message = 'SELECT write_log(''an info entry'')'
+----
+true
+
+# the level of the default log sink leaves the other sinks alone
+statement ok
+CALL enable_logging(level := 'error')
+
+statement ok
+SELECT write_log('another info entry')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'another info entry'
+----
+0
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs('queries') WHERE message = 'SELECT write_log(''another info entry'')'
+----
+true
+
+# the level and the log types that are not given stay as they are, an empty list is every log type
+statement ok
+CALL enable_log_sink('queries', level := 'debug')
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'queries'
+----
+DEBUG	[QueryLog]
+
+statement ok
+CALL enable_log_sink('queries', log_types := [])
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'queries'
+----
+DEBUG	NULL
+
+# without a level, the log types set the level to the one of their entries
+statement ok
+CALL enable_log_sink('files', type := 'memory', log_types := ['FileSystem'])
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'files'
+----
+TRACE	[FileSystem]
+
+# the level and the log types are verified before the sink changes
+statement error
+CALL enable_log_sink('files', log_types := ['Bogus'])
+----
+Unknown log type: 'Bogus'
+
+statement error
+CALL enable_log_sink('files', log_types := ['memory'])
+----
+Unknown log type: 'memory'. 'memory' is a type of log sink, did you mean type := 'memory'?
+
+statement error
+CALL enable_log_sink('files', level := NULL)
+----
+enable_log_sink: level cannot be NULL
+
+statement error
+CALL enable_log_sink('files', log_types := NULL)
+----
+enable_log_sink: the log types cannot be NULL
+
+statement error
+CALL enable_log_sink('files', log_types := 42)
+----
+enable_log_sink: the log types must be a VARCHAR or a VARCHAR[]
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'files'
+----
+TRACE	[FileSystem]
+
+# a disabled sink keeps its filter
+statement ok
+CALL disable_log_sink('errors')
+
+statement ok
+CALL enable_log_sink('errors')
+
+query II
+SELECT active, level FROM duckdb_log_sinks() WHERE name = 'errors'
+----
+true	ERROR
+
+# an enabled sink keeps its type, a disabled sink that gets another type is a new sink, at the default level with
+# every log type
+statement error
+CALL enable_log_sink('errors', type := 'file', config := {path: '{TEST_DIR}/logging_sink_filters_errors.csv'})
+----
+Log sink 'errors' is a 'memory' log sink, disable it before enabling a 'file' log sink with this name
+
+statement ok
+CALL disable_log_sink('errors')
+
+statement ok
+CALL enable_log_sink('errors', type := 'file', config := {path: '{TEST_DIR}/logging_sink_filters_errors.csv'})
+
+query IIII
+SELECT type, active, level, log_types FROM duckdb_log_sinks() WHERE name = 'errors'
+----
+file	true	INFO	NULL
+
+# the default log sink of another type is a new sink as well
+statement ok
+CALL enable_logging(type := 'file', config := {path: '{TEST_DIR}/logging_sink_filters_default.csv'})
+
+query III
+SELECT type, level, log_types FROM duckdb_log_sinks() WHERE name = 'default'
+----
+file	INFO	NULL
+
+statement ok
+CALL enable_logging(type := 'memory')
+
+# enable_logging sets the whole filter of the default log sink, as in 2.0.0, enable_log_sink('default') changes the
+# level and the log types it is given
+statement ok
+CALL enable_logging(log_types := ['QueryLog'])
+
+statement ok
+CALL enable_log_sink('default', level := 'debug')
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'default'
+----
+DEBUG	[QueryLog]
+
+statement ok
+CALL enable_logging(level := 'debug')
+
+query II
+SELECT level, log_types FROM duckdb_log_sinks() WHERE name = 'default'
+----
+DEBUG	NULL
+
+# a log entry reaches the loggers when any enabled sink takes it, and then only the sinks that take it
+statement ok
+CALL disable_log_sink('errors')
+
+statement ok
+CALL disable_log_sink('queries')
+
+statement ok
+CALL disable_log_sink('files')
+
+statement ok
+SET logging_mode = 'DISABLE_SELECTED'
+
+statement ok
+SET disabled_log_types = 'QueryLog'
+
+statement ok
+CALL enable_log_sink('selected', type := 'memory', log_types := ['QueryLog'])
+
+statement ok
+SELECT 'counted'
+
+statement ok
+SELECT write_log('not a query')
+
+query I
+SELECT DISTINCT message FROM duckdb_logs WHERE message IN ('SELECT ''counted''', 'not a query')
+----
+not a query
+
+query I
+SELECT DISTINCT message FROM duckdb_logs('selected') WHERE message IN ('SELECT ''counted''', 'not a query')
+----
+SELECT 'counted'

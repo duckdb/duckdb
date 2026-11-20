@@ -1,0 +1,222 @@
+# name: test/sql/logging/logging_added_file_sink.test
+# description: Enable a file log sink next to the default log sink
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+statement ok
+CALL enable_logging()
+
+statement ok
+CALL enable_log_sink('file', config={path: '{TEST_DIR}/logging_added_file_sink.csv'})
+
+statement ok
+SELECT write_log('to both')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to both'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message = 'to both'
+----
+1
+
+# a csv file holds the denormalized logs, the log entries and the log contexts are read from it
+query III
+SELECT context_id IS NOT NULL, log_level, message FROM duckdb_logs('file') WHERE message = 'to both'
+----
+true	INFO	to both
+
+query I
+SELECT count(*) > 0 FROM duckdb_log_contexts('file')
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_log_contexts('file') JOIN duckdb_logs('file', denormalized_table=false) USING (context_id) WHERE message = 'to both'
+----
+1
+
+# enabling the file sink again updates its config and keeps its path
+statement ok
+CALL enable_log_sink('file', config={buffer_size: 100})
+
+statement ok
+SELECT write_log('after update')
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message IN ('to both', 'after update')
+----
+2
+
+# duckdb_log_sinks shows the options the user set
+query III
+SELECT map_keys(config), config['path'] LIKE '%logging_added_file_sink.csv', config['buffer_size'] FROM duckdb_log_sinks() WHERE name = 'file'
+----
+[buffer_size, path]	true	100
+
+# truncate_duckdb_logs only clears the default log sink
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to both'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message = 'to both'
+----
+1
+
+# disable_logging only turns off the default log sink, the file sink keeps receiving log entries
+statement ok
+CALL disable_logging()
+
+statement ok
+SELECT write_log('while disabled')
+
+statement ok
+CALL enable_logging()
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'while disabled'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message = 'while disabled'
+----
+1
+
+# a failed enable_logging puts the previous sinks back
+statement error
+CALL enable_logging(sink_config={'path': '{TEST_DIR}/logging_added_file_sink_default.csv', 'bogus': 1})
+----
+Log sink 'default' is a 'file' log sink, which has no option 'bogus'
+
+query II
+SELECT name, type FROM duckdb_log_sinks()
+----
+default	memory
+file	file
+
+statement ok
+SELECT write_log('after rollback')
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message IN ('to both', 'after rollback')
+----
+2
+
+# the named file sink is not the default log sink: a default file sink needs a path of its own
+statement error
+CALL enable_logging(type := 'file')
+----
+Cannot enable the 'file' log sink without a valid path
+
+statement error
+CALL enable_logging(sink_path='{TEST_DIR}/logging_added_file_sink.csv')
+----
+Log sink 'file' already writes to
+
+query I
+SELECT type FROM duckdb_log_sinks() WHERE name = 'default'
+----
+memory
+
+statement ok
+CALL enable_logging(sink_path='{TEST_DIR}/logging_added_file_sink_default.csv')
+
+query II
+SELECT name, type FROM duckdb_log_sinks()
+----
+default	file
+file	file
+
+statement ok
+SELECT write_log('to two files')
+
+query I
+SELECT count(*) FROM duckdb_logs(denormalized_table=true) WHERE message = 'to two files'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs('file', denormalized_table=true) WHERE message = 'to two files'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs() WHERE message = 'to two files'
+----
+1
+
+# changing the default log sink keeps the named sinks
+statement ok
+CALL enable_logging(sink='memory')
+
+query II
+SELECT name, type FROM duckdb_log_sinks()
+----
+default	memory
+file	file
+
+# disabling the file sink keeps its file and its config, enabling it again resumes it
+statement ok
+CALL disable_log_sink('file')
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/logging_added_file_sink.csv') WHERE message = 'to two files'
+----
+1
+
+query III
+SELECT name, active, config['path'] LIKE '%logging_added_file_sink.csv' FROM duckdb_log_sinks() WHERE name = 'file'
+----
+file	false	true
+
+statement ok
+SELECT write_log('while the file sink is disabled')
+
+statement ok
+CALL enable_log_sink('file')
+
+statement ok
+SELECT write_log('file sink enabled again')
+
+query I
+SELECT message FROM duckdb_logs('file') WHERE message IN ('while the file sink is disabled', 'file sink enabled again')
+----
+file sink enabled again
+
+# a new path moves an enabled file sink to that file
+statement ok
+CALL enable_log_sink('file', config={path: '{TEST_DIR}/logging_added_file_sink_a.csv'})
+
+statement ok
+SELECT write_log('in a')
+
+statement ok
+CALL enable_log_sink('file', config={path: '{TEST_DIR}/logging_added_file_sink_b.csv'})
+
+statement ok
+SELECT write_log('in b')
+
+query I
+SELECT message FROM duckdb_logs('file', denormalized_table=true) WHERE message IN ('in a', 'in b')
+----
+in b
+
+statement ok
+CALL enable_log_sink('file', config={path: '{TEST_DIR}/logging_added_file_sink_a.csv'})
+
+query I
+SELECT message FROM duckdb_logs('file', denormalized_table=true) WHERE message IN ('in a', 'in b')
+----
+in a

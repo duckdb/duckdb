@@ -1,0 +1,166 @@
+# name: test/sql/logging/enable_logging_types_and_config.test
+# description: enable_logging takes the log types as log_types := and the sink config as config :=, like enable_log_sink. As in 2.0.0, it sets the whole filter of the default log sink
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+# the log types by name, as a list or a single type
+statement ok
+CALL enable_logging(log_types := ['QueryLog'])
+
+query I
+SELECT current_setting('enabled_log_types')
+----
+QueryLog
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT write_log('dropped')
+
+query II
+SELECT count(*) > 0, count(*) FILTER (WHERE type <> 'QueryLog') FROM duckdb_logs
+----
+true	0
+
+statement ok
+CALL enable_logging(log_types := 'QueryLog')
+
+query I
+SELECT current_setting('enabled_log_types')
+----
+QueryLog
+
+# the log types by position still work
+statement ok
+CALL enable_logging('QueryLog')
+
+statement error
+CALL enable_logging('QueryLog', log_types := ['QueryLog'])
+----
+EnableLogging: give the log types either by position or as log_types, not both
+
+statement error
+CALL enable_logging(log_types := NULL)
+----
+EnableLogging: the log types cannot be NULL
+
+statement error
+CALL enable_logging(log_types := 42)
+----
+EnableLogging: the log types must be a VARCHAR or a VARCHAR[]
+
+statement error
+CALL enable_logging(log_types := ['Bogus'])
+----
+Unknown log type: 'Bogus'
+
+# as in 2.0.0, the log types are logged at their own level, a level given with them is not used
+statement ok
+CALL enable_logging(log_types := ['FileSystem'])
+
+query I
+SELECT current_setting('logging_level')
+----
+TRACE
+
+statement ok
+CALL enable_logging(log_types := ['QueryLog'], level := 'warning')
+
+query II
+SELECT current_setting('enabled_log_types'), current_setting('logging_level')
+----
+QueryLog	INFO
+
+# a type of log sink given as the log type gets a hint
+statement error
+CALL enable_logging('memory')
+----
+Unknown log type: 'memory'. 'memory' is a type of log sink, did you mean CALL enable_logging(type := 'memory')?
+
+statement error
+CALL enable_logging(log_types := ['FILE'])
+----
+Unknown log type: 'FILE'. 'FILE' is a type of log sink, did you mean CALL enable_logging(type := 'file')?
+
+# as in 2.0.0, the level and the log types that are not given go back to the default level with every log type
+statement ok
+CALL enable_logging(log_types := ['QueryLog'], level := 'warning')
+
+statement ok
+CALL enable_logging()
+
+query II
+SELECT current_setting('enabled_log_types'), current_setting('logging_level')
+----
+(empty)	INFO
+
+statement ok
+SELECT write_log('kept')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'kept'
+----
+1
+
+# the sink config as config, a path in it means the file sink
+statement ok
+CALL enable_logging(config := {path: '{TEST_DIR}/enable_logging_types_and_config.csv'})
+
+query III
+SELECT type, map_keys(config), config['path'] LIKE '%enable_logging_types_and_config.csv' FROM duckdb_log_sinks() WHERE name = 'default'
+----
+file	[path]	true
+
+statement ok
+SELECT write_log('in the file')
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'in the file'
+----
+1
+
+# type is the kind of the default log sink, as in enable_log_sink
+statement ok
+CALL enable_logging(type := 'file', config := {path: '{TEST_DIR}/enable_logging_types_and_config_typed.csv'})
+
+query II
+SELECT type, config['path'] LIKE '%enable_logging_types_and_config_typed.csv' FROM duckdb_log_sinks() WHERE name = 'default'
+----
+file	true
+
+statement ok
+CALL enable_logging(type := 'memory')
+
+statement error
+CALL enable_logging(type := 'file')
+----
+Cannot enable the 'file' log sink without a valid path. Provide one in config, e.g. CALL enable_logging(type := 'file', config := {path: 'mylog.csv'});
+
+# a parameter cannot be given twice under different names
+statement error
+CALL enable_logging(type := 'memory', sink := 'memory')
+----
+cannot be combined with
+
+statement error
+CALL enable_logging(config := {path: '{TEST_DIR}/a.csv'}, sink_config := {path: '{TEST_DIR}/b.csv'})
+----
+cannot be combined with
+
+statement error
+CALL enable_logging(config := 42)
+----
+EnableLogging: config must be a struct
+
+statement ok
+CALL enable_logging(type := 'memory')
+
+query II
+SELECT type, map_keys(config) FROM duckdb_log_sinks() WHERE name = 'default'
+----
+memory	[]

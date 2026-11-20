@@ -47,18 +47,23 @@ CONNECTION	NULL	QueryLog	INFO	SELECT 1;
 CONNECTION	NULL	QueryLog	INFO	SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
 CONNECTION	NULL	QueryLog	INFO	set enable_logging=false;
 
+# switching the type of the default log sink replaces it
 statement ok
-set logging_sink='stdout';
+CALL enable_logging(type := 'stdout');
 
 statement ok
-set logging_sink='memory';
+CALL enable_logging(type := 'memory');
 
 statement error
-set logging_sink='quack';
+CALL enable_logging(type := 'quack');
 ----
 Invalid Input Error: Log sink 'quack' is not yet registered
 
-# Storage is now cleared because switching storage will clear it
-query IIIIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+statement ok
+CALL disable_logging();
+
+# The log entries are now cleared because switching the sink will clear them
+query I
+SELECT count(*) FROM duckdb_logs WHERE message IN ('SELECT 1;', 'set enable_logging=false;')
 ----
+0

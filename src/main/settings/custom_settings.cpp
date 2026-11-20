@@ -59,7 +59,6 @@ namespace duckdb {
 constexpr const char *LoggingMode::Name;
 constexpr const char *LoggingLevel::Name;
 constexpr const char *EnableLogging::Name;
-constexpr const char *LoggingSink::Name;
 constexpr const char *LoggingStorage::Name;
 constexpr const char *EnabledLogTypes::Name;
 constexpr const char *DisabledLogTypes::Name;
@@ -953,36 +952,26 @@ void LoggingLevel::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
-// Logging Sink
-//===----------------------------------------------------------------------===//
-Value LoggingSink::GetSetting(const ClientContext &context) {
-	return context.db->GetLogManager().GetConfig().storage;
-}
-void LoggingSink::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
-	auto &db = GetDB<LoggingSink>(db_p);
-	db.GetLogManager().SetLogSink(db, parameter.GetValue<string>());
-}
-
-void LoggingSink::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
-	auto &db = GetDB<LoggingSink>(db_p);
-	db.GetLogManager().SetLogSink(db, LogConfig::DEFAULT_LOG_STORAGE);
-}
-
-//===----------------------------------------------------------------------===//
-// Logging Storage (deprecated, use logging_sink)
+// Logging Storage (deprecated, use CALL enable_logging(type := '...'))
 //===----------------------------------------------------------------------===//
 Value LoggingStorage::GetSetting(const ClientContext &context) {
-	return LoggingSink::GetSetting(context);
+	// the setting of 2.0.0 shows the name the CLI's sink had then
+	auto storage = context.db->GetLogManager().GetConfig().storage;
+	if (storage == "shell_log_sink") {
+		return Value("shell_log_storage");
+	}
+	return storage;
 }
 
 void LoggingStorage::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingStorage>(db_p);
-	DUCKDB_LOG_WARNING(db, "the logging_storage setting is deprecated: use logging_sink instead");
-	LoggingSink::SetGlobal(db_p, config, parameter);
+	DUCKDB_LOG_WARNING(db, "the logging_storage setting is deprecated: use CALL enable_logging(type := '...') instead");
+	db.GetLogManager().SetDefaultLogSink(db, parameter.GetValue<string>());
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
-	LoggingSink::ResetGlobal(db_p, config);
+	auto &db = GetDB<LoggingStorage>(db_p);
+	db.GetLogManager().SetDefaultLogSink(db, LogConfig::DEFAULT_LOG_STORAGE);
 }
 
 //===----------------------------------------------------------------------===//

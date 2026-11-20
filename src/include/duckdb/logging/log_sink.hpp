@@ -68,7 +68,14 @@ public:
 	}
 	DUCKDB_API virtual ~LogSink() = default;
 
-	virtual const string GetSinkName() = 0;
+	//! The name of the sink in error messages
+	virtual const string GetSinkName() {
+		return GetStorageName();
+	}
+	//! Deprecated: the name of GetSinkName from before log storages were renamed to log sinks, override GetSinkName
+	virtual const string GetStorageName() {
+		return "LogSink";
+	}
 
 	static vector<LogicalType> GetSchema(LoggingTargetTable table);
 	static vector<Identifier> GetColumnNames(LoggingTargetTable table);
@@ -137,6 +144,9 @@ protected:
 	//! ResetAllBuffers will clear all buffered data. To be overridden by child classes to ensure their buffers are
 	//! flushed too
 	virtual void ResetAllBuffers();
+	//! Gives the empty buffers the buffer limit as their size. To be overridden by child classes with buffers of that
+	//! size
+	virtual void ResizeBuffers();
 
 	/// Helper methods
 
@@ -159,6 +169,8 @@ protected:
 private:
 	//! Resets the log buffers
 	void ResetLogBuffers();
+	//! Creates empty log buffers of the buffer limit as their size
+	void InitializeLogBuffers();
 	//! Write out a logging context
 	void WriteLoggingContext(const RegisteredLoggingContext &context);
 
@@ -191,6 +203,8 @@ protected:
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) final;
 	//! Resets all buffers and state
 	void ResetAllBuffers() override;
+	//! Resizes the cast buffers as well
+	void ResizeBuffers() override;
 	//! Implements CSVLogSink specific config handling
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
 
@@ -356,5 +370,15 @@ private:
 
 	map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_sink_buffers;
 };
+
+//! Deprecated: the names from before log storages were renamed to log sinks
+using LogStorageScanState = LogSinkScanState;
+using LogStorage = LogSink;
+using BufferingLogStorage = BufferingLogSink;
+using CSVLogStorage = CSVLogSink;
+using StdOutLogStorage = StdOutLogSink;
+using FileLogStorage = FileLogSink;
+using InMemoryLogStorageScanState = InMemoryLogSinkScanState;
+using InMemoryLogStorage = InMemoryLogSink;
 
 } // namespace duckdb
