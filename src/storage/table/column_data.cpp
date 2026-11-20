@@ -121,9 +121,15 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 			for (idx_t i = 0; i < offsets.size(); i++) {
 				offsets[i] = vector_start + i;
 			}
-			Vector base_data(type);
-			FetchBaseRows(QueryContext(), offsets.data(), *FlatVector::IncrementalSelectionVector(), offsets.size(),
-			              base_data, 0);
+			auto &sel = *FlatVector::IncrementalSelectionVector();
+			// as in ValidityColumnData::UpdateWithBase: the data of the parent holds an empty segment's validity
+			auto &segment = data.GetSegment(vector_start)->GetNode();
+			bool validity_in_parent = segment.GetCompressionFunction().type == CompressionType::COMPRESSION_EMPTY;
+			Vector base_data(validity_in_parent ? parent->type : type);
+			if (validity_in_parent) {
+				parent->FetchBaseRows(QueryContext(), offsets.data(), sel, offsets.size(), base_data, 0);
+			}
+			FetchBaseRows(QueryContext(), offsets.data(), sel, offsets.size(), base_data, 0);
 			update_segment->StoreBaseValues(visibility_bound, vector_index, base_data);
 		}
 	}
