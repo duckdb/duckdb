@@ -467,6 +467,7 @@ Cannot CHECKPOINT
 statement ok con1
 ROLLBACK
 
+# dropping a table without indexes does not keep them from running
 statement ok con1
 BEGIN TRANSACTION
 
@@ -476,14 +477,13 @@ DROP TABLE u
 statement ok
 INSERT INTO t2 VALUES (1, 1)
 
-statement error
+statement ok
 CHECKPOINT
-----
-Cannot CHECKPOINT
 
 statement ok con1
 ROLLBACK
 
+# a drop with CASCADE does
 statement ok con1
 BEGIN TRANSACTION
 
