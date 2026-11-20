@@ -23,6 +23,25 @@
 
 namespace duckdb {
 
+struct JoinHashTable::BuildState {
+	explicit BuildState(JoinHashTable &ht) : selection(STANDARD_VECTOR_SIZE) {
+		auto &allocator = ht.buffer_manager.GetBufferAllocator();
+		auto &types = ht.layout_ptr->GetTypes();
+		source.Initialize(allocator, types, vector<bool>(types.size(), false));
+		vector<bool> initialize_indices(types.size(), false);
+		for (idx_t i = 0; i < ht.build_types.size(); i++) {
+			initialize_indices[ht.condition_types.size() + i] = ht.GetDictSurvivingColumn(i) != nullptr;
+		}
+		dictionary_indices.Initialize(allocator, types, initialize_indices);
+		hashes.Initialize(allocator, {LogicalType::HASH, LogicalType::HASH});
+	}
+
+	DataChunk source;
+	DataChunk hashes;
+	DataChunk dictionary_indices;
+	SelectionVector selection;
+};
+
 //! Maps matched build rows to output positions; remaining output positions contain NULL.
 struct JoinBuildSelection {
 	JoinBuildSelection(const SelectionVector &rows, idx_t count)
@@ -498,31 +517,24 @@ static uint8_t DictIndexWidth(idx_t dict_size) {
 	return sizeof(uint32_t);
 }
 
-//! Materialise a flat width-INDEX_T index vector (allocation owned by `buffers`, view in `vectors`) from the
-//! dict sel. UnsafeNumericCast is safe: the publisher sized the width to the dictionary, so every index fits.
 template <class INDEX_T>
-static void ScatterDictIndices(const SelectionVector &dict_sel, idx_t count, const LogicalType &index_type,
-                               Allocator &allocator, vector<AllocatedData> &buffers, vector<Vector> &vectors) {
-	buffers.emplace_back(allocator.Allocate(count * sizeof(INDEX_T)));
-	vectors.emplace_back(index_type, buffers.back().get(), count);
-	auto idx_data = FlatVector::GetDataMutable<INDEX_T>(vectors.back());
+static void ScatterDictIndices(const SelectionVector &dict_sel, idx_t count, Vector &result) {
+	auto idx_data = FlatVector::GetDataMutable<INDEX_T>(result);
 	for (idx_t r = 0; r < count; r++) {
 		idx_data[r] = UnsafeNumericCast<INDEX_T>(dict_sel.get_index(r));
 	}
 }
 
-//! Dispatch on the chosen index width (1/2/4 B) to the matching templated ScatterDictIndices
-static void ScatterDictIndices(uint8_t index_width, const SelectionVector &dict_sel, idx_t count, Allocator &allocator,
-                               vector<AllocatedData> &buffers, vector<Vector> &vectors) {
+static void ScatterDictIndices(uint8_t index_width, const SelectionVector &dict_sel, idx_t count, Vector &result) {
 	switch (index_width) {
 	case sizeof(uint8_t):
-		ScatterDictIndices<uint8_t>(dict_sel, count, LogicalType::UTINYINT, allocator, buffers, vectors);
+		ScatterDictIndices<uint8_t>(dict_sel, count, result);
 		break;
 	case sizeof(uint16_t):
-		ScatterDictIndices<uint16_t>(dict_sel, count, LogicalType::USMALLINT, allocator, buffers, vectors);
+		ScatterDictIndices<uint16_t>(dict_sel, count, result);
 		break;
 	default:
-		ScatterDictIndices<uint32_t>(dict_sel, count, LogicalType::UINTEGER, allocator, buffers, vectors);
+		ScatterDictIndices<uint32_t>(dict_sel, count, result);
 		break;
 	}
 }
@@ -640,8 +652,7 @@ DictSurvivingColumn JoinHashTable::CreateDictSurvivingColumn(const Vector &incom
 }
 
 void JoinHashTable::EncodeDictSurvivingColumn(const DictSurvivingColumn &column, idx_t build_col_idx,
-                                              const Vector &incoming, idx_t count, vector<AllocatedData> &buffers,
-                                              vector<Vector> &vectors) {
+                                              const Vector &incoming, idx_t count, Vector &result) {
 	if (incoming.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// Slot was narrowed against one specific upstream dictionary; a different one would scatter foreign indices.
 		if (DictionaryVector::DictionaryId(incoming) != column.upstream_id) {
@@ -650,15 +661,14 @@ void JoinHashTable::EncodeDictSurvivingColumn(const DictSurvivingColumn &column,
 			                        static_cast<uint64_t>(build_col_idx));
 		}
 		// Indices are < upstream size by construction, and the publisher sized the width to upstream size + 1
-		ScatterDictIndices(column.index_width, DictionaryVector::SelVector(incoming), count,
-		                   buffer_manager.GetBufferAllocator(), buffers, vectors);
+		ScatterDictIndices(column.index_width, DictionaryVector::SelVector(incoming), count, result);
 		return;
 	}
 	if (!VectorOperations::HasNotNull(incoming)) {
 		// e.g. the unmatched-build scan of an upstream FULL/RIGHT join: every row stores the reserved NULL index
 		const auto null_index =
 		    Value::Numeric(DictSurvivingInfo::IndexType(column.index_width), NumericCast<int64_t>(column.NullIndex()));
-		vectors.emplace_back(null_index, count_t(count));
+		result.Reference(null_index, count_t(count));
 		return;
 	}
 	// There is no fallback for values that are not in the pinned dictionary. Throw, not D_ASSERT: storing the
@@ -704,6 +714,13 @@ static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_n
 	return has_null;
 }
 
+JoinHashTable::BuildState &JoinHashTable::GetBuildState() {
+	if (!build_state) {
+		build_state = make_uniq<BuildState>(*this);
+	}
+	return *build_state;
+}
+
 void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
 	D_ASSERT(!finalized);
 	D_ASSERT(keys.size() == payload.size());
@@ -741,17 +758,22 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	}
 
 	// build a chunk to append to the data collection [keys, payload, (optional "found" boolean), hash]
-	DataChunk source_chunk;
-	source_chunk.InitializeEmpty(layout_ptr->GetTypes());
+	auto &state = GetBuildState();
+	state.source.Reset();
+	state.hashes.Reset();
+	state.dictionary_indices.Reset();
+	auto &source_chunk = state.source;
+	struct ReleaseSource {
+		DataChunk &source;
+		~ReleaseSource() {
+			source.Reset();
+		}
+	} release {source_chunk};
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		source_chunk.data[i].Reference(keys.data[i]);
 	}
 	idx_t col_offset = keys.ColumnCount();
 	D_ASSERT(build_types.size() == payload.ColumnCount());
-	// Scratch index vectors for narrowed columns, allocated via the buffer manager so the bytes are accounted.
-	// buffers own the bytes, vectors are flat views; both must outlive the ToUnifiedFormat / AppendUnified below.
-	vector<AllocatedData> dict_idx_buffers;
-	vector<Vector> dict_idx_vectors;
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 		auto &incoming = payload.data[i];
 		auto dict_column = GetDictSurvivingColumn(i);
@@ -760,8 +782,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 			continue;
 		}
 		// Narrowed column: store dictionary indices (or the reserved NULL index) at the chosen width, not the value
-		EncodeDictSurvivingColumn(*dict_column, i, incoming, payload.size(), dict_idx_buffers, dict_idx_vectors);
-		source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
+		auto &indices = state.dictionary_indices.data[col_offset + i];
+		EncodeDictSurvivingColumn(*dict_column, i, incoming, payload.size(), indices);
+		source_chunk.data[col_offset + i].Reference(indices);
 	}
 	col_offset += payload.ColumnCount();
 	if (PropagatesBuildSide(join_type)) {
@@ -769,7 +792,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		source_chunk.data[col_offset].Reference(vfound);
 		col_offset++;
 	}
-	Vector hash_values(LogicalType::HASH);
+	auto &hash_values = state.hashes.data[0];
 	source_chunk.data[col_offset].Reference(hash_values);
 	source_chunk.SetChildCardinality(keys.size());
 
@@ -778,7 +801,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// prepare the keys for processing
 	optional_ptr<const SelectionVector> current_sel;
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	auto &sel = state.selection;
 	idx_t added_count = PrepareKeys(keys, append_state.chunk_state.vector_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
@@ -798,7 +821,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		}
 	} else if (!bloom_filters.empty()) {
 		// the per-key-column filters of an external join with several equality keys
-		Vector key_hashes(LogicalType::HASH);
+		auto &key_hashes = state.hashes.data[1];
 		for (idx_t key_idx = 0; key_idx < bloom_filters.size(); key_idx++) {
 			auto &filter = bloom_filters[key_idx];
 			if (!filter) {
@@ -2068,10 +2091,11 @@ void JoinHashTable::GatherRHS(Vector &row_ptrs, const JoinBuildSelection &select
 	}
 
 	const auto null_count = selection.count - selection.match_count;
-	SelectionVector null_sel;
+	auto &null_sel = dictionary_state.GetNullSelection(null_count);
 	if (null_count > 0 && selection.match_count > 0) {
-		null_sel.Initialize(null_count);
-		ValidityMask matched(selection.count);
+		D_ASSERT(selection.count <= STANDARD_VECTOR_SIZE);
+		validity_t matched_entries[ValidityMask::STANDARD_ENTRY_COUNT];
+		ValidityMask matched(matched_entries, STANDARD_VECTOR_SIZE);
 		matched.SetAllInvalid(selection.count);
 		for (idx_t i = 0; i < selection.match_count; i++) {
 			matched.SetValid(selection.output.get_index(i));
@@ -3008,6 +3032,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	// dictionary it indexes into cannot be carried over.
 	layout_ptr.reset();
 	dict_info.reset();
+	build_state.reset();
 	data_collection.reset();
 	sink_collection.reset();
 	capacity = DConstants::INVALID_INDEX;
@@ -3092,20 +3117,27 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
                                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
                                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk) {
-	// hash all the keys
-	Vector hashes(LogicalType::HASH);
+	spill_chunk.Reset();
+	if (!probe_state.spill_hashes) {
+		probe_state.spill_hashes = make_uniq<DataChunk>();
+		probe_state.spill_hashes->Initialize(buffer_manager.GetBufferAllocator(), {LogicalType::HASH});
+	}
+	probe_state.spill_hashes->Reset();
+	auto &hashes = probe_state.spill_hashes->data[0];
 	Hash(probe_keys, *FlatVector::IncrementalSelectionVector(), probe_keys.size(), hashes);
 
-	// find out which keys we can match with the current pinned partitions
+	// Probe keys and output can retain this selection until the next batch has already started.
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
+	auto &false_sel = probe_state.spill_false_sel;
+	if (false_sel.sel_data().use_count() != 1) {
+		false_sel.Initialize(STANDARD_VECTOR_SIZE);
+	}
 	const auto true_count =
 	    RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), probe_keys.size(), radix_bits,
 	                              current_partitions, &true_sel, &false_sel);
 	const auto false_count = probe_keys.size() - true_count;
 
 	// can't probe these values right now, append to spill
-	spill_chunk.Reset();
 	spill_chunk.Reference(probe_chunk);
 	spill_chunk.data.back().Reference(hashes);
 	spill_chunk.Slice(false_sel, false_count);
