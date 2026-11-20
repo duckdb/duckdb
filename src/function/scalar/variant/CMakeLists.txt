@@ -12,6 +12,7 @@ add_library_unity(
   variant_typeof.cpp
   variant_normalize.cpp
   variant_path_function.cpp
+  variant_structure.cpp
   variant_type.cpp
   variant_comparator.cpp)
 set(ALL_OBJECT_FILES
