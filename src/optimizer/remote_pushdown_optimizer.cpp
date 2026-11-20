@@ -40,6 +40,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -109,18 +110,25 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	}
 }
 
-void RemotePushdownOptimizer::ResolveQualification(const QualifiedName &name, Identifier &catalog_name,
-                                                   vector<Identifier> &schema_path) {
+bool RemotePushdownOptimizer::ResolveQualification(const QualifiedName &name, Identifier &catalog_name,
+                                                   vector<Identifier> &schema_path, CatalogType type) {
 	// BindTableName resolves the "x.name" catalog-or-schema ambiguity the same way the binder does, and returns
 	// [catalog, schema path..., name] - so a nested schema path survives instead of collapsing onto Catalog()
 	if (name.Path().empty()) {
-		return;
+		return true;
 	}
 	auto bound = Binder::BindTableName(binder.EntryRetriever(), name);
+	if (!bound.Catalog().empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, bound.Catalog());
+		if (catalog && !catalog->SupportsSchemaPath(bound, type)) {
+			return false;
+		}
+	}
 	catalog_name = bound.Catalog();
 	bound.StripCatalog();
 	auto &path = bound.Path();
 	schema_path.assign(path.begin(), path.end() - 1);
+	return true;
 }
 
 optional_ptr<CatalogEntry> RemotePushdownOptimizer::LookupEntry(const Identifier &catalog_name,
@@ -630,7 +638,9 @@ CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedN
                                                                 CatalogType entry_type) {
 	Identifier catalog_name;
 	vector<Identifier> schema_path;
-	ResolveQualification(name, catalog_name, schema_path);
+	if (!ResolveQualification(name, catalog_name, schema_path, entry_type)) {
+		return CatalogPushdownResult::Unknown();
+	}
 	if (!catalog_name.empty()) {
 		return ResolveRemoteCatalog(catalog_name, RemoteCapability::EXECUTE_STATEMENT);
 	}
@@ -752,10 +762,6 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(DropStatement &s
 		return CatalogPushdownResult::Unknown();
 	}
 	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.type);
-	if (info.type == CatalogType::SCHEMA_ENTRY && target.catalog && !target.catalog->SupportsNestedSchemas()) {
-		target.catalog->CheckNestedSchemaSupport(binder.ResolveCatalog(binder.context, info.GetQualifiedName()),
-		                                         info.type);
-	}
 	return VerifyStatementSupport(statement, std::move(target));
 }
 
@@ -866,7 +872,10 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	// Figure out
 	Identifier catalog_name;
 	vector<Identifier> schema_path;
-	ResolveQualification(func_expr.GetQualifiedName(), catalog_name, schema_path);
+	if (!ResolveQualification(func_expr.GetQualifiedName(), catalog_name, schema_path)) {
+		TrackLocalTable(ref);
+		return CatalogPushdownResult::Unknown();
+	}
 
 	// If the function has an explicit catalog prefix, check if it's remote
 	if (!catalog_name.empty()) {
@@ -1009,7 +1018,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// (possibly nested) schema path, so a reference like s1.child.t is not mistaken for catalog "s1"
 	Identifier catalog_name;
 	vector<Identifier> schema_path;
-	ResolveQualification(ref.GetQualifiedName(), catalog_name, schema_path);
+	if (!ResolveQualification(ref.GetQualifiedName(), catalog_name, schema_path)) {
+		TrackLocalTable(ref);
+		return CatalogPushdownResult::Unknown();
+	}
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
 	if (catalog_name.empty() && schema_path.empty()) {
@@ -1088,7 +1100,9 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const P
                                                                          const QualifiedName &name) {
 	Identifier catalog_name;
 	vector<Identifier> schema_path;
-	ResolveQualification(name, catalog_name, schema_path);
+	if (!ResolveQualification(name, catalog_name, schema_path)) {
+		return CatalogPushdownResult::Unknown();
+	}
 	if (catalog_name.empty()) {
 		return CatalogPushdownResult::NoCatalogReference();
 	}
@@ -1353,6 +1367,24 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 		for (auto &row : el.values) {
 			for (auto &expr : row) {
 				StripCatalogName(*expr, catalog_name);
+			}
+		}
+		break;
+	}
+	case TableReferenceType::PIVOT: {
+		auto &pivot_ref = ref.Cast<PivotRef>();
+		StripCatalogName(*pivot_ref.source, catalog_name);
+		for (auto &aggr : pivot_ref.aggregates) {
+			StripCatalogName(*aggr, catalog_name);
+		}
+		for (auto &pivot : pivot_ref.pivots) {
+			for (auto &expr : pivot.pivot_expressions) {
+				StripCatalogName(*expr, catalog_name);
+			}
+			for (auto &entry : pivot.entries) {
+				if (entry.expr) {
+					StripCatalogName(*entry.expr, catalog_name);
+				}
 			}
 		}
 		break;

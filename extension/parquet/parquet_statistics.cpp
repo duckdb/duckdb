@@ -406,6 +406,12 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
 		return Value::UUID(uuid_val);
 	}
+	case LogicalTypeId::SQLNULL:
+		// a column without values has no minimum or maximum
+		return Value();
+	case LogicalTypeId::INTERVAL:
+		// Parquet does not define an order for intervals
+		return Value();
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}
@@ -764,6 +770,8 @@ ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &sch
 		// no stats present for row group
 		return nullptr;
 	}
+	// every column whose chunk statistics become statistics of the scan gets here, whatever it is nested in
+	schema.ValidateNullCount(column_chunk);
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, parquet_options,
 	                                             parquet_options.can_have_nan, &column_chunk);
@@ -870,13 +878,28 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	bool child_has_constant = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child, hash_strategy);
-		}
-	});
-	return child_has_constant;
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_child_has_constant = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (!any_child_has_constant) {
+				any_child_has_constant = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return any_child_has_constant;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_have_constants = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			if (all_children_have_constants) {
+				all_children_have_constants = HasFilterConstants(child, hash_strategy);
+			}
+		});
+		return all_children_have_constants;
+	}
+	default:
+		return false;
+	}
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter, ParquetBloomFilterHashStrategy hash_strategy) {

@@ -90,8 +90,12 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 			auto &nested_default = defaults[remap.default_index.GetIndex()];
 			if (nested_default.GetType().id() == LogicalTypeId::STRUCT &&
 			    result_vectors[i].get().GetType().id() == LogicalTypeId::STRUCT) {
-				RemapNested(nested_default, nested_default, result_vectors[i], count, remap.child_remap_info);
-				if (has_top_level_null) {
+				auto &nested_result = result_vectors[i].get();
+				RemapNested(nested_default, nested_default, nested_result, count, remap.child_remap_info);
+				// a NULL default leaves the result a constant NULL, which is already NULL in every row
+				bool default_is_null = nested_result.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+				                       ConstantVector::IsNull(nested_result);
+				if (has_top_level_null && !default_is_null) {
 					FlatVector::SetValidity(result_vectors[i], FlatVector::Validity(result));
 					PropagateStructNulls(result_vectors[i], FlatVector::Validity(result), count);
 				}

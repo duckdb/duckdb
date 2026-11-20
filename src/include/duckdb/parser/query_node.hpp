@@ -74,9 +74,6 @@ public:
 
 	string ResultModifiersToString() const;
 
-	//! Adds a distinct modifier to the query node
-	void AddDistinct();
-
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
 	//! Throws a SerializationException if a deserialized query node does not have a valid shape

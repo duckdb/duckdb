@@ -48,10 +48,10 @@ BenchmarkRunner::BenchmarkRunner() {
 }
 
 void BenchmarkRunner::InitializeBenchmarkDirectory() {
-	auto fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	// check if the database directory exists; if not create it
-	if (!fs->DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
-		fs->CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
+	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
+		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
 	}
 }
 
@@ -426,12 +426,12 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto &fs = TestLocalFileSystem();
 	// Set the working directory. We need to scan this before loading the benchmarks or parsing the other arguments
-	string root_dir = parse_root_dir_or_default(argc, argv, *fs);
+	string root_dir = parse_root_dir_or_default(argc, argv, fs);
 	FileSystem::SetWorkingDirectory(root_dir);
 	// load interpreted benchmarks before doing anything else
-	LoadInterpretedBenchmarks(*fs);
+	LoadInterpretedBenchmarks(fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
 

@@ -87,11 +87,11 @@ EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a 
 analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
 
 
-# range joins do *not* flip
+# a single range condition flips as well: the smaller side is built by a RIGHT SEMI piecewise merge join
 query II
 EXPLAIN ANALYZE SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a);
 ----
-analyzed_plan	<!REGEX>:.*RIGHT_SEMI.*
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
 
 
 # complex condition resulting in an any join DOES *NOT* flip

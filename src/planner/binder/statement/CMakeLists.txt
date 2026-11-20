@@ -23,7 +23,6 @@ add_library_unity(
   bind_merge_into.cpp
   bind_pragma.cpp
   bind_prepare.cpp
-  bind_relation.cpp
   bind_select.cpp
   bind_set.cpp
   bind_summarize.cpp

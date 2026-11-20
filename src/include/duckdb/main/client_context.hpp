@@ -50,7 +50,6 @@ class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
 struct PreprocessedStatement;
-class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
 class ClientContextLock;
@@ -225,19 +224,6 @@ public:
 	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
-	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
-	//! list with the set of returned columns
-	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Internal function for try bind relation. It does not require a client-context lock.
-	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
-
-	//! Non-blocking. Submits a relation and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Submit(const shared_ptr<Relation> &relation,
-	                                          const QueryParameters &query_parameters);
-	//! Blocking. Runs a relation to completion and returns its handle
-	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
-
 	//! Prepare a query. A statement that expands into several is kept as written and expanded at each execution, so
 	//! its metadata is known only from the result
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
@@ -341,6 +327,9 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Rolls back the active transaction (if any) without throwing, while the context is still fully alive
+	void RollbackActiveTransaction();
+
 	friend class Parser;
 	friend class ParseIterator;
 	ParserOptions GetParserOptions();
@@ -465,9 +454,6 @@ private:
 	//! Record the error on the result, end the query and report EXECUTION_ERROR
 	QueryResultState FailQueryInternal(ClientContextLock &lock, BaseQueryResult &result, ErrorData error);
 	void UpdateProgressInternal(QueryResultState state);
-
-	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
-	                                       const QueryParameters &query_parameters);
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());

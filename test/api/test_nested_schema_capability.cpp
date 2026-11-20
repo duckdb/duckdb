@@ -38,15 +38,20 @@ public:
 
 class FlatEntryCatalog : public FlatCatalog {
 public:
-	explicit FlatEntryCatalog(AttachedDatabase &db) : FlatCatalog(db) {
+	FlatEntryCatalog(AttachedDatabase &db, bool is_remote) : FlatCatalog(db), is_remote(is_remote) {
 	}
 
+	//! Only counted as a remote catalog (which enables the remote pushdown optimizer) when set at ATTACH
+	const bool is_remote;
+	//! Whether statements may be pushed down, which is off during the test's setup
 	bool remote = false;
 
 	bool Supports(RemoteCapability capability) const override {
-		return remote &&
-		       (capability == RemoteCapability::IS_REMOTE || capability == RemoteCapability::EXECUTE_QUERY_NODE ||
-		        capability == RemoteCapability::EXECUTE_STATEMENT);
+		if (capability == RemoteCapability::IS_REMOTE) {
+			return is_remote;
+		}
+		return remote && (capability == RemoteCapability::EXECUTE_QUERY_NODE ||
+		                  capability == RemoteCapability::EXECUTE_STATEMENT);
 	}
 
 private:
@@ -65,10 +70,11 @@ struct FlatStorageExtension : StorageExtension {
 	FlatStorageExtension() {
 		attach = [](optional_ptr<StorageExtensionInfo>, ClientContext &, AttachedDatabase &db, const string &,
 		            AttachInfo &info, AttachOptions &) -> unique_ptr<Catalog> {
-			bool override_entry_lookup = info.path == "override";
+			bool is_remote = info.path == "remote";
+			bool override_entry_lookup = is_remote || info.path == "override";
 			info.path = IN_MEMORY_PATH;
 			if (override_entry_lookup) {
-				return make_uniq_base<Catalog, FlatEntryCatalog>(db);
+				return make_uniq_base<Catalog, FlatEntryCatalog>(db, is_remote);
 			}
 			return make_uniq_base<Catalog, FlatCatalog>(db);
 		};
@@ -90,7 +96,7 @@ TEST_CASE("Unsupported catalogs reject nested schemas", "[api][nested_schema]") 
 		mode = "override";
 	}
 	SECTION("Remote pushdown") {
-		mode = "override";
+		mode = "remote";
 		remote = true;
 	}
 	DBConfig config;
@@ -105,6 +111,17 @@ TEST_CASE("Unsupported catalogs reject nested schemas", "[api][nested_schema]") 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b.t AS SELECT 42 AS i"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"a.b\".t AS SELECT 99 AS i"));
 	REQUIRE_NO_FAIL(con.Query("CREATE MACRO b.f(x) AS x + 1"));
+
+	// a dotted call on a qualified column, an alias or a lambda parameter is not a nested schema path
+	auto check_value = [&con](const string &query, const Value &expected) {
+		INFO(query);
+		auto result = con.Query(query);
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(CHECK_COLUMN(result, result->ColumnCount() - 1, {expected}));
+	};
+	check_value("SELECT t.i.abs() FROM b.t t", Value::INTEGER(42));
+	check_value("SELECT 'AbC' AS s, alias.s.lower()", Value("abc"));
+	check_value("SELECT list_transform([{'f': -2}], lambda y: y.f.abs())", Value::LIST({Value::INTEGER(2)}));
 
 	if (remote) {
 		con.BeginTransaction();
@@ -121,7 +138,19 @@ TEST_CASE("Unsupported catalogs reject nested schemas", "[api][nested_schema]") 
 		REQUIRE(message == "Catalog \"flat\" does not support nested schemas: " + schema_path);
 	};
 
-	const vector<string> queries {
+	// a nested path can't name anything in the catalog, so these find nothing instead of the flattened b.t
+	auto check_not_found = [&con](const string &query) {
+		INFO(query);
+		auto result = con.Query(query);
+		REQUIRE_FAIL(result);
+		INFO(result->GetError());
+		REQUIRE(result->GetErrorType() == ExceptionType::CATALOG);
+		auto &message = result->GetErrorObject().RawMessage();
+		REQUIRE((StringUtil::Contains(message, "does not exist") ||
+		         StringUtil::Contains(message, "No catalog + schema named")));
+	};
+
+	const vector<string> lookups {
 	    "SELECT * FROM flat.a.b.t",
 	    "SELECT * FROM a.b.t",
 	    "SELECT flat.a.b.f(1)",
@@ -134,20 +163,26 @@ TEST_CASE("Unsupported catalogs reject nested schemas", "[api][nested_schema]") 
 	    "SET schema = 'flat.a.b'",
 	    "SET search_path = 'flat.a.b'",
 	    "SHOW TABLES FROM flat.a.b",
+	    "SELECT * FROM lakee.sales.t",
+	    "SELECT * FROM flat.a.b.c.t",
+	    "SELECT * FROM flat.\"a.b\".\"c\"\"d\".t",
+	    "DROP SCHEMA flat.a.b CASCADE",
+	    "DROP SCHEMA flat.\"a.b\".\"c\"\"d\"",
+	};
+	for (auto &query : lookups) {
+		check_not_found(query);
+	}
+	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA IF EXISTS flat.a.b CASCADE"));
+
+	const vector<string> create_schema_statements {
 	    "CREATE SCHEMA flat.a.b",
 	    "CREATE SCHEMA IF NOT EXISTS flat.a.b",
 	    "CREATE OR REPLACE SCHEMA flat.a.b",
-	    "DROP SCHEMA flat.a.b CASCADE",
-	    "DROP SCHEMA IF EXISTS flat.a.b CASCADE",
 	};
-	for (auto &query : queries) {
+	for (auto &query : create_schema_statements) {
 		check_error(query, "a.b");
 	}
-	check_error("SELECT * FROM lakee.sales.t", "lakee.sales");
-	check_error("SELECT * FROM flat.a.b.c.t", "a.b.c");
-	check_error("SELECT * FROM flat.\"a.b\".\"c\"\"d\".t", "\"a.b\".\"c\"\"d\"");
 	check_error("CREATE SCHEMA flat.\"a.b\".\"c\"\"d\"", "\"a.b\".\"c\"\"d\"");
-	check_error("DROP SCHEMA flat.\"a.b\".\"c\"\"d\"", "\"a.b\".\"c\"\"d\"");
 
 	if (remote) {
 		con.BeginTransaction();
@@ -157,11 +192,13 @@ TEST_CASE("Unsupported catalogs reject nested schemas", "[api][nested_schema]") 
 
 	con.BeginTransaction();
 	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, QualifiedName::Parse("flat.a.b.t"));
-	REQUIRE_THROWS_WITH(Catalog::GetEntry(*con.context, lookup, OnEntryNotFound::RETURN_NULL),
-	                    Catch::Contains("does not support nested schemas"));
+	REQUIRE(!Catalog::GetEntry(*con.context, lookup, OnEntryNotFound::RETURN_NULL));
 	vector<Identifier> schema_path {"a", "b"};
-	REQUIRE_THROWS_WITH(Catalog::GetSchema(*con.context, "flat", schema_path, OnEntryNotFound::RETURN_NULL),
-	                    Catch::Contains("does not support nested schemas"));
+	REQUIRE(!Catalog::GetSchema(*con.context, "flat", schema_path, OnEntryNotFound::RETURN_NULL));
+	// the catalog's own LookupSchema would flatten a.b to b
+	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName::FromPath({"flat", "a", "b"}));
+	REQUIRE(!Catalog::GetCatalog(*con.context, "flat")
+	             .GetSchema(*con.context, schema_lookup, OnEntryNotFound::RETURN_NULL));
 	con.Rollback();
 
 	auto result = con.Query("SELECT * FROM b.t");

@@ -2441,8 +2441,4 @@ unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path,
 	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
 }
 
-unique_ptr<FileSystem> FileSystem::CreateLocal() {
-	return make_uniq<LocalFileSystem>();
-}
-
 } // namespace duckdb
