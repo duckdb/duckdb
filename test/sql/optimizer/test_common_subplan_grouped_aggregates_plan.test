@@ -164,3 +164,73 @@ FROM (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '0'::DOUBLE END) m FROM grouped_
 JOIN (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '-0'::DOUBLE END) m FROM grouped_plan GROUP BY k) y ON x.k = y.k;
 ----
 logical_opt	<REGEX>:.*"AGGREGATE".*"AGGREGATE".*
+
+# Several grouping sets return a key more than once (the NULL of the data and the NULL of the total): such
+# aggregates are not matched by their groups alone, and a join of two of them on the keys stays a join.
+statement ok
+CREATE TABLE grouping_probe(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO grouping_probe VALUES (1, 10), (NULL, 20);
+
+foreach disabled grouping_sets common_subplan,grouping_sets regex_range
+
+statement ok
+SET disabled_optimizers='{disabled}';
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) x
+JOIN (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	220
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY CUBE(k)) x
+JOIN (SELECT k, max(v) AS s FROM grouping_probe GROUP BY CUBE(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	200
+
+query II
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) x
+JOIN (SELECT k, min(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+5	180
+
+endloop
+
+foreach disabled grouping_sets regex_range
+
+statement ok
+SET disabled_optimizers='{disabled}';
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) x
+JOIN (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY ROLLUP(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY CUBE(k)) x
+JOIN (SELECT k, max(v) AS s FROM grouping_probe GROUP BY CUBE(k)) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(*), sum(x.s + y.s)
+FROM (SELECT k, sum(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) x
+JOIN (SELECT k, min(v) AS s FROM grouping_probe GROUP BY GROUPING SETS ((k), ())) y ON x.k IS NOT DISTINCT FROM y.k;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+endloop
+
+statement ok
+SET disabled_optimizers='';
