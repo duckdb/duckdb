@@ -399,6 +399,19 @@ EXPLAIN SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUB
 ----
 physical_plan	<!REGEX>:.*Union.*
 
+# with the constant of its branch the statistics show that the HAVING removes every group of the first two branches:
+# they are not computed, and the cast that fails for their rows does not fail. They are kept, as one aggregate over all
+# branches would compute their groups first (without the HAVING, or without the cast, the branches are merged)
+query II
+EXPLAIN SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 21 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 14 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 1 GROUP BY store, amount HAVING min(amount) < 10 ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query III
+SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 21 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 14 GROUP BY store, amount HAVING min(amount) < 10 UNION ALL SELECT store, amount, sum((amount * 100)::TINYINT) FROM sales WHERE amount = 1 GROUP BY store, amount HAVING min(amount) < 10 ORDER BY ALL;
+----
+1	1	2000
+
 # on several threads the branches over a small table run next to each other, which one pipeline over its one row
 # group cannot make up for: they are kept. The row groups of big have work for four threads
 statement ok

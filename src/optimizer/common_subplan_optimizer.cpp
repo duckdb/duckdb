@@ -1999,6 +1999,23 @@ private:
 		return aggregate.groups.empty();
 	}
 
+	//! Whether an expression of the operator or of an operator below it can throw
+	static bool CanThrow(LogicalOperator &op) {
+		bool can_throw = false;
+		LogicalOperatorVisitor::EnumerateExpressions(
+		    op, [&](unique_ptr<Expression> *expr) { can_throw = can_throw || (*expr)->CanThrow(); });
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			for (auto &entry : op.Cast<LogicalGet>().table_filters) {
+				auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "UnionAggregateMerge");
+				can_throw = can_throw || filter.expr->CanThrow();
+			}
+		}
+		for (auto &child : op.children) {
+			can_throw = can_throw || CanThrow(*child);
+		}
+		return can_throw;
+	}
+
 	//! The aggregate of a UNION ALL child of the form PROJECTION - [FILTER] - AGGREGATE
 	static optional_ptr<LogicalOperator> BranchAggregate(LogicalOperator &child) {
 		if (child.type != LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -2105,6 +2122,12 @@ private:
 		}
 		if (IsUngrouped(aggregate) && (having || aggregate.expressions.empty())) {
 			// a branch without groups returns a row for an empty input, which a filter above it could remove
+			return nullptr;
+		}
+		if (having && CanThrow(*having)) {
+			// with the constant of its branch the statistics can show that a HAVING removes every group
+			// (x = 21 .. HAVING min(x) < 10): the branch is then not computed at all, and an expression in it that
+			// fails for its rows does not fail. The merged aggregate computes the groups before the HAVING removes them
 			return nullptr;
 		}
 		for (auto &expr : aggregate.expressions) {
