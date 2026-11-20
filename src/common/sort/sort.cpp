@@ -260,6 +260,18 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 	return make_uniq<SortGlobalSinkState>(context);
 }
 
+void Sort::SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t expected_size) const {
+	auto &sink = gstate.Cast<SortGlobalSinkState>();
+	D_ASSERT(sink.sunk_tuples == 0);
+	auto &state = *sink.temporary_memory_state;
+	// only lower the reservation: a larger sort keeps the default minimum and grows on demand
+	expected_size = MinValue(expected_size, state.GetMinimumReservation());
+	if (expected_size == 0) {
+		return;
+	}
+	state.SetRemainingSizeAndUpdateReservation(context.GetContext(), expected_size);
+}
+
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 idx_t Sort::GetLocalSizeInBytes(LocalSinkState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<SortLocalSinkState>();
