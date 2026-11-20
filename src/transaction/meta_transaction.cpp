@@ -205,18 +205,18 @@ string MetaTransaction::ShareTransaction() {
 	return share_id;
 }
 
-void MetaTransaction::BeginStatement() {
-	unique_lock<mutex> guard(statement_lock);
-	statement_cv.wait(guard, [&]() { return !statement_active; });
-	statement_active = true;
+void MetaTransaction::BeginWrite() {
+	unique_lock<mutex> guard(write_lock);
+	write_cv.wait(guard, [&]() { return !write_active; });
+	write_active = true;
 }
 
-void MetaTransaction::EndStatement() {
+void MetaTransaction::EndWrite() {
 	{
-		lock_guard<mutex> guard(statement_lock);
-		statement_active = false;
+		lock_guard<mutex> guard(write_lock);
+		write_active = false;
 	}
-	statement_cv.notify_one();
+	write_cv.notify_one();
 }
 
 string MetaTransaction::GetShareId() {

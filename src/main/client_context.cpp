@@ -445,6 +445,10 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		throw ErrorManager::InvalidatedTransaction(*this);
 	}
 
+	if (!statement.properties.modified_databases.empty()) {
+		// connections that share the transaction execute their writes one at a time
+		transaction.BeginWrite();
+	}
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
 	for (auto &it : statement.properties.modified_databases) {
@@ -1357,7 +1361,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		transaction.BeginTransaction();
 		interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 	}
-	StatementEndGuard statement_end(transaction, transaction.BeginStatement());
+	WriteEndGuard write_end(transaction, transaction.BeginWrite());
 	try {
 		fun();
 	} catch (std::exception &ex) {

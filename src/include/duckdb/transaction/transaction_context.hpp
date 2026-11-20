@@ -63,10 +63,10 @@ public:
 	//! Safe to call from other connections.
 	shared_ptr<MetaTransaction> GetSharedTransaction(const string &share_id);
 
-	//! Starts executing a statement in the current transaction, waiting for the other connections that share it.
-	//! Returns false if this connection already is executing a statement.
-	bool BeginStatement();
-	void EndStatement();
+	//! Starts executing a write in the current transaction, waiting for the other connections that share it.
+	//! Returns false if this connection already is executing a write.
+	bool BeginWrite();
+	void EndWrite();
 
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();
@@ -92,8 +92,8 @@ private:
 	//! Guards replacing current_transaction against reads from other connections (GetSharedTransaction)
 	mutex current_transaction_lock;
 	shared_ptr<MetaTransaction> current_transaction;
-	//! The transaction in which this connection is executing a statement
-	shared_ptr<MetaTransaction> statement_transaction;
+	//! The transaction in which this connection is executing a write
+	shared_ptr<MetaTransaction> write_transaction;
 	//! The query number of the query currently running on this connection (MAXIMUM_QUERY_ID if none)
 	atomic<transaction_t> active_query_id = MAXIMUM_QUERY_ID;
 	ErrorData autocheckpoint_error;
@@ -107,13 +107,13 @@ private:
 	TransactionContext(const TransactionContext &) = delete;
 };
 
-//! Ends the statement that the connection is executing when it goes out of scope
-struct StatementEndGuard {
-	StatementEndGuard(TransactionContext &transaction_p, bool owns_p) : transaction(transaction_p), owns(owns_p) {
+//! Ends the write that the connection is executing when it goes out of scope
+struct WriteEndGuard {
+	WriteEndGuard(TransactionContext &transaction_p, bool owns_p) : transaction(transaction_p), owns(owns_p) {
 	}
-	~StatementEndGuard() {
+	~WriteEndGuard() {
 		if (owns) {
-			transaction.EndStatement();
+			transaction.EndWrite();
 		}
 	}
 

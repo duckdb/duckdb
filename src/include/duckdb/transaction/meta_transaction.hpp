@@ -68,10 +68,10 @@ public:
 	string ShareTransaction();
 	//! The identifier under which the transaction was shared (empty if not shared)
 	string GetShareId();
-	//! Waits until no other participant executes a statement, then starts executing one
-	void BeginStatement();
-	//! The participant finished executing its statement
-	void EndStatement();
+	//! Waits until no other participant executes a write, then starts executing one
+	void BeginWrite();
+	//! The participant finished executing its write
+	void EndWrite();
 	//! Adds a participant to the shared transaction. Returns false if the transaction already ended.
 	bool Join();
 	struct LeaveResult {
@@ -142,10 +142,10 @@ private:
 	atomic<bool> finished;
 	//! Guards the participant state below
 	mutex shared_lock;
-	//! Participants execute their statements one at a time
-	mutex statement_lock;
-	condition_variable statement_cv;
-	bool statement_active = false;
+	//! Participants execute their writes one at a time
+	mutex write_lock;
+	condition_variable write_cv;
+	bool write_active = false;
 	//! The number of connections participating in the transaction, starting with the one that created it
 	idx_t participants = 1;
 	//! Whether a participant voted to roll back

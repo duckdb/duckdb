@@ -242,27 +242,37 @@ TEST_CASE("Test sharing a transaction between connections", "[api][transaction]"
 		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 	}
-	SECTION("a statement of one connection is not visible half-way to the other") {
+	SECTION("a read of one connection sees the rows written by another connection grow") {
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE s(a BIGINT)"));
 		REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));
 		auto share_id = ShareTransaction(con1);
 		REQUIRE_NO_FAIL(con2.Query("JOIN TRANSACTION '" + share_id + "'"));
 		atomic<bool> done {false};
+		atomic<int64_t> failures {0};
 		thread writer([&]() {
 			for (idx_t i = 0; i < 100; i++) {
-				REQUIRE_NO_FAIL(*con1.Query("INSERT INTO s SELECT * FROM range(20000)"));
+				if (con1.Query("INSERT INTO s SELECT * FROM range(20000)")->HasError()) {
+					failures++;
+				}
 			}
 			done = true;
 		});
-		thread reader([&]() {
-			while (!done) {
-				auto result = con2.Query("SELECT COUNT(*) FROM s");
-				REQUIRE_NO_FAIL(*result);
-				REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() % 20000 == 0);
+		int64_t previous = 0;
+		bool monotonic = true;
+		while (!done) {
+			auto result = con2.Query("SELECT COUNT(*) FROM s");
+			if (result->HasError()) {
+				failures++;
+				break;
 			}
-		});
+			auto count = result->Collection().GetValue(0, 0).GetValue<int64_t>();
+			monotonic = monotonic && count >= previous && count <= 100 * 20000;
+			previous = count;
+		}
 		writer.join();
-		reader.join();
+		REQUIRE(failures == 0);
+		REQUIRE(monotonic);
+		RequireValue(con2, "SELECT COUNT(*) FROM s", 100 * 20000);
 		REQUIRE_NO_FAIL(con2.Query("COMMIT"));
 		REQUIRE_NO_FAIL(con1.Query("COMMIT"));
 	}
