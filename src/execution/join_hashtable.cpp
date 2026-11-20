@@ -1511,6 +1511,10 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 
 bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
                                        ProbeState &probe_state) {
+	// Direct membership and dictionary loops do not need cached row resolution.
+	if (GetProbeResultType() != PerfectHashJoinTable::Type::ROWS) {
+		return false;
+	}
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
 

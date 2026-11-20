@@ -23,7 +23,7 @@ class buffer_ptr;
 template <class T>
 class enable_buffer_from_this;
 template <class T, class... ARGS>
-buffer_ptr<T> make_buffer(ARGS &&... args);
+buffer_ptr<T> make_buffer(ARGS &&...args);
 
 namespace buffer_ptr_detail {
 
@@ -62,7 +62,7 @@ struct ControlBlock {
 template <class T>
 struct Allocation : ControlBlock {
 	template <class... ARGS>
-	explicit Allocation(ARGS &&... args) : ControlBlock(Destroy), value(std::forward<ARGS>(args)...) {
+	explicit Allocation(ARGS &&...args) : ControlBlock(Destroy), value(std::forward<ARGS>(args)...) {
 	}
 
 	static void Destroy(ControlBlock *block) {
@@ -165,7 +165,7 @@ private:
 	template <class U>
 	friend class enable_buffer_from_this;
 	template <class U, class... ARGS>
-	friend buffer_ptr<U> make_buffer(ARGS &&... args);
+	friend buffer_ptr<U> make_buffer(ARGS &&...args);
 
 	buffer_ptr(T *ptr_p, buffer_ptr_detail::ControlBlock *control_p) noexcept : ptr(ptr_p), control(control_p) {
 	}
@@ -261,7 +261,7 @@ private:
 };
 
 template <class T, class... ARGS>
-buffer_ptr<T> make_buffer(ARGS &&... args) { // NOLINT: mimic std casing
+buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
 	auto allocation = new buffer_ptr_detail::Allocation<T>(std::forward<ARGS>(args)...);
 	buffer_ptr<T> result(&allocation->value, allocation);
 	result.EnableOwner(&allocation->value);

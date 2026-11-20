@@ -72,7 +72,7 @@ struct TemplatedUniqueIf<DATA_TYPE[N]>
 template<class DATA_TYPE, class... ARGS>
 inline
 typename TemplatedUniqueIf<DATA_TYPE, true>::templated_unique_single_t
-make_uniq(ARGS&&... args) // NOLINT: mimic std style
+make_uniq(ARGS&&...args) // NOLINT: mimic std style
 {
     return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
@@ -80,7 +80,7 @@ make_uniq(ARGS&&... args) // NOLINT: mimic std style
 template<class DATA_TYPE, class... ARGS>
 inline
 shared_ptr<DATA_TYPE>
-make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
+make_shared_ptr(ARGS&&...args) // NOLINT: mimic std style
 {
 	return shared_ptr<DATA_TYPE>(duckdb_base_std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
@@ -88,7 +88,7 @@ make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
 template<class DATA_TYPE, class... ARGS>
 inline
 typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
-make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
+make_unsafe_uniq(ARGS&&...args) // NOLINT: mimic std style
 {
     return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
@@ -127,13 +127,13 @@ template<class DATA_TYPE, class... ARGS>
 
 
 template <typename S, typename T, typename... ARGS>
-unique_ptr<S> make_uniq_base(ARGS &&... args) { // NOLINT: mimic std style
+unique_ptr<S> make_uniq_base(ARGS &&...args) { // NOLINT: mimic std style
 	return unique_ptr<S>(new T(std::forward<ARGS>(args)...));
 }
 
 #ifdef DUCKDB_ENABLE_DEPRECATED_API
 template <typename S, typename T, typename... Args>
-unique_ptr<S> make_unique_base(Args &&... args) {
+unique_ptr<S> make_unique_base(Args &&...args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 #endif // DUCKDB_ENABLE_DEPRECATED_API
@@ -157,7 +157,7 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 #endif
 
 template <class T, class... ARGS>
-static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic std style
+static duckdb::unique_ptr<T> make_unique(ARGS&&...__args) { // NOLINT: mimic std style
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API
@@ -165,7 +165,7 @@ static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic st
 }
 
 template <class T, class... ARGS>
-static duckdb::shared_ptr<T> make_shared(ARGS&&... __args) { // NOLINT: mimic std style
+static duckdb::shared_ptr<T> make_shared(ARGS&&...__args) { // NOLINT: mimic std style
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_shared_ptr instead of make_shared!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API

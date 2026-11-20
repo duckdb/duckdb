@@ -1,0 +1,30 @@
+# name: test/optimizer/correlated_aggregate_recovery_statistics.test
+# description: Range statistics must not hide repeated aggregate recovery
+# group: [optimizer]
+
+require parquet
+
+statement ok
+COPY (
+    SELECT i AS id, (i % 20000) * 100003 AS k, i % 100 AS sel FROM range(120000) t(i)
+) TO '{TEST_DIR}/recovery_statistics.parquet' (FORMAT parquet);
+
+statement ok
+CREATE TABLE recovery_inner AS
+SELECT (i % 200000) * 100003 AS k FROM range(200000) t(i);
+
+# A wide min/max span does not make the outer keys distinct.
+query II
+EXPLAIN (FORMAT JSON)
+SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM recovery_inner r WHERE r.k=o.k)
+FROM read_parquet('{TEST_DIR}/recovery_statistics.parquet') o WHERE o.sel<>7;
+----
+physical_plan	<REGEX>:[\s\S]*"Join Type": "SINGLE"[\s\S]*
+
+query II
+SELECT count(*),sum(length(c)) FROM (
+    SELECT (SELECT sha256(sha256(count(*)::VARCHAR)) FROM recovery_inner r WHERE r.k=o.k) c
+    FROM read_parquet('{TEST_DIR}/recovery_statistics.parquet') o WHERE o.sel<>7
+);
+----
+118800	7603200

@@ -128,8 +128,8 @@ static bool CanGroupList(const ListMatcher &list) {
 }
 
 static bool SameFirstPredicate(const MatcherFirstSet &left, const MatcherFirstSet &right) {
-	return left.computed && right.computed && left.any == right.any && left.nullable == right.nullable &&
-	       left.class_mask == right.class_mask && left.table == right.table && left.literals == right.literals;
+	return left.computed && right.computed && left.nullable == right.nullable && left.table == right.table &&
+	       left.Equals(right);
 }
 
 void MatcherAllocator::InitializeListChains() {
@@ -204,6 +204,8 @@ void MatcherAllocator::InitializeListChains() {
 				}
 			}
 		}
+		chain->tail_first_set.Finalize();
+		chain->prefix_first_set.Finalize();
 		// Publish the owner before installing borrowed pointers: vector growth can throw.
 		auto chain_ptr = chain.get();
 		list_chains.push_back(std::move(chain));

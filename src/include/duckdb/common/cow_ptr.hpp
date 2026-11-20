@@ -34,7 +34,7 @@ public:
 
 	//! Constructs the object in place - U is the (derived) type to construct
 	template <class U = T, class... ARGS>
-	static cow_ptr make(ARGS &&... args) { // NOLINT: mimic std casing
+	static cow_ptr make(ARGS &&...args) { // NOLINT: mimic std casing
 		cow_ptr result;
 		result.ptr = make_shared_ptr<U>(std::forward<ARGS>(args)...);
 		return result;
