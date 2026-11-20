@@ -307,6 +307,9 @@ constexpr uint64_t Uint128DivRem64Portable(uint64_t high, uint64_t low, uint64_t
 //! divDouble): the quotient is estimated from the normalized top bits of the divisor and corrected by at most one.
 constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
                                                         uint64_t rhs_lower) {
+	if (lhs_upper < rhs_upper) {
+		return Uint128DivModResult {0, 0, lhs_upper, lhs_lower};
+	}
 	const uint32_t shift = Uint64LeadingZeros(rhs_upper);
 	const uint64_t divisor_top = shift == 0 ? rhs_upper : (rhs_upper << shift) | (rhs_lower >> (64 - shift));
 	// halving keeps the high half of the dividend below the normalized divisor, as the 128-by-64-bit step requires
