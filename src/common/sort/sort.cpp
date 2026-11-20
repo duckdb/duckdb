@@ -160,13 +160,20 @@ private:
 class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
-	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context.GetContext()).Register(context.GetContext())),
-	      sorted_tuples(0), sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0),
-	      partition_size(0) {
+	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()), sorted_tuples(0), sunk_tuples(0),
+	      external(Settings::Get<DebugForceExternalSetting>(context)), total_count(0), partition_size(0) {
 	}
 
 public:
+	//! Register with the TemporaryMemoryManager once data arrives, so an idle sort reserves no memory
+	void InitializeLocalState(ClientContext &context, SortLocalSinkState &lstate) {
+		const lock_guard<mutex> guard(lock);
+		if (!temporary_memory_state) {
+			temporary_memory_state = TemporaryMemoryManager::Get(context.GetContext()).Register(context.GetContext());
+		}
+		UpdateLocalState(lstate);
+	}
+
 	void UpdateLocalState(SortLocalSinkState &lstate) const {
 		lstate.maximum_run_size = temporary_memory_state->GetReservation() / num_threads;
 		lstate.external = external;
@@ -260,14 +267,6 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 	return make_uniq<SortGlobalSinkState>(context);
 }
 
-void Sort::SetExpectedSize(ClientContext &context, GlobalSinkState &gstate, idx_t expected_size) const {
-	if (expected_size == 0) {
-		return;
-	}
-	auto &sink = gstate.Cast<SortGlobalSinkState>();
-	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.GetContext(), expected_size);
-}
-
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 idx_t Sort::GetLocalSizeInBytes(LocalSinkState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<SortLocalSinkState>();
@@ -303,7 +302,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 
 	if (!lstate.sorted_run) {
 		lstate.InitializeSortedRun(*this, context.client);
-		gstate.UpdateLocalState(lstate);
+		gstate.InitializeLocalState(context.client, lstate);
 	}
 
 	// Sink data into sorted run
