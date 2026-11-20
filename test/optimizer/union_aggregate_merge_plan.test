@@ -332,45 +332,6 @@ EXPLAIN SELECT store, first(amount), list(amount)[1:2] FROM sales WHERE month = 
 ----
 physical_plan	<REGEX>:.*Union.*
 
-# constants that are equal without being identical: every branch returns its own
-
-query II
-EXPLAIN SELECT INTERVAL '1 month' AS label, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT INTERVAL '30 days', sum(amount) FROM sales WHERE month = 2;
-----
-physical_plan	<!REGEX>:.*Union.*
-
-query II
-EXPLAIN SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2);
-----
-physical_plan	<!REGEX>:.*Union.*
-
-query II
-EXPLAIN SELECT '12:00:00+00'::TIMETZ AS label, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE} AS nested, ['NaN'::DOUBLE] AS l, count(*) FROM sales WHERE month = 1 UNION ALL SELECT '13:00:00+01'::TIMETZ, {'i': INTERVAL '24 hours', 'd': -0.0::DOUBLE}, ['-NaN'::DOUBLE], count(*) FROM sales WHERE month = 2 UNION ALL SELECT '12:00:00+00'::TIMETZ, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE}, ['NaN'::DOUBLE], count(*) FROM sales WHERE month = 3;
-----
-physical_plan	<!REGEX>:.*Union.*
-
-query II
-EXPLAIN SELECT (INTERVAL '1 month')::VARCHAR || '!' AS label, store, count(*) FROM sales WHERE month = 1 GROUP BY store HAVING (INTERVAL '1 month')::VARCHAR <> 'x' UNION ALL SELECT (INTERVAL '30 days')::VARCHAR || '!', store, count(*) FROM sales WHERE month = 2 GROUP BY store HAVING (INTERVAL '30 days')::VARCHAR <> 'x' ORDER BY ALL;
-----
-physical_plan	<!REGEX>:.*Union.*
-
-# a predicate that differs in such a constant is another predicate
-
-query II
-EXPLAIN SELECT store, count(*) FROM sales WHERE month = 1 AND day + INTERVAL '1 month' > DATE '2024-02-03' GROUP BY store UNION ALL SELECT store, count(*) FROM sales WHERE month = 2 AND day + INTERVAL '30 days' > DATE '2024-02-03' GROUP BY store ORDER BY ALL;
-----
-physical_plan	<REGEX>:.*Union.*
-
-query II
-EXPLAIN SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
-----
-physical_plan	<!REGEX>:.*Union.*
-
-query II
-EXPLAIN SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2 GROUP BY 1) ORDER BY ALL;
-----
-physical_plan	<!REGEX>:.*Union.*
-
 # the rows of big are clustered by batch: every branch reads its own row groups, and one pass has nothing to save
 query II
 EXPLAIN SELECT 'a' AS name, sum(amount), count(*) FROM big WHERE batch = 1 UNION ALL SELECT 'b', sum(amount), count(*) FROM big WHERE batch = 5 UNION ALL SELECT 'c', sum(amount), count(*) FROM big WHERE batch = 9;
@@ -400,6 +361,43 @@ query II
 EXPLAIN SELECT 'jan' AS name, sum(amount), count(*) FROM big WHERE month = 1 UNION ALL SELECT 'feb', sum(amount), count(*) FROM big WHERE month = 2 UNION ALL SELECT 'jun', sum(amount), count(*) FROM big WHERE month = 6;
 ----
 physical_plan	<REGEX>:.*Filters:.*month IN \(1, 2, 6\).*
+
+# constants that are equal without being identical do not keep branches from being merged (their results are in
+# union_aggregate_merge_identical_constants.test); a filter that differs in such a constant does
+query II
+EXPLAIN SELECT INTERVAL '1 month' AS label, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT INTERVAL '30 days', sum(amount) FROM sales WHERE month = 2;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2);
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT '12:00:00+00'::TIMETZ AS label, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE} AS nested, [0.0::DOUBLE] AS l, count(*) FROM sales WHERE month = 1 UNION ALL SELECT '13:00:00+01'::TIMETZ, {'i': INTERVAL '24 hours', 'd': -0.0::DOUBLE}, [-0.0::DOUBLE], count(*) FROM sales WHERE month = 2 UNION ALL SELECT '12:00:00+00'::TIMETZ, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE}, [0.0::DOUBLE], count(*) FROM sales WHERE month = 3;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT (INTERVAL '1 month')::VARCHAR || '!' AS label, store, count(*) FROM sales WHERE month = 1 GROUP BY store HAVING (INTERVAL '1 month')::VARCHAR <> 'x' UNION ALL SELECT (INTERVAL '30 days')::VARCHAR || '!', store, count(*) FROM sales WHERE month = 2 GROUP BY store HAVING (INTERVAL '30 days')::VARCHAR <> 'x' ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, count(*) FROM sales WHERE month = 1 AND day + INTERVAL '1 month' > DATE '2024-02-03' GROUP BY store UNION ALL SELECT store, count(*) FROM sales WHERE month = 2 AND day + INTERVAL '30 days' > DATE '2024-02-03' GROUP BY store ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
+
+query II
+EXPLAIN SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2 GROUP BY 1) ORDER BY ALL;
+----
+physical_plan	<!REGEX>:.*Union.*
 
 # on several threads the branches over a small table run next to each other, which one pipeline over its one row
 # group cannot make up for: they are kept. The row groups of big have work for four threads

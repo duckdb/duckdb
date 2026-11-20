@@ -1,0 +1,130 @@
+# name: test/optimizer/union_aggregate_merge_identical_constants.test
+# description: UNION ALL branches whose constants are equal without being identical return their own constants when one aggregate computes them
+# group: [optimizer]
+
+# The vector verification of the test runner (--verify-vector sequence_operator) replaces rows that are equal by the
+# first of them, also in a plain VALUES list, so it cannot run queries whose point is that equal values stay apart.
+require no_vector_verification
+
+# Every query runs with the rule disabled and enabled, at one thread (where it merges also the branches over
+# small tables) and at four threads; the expected rows are those of the unoptimized plan.
+
+statement ok
+CREATE TABLE sales AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (2000 + i % 3)::INTEGER AS year, (i % 5)::INTEGER AS store, CASE WHEN i % 10 = 0 THEN NULL ELSE i % 100 END::BIGINT AS amount, 'c' || (i % 4) AS category, DATE '2024-01-01' + (i % 6)::INTEGER AS day, (i % 3)::DOUBLE AS ratio, CASE i % 2 WHEN 0 THEN 'a' ELSE 'A' END COLLATE NOCASE AS code FROM range(3000) r(i) WHERE i * 7 % 12 + 1 <> 4;
+
+statement ok
+CREATE TABLE dates AS SELECT i::INTEGER AS date_id, (2000 + i // 12)::INTEGER AS year, (i % 12 + 1)::INTEGER AS month FROM range(36) r(i);
+
+statement ok
+CREATE TABLE facts AS SELECT (i % 36)::INTEGER AS date_id, (i % 5)::INTEGER AS store, (i % 50)::BIGINT AS amount FROM range(4000) r(i) WHERE i % 36 <> 7;
+
+statement ok
+CREATE TABLE nothing(month INTEGER, store INTEGER, amount BIGINT);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE big AS SELECT (i * 7 % 12 + 1)::INTEGER AS month, (i % 5)::INTEGER AS store, i::BIGINT AS amount, (i // 100000)::INTEGER AS batch FROM range(1200000) r(i);
+
+foreach threads 1 4
+
+statement ok
+SET threads = {threads};
+
+foreach disabled 'union_aggregate_merge' ''
+
+statement ok
+SET disabled_optimizers = {disabled};
+
+# constants that are equal without being identical: every branch returns its own
+
+query II
+SELECT INTERVAL '1 month' AS label, sum(amount) FROM sales WHERE month = 1 UNION ALL SELECT INTERVAL '30 days', sum(amount) FROM sales WHERE month = 2;
+----
+1 month	10000
+30 days	12750
+
+query III
+SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2);
+----
+0.0	0	10000
+-0.0	1	12750
+
+query III
+SELECT label::VARCHAR, store, s FROM (SELECT INTERVAL '1 month' AS label, store, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY 1, 2 UNION ALL SELECT INTERVAL '30 days', store, sum(amount) FROM sales WHERE month = 2 GROUP BY 1, 2 UNION ALL SELECT INTERVAL '720 hours', store, sum(amount) FROM sales WHERE month = 3 GROUP BY 1, 2) ORDER BY ALL;
+----
+1 month	0	NULL
+1 month	1	2800
+1 month	2	2600
+1 month	3	2400
+1 month	4	2200
+30 days	0	2750
+30 days	1	2550
+30 days	2	2350
+30 days	3	2150
+30 days	4	2950
+720:00:00	0	NULL
+720:00:00	1	2300
+720:00:00	2	2100
+720:00:00	3	2900
+720:00:00	4	2700
+
+query II
+SELECT label::VARCHAR, s FROM (SELECT INTERVAL '1 month' AS label, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY 1 UNION ALL SELECT INTERVAL '30 days', sum(amount) FROM sales WHERE month = 2 GROUP BY 1 UNION ALL SELECT INTERVAL '720 hours', sum(amount) FROM sales WHERE month = 3 GROUP BY 1) ORDER BY ALL;
+----
+1 month	10000
+30 days	12750
+720:00:00	10000
+
+query IIII
+SELECT '12:00:00+00'::TIMETZ AS label, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE} AS nested, [0.0::DOUBLE] AS l, count(*) FROM sales WHERE month = 1 UNION ALL SELECT '13:00:00+01'::TIMETZ, {'i': INTERVAL '24 hours', 'd': -0.0::DOUBLE}, [-0.0::DOUBLE], count(*) FROM sales WHERE month = 2 UNION ALL SELECT '12:00:00+00'::TIMETZ, {'i': INTERVAL '1 day', 'd': 0.0::DOUBLE}, [0.0::DOUBLE], count(*) FROM sales WHERE month = 3;
+----
+12:00:00+00	{'i': 1 day, 'd': 0.0}	[0.0]	250
+13:00:00+01	{'i': '24:00:00', 'd': -0.0}	[-0.0]	250
+12:00:00+00	{'i': 1 day, 'd': 0.0}	[0.0]	250
+
+query III
+SELECT (INTERVAL '1 month')::VARCHAR || '!' AS label, store, count(*) FROM sales WHERE month = 1 GROUP BY store HAVING (INTERVAL '1 month')::VARCHAR <> 'x' UNION ALL SELECT (INTERVAL '30 days')::VARCHAR || '!', store, count(*) FROM sales WHERE month = 2 GROUP BY store HAVING (INTERVAL '30 days')::VARCHAR <> 'x' ORDER BY ALL;
+----
+1 month!	0	50
+1 month!	1	50
+1 month!	2	50
+1 month!	3	50
+1 month!	4	50
+30 days!	0	50
+30 days!	1	50
+30 days!	2	50
+30 days!	3	50
+30 days!	4	50
+
+# a predicate that differs in such a constant is another predicate
+
+query II
+SELECT store, count(*) FROM sales WHERE month = 1 AND day + INTERVAL '1 month' > DATE '2024-02-03' GROUP BY store UNION ALL SELECT store, count(*) FROM sales WHERE month = 2 AND day + INTERVAL '30 days' > DATE '2024-02-03' GROUP BY store ORDER BY ALL;
+----
+
+
+query III
+SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 1 GROUP BY store UNION ALL SELECT store, min((INTERVAL '1 month')::VARCHAR), count(*) FROM sales WHERE month = 2 GROUP BY store ORDER BY ALL;
+----
+0	1 month	50
+0	1 month	50
+1	1 month	50
+1	1 month	50
+2	1 month	50
+2	1 month	50
+3	1 month	50
+3	1 month	50
+4	1 month	50
+4	1 month	50
+
+query III
+SELECT label::VARCHAR, signbit(label)::INTEGER, s FROM (SELECT '0'::DOUBLE AS label, sum(amount) AS s FROM sales WHERE month = 1 GROUP BY 1 UNION ALL SELECT '-0'::DOUBLE, sum(amount) FROM sales WHERE month = 2 GROUP BY 1) ORDER BY ALL;
+----
+-0.0	1	12750
+0.0	0	10000
+
+endloop
+
+endloop
