@@ -50,9 +50,16 @@ public:
 		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetStatisticsCallback(callback); });
 	}
 
-	//! Declare the set a function language: members of CREATE FUNCTION ... LANGUAGE <name> resolve through it. An
-	//! extension registers the declared set first: later sets of that name it registers without the declaration join
-	//! the language, while declaring a language after registering overloads of it in its own schema fails
+	//! Declare the set a function language: members of CREATE FUNCTION ... LANGUAGE <name> resolve through it.
+	//!
+	//! A language lives in the main schema of the system catalog: the catalog rejects a declared language for
+	//! another schema. The extension loader places a language its extension registers in its default schema there.
+	//!
+	//! Registration order is part of the contract: register the declared set before any other overload of the
+	//! language. Overloads the extension registers later in its default schema without the declaration, one at a time
+	//! or as a set, join the language. Declaring a language after the extension registered an overload of that name
+	//! in its own schema fails, since member calls would never select that overload. A binding that registers one
+	//! overload per call (the C API) registers the declared overload first
 	void DeclareLanguage() {
 		is_language = true;
 	}
