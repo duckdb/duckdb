@@ -1876,8 +1876,11 @@ private:
 //    (col = constant, on one or more columns), and the constants of two branches have to differ: branches that
 //    repeat the constants of an earlier one are left alone, as their rows are needed twice.
 //  - constants in the select list and constants among the groups (GROUP BY 'jan').
-// Nothing in a branch may be volatile: what does not depend on the compared columns is evaluated once instead of
-// once per branch. Expressions that can fail are evaluated for the same rows as before.
+// Branches in which an expression at or below the aggregate (its arguments and groups, a HAVING, the joins, filters
+// and table filters below it) can throw or is volatile are kept as they are: the merged plan evaluates such an
+// expression for other rows, or another number of times, than the branches do (see CanThrowOrIsVolatile). The
+// select list above the aggregate can throw, as it is evaluated for the same rows in both plans, but cannot be
+// volatile. Branches with aggregates that depend on the order of their input (first, list) are kept as well.
 //
 // The columns that are compared become group columns of the aggregate of the first branch, whose scan is restricted
 // to the constants of all branches. A grouped aggregate returns the rows of every branch then. If the branches
@@ -2156,7 +2159,8 @@ private:
 		if (!signature || branch.scans.empty()) {
 			return nullptr;
 		}
-		// constants among the groups and in the select list are compared by their type only
+		// constants among the groups and in the select list are in the signature by their type only; their values
+		// are compared (IdenticalValues) when the branches are merged
 		vector<unique_ptr<Expression>> constants;
 		auto hide_constants = [&](vector<unique_ptr<Expression>> &expressions) {
 			for (idx_t i = 0; i < expressions.size(); i++) {

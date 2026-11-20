@@ -142,6 +142,16 @@ SELECT month, count(*) FROM sales WHERE month = 1 AND signbit(CASE WHEN amount I
 ----
 2	250
 
+query II rowsort
+SELECT month, count(*) FROM sales WHERE month = 1 AND signbit((amount::DOUBLE + 1) * (SELECT '0'::DOUBLE)) GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND signbit((amount::DOUBLE + 1) * (SELECT '-0'::DOUBLE)) GROUP BY month ORDER BY ALL;;
+----
+2	250
+
+query II rowsort
+SELECT month, count(*) FROM sales WHERE month = 1 AND signbit((amount::DOUBLE + 1) * (SELECT max('0'::DOUBLE) FROM facts)) GROUP BY month UNION ALL SELECT month, count(*) FROM sales WHERE month = 2 AND signbit((amount::DOUBLE + 1) * (SELECT max('-0'::DOUBLE) FROM facts)) GROUP BY month ORDER BY ALL;;
+----
+2	250
+
 query II
 SELECT month, count(*) FILTER (WHERE list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '0'::DOUBLE))[1]) FROM sales WHERE month = 1 GROUP BY month UNION ALL SELECT month, count(*) FILTER (WHERE list_transform([amount::DOUBLE + 1], lambda x: signbit(x * '-0'::DOUBLE))[1]) FROM sales WHERE month = 2 GROUP BY month ORDER BY ALL;
 ----
