@@ -1,5 +1,4 @@
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/bignum_limbs.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 
@@ -262,7 +261,7 @@ char *NumericHelper::FormatUnsigned(uhugeint_t value, char *ptr) {
 	while (value.upper > 0) {
 		uint64_t remainder;
 		const auto upper = value.upper / DIVISOR;
-		const auto lower = BignumLimb::DivRemPortable(value.upper % DIVISOR, value.lower, DIVISOR, remainder);
+		const auto lower = Uint128DivRem64Portable(value.upper % DIVISOR, value.lower, DIVISOR, remainder);
 		value = uhugeint_t(upper, lower);
 
 		auto chunk_start = ptr - DIVISOR_DIGITS;

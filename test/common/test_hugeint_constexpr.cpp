@@ -96,16 +96,14 @@ constexpr bool SameResult(const Uint128DivModResult &a, const Uint128DivModResul
 
 constexpr bool CheckUnsignedDivisions() {
 	for (const auto &test : unsigned_divisions) {
-		if (!SameResult(Uint128DivModPortable(test.lhs_upper, test.lhs_lower, test.rhs_upper, test.rhs_lower),
-		                test.expected) ||
-		    !SameResult(Uint128DivMod(test.lhs_upper, test.lhs_lower, test.rhs_upper, test.rhs_lower), test.expected)) {
+		if (!SameResult(Uint128DivMod(test.lhs_upper, test.lhs_lower, test.rhs_upper, test.rhs_lower), test.expected)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-static_assert(CheckUnsignedDivisions(), "portable and native unsigned division agree with known results");
+static_assert(CheckUnsignedDivisions(), "unsigned division agrees with known results");
 
 //! Operands around the limb, half-limb and sign boundaries, which exercise the estimate corrections of the portable
 //! division
@@ -175,7 +173,7 @@ TEST_CASE("Unsigned 128-bit division agrees with long division", "[hugeint]") {
 						continue;
 					}
 					volatile uint64_t runtime_lhs_lower = lhs_lower;
-					const auto result = Uint128DivModPortable(lhs_upper, runtime_lhs_lower, rhs_upper, rhs_lower);
+					const auto result = Uint128DivMod(lhs_upper, runtime_lhs_lower, rhs_upper, rhs_lower);
 					// the quotient and remainder fully determine the dividend when the remainder is below the divisor
 					const uhugeint_t lhs(lhs_upper, lhs_lower);
 					const uhugeint_t rhs(rhs_upper, rhs_lower);
@@ -192,11 +190,12 @@ TEST_CASE("Unsigned 128-bit division agrees with long division", "[hugeint]") {
 
 					if (rhs_upper == 0) {
 						const uint64_t high = lhs_upper % rhs_lower;
-						const auto expected = Uint128DivMod(high, lhs_lower, 0, rhs_lower);
+						uint64_t expected_remainder = 0;
+						const uint64_t expected =
+						    Uint128DivRem64(high, runtime_lhs_lower, rhs_lower, expected_remainder);
 						uint64_t limb_remainder;
-						REQUIRE(Uint128DivRem64Portable(high, lhs_lower, rhs_lower, limb_remainder) ==
-						        expected.quotient_lower);
-						REQUIRE(limb_remainder == expected.remainder_lower);
+						REQUIRE(Uint128DivRem64Portable(high, lhs_lower, rhs_lower, limb_remainder) == expected);
+						REQUIRE(limb_remainder == expected_remainder);
 					}
 				}
 			}

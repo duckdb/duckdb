@@ -40,15 +40,7 @@ struct BignumLimb {
 	//! Divides high * 2^64 + low by a divisor larger than high, so that the quotient fits a digit; sets the remainder
 	static inline uint64_t DivRem(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
 		D_ASSERT(high < divisor);
-#ifdef _MSC_VER
-		// clang-cl has the 128-bit type but links no runtime support for dividing it
-		return DivRemPortable(high, low, divisor, remainder);
-#else
-		const twodigit_t numerator = (static_cast<twodigit_t>(high) << 64) | low;
-		const auto quotient = static_cast<uint64_t>(numerator / divisor);
-		remainder = static_cast<uint64_t>(numerator - static_cast<twodigit_t>(quotient) * divisor);
-		return quotient;
-#endif
+		return Uint128DivRem64(high, low, divisor, remainder);
 	}
 #else
 	using digit_t = uint32_t;
@@ -86,12 +78,6 @@ struct BignumLimb {
 	//! Bytes and bits of a multiplication / division digit
 	static constexpr idx_t DIGIT_BYTES = sizeof(digit_t);
 	static constexpr idx_t DIGIT_BITS = DIGIT_BYTES * 8;
-
-	//! DivRem in two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division
-	static inline uint64_t DivRemPortable(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
-		D_ASSERT(high < divisor);
-		return Uint128DivRem64Portable(high, low, divisor, remainder);
-	}
 
 	template <class T>
 	static inline T ToHostOrder(T value) {
