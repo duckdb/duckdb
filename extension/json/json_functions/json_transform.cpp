@@ -1301,6 +1301,28 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	return set;
 }
 
+//! Strings of the result point into the JSON allocator, which must outlive the cast's local state
+static void AddJSONBuffer(Vector &vector, yyjson_alc *alc) {
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::VARCHAR:
+		JSONAllocator::AddBuffer(vector, alc);
+		break;
+	case PhysicalType::STRUCT:
+		for (auto &child : StructVector::GetEntries(vector)) {
+			AddJSONBuffer(child, alc);
+		}
+		break;
+	case PhysicalType::LIST:
+		AddJSONBuffer(ListVector::GetChildMutable(vector), alc);
+		break;
+	case PhysicalType::ARRAY:
+		AddJSONBuffer(ArrayVector::GetChildMutable(vector), alc);
+		break;
+	default:
+		break;
+	}
+}
+
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator->Reset();
@@ -1310,6 +1332,7 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	options.delay_error = true;
 
 	auto success = TransformFunctionInternal(source, count, result, alc, options);
+	AddJSONBuffer(result, alc);
 	if (!success) {
 		HandleCastError::AssignError(options.error_message, parameters);
 	}
