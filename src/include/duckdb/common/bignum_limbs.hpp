@@ -205,11 +205,7 @@ struct BignumLimb {
 	//! The number of leading zero bits of a non-zero limb
 	static inline idx_t LeadingZeros(uint64_t value) {
 		D_ASSERT(value != 0);
-#if defined(__GNUC__) || defined(__clang__)
-		return static_cast<idx_t>(__builtin_clzll(value));
-#else
-		return CountZeros<uint64_t>::Leading(value);
-#endif
+		return Uint64LeadingZeros(value);
 	}
 	static inline idx_t LeadingZeros(uint32_t value) {
 		D_ASSERT(value != 0);
