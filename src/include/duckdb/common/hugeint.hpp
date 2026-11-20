@@ -359,18 +359,17 @@ constexpr Uint128DivModResult Uint128DivMod(uint64_t lhs_upper, uint64_t lhs_low
 	if (lhs_upper == 0 && rhs_upper == 0) {
 		return Uint128DivModResult {0, lhs_lower / rhs_lower, 0, lhs_lower % rhs_lower};
 	}
-	if (rhs_upper != 0) {
-		return Uint128DivModLargeDivisor(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
-	}
 	// clang-cl has the 128-bit type but links no runtime support for dividing it
 #if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__) && !defined(_MSC_VER)
-	const auto lhs = (static_cast<__uint128_t>(lhs_upper) << 64) | lhs_lower;
-	const auto quotient = lhs / rhs_lower;
-	const auto remainder = static_cast<uint64_t>(lhs - quotient * rhs_lower);
-	return Uint128DivModResult {static_cast<uint64_t>(quotient >> 64), static_cast<uint64_t>(quotient), 0, remainder};
-#else
-	return Uint128DivModSmallDivisor(lhs_upper, lhs_lower, rhs_lower);
+	if (rhs_upper == 0) {
+		const auto lhs = (static_cast<__uint128_t>(lhs_upper) << 64) | lhs_lower;
+		const auto quotient = lhs / rhs_lower;
+		const auto remainder = static_cast<uint64_t>(lhs - quotient * rhs_lower);
+		return Uint128DivModResult {static_cast<uint64_t>(quotient >> 64), static_cast<uint64_t>(quotient), 0,
+		                            remainder};
+	}
 #endif
+	return Uint128DivModPortable(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
 }
 
 //! Signed 128-bit division truncating toward zero. Dividing by zero yields a zero quotient with lhs as the
