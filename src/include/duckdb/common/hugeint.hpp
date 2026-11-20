@@ -233,9 +233,11 @@ constexpr uint32_t Uint64LeadingZeros(uint64_t value) {
 	return static_cast<uint32_t>(__builtin_clzll(value));
 #else
 	uint32_t count = 0;
-	while (!(value >> 63)) {
-		value <<= 1;
-		count++;
+	for (uint32_t step = 32; step > 0; step >>= 1) {
+		if (!(value >> (64 - step))) {
+			value <<= step;
+			count += step;
+		}
 	}
 	return count;
 #endif
