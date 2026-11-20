@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/bswap.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 #include <cstring>
@@ -89,42 +90,7 @@ struct BignumLimb {
 	//! DivRem in two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division
 	static inline uint64_t DivRemPortable(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
 		D_ASSERT(high < divisor);
-		constexpr uint64_t HALF_BASE = static_cast<uint64_t>(1) << 32;
-		constexpr uint64_t HALF_MASK = HALF_BASE - 1;
-		// normalize so that the divisor has its top bit set; the quotient is unchanged, the remainder is scaled
-		const idx_t shift = LeadingZeros(divisor);
-		if (shift > 0) {
-			divisor <<= shift;
-			high = (high << shift) | (low >> (64 - shift));
-			low <<= shift;
-		}
-		const uint64_t divisor_high = divisor >> 32;
-		const uint64_t divisor_low = divisor & HALF_MASK;
-		const uint64_t low_high = low >> 32;
-		const uint64_t low_low = low & HALF_MASK;
-		// the high half of the quotient: an estimate from the top halves that is corrected down until it is exact
-		uint64_t q_high = high / divisor_high;
-		uint64_t rhat = high - q_high * divisor_high;
-		while (q_high >= HALF_BASE || q_high * divisor_low > ((rhat << 32) | low_high)) {
-			q_high--;
-			rhat += divisor_high;
-			if (rhat >= HALF_BASE) {
-				break;
-			}
-		}
-		// the partial remainder is below the divisor, so the wrapping arithmetic yields the exact value
-		const uint64_t middle = (high << 32) + low_high - q_high * divisor;
-		uint64_t q_low = middle / divisor_high;
-		rhat = middle - q_low * divisor_high;
-		while (q_low >= HALF_BASE || q_low * divisor_low > ((rhat << 32) | low_low)) {
-			q_low--;
-			rhat += divisor_high;
-			if (rhat >= HALF_BASE) {
-				break;
-			}
-		}
-		remainder = ((middle << 32) + low_low - q_low * divisor) >> shift;
-		return (q_high << 32) | q_low;
+		return Uint128DivRem64Portable(high, low, divisor, remainder);
 	}
 
 	template <class T>

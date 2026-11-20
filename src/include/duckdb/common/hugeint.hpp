@@ -154,45 +154,6 @@ constexpr hugeint_t HugeintSubtractOne(hugeint_t n) {
 	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) - borrow), n.lower - 1);
 }
 
-//! Helpers for the bit-at-a-time division, from the same uint128_t reference the
-//! runtime implementation uses
-constexpr uint8_t HugeintHighestBit(hugeint_t bits) {
-	uint8_t out = 0;
-	if (bits.upper) {
-		// bit index 64 is the lowest bit of upper
-		out = 64;
-		uint64_t up = static_cast<uint64_t>(bits.upper);
-		while (up) {
-			up >>= 1;
-			out++;
-		}
-	} else {
-		uint64_t low = bits.lower;
-		while (low) {
-			low >>= 1;
-			out++;
-		}
-	}
-	return out;
-}
-
-constexpr bool HugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
-	if (bit_position < 64) {
-		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
-	}
-	return static_cast<uint64_t>(lhs.upper) & (uint64_t(1) << uint64_t(bit_position - 64));
-}
-
-//! Shift left by 1..63 bits. Called by the division loop below with amount == 1.
-//! Takes no D_ASSERT: in assertion builds that macro is an unconditional function call, which
-//! would make this function unusable in a constant expression.
-constexpr hugeint_t HugeintLeftShift(hugeint_t lhs, uint32_t amount) {
-	hugeint_t result {0, 0};
-	result.lower = lhs.lower << amount;
-	result.upper = static_cast<int64_t>((static_cast<uint64_t>(lhs.upper) << amount) + (lhs.lower >> (64 - amount)));
-	return result;
-}
-
 constexpr hugeint_t HugeintMultiplyUnchecked(hugeint_t lhs, hugeint_t rhs) {
 	// Unchecked multiplication uses the low 128 bits, including for negative operands.
 #if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
@@ -258,84 +219,151 @@ struct HugeintDivModResult {
 	hugeint_t remainder;
 };
 
-constexpr HugeintDivModResult HugeintDivMod(hugeint_t lhs, hugeint_t rhs);
+//! Result of an unsigned 128-bit division, split into 64-bit halves
+struct Uint128DivModResult {
+	uint64_t quotient_upper;
+	uint64_t quotient_lower;
+	uint64_t remainder_upper;
+	uint64_t remainder_lower;
+};
 
-//! Precondition: lhs or rhs equals HugeintMinimum(). Only reached through HugeintDivMod.
-//! Takes no D_ASSERT for the same reason as HugeintLeftShift.
-constexpr HugeintDivModResult HugeintDivModMinimum(hugeint_t lhs, hugeint_t rhs) {
-	// rhs == MINIMUM: the quotient is 1 with remainder 0 only when lhs == MINIMUM;
-	// every other lhs has |lhs| < |MINIMUM|, so the quotient is 0 and the remainder is lhs
-	if (rhs.upper == INT64_MIN && rhs.lower == 0) {
-		if (lhs.upper == INT64_MIN && lhs.lower == 0) {
-			return HugeintDivModResult {hugeint_t(1), hugeint_t(0)};
-		}
-		return HugeintDivModResult {hugeint_t(0), lhs};
+//! The number of leading zero bits of a non-zero value
+constexpr uint32_t Uint64LeadingZeros(uint64_t value) {
+#if defined(__GNUC__) || defined(__clang__)
+	return static_cast<uint32_t>(__builtin_clzll(value));
+#else
+	uint32_t count = 0;
+	while (!(value >> 63)) {
+		value <<= 1;
+		count++;
 	}
-
-	auto shifted = HugeintDivMod(HugeintAddOne(lhs), rhs);
-	auto quotient = shifted.quotient;
-	auto remainder = shifted.remainder;
-
-	// If the 1 mattered we need to adjust the result, otherwise the remainder
-	if (HugeintEquals(HugeintAddOne(HugeintAbs(remainder)), HugeintAbs(rhs))) {
-		quotient = HugeintSign(rhs) > 0 ? HugeintSubtractOne(quotient) : HugeintAddOne(quotient);
-		remainder = hugeint_t(0);
-	} else {
-		remainder = HugeintSubtractOne(remainder);
-	}
-	return HugeintDivModResult {quotient, remainder};
+	return count;
+#endif
 }
 
-//! Bit-at-a-time 128-bit division, adapted from
-//! https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
+//! Divides high * 2^64 + low by a divisor larger than high, so that the quotient fits 64 bits; sets the remainder.
+//! Two base 2^32 steps (Hacker's Delight divlu), for compilers without 128-bit division.
+//! Takes no D_ASSERT: in assertion builds that macro is an unconditional function call, which would make this
+//! function unusable in a constant expression.
+constexpr uint64_t Uint128DivRem64Portable(uint64_t high, uint64_t low, uint64_t divisor, uint64_t &remainder) {
+	constexpr uint64_t HALF_BASE = static_cast<uint64_t>(1) << 32;
+	constexpr uint64_t HALF_MASK = HALF_BASE - 1;
+	// normalize so that the divisor has its top bit set; the quotient is unchanged, the remainder is scaled
+	const uint32_t shift = Uint64LeadingZeros(divisor);
+	if (shift > 0) {
+		divisor <<= shift;
+		high = (high << shift) | (low >> (64 - shift));
+		low <<= shift;
+	}
+	const uint64_t divisor_high = divisor >> 32;
+	const uint64_t divisor_low = divisor & HALF_MASK;
+	const uint64_t low_high = low >> 32;
+	const uint64_t low_low = low & HALF_MASK;
+	// the high half of the quotient: an estimate from the top halves that is corrected down until it is exact
+	uint64_t q_high = high / divisor_high;
+	uint64_t rhat = high - q_high * divisor_high;
+	while (q_high >= HALF_BASE || q_high * divisor_low > ((rhat << 32) | low_high)) {
+		q_high--;
+		rhat += divisor_high;
+		if (rhat >= HALF_BASE) {
+			break;
+		}
+	}
+	// the partial remainder is below the divisor, so the wrapping arithmetic yields the exact value
+	const uint64_t middle = (high << 32) + low_high - q_high * divisor;
+	uint64_t q_low = middle / divisor_high;
+	rhat = middle - q_low * divisor_high;
+	while (q_low >= HALF_BASE || q_low * divisor_low > ((rhat << 32) | low_low)) {
+		q_low--;
+		rhat += divisor_high;
+		if (rhat >= HALF_BASE) {
+			break;
+		}
+	}
+	remainder = ((middle << 32) + low_low - q_low * divisor) >> shift;
+	return (q_high << 32) | q_low;
+}
+
+//! Unsigned 128-bit division by a divisor of at least 2^64, so that the quotient fits 64 bits (Hacker's Delight
+//! divDouble): a 128-by-64-bit division of the halved dividend by the normalized top bits of the divisor estimates
+//! the quotient, which is then off by at most one. The runtime 128-bit division of some compilers (e.g. compiler-rt)
+//! takes a bit-at-a-time loop for these divisors instead.
+constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
+                                                        uint64_t rhs_lower) {
+	const uint32_t shift = Uint64LeadingZeros(rhs_upper);
+	const uint64_t divisor_top = shift == 0 ? rhs_upper : (rhs_upper << shift) | (rhs_lower >> (64 - shift));
+	// halving keeps the high half of the dividend below the normalized divisor, as the 128-by-64-bit step requires
+	uint64_t unused_remainder = 0;
+	const uint64_t estimate =
+	    Uint128DivRem64Portable(lhs_upper >> 1, (lhs_upper << 63) | (lhs_lower >> 1), divisor_top, unused_remainder);
+	uint64_t quotient = estimate >> (63 - shift);
+	if (quotient != 0) {
+		quotient--;
+	}
+	// the quotient does not exceed the exact one, so the product fits 128 bits and the remainder is non-negative
+	const hugeint_t product =
+	    HugeintMultiplyUnchecked(hugeint_t(0, quotient), hugeint_t(static_cast<int64_t>(rhs_upper), rhs_lower));
+	const uint64_t product_upper = static_cast<uint64_t>(product.upper);
+	uint64_t remainder_lower = lhs_lower - product.lower;
+	uint64_t remainder_upper = lhs_upper - product_upper - (lhs_lower < product.lower ? 1 : 0);
+	if (remainder_upper > rhs_upper || (remainder_upper == rhs_upper && remainder_lower >= rhs_lower)) {
+		const uint64_t borrow = remainder_lower < rhs_lower ? 1 : 0;
+		remainder_lower -= rhs_lower;
+		remainder_upper -= rhs_upper + borrow;
+		quotient++;
+	}
+	return Uint128DivModResult {0, quotient, remainder_upper, remainder_lower};
+}
+
+//! Unsigned 128-bit division for compilers without 128-bit division. Precondition: the divisor is not zero.
+constexpr Uint128DivModResult Uint128DivModPortable(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
+                                                    uint64_t rhs_lower) {
+	if (rhs_upper != 0) {
+		return Uint128DivModLargeDivisor(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
+	}
+	// the high step leaves a remainder below the divisor, as the low step requires
+	const uint64_t quotient_upper = lhs_upper / rhs_lower;
+	uint64_t remainder = 0;
+	const uint64_t quotient_lower = Uint128DivRem64Portable(lhs_upper % rhs_lower, lhs_lower, rhs_lower, remainder);
+	return Uint128DivModResult {quotient_upper, quotient_lower, 0, remainder};
+}
+
+//! Unsigned 128-bit division. Precondition: the divisor is not zero.
+constexpr Uint128DivModResult Uint128DivMod(uint64_t lhs_upper, uint64_t lhs_lower, uint64_t rhs_upper,
+                                            uint64_t rhs_lower) {
+	if (lhs_upper == 0 && rhs_upper == 0) {
+		return Uint128DivModResult {0, lhs_lower / rhs_lower, 0, lhs_lower % rhs_lower};
+	}
+	if (rhs_upper != 0) {
+		return Uint128DivModLargeDivisor(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
+	}
+	// clang-cl has the 128-bit type but links no runtime support for dividing it
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__) && !defined(_MSC_VER)
+	const auto lhs = (static_cast<__uint128_t>(lhs_upper) << 64) | lhs_lower;
+	const auto quotient = lhs / rhs_lower;
+	const auto remainder = static_cast<uint64_t>(lhs - quotient * rhs_lower);
+	return Uint128DivModResult {static_cast<uint64_t>(quotient >> 64), static_cast<uint64_t>(quotient), 0, remainder};
+#else
+	return Uint128DivModPortable(lhs_upper, lhs_lower, rhs_upper, rhs_lower);
+#endif
+}
+
+//! Signed 128-bit division truncating toward zero. Dividing by zero yields a zero quotient with lhs as the
+//! remainder, and MINIMUM / -1 wraps to MINIMUM.
 constexpr HugeintDivModResult HugeintDivMod(hugeint_t lhs, hugeint_t rhs) {
 	if (HugeintEquals(rhs, hugeint_t(0))) {
 		return HugeintDivModResult {hugeint_t(0), lhs};
 	}
-
-	// MINIMUM cannot be negated, so it has to be handled before any sign is stripped
-	if (HugeintEquals(lhs, HugeintMinimum()) || HugeintEquals(rhs, HugeintMinimum())) {
-		return HugeintDivModMinimum(lhs, rhs);
-	}
-
-	bool lhs_negative = lhs.upper < 0;
-	bool rhs_negative = rhs.upper < 0;
-	if (lhs_negative) {
-		lhs = HugeintNegate(lhs);
-	}
-	if (rhs_negative) {
-		rhs = HugeintNegate(rhs);
-	}
-
-	hugeint_t quotient {0, 0};
-	hugeint_t remainder {0, 0};
-
-	const uint8_t highest_bit_set = HugeintHighestBit(lhs);
-	for (uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current quotient and remainder by 1
-		quotient = HugeintLeftShift(quotient, 1);
-		remainder = HugeintLeftShift(remainder, 1);
-
-		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (HugeintIsBitSet(lhs, x - 1)) {
-			remainder.lower += 1;
-			if (remainder.lower == 0) {
-				remainder.upper += 1;
-			}
-		}
-		if (HugeintGreaterThanEquals(remainder, rhs)) {
-			// the remainder has passed the division multiplier: subtract the divisor,
-			// carrying a borrow out of lower, and add one to the quotient
-			const int64_t borrow = remainder.lower < rhs.lower ? 1 : 0;
-			remainder.lower -= rhs.lower;
-			remainder.upper -= rhs.upper + borrow;
-			quotient.lower += 1;
-			if (quotient.lower == 0) {
-				quotient.upper += 1;
-			}
-		}
-	}
-	if (lhs_negative ^ rhs_negative) {
+	const bool lhs_negative = lhs.upper < 0;
+	const bool rhs_negative = rhs.upper < 0;
+	// MINIMUM negates to itself, and its bits read as unsigned are its magnitude 2^127
+	const hugeint_t lhs_abs = lhs_negative ? HugeintNegate(lhs) : lhs;
+	const hugeint_t rhs_abs = rhs_negative ? HugeintNegate(rhs) : rhs;
+	const auto result = Uint128DivMod(static_cast<uint64_t>(lhs_abs.upper), lhs_abs.lower,
+	                                  static_cast<uint64_t>(rhs_abs.upper), rhs_abs.lower);
+	hugeint_t quotient(static_cast<int64_t>(result.quotient_upper), result.quotient_lower);
+	hugeint_t remainder(static_cast<int64_t>(result.remainder_upper), result.remainder_lower);
+	if (lhs_negative != rhs_negative) {
 		quotient = HugeintNegate(quotient);
 	}
 	if (lhs_negative) {
