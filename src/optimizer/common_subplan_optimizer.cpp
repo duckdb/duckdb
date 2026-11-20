@@ -1915,7 +1915,10 @@ private:
 				if (!is_column[i]) {
 					continue;
 				}
-				D_ASSERT(bindings[i].table_index == projection.table_index);
+				if (bindings[i].table_index != projection.table_index) {
+					is_column[i] = false;
+					continue;
+				}
 				auto &expression = *projection.expressions[bindings[i].column_index.GetIndex()];
 				if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 					is_column[i] = false;
@@ -2088,7 +2091,7 @@ private:
 		vector<ProjectionIndex> right_projection_map;
 		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			auto &join = op->Cast<LogicalComparisonJoin>();
-			if (join.join_type != JoinType::INNER) {
+			if (join.join_type != JoinType::INNER || !join.expressions.empty()) {
 				return;
 			}
 			left_projection_map = join.left_projection_map;
@@ -2172,6 +2175,9 @@ private:
 		}
 		const auto old_bindings = op->GetColumnBindings();
 		D_ASSERT(old_bindings.size() == columns.size());
+		if (columns.empty()) {
+			return;
+		}
 
 		unique_ptr<LogicalOperator> reader = std::move(*left.ref_slot);
 		if (!filters.empty()) {
