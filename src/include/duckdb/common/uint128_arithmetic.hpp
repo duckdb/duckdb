@@ -120,7 +120,7 @@ constexpr Uint128DivModResult Uint128DivModLargeDivisor(uint64_t lhs_upper, uint
 	// halving keeps the high half of the dividend below the normalized divisor, as the 128-by-64-bit step requires
 	uint64_t unused_remainder = 0;
 	const uint64_t estimate =
-	    Uint128DivRem64Portable(lhs_upper >> 1, (lhs_upper << 63) | (lhs_lower >> 1), divisor_top, unused_remainder);
+	    Uint128DivRem64(lhs_upper >> 1, (lhs_upper << 63) | (lhs_lower >> 1), divisor_top, unused_remainder);
 	uint64_t quotient = estimate >> (63 - shift);
 	if (quotient != 0) {
 		quotient--;
