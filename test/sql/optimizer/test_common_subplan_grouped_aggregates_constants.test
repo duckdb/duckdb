@@ -1,0 +1,46 @@
+# name: test/sql/optimizer/test_common_subplan_grouped_aggregates_constants.test
+# description: Grouped aggregates over the same input that differ in constants which are equal but not the same value
+# group: [optimizer]
+
+# vector verification replaces consecutive rows that are equal by the first of them
+require no_vector_verification
+
+statement ok
+CREATE TABLE grouped_input AS
+SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE (i % 5)::INTEGER END AS k,
+       CASE WHEN i % 11 = 0 THEN NULL ELSE (i % 3)::INTEGER END AS g,
+       i::INTEGER AS a, (i * 10)::DECIMAL(12,2) AS b, (i % 4)::DOUBLE AS d, 'v' || (i % 2) AS s
+FROM range(40) t(i);
+
+# Constants that are equal but not the same value (0.0 and -0.0) keep their own aggregate and their own label.
+query IRR
+SELECT x.k, x.m, y.m
+FROM (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '0'::DOUBLE END) m FROM grouped_input GROUP BY k) x
+JOIN (SELECT k, max(CASE WHEN a < 0 THEN 1 ELSE '-0'::DOUBLE END) m FROM grouped_input GROUP BY k) y ON x.k = y.k
+ORDER BY ALL;
+----
+0	0.0	-0.0
+1	0.0	-0.0
+2	0.0	-0.0
+3	0.0	-0.0
+4	0.0	-0.0
+
+query IRI
+SELECT k, '0'::FLOAT AS label, count(*) AS m FROM grouped_input WHERE k < 2 GROUP BY k
+UNION ALL
+SELECT k, '-0'::FLOAT AS label, min(a) AS m FROM grouped_input WHERE k < 2 GROUP BY k
+ORDER BY k, m;
+----
+0	-0.0	5
+0	0.0	6
+1	-0.0	1
+1	0.0	7
+
+query ITI
+SELECT k, [INTERVAL 30 DAY] AS label, count(*) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+UNION ALL
+SELECT k, [INTERVAL 1 MONTH] AS label, min(a) AS m FROM grouped_input WHERE k < 1 GROUP BY k
+ORDER BY k, m;
+----
+0	[1 month]	5
+0	[30 days]	6
