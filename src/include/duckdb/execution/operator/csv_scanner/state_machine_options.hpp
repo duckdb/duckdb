@@ -25,8 +25,8 @@ struct CSVStateMachineOptions {
 	                       CSVOption<bool> allow_unescaped_quotes_p = false)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
 	      strict_mode(strict_mode_p), escape_mode(escape_mode_p), quote_mode(quote_mode_p),
-	      doubled_quotes(doubled_quotes_p), embedded_quote(embedded_quote_p), mixed_line_breaks(mixed_line_breaks_p),
-	      allow_unescaped_quotes(allow_unescaped_quotes_p) {};
+	      doubled_quotes(doubled_quotes_p), mixed_line_breaks(mixed_line_breaks_p),
+	      allow_unescaped_quotes(allow_unescaped_quotes_p), embedded_quote(embedded_quote_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
