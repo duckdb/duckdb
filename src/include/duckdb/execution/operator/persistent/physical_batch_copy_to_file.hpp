@@ -33,6 +33,7 @@ public:
 	cow_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	CopyOverwriteMode overwrite_mode;
 	CopyFunctionReturnType return_type;
 	//! The names and types of the copied query, for RETURN_COLUMN_TYPES
 	vector<Identifier> query_names;
