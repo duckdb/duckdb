@@ -250,7 +250,7 @@ class ArrowDictionaryBenchmark:
 class SelectAndCallBenchmark:
     def __init__(self):
         """
-        SELECT statements become QueryRelations, any other statement type becomes a MaterializedRelation.
+        A SELECT becomes a lazy relation, any other statement runs at once and the relation holds its result.
         We use SELECT and CALL here because their execution plans are identical
         """
         self.initialize_connection()

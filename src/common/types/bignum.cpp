@@ -716,12 +716,17 @@ static idx_t BignumCastToDecimal(const bignum_t &blob, BignumCastScratch &scratc
 }
 
 string Bignum::BignumToVarchar(const bignum_t &blob, optional_ptr<ClientContext> context) {
-	BignumCastScratch scratch(context);
-	bool is_negative;
-	const idx_t length = BignumCastToDecimal(blob, scratch, is_negative);
-	string result(length, '\0');
-	BignumCastWriteDecimal(&result[0] + length, scratch.decimal, length - (is_negative ? 1 : 0), is_negative);
+	BignumCastScratch state(context);
+	string result;
+	BignumToVarchar(state, blob, result);
 	return result;
+}
+
+void Bignum::BignumToVarchar(BignumCastScratch &state, const bignum_t &blob, string &result) {
+	bool is_negative;
+	const idx_t length = BignumCastToDecimal(blob, state, is_negative);
+	result.resize(length);
+	BignumCastWriteDecimal(&result[0] + length, state.decimal, length - (is_negative ? 1 : 0), is_negative);
 }
 
 string_t Bignum::BignumToVarchar(const bignum_t &blob, Vector &result, BignumCastScratch &scratch) {

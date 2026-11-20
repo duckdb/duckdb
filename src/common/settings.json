@@ -421,6 +421,14 @@
         "struct": "ForceBitpackingModeSetting"
     },
     {
+        "name": "debug_force_bloom_filter_replication",
+        "description": "Force join Bloom filter copies regardless of machine size or allocation locality.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_force_checkpoint",
         "description": "Force a checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made.",
         "type": "BOOLEAN",

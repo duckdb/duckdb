@@ -45,6 +45,11 @@ struct SemiAntiJoinCardinalityEstimate {
 	bool used_domain_evidence;
 };
 
+struct TupleDomainRestrictionEstimate {
+	double rows;
+	double groups;
+};
+
 class RelationStatisticsHelper {
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
@@ -104,6 +109,11 @@ public:
 	                                JoinType join_type, const vector<SemiAntiJoinDomain> &domains, bool has_residual);
 	static SemiAntiJoinCardinalityEstimate
 	EstimateSemiAntiJoinCardinality(LogicalComparisonJoin &join, const RelationStats &left, const RelationStats &right);
+	//! Estimate rows and groups for a matched tuple restriction with column-reference conditions.
+	static optional<TupleDomainRestrictionEstimate> EstimateTupleDomainRestriction(LogicalComparisonJoin &restriction,
+	                                                                               const RelationStats &input,
+	                                                                               const RelationStats &keys,
+	                                                                               RelationStatsExtractor &extractor);
 	static optional_idx EstimateDirectFilterDomain(const Expression &expression, optional<ColumnBinding> target_binding,
 	                                               idx_t maximum_domain);
 

@@ -71,8 +71,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		D_ASSERT(op->children.size() == 2);
 		auto comparisons = setop.GetComparisons(optimizer.context);
 		auto left_bindings = op->children[0]->GetColumnBindings();
-		FilterPushdown left_pushdown(optimizer, convert_mark_joins, projection_mode);
-		FilterPushdown right_pushdown(optimizer, convert_mark_joins, projection_mode);
+		FilterPushdown left_pushdown(optimizer, projection_mode);
+		FilterPushdown right_pushdown(optimizer, projection_mode);
 		for (auto &original_filter : filters) {
 			auto filter = make_uniq<Filter>();
 			filter->filter = original_filter->filter->Copy();
@@ -105,7 +105,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		auto &child = op->children[child_idx];
 		auto child_bindings = child->GetColumnBindings();
 
-		FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
+		FilterPushdown child_pushdown(optimizer, projection_mode);
 		for (auto &original_filter : filters) {
 			// first create a copy of the filter
 			auto filter = make_uniq<Filter>();

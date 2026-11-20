@@ -52,6 +52,8 @@ string TestNameToId(const string &name);
 
 //! Delete a database file (+ its .wal). A no-op under --database-destroy off (retain).
 void DeleteDatabase(string path);
+//! A shared local file system obtained from a DuckDB instance (for tests that have no database of their own)
+FileSystem &TestLocalFileSystem();
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);
@@ -183,13 +185,6 @@ void CreateViewOver(Connection &con, unique_ptr<TableRef> table_ref, const strin
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
-
-#define COMPARE_CSV(result, csv, header)                                                                               \
-	{                                                                                                                  \
-		auto res = compare_csv(*result, csv, header);                                                                  \
-		if (!res.empty())                                                                                              \
-			FAIL(res);                                                                                                 \
-	}
 
 #define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
 	{                                                                                                                  \
