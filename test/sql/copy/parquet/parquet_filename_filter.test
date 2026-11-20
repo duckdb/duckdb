@@ -33,6 +33,15 @@ query III
 select i, j, filename as file from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='{DATA_DIR}/parquet-testing/glob2/t1.parquet' and i=2 order by i;
 ----
 
+# A file filter proving one INNER JOIN side empty must skip the other scan
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) empty_side
+INNER JOIN parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet') other_side USING (i)
+WHERE empty_side.filename LIKE '%missing.parquet%';
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
 # This query should trigger the file skipping mechanism, which prevents reading metadata for files that are not scanned
 query IIII
 select id, value, date, filename from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by id;

@@ -42,6 +42,10 @@ public:
 	optional_idx total_files;
 	//! Size of file list after applying filters
 	optional_idx filtered_files;
+	//! Whether file-filter pushdown proved that no source file can produce rows
+	bool FilesPrunedToEmpty() const {
+		return total_files.IsValid() && filtered_files.IsValid() && filtered_files.GetIndex() == 0;
+	}
 	//! Sample options that have been pushed down into the table scan
 	unique_ptr<SampleOptions> sample_options;
 
