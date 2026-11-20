@@ -72,10 +72,8 @@ public:
 	void ResetActiveCheckpoint(bool checkpoint_succeeded);
 	//! Hands dropped tables over to the running checkpoint, which frees them. False if none runs: the commit does
 	bool DeferDroppedTables(const vector<shared_ptr<DataTable>> &tables);
-	//! The start time that the next transaction gets
-	transaction_t NextStartTimestamp();
-	//! The earliest start of the active transactions, checkpoints aside: the next start if none, 0 if a cleanup waits
-	transaction_t LowestActiveStart();
+	//! The next start time, and the earliest of the active transactions: the same if none, 0 if a cleanup waits
+	void GetStartTimes(transaction_t &next_start, transaction_t &lowest_active_start);
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -140,8 +138,8 @@ private:
 	void CleanupTransactions();
 	//! Lets the block manager reuse the blocks that checkpoints freed before every active transaction started
 	void ReuseFreedBlocks(transaction_t lowest_start) noexcept;
-	//! LowestActiveStart for a caller that holds the transaction lock
-	transaction_t LowestActiveStartInternal();
+	//! The earliest start time of the active transactions, checkpoints aside. Caller holds the transaction lock
+	transaction_t LowestActiveStart();
 
 	//! Whether a commit that needed a WAL sync is still in its commit path, possibly inside SyncUpTo
 	bool HasUnsyncedCommits();

@@ -102,10 +102,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
 		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 		auto modifications = stmt.info->GetModifications();
+		// FIXME: temporary, until the drops that involve indexes run alongside checkpoints as well
 		if (entry->type == CatalogType::TABLE_ENTRY && !stmt.info->cascade) {
 			auto &table = entry->Cast<TableCatalogEntry>();
 			if (table.IsDuckTable() && !table.GetStorage().HasIndexes()) {
-				// without indexes, also uncommitted ones, a checkpoint that runs when the drop commits frees the table
+				// no modification type: DuckTransaction::SetModifications then takes no checkpoint lock for the drop
 				modifications = DatabaseModificationType();
 			}
 		}
