@@ -233,6 +233,28 @@ def query_plan_cost(cli, dbname, query):
         return cost
 
 
+def plan_without_cardinalities(op):
+    return {
+        **op,
+        'extra_info': {key: value for key, value in op.get('extra_info', {}).items() if key != 'Estimated Cardinality'},
+        'children': [plan_without_cardinalities(child) for child in op.get('children', [])],
+    }
+
+
+def query_plan(cli, dbname, query):
+    # EXPLAIN describes the plan before execution adds dynamic filters and profiling metrics.
+    command = [cli, '--readonly', dbname, '-json', '-c', f'EXPLAIN (FORMAT JSON) {query}']
+    completed = run_command(command, capture_output=True, text=True, timeout=600)
+    if completed.returncode:
+        raise RuntimeError(f"Query explain failed for {cli}:\n{completed.stderr}")
+    plan = json.loads(completed.stdout)
+    if plan and 'explain_key' in plan[0]:
+        plan = json.loads(next(row['explain_value'] for row in plan if row['explain_key'] == 'physical_plan'))
+    if not plan:
+        raise RuntimeError(f"No physical plan returned by {cli}")
+    return [plan_without_cardinalities(op) for op in plan]
+
+
 def query_timings(cli, dbname, query, runs):
     # Warm up in the same process before enabling the timer.
     command = [cli, '--readonly', dbname, '-c', query, '-c', '.timer on 6']
@@ -328,6 +350,10 @@ def main():
 
         old_cost = query_plan_cost(old, DB_NAME, query)
         new_cost = query_plan_cost(new, DB_NAME, query)
+
+        if old_cost != new_cost and query_plan(old, DB_NAME, query) == query_plan(new, DB_NAME, query):
+            print(f"{query_name}: identical plans; ignoring runtime row-count differences")
+            continue
 
         if old_cost.needs_timing(new_cost):
             print(f"{query_name}: comparing hot query timings")

@@ -1,5 +1,7 @@
 import contextlib
+import copy
 import io
+import json
 import math
 import os
 import re
@@ -12,7 +14,7 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 from scripts import plan_cost_runner
-from scripts.plan_cost_runner import PlanCost, op_inspect
+from scripts.plan_cost_runner import PlanCost, op_inspect, plan_without_cardinalities, query_plan
 from scripts.regression.benchmark import (
     BENCHMARK_DATA_DIRECTORY,
     BenchmarkRunner,
@@ -25,6 +27,54 @@ from scripts.regression.comparison import benchmark_measurement, confirmation_ru
 
 
 class TestPlanCostComparison(unittest.TestCase):
+    def test_plan_comparison_ignores_only_cardinalities(self):
+        plan = {
+            'name': 'HASH_JOIN',
+            'extra_info': {'Join Type': 'INNER', 'Conditions': 'a = b', 'Estimated Cardinality': '10'},
+            'children': [
+                {'name': 'SEQ_SCAN', 'extra_info': {'Table': 'a', 'Filters': 'a > 1', 'Estimated Cardinality': '100'}},
+                {'name': 'SEQ_SCAN', 'extra_info': {'Table': 'b', 'Estimated Cardinality': '10'}},
+            ],
+        }
+        estimated = copy.deepcopy(plan)
+        estimated['extra_info']['Estimated Cardinality'] = '20'
+        estimated['children'][0]['extra_info']['Estimated Cardinality'] = '200'
+        self.assertEqual(plan_without_cardinalities(plan), plan_without_cardinalities(estimated))
+        self.assertEqual(plan['extra_info']['Estimated Cardinality'], '10')
+
+        for field, value in [('Join Type', 'SEMI'), ('Conditions', 'a < b')]:
+            changed = copy.deepcopy(plan)
+            changed['extra_info'][field] = value
+            self.assertNotEqual(plan_without_cardinalities(plan), plan_without_cardinalities(changed))
+        for field, value in [('Table', 'c'), ('Filters', 'a > 2')]:
+            changed = copy.deepcopy(plan)
+            changed['children'][0]['extra_info'][field] = value
+            self.assertNotEqual(plan_without_cardinalities(plan), plan_without_cardinalities(changed))
+        changed = copy.deepcopy(plan)
+        changed['children'].reverse()
+        self.assertNotEqual(plan_without_cardinalities(plan), plan_without_cardinalities(changed))
+        changed = copy.deepcopy(plan)
+        changed['name'] = 'NESTED_LOOP_JOIN'
+        self.assertNotEqual(plan_without_cardinalities(plan), plan_without_cardinalities(changed))
+
+    def test_reads_raw_and_tabular_json_explain(self):
+        plan = [{'name': 'SEQ_SCAN', 'extra_info': {'Table': 'a', 'Estimated Cardinality': '100'}}]
+        for output in [plan, [{'explain_key': 'physical_plan', 'explain_value': json.dumps(plan)}]]:
+            with self.subTest(output=output):
+                completed = subprocess.CompletedProcess([], 0, stdout=json.dumps(output))
+                with patch.object(plan_cost_runner, 'run_command', return_value=completed):
+                    self.assertEqual(query_plan('cli', 'db', 'SELECT * FROM a;'), [plan_without_cardinalities(plan[0])])
+
+    def test_explain_failure_is_not_an_identical_plan(self):
+        completed = subprocess.CompletedProcess([], 1, stderr='explain error')
+        with patch.object(plan_cost_runner, 'run_command', return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, 'explain error'):
+                query_plan('cli', 'db', 'SELECT * FROM a;')
+        completed = subprocess.CompletedProcess([], 0, stdout='[]')
+        with patch.object(plan_cost_runner, 'run_command', return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, 'No physical plan'):
+                query_plan('cli', 'db', 'SELECT * FROM a;')
+
     def test_membership_rewrite_preserves_input_work(self):
         def cost(join_type, rows):
             return op_inspect(
@@ -67,10 +117,11 @@ class TestPlanCostComparison(unittest.TestCase):
                 self.assertEqual(old < new, regressed)
                 self.assertFalse(new > old and old > new)
 
-    def test_runner_confirms_hot_regression_on_shared_database(self):
+    def check_runner(self, same_plan, new_work):
         old, new = PlanCost(), PlanCost()
         old.total, old.build_side, old.probe_side, old.time = 20, 10, 20, 1.0
-        new.total, new.build_side, new.probe_side, new.time = 5, 40, 100, 0.9
+        new.total, new.build_side, new.probe_side = new_work
+        new.time = 0.9
         with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
             root = Path(directory)
             (root / 'queries').mkdir()
@@ -79,6 +130,11 @@ class TestPlanCostComparison(unittest.TestCase):
             stack.enter_context(patch.object(plan_cost_runner, 'DB_NAME', database))
             initialize = stack.enter_context(patch.object(plan_cost_runner, 'init_db'))
             profiles = stack.enter_context(patch.object(plan_cost_runner, 'query_plan_cost', side_effect=[old, new]))
+            plans = stack.enter_context(
+                patch.object(
+                    plan_cost_runner, 'query_plan', side_effect=['old plan', 'old plan' if same_plan else 'new plan']
+                )
+            )
             timings = stack.enter_context(
                 patch.object(
                     plan_cost_runner,
@@ -91,13 +147,28 @@ class TestPlanCostComparison(unittest.TestCase):
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
             with self.assertRaises(SystemExit) as result:
                 plan_cost_runner.main()
-            self.assertEqual(result.exception.code, 1)
+            self.assertEqual(result.exception.code, 0 if same_plan else 1)
             initialize.assert_called_once_with('old', database, directory, [])
             self.assertEqual(profiles.call_args_list, [call(cli, database, 'SELECT 1;') for cli in ('old', 'new')])
-            self.assertEqual(
-                timings.call_args_list,
-                [call(cli, database, 'SELECT 1;', 5) for cli in ('old', 'new', 'new', 'old') * 4],
-            )
+            self.assertEqual(plans.call_args_list, [call(cli, database, 'SELECT 1;') for cli in ('old', 'new')])
+            if same_plan or not old.needs_timing(new):
+                timings.assert_not_called()
+            else:
+                self.assertEqual(
+                    timings.call_args_list,
+                    [call(cli, database, 'SELECT 1;', 5) for cli in ('old', 'new', 'new', 'old') * 4],
+                )
+
+    def test_runner_confirms_hot_regression_on_shared_database(self):
+        self.check_runner(same_plan=False, new_work=(5, 40, 100))
+
+    def test_runner_preserves_unambiguous_changed_plan_regression(self):
+        self.check_runner(same_plan=False, new_work=(30, 40, 100))
+
+    def test_identical_plans_skip_timing_and_unambiguous_cost_regressions(self):
+        for new_work in [(20, 10, 21), (5, 40, 100), (30, 40, 100)]:
+            with self.subTest(new_work=new_work):
+                self.check_runner(same_plan=True, new_work=new_work)
 
 
 class TestBenchmarkRunner(unittest.TestCase):
