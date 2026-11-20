@@ -185,6 +185,17 @@ SELECT x FROM {view} ORDER BY x DESC NULLS LAST LIMIT 3
 108
 107
 
+# a join pushes a filter on the join key into the scan
+query I
+SELECT x FROM {view} JOIN (VALUES (5), (105), (1000)) v(key) ON x = key ORDER BY x
+----
+5
+105
+
+endloop
+
+foreach view wide_first narrow_first
+
 # late materialization: the top-N runs over the converted column, the other columns are fetched by row id
 query III
 SELECT x, k, s.a FROM {view} ORDER BY x LIMIT 2
@@ -197,13 +208,6 @@ SELECT x, k, s.b FROM {view} WHERE k <> 109 ORDER BY x DESC NULLS LAST LIMIT 2
 ----
 108	108	80
 107	107	70
-
-# a join pushes a filter on the join key into the scan
-query I
-SELECT x FROM {view} JOIN (VALUES (5), (105), (1000)) v(key) ON x = key ORDER BY x
-----
-5
-105
 
 endloop
 
