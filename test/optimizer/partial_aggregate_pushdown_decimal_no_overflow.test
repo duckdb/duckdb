@@ -1,0 +1,32 @@
+# name: test/optimizer/partial_aggregate_pushdown_decimal_no_overflow.test
+# description: Double-eager pushdown of a DECIMAL sum specialized to sum_no_overflow keeps the decimal scale
+# group: [optimizer]
+
+statement ok
+CREATE TABLE c AS SELECT i AS id, (i % 5) AS nk, CAST(i AS DECIMAL(15,2)) + 0.25 AS bal FROM range(100) t(i);
+
+statement ok
+CREATE TABLE s AS SELECT i AS id, (i % 5) AS nk FROM range(20) t(i);
+
+statement ok
+CREATE TABLE n AS SELECT i AS nk, (i % 3) AS rk FROM range(5) t(i);
+
+query I
+SELECT sum(bal) AS a0
+FROM c
+JOIN s ON c.nk = s.nk
+LEFT JOIN n ON c.nk = n.nk AND n.nk < -1
+GROUP BY n.rk
+HAVING ((count(*) <> 92.44) OR (n.rk < 0));
+----
+19900.00
+
+query I
+SELECT sum(bal) AS a0
+FROM c
+JOIN s ON c.nk = s.nk
+LEFT JOIN n ON c.nk = n.nk AND n.nk < -1
+GROUP BY n.rk
+HAVING ((count(*) <> 92) OR (n.rk IS NOT NULL));
+----
+19900.00

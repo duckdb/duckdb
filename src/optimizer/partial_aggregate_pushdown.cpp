@@ -892,6 +892,11 @@ static bool DEBuildLowerSides(Optimizer &optimizer, const LogicalAggregate &aggr
 		if (!partial->GetReturnType().IsAggregateState()) {
 			return false;
 		}
+		// the state must finalize back to the original type (e.g. not when a specialized implementation was bound)
+		auto state_ref = make_uniq<BoundColumnRefExpression>(partial->GetReturnType(), ColumnBinding());
+		if (optimizer.BindScalarFunction("finalize", std::move(state_ref))->GetReturnType() != de.return_type) {
+			return false;
+		}
 		de.partial_pos = sides[de.side].aggregates.size();
 		sides[de.side].aggregates.push_back(std::move(partial));
 	}
@@ -1063,16 +1068,13 @@ bool PartialAggregatePushdown::TryDoubleEagerPushdown(unique_ptr<LogicalOperator
 	auto upper_aggr =
 	    DECreateUpperAggregate(optimizer, aggr, std::move(new_join), side_bindings, sides, std::move(upper_aggregates));
 
-	auto projection =
-	    BuildFinalProjection(optimizer, aggr, std::move(upper_aggr), replacement_map,
-	                         [&](idx_t j, unique_ptr<Expression> ref) -> unique_ptr<Expression> {
-		                         auto finalized = optimizer.BindScalarFunction("finalize", std::move(ref));
-		                         if (finalized->GetReturnType() != aggregates[j].return_type) {
-			                         return BoundCastExpression::AddCastToType(optimizer.context, std::move(finalized),
-			                                                                   aggregates[j].return_type);
-		                         }
-		                         return finalized;
-	                         });
+	auto projection = BuildFinalProjection(optimizer, aggr, std::move(upper_aggr), replacement_map,
+	                                       [&](idx_t j, unique_ptr<Expression> ref) -> unique_ptr<Expression> {
+		                                       auto finalized =
+		                                           optimizer.BindScalarFunction("finalize", std::move(ref));
+		                                       D_ASSERT(finalized->GetReturnType() == aggregates[j].return_type);
+		                                       return finalized;
+	                                       });
 	if (!projection) {
 		return false;
 	}
