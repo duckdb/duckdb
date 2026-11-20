@@ -201,6 +201,26 @@ protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
 };
 
+class DirectAppender : public BaseAppender {
+public:
+	DUCKDB_API DirectAppender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+	                          const Identifier &table_name,
+	                          const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API DirectAppender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
+	                          const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API DirectAppender(Connection &con, const Identifier &table_name,
+	                          const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API ~DirectAppender() override;
+
+protected:
+	void FlushInternal(ColumnDataCollection &collection) override;
+
+private:
+	weak_ptr<ClientContext> context;
+	unique_ptr<TableDescription> description;
+	vector<LogicalIndex> column_ids; // empty = all columns
+};
+
 class InternalAppender : public BaseAppender {
 	//! The client context
 	ClientContext &context;
