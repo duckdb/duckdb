@@ -239,10 +239,10 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) const {
 	return intermediate;
 }
 
-idx_t VariantColumnData::ScanWithCallback(
-    ColumnScanState &state, Vector &result, idx_t target_count,
-    const std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)>
-        &callback) const {
+idx_t VariantColumnData::ScanWithCallback(ColumnScanState &state, Vector &result, idx_t target_count,
+                                          const std::function<idx_t(ColumnData &column, ColumnScanState &child_state,
+                                                                    Vector &target_vector, idx_t count)> &callback,
+                                          optional_ptr<const SelectionVector> sel, idx_t sel_count) const {
 	if (state.storage_index.IsPushdownExtract()) {
 		if (IsShredded() && state.child_states[2].storage_index.IsPushdownExtract()) {
 			//! Then we can do the unshredding on the extracted data, rather than falling back to unshredding+extracting
@@ -250,6 +250,8 @@ idx_t VariantColumnData::ScanWithCallback(
 			//! In the initialize we have verified that the field exists and the data is fully shredded (for this
 			//! rowgroup) We have created a scan state that performs a 'struct_extract' in the shredded data, to extract
 			//! the requested field.s
+			//! The caller handles the selection for this path (see Select)
+			D_ASSERT(!sel);
 			auto res = callback(*sub_columns[1], state.child_states[2], result, target_count);
 			if (result.GetType().id() == LogicalTypeId::LIST) {
 				//! Shredded ARRAY Variant looks like:
@@ -303,13 +305,23 @@ idx_t VariantColumnData::ScanWithCallback(
 			input.Reset();
 			target.Reset();
 			input.data[0].Reference(extract_intermediate);
-			executor.Execute(input, target);
+			if (sel) {
+				//! Only cast the rows that survived the filter
+				//! otherwise a row the filter removed can still raise a conversion error
+				executor.ExecuteExpression(input, target.data[0], *sel, sel_count);
+			} else {
+				executor.Execute(input, target);
+			}
 			result.Reference(target.data[0]);
 		} else {
 			result.Reference(extract_intermediate);
+			if (sel) {
+				result.Slice(*sel, sel_count);
+			}
 		}
 		return scan_count;
 	} else {
+		D_ASSERT(!sel);
 		if (IsShredded()) {
 			auto intermediate = CreateUnshreddingIntermediate(target_count);
 			auto &child_vectors = StructVector::GetEntries(intermediate);
@@ -346,6 +358,28 @@ idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 	    });
 	result.Flatten();
 	return result_count;
+}
+
+void VariantColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                               SelectionVector &sel, idx_t sel_count) {
+	if (!state.storage_index.IsPushdownExtract()) {
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	if (IsShredded() && state.child_states[2].storage_index.IsPushdownExtract()) {
+		//! The field is fully shredded for this row group
+		//! the leaf (and the cast pushed down onto it, if any) is scanned by the shredded sub-column
+		sub_columns[1]->Select(transaction, vector_index, state.child_states[2], result, sel, sel_count);
+		return;
+	}
+	//! Fall back to unshredding + extracting the full vector, casting only the selected rows
+	auto target_count = GetVectorCount(vector_index);
+	ScanWithCallback(
+	    state, result, target_count,
+	    [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
+		    return col.Scan(transaction, vector_index, child_state, target_vector, count);
+	    },
+	    &sel, sel_count);
 }
 
 void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {
