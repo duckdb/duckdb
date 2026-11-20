@@ -22,10 +22,14 @@ CREATE EXTERNAL RESOURCE 'nobody.provides.this' AS r;
 ----
 <REGEX>:.*unknown resource type "nobody.provides.this".*
 
-statement error
-REGISTER EXTERNAL RESOURCE nobody.provides.this AS r FROM MAP {'id': 'x'};
+# REGISTER records the type without looking it up, so the unquoted name shows in the record, case-folded
+query TTTT
+REGISTER EXTERNAL RESOURCE Nobody.Provides.THIS AS r FROM MAP {'id': 'x'};
 ----
-<REGEX>:.*unknown resource type "nobody.provides.this".*
+registered	r	nobody.provides.this	{id=x}
+
+statement ok
+CALL deregister_external_resource('r');
 
 statement error
 ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE nobody.provides.this AS db;
