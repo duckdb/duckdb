@@ -1481,37 +1481,15 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 			start++;
 		}
 	}
-	// Figure out the exact size
+	auto removed_escapes = StringVector::EmptyString(vector, end - start);
+	auto removed_escapes_ptr = removed_escapes.GetDataWriteable();
 	idx_t str_pos = 0;
 	bool just_escaped = false;
-	for (idx_t cur_pos = start; cur_pos < end; cur_pos++) {
-		if (str_ptr[cur_pos] == escape && !just_escaped) {
-			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
-			if (doubled_quotes && !just_escaped && cur_pos + 1 < end && str_ptr[cur_pos + 1] == quote) {
-				// a doubled quote is one quote
-				cur_pos++;
-			}
-			if (just_escaped || !strict_mode) {
-				str_pos++;
-			}
-			just_escaped = false;
-		} else {
-			just_escaped = false;
-			str_pos++;
-		}
-	}
-
-	auto removed_escapes = StringVector::EmptyString(vector, str_pos);
-	auto removed_escapes_ptr = removed_escapes.GetDataWriteable();
-	// Allocate string and copy it
-	str_pos = 0;
-	just_escaped = false;
 	for (idx_t cur_pos = start; cur_pos < end; cur_pos++) {
 		const char c = str_ptr[cur_pos];
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
-		} else if (str_ptr[cur_pos] == quote) {
+		} else if (c == quote) {
 			if (doubled_quotes && !just_escaped && cur_pos + 1 < end && str_ptr[cur_pos + 1] == quote) {
 				// a doubled quote is one quote
 				cur_pos++;
@@ -1525,28 +1503,38 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 			removed_escapes_ptr[str_pos++] = c;
 		}
 	}
-	removed_escapes.Finalize();
+	removed_escapes.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(str_pos), end - start);
 	return removed_escapes;
 }
 
-static bool IsUnicodeWhitespace(const char *str, idx_t char_len) {
+//! Decodes one UTF-8 character without throwing, as the field may hold any bytes; an invalid byte stands alone
+static int32_t DecodeCharacter(const char *str, idx_t remaining, idx_t &char_len) {
 	const auto lead = static_cast<uint8_t>(str[0]);
-	if (char_len == 1) {
-		return (lead >= 0x09 && lead <= 0x0D) || lead == 0x20 || (lead >= 0x1C && lead <= 0x1F);
+	char_len = 1;
+	if (lead < 0x80) {
+		return lead;
 	}
-	uint32_t code_point;
-	if (char_len == 2) {
-		code_point = ((lead & 0x1FU) << 6) | (static_cast<uint8_t>(str[1]) & 0x3FU);
-	} else if (char_len == 3) {
-		code_point = ((lead & 0x0FU) << 12) | ((static_cast<uint8_t>(str[1]) & 0x3FU) << 6) |
-		             (static_cast<uint8_t>(str[2]) & 0x3FU);
-	} else {
-		// no character of four UTF-8 bytes is whitespace
-		return false;
+	const idx_t needed = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : (lead >= 0xC0 ? 2 : 0));
+	if (needed == 0 || needed > remaining) {
+		return -1;
 	}
+	int32_t code_point = lead & (0x7F >> needed);
+	for (idx_t i = 1; i < needed; i++) {
+		if ((static_cast<uint8_t>(str[i]) & 0xC0) != 0x80) {
+			return -1;
+		}
+		code_point = (code_point << 6) | (static_cast<uint8_t>(str[i]) & 0x3F);
+	}
+	char_len = needed;
+	return code_point;
+}
+
+static bool IsUnicodeWhitespace(int32_t code_point) {
 	// Java's isWhitespace, the space separators except the non breaking ones plus the line and paragraph separators
-	return code_point == 0x1680 || (code_point >= 0x2000 && code_point <= 0x200A && code_point != 0x2007) ||
-	       code_point == 0x2028 || code_point == 0x2029 || code_point == 0x205F || code_point == 0x3000;
+	return (code_point >= 0x09 && code_point <= 0x0D) || code_point == 0x20 ||
+	       (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x1680 ||
+	       (code_point >= 0x2000 && code_point <= 0x200A && code_point != 0x2007) || code_point == 0x2028 ||
+	       code_point == 0x2029 || code_point == 0x205F || code_point == 0x3000;
 }
 
 string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t size, char escape, char quote,
@@ -1563,6 +1551,9 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 	auto result_ptr = result_string.GetDataWriteable();
 	idx_t result_pos = 0;
 	idx_t units = units_before;
+	auto add_units = [&units](idx_t count) {
+		units = units < 3 ? units + count : units;
+	};
 	bool in_quotes = false;
 	bool in_field = false;
 	bool all_whitespace = true;
@@ -1574,11 +1565,11 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 				// an escaped quote or escape character, while any other escape is consumed without effect
 				result_ptr[result_pos++] = str_ptr[pos + 1];
 				all_whitespace = false;
-				units = units < 3 ? units + 2 : units;
+				add_units(2);
 				pos += 2;
 				continue;
 			}
-			units = units < 3 ? units + 1 : units;
+			add_units(1);
 			pos++;
 			continue;
 		}
@@ -1588,7 +1579,7 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 				result_ptr[result_pos++] = quote;
 				all_whitespace = false;
 				in_field = !in_field;
-				units = units < 3 ? units + 2 : units;
+				add_units(2);
 				pos += 2;
 				continue;
 			}
@@ -1604,22 +1595,19 @@ string_t StringValueScanner::ResolveEmbeddedQuotes(const char *str_ptr, idx_t si
 			}
 			in_quotes = !in_quotes;
 			in_field = !in_field;
-			units = units < 3 ? units + 1 : units;
+			add_units(1);
 			pos++;
 			continue;
 		}
-		// a plain character sets the field flag and counts one UTF-16 unit, or two when UTF-8 takes four bytes
-		const auto lead = static_cast<uint8_t>(c);
-		idx_t char_len = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : (lead >= 0xC0 ? 2 : 1));
-		if (char_len > size - pos) {
-			char_len = size - pos;
-		}
-		all_whitespace = all_whitespace && IsUnicodeWhitespace(str_ptr + pos, char_len);
+		// a plain character sets the field flag and counts one UTF-16 unit, or two beyond the basic plane
+		idx_t char_len;
+		const auto code_point = DecodeCharacter(str_ptr + pos, size - pos, char_len);
+		all_whitespace = all_whitespace && IsUnicodeWhitespace(code_point);
 		for (idx_t i = 0; i < char_len; i++) {
 			result_ptr[result_pos++] = str_ptr[pos + i];
 		}
 		in_field = true;
-		units = units < 3 ? units + (lead >= 0xF0 ? 2 : 1) : units;
+		add_units(code_point >= 0x10000 ? 2 : 1);
 		pos += char_len;
 	}
 	result_string.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(result_pos), size);

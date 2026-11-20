@@ -351,26 +351,24 @@ public:
 		// the raw bytes run through the embedded quote text pass on the escaped path
 		escaped = true;
 	}
+	//! Counts the UTF-16 units of the bytes onto units, clamped at cap, as the embedded quote position rule counts
+	static inline idx_t ClampedUtf16Units(const char *str, idx_t size, idx_t units, idx_t cap) {
+		for (idx_t i = 0; i < size && units < cap; i++) {
+			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
+			if ((static_cast<uint8_t>(str[i]) & 0xC0) != 0x80) {
+				units += static_cast<uint8_t>(str[i]) >= 0xF0 ? 2 : 1;
+			}
+		}
+		return units < cap ? units : cap;
+	}
 	//! Advances the line offset past the field just consumed and its separator
 	inline void UpdateUnitsBeforeField(const char *value_ptr, idx_t size) {
 		if (state_machine.state_machine_options.embedded_quote.GetValue() != CSVEmbeddedQuote::TOGGLE) {
 			return;
 		}
 		const auto &delimiter = state_machine.state_machine_options.delimiter.GetValue();
-		idx_t units = units_before_field;
-		for (idx_t i = 0; i < delimiter.size() && units < 3; i++) {
-			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
-			if ((static_cast<uint8_t>(delimiter[i]) & 0xC0) != 0x80) {
-				units += static_cast<uint8_t>(delimiter[i]) >= 0xF0 ? 2 : 1;
-			}
-		}
-		for (idx_t i = 0; i < size && units < 3; i++) {
-			// a character is one UTF-16 unit, or two when UTF-8 encodes it in four bytes
-			if ((static_cast<uint8_t>(value_ptr[i]) & 0xC0) != 0x80) {
-				units += static_cast<uint8_t>(value_ptr[i]) >= 0xF0 ? 2 : 1;
-			}
-		}
-		units_before_field = units < 3 ? units : 3;
+		const idx_t units = ClampedUtf16Units(delimiter.data(), delimiter.size(), units_before_field, 3);
+		units_before_field = ClampedUtf16Units(value_ptr, size, units, 3);
 	}
 	//! Moves last_position past the newline that ends the row at buffer_pos
 	inline void SetLastPositionAfterNewline(idx_t buffer_pos);
