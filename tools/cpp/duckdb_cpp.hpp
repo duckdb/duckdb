@@ -1259,13 +1259,29 @@ public:
 	/// @param path The database file, or ":memory:" / the empty string for a new in-memory database, which is never
 	/// shared.
 	/// @param options The options that can only be chosen at startup. An instance that is already open is shared only
-	/// when it was created with the same options, written the same way.
+	/// when it was created with options that give the same settings: an alias counts as its option, and a value
+	/// counts as equal once converted to the option's type, text regardless of case.
 	/// @throws Exception When the file is open in an instance created with other options, or attached to an instance
 	/// that is not shared.
 	static auto OpenShared(const std::string &path, const StartupOptions &options = {}) -> Instance;
 
 	/// `OpenShared` through `env`, which must outlive the instance.
 	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options = {}) -> Instance;
+
+	/// Initializes an instance that `OpenShared` has just created. The instance is borrowed for the duration of the
+	/// call, and must not be moved from: configure it, or connect to it and run SQL.
+	using InitCallback = std::function<void(Instance &instance)>;
+
+	/// `OpenShared`, calling `init` when this call creates the instance, before another call can share it: calls for
+	/// the same file wait for `init` to return. When `init` throws, the instance is destroyed and the exception
+	/// propagates; the next call for the file creates an instance again. `init` is not called when the call shares
+	/// an existing instance, and must not open the same file with `OpenShared`.
+	static auto OpenShared(const std::string &path, const StartupOptions &options, const InitCallback &init)
+	    -> Instance;
+
+	/// `OpenShared` through `env`, which must outlive the instance, calling `init` when this call creates it.
+	static auto OpenShared(Environment &env, const std::string &path, const StartupOptions &options,
+	                       const InitCallback &init) -> Instance;
 
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
